@@ -138,20 +138,16 @@ situation-based design lives within a structured scene.)
 Investigation scenes are the backbone of mystery-driven games.
 The core challenge is interpretation of clues, not finding them.
 
-**The Three Clue Rule (The Alexandrian):**
+**The Three Clue Rule (Justin Alexander / The Alexandrian):**
 
 For any conclusion PCs need to reach, include at least three
-clues. Players will miss the first, ignore the second, and
-misinterpret the third.
+independent clues. Players will miss the first, ignore the
+second, and misinterpret the third. Alexander categorises
+clues by how players encounter them — ranging from those
+found passively through searching to those that come to the
+PCs directly.
 
-**Clue Types:**
-
-| Type | Description | Example |
-|------|-------------|---------|
-| Passive | Found through searching | Letter in a desk |
-| Reactive | Require specific action | Asking the right question |
-| Dynamic | Created on the fly by GM | Improvised based on play |
-| Proactive | Come to the PCs directly | An assassin attacks |
+Full article: https://thealexandrian.net/
 
 **Anti-Patterns:**
 
@@ -316,30 +312,20 @@ https://mcdm.gg/
 
 ## Node-Based Scenario Design (The Alexandrian)
 
-Scenarios are organised around interconnected nodes rather than
-linear sequences.
+Justin Alexander's node-based design structures scenarios as
+networks of interconnected nodes — locations, people, events,
+organisations, activities — linked by clues. Instead of a
+linear sequence, players choose which nodes to visit, and the
+clues they find point them toward other nodes. The Three Clue
+Rule applies at the node level: each node should be reachable
+via at least three clues from other nodes.
 
-### Node Types
+Full framework: https://thealexandrian.net/
 
-| Type | Description | Clue Mechanism |
-|------|-------------|----------------|
-| Location | A place to visit | Search the area |
-| Person | An individual to interact with | Interrogation |
-| Organisation | A group | Investigate members |
-| Event | An occurrence | Attend or witness |
-| Activity | A task to perform | Complete the task |
-
-### Connecting Nodes
-
-Each node contains clues pointing to other nodes. Apply the Three
-Clue Rule at the node level: each node should be reachable via at
-least three clues from other nodes.
-
-### The Inverted Three Clue Rule
-
-If PCs have access to any three clues across all nodes, they will
-reach at least one valid conclusion. Design clue density to ensure
-this threshold is met regardless of which nodes PCs visit.
+**The Inverted Three Clue Rule:** If PCs have access to any
+three clues across all nodes, they will reach at least one
+valid conclusion. Design clue density to ensure this threshold
+is met regardless of which nodes PCs visit.
 
 ## Pacing Within Scenes
 
