@@ -1,12 +1,5 @@
 # GURPS 4e Character Generation
 
-> **Copyright Notice:** GURPS is a registered trademark of
-> Steve Jackson Games Incorporated. The mechanical data in
-> this section is derived from GURPS sourcebooks and is
-> included for personal reference only. A future update will
-> replace embedded data with a connector to the user's own
-> licensed GCA data files. See ATTRIBUTION.md for details.
-
 Comprehensive character creation assistant for GURPS 4th Edition.
 Supports any genre, power level, and campaign style. Works for
 both players building PCs and GMs drafting NPCs.
@@ -47,18 +40,13 @@ parameters. These constrain every decision that follows.
 | Special rules | Magic, psionics, powers, supers | None |
 | House rules | GM-specific modifications | None |
 
-**Point Total Guidelines** (Basic Set Characters p.487):
+Point totals range from low (ordinary people) through heroic
+(action heroes, special forces) to legendary and superheroic.
+Higher budgets allow more extreme attributes and exotic abilities.
 
-| Points | Power Level | Examples |
-|--------|------------|---------|
-| 25 | Ordinary person | Civilians, bystanders |
-| 50 | Competent normal | Trained professional |
-| 75 | Experienced | Veteran, skilled expert |
-| 100 | Exceptional | Elite professional |
-| 150 | Heroic | Action hero, special forces |
-| 200 | Larger-than-life | Cinematic hero, low supers |
-| 300 | Legendary | Comic book hero |
-| 500+ | Superheroic | Major supers, demigods |
+Look up the full point-total-to-power-level guidelines in your
+converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/campaign-settings.md`
 
 ### Step 1: Character Concept
 
@@ -85,16 +73,23 @@ page number.
 
 Four primary attributes, each defaulting to 10 (human average).
 
-| Attribute | Cost per Level | Governs |
-|-----------|---------------|---------|
-| ST (Strength) | 10 pts/level | Damage, lifting, HP base |
-| DX (Dexterity) | 20 pts/level | Physical skills, Basic Speed |
-| IQ (Intelligence) | 20 pts/level | Mental skills, Will, Per |
-| HT (Health) | 10 pts/level | Endurance, FP base, Basic Speed |
+- **ST (Strength)** — Governs damage, lifting capacity, and HP
+  base. One of the cheaper attributes per level.
+- **DX (Dexterity)** — Governs physical skills and contributes
+  to Basic Speed. One of the more expensive attributes per
+  level because it broadly affects many skills.
+- **IQ (Intelligence)** — Governs mental skills, Will, and
+  Perception. Same cost tier as DX.
+- **HT (Health)** — Governs endurance, FP base, and contributes
+  to Basic Speed. Same cost tier as ST.
 
 **Size Modifier affects ST cost**: For SM +1 or larger, ST cost
-drops to 9/level; for SM -1 or smaller, cost is unchanged but
-check specific rules.
+is reduced; for SM -1 or smaller, cost is unchanged but check
+specific rules.
+
+Look up attribute point costs per level in your converted GCA
+data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/attributes.md`
 
 **Guidance by archetype:**
 - Combat-focused: ST 12-14, DX 12-14, HT 12+
@@ -115,19 +110,21 @@ costs the listed amount; each -1 below 10 gives back that amount.
 
 Derive from primary attributes; can be bought up or down.
 
-| Characteristic | Base | Cost to Modify |
-|---------------|------|---------------|
-| HP (Hit Points) | = ST | 2 pts/level |
-| Will | = IQ | 5 pts/level |
-| Perception (Per) | = IQ | 5 pts/level |
-| FP (Fatigue Points) | = HT | 3 pts/level |
-| Basic Speed | = (HT+DX)/4 | 5 pts/+0.25 |
-| Basic Move | = Basic Speed (drop fractions) | 5 pts/level |
+- **HP (Hit Points)** — Defaults to ST
+- **Will** — Defaults to IQ
+- **Perception (Per)** — Defaults to IQ
+- **FP (Fatigue Points)** — Defaults to HT
+- **Basic Speed** — Derived from (HT+DX)/4
+- **Basic Move** — Derived from Basic Speed (drop fractions)
+
+Look up cost-to-modify values for each secondary characteristic
+in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/attributes.md`
 
 **Derived values to calculate:**
-- **Damage**: Based on ST via the Damage Table (Characters p.16).
-  Key breakpoints: ST 10 = 1d-2 thr / 1d sw; ST 12 = 1d-1 / 1d+2;
-  ST 14 = 1d / 2d; ST 16 = 1d+1 / 2d+2
+- **Damage**: Based on ST via the Damage Table. Look up in your
+  converted GCA data:
+  `~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/damage-table.md`
 - **Basic Lift**: ST×ST/5 lbs
 - **Dodge**: floor(Basic Speed) + 3
 - **Size Modifier (SM)**: 0 for humans
@@ -156,22 +153,23 @@ limitations (-% cost). Net modifier cannot reduce cost below
 
 **Common Advantages by Genre:**
 
-*Modern Military/Action*: Combat Reflexes [15], High Pain
-Threshold [10], Fit/Very Fit [5/15], Danger Sense [15],
-Luck [15], Military Rank [5/level], Legal Enforcement Powers
-[varies], Trained by a Master [30] (cinematic only)
+*Modern Military/Action*: Combat Reflexes, High Pain Threshold,
+Fit/Very Fit, Danger Sense, Luck, Military Rank, Legal
+Enforcement Powers, Trained by a Master (cinematic only)
 
-*Fantasy*: Magery [varies], Power Investiture [10/level],
-Eidetic Memory [5], Luck [15], Patron [varies]
+*Fantasy*: Magery, Power Investiture, Eidetic Memory, Luck,
+Patron
 
-*Supers*: Innate Attack [varies], DR [varies], Enhanced Move
-[20/level], Flight [40], Super ST/DX [varies with power
-modifier]. For power modifiers and supers-specific rules,
-reference `gurps-rules-reference.md` (Powers and Supers
-  section).
+*Supers*: Innate Attack, DR, Enhanced Move, Flight, Super
+ST/DX (with power modifier). For power modifiers and
+supers-specific rules, reference `gurps-rules-reference.md`
+(Powers and Supers section).
 
-*Horror*: Medium [10], Oracle [15], Spirit Empathy [10],
-Luck [15], Danger Sense [15]
+*Horror*: Medium, Oracle, Spirit Empathy, Luck, Danger Sense
+
+Look up specific advantage point costs in your converted GCA
+data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/advantages.md`
 
 **Validation:**
 - Some advantages require GM permission (Unkillable, Modular
@@ -186,25 +184,28 @@ Luck [15], Danger Sense [15]
 Disadvantages give back character points up to the campaign
 limit (typically -50 to -75 pts).
 
-**Self-Control Rolls (CR)**: Many mental disadvantages use CR:
+**Self-Control Rolls (CR)**: Many mental disadvantages use a
+self-control roll. Worse self-control (rolling less often to
+resist) increases the point value of the disadvantage through
+a multiplier.
 
-| CR | Resist On | Point Multiplier |
-|----|----------|-----------------|
-| 6 | Almost never | ×2 |
-| 9 | Quite rarely | ×1.5 |
-| 12 | Fairly often | ×1 (base) |
-| 15 | Almost always | ×0.5 |
+Look up self-control roll values and multipliers in your
+converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/disadvantages.md`
 
 **Disadvantage-Driven Characters**: GURPS characters come alive
 through disadvantages. They should reflect the concept, not be
 picked for point value. A Navy SEAL with Duty (Military;
-Extremely Hazardous; 15 or less) [-20] and Sense of Duty
-(Teammates) [-5] tells a story. Greed [-15] on the same
-character doesn't.
+Extremely Hazardous) and Sense of Duty (Teammates) tells a
+story. Greed on the same character doesn't.
 
-**Duty frequency**: 6 or less [-2], 9 or less [-5], 12 or
-less [-10], 15 or less [-15]. Extremely Hazardous doubles
-the base value. Involuntary adds another -5.
+**Duty frequency**: Duty value depends on how often the duty
+comes up (frequency) and how dangerous it is. Extremely
+Hazardous and Involuntary modifiers increase the value further.
+
+Look up specific disadvantage point values in your converted
+GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/disadvantages.md`
 
 **Validation:**
 - Total disadvantages cannot exceed campaign limit
@@ -218,17 +219,13 @@ the base value. Involuntary adds another -5.
 Skills are learned abilities. Effective level = controlling
 attribute + modifier from difficulty and points spent.
 
-**Difficulty Levels and Cost Progression:**
+**Difficulty Levels**: Skills come in Easy, Average, Hard, and
+Very Hard. Harder skills require more points to reach the same
+relative level compared to the controlling attribute.
 
-| Pts Spent | Easy (E) | Average (A) | Hard (H) | Very Hard (VH) |
-|-----------|----------|-------------|----------|----------------|
-| 1 | Attr+0 | Attr-1 | Attr-2 | Attr-3 |
-| 2 | Attr+1 | Attr+0 | Attr-1 | Attr-2 |
-| 4 | Attr+2 | Attr+1 | Attr+0 | Attr-1 |
-| 8 | Attr+3 | Attr+2 | Attr+1 | Attr+0 |
-| 12 | Attr+4 | Attr+3 | Attr+2 | Attr+1 |
-| 16 | Attr+5 | Attr+4 | Attr+3 | Attr+2 |
-| +4 per | +1 | +1 | +1 | +1 |
+Look up the skill difficulty/cost progression table in your
+converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/skills.md`
 
 **Skill Defaults**: Most skills can be attempted untrained at
 attribute-4 to attribute-6. Some have no default (Karate,
@@ -236,9 +233,9 @@ Surgery, etc.).
 
 **Techniques**: Specific applications of a skill bought up from
 a default penalty. Example: Targeted Attack (Guns/Head) defaults
-to Guns-7, can be bought up to Guns-3 max. For martial arts
-techniques, reference `gurps-rules-reference.md` (Martial
-  Arts section).
+to Guns at a penalty, can be bought up to a reduced penalty. For
+martial arts techniques, reference `gurps-rules-reference.md`
+(Martial Arts section).
 
 **Wildcard Skills**: Written as Skill! (e.g., Gun!). Cost 3 pts
 per +1 from attribute. Cinematic campaigns only.
@@ -273,20 +270,12 @@ skills 12-14, related skills 10-12
 Equipment purchased with starting wealth, not character points
 (unless using Signature Gear advantage).
 
-**Starting Wealth by TL:**
+Starting wealth varies by Tech Level. Higher TLs provide more
+starting money; the Wealth advantage multiplies it, while
+Struggling/Poor/Dead Broke reduces it.
 
-| TL | Setting | Starting Wealth |
-|----|---------|----------------|
-| 3 | Medieval | $1,000 |
-| 4 | Renaissance | $2,000 |
-| 5 | Industrial | $5,000 |
-| 6 | WWI-WWII | $10,000 |
-| 7 | Early Modern | $15,000 |
-| 8 | Modern | $20,000 |
-| 9+ | Near Future+ | $30,000+ |
-
-Wealth advantage multiplies starting wealth; Struggling/Poor/
-Dead Broke reduces it.
+Look up starting wealth by TL in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/equipment.md`
 
 For weapons and equipment stats, reference
 `gurps-rules-reference.md` (Equipment section). Canonical

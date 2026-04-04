@@ -1,12 +1,5 @@
 # GURPS 4th Edition — Core Mechanics
 
-> **Copyright Notice:** GURPS is a registered trademark of
-> Steve Jackson Games Incorporated. The mechanical data in
-> this section is derived from GURPS sourcebooks and is
-> included for personal reference only. A future update will
-> replace embedded data with a connector to the user's own
-> licensed GCA data files. See ATTRIBUTION.md for details.
-
 ## Overview
 
 Generic Universal RolePlaying System using 3d6 roll-under.
@@ -20,52 +13,80 @@ For character generation workflows, see
 
 ## Primary Attributes
 
-| Attribute | Default | Cost | Governs |
-|-----------|---------|------|---------|
-| ST | 10 | 10/level | Damage, HP, Basic Lift |
-| DX | 10 | 20/level | Physical skills, Basic Speed |
-| IQ | 10 | 20/level | Mental skills, Will, Perception |
-| HT | 10 | 10/level | FP, Basic Speed, consciousness |
+GURPS characters are built on four primary attributes, each
+defaulting to 10 (human average). Raising or lowering them
+costs character points:
+
+- **ST (Strength)** — Governs melee damage, lifting capacity
+  (Basic Lift), and base Hit Points. Cheaper per level than
+  DX or IQ, making it efficient for physical combatants.
+- **DX (Dexterity)** — Governs physical skills (combat,
+  athletics, stealth) and contributes to Basic Speed. The
+  most expensive physical attribute because it affects so
+  many skills at once.
+- **IQ (Intelligence)** — Governs mental and knowledge skills,
+  and sets the base for Will and Perception. As expensive as
+  DX because it is the controlling attribute for many skills.
+- **HT (Health)** — Governs endurance, Fatigue Points, and
+  contributes to Basic Speed. Also governs consciousness
+  rolls and recovery. Same cost as ST.
+
+For specific point costs per attribute level, this skill reads
+from your converted GCA data at
+`~/.gm-apprentice/data/gurps-4e/`. Run the setup wizard to
+connect your GCA4 data files.
 
 ## Secondary Characteristics
 
-| Characteristic | Base | Cost to Modify |
-|---------------|------|---------------|
-| HP | ST | ±2 pts/level |
-| Will | IQ | ±5 pts/level |
-| Per | IQ | ±5 pts/level |
-| FP | HT | ±3 pts/level |
-| Basic Speed | (HT+DX)/4 | ±5 pts per ±0.25 |
-| Basic Move | Basic Speed (floor) | ±5 pts/level |
-| Dodge | Basic Speed + 3 (floor) | Derived, not bought directly |
-| Basic Lift | ST×ST/5 lbs | Derived from ST |
+Secondary characteristics derive from primary attributes. Each
+can be bought up or down from its base value at a per-level
+cost.
 
-## Damage Table (Key Breakpoints)
+- **HP (Hit Points)** — Defaults to ST. Represents physical
+  toughness and how much damage you can absorb.
+- **Will** — Defaults to IQ. Governs resistance to mental
+  influence, fear, and psychic attacks.
+- **Perception (Per)** — Defaults to IQ. Governs noticing
+  things, spotting ambushes, and sensory rolls.
+- **FP (Fatigue Points)** — Defaults to HT. Represents
+  endurance; spent on extra effort, spellcasting, and
+  sustained exertion.
+- **Basic Speed** — Derived from (HT+DX)/4. Determines turn
+  order in combat and contributes to Dodge.
+- **Basic Move** — Derived from Basic Speed (drop fractions).
+  Yards moved per turn on the ground.
+- **Dodge** — Derived from Basic Speed + 3 (drop fractions
+  first). Primary active defense against any attack.
+- **Basic Lift** — Derived from ST×ST/5 lbs. Determines
+  carrying capacity and encumbrance thresholds.
 
-| ST | Thrust | Swing |
-|----|--------|-------|
-| 8 | 1d-3 | 1d-2 |
-| 10 | 1d-2 | 1d |
-| 11 | 1d-1 | 1d+1 |
-| 12 | 1d-1 | 1d+2 |
-| 13 | 1d | 2d-1 |
-| 14 | 1d | 2d |
-| 16 | 1d+1 | 2d+2 |
-| 18 | 1d+2 | 3d |
-| 20 | 2d-1 | 3d+2 |
+For specific point costs to modify secondary characteristics,
+this skill reads from your converted GCA data at
+`~/.gm-apprentice/data/gurps-4e/`. Run the setup wizard to
+connect your GCA4 data files.
 
 ## Skills
 
-| Difficulty | Attr-3 | Attr-2 | Attr-1 | Attr+0 | Attr+1 | Attr+2 | Each +1 |
-|------------|--------|--------|--------|--------|--------|--------|---------|
-| Easy | — | — | — | 1 | 2 | 4 | +4 |
-| Average | — | — | 1 | 2 | 4 | 8 | +4 |
-| Hard | — | 1 | 2 | 4 | 8 | 12 | +4 |
-| Very Hard | 1 | 2 | 4 | 8 | 12 | 16 | +4 |
+Skills are learned abilities rated by difficulty level: Easy,
+Average, Hard, or Very Hard. The difficulty determines how
+many character points you must invest to reach a given level
+relative to the controlling attribute.
 
-Controlling attribute is typically DX for physical skills,
-IQ for mental/knowledge skills. Some skills use HT, Per,
-or Will. Defaults allow untrained use at a penalty.
+- **Controlling Attribute** — Typically DX for physical skills,
+  IQ for mental/knowledge skills. Some skills use HT, Per,
+  or Will.
+- **Difficulty** — Harder skills require more points to reach
+  the same relative level. A Very Hard skill at attribute+0
+  costs significantly more than an Easy skill at the same
+  relative level.
+- **Defaults** — Most skills can be attempted untrained at a
+  penalty (typically attribute-4 to attribute-6). Some have
+  no default (Karate, Surgery, etc.).
+
+For the skill cost progression table (points spent vs.
+difficulty level), this skill reads from your converted GCA
+data at `~/.gm-apprentice/data/gurps-4e/`. Run the setup
+wizard to connect your GCA4 data files.
 
 ## Roll Mechanics
 
@@ -99,8 +120,15 @@ Point-buy system for traits. Full lists with costs in
 - **Enhancements/Limitations**: Percentage modifiers on
   advantage costs (+/- %, minimum 20% of base)
 
-Self-control rolls for mental disadvantages:
-CR 6 (×2), CR 9 (×1.5), CR 12 (×1), CR 15 (×0.5)
+Mental disadvantages often use self-control rolls (CR) to
+determine how often the character must give in to the
+compulsion. Worse self-control (harder to resist) increases
+the point value of the disadvantage.
+
+For specific self-control roll multipliers and point cost
+tables, this skill reads from your converted GCA data at
+`~/.gm-apprentice/data/gurps-4e/`. Run the setup wizard to
+connect your GCA4 data files.
 
 ## Character Generation
 

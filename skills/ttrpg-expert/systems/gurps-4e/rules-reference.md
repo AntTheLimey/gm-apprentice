@@ -1,20 +1,18 @@
 # GURPS 4e Expanded Rules Reference
 
-> **Copyright Notice:** GURPS is a registered trademark of
-> Steve Jackson Games Incorporated. The mechanical data in
-> this section is derived from GURPS sourcebooks and is
-> included for personal reference only. A future update will
-> replace embedded data with a connector to the user's own
-> licensed GCA data files. See ATTRIBUTION.md for details.
-
 Deep-dive reference for GURPS 4th Edition mechanics beyond the
 summaries in `game-systems.md`. This file covers combat, advantages
 and disadvantages, equipment, powers, magic, and martial arts.
 
 This file is the authoritative GURPS rules reference within
-this skill. All point costs, formulas, and mechanics are based
-on GURPS 4th Edition sourcebooks. Cite source book and page
-number where possible (e.g., "Basic Set — Characters, p.14").
+this skill. All procedural mechanics are based on GURPS 4th
+Edition sourcebooks. Cite source book and page number where
+possible (e.g., "Basic Set — Characters, p.14").
+
+For specific point costs, damage values, and mechanical tables,
+this skill reads from your converted GCA data at
+`~/.gm-apprentice/data/gurps-4e/`. Run the setup wizard to
+connect your GCA4 data files.
 
 ## Table of Contents
 
@@ -78,50 +76,47 @@ without requiring backward movement.
 
 ### Hit Locations
 
-| Location | Penalty | DR Modifier | Wounding Modifier |
-|----------|---------|-------------|-------------------|
-| Torso | +0 | — | ×1 |
-| Skull | -7 | DR 2 (bone) | ×4 |
-| Face | -5 | — | ×4 (no DR 2 bone) |
-| Neck | -5 | — | ×2 (crushing ×1.5) |
-| Eye | -9 | — | ×4, can blind |
-| Groin | -3 | — | ×1 (knockdown at HT-5) |
-| Arm | -2 | — | ×1 (cripple at HP/2) |
-| Leg | -2 | — | ×1 (cripple at HP/2) |
-| Hand | -4 | — | ×1 (cripple at HP/3) |
-| Foot | -4 | — | ×1 (cripple at HP/3) |
-| Vitals | -3 | — | ×3 (imp/pi only) |
+Hit locations impose an attack penalty and modify wounding
+effects on that body part. Key locations include the torso
+(no penalty, standard wounding), skull, face, neck, eyes,
+vitals, limbs, hands, and feet. Some locations have inherent
+DR (e.g., skull bone) and different wounding multipliers for
+different damage types.
+
+Look up the full hit location table (penalties, DR modifiers,
+and wounding multipliers) in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-campaigns/combat-tables.md`
 
 ### Damage Types
 
-| Type | Abbreviation | Notes |
-|------|-------------|-------|
-| Crushing | cr | Blunt trauma; double knockback |
-| Cutting | cut | ×1.5 after DR penetration |
-| Impaling | imp | ×2 after DR penetration |
-| Piercing (small) | pi- | ×0.5 after DR |
-| Piercing | pi | ×1 after DR |
-| Piercing (large) | pi+ | ×1.5 after DR |
-| Piercing (huge) | pi++ | ×2 after DR |
-| Burning | burn | ×1 after DR; can ignite |
-| Corrosion | cor | ×1; also damages DR |
-| Toxic | tox | ×1; internal only |
-| Fatigue | fat | To FP, not HP |
+Damage types determine the wounding multiplier applied after
+armor penetration. The main types are:
+
+- **Crushing (cr)** — Blunt trauma; double knockback
+- **Cutting (cut)** — Slashing; enhanced wounding after DR
+- **Impaling (imp)** — Piercing deep; high wounding multiplier
+- **Piercing (pi-, pi, pi+, pi++)** — Ranging from small to
+  huge, with increasing wounding effectiveness
+- **Burning (burn)** — Fire/energy; can ignite
+- **Corrosion (cor)** — Also damages DR
+- **Toxic (tox)** — Internal only
+- **Fatigue (fat)** — Applies to FP, not HP
+
+Look up specific wounding multipliers for each damage type in
+your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-campaigns/combat-tables.md`
 
 ### Ranged Combat Modifiers
 
-| Factor | Modifier |
-|--------|---------|
-| Range (Speed/Range Table) | -0 to -17+ |
-| Target Size (SM) | Per SM difference |
-| Aim (1 turn) | +weapon Acc |
-| Aim (2 turns) | +Acc +1 |
-| Aim (3+ turns) | +Acc +2 |
-| Braced | Included in Acc for 2-handed |
-| Scope | +1 to +3 (stacks with Acc) |
-| Move and Attack | -4 (max effective 9) |
-| Pop-up attack | -2 |
-| Shooting into melee | -4 per interposing figure |
+Ranged combat applies modifiers for range (via the Speed/Range
+Table), target size (SM), aiming duration, bracing, scope
+bonuses, movement penalties, pop-up attacks, and shooting into
+melee. Aim gives the weapon's Accuracy bonus on the first turn,
+with cumulative +1 per additional turn of aiming (max +2 extra).
+
+Look up the full ranged combat modifier table in your converted
+GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-campaigns/combat-tables.md`
 
 ### Shock and Knockdown
 
@@ -148,65 +143,77 @@ without requiring backward movement.
 
 ### Key Advantages with Rules Notes
 
-**Combat Reflexes** [15]: +1 all active defenses, +6 vs surprise,
-+2 Fright Checks, never freeze. One of the best combat advantages
-in the game. (Characters p.43)
+Advantage names and what they do conceptually. These traits are
+bought with character points — look up specific costs in your
+converted GCA data.
 
-**High Pain Threshold** [10]: Never suffer shock penalties, +3 to
+**Combat Reflexes**: +1 all active defenses, +6 vs surprise,
++2 Fright Checks, never freeze. One of the best combat
+advantages in the game. (Characters p.43)
+
+**High Pain Threshold**: Never suffer shock penalties, +3 to
 resist knockdown/stun, +3 to resist torture. (Characters p.59)
 
-**Danger Sense** [15]: GM rolls Per (or IQ) secretly when danger
+**Danger Sense**: GM rolls Per (or IQ) secretly when danger
 threatens; success = warning. (Characters p.47)
 
-**Fit** [5] / **Very Fit** [15]: Fit = +1 to all HT rolls
-(except resist death). Very Fit = +2 to all HT rolls, recover FP
-at double rate. (Characters p.55)
+**Fit / Very Fit**: Fit = +1 to all HT rolls (except resist
+death). Very Fit = +2 to all HT rolls, recover FP at double
+rate. (Characters p.55)
 
-**Luck** [15] / **Extraordinary Luck** [30] / **Ridiculous Luck**
-[60]: Reroll any one roll (take best) once per hour of play /
-30 min / 10 min. Cinematic campaigns may allow higher levels.
-(Characters p.66)
+**Luck / Extraordinary Luck / Ridiculous Luck**: Reroll any
+one roll (take best) at varying frequencies — once per hour of
+play, every 30 min, or every 10 min. Cinematic campaigns may
+allow higher levels. (Characters p.66)
 
-**Talent** [varies]: +1/level to a group of skills plus reaction
-bonuses from those who value the talent. Cost = 5/10/15 pts per
-level depending on breadth. (Characters p.89)
+**Talent**: +1/level to a group of skills plus reaction bonuses
+from those who value the talent. Cost depends on breadth of the
+skill group. (Characters p.89)
 
-**Trained by a Master** [30]: Halves skill penalties for rapid
+**Trained by a Master**: Halves skill penalties for rapid
 strikes, allows cinematic martial arts techniques. Prerequisite
 for many Martial Arts options. Cinematic. (Characters p.93)
 
-**Weapon Master** [20-45]: +1/die to damage with chosen
-weapon(s), halves penalties for Rapid Strike. Cost varies by
-breadth. (Characters p.99)
+**Weapon Master**: +1/die to damage with chosen weapon(s),
+halves penalties for Rapid Strike. Cost varies by breadth of
+weapons covered. (Characters p.99)
 
-**Magery** [5 + 10/level]: Prerequisite for spells. Level adds
-to spell skill and to IQ for learning spells. Magery 0 [5] =
-can learn spells but no bonus. (Characters p.66)
+**Magery**: Prerequisite for spells. Level adds to spell skill
+and to IQ for learning spells. Magery 0 = can learn spells but
+no bonus. (Characters p.66)
+
+Look up specific advantage point costs in your converted GCA
+data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/advantages.md`
 
 ### Key Disadvantages with Rules Notes
 
-**Duty** [varies]: Frequency × hazard. Base: 6 or less [-2],
-9 or less [-5], 12 or less [-10], 15 or less [-15]. Extremely
-Hazardous = ×2. Involuntary = extra -5. (Characters p.133)
+**Duty**: Value depends on frequency (how often it comes up)
+and hazard level. Extremely Hazardous and Involuntary modifiers
+increase the value. (Characters p.133)
 
-**Enemy** [varies]: Frequency × power. Less powerful than PC
-[-5 base], equal [-10 base], more powerful [-20 base], entire
-government [-30 base]. Frequency multiplier same as Duty.
-(Characters p.135)
+**Enemy**: Value depends on frequency and power relative to the
+PC (less powerful, equal, more powerful, or an entire
+government). (Characters p.135)
 
-**Sense of Duty** [varies]: -2 to small group, -5 to large
-group, -10 to nation, -15 to all living things, -20 to all
-sapient beings. (Characters p.153)
+**Sense of Duty**: Value depends on the size of the group the
+character feels duty toward (small group through all sapient
+beings). (Characters p.153)
 
-**Code of Honor** [varies]: -5 (Professional), -10 (Gentleman's
-or Soldier's), -15 (Chivalric). (Characters p.127)
+**Code of Honor**: Value varies by strictness of the code
+(Professional, Gentleman's/Soldier's, Chivalric).
+(Characters p.127)
 
-**Overconfidence** [-5*]: Self-control roll to avoid rash
-actions. Asterisk = modified by CR. (Characters p.148)
+**Overconfidence**: Self-control roll to avoid rash actions.
+Value modified by self-control number. (Characters p.148)
 
-**Compulsive Behavior** [-5* to -15*]: Various. -5 for minor,
--10 for moderate, -15 for seriously inconvenient. Modified by
-CR. (Characters p.128)
+**Compulsive Behavior**: Various types at different base values
+for minor, moderate, and seriously inconvenient compulsions.
+Modified by self-control roll. (Characters p.128)
+
+Look up specific disadvantage point values in your converted
+GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/disadvantages.md`
 
 ### Disadvantage Limits
 
@@ -224,29 +231,33 @@ limitations decrease it. They're core to the Powers system but
 apply to any advantage.
 
 **Key Enhancements:**
-- Affects Others (+50%/level): Share advantage with others
-- Area Effect (+50%/level): Affects an area (2 yd radius/level)
-- Armor Divisor (+50% for (2), +100% for (3), +150% for (5), +200% for (10))
-- Selective Area (+20%): Exclude targets from area effect
-- Reduced Time (+20%/level): Halve activation time
+- Affects Others: Share advantage with others
+- Area Effect: Affects an area (radius per level)
+- Armor Divisor: Penetrate DR more effectively (multiple tiers)
+- Selective Area: Exclude targets from area effect
+- Reduced Time: Halve activation time per level
 
 **Key Limitations:**
-- Accessibility (-varies): Limited conditions for use
-- Costs Fatigue (-5%/FP): Drains FP to use
-- Limited Use (-varies): Finite uses per day
-- Nuisance Effect (-5%): Annoying side effect
-- Requires (Attribute) Roll (-10%): Must roll to activate
-- Takes Extra Time (-10%/level): Double activation time
-- Unreliable (-varies): Activation roll required
+- Accessibility: Limited conditions for use
+- Costs Fatigue: Drains FP to use
+- Limited Use: Finite uses per day
+- Nuisance Effect: Annoying side effect
+- Requires (Attribute) Roll: Must roll to activate
+- Takes Extra Time: Double activation time per level
+- Unreliable: Activation roll required
 
 **Power Modifiers** (from Powers): These are special limitations
 that tie an advantage to a power source:
-- Divine (-10%): Requires faith and patron deity
-- Magical (-10%): Can be dispelled, detected as magic
-- Psionic (-10%): Subject to anti-psi
-- Spirit (-25%): Requires spirit cooperation
-- Super (-10%): Innate metahuman ability
-- Chi (-10%): Internal energy, requires discipline
+- Divine: Requires faith and patron deity
+- Magical: Can be dispelled, detected as magic
+- Psionic: Subject to anti-psi
+- Spirit: Requires spirit cooperation
+- Super: Innate metahuman ability
+- Chi: Internal energy, requires discipline
+
+Look up specific enhancement and limitation percentage values
+in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/modifiers.md`
 
 **Net modifier rule**: Total limitation percentage cannot reduce
 final cost below 20% of the base cost.
@@ -266,7 +277,7 @@ ST requirement, and special notes.
 - Damage type (cut, cr, imp, etc.)
 
 **Ranged Weapons:**
-- Damage (often listed directly, e.g., 7d pi for 5.56mm)
+- Damage (often listed directly, e.g., dice + type)
 - Accuracy (Acc): Bonus when Aiming
 - Range: Half damage / max range in yards
 - RoF: Shots per turn
@@ -274,44 +285,38 @@ ST requirement, and special notes.
 - Bulk: Handling penalty (more negative = harder to maneuver)
 - Recoil (Rcl): Penalty to subsequent shots in a burst
 
-### Key Modern Firearms (TL8)
+For specific weapon statistics, look up in your converted GCA
+data or reference the source books directly:
+`~/.gm-apprentice/data/gurps-4e/gurps-high-tech/weapons.md`
 
 Source: GURPS High-Tech (TL5-8 weapons) and GURPS
-High-Tech — Weapon Tables. Key weapon categories:
-
-**Pistols**: 2d-3d pi/pi+ damage, Acc 2-3, typical weight 2-3 lbs
-**SMGs**: 2d-3d pi damage, Acc 2-4, RoF 8-15
-**Assault Rifles**: 5d-7d pi damage, Acc 4-5, RoF 10-15
-**Battle Rifles**: 7d pi damage, Acc 5, RoF 10-11
-**Shotguns**: 1d+1 pi per pellet (×9), or slugs 4d+4 pi++
-**Sniper Rifles**: 7d-9d pi damage, Acc 5-6+scope
+High-Tech — Weapon Tables for detailed stats.
 
 ### Armor
 
-**Modern Body Armor** (TL8):
-- Ballistic vest: DR 8/2* (pi/cut vs other)
-- Tactical vest: DR 12/5* with plates
-- Full tactical gear: DR 12-35 depending on plates
+Armor provides Damage Resistance (DR) that subtracts directly
+from incoming damage. DR values vary by material and
+construction, from light leather to heavy plate to modern
+ballistic vests with ceramic plates. Some armor has split DR
+(one value for piercing/cutting, another for other damage
+types, noted with *).
 
-The * notation means the first number applies to piercing and
-cutting attacks; the second applies to all other damage types.
+Look up specific armor DR values in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-high-tech/armor.md`
 
-**Medieval/Fantasy** (Source: GURPS Low-Tech):
-- Leather: DR 1-2
-- Chain mail: DR 4
-- Light plate: DR 6
-- Heavy plate: DR 7-8
-- Shield: DB +1 to +3
+Source: GURPS Low-Tech (TL0-4 armor), GURPS High-Tech (TL5-8
+armor), GURPS Ultra-Tech (TL9+ armor).
 
-### Encumbrance Table
+### Encumbrance
 
-| Level | Weight | Move Penalty | Dodge Penalty |
-|-------|--------|-------------|---------------|
-| None (0) | ≤ BL | None | None |
-| Light (1) | ≤ 2×BL | -1 | -1 |
-| Medium (2) | ≤ 3×BL | -2 | -2 |
-| Heavy (3) | ≤ 6×BL | -3 | -3 |
-| X-Heavy (4) | ≤ 10×BL | -4 | -4 |
+Encumbrance is based on total carried weight relative to Basic
+Lift (BL). There are five levels: None, Light, Medium, Heavy,
+and X-Heavy. Each level above None penalizes both Move and
+Dodge by an increasing amount.
+
+Look up the encumbrance table (weight thresholds and
+Move/Dodge penalties) in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-campaigns/encumbrance.md`
 
 ---
 
@@ -324,7 +329,7 @@ superhuman ability by combining advantages with power modifiers.
 
 A "power" is a thematic group of advantages sharing a power
 source (e.g., all your fire-based abilities share the "Fire
-Power" source with a -10% limitation). This groups them
+Power" source with a limitation). This groups them
 narratively and mechanically.
 
 **Building a Power:**
@@ -333,24 +338,25 @@ narratively and mechanically.
 3. Apply the power source modifier to each advantage
 4. Optionally add a Talent for the power (+1/level to rolls)
 
-**Example — Low-Level Super Soldier (200 pts):**
-- Enhanced ST +5 (Super, -10%) [41]
-- DR 5 (Tough Skin, -40%; Super, -10%) [13]
-- Enhanced Move 1 (Super, -10%) [18]
-- Regeneration (Slow; Super, -10%) [9]
+To build specific power examples with point costs, look up
+advantages and modifiers in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/advantages.md`
 
 ### Power Talents
 
 Power Talents add their level to all rolls made with abilities
-in that power. Cost is 5 pts/level for narrow powers, 10/level
-for broad.
+in that power. Cost depends on whether the power is narrow or
+broad.
 
 ### Anti-Powers
 
 Some advantages specifically counter powers:
-- Neutralize (specific power) [50]: Shut down one power
-- Static (specific power) [30]: Create power-dampening field
-- Resistant to (power) [varies]: Bonus to resist
+- Neutralize (specific power): Shut down one power
+- Static (specific power): Create power-dampening field
+- Resistant to (power): Bonus to resist
+
+Look up anti-power costs in your converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-basic-set-4th-ed-characters/advantages.md`
 
 Source: GURPS Supers covers origin stories, power
 frameworks, and metahuman campaign design in detail.
@@ -365,7 +371,7 @@ system from GURPS Magic.
 ### Default (Spell-Based) Magic
 
 **Prerequisites:**
-- Magery 0 [5] to learn any spells
+- Magery 0 to learn any spells
 - Higher Magery adds to spell skill and IQ for spell learning
 - Most spells require other spells as prerequisites
 
@@ -425,19 +431,19 @@ have:
 
 ### Key Combat Skills
 
-| Skill | Difficulty | Default | Parry | Notes |
-|-------|-----------|---------|-------|-------|
-| Boxing | DX/A | — | Skill/2+3 | +1/die damage, +1 Parry |
-| Brawling | DX/E | — | Skill/2+3 | +1/die damage above skill 2 |
-| Karate | DX/H | — | Skill/2+3 | +1/die damage at DX+1, +2/die at DX+2 |
-| Judo | DX/H | — | Skill/2+3 | Can parry weapons unarmed at -3 |
-| Wrestling | DX/A | — | — | Grappling; +1 per 2 pts of ST |
-| Broadsword | DX/A | Various | Skill/2+3 | Sword & similar |
-| Knife | DX/E | Various | Skill/2+3 | Fast draw common |
-| Shield | DX/E | Various | — | Block = Skill/2+3 |
-| Staff | DX/A | Various | Skill/2+3 | Reach 1-2 |
-| Guns (Pistol) | DX/E | DX-4 | — | Ranged; no parry |
-| Guns (Rifle) | DX/E | DX-4 | — | Ranged; no parry |
+| Skill | Difficulty | Parry | Notes |
+|-------|-----------|-------|-------|
+| Boxing | DX/A | Skill/2+3 | Bonus to damage, +1 Parry |
+| Brawling | DX/E | Skill/2+3 | Bonus to damage at higher skill |
+| Karate | DX/H | Skill/2+3 | Scaling damage bonus at higher skill |
+| Judo | DX/H | Skill/2+3 | Can parry weapons unarmed at -3 |
+| Wrestling | DX/A | — | Grappling; ST bonus |
+| Broadsword | DX/A | Skill/2+3 | Sword & similar |
+| Knife | DX/E | Skill/2+3 | Fast draw common |
+| Shield | DX/E | — | Block = Skill/2+3 |
+| Staff | DX/A | Skill/2+3 | Reach 1-2 |
+| Guns (Pistol) | DX/E | — | Ranged; no parry |
+| Guns (Rifle) | DX/E | — | Ranged; no parry |
 
 ### Key Techniques
 
@@ -445,22 +451,18 @@ Techniques are specializations bought up from a negative default.
 Cost is 1 pt to reduce penalty by 1 (for Average techniques) or
 to reduce by 1 from a Hard technique.
 
-| Technique | Default | Max | Notes |
-|-----------|---------|-----|-------|
-| Arm Lock | Skill+0 | +4 | Grappling follow-up |
-| Back Kick | Skill-4 | Skill-1 | More damage, less accuracy |
-| Choke Hold | Skill-2 | +0 | Fatigue/suffocation |
-| Disarm | Skill-2 | +0 | Quick Contest to disarm |
-| Elbow Strike | Skill-2 | +0 | Close combat |
-| Feint | Skill+0 | — | Not technically a technique; use Quick Contest |
-| Knee Strike | Skill-1 | +0 | Close combat |
-| Targeted Attack | Skill-(location penalty) | Skill-1 to -3 | Reduce hit location penalty |
-| Sweep | Skill-3 | -1 | Knock prone |
-| Rapid Strike | Skill-6 each | Skill-3 each | Two attacks; halved with TBAM/WM |
+Common techniques include: Arm Lock, Back Kick, Choke Hold,
+Disarm, Elbow Strike, Knee Strike, Targeted Attack, Sweep,
+and Rapid Strike. Each has a default relative to the parent
+skill and a maximum level it can be improved to.
+
+Look up specific technique defaults and max values in your
+converted GCA data:
+`~/.gm-apprentice/data/gurps-4e/gurps-martial-arts/techniques.md`
 
 ### Cinematic Combat Options
 
-Require **Trained by a Master** [30] or **Weapon Master** [20-45]:
+Require **Trained by a Master** or **Weapon Master**:
 - Rapid Strike penalties halved (to -3 each)
 - Flying Leap, Power Blow, Pressure Points, Kiai
 - Breaking Blow, Mental Strength, Blind Fighting
@@ -473,7 +475,7 @@ Gutter Fighting, and SAS/SBS Close Combat.
 ### Gun Fu (Cinematic Firearms)
 
 From GURPS Gun Fu. For cinematic gun combat:
-- Dual-Weapon Attack: -4 each hand (halved with Gunslinger)
+- Dual-Weapon Attack: penalty each hand (halved with Gunslinger)
 - Shooting from unusual positions
 - Pistol-whip and weapon transition techniques
 
@@ -484,7 +486,7 @@ Source: GURPS Gun Fu for complete cinematic firearms rules.
 ## 8. Psionic Powers
 
 From GURPS Psionic Powers. Psionics use the Powers framework
-with the Psionic (-10%) power modifier.
+with the Psionic power modifier.
 
 ### Psionic Abilities
 
