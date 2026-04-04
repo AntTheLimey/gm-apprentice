@@ -609,3 +609,4 @@ content — summarize what you learn in your own words for the
 user.
 
 - **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)
+- **Dhole's House (Official CoC Toolkit):** https://www.dholeshouse.org/ — Chaosium's official free character generator and occupation data for Call of Cthulhu 7e

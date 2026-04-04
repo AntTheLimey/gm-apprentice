@@ -377,3 +377,4 @@ user.
 
 - **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)
 - **3-Line NPC:** https://roleplayingtips.com/ (Johnn Four)
+- **Dhole's House Character Library:** https://www.dholeshouse.org/ — Official Chaosium NPC/character library and generator for Call of Cthulhu 7e

@@ -814,3 +814,12 @@ records (see continuity-engine.md):
 - Dungeon Vault, "D&D Cipher and Code Puzzles."
 - Liminal Horror, layout and typography guidance for
   TTRPG design.
+
+## External References
+
+When you need the full detail of a framework referenced above,
+fetch the original source at runtime. Do not reproduce the
+content — summarize what you learn in your own words for the
+user.
+
+- **Dhole's House Handout Generator:** https://www.dholeshouse.org/ — Official Chaosium toolkit for generating CoC telegrams, newspapers, business cards, and calendars

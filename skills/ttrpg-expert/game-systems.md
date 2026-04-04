@@ -978,3 +978,12 @@ When designing features:
   Design).
 - Wizards of the Coast, Systems Reference Document 5.2
   (CC-BY-4.0).
+
+## External References
+
+When you need the full detail of a framework referenced above,
+fetch the original source at runtime. Do not reproduce the
+content — summarize what you learn in your own words for the
+user.
+
+- **Dhole's House (Official CoC Toolkit):** https://www.dholeshouse.org/ — Chaosium's official free character generator, occupation lists, and era-specific skill data for Call of Cthulhu 7e
