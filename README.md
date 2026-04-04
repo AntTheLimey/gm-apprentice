@@ -27,6 +27,19 @@ generation to campaign management and session lifecycle support.
 /plugin install gm-apprentice
 ```
 
+## Documentation
+
+- [Quickstart Guide](docs/quickstart.md) -- set up your first
+  campaign from scratch
+- [ttrpg-expert](docs/ttrpg-expert.md) -- rules, content
+  generation, and GM assistance
+- [campaign-organizer](docs/campaign-organizer.md) -- vault
+  structure and knowledge graphs
+- [campaign-qa](docs/campaign-qa.md) -- campaign quality
+  auditing
+- [session-lifecycle](docs/session-lifecycle.md) -- session
+  prep, play, and wrap-up
+
 ## Obsidian Setup
 
 Three of the four skills (campaign-organizer, campaign-qa,
