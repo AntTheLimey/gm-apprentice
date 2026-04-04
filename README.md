@@ -9,7 +9,7 @@ generation to campaign management and session lifecycle support.
 | Skill | Description | Obsidian Required |
 |-------|-------------|-------------------|
 | **ttrpg-expert** | Rules engine, content generation, canon management, continuity checking, session planning, encounter design, scenario writing | Optional |
-| **campaign-organizer** | Obsidian vault architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata | Mandatory |
+| **campaign-organizer** | Campaign architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata. Works with Obsidian or plain filesystem. | Recommended |
 | **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks | Primary |
 | **session-lifecycle** | Session lifecycle management -- prep, play, wrap-up, and reconciliation between planned and actual session content | Primary |
 
@@ -53,7 +53,7 @@ content. The ttrpg-expert skill works standalone.
 | ttrpg-expert | Fully functional | Enhanced continuity checks | Best experience |
 | campaign-qa | Not functional | Partial (file reads only) | Full QA auditing |
 | session-lifecycle | Advisory only (~40%) | Read-only analysis | Full lifecycle management |
-| campaign-organizer | Not functional | Manual vault management | Full automation |
+| campaign-organizer | Functional (filesystem mode) | Manual vault management | Full automation |
 
 ### Required Obsidian Community Plugins
 
@@ -100,7 +100,9 @@ query your Obsidian vault and return results.
 
 ## Using Without Obsidian
 
-The **ttrpg-expert** skill works without Obsidian and provides:
+Two skills work without Obsidian:
+
+**ttrpg-expert** is fully functional and provides:
 
 - Game system rules help and validation
 - NPC, location, faction, and item generation
@@ -110,8 +112,14 @@ The **ttrpg-expert** skill works without Obsidian and provides:
 - Continuity checking (from conversation context)
 - General GM support across all four game systems
 
-The other three skills require an Obsidian vault to function
-meaningfully.
+**campaign-organizer** works in filesystem mode — it creates
+the same structured markdown files, folder hierarchy, YAML
+frontmatter, and wiki-links, just without Obsidian's graph
+visualization and semantic search. Open the folder in Obsidian
+later for the full experience.
+
+The remaining two skills (campaign-qa, session-lifecycle)
+require an Obsidian vault to function meaningfully.
 
 ## License
 
