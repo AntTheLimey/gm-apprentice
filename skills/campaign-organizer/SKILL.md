@@ -32,20 +32,13 @@ flag it rather than inventing content.
 
 On first invocation, check which tools are available:
 
-### Obsidian Mode (Full)
-
-If MCP tools are available (`search_vault`, `list_vault_files`,
-`get_vault_file`), announce:
+**Obsidian Mode:** If MCP tools are available (`search_vault`,
+`list_vault_files`, `get_vault_file`), announce:
 
 > "I have access to your Obsidian vault via MCP tools.
 > Running in full mode."
 
-Use MCP tools for all vault operations. This is the current
-default behaviour.
-
-### Filesystem Mode
-
-If no MCP tools are detected, announce:
+**Filesystem Mode:** If no MCP tools are detected, announce:
 
 > "I don't see Obsidian MCP tools, so I'll work directly
 > with the filesystem. Your campaign files will be
@@ -60,42 +53,11 @@ Then **always** ask the user to confirm the working path:
 **Never default to the current working directory.** Wait for
 the user to provide a path before writing any files. This
 prevents accidentally creating campaign structure in an
-existing project directory.
+existing project directory. Once confirmed, use that path
+for the rest of the session without re-asking.
 
-Once confirmed, use that path for the rest of the session
-without re-asking.
-
-### Tool Mapping
-
-| Operation | Obsidian (MCP) | Filesystem |
-|-----------|----------------|------------|
-| Search for entities | `search_vault`, `search_vault_smart` | Grep/Glob |
-| Read files | `get_vault_file` | Read tool |
-| List files | `list_vault_files` | Glob tool |
-| Write/edit files | MCP tools or Edit | Write/Edit tools |
-
-### File Format
-
-**Identical in both modes.** All files use:
-
-- YAML frontmatter with all schema fields
-- `[[wiki-links]]` for entity cross-references
-- Quoted `"[[Entity Name]]"` in frontmatter (Juggl format)
-- Same folder structure, `_meta/` schema, naming conventions
-
-A campaign folder created in filesystem mode is a valid
-Obsidian vault — open it in Obsidian at any time with zero
-migration.
-
-### What Is Lost in Filesystem Mode
-
-- **Juggl graph visualization** — metadata is written but
-  not visualizable until opened in Obsidian.
-- **Smart Connections semantic search** — Weave mode's link
-  discovery is limited to text/name matching.
-- **Templater auto-application** — templates exist as files
-  but don't auto-apply on note creation.
-- **Dataview queries** — query syntax appears as plain text.
+For the full tool mapping and what is lost in filesystem mode,
+read `references/filesystem-mode.md`.
 
 ## The Vault Schema Layer: `_meta/`
 
@@ -169,8 +131,7 @@ an "Appearances" section. Juggl shows both dimensions.
 
 All four modes work in both Obsidian and filesystem
 environments. The workflow steps are identical — only the
-tools used to read, write, and search differ. See
-"Environment Detection" above for the tool mapping.
+tools used to read, write, and search differ.
 
 ### Organize
 
@@ -179,11 +140,14 @@ tools used to read, write, and search differ. See
 1. **Initialize schema** — Check `_meta/`. Seed if missing.
 2. **Survey** — Inventory input files: chapters, entity types,
    time periods. Flag schema misfits.
-3. **Propose structure** — Present vault layout. Adapt to content.
+3. **Propose structure** — Present vault layout. Read
+   `references/vault-structure.md` for the default layout.
+   Adapt to content.
 4. **Extract and file** — Create notes with frontmatter per
    schema. Embed `[[wiki-links]]`.
 5. **Link pass** — Find missed cross-references.
-6. **Graph audit** — Run hygiene checks (see below).
+6. **Graph audit** — Read `references/graph-hygiene.md` and
+   run hygiene checks.
 7. **Update index** — Full rebuild of `_meta/index.md`.
 8. **Report** — Counts, stubs, relationships, graph health.
 
@@ -213,8 +177,10 @@ tools used to read, write, and search differ. See
 3. **Discover** — Find missing links in body text.
 4. **Propose** — Group by confidence: Explicit, Inferred, Possible.
 5. **Apply** — After confirmation, update frontmatter and links.
+   Read `references/graph-hygiene.md` for link conventions.
 6. **Update index** — Refresh `_meta/index.md`.
-7. **Graph audit** — Full hygiene check.
+7. **Graph audit** — Read `references/graph-hygiene.md` and
+   run full hygiene check.
 
 ### Validate
 
@@ -224,80 +190,8 @@ tools used to read, write, and search differ. See
    required relationships, bidirectional consistency.
 2. **Semantic checks:** redundant edges, implied traversal edges,
    hub overload, generic type usage (`associated_with` etc.).
+   Read `references/graph-hygiene.md` for anti-patterns.
 3. **Report** — Categorized findings with severity and fixes.
-
-## Default Vault Structure
-
-Written to `_meta/vault-config.md` on first setup.
-
-```
-{Campaign Name}/
-├── _meta/           (schema + index)
-├── _Campaign/
-│   ├── Campaign Overview.md
-│   ├── Player Characters.md
-│   └── Timeline.md
-├── _Templates/      (one per type)
-├── Chapters/
-│   └── Chapter N - {Title}/
-│       ├── Chapter N Overview.md
-│       ├── Sessions/
-│       └── Scenes/
-├── Characters/ (PCs/, NPCs/)
-├── Locations/
-├── Factions & Organizations/
-├── Items & Artifacts/
-├── Creatures/
-├── Events/
-├── Documents/
-└── Clues/
-```
-
-**Campaign Overview** — Front page: campaign name, game system,
-setting/era, chapter list with links, premise.
-
-**Player Characters** — Quick-reference PC roster: player name,
-character name, key traits, status, link to full PC note.
-
-**Timeline** — Master timeline of campaign events.
-
-**Templates** — One per type in schema. On setup, create all. On
-schema evolution, create immediately. Each includes: full
-frontmatter, section headings, Dataview backlink query,
-`## Source References` and `## GM Notes`.
-
-**Naming:** Entity notes use canonical name as filename. Sessions:
-`Session {NN} - {Title}.md`. Chapters: `Chapter {N} - {Title}/`.
-Aliases in frontmatter.
-
-## Graph Hygiene
-
-**Direct edges vs traversals.** Only create direct edges that
-carry independent narrative meaning. If two NPCs share a location,
-that's discoverable by traversal — don't add `associated_with`.
-
-**Specificity.** `employs` > `associated_with`. Always use the
-most specific relationship type. Flag generic types.
-
-**Anti-patterns:** Hub overload (one entity connecting to
-everything). Redundant edges (same pair, same meaning, different
-type name). Implied traversal edges (redundant with short graph
-paths). Orphaned entities (zero relationships — flag, don't
-delete).
-
-**Required relationships:** NPCs/PCs/creatures need `located_at`.
-Factions/organizations need `headquartered_at`. Flag missing.
-
-## Wiki-Link Conventions
-
-**Frontmatter:** `"[[Entity Name]]"` (quoted, double brackets).
-Juggl reads these as graph edges.
-
-**Body text:** `[[Entity Name]]` on first mention per section.
-Alias syntax: `[[Professor Albin Herzfeld|Herzfeld]]`.
-
-**Scene entities:** The `entities:` frontmatter list is the
-primary bridge between narrative and entity layers.
 
 ## Handling Ambiguity
 
