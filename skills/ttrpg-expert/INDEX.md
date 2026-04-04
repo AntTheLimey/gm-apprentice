@@ -4,21 +4,55 @@ This file maps request types to the correct knowledge base
 file. Read this file first, then read only the file(s)
 relevant to the current request.
 
-## Routing Table
+## System Selection
+
+Determine the user's game system first. If it matches one of
+the four supported systems, use that subfolder under
+`systems/`. Otherwise, use `systems/generic/`.
+
+| System | Subfolder |
+|--------|-----------|
+| D&D 5th Edition (2024) | `systems/dnd-5e-2024/` |
+| Forged in the Dark | `systems/fitd/` |
+| Call of Cthulhu 7th Edition | `systems/coc-7e/` |
+| GURPS 4th Edition | `systems/gurps-4e/` |
+| Anything else | `systems/generic/` |
+
+For unsupported systems, use `systems/generic/` which
+provides universal RPG guidance.
+
+## Routing Table — Per-System Requests
+
+In the table below, `{system}` is one of: `dnd-5e-2024`,
+`fitd`, `coc-7e`, `gurps-4e`, `generic`.
 
 | Request Type | Read This File | Also Read |
-|-------------|---------------|-----------|
-| **NPC generation** (any depth) | `npc-generation.md` | `game-systems.md` for stats |
+|---|---|---|
+| **Rules question** (any system) | `systems/{system}/mechanics.md` | `systems/{system}/rules-reference.md` |
+| **Character creation** (any system) | `systems/{system}/character-generation.md` | `systems/{system}/mechanics.md` for stats |
+| **Character validation** | `systems/{system}/character-generation.md` | `systems/{system}/rules-reference.md` |
+| **Session procedures** | `systems/{system}/session-procedures.md` | — |
+| **Character sheet reference** | `systems/{system}/character-sheet.md` | — |
+| **Combat or tactical question** | `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
+| **Advantages, traits, or costs** | `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building a character |
+| **Equipment or weapons** | `systems/{system}/rules-reference.md` | — |
+| **Powers, magic, or special abilities** | `systems/{system}/rules-reference.md` | — |
+
+## Routing Table — System-Agnostic Requests
+
+| Request Type | Read This File | Also Read |
+|---|---|---|
+| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats |
 | **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks |
 | **Location** generation | `content-generation.md` | — |
 | **Faction** generation | `content-generation.md` | `relationship-patterns.md` for webs |
-| **Item or artifact** generation | `content-generation.md` | `game-systems.md` for stats |
-| **Creature or monster** generation | `content-generation.md` | `game-systems.md` for stats |
+| **Item or artifact** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
+| **Creature or monster** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
 | **Scenario or adventure** outline | `content-generation.md` | `scenario-writing.md` for structure |
 | **Handout, letter, newspaper, diary** | `handouts-and-props.md` | — |
 | **Official document** (autopsy, police report, warrant, will) | `handouts-and-props.md` | — |
 | **Mythos tome or occult text** | `handouts-and-props.md` | — |
-| **Item card** | `handouts-and-props.md` | `game-systems.md` for stats |
+| **Item card** | `handouts-and-props.md` | `systems/{system}/mechanics.md` for stats |
 | **Telegram, wanted poster** | `handouts-and-props.md` | — |
 | **Cipher or coded message** | `handouts-and-props.md` | — |
 | **Random or procedural** content | `random-generation.md` | — |
@@ -30,40 +64,44 @@ relevant to the current request.
 | **Revision or retcon** | `continuity-engine.md` | — |
 | **Callback generation** | `continuity-engine.md` | — |
 | **Campaign state snapshot** | `continuity-engine.md` | — |
-| **Character creation** (GURPS) | `gurps-character-generation.md` | `game-systems.md` for attribute costs, `gurps-rules-reference.md` for trait details |
-| **Character creation** (other systems) | `game-systems.md` | `entity-types.md` for schemas |
-| **Point budget / validation** (GURPS) | `gurps-character-generation.md` | `gurps-rules-reference.md` for costs |
-| **GURPS combat question** | `gurps-rules-reference.md` | `game-systems.md` for overview |
-| **GURPS advantages/disadvantages** | `gurps-rules-reference.md` | `gurps-character-generation.md` if building a character |
-| **GURPS powers, magic, or psionics** | `gurps-rules-reference.md` | — |
-| **GURPS martial arts or techniques** | `gurps-rules-reference.md` | — |
-| **GURPS equipment or weapons** | `gurps-rules-reference.md` | — |
-| **Rules question or validation** | `game-systems.md` | `entity-types.md` for schemas; `gurps-rules-reference.md` if GURPS-specific |
 | **Canon conflict** | `canon-management.md` | — |
-| **Active play / mid-session help** | `active-play-management.md` | `gurps-rules-reference.md` if GURPS combat |
-| **System-specific procedures** | `system-session-procedures.md` | `game-systems.md` |
+| **Active play / mid-session help** | `active-play-management.md` | `systems/{system}/rules-reference.md` for combat |
 | **Terminology question** | `rpg-terminology.md` | — |
 | **Relationship modeling** | `relationship-patterns.md` | — |
 | **Campaign structure** | `campaign-structure.md` | — |
+| **Cross-system tone or patterns** | `systems/shared-patterns.md` | — |
 
 ## File Summaries
 
-### Core Reference (Analysis and Rules)
+### Per-System Files (under `systems/{system}/`)
 
-- `game-systems.md` — Mechanics, attributes, skills, and
-  roll mechanics for all four systems. GURPS section includes
-  damage table, skill cost table, active defense formulas,
-  and character generation summary.
-- `gurps-character-generation.md` — Full GURPS 4e character
-  creation workflow: campaign context gathering, concept
-  development, attributes, advantages/disadvantages, skills,
-  equipment, point budget tracking, and validation checks.
-  Use for any "help me build a GURPS character" request.
-- `gurps-rules-reference.md` — Deep GURPS 4e mechanics:
-  combat (maneuvers, hit locations, damage types, active
-  defenses), expanded advantage/disadvantage lists with costs,
-  enhancement/limitation system, equipment, Powers framework,
-  magic, martial arts techniques, and psionics.
+Each supported game system has its own subfolder containing
+five reference files:
+
+- `mechanics.md` — Core mechanics, attributes, skills, roll
+  mechanics, and key formulas for that system.
+- `character-generation.md` — Full character creation
+  workflow: concept development, attributes, abilities,
+  equipment, budget tracking, and validation checks.
+- `rules-reference.md` — Deep mechanical reference: combat
+  rules, trait/ability lists with costs, equipment tables,
+  special subsystems (powers, magic, techniques, etc.).
+- `session-procedures.md` — System-specific session
+  procedures, phase structures, and GM workflows.
+- `character-sheet.md` — Character sheet layout reference,
+  field descriptions, and recording conventions.
+
+Supported systems: `dnd-5e-2024`, `fitd`, `coc-7e`,
+`gurps-4e`. The `generic` subfolder provides universal RPG
+guidance as a fallback for unsupported systems.
+
+- `systems/shared-patterns.md` — Cross-system tone guidance
+  and generation patterns shared across all systems.
+
+### System-Agnostic Files (root level)
+
+#### Core Reference (Analysis and Rules)
+
 - `entity-types.md` — Entity type definitions and
   system-specific attribute schemas.
 - `canon-management.md` — Source confidence levels (DRAFT,
@@ -74,7 +112,7 @@ relevant to the current request.
   discovery tracking.
 - `rpg-terminology.md` — Cross-system terminology reference.
 
-### Operational Patterns (How to Run Games)
+#### Operational Patterns (How to Run Games)
 
 - `gm-session-patterns.md` — Session prep frameworks: Lazy
   DM, Three Clue Rule, Five Room Dungeon, Fronts, progress
@@ -83,12 +121,10 @@ relevant to the current request.
   encounter design, node-based scenarios, pacing.
 - `active-play-management.md` — Real-time notes, improv,
   spotlight management, pacing, mid-session adjustments.
-- `system-session-procedures.md` — System-specific session
-  procedures for CoC 7e, D&D 5e, GURPS 4e, Blades.
 - `scenario-writing.md` — Scenario structure, player agency,
   NPC design, system-specific conventions.
 
-### Content Generation (How to Create Content)
+#### Content Generation (How to Create Content)
 
 - `npc-generation.md` — 3-Line NPC, AIMS framework,
   Five-Component NPC, voice/mannerism design, stat blocks.
@@ -106,7 +142,7 @@ relevant to the current request.
   tomes, item cards, telegrams, ciphers), period voice
   guides, physical prop techniques.
 
-### Session Planning (How to Prep for Players)
+#### Session Planning (How to Prep for Players)
 
 - `session-planner.md` — PC Roster Review, Five-Stage Arc
   Model, A/B/C plot rotation, Touchpoint Planning Matrix,
