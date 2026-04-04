@@ -1,5 +1,12 @@
 # GURPS 4e Character Generation
 
+> **Copyright Notice:** GURPS is a registered trademark of
+> Steve Jackson Games Incorporated. The mechanical data in
+> this section is derived from GURPS sourcebooks and is
+> included for personal reference only. A future update will
+> replace embedded data with a connector to the user's own
+> licensed GCA data files. See ATTRIBUTION.md for details.
+
 Comprehensive character creation assistant for GURPS 4th Edition.
 Supports any genre, power level, and campaign style. Works for
 both players building PCs and GMs drafting NPCs.

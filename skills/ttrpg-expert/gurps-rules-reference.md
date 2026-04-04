@@ -1,5 +1,12 @@
 # GURPS 4e Expanded Rules Reference
 
+> **Copyright Notice:** GURPS is a registered trademark of
+> Steve Jackson Games Incorporated. The mechanical data in
+> this section is derived from GURPS sourcebooks and is
+> included for personal reference only. A future update will
+> replace embedded data with a connector to the user's own
+> licensed GCA data files. See ATTRIBUTION.md for details.
+
 Deep-dive reference for GURPS 4th Edition mechanics beyond the
 summaries in `game-systems.md`. This file covers combat, advantages
 and disadvantages, equipment, powers, magic, and martial arts.

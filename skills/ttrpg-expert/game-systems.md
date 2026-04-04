@@ -308,6 +308,13 @@ npc:
 
 ## GURPS 4th Edition
 
+> **Copyright Notice:** GURPS is a registered trademark of
+> Steve Jackson Games Incorporated. The mechanical data in
+> this section is derived from GURPS sourcebooks and is
+> included for personal reference only. A future update will
+> replace embedded data with a connector to the user's own
+> licensed GCA data files. See ATTRIBUTION.md for details.
+
 ### Overview
 
 Generic Universal RolePlaying System using 3d6 roll-under.
