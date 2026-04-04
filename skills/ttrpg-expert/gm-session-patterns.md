@@ -44,29 +44,13 @@ GMs track essential metadata for each campaign.
 ### The Lazy DM Framework
 
 Mike "Sly Flourish" Shea created the most widely adopted prep framework. The
-framework requires approximately 30 minutes of prep for a 4-hour session.
+core insight is that session prep should start with a review of the player
+characters and their goals, then focus only on the elements that matter for
+the upcoming session. The method delivers roughly 30 minutes of focused prep
+for a 4-hour session by concentrating on what will actually hit the table.
 
-The eight steps are:
-
-1. Review the characters by examining player backgrounds, mechanics, goals,
-   and personal arcs.
-
-2. Create a strong start that opens with momentum through combat, mystery,
-   or drama.
-
-3. Outline potential scenes by brainstorming 3-5 likely scenes or locations.
-
-4. Write secrets and clues by preparing 10 pieces of information that matter
-   to the characters or reveal world history.
-
-5. Describe fantastic locations by writing 2-3 evocative locations with
-   sensory details.
-
-6. List important NPCs with their motivations and key traits.
-
-7. Prepare relevant monsters with stat blocks and tactics.
-
-8. Consider magic items and rewards that advance story or character goals.
+See *Return of the Lazy Dungeon Master* for the full method:
+https://slyflourish.com/
 
 ### The Three Clue Rule
 
@@ -89,16 +73,14 @@ The following clue types help ensure players can find information:
 
 ### The Five Room Dungeon
 
-The Five Room Dungeon provides a flexible framework for single-session
-adventures.
+Johnn Four (Roleplaying Tips) created the Five Room Dungeon as a flexible
+framework for single-session adventures. The core insight is that a complete
+adventure can be built from five encounters, each with a distinct dramatic
+purpose — progressing from an entry challenge through complications to a
+climax and resolution.
 
-| Room | Purpose |
-|------|---------|
-| Entrance/Guardian | A challenge before the main adventure begins |
-| Puzzle/Roleplay | A thinking or social challenge |
-| Trick/Setback | A complication or unexpected twist |
-| Climax | The main conflict or battle |
-| Resolution | A reward, revelation, or hook for the next adventure |
+See the original for the full framework:
+https://roleplayingtips.com/
 
 ### Fronts and Threats
 
