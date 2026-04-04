@@ -123,6 +123,12 @@ require an Obsidian vault to function meaningfully.
 
 ## License
 
-Content (skills and markdown) is licensed under
+Original content (skills and markdown) is licensed under
 [CC-BY-SA 4.0](LICENSE). Code (scripts, hooks, and executable
 files) is licensed under [MIT](LICENSE-CODE).
+
+This project includes material from open game content
+licensed under CC-BY 4.0 (D&D SRD 5.2), CC-BY 3.0 (Blades
+in the Dark SRD), and the ORC License (Basic Roleplaying).
+See [ATTRIBUTION.md](ATTRIBUTION.md) for full credits and
+licensing details.
