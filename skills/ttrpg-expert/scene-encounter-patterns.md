@@ -399,3 +399,15 @@ is met regardless of which nodes PCs visit.
 - Chaosium, Call of Cthulhu Keeper's Rulebook.
 - Steve Jackson Games, GURPS Basic Set.
 - Wizards of the Coast, 2024 Dungeon Master's Guide.
+
+## External References
+
+When you need the full detail of a framework referenced above,
+fetch the original source at runtime. Do not reproduce the
+content — summarize what you learn in your own words for the
+user.
+
+- **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)
+- **Three Clue Rule:** https://thealexandrian.net/wordpress/1118/roleplaying-games/three-clue-rule (Justin Alexander)
+- **Node-Based Scenario Design:** https://thealexandrian.net/wordpress/7949/roleplaying-games/node-based-scenario-design-part-1-the-basics (Justin Alexander)
+- **The Monsters Know What They're Doing:** https://themonstersknow.com/ (Keith Ammann)

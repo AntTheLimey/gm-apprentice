@@ -367,3 +367,13 @@ ambiguous, but generate something usable even with minimal input.
 - Steve Jackson Games, GURPS Basic Set: Characters.
 - John Harper, Blades in the Dark SRD.
 - Wizards of the Coast, 2024 Dungeon Master's Guide.
+
+## External References
+
+When you need the full detail of a framework referenced above,
+fetch the original source at runtime. Do not reproduce the
+content — summarize what you learn in your own words for the
+user.
+
+- **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)
+- **3-Line NPC:** https://roleplayingtips.com/ (Johnn Four)

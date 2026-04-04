@@ -403,3 +403,12 @@ outcome. Common bargains:
 - Wizards of the Coast, 2024 Dungeon Master's Guide.
 - Robin Laws, Robin's Laws of Good Game Mastering (2002).
 - Robin Laws, GUMSHOE System Reference Document.
+
+## External References
+
+When you need the full detail of a framework referenced above,
+fetch the original source at runtime. Do not reproduce the
+content — summarize what you learn in your own words for the
+user.
+
+- **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)

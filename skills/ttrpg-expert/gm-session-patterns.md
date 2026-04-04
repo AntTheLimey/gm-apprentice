@@ -299,3 +299,13 @@ The following sources informed the patterns in this document.
 - John Harper designed Progress Clocks in Blades in the Dark.
 
 - Johnn Four created the Five Room Dungeon at Roleplaying Tips.
+
+## External References
+
+When you need the full detail of a framework referenced above,
+fetch the original source at runtime. Do not reproduce the
+content — summarize what you learn in your own words for the
+user.
+
+- **Lazy DM Prep Method:** https://slyflourish.com/lazydm/ (Mike Shea)
+- **Five Room Dungeon:** https://roleplayingtips.com/rptn/five-room-dungeons/ (Johnn Four)
