@@ -84,26 +84,36 @@ All generated content starts as DRAFT status. It becomes canon when you confirm 
 
 ## Game System Data Sources
 
-The ttrpg-expert skill draws on different data sources
-depending on the game system:
+Each supported game system has its own subfolder under
+`systems/` with five consistent reference files: mechanics,
+character generation, rules reference, session procedures,
+and a character sheet template.
 
-- **D&D 5e (2024)** — Content sourced from the SRD 5.2,
-  licensed under CC-BY 4.0 by Wizards of the Coast. Built
-  directly into the skill.
+- **D&D 5e (2024)** — `systems/dnd-5e-2024/`. Content sourced
+  from the SRD 5.2, licensed under CC-BY 4.0 by Wizards of
+  the Coast. Built directly into the skill.
 
-- **Forged in the Dark** — Content sourced from the Blades
-  in the Dark SRD, licensed under CC-BY 3.0 by John Harper /
-  One Seven Design. Built directly into the skill.
+- **Forged in the Dark** — `systems/fitd/`. Content sourced
+  from the Blades in the Dark SRD, licensed under CC-BY 3.0
+  by John Harper / One Seven Design. Built directly into the
+  skill.
 
-- **Call of Cthulhu 7e** — Core mechanics sourced from the
-  Basic Roleplaying SRD (ORC License, Chaosium). CoC-specific
-  content (investigator skills, Sanity system) attributed to
-  the official free character sheet. Built into the skill.
+- **Call of Cthulhu 7e** — `systems/coc-7e/`. Core mechanics
+  sourced from the Basic Roleplaying SRD (ORC License,
+  Chaosium). CoC-specific content (investigator skills,
+  Sanity system) attributed to the official free character
+  sheet. Built into the skill.
 
-- **GURPS 4e** — No open license exists for GURPS. A future
-  update will add a connector to read your own GCA4 data
-  files for full mechanical support. Currently includes
-  workflow guidance and embedded reference data.
+- **GURPS 4e** — `systems/gurps-4e/`. No open license exists
+  for GURPS. A future update will add a connector to read
+  your own GCA4 data files for full mechanical support.
+  Currently includes workflow guidance and embedded reference
+  data.
+
+- **Other systems** — `systems/generic/`. Universal RPG
+  guidance for any system not listed above. Covers common
+  resolution mechanics, character creation patterns, and
+  session running principles.
 
 All sources are credited in
 [ATTRIBUTION.md](../ATTRIBUTION.md).
