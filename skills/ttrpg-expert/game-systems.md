@@ -244,55 +244,149 @@ npc:
 
 ## Forged in the Dark
 
+Based on the Blades in the Dark SRD by John Harper / One Seven
+Design, licensed under CC-BY 3.0.
+
 ### Overview
 
-Heist/scoundrel games using d6 dice pools.
+Heist/scoundrel games using d6 dice pools. Players build a
+crew of daring scoundrels and play to find out whether the
+fledgling crew can thrive amid the teeming threats around it.
+The game follows a structured cycle: free play, score, downtime.
 
 ### Action Ratings
 
-Grouped by attribute:
+There are 12 actions grouped into three attributes. Each action
+has a rating from 0 to 4 that determines the dice pool. Action
+ratings represent more than skill -- they reflect how the
+character approaches problems.
 
-**Insight**:
+**Insight** (resists deception/understanding consequences):
 - Hunt, Study, Survey, Tinker
 
-**Prowess**:
+**Prowess** (resists physical strain/injury):
 - Finesse, Prowl, Skirmish, Wreck
 
-**Resolve**:
+**Resolve** (resists mental strain/willpower):
 - Attune, Command, Consort, Sway
+
+Each attribute also has a rating (0-4), equal to the number of
+actions under that attribute that have at least one dot. The
+attribute rating is used for resistance rolls.
 
 ### Dice Pool Mechanics
 
 - Roll d6s equal to action rating
 - Highest die determines result:
   - 6: Full success
-  - 4-5: Partial success (complication)
-  - 1-3: Failure (bad outcome)
-- Critical: Two or more 6s
+  - 4-5: Partial success (with consequence)
+  - 1-3: Bad outcome
+- Critical: Two or more 6s (additional advantage)
+- Zero dice: Roll 2d6, take the lowest (cannot crit)
+
+Four roll types: action roll (dangerous actions), downtime roll
+(leisure activities), fortune roll (disclaim GM decisions), and
+resistance roll (reduce consequences at a stress cost).
 
 ### Position & Effect
 
-**Position** (how dangerous):
-- Controlled: Safe, low stakes
-- Risky: Standard danger
-- Desperate: High danger
+The GM sets both position and effect before the roll. Default is
+risky/standard. Nine possible combinations.
 
-**Effect** (how impactful):
-- Limited: Minor progress
-- Standard: Normal progress
-- Great: Major progress
+**Position** (how dangerous):
+- Controlled: You act on your terms, exploit dominant advantage
+- Risky: You go head to head, act under fire
+- Desperate: You overreach, you're in serious trouble
+
+**Effect** (how impactful, ticks on a progress clock):
+- Limited: Partial or weak effect (1 tick)
+- Standard: Normal expected outcome (2 ticks)
+- Great: More than usual, extra benefit (3 ticks)
+
+Effect is assessed via three factors: potency (situational
+advantages, arcane power), quality/tier (equipment and crew
+tier -- fine items count as +1), and scale (numbers involved).
+Players may trade position for effect or vice versa after the
+GM sets the levels.
+
+### Resistance Rolls
+
+When a PC suffers a consequence they don't like, they may
+resist. Resistance always succeeds -- the consequence is reduced
+or avoided (GM's choice). The PC rolls their attribute rating:
+suffer 6 stress minus the highest die result. On a critical,
+also clear 1 stress. Each consequence can only be resisted once.
 
 ### Stress & Trauma
 
-- **Stress**: 0-9 track, avoid consequences
-- **Trauma**: Permanent condition at stress-out
-- **Harm**: Physical/mental injury levels
+- **Stress**: 9-box track. Spent to resist consequences, push
+  yourself (+1d, +1 effect, or act when incapacitated for 2
+  stress each), or assist teammates (1 stress for +1d).
+- **Trauma**: When the last stress box is marked, the PC suffers
+  a trauma condition (permanent). They're taken out of the
+  current action, return later with zero stress and vice
+  satisfied. At four trauma conditions, the character must
+  retire.
+- **Trauma conditions**: Cold, Haunted, Obsessed, Paranoid,
+  Reckless, Soft, Unstable, Vicious.
+
+### Harm
+
+Four levels of harm with escalating penalties:
+
+| Level | Severity | Penalty |
+|-------|----------|---------|
+| 1 | Lesser (Battered, Drained, Distracted) | Reduced effect |
+| 2 | Moderate (Exhausted, Deep Cut, Concussion) | -1d |
+| 3 | Severe (Impaled, Broken Leg, Shot in Chest) | Need help to act |
+| 4 | Fatal (Electrocuted, Drowned, Stabbed in Heart) | Death |
+
+If a harm row is already full, the harm moves up to the next
+level. Harm is healed via the Recover downtime activity.
+
+### Vice & Overindulgence
+
+Every PC has a vice they indulge to clear stress. Vice types:
+Faith, Gambling, Luxury, Obligation, Pleasure, Stupor, Weird.
+
+To indulge, roll dice equal to your lowest attribute rating.
+Clear stress equal to the highest die result. If you clear more
+stress than you had marked, you overindulge:
+
+- **Attract Trouble**: Roll an additional entanglement.
+- **Brag**: The crew takes +2 heat.
+- **Lost**: Character vanishes; play a different PC until they
+  return.
+- **Tapped**: Your vice purveyor cuts you off; find a new one.
+
+If a PC does not or cannot indulge their vice during downtime,
+they take stress equal to their trauma count.
 
 ### Faction System
 
-- **Tier**: Power level (0-5)
-- **Status**: Relationship (-3 to +3)
-- **Hold**: Weak or Strong
+- **Tier**: Measure of wealth, influence, and scale (0 to VI).
+  Determines quality level of items, scale of gangs, and dice
+  pool for fortune rolls involving crew power. Gang scale by
+  tier: 0 (1-2 people), I (3-6), II (12), III (20), IV (40),
+  V (80).
+- **Hold**: Weak or Strong. Reflects how well a faction
+  maintains its position. Your crew starts with strong hold
+  at Tier 0.
+- **Rep**: Earned from scores (2 base, +1 per tier the target
+  is above you, -1 per tier below, minimum 0). 12 rep to
+  advance: weak hold becomes strong, or strong hold can pay
+  coin (new tier x 8) to increase tier. Turf reduces the rep
+  needed (max 6 turf, minimum 6 rep to advance).
+- **Status**: Relationship rating from -3 (war) to +3 (allies).
+  At war: +1 heat per score, lose 1 hold temporarily, PCs get
+  only one downtime activity.
+
+### Coin & Stash
+
+Coin is an abstract measure of cash and liquid assets. Crew
+can store up to 4 coin in the lair (8 with vault, 16 with
+double vault). PCs can stash coin for retirement (determines
+their fate: 0-10 poor, 11-20 meager, 21-39 modest, 40 fine).
 
 ### Entity Attributes for FitD
 
@@ -312,9 +406,10 @@ npc:
     level_3: string
 
 faction:
-  tier: number (0-5)
+  tier: number (0-6)
   hold: "weak" | "strong"
   status_with_crew: number (-3 to +3)
+  rep: number (0-12)
 ```
 
 ## D&D 5th Edition (2024 Revision)
