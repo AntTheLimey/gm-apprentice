@@ -15,27 +15,31 @@ user's intent matches one of these, skip clarification and
 go directly to the referenced file and step.
 
 **"Build me a character"** / **"help me with my character
-sheet"** / **"I need a GURPS character"** / **"create a PC"**
-→ Read `gurps-character-generation.md`. Follow the full
+sheet"** / **"I need a [system] character"** / **"create a PC"**
+→ Determine the game system first. Read
+  `systems/{system}/character-generation.md`. Follow the full
   Character Generation Workflow starting from Step 0
   (Campaign Context). If the user has existing campaign data,
   check it for campaign parameters and existing characters.
   Track point budget throughout. Validate the final build.
-  If the system is not GURPS, use `game-systems.md` for the
-  relevant system's creation rules.
+  Also read `systems/{system}/mechanics.md` for attribute
+  costs and stat references.
 
 **"How much does [trait] cost?"** / **"what are the rules
 for [mechanic]?"** / **"how does combat work?"**
-→ Read `gurps-rules-reference.md` for GURPS questions (or
-  `game-systems.md` for other systems). Provide the specific
-  rule with page references where possible. For GURPS, check
-  authoritative detail from the rules reference files.
+→ Determine the game system first. Read
+  `systems/{system}/rules-reference.md`. Provide the specific
+  rule with page references where possible. For deeper
+  context, also read `systems/{system}/mechanics.md`.
 
 **"Validate my character"** / **"check my character sheet"**
-→ Read `gurps-character-generation.md` (Validation Checks
-  section). Run the full validation: point budget, illegal
-  combos, missing prerequisites, disadvantage limits, skill
-  level sanity, equipment affordability, active defenses.
+→ Determine the game system first. Read
+  `systems/{system}/character-generation.md` (Validation
+  Checks section). Run the full validation: point budget,
+  illegal combos, missing prerequisites, disadvantage limits,
+  skill level sanity, equipment affordability, active
+  defenses. Also read `systems/{system}/rules-reference.md`
+  for cost verification.
 
 **"Make me an NPC"** / **"I need a villain"** / **"generate
 a character"**
@@ -121,25 +125,32 @@ then Continuity.
 Read `INDEX.md` first to find the correct knowledge base
 file for any request. The index contains a routing table
 mapping request types to files and brief summaries of all
-20 knowledge base files.
+knowledge base files.
+
+Each supported game system has its own subfolder under
+`systems/` with five reference files: `mechanics.md`,
+`character-generation.md`, `rules-reference.md`,
+`session-procedures.md`, and `character-sheet.md`. For
+unsupported systems, use `systems/generic/`.
 
 **Critical rule:** Always read the relevant knowledge base
 file before generating content or providing guidance. The
 templates, frameworks, and system-specific details in the
 knowledge base files are essential for quality output.
 
-**GURPS deep-dive files**: For any GURPS-specific request,
-the routing table will direct you to one of two specialized
-files: `gurps-character-generation.md` (character building
-workflow) or `gurps-rules-reference.md` (combat, traits,
-equipment, powers, magic, martial arts). These supplement
-the GURPS overview in `game-systems.md`.
+**System-specific deep-dives**: For any system-specific
+request, the routing table will direct you to the correct
+subfolder. Each system's `rules-reference.md` contains the
+deep mechanical detail (combat, traits, equipment, powers,
+etc.) and `character-generation.md` contains the full
+character building workflow.
 
-**GURPS sourcebook citations**: When providing GURPS rules
-answers, cite the canonical source book and page number where
-possible (e.g., "Basic Set — Characters, p.14"). The rules
-reference files within this skill contain all the mechanics
-needed for accurate rulings.
+**Sourcebook citations**: When providing rules answers, cite
+the canonical source book and page number where possible
+(e.g., "Basic Set — Characters, p.14" for GURPS, "Player's
+Handbook, p.73" for D&D). The rules reference files within
+each system subfolder contain all the mechanics needed for
+accurate rulings.
 
 ## Content Generation Workflow
 
@@ -164,8 +175,8 @@ needed for accurate rulings.
 
 ## Game Systems (Summary)
 
-Full details in `game-systems.md`. Generation tone guidance
-in each content generation file.
+Full details in `systems/{system}/mechanics.md`. Generation
+tone guidance in `systems/shared-patterns.md`.
 
 | System | Core Mechanic | Generation Tone |
 |--------|--------------|-----------------|
