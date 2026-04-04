@@ -1,4 +1,19 @@
+# OS
 .DS_Store
+
+# Editor
 *.swp
 *.swo
 *~
+
+# Skill-creator eval workspaces
+*-workspace/
+evals/
+
+# Go build artifacts
+bin/
+*.exe
+gca-converter-*
+
+# Converter output (user-specific data)
+data/
