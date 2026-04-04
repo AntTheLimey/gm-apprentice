@@ -2,9 +2,9 @@
 
 ## What It Does
 
-Your campaign librarian. campaign-organizer takes your campaign content — scattered notes, session logs, character sheets, worldbuilding docs — and structures it into a clean, interlinked Obsidian vault with knowledge graph metadata.
+Your campaign librarian. campaign-organizer takes your campaign content — scattered notes, session logs, character sheets, worldbuilding docs — and structures it into clean, interlinked markdown files with knowledge graph metadata.
 
-It classifies entities (NPCs, locations, factions, items), creates structured notes with YAML frontmatter and wiki-links, builds relationship graphs compatible with Juggl, and organizes your narrative into a chapter/session/scene hierarchy.
+It classifies entities (NPCs, locations, factions, items), creates structured notes with YAML frontmatter and wiki-links, builds relationship graphs, and organizes your narrative into a chapter/session/scene hierarchy. It works best with Obsidian but can also operate on a plain folder of markdown files.
 
 ## When to Use It
 
@@ -20,9 +20,9 @@ Reach for campaign-organizer when you need to:
 
 ## What You Need
 
-**Obsidian:** Mandatory. This skill creates and manages Obsidian vault files. It cannot function without one.
+**Obsidian:** Recommended but not required. With Obsidian and its plugins, you get the full experience — clickable wiki-links, graph visualization, semantic search, and template auto-application. Without Obsidian, the skill works directly on the filesystem, producing Obsidian-compatible files you can open in Obsidian later.
 
-**Obsidian plugins:** Smart Connections, Templater, Local REST API, and MCP Tools. See the [README](../README.md) for setup instructions.
+**For the full Obsidian experience:** Install Smart Connections, Templater, Local REST API, and MCP Tools. See the [README](../README.md) for setup instructions.
 
 ## Example Prompts
 
@@ -73,3 +73,33 @@ Claude will ask before making changes to existing files. New entities start as D
 - After a big import, run campaign-qa to catch any issues.
 - Don't worry about perfect organization upfront. You can always run the "weave" workflow later to enrich links.
 - If you have entities that don't fit the standard types (NPCs, locations, factions, etc.), tell Claude. It can create custom entity types.
+
+## Filesystem Mode
+
+If Obsidian isn't set up, campaign-organizer works directly
+with the filesystem. On first use, Claude will ask you to
+confirm a folder path before writing anything.
+
+### What Works
+
+All four modes — Organize, Dissect, Weave, and Validate —
+work in filesystem mode. You get the same folder structure,
+YAML frontmatter, wiki-links, and relationship metadata.
+
+### What's Different
+
+- **No graph visualization** — relationship data is written
+  to frontmatter but you can't see the graph until you open
+  the folder in Obsidian with Juggl.
+- **No semantic search** — link discovery in Weave mode uses
+  text matching instead of Smart Connections.
+- **No template auto-application** — templates are created as
+  reference files, not auto-applied by Templater.
+- **No Dataview** — query syntax appears as plain text.
+
+### Upgrading to Obsidian
+
+Open your campaign folder in Obsidian. That's it. All the
+files, frontmatter, wiki-links, and folder structure are
+already Obsidian-compatible. Install the recommended plugins
+to unlock graph visualization and semantic search.
