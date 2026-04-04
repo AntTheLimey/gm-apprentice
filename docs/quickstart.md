@@ -38,6 +38,7 @@ gm-apprentice supports four systems:
 
 - **Call of Cthulhu 7th Edition** (CoC 7e) — percentile-based investigation and cosmic horror
 - **GURPS 4th Edition** — point-buy, any-genre, 3d6 roll-under
+  - *If you have GURPS Character Assistant (GCA4), Claude will set up access to your data files automatically the first time you ask a GURPS question.*
 - **Forged in the Dark** (Blades in the Dark) — d6 dice pool, position and effect
 - **D&D 5th Edition, 2024 Revision** — d20 core, classes and spell slots
 

@@ -105,10 +105,14 @@ and a character sheet template.
   sheet. Built into the skill.
 
 - **GURPS 4e** — `systems/gurps-4e/`. No open license exists
-  for GURPS. A future update will add a connector to read
-  your own GCA4 data files for full mechanical support.
-  Currently includes workflow guidance and embedded reference
-  data.
+  for GURPS. If you have GURPS Character Assistant (GCA4)
+  installed, the first time you ask a GURPS question, a setup
+  wizard runs automatically. It downloads a converter tool and
+  processes your GCA4 data into markdown. Your converted data
+  stays on your machine. With GCA4, you get full mechanical
+  support including character validation and point tracking.
+  Without it, ttrpg-expert provides workflow guidance and
+  embedded reference data.
 
 - **Other systems** — `systems/generic/`. Universal RPG
   guidance for any system not listed above. Covers common
