@@ -29,14 +29,18 @@ point to other nodes. Players choose which nodes to visit.
 
 ### Investigation Skill Selection
 
-| Skill | Use When |
-|-------|----------|
-| Spot Hidden (25%) | Noticing physical objects, hidden doors, lurking figures |
-| Library Use (20%) | Searching archives, navigating catalogues |
-| Listen (20%) | Overhearing conversations, detecting sounds |
-| Psychology (10%) | Reading NPC motives, detecting lies |
-| Track (10%) | Following physical trails, footprints |
-| Appraise (5%) | Determining value, authenticity, origin |
+Call of Cthulhu's investigation skills use the BRP percentile
+system (BRP, ORC License). The key investigation skills — Spot
+Hidden, Library Use, Listen, Psychology, Track, Appraise —
+have low base values, which encourages players to specialise
+and work as a team. Each skill has a clear niche:
+
+- **Spot Hidden**: Noticing physical objects, hidden doors, lurking figures.
+- **Library Use**: Searching archives, navigating catalogues.
+- **Listen**: Overhearing conversations, detecting sounds.
+- **Psychology**: Reading NPC motives, detecting lies.
+- **Track**: Following physical trails, footprints.
+- **Appraise**: Determining value, authenticity, origin.
 
 Core clues should be found automatically. Successful skill rolls
 reveal additional detail. Failed rolls mean the investigator
