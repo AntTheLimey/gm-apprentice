@@ -251,7 +251,11 @@ All of the above, plus:
 **Villain NPC (BBEG, arc antagonist):**
 
 All of the above, plus:
-- Action-Oriented design: add Villain Actions for rounds 1-3.
+- Action-Oriented design (Matthew Colville / MCDM): boss monsters
+  should have scripted villain actions that create escalating
+  pressure across combat rounds, rather than just attacking each
+  turn. See Colville's Action-Oriented Monsters for the full
+  framework: https://mcdm.gg/
 - Legendary Resistances (2-3) to prevent early shutdown.
 - Lair actions if they have a stronghold.
 - A specific plan that advances on a timeline if PCs do not

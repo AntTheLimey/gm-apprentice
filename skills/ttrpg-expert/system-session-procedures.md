@@ -140,16 +140,15 @@ Multiply by number of characters for total encounter budget.
 
 ### Action-Oriented Monsters (Colville Method)
 
-| Step | Action | Purpose |
-|------|--------|---------|
-| 1 | Double or triple HP | Fight lasts 3+ rounds |
-| 2 | Round 1 Villain Action | Positioning |
-| 3 | Round 2 Villain Action | Escape/reposition |
-| 4 | Round 3 Villain Action | Devastating burst |
-| 5 | Add Legendary Resistances | Prevent early shutdown |
+Matthew Colville (MCDM) developed the Action-Oriented Monster concept
+to make solo boss fights dynamic and memorable. The core insight is
+that boss monsters should have scripted villain actions that create
+escalating pressure across combat rounds, rather than just attacking
+each turn. Villain actions trigger at end of a round, not on the
+monster's turn.
 
-Villain actions trigger at end of a round, not on the monster's
-turn.
+See Colville's Action-Oriented Monsters for the full framework:
+https://mcdm.gg/
 
 ### Exploration Procedures
 

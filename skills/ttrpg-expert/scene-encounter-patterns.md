@@ -290,23 +290,14 @@ and what it will do to survive.
 
 ### Action-Oriented Encounter Design
 
-Boss encounters follow a three-round dramatic arc with "villain
-actions" keyed to rounds.
+Matthew Colville (MCDM) developed the Action-Oriented Monster concept.
+The core insight is that boss monsters should have scripted villain
+actions that create escalating pressure across combat rounds, rather
+than just attacking each turn. This transforms solo boss fights from
+static damage exchanges into dynamic, memorable encounters.
 
-| Round | Purpose | Example |
-|-------|---------|---------|
-| 1 | Position | Boss leaps to high ground |
-| 2 | Escape | Boss burrows underground, summons minions |
-| 3 | Explode | Multi-target devastating attack |
-
-**Difficulty Adjustment Dials:**
-
-| Dial | Adjustment |
-|------|------------|
-| Hit Points | Halve or double |
-| Monster Count | Add reinforcements or allow retreat |
-| Damage | Increase or decrease |
-| Attack Frequency | Extra attacks for solo bosses |
+See Colville's Action-Oriented Monsters for the full framework:
+https://mcdm.gg/
 
 ### Multi-Stage Encounters
 
