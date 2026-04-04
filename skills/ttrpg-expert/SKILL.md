@@ -152,6 +152,54 @@ Handbook, p.73" for D&D). The rules reference files within
 each system subfolder contain all the mechanics needed for
 accurate rulings.
 
+## Game System Data
+
+### Built-in Systems (No Setup Required)
+
+D&D 5e 2024, Forged in the Dark, and Call of Cthulhu 7e
+have open SRD content built into their system subfolders.
+No additional setup is needed.
+
+### GURPS 4e (Connector Required)
+
+GURPS has no open license. For full mechanical support
+(point costs, trait lookups, damage tables), this skill
+reads from converted GCA4 data files.
+
+**On first GURPS request, check `~/.gm-apprentice/config.json`.**
+
+If GURPS is not configured (or `converted` is false):
+
+1. Ask the user: "GURPS doesn't have an open SRD, so I need
+   access to your game data for full mechanical support.
+   Do you have GCA4 (GURPS Character Assistant) data files?"
+
+2. If yes: get the path to their GCA data files directory.
+
+3. Determine the user's OS and architecture.
+
+4. Download the correct `gca-converter` binary from the
+   latest GitHub Release at
+   `github.com/AntTheLimey/gm-apprentice/releases`.
+
+5. Run: `gca-converter --input <path> --output ~/.gm-apprentice/data/gurps-4e`
+
+6. Create/update `~/.gm-apprentice/config.json` with the
+   GURPS entry (type: gca-data, paths, book list, timestamp).
+
+7. Announce completion and proceed with the request.
+
+If no GCA data: fall back to the workflow-only content in
+`systems/gurps-4e/`. The skill still works for session
+planning, encounter design, and general GURPS guidance —
+just without precise mechanical lookups.
+
+**Reading converted data:** When you need a specific GURPS
+mechanical value (point cost, damage, skill default), read
+the relevant file from `~/.gm-apprentice/data/gurps-4e/`.
+The files are organized by source book and section:
+`{book-name}/advantages.md`, `{book-name}/skills.md`, etc.
+
 ## Content Generation Workflow
 
 1. **Clarify** — What type, which system, what depth, what
