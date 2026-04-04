@@ -208,6 +208,77 @@ Listen, Psychology, and others have deliberately low base
 values, encouraging specialisation and teamwork among
 investigators.
 
+### Investigator Skills (1920s Era)
+
+From the official Chaosium character sheet (free download at
+https://www.chaosium.com/cthulhu-character-sheets/).
+
+| Skill | Base % | Category |
+|-------|--------|----------|
+| Accounting | 05 | Mental |
+| Anthropology | 01 | Mental |
+| Appraise | 05 | Mental |
+| Archaeology | 01 | Mental |
+| Art/Craft (specify) | 05 | Mental |
+| Charm | 15 | Communication |
+| Climb | 20 | Physical |
+| Credit Rating | 00 | Special |
+| Cthulhu Mythos | 00 | Special |
+| Disguise | 05 | Manipulation |
+| Dodge | DEX/2 | Combat |
+| Drive Auto | 20 | Manipulation |
+| Electrical Repair | 10 | Manipulation |
+| Fast Talk | 05 | Communication |
+| Fighting (Brawl) | 25 | Combat |
+| Firearms (Handgun) | 20 | Combat |
+| Firearms (Rifle/Shotgun) | 25 | Combat |
+| First Aid | 30 | Mental |
+| History | 05 | Mental |
+| Intimidate | 15 | Communication |
+| Jump | 20 | Physical |
+| Language (Other) | 01 | Mental |
+| Language (Own) | EDU | Mental |
+| Law | 05 | Mental |
+| Library Use | 20 | Mental |
+| Listen | 20 | Perception |
+| Locksmith | 01 | Manipulation |
+| Mechanical Repair | 10 | Manipulation |
+| Medicine | 01 | Mental |
+| Natural World | 10 | Mental |
+| Navigate | 10 | Mental |
+| Occult | 05 | Mental |
+| Operate Heavy Machinery | 01 | Manipulation |
+| Persuade | 10 | Communication |
+| Pilot (specify) | 01 | Manipulation |
+| Psychology | 10 | Mental |
+| Psychoanalysis | 01 | Mental |
+| Ride | 05 | Physical |
+| Science (specify) | 01 | Mental |
+| Sleight of Hand | 10 | Manipulation |
+| Spot Hidden | 25 | Perception |
+| Stealth | 20 | Physical |
+| Survival (specify) | 10 | Physical |
+| Swim | 20 | Physical |
+| Throw | 20 | Combat |
+| Track | 10 | Perception |
+
+**Notes:**
+- Dodge base = half DEX characteristic value
+- Own Language base = EDU characteristic value
+- Credit Rating is set by occupation, not by base value
+- Cthulhu Mythos starts at 0 and can only increase through
+  encounters with the Mythos (never through skill point
+  allocation)
+- Specialisation skills (Art/Craft, Science, Pilot, etc.)
+  require specifying a particular field
+- The modern era character sheet adds Computer Use (05%),
+  Electronics (01%), and other contemporary skills
+
+> Skill list from the official Call of Cthulhu 7th Edition
+> character sheet, freely distributed by Chaosium Inc. at
+> https://www.chaosium.com/cthulhu-character-sheets/. Call of
+> Cthulhu is a trademark of Chaosium Inc.
+
 ### Entity Attributes for CoC
 
 ```yaml
