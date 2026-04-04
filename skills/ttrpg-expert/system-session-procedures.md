@@ -7,6 +7,31 @@ each system's core gameplay loops.
 
 ## Call of Cthulhu 7e -- Investigation Sessions
 
+### BRP Procedural Foundations (ORC License)
+
+The session procedures below rest on the BRP percentile system.
+Key mechanical reminders for running CoC sessions:
+
+**Skill rolls**: D100 roll-under. Difficulty modifiers apply
+before the roll: Easy (skill doubled), Average (unmodified),
+Difficult (skill halved). The GM should only call for rolls
+when the outcome is uncertain and dramatic -- routine actions
+succeed automatically.
+
+**Opposed rolls**: When skills directly contest each other
+(e.g., Stealth vs Listen), both sides roll; the highest
+successful result wins. Ties go to the higher skill rating.
+
+**Resistance rolls**: When characteristics oppose each other
+(e.g., STR vs SIZ to force a door), use the formula:
+Chance = 50% + (active x 5) - (passive x 5). Equal values
+give 50%.
+
+**Success quality**: Critical (1/20 of skill), Special (1/5 of
+skill), Success, Failure, and Fumble (00 always fumbles). In
+investigation scenes, treat Critical/Special results as bonus
+detail or shortcuts rather than blocking progress on Failure.
+
 ### Investigation Structure Models
 
 **Linear investigations** follow a fixed sequence (A then B then
@@ -30,21 +55,23 @@ point to other nodes. Players choose which nodes to visit.
 ### Investigation Skill Selection
 
 Call of Cthulhu's investigation skills use the BRP percentile
-system (BRP, ORC License). The key investigation skills — Spot
-Hidden, Library Use, Listen, Psychology, Track, Appraise —
-have low base values, which encourages players to specialise
-and work as a team. Each skill has a clear niche:
+system (BRP, ORC License). The BRP skill categories (Combat,
+Communication, Manipulation, Mental, Perception, Physical)
+underpin the CoC skill list. Key investigation skills have
+deliberately low base values, encouraging players to specialise
+and work as a team:
 
-- **Spot Hidden**: Noticing physical objects, hidden doors, lurking figures.
-- **Library Use**: Searching archives, navigating catalogues.
-- **Listen**: Overhearing conversations, detecting sounds.
-- **Psychology**: Reading NPC motives, detecting lies.
-- **Track**: Following physical trails, footprints.
-- **Appraise**: Determining value, authenticity, origin.
+- **Spot Hidden** (Perception): Noticing physical objects, hidden doors, lurking figures.
+- **Library Use** (Mental): Searching archives, navigating catalogues.
+- **Listen** (Perception): Overhearing conversations, detecting sounds.
+- **Psychology** (Mental): Reading NPC motives, detecting lies.
+- **Track** (Perception): Following physical trails, footprints.
+- **Appraise** (Mental): Determining value, authenticity, origin.
 
-Core clues should be found automatically. Successful skill rolls
-reveal additional detail. Failed rolls mean the investigator
-finds the clue but misses the extra information.
+Core clues should be found automatically (BRP "Automatic"
+difficulty -- no roll needed). Successful skill rolls reveal
+additional detail. Failed rolls mean the investigator finds the
+clue but misses the extra information.
 
 ### Handout Design and Delivery
 
@@ -65,7 +92,10 @@ Handout types ranked by player engagement:
 - Reserve Mythos texts for peak investigation success.
 - Limit handouts to 3-5 per session.
 
-### Sanity Pacing
+### Sanity Pacing (CoC-Specific)
+
+The Sanity system is CoC's signature extension of BRP's optional
+Sanity rule. The following pacing guidance is conceptual.
 
 **Session sanity budget:**
 
@@ -86,6 +116,10 @@ Handout types ranked by player engagement:
   the roll creates consequences.
 
 ### NPC Interaction Patterns
+
+BRP Communication skills (Bargain, Command, Etiquette, Fast
+Talk, Persuade) drive NPC interactions. CoC layers in Credit
+Rating as a social-access mechanic.
 
 **Willing witnesses:** Respond to Charm or Persuade. Provide core
 clues freely; successful roll reveals sensitive details.
@@ -556,6 +590,8 @@ PC stash equal to crew Tier + 2.
 - Mike Shea, Return of the Lazy Dungeon Master (Sly Flourish).
 - Matthew Colville, Action-Oriented Monsters (MCDM).
 - Chaosium, Call of Cthulhu 7th Edition Keeper Rulebook.
+- Basic Roleplaying: Universal Game Engine. ORC License.
+  Chaosium Inc. https://www.chaosium.com/orclicense
 - Steve Jackson Games, GURPS Basic Set: Campaigns.
 - John Harper, Blades in the Dark SRD (CC-BY 3.0, One Seven
   Design).
