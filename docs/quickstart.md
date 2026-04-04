@@ -43,21 +43,25 @@ gm-apprentice supports four systems:
 
 Tell Claude which system you're using when you start. It won't assume.
 
-## Step 3: Set Up Obsidian (Optional)
+## Step 3: Set Up Obsidian (Recommended)
 
-If you only want to use ttrpg-expert for rules help and content generation, skip this step. You don't need Obsidian for that.
+Obsidian gives you the best experience — clickable wiki-links, graph visualization, semantic search — but it's not required. The campaign-organizer skill can work directly on a folder of markdown files, producing Obsidian-compatible content you can open in Obsidian later.
 
-If you want the full experience — organized campaign vaults, quality auditing, session lifecycle management — set up Obsidian and its plugins. Follow the [Obsidian Setup](../README.md#obsidian-setup) instructions in the README.
+**To set up Obsidian now:** Follow the [Obsidian Setup](../README.md#obsidian-setup) instructions in the README, then come back here.
 
-Come back here when your vault is created and the MCP connection is working.
+**To skip Obsidian for now:** Continue to Step 4. Claude will ask you for a folder path and work with the filesystem directly. You can switch to Obsidian anytime by opening that folder as a vault.
 
-## Step 4: Scaffold Your Campaign Vault
+## Step 4: Scaffold Your Campaign
 
-With Obsidian set up, ask Claude to create your campaign structure:
+Ask Claude to create your campaign structure:
 
-> "Set up a new Obsidian vault for my Call of Cthulhu campaign. It's set in 1920s New York, called 'Shadows Over Manhattan'."
+> "Set up a new campaign for Call of Cthulhu. It's set in 1920s New York, called 'Shadows Over Manhattan'."
 
-Claude will create the folder structure, schema files, and templates. You'll see directories for Characters, Locations, Factions, Items, and a narrative hierarchy for Chapters, Sessions, and Scenes.
+If you have Obsidian set up, Claude uses it automatically. If not, it will ask where to create the campaign folder:
+
+> "Where should I work? Give me the path to your campaign folder, or tell me where to create a new one."
+
+Either way, Claude creates the folder structure, schema files, and templates. You'll see directories for Characters, Locations, Factions, Items, and a narrative hierarchy for Chapters, Sessions, and Scenes.
 
 If you have existing campaign notes (Google Docs, text files, PDFs), feed them in:
 
