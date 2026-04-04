@@ -116,18 +116,33 @@ Credit Rating 50+ accesses official records without a roll.
 
 ### Combat Encounter Design
 
-**2024 XP Budget per character:**
+**XP Budget per Character (SRD 5.2, CC-BY-4.0):**
 
 | Level | Low | Moderate | High |
 |-------|-----|----------|------|
 | 1 | 50 | 75 | 100 |
+| 2 | 100 | 150 | 200 |
 | 3 | 150 | 225 | 400 |
+| 4 | 250 | 375 | 500 |
 | 5 | 500 | 750 | 1,100 |
-| 10 | 2,000 | 3,000 | 4,500 |
-| 15 | 5,000 | 7,500 | 11,500 |
-| 20 | 14,000 | 20,000 | 30,000 |
+| 6 | 600 | 1,000 | 1,400 |
+| 7 | 750 | 1,300 | 1,700 |
+| 8 | 1,000 | 1,700 | 2,100 |
+| 9 | 1,300 | 2,000 | 2,600 |
+| 10 | 1,600 | 2,300 | 3,100 |
+| 11 | 1,900 | 2,900 | 4,100 |
+| 12 | 2,200 | 3,700 | 4,700 |
+| 13 | 2,600 | 4,200 | 5,400 |
+| 14 | 2,900 | 4,900 | 6,200 |
+| 15 | 3,300 | 5,400 | 7,800 |
+| 16 | 3,800 | 6,100 | 9,800 |
+| 17 | 4,500 | 7,200 | 11,700 |
+| 18 | 5,000 | 8,700 | 14,200 |
+| 19 | 5,500 | 10,700 | 17,200 |
+| 20 | 6,400 | 13,200 | 22,000 |
 
 Multiply by number of characters for total encounter budget.
+Spend creature XP from the budget without going over.
 
 **Lazy DM Deadly Benchmark (Sly Flourish):**
 
@@ -136,11 +151,21 @@ Multiply by number of characters for total encounter budget.
 - Levels 5+: Deadly when total monster CR exceeds one half of
   total character levels.
 
-**When to use each difficulty:**
+**Difficulty descriptions (SRD 5.2, CC-BY-4.0):**
 
-- **Low:** Warmup, attrition, random encounters.
-- **Moderate:** Standard planned combats.
-- **High:** Boss fights, climactic set pieces.
+- **Low:** Characters should emerge victorious with no casualties;
+  may need healing resources. A single monster whose CR equals
+  the party level is roughly low difficulty for four characters.
+- **Moderate:** Could go badly without healing/resources; weaker
+  characters might go down; slim chance of death.
+- **High:** Could be lethal; requires smart tactics and quick
+  thinking.
+
+**Troubleshooting (SRD 5.2, CC-BY-4.0):** If an encounter has
+more than two creatures per character, include fragile creatures
+that can be defeated quickly -- especially at levels 1-2. Adjust
+on the fly by having creatures flee (easier) or adding
+reinforcements (harder).
 
 ### Action-Oriented Monsters (Colville Method)
 
@@ -164,25 +189,47 @@ https://mcdm.gg/
 4. Track time in 10-minute exploration turns.
 5. Use passive Perception for traps.
 
-**Wilderness travel:**
+**Travel Pace (SRD 5.2, CC-BY-4.0):**
 
-| Pace | Speed (6-mile hex/day) | Effect |
-|------|----------------------|--------|
-| Slow | 3 hexes | Advantage on navigation; Stealth |
-| Normal | 4 hexes | Standard |
-| Fast | 5 hexes | -5 passive Perception |
+| Pace | Per Minute | Per Hour | Per Day | Effect |
+|------|-----------|----------|---------|--------|
+| Slow | 200 ft | 2 miles | 18 miles | Advantage on Wisdom (Perception/Survival) |
+| Normal | 300 ft | 3 miles | 24 miles | Disadvantage on Stealth |
+| Fast | 400 ft | 4 miles | 30 miles | Disadvantage on Perception/Survival and Stealth |
+
+**Travel Terrain (SRD 5.2, CC-BY-4.0):**
+
+| Terrain | Max Pace | Foraging DC | Navigation DC |
+|---------|----------|-------------|---------------|
+| Arctic | Fast* | 20 | 10 |
+| Coastal | Normal | 10 | 5 |
+| Desert | Normal | 20 | 10 |
+| Forest | Normal | 10 | 15 |
+| Grassland | Fast | 15 | 5 |
+| Hill | Normal | 15 | 10 |
+| Mountain | Slow | 20 | 15 |
+| Swamp | Slow | 10 | 15 |
+| Underdark | Normal | 20 | 10 |
+
+*Appropriate equipment (e.g. skis) needed for Fast pace in Arctic.
+A good road increases maximum pace by one step.
 
 ### Social Encounter Structure
 
-**NPC Attitude System (2024):**
+**NPC Attitude System (SRD 5.2, CC-BY-4.0):**
 
-| Attitude | DC Modifier |
-|----------|------------|
-| Hostile | Disadvantage |
-| Unfriendly | +5 to DC |
-| Indifferent | No modifier |
-| Friendly | -5 to DC |
-| Helpful | Advantage |
+Monsters have one of three attitudes toward player characters.
+Use the Influence action to change a creature's attitude.
+
+| Attitude | Effect on Influence Checks |
+|----------|---------------------------|
+| Hostile | Disadvantage on ability checks to influence |
+| Indifferent | No modifier (default attitude) |
+| Friendly | Advantage on ability checks to influence |
+
+The GM determines whether a creature is Willing (complies
+without a check), Unwilling (refuses regardless), or Hesitant
+(requires an ability check modified by attitude).
 
 **Skill Challenge Framework (4e legacy):**
 
@@ -401,6 +448,8 @@ outcome. Common bargains:
 - Steve Jackson Games, GURPS Basic Set: Campaigns.
 - John Harper, Blades in the Dark SRD.
 - Wizards of the Coast, 2024 Dungeon Master's Guide.
+- Wizards of the Coast, Systems Reference Document 5.2
+  (CC-BY-4.0).
 - Robin Laws, Robin's Laws of Good Game Mastering (2002).
 - Robin Laws, GUMSHOE System Reference Document.
 

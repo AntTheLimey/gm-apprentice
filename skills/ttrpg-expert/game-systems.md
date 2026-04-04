@@ -406,11 +406,11 @@ proficient) against a DC.
 | 30 | Nearly Impossible |
 
 **Critical Hit**: Natural 20 on an attack roll always hits and
-doubles all damage dice. The 2024 revision limits critical hits to
-attack rolls only.
+the attack's damage dice are rolled twice (SRD 5.2, CC-BY-4.0).
 
-**Natural 20/1**: In the 2024 revision, natural 20 on any d20 roll
-always succeeds and natural 1 always fails.
+**Natural 20/1 on Attack Rolls**: A natural 20 always hits
+regardless of AC; a natural 1 always misses (SRD 5.2,
+CC-BY-4.0).
 
 ### Class System
 
@@ -436,16 +436,16 @@ Twelve core classes, subclass chosen at level 3 (standardized in
 
 Martial classes gain weapon mastery properties.
 
-| Mastery | Effect |
+| Mastery | Effect (SRD 5.2, CC-BY-4.0) |
 |---------|--------|
-| Cleave | Damage a second creature on hit |
-| Graze | Deal ability modifier damage on a miss |
-| Nick | Extra light weapon attack as bonus action |
-| Push | Push target 10 ft away on hit |
-| Sap | Disadvantage on target's next attack |
-| Slow | Reduce target's speed by 10 ft |
-| Topple | Target must save or fall prone |
-| Vex | Advantage on next attack against target |
+| Cleave | On hit, make a melee attack roll against a second creature within 5 ft; don't add ability modifier to damage |
+| Graze | On a miss, deal ability modifier damage of the weapon's type |
+| Nick | Light property extra attack is part of the Attack action, not a Bonus Action |
+| Push | Push Large or smaller target up to 10 ft straight away on hit |
+| Sap | Target has Disadvantage on its next attack roll before your next turn |
+| Slow | Reduce target's Speed by 10 ft until start of your next turn (doesn't stack) |
+| Topple | Target must succeed on a CON save (DC 8 + ability mod + proficiency) or fall Prone |
+| Vex | On hit with damage, gain Advantage on your next attack against that target before end of your next turn |
 
 ### Spellcasting
 
@@ -459,13 +459,13 @@ Martial classes gain weapon mastery properties.
 
 ### Combat
 
-**Action Economy** (per turn):
+**Action Economy** (per turn, SRD 5.2, CC-BY-4.0):
 
 | Resource | Usage |
 |----------|-------|
-| Action | Attack, Cast, Dash, Dodge, Disengage, Help, Hide, Ready |
-| Bonus Action | Off-hand attack, certain spells, class features |
-| Reaction | Opportunity attack, Counterspell, Shield (one per round) |
+| Action | Attack, Dash, Disengage, Dodge, Help, Hide, Influence, Magic, Ready, Search, Study, Utilize |
+| Bonus Action | Light weapon extra attack, certain spells, class features |
+| Reaction | Opportunity attack, certain spells (one per round) |
 | Movement | Up to speed in feet, splittable around actions |
 
 **Death Saving Throws**: At 0 HP, roll d20 at start of each turn
@@ -474,10 +474,42 @@ Martial classes gain weapon mastery properties.
 
 ### Rest System
 
-| Rest | Duration | Benefits |
+| Rest | Duration | Benefits (SRD 5.2, CC-BY-4.0) |
 |------|----------|----------|
-| Short | 1 hour | Spend hit dice to heal; some features recharge |
-| Long | 8 hours | All HP, half hit dice, all spell slots, most features |
+| Short | 1 hour | Spend Hit Dice to heal; some features recharge |
+| Long | 8 hours | Regain all HP, all spent Hit Dice, reduce Exhaustion by 1; most features recharge |
+
+### Conditions (SRD 5.2, CC-BY-4.0)
+
+| Condition | Key Effect |
+|-----------|-----------|
+| Blinded | Can't see; attacks against have Advantage, own attacks have Disadvantage |
+| Charmed | Can't attack charmer; charmer has Advantage on social checks |
+| Deafened | Can't hear; auto-fails hearing-based checks |
+| Exhaustion | Cumulative levels: -2 per level on D20 Tests, -5 ft Speed per level; 6 levels = death |
+| Frightened | Disadvantage on checks/attacks while source is in sight; can't willingly move closer |
+| Grappled | Speed 0; ends if grappler is Incapacitated or target is moved out of range |
+| Incapacitated | Can't take actions or reactions; Disadvantage on Initiative |
+| Invisible | Can't be seen; attacks against have Disadvantage, own attacks have Advantage |
+| Paralyzed | Incapacitated; auto-fails STR/DEX saves; attacks have Advantage; hits within 5 ft are Critical |
+| Petrified | Incapacitated; weight x10; immune to poison/disease; resistant to all damage |
+| Poisoned | Disadvantage on attack rolls and ability checks |
+| Prone | Disadvantage on attacks; melee attacks within 5 ft have Advantage; ranged attacks have Disadvantage |
+| Restrained | Speed 0; attacks against have Advantage; own attacks have Disadvantage; DEX saves at Disadvantage |
+| Stunned | Incapacitated; auto-fails STR/DEX saves; attacks have Advantage |
+| Unconscious | Incapacitated and Prone; drop held items; auto-fail STR/DEX saves; attacks have Advantage; hits within 5 ft are Critical |
+
+Note: Exhaustion in the 2024 revision is cumulative levels
+that reduce D20 Tests by 2x level and Speed by 5 ft x level.
+A Long Rest removes 1 Exhaustion level. At 6 levels, the
+creature dies.
+
+### Heroic Inspiration (SRD 5.2, CC-BY-4.0)
+
+A player character can hold one instance of Heroic Inspiration
+at a time. Expend it to reroll any die immediately after rolling;
+you must use the new roll. If you gain Heroic Inspiration while
+already having it, you can give it to another PC who lacks it.
 
 ### Character Advancement
 
