@@ -1,0 +1,9 @@
+{
+  "name": "gm-apprentice",
+  "description": "TTRPG Game Master skills for Claude -- rules validation, content generation, campaign organization, quality auditing, and session lifecycle management",
+  "version": "1.0.0",
+  "license": "CC-BY-SA-4.0 AND MIT",
+  "author": {
+    "name": "AntTheLimey"
+  }
+}

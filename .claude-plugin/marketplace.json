@@ -1,0 +1,18 @@
+{
+  "name": "gm-apprentice",
+  "owner": {
+    "name": "AntTheLimey"
+  },
+  "metadata": {
+    "description": "TTRPG Game Master skills for Claude",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "gm-apprentice",
+      "source": ".",
+      "description": "TTRPG GM skills: rules expertise, campaign organization, quality auditing, and session lifecycle management for CoC 7e, GURPS 4e, Forged in the Dark, and D&D 5e 2024",
+      "version": "1.0.0"
+    }
+  ]
+}
