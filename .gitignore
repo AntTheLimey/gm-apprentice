@@ -17,3 +17,6 @@ gca-converter-*
 
 # Converter output (user-specific data)
 data/
+
+# Backup copies of refactored files
+_backup/
