@@ -82,6 +82,32 @@ For continuity checking, Claude looks for 11 categories of problems including ti
 
 All generated content starts as DRAFT status. It becomes canon when you confirm it.
 
+## Game System Data Sources
+
+The ttrpg-expert skill draws on different data sources
+depending on the game system:
+
+- **D&D 5e (2024)** — Content sourced from the SRD 5.2,
+  licensed under CC-BY 4.0 by Wizards of the Coast. Built
+  directly into the skill.
+
+- **Forged in the Dark** — Content sourced from the Blades
+  in the Dark SRD, licensed under CC-BY 3.0 by John Harper /
+  One Seven Design. Built directly into the skill.
+
+- **Call of Cthulhu 7e** — Core mechanics sourced from the
+  Basic Roleplaying SRD (ORC License, Chaosium). CoC-specific
+  content (investigator skills, Sanity system) attributed to
+  the official free character sheet. Built into the skill.
+
+- **GURPS 4e** — No open license exists for GURPS. A future
+  update will add a connector to read your own GCA4 data
+  files for full mechanical support. Currently includes
+  workflow guidance and embedded reference data.
+
+All sources are credited in
+[ATTRIBUTION.md](../ATTRIBUTION.md).
+
 ## Tips
 
 - Always specify the game system upfront. Claude supports four systems and needs to know which one you're in.
