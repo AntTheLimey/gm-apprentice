@@ -1,0 +1,199 @@
+> BRP mechanics: BRP ORC License. See ATTRIBUTION.md.
+
+# Call of Cthulhu 7e — Session Procedures
+
+Detailed procedural guidance for running Call of Cthulhu 7e
+investigation sessions. Supplements the high-level checklists
+in gm-session-patterns.md with CoC-specific procedures.
+
+## BRP Procedural Foundations (ORC License)
+
+The session procedures below rest on the BRP percentile system.
+Key mechanical reminders for running CoC sessions:
+
+**Skill rolls**: D100 roll-under. Difficulty modifiers apply
+before the roll: Easy (skill doubled), Average (unmodified),
+Difficult (skill halved). The GM should only call for rolls
+when the outcome is uncertain and dramatic -- routine actions
+succeed automatically.
+
+**Opposed rolls**: When skills directly contest each other
+(e.g., Stealth vs Listen), both sides roll; the highest
+successful result wins. Ties go to the higher skill rating.
+
+**Resistance rolls**: When characteristics oppose each other
+(e.g., STR vs SIZ to force a door), use the formula:
+Chance = 50% + (active x 5) - (passive x 5). Equal values
+give 50%.
+
+**Success quality**: Critical (1/20 of skill), Special (1/5 of
+skill), Success, Failure, and Fumble (00 always fumbles). In
+investigation scenes, treat Critical/Special results as bonus
+detail or shortcuts rather than blocking progress on Failure.
+
+## Investigation Structure Models
+
+**Linear investigations** follow a fixed sequence (A then B then
+C). Every transition is a chokepoint where the investigation can
+stall. Linear design is fragile and should be avoided beyond
+one-shots.
+
+**Node-based investigations** (The Alexandrian model) treat each
+location, NPC, or event as a discrete node containing clues that
+point to other nodes. Players choose which nodes to visit.
+
+**Building a node-based investigation:**
+
+1. Identify 5-8 nodes (crime scene, library, witness, hideout).
+2. For each node, write 2-3 clues pointing to other nodes.
+3. Ensure at least three independent paths from opening to
+   climax.
+4. Apply the Three Clue Rule: for every conclusion investigators
+   must reach, prepare at least three supporting clues.
+
+## Investigation Skill Selection
+
+Call of Cthulhu's investigation skills use the BRP percentile
+system (BRP, ORC License). The BRP skill categories (Combat,
+Communication, Manipulation, Mental, Perception, Physical)
+underpin the CoC skill list. Key investigation skills have
+deliberately low base values, encouraging players to specialise
+and work as a team:
+
+- **Spot Hidden** (Perception): Noticing physical objects, hidden doors, lurking figures.
+- **Library Use** (Mental): Searching archives, navigating catalogues.
+- **Listen** (Perception): Overhearing conversations, detecting sounds.
+- **Psychology** (Mental): Reading NPC motives, detecting lies.
+- **Track** (Perception): Following physical trails, footprints.
+- **Appraise** (Mental): Determining value, authenticity, origin.
+
+Core clues should be found automatically (BRP "Automatic"
+difficulty -- no roll needed). Successful skill rolls reveal
+additional detail. Failed rolls mean the investigator finds the
+clue but misses the extra information.
+
+## Skill Usage Patterns and Niches
+
+Each investigator should have at least one skill niche where
+they are the party's go-to expert. Common niche distributions:
+
+| Niche | Primary Skills | Role |
+|-------|---------------|------|
+| Researcher | Library Use, History, Language (Other) | Archives, translations |
+| Observer | Spot Hidden, Listen, Track | Scene examination |
+| Social | Charm, Persuade, Fast Talk, Intimidate | Witness interviews |
+| Technical | Electrical Repair, Mechanical Repair, Locksmith | Physical obstacles |
+| Medical | First Aid, Medicine, Psychoanalysis | Healing, sanity recovery |
+| Occult | Occult, Archaeology, Anthropology | Mythos connections |
+
+Encourage players to spread skills so every investigator has a
+moment to shine in each session.
+
+## Handout Design and Delivery
+
+Handout types ranked by player engagement:
+
+1. Newspaper clippings -- set context, often the opening hook.
+2. Letters and correspondence -- reveal NPC relationships.
+3. Diary entries -- first-person descent into horror.
+4. Maps and floor plans -- drive exploration decisions.
+5. Photographs -- establish visual details.
+6. Official documents -- provide hard facts.
+
+**Delivery guidelines:**
+
+- Provide public documents freely; these are hooks.
+- Gate personal documents behind skill checks or NPC
+  interactions.
+- Reserve Mythos texts for peak investigation success.
+- Limit handouts to 3-5 per session.
+
+## Sanity Pacing (CoC-Specific)
+
+The Sanity system is CoC's signature extension of BRP's optional
+Sanity rule. The following pacing guidance is conceptual.
+
+**Session sanity budget:**
+
+| Session Type | SAN Loss | Rationale |
+|-------------|----------|-----------|
+| Slow burn / early | 2-5 total | Build unease |
+| Mid-scenario | 5-10 total | Risk one bout of madness |
+| Climax | 8-15 total | Multiple SAN rolls expected |
+| Pulp Cthulhu | Increase by 50% | Higher resilience |
+
+**Pacing principles:**
+
+- Front-load mundane horror before supernatural horror.
+- Use at least two escalating events before the major reveal.
+- Reserve the largest single SAN loss for the climax.
+- No more than three SAN rolls per hour of play.
+- Narrate before calling for a roll. Description creates dread;
+  the roll creates consequences.
+
+## NPC Interaction Patterns
+
+BRP Communication skills (Bargain, Command, Etiquette, Fast
+Talk, Persuade) drive NPC interactions. CoC layers in Credit
+Rating as a social-access mechanic.
+
+**Willing witnesses:** Respond to Charm or Persuade. Provide core
+clues freely; successful roll reveals sensitive details.
+
+**Reluctant witnesses:** Require establishing trust first. Use
+Psychology to identify what the witness fears.
+
+**Hostile witnesses:** Intimidate may extract information but
+creates future complications. Fast Talk can bypass hostility.
+
+**Authority figures:** Respond to Credit Rating and credentials.
+Credit Rating 50+ accesses official records without a roll.
+
+## Chase Procedures
+
+CoC 7e includes a structured chase system. Key elements:
+
+1. **Initiation**: A chase begins when one party flees and
+   another pursues. The Keeper sets the chase track (a series
+   of locations/waypoints).
+2. **Speed**: Each participant's MOV determines their base
+   speed. CON rolls may be required for sustained running.
+3. **Actions**: Each round, participants can attempt one action:
+   speed up (CON roll), use a skill to create/navigate hazards,
+   attack, or perform another stunt.
+4. **Hazards**: The Keeper places barriers on the track
+   (fences, traffic, crowds) requiring skill rolls to pass.
+   Failure costs movement or causes harm.
+5. **Resolution**: The chase ends when the gap closes to zero
+   (caught) or exceeds the track length (escaped).
+
+## Combat Procedures
+
+Combat in CoC should be rare, brief, and dangerous. Key
+reminders for Keepers:
+
+- **Lethality**: Firearms can kill in one hit. A .45 automatic
+  does 1D10+2 damage against investigators with 10-12 HP.
+- **Avoidance**: Reward players who find non-combat solutions.
+- **Duration**: Most CoC combats should resolve in 2-4 rounds.
+- **Consequences**: Injuries linger. Major wounds require
+  First Aid within one round and extended medical care.
+
+## Typical CoC Session Flow
+
+1. **Opening hook** (10-15 min): Newspaper, letter, or
+   direct encounter.
+2. **Initial investigation** (60-90 min): Visit 2-3 nodes,
+   gather clues, interview witnesses.
+3. **Complication** (15-30 min): Antagonist becomes aware, a
+   witness dies, or new layer is revealed.
+4. **Escalation** (30-45 min): Investigation narrows. SAN
+   checks increase.
+5. **Confrontation** (30-45 min): Climactic encounter.
+6. **Resolution/Escape** (15-20 min): Aftermath and hooks.
+
+## External References
+
+- [Chaosium Inc. (publisher)](https://www.chaosium.com/)
+- [The Alexandrian — Node-Based Scenario Design](https://thealexandrian.net/)
+- [Dhole's House (online investigator generator)](https://www.dholeshouse.org/)
