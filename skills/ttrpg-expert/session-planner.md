@@ -512,12 +512,12 @@ encounter things beyond human comprehension. Their arcs
 trend toward tragedy, but the best arcs have moments of
 defiance, sacrifice, and hard-won understanding.
 
-**Drive Mechanic (from Trail of Cthulhu):**
-Each investigator has a stated Drive — the reason they
-investigate despite the danger. Drives include Curiosity,
-Duty, Ennui, Follower, In the Blood, Revenge, and Thirst
-for Knowledge. The Drive is the foundation of the
-investigator's arc.
+**Character Motivation Systems:**
+Character motivation systems — like the Drive mechanic in
+GUMSHOE games (Robin Laws / Pelgrane Press) — can anchor
+session planning around what each PC is compelled to pursue.
+Assign or identify each character's core motivation and build
+session touchpoints that challenge or advance it.
 
 **Arc fuel for CoC:**
 - Sanity loss as arc progression. As SAN decreases, the
