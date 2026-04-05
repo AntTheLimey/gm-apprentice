@@ -247,9 +247,9 @@ else
   echo "" >&2
   echo "  ▶ Running quality review (Opus) …" >&2
 
-  # Check we have all 3 character sheets
+  # Check we have required character sheets
   MISSING_SHEETS=false
-  for TYPE in "${ALL_TYPES[@]}"; do
+  for TYPE in "${RUN_TYPES[@]}"; do
     SHEET="$OUTPUT_DIR/${TYPE}-${MODEL}.md"
     if [[ ! -f "$SHEET" ]] || [[ ! -s "$SHEET" ]]; then
       echo "  ⚠ Missing sheet: $SHEET" >&2
@@ -269,7 +269,7 @@ else
   echo "" >> "$REVIEW_TMP"
   echo "--- CHARACTER SHEETS ---" >> "$REVIEW_TMP"
 
-  for TYPE in "${ALL_TYPES[@]}"; do
+  for TYPE in "${RUN_TYPES[@]}"; do
     SHEET="$OUTPUT_DIR/${TYPE}-${MODEL}.md"
     TYPE_UPPER="$(echo "$TYPE" | tr '[:lower:]' '[:upper:]')"
     echo "" >> "$REVIEW_TMP"
@@ -306,6 +306,17 @@ else
   else
     REVIEW_RAW="$(jq -r '.result // empty' "$REVIEW_JSON")"
 
+    # Build mapping: review block index → ALL_TYPES index
+    declare -a REVIEW_MAP
+    for _ri in "${!RUN_TYPES[@]}"; do
+      for _ai in "${!ALL_TYPES[@]}"; do
+        if [[ "${RUN_TYPES[$_ri]}" == "${ALL_TYPES[$_ai]}" ]]; then
+          REVIEW_MAP[$_ri]=$_ai
+          break
+        fi
+      done
+    done
+
     # Parse JSON blocks separated by --- lines
     BLOCK_INDEX=0
     CURRENT_BLOCK=""
@@ -329,7 +340,7 @@ else
       TRIMMED="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
       if [[ "$TRIMMED" == "---" ]]; then
         if [[ -n "$CURRENT_BLOCK" ]]; then
-          parse_block "$CURRENT_BLOCK" "$BLOCK_INDEX"
+          parse_block "$CURRENT_BLOCK" "${REVIEW_MAP[$BLOCK_INDEX]}"
           BLOCK_INDEX=$(( BLOCK_INDEX + 1 ))
           CURRENT_BLOCK=""
         fi
@@ -341,8 +352,8 @@ else
     done <<< "$REVIEW_RAW"
 
     # Process last block (no trailing ---)
-    if [[ -n "$CURRENT_BLOCK" ]] && [[ $BLOCK_INDEX -lt 3 ]]; then
-      parse_block "$CURRENT_BLOCK" "$BLOCK_INDEX"
+    if [[ -n "$CURRENT_BLOCK" ]] && [[ $BLOCK_INDEX -lt ${#RUN_TYPES[@]} ]]; then
+      parse_block "$CURRENT_BLOCK" "${REVIEW_MAP[$BLOCK_INDEX]}"
     fi
 
     # Fill missing blocks
@@ -387,8 +398,15 @@ fi
 
 # Average quality (only if all 3 are numeric)
 AVG_QUALITY="–"
-if [[ "${Q_TOTAL[0]:-–}" != "–" ]] && [[ "${Q_TOTAL[1]:-–}" != "–" ]] && [[ "${Q_TOTAL[2]:-–}" != "–" ]]; then
-  AVG_QUALITY=$(awk "BEGIN {printf \"%.1f\", (${Q_TOTAL[0]} + ${Q_TOTAL[1]} + ${Q_TOTAL[2]}) / 3}")
+_q_sum=0; _q_count=0
+for _qi in "${!ALL_TYPES[@]}"; do
+  if [[ "${Q_TOTAL[$_qi]:-–}" != "–" ]]; then
+    _q_sum=$(awk "BEGIN {printf \"%.1f\", $_q_sum + ${Q_TOTAL[$_qi]}}")
+    _q_count=$((_q_count + 1))
+  fi
+done
+if [[ $_q_count -gt 0 ]]; then
+  AVG_QUALITY=$(awk "BEGIN {printf \"%.1f\", $_q_sum / $_q_count}")
 fi
 
 # ── Git info ─────────────────────────────────────────────
