@@ -183,23 +183,29 @@ from the GCS master library — structured JSON data covering
 
 **On first GURPS request, check for GCS data:**
 
-1. Check if `~/.gm-apprentice/data/gurps-4e/gcs/` exists
-   and contains data.
+1. Check if `~/.gm-apprentice/data/gurps-4e/gcs/` contains
+   the expected core book files listed in
+   `references/gcs-book-catalog.json` under `core_books`
+   (not just any files — verify the core set is complete).
 
-2. If no GCS data exists:
+2. If core data is missing or incomplete:
    a. Read `references/gcs-book-catalog.json` for the
-      file list.
+      core book file lists.
    b. Announce: "I'll download the GURPS core data
       library for supplement lookups — this takes a moment."
-   c. Download core books (Basic Set, Martial Arts,
-      Power Ups) from GitHub. For each file in the catalog:
+   c. Download only the core books (Basic Set, Martial
+      Arts, Power Ups) from GitHub. For each file listed
+      under these three books in the catalog:
       - Fetch from `{base_url}{file_path}` where base_url
         is `https://raw.githubusercontent.com/richardwilkes/gcs_master_library/master/`
       - Write to `~/.gm-apprentice/data/gurps-4e/gcs/{file_path}`
       - Use whatever HTTP fetch and file write tools are
         available (works in Claude Code and Claude Desktop
         on Mac and Windows)
-   d. Create/update `~/.gm-apprentice/config.json`
+      - If a file fails to download, report the failure
+        and continue with remaining files
+   d. Only mark setup complete after all core files are
+      present. Create/update `~/.gm-apprentice/config.json`
    e. Ask: "Core data ready. Want to add books for a
       specific genre? Use `/gurps-books` any time."
    f. Proceed with the original request.
