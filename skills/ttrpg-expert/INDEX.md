@@ -100,7 +100,9 @@ standard files, GURPS has topic-based reference files:
 `spells.md`, `combat.md`, `magic-rules.md`,
 `powers-rules.md`, `social-rules.md`. GURPS also has
 chargen kit files (`chargen-kit-combat.md`,
-`chargen-kit-magic.md`, `chargen-kit-powers.md`) for
+`chargen-kit-magic.md`, `chargen-kit-powers.md`,
+`chargen-kit-social.md`, `chargen-kit-scholar.md`,
+`chargen-kit-thief.md`, `chargen-kit-outdoor.md`) for
 efficient character generation. See SKILL.md for
 which files to load for each request type.
 

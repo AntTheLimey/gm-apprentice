@@ -186,6 +186,10 @@ character-generation.md first, then ONE kit file):
 | Combat/military/operative | chargen-kit-combat.md |
 | Wizard/mage/spellcaster | chargen-kit-magic.md |
 | Super/psionic/powers | chargen-kit-powers.md |
+| Diplomat/politician/con artist/face | chargen-kit-social.md |
+| Doctor/scientist/scholar/inventor | chargen-kit-scholar.md |
+| Thief/spy/infiltrator/assassin | chargen-kit-thief.md |
+| Explorer/ranger/survivalist/scout | chargen-kit-outdoor.md |
 | Mixed or unusual concept | Read individual topic files as needed |
 
 Kit files bundle the relevant traits, skills, equipment,
