@@ -171,6 +171,9 @@ is needed.
 
 ### GURPS 4e — File Routing
 
+**Path prefix:** `systems/gurps-4e/` — all GURPS files
+listed below are in this directory.
+
 The GURPS system has topic-based reference files for
 efficient lookup. Load only the files relevant to the
 request — never load all files at once.
