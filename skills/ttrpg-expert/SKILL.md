@@ -95,6 +95,15 @@ an item"**
 → Read `random-generation.md`. Use the appropriate oracle
   or table system. Interpret results in campaign context.
 
+**"/gurps-books"** / **"add GURPS books"** / **"download
+more GURPS data"**
+→ Read `references/gcs-book-catalog.json`. Show available
+  bundles and individual books, marking what's already
+  downloaded in `~/.gm-apprentice/data/gurps-4e/gcs/`.
+  User picks bundles or individual titles. Download
+  selected books to `~/.gm-apprentice/data/gurps-4e/gcs/`.
+  Update `~/.gm-apprentice/config.json`.
+
 ## Three Modes of Operation
 
 **Analysis Mode** — Validate, review, check, and advise.
@@ -151,6 +160,79 @@ the canonical source book and page number where possible
 Handbook, p.73" for D&D). The rules reference files within
 each system subfolder contain all the mechanics needed for
 accurate rulings.
+
+## Game System Data
+
+### Built-in Systems (No Setup Required)
+
+D&D 5e 2024, Forged in the Dark, and Call of Cthulhu 7e
+have open SRD content built into their system subfolders.
+No additional setup is needed.
+
+### GURPS 4e
+
+The GURPS skill files contain curated rules content from
+the Basic Set: attribute costs, skill tables, damage table,
+combat procedures, and character generation workflows.
+This data is distributed under the SJG Online Policy.
+
+For lookups beyond the Basic Set (supplements like Magic,
+Martial Arts, Powers, High-Tech, etc.), this skill reads
+from the GCS master library — structured JSON data covering
+55 GURPS source books.
+
+**On first GURPS request, check for GCS data:**
+
+1. Check if `~/.gm-apprentice/data/gurps-4e/gcs/` exists
+   and contains data.
+
+2. If no GCS data exists:
+   a. Read `references/gcs-book-catalog.json` for the
+      file list.
+   b. Announce: "I'll download the GURPS core data
+      library for supplement lookups — this takes a moment."
+   c. Download core books (Basic Set, Martial Arts,
+      Power Ups) from GitHub. For each file in the catalog:
+      - Fetch from `{base_url}{file_path}` where base_url
+        is `https://raw.githubusercontent.com/richardwilkes/gcs_master_library/master/`
+      - Write to `~/.gm-apprentice/data/gurps-4e/gcs/{file_path}`
+      - Use whatever HTTP fetch and file write tools are
+        available (works in Claude Code and Claude Desktop
+        on Mac and Windows)
+   d. Create/update `~/.gm-apprentice/config.json`
+   e. Ask: "Core data ready. Want to add books for a
+      specific genre? Use `/gurps-books` any time."
+   f. Proceed with the original request.
+
+3. If GCS data already exists, proceed normally.
+
+**Reading GCS data:** When you need a GURPS mechanical
+value not in the skill files (e.g., a trait from a
+supplement), read the relevant GCS JSON file. All files
+use this structure:
+
+```json
+{"version": 5, "rows": [...nested entries...]}
+```
+
+Key fields per entry type:
+- **Traits (.adq):** `name`, `reference` (e.g., "B43"),
+  `tags`, `base_points`, `points_per_level`, `features`,
+  `prereqs`, `modifiers`, `cr` (self-control roll)
+- **Skills (.skl):** `name`, `reference`, `tags`,
+  `difficulty` (e.g., "dx/h"), `defaults`, `points`
+- **Equipment (.eqp):** `description`, `reference`,
+  `tech_level`, `base_value`, `base_weight`, `weapons`
+- **Spells (.spl):** `name`, `reference`, `college`,
+  `difficulty`, `spell_class`, `casting_cost`,
+  `casting_time`, `duration`
+
+Entries nest via `children` arrays. Search recursively.
+
+**Personal reference files:** Users with GURPS rulebooks
+can place additional reference files in
+`systems/gurps-4e/personal/` for richer lookups. These
+are checked first when present.
 
 ## Content Generation Workflow
 
