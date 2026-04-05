@@ -29,10 +29,25 @@ Copyright Chaosium Inc.
 
 ## GURPS
 
-GURPS is a registered trademark of Steve Jackson Games
-Incorporated. This project does not reproduce GURPS game
-mechanics. GURPS support requires the user's own licensed
-data files (e.g., GCA4 data files) or rulebooks.
+GURPS is a trademark of Steve Jackson Games, and its rules
+and art are copyrighted by Steve Jackson Games. All rights
+are reserved by Steve Jackson Games. This game aid is the
+original creation of AntTheLimey and is released for free
+distribution, and not for resale, under the permissions
+granted in the
+[Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+
+The GURPS skill files in this project contain trait names,
+point costs, and short mechanical notes as permitted by the
+SJG Online Policy. This is the same category of data that
+the GCS Master Library
+(https://github.com/richardwilkes/gcs_master_library)
+distributes under the Mozilla Public License 2.0.
+
+Extended GURPS mechanical data (traits, skills, spells,
+equipment from 55+ source books) is sourced at runtime from
+the GCS Master Library, licensed under the Mozilla Public
+License 2.0 (https://www.mozilla.org/en-US/MPL/2.0/).
 
 ## Referenced Frameworks and Concepts
 
