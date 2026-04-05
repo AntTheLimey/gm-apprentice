@@ -23,3 +23,6 @@ _backup/
 
 # Git worktrees
 .worktrees/
+
+# Personal GURPS reference files (not for distribution)
+skills/ttrpg-expert/systems/gurps-4e/personal/
