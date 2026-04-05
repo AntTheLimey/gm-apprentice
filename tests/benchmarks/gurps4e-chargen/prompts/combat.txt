@@ -12,13 +12,7 @@ Quirk limit: -5 points.
 REFERENCE FILES (read these in order):
 1. skills/ttrpg-expert/systems/gurps-4e/mechanics.md
 2. skills/ttrpg-expert/systems/gurps-4e/character-generation.md
-3. skills/ttrpg-expert/systems/gurps-4e/skills-combat.md
-4. skills/ttrpg-expert/systems/gurps-4e/traits-physical.md
-5. skills/ttrpg-expert/systems/gurps-4e/traits-mental.md
-6. skills/ttrpg-expert/systems/gurps-4e/equipment-weapons.md
-7. skills/ttrpg-expert/systems/gurps-4e/equipment-armor.md
-8. skills/ttrpg-expert/systems/gurps-4e/equipment-gear.md
-9. skills/ttrpg-expert/systems/gurps-4e/skills-military-police.md
+3. skills/ttrpg-expert/systems/gurps-4e/chargen-kit-combat.md
 
 REQUIRED OUTPUT SECTIONS (include ALL of these):
 - Character name and background (2-3 sentences)
