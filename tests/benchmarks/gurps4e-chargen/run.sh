@@ -87,20 +87,19 @@ for i in "${!TYPES[@]}"; do
     continue
   fi
 
-  PROMPT_CONTENT="$(cat "$PROMPT_FILE")"
   JSON_OUT="$OUTPUT_DIR/${TYPE}-${MODEL}.json"
   MD_OUT="$OUTPUT_DIR/${TYPE}-${MODEL}.md"
 
   echo "" >&2
   echo "  ▶ Generating $TYPE character …" >&2
 
-  # Run claude — capture exit code without aborting (set +e)
+  # Run claude — redirect prompt file to stdin
   set +e
   claude -p \
     --output-format json \
     --model "$MODEL" \
     --allowedTools "Read,Glob" \
-    "$PROMPT_CONTENT" \
+    < "$PROMPT_FILE" \
     > "$JSON_OUT" 2>/dev/null
   RC=$?
   set -e
@@ -129,7 +128,8 @@ for i in "${!TYPES[@]}"; do
   DURATION_MS=$(jq '.duration_ms // 0' "$JSON_OUT")
   DURATION=$(awk "BEGIN {printf \"%.1f\", $DURATION_MS / 1000}")
 
-  COST=$(jq '.total_cost_usd // 0' "$JSON_OUT")
+  COST_RAW=$(jq '.total_cost_usd // 0' "$JSON_OUT")
+  COST=$(awk "BEGIN {printf \"%.4f\", $COST_RAW}")
 
   M_TOKENS[$i]=$TOKENS
   M_ROUNDS[$i]=$TOOL_ROUNDS
@@ -157,17 +157,21 @@ else
   echo "" >&2
   echo "  ▶ Running quality review (Opus) …" >&2
 
-  # Build review input: review-prompt + rubric + all 3 sheets
-  REVIEW_INPUT="$(cat "$SCRIPT_DIR/review-prompt.txt")"
-  REVIEW_INPUT+=$'\n'"$(cat "$SCRIPT_DIR/rubric.md")"
-  REVIEW_INPUT+=$'\n\n'"--- CHARACTER SHEETS ---"
+  # Build review input file: review-prompt + rubric + all 3 sheets
+  REVIEW_TMP="$OUTPUT_DIR/.review-input-${MODEL}.txt"
+  cat "$SCRIPT_DIR/review-prompt.txt" > "$REVIEW_TMP"
+  echo "" >> "$REVIEW_TMP"
+  cat "$SCRIPT_DIR/rubric.md" >> "$REVIEW_TMP"
+  echo -e "\n\n--- CHARACTER SHEETS ---" >> "$REVIEW_TMP"
 
   for TYPE in "${TYPES[@]}"; do
     SHEET="$OUTPUT_DIR/${TYPE}-${MODEL}.md"
+    TYPE_UPPER="$(echo "$TYPE" | tr '[:lower:]' '[:upper:]')"
+    echo -e "\n\n=== ${TYPE_UPPER} ===" >> "$REVIEW_TMP"
     if [[ -f "$SHEET" ]] && [[ -s "$SHEET" ]]; then
-      REVIEW_INPUT+=$'\n\n'"=== ${TYPE^^} ==="$'\n'"$(cat "$SHEET")"
+      cat "$SHEET" >> "$REVIEW_TMP"
     else
-      REVIEW_INPUT+=$'\n\n'"=== ${TYPE^^} ==="$'\n'"[Character generation failed — no sheet available]"
+      echo "[Character generation failed — no sheet available]" >> "$REVIEW_TMP"
     fi
   done
 
@@ -178,10 +182,12 @@ else
     --output-format json \
     --model opus \
     --allowedTools "" \
-    "$REVIEW_INPUT" \
+    < "$REVIEW_TMP" \
     > "$REVIEW_JSON" 2>/dev/null
   REVIEW_RC=$?
   set -e
+
+  rm -f "$REVIEW_TMP"
 
   if [[ $REVIEW_RC -ne 0 ]] || [[ ! -s "$REVIEW_JSON" ]]; then
     echo "  ✗ Review failed (exit $REVIEW_RC)" >&2
@@ -315,7 +321,8 @@ REPORT_EOF
 for i in "${!TYPES[@]}"; do
   TYPE="${TYPES[$i]}"
   NOTE="${Q_NOTES[$i]:-No notes.}"
-  echo "**${TYPE^}:** $NOTE" >> "$REPORT_FILE"
+  TYPE_CAP="$(echo "$TYPE" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+  echo "**${TYPE_CAP}:** $NOTE" >> "$REPORT_FILE"
   echo "" >> "$REPORT_FILE"
 done
 
