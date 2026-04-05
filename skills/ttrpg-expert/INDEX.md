@@ -29,7 +29,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | Request Type | Read This File | Also Read |
 |---|---|---|
 | **Rules question** (any system) | `systems/{system}/mechanics.md` | For GURPS: use file routing in SKILL.md. Others: `systems/{system}/rules-reference.md` |
-| **Character creation** (any system) | `systems/{system}/character-generation.md` | `systems/{system}/mechanics.md` for stats |
+| **Character creation** (any system) | `systems/{system}/character-generation.md` | For GURPS: also read `chargen-kit-{archetype}.md`. Others: `systems/{system}/mechanics.md` |
 | **Character validation** | `systems/{system}/character-generation.md` | For GURPS: topic trait/skill files. Others: `systems/{system}/rules-reference.md` |
 | **Session procedures** | `systems/{system}/session-procedures.md` | — |
 | **Character sheet reference** | `systems/{system}/character-sheet.md` | — |
@@ -95,10 +95,13 @@ core reference files:
 
 **GURPS 4e expanded file structure:** In addition to the
 standard files, GURPS has topic-based reference files:
-`sources.md` (book catalog), `traits-*.md` (4 files),
+`sources.md` (book catalog), `traits-*.md` (6 files),
 `skills-*.md` (7 files), `equipment-*.md` (3 files),
 `spells.md`, `combat.md`, `magic-rules.md`,
-`powers-rules.md`, `social-rules.md`. See SKILL.md for
+`powers-rules.md`, `social-rules.md`. GURPS also has
+chargen kit files (`chargen-kit-combat.md`,
+`chargen-kit-magic.md`, `chargen-kit-powers.md`) for
+efficient character generation. See SKILL.md for
 which files to load for each request type.
 
 Supported systems: `dnd-5e-2024`, `fitd`, `coc-7e`,
