@@ -140,6 +140,7 @@ Cost: 1 pt per +1 for Average; 1 pt per +1 for Hard.
 | Strategy (Land) | IQ/H | B222 | IQ-6 | Campaign-level planning |
 | Tactics | IQ/H | B224 | IQ-6 | Small-unit combat planning |
 | Traps | IQ/A | B226 | IQ-5, DX-5 | Set and detect traps |
+| First Aid | IQ/E | B195 | IQ-4 | TL. Stabilize casualties |
 | Forced Entry | DX/E | B196 | — | Break doors/windows |
 | Intimidation | Will/A | B202 | Will-5 | Threaten and coerce |
 | Search | Per/A | B219 | Per-5 | Find hidden items/people |
