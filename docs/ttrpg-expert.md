@@ -104,11 +104,14 @@ and a character sheet template.
   Sanity system) attributed to the official free character
   sheet. Built into the skill.
 
-- **GURPS 4e** — `systems/gurps-4e/`. No open license exists
-  for GURPS. A future update will add a connector to read
-  your own GCA4 data files for full mechanical support.
-  Currently includes workflow guidance and embedded reference
-  data.
+- **GURPS 4e** — `systems/gurps-4e/`. GURPS skill files
+  include curated Basic Set content (point costs, tables,
+  workflows) distributed under the SJG Online Policy. For
+  supplement lookups (Magic, Martial Arts, Powers, High-Tech,
+  etc.), the skill downloads data from the GCS master library
+  on first use. Use `/gurps-books` to add more source books
+  anytime. Users with GURPS PDFs can add personal reference
+  files to `systems/gurps-4e/personal/` for richer lookups.
 
 - **Other systems** — `systems/generic/`. Universal RPG
   guidance for any system not listed above. Covers common

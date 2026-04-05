@@ -37,7 +37,7 @@ Then reload:
 gm-apprentice supports four systems:
 
 - **Call of Cthulhu 7th Edition** (CoC 7e) — percentile-based investigation and cosmic horror
-- **GURPS 4th Edition** — point-buy, any-genre, 3d6 roll-under
+- **GURPS 4th Edition** — point-buy, any-genre, 3d6 roll-under. Includes curated Basic Set content out of the box. On first GURPS request, the skill downloads additional data from the GCS master library for supplement lookups. Use `/gurps-books` to add more source books.
 - **Forged in the Dark** (Blades in the Dark) — d6 dice pool, position and effect
 - **D&D 5th Edition, 2024 Revision** — d20 core, classes and spell slots
 
