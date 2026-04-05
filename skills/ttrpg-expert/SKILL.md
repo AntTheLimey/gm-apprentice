@@ -136,7 +136,9 @@ Each supported game system has its own subfolder under
 `character-generation.md`, `session-procedures.md`, and
 `character-sheet.md`. Most systems also have a single
 `rules-reference.md`; GURPS 4e uses topic-based files
-instead (see "Game System Data" below). For unsupported
+instead (see "Game System Data" below). GURPS 4e also has
+chargen kit files for efficient character generation — see
+the routing table below. For unsupported
 systems, use `systems/generic/`.
 
 **Critical rule:** Always read the relevant knowledge base
@@ -174,18 +176,18 @@ efficient lookup. Load only the files relevant to the
 request — never load all files at once.
 
 **Character Generation** (always read mechanics.md +
-character-generation.md first, then add 2-3 reference
-files based on concept):
+character-generation.md first, then ONE kit file):
 
-| Character Concept | Also Read |
-|-------------------|-----------|
-| Combat/military | skills-combat.md + traits-physical.md + equipment-weapons.md |
-| Social/political | skills-social.md + traits-social.md + traits-mental.md |
-| Wizard/mage | skills-esoteric.md + spells.md + traits-mental.md |
-| Thief/spy | skills-military-police.md + traits-mental.md + equipment-gear.md |
-| Martial artist | skills-combat.md + traits-physical.md + equipment-weapons.md |
-| Scientist/medic | skills-knowledge.md + skills-technical.md + traits-mental.md |
-| Outdoorsman/scout | skills-athletic-outdoor.md + traits-physical.md + equipment-gear.md |
+| Character Concept | Kit File |
+|-------------------|----------|
+| Combat/military/operative | chargen-kit-combat.md |
+| Wizard/mage/spellcaster | chargen-kit-magic.md |
+| Super/psionic/powers | chargen-kit-powers.md |
+| Mixed or unusual concept | Read individual topic files as needed |
+
+Kit files bundle the relevant traits, skills, equipment,
+and mechanics for that archetype. Only read additional
+topic files if the kit doesn't cover a specific need.
 
 **Procedural Rules** (in-play reference):
 
