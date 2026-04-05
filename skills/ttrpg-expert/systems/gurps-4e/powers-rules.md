@@ -252,8 +252,8 @@ campaign is cinematic.
 
 ## Cross-References
 
-- Enhancement/limitation details: `rules-reference.md` section 3
-- Power source descriptions: `rules-reference.md` section 5
+- Enhancement/limitation details: see tables above
+- Power source descriptions: see tables above
 - Magic as a power: `magic-rules.md`
 - Core mechanics (contests, rolls): `mechanics.md`
-- Trait costs and descriptions: `rules-reference.md` section 2
+- Trait costs and descriptions: `traits-*.md` files

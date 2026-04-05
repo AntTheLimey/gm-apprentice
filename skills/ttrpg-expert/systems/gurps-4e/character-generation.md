@@ -20,9 +20,10 @@ check for:
 - Existing PCs and NPCs (avoid duplication, find party gaps)
 - Campaign metadata (point total, TL, genre, house rules)
 
-This file and `gurps-rules-reference.md` together contain
-all the rules needed for character generation. They are the
-authoritative reference within this skill.
+This file, together with the GURPS topic files (traits,
+skills, equipment, spells, combat, powers, magic, social
+rules), contains all the rules needed for character
+generation. See SKILL.md for file routing.
 
 ## Character Generation Workflow
 
@@ -142,7 +143,8 @@ Derive from primary attributes; can be bought up or down.
 
 Advantages are beneficial traits bought with character points.
 For the full advantage list with costs, modifiers, and
-prerequisites, reference `gurps-rules-reference.md`.
+prerequisites, reference `traits-*.md` files or the
+chargen kit file for your archetype.
 
 **Categories:**
 - **Physical**: Enhanced attributes, DR, Appearance, etc.
@@ -168,8 +170,7 @@ Eidetic Memory [5], Luck [15], Patron [varies]
 *Supers*: Innate Attack [varies], DR [varies], Enhanced Move
 [20/level], Flight [40], Super ST/DX [varies with power
 modifier]. For power modifiers and supers-specific rules,
-reference `gurps-rules-reference.md` (Powers and Supers
-  section).
+reference `powers-rules.md`.
 
 *Horror*: Medium [10], Oracle [15], Spirit Empathy [10],
 Luck [15], Danger Sense [15]
@@ -238,8 +239,7 @@ Surgery, etc.).
 **Techniques**: Specific applications of a skill bought up from
 a default penalty. Example: Targeted Attack (Guns/Head) defaults
 to Guns-7, can be bought up to Guns-3 max. For martial arts
-techniques, reference `gurps-rules-reference.md` (Martial
-  Arts section).
+techniques, reference `skills-combat.md`.
 
 **Wildcard Skills**: Written as Skill! (e.g., Gun!). Cost 3 pts
 per +1 from attribute. Cinematic campaigns only.
@@ -290,9 +290,10 @@ Wealth advantage multiplies starting wealth; Struggling/Poor/
 Dead Broke reduces it.
 
 For weapons and equipment stats, reference
-`gurps-rules-reference.md` (Equipment section). Canonical
-sources are GURPS High-Tech (TL5-8), Tactical Shooting
-(modern firearms), Ultra-Tech (TL9+), and Low-Tech (TL0-4).
+`equipment-weapons.md`, `equipment-armor.md`, and
+`equipment-gear.md`. Canonical sources are GURPS High-Tech
+(TL5-8), Tactical Shooting (modern firearms), Ultra-Tech
+(TL9+), and Low-Tech (TL0-4).
 
 **Encumbrance**: Total carried weight vs Basic Lift determines
 level (None/Light/Medium/Heavy/X-Heavy), penalizing Move and
@@ -455,8 +456,12 @@ points (not counting quirks). Quirks cap at -5 (5 × -1).
 
 ## Cross-References
 
-- Expanded rules (combat, advantages, powers, magic, martial
-  arts, equipment): `gurps-rules-reference.md`
+- Combat rules: `combat.md`
+- Traits: `traits-*.md` (by category)
+- Skills: `skills-*.md` (by category)
+- Equipment: `equipment-*.md` (by type)
+- Powers: `powers-rules.md`
+- Magic: `magic-rules.md`, `spells.md`
 - NPC generation shortcuts: `npc-generation.md`
 - Game system overview: `game-systems.md`
 

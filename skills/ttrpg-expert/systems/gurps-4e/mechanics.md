@@ -15,7 +15,8 @@ Point-buy character creation with no fixed classes or levels.
 Covers any genre via modular supplements. Detailed combat
 with 1-second turns, hit locations, and active defenses.
 
-For deep rules coverage, see `rules-reference.md`.
+For deep rules coverage, see the topic files (combat.md,
+traits-*.md, skills-*.md, equipment-*.md, etc.).
 For character generation workflows, see
 `character-generation.md`.
 
@@ -91,7 +92,7 @@ Combat Reflexes: +1 to all active defenses.
 ## Advantages/Disadvantages
 
 Point-buy system for traits. Full lists with costs in
-`rules-reference.md`.
+`traits-*.md` files.
 
 - **Advantages**: Beneficial traits (cost points)
 - **Disadvantages**: Limiting traits (give points back,

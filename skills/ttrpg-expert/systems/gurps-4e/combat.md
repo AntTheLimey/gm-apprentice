@@ -255,7 +255,6 @@ harder to use while moving. Pistols are typically -2; rifles
 ## Cross-References
 
 - Core mechanics (attributes, skills, roll math): `mechanics.md`
-- Martial arts styles and techniques: `rules-reference.md`
-  section 7
+- Martial arts styles and techniques: `skills-combat.md`
 - Character generation: `character-generation.md`
-- Ranged weapons stats: `rules-reference.md` section 4
+- Ranged weapons stats: `equipment-weapons.md`

@@ -191,6 +191,6 @@ Works well with Monster Hunters templates.
 ## Cross-References
 
 - Spell catalog: `spells.md`
-- Magery advantage details: `rules-reference.md` section 2
+- Magery advantage details: `traits-supernatural.md`
 - Powers framework (for magic as a power): `powers-rules.md`
 - Core mechanics (skill rolls, success/failure): `mechanics.md`

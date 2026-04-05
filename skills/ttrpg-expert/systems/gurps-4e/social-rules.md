@@ -174,8 +174,7 @@ the Enemy shows up to cause trouble.
 
 ## Cross-References
 
-- Reaction modifiers from advantages: `rules-reference.md`
-  section 2
+- Reaction modifiers from advantages: `traits-social.md`
 - Core roll mechanics: `mechanics.md`
 - Character social traits: `character-generation.md`
 - Social Engineering supplement: expands all rules in this
