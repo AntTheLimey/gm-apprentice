@@ -28,15 +28,17 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 
 | Request Type | Read This File | Also Read |
 |---|---|---|
-| **Rules question** (any system) | `systems/{system}/mechanics.md` | `systems/{system}/rules-reference.md` |
+| **Rules question** (any system) | `systems/{system}/mechanics.md` | For GURPS: use file routing in SKILL.md. Others: `systems/{system}/rules-reference.md` |
 | **Character creation** (any system) | `systems/{system}/character-generation.md` | `systems/{system}/mechanics.md` for stats |
-| **Character validation** | `systems/{system}/character-generation.md` | `systems/{system}/rules-reference.md` |
+| **Character validation** | `systems/{system}/character-generation.md` | For GURPS: topic trait/skill files. Others: `systems/{system}/rules-reference.md` |
 | **Session procedures** | `systems/{system}/session-procedures.md` | — |
 | **Character sheet reference** | `systems/{system}/character-sheet.md` | — |
-| **Combat or tactical question** | `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
-| **Advantages, traits, or costs** | `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building a character |
-| **Equipment or weapons** | `systems/{system}/rules-reference.md` | — |
-| **Powers, magic, or special abilities** | `systems/{system}/rules-reference.md` | — |
+| **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
+| **Advantages, traits, or costs** | For GURPS: `systems/gurps-4e/traits-*.md` (pick by nature). Others: `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building |
+| **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). Others: `systems/{system}/rules-reference.md` | — |
+| **Powers, magic, or special abilities** | For GURPS: `powers-rules.md` or `magic-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Spells** | For GURPS: `systems/gurps-4e/spells.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). Others: `systems/{system}/rules-reference.md` | — |
 
 ## Routing Table — System-Agnostic Requests
 
@@ -65,7 +67,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Callback generation** | `continuity-engine.md` | — |
 | **Campaign state snapshot** | `continuity-engine.md` | — |
 | **Canon conflict** | `canon-management.md` | — |
-| **Active play / mid-session help** | `active-play-management.md` | `systems/{system}/rules-reference.md` for combat |
+| **Active play / mid-session help** | `active-play-management.md` | For GURPS: `systems/gurps-4e/combat.md`. Others: `systems/{system}/rules-reference.md` |
 | **Terminology question** | `rpg-terminology.md` | — |
 | **Relationship modeling** | `relationship-patterns.md` | — |
 | **Campaign structure** | `campaign-structure.md` | — |
@@ -76,20 +78,28 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 ### Per-System Files (under `systems/{system}/`)
 
 Each supported game system has its own subfolder containing
-five reference files:
+core reference files:
 
 - `mechanics.md` — Core mechanics, attributes, skills, roll
   mechanics, and key formulas for that system.
 - `character-generation.md` — Full character creation
   workflow: concept development, attributes, abilities,
   equipment, budget tracking, and validation checks.
-- `rules-reference.md` — Deep mechanical reference: combat
-  rules, trait/ability lists with costs, equipment tables,
-  special subsystems (powers, magic, techniques, etc.).
+- `rules-reference.md` — Deep mechanical reference (CoC,
+  FitD, D&D, generic). GURPS uses topic-based files instead
+  — see SKILL.md "Game System Data" for routing.
 - `session-procedures.md` — System-specific session
   procedures, phase structures, and GM workflows.
 - `character-sheet.md` — Character sheet layout reference,
   field descriptions, and recording conventions.
+
+**GURPS 4e expanded file structure:** In addition to the
+standard files, GURPS has topic-based reference files:
+`sources.md` (book catalog), `traits-*.md` (4 files),
+`skills-*.md` (7 files), `equipment-*.md` (3 files),
+`spells.md`, `combat.md`, `magic-rules.md`,
+`powers-rules.md`, `social-rules.md`. See SKILL.md for
+which files to load for each request type.
 
 Supported systems: `dnd-5e-2024`, `fitd`, `coc-7e`,
 `gurps-4e`. The `generic` subfolder provides universal RPG
