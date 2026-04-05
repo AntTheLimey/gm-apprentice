@@ -392,6 +392,67 @@ After Step 4 (Advantages):
 
 This lets the user make informed trade-offs as they build.
 
+## Quick Reference — Common Traits
+
+These traits appear in most builds. For unusual traits, read
+the full trait files (see SKILL.md routing).
+
+### Common Advantages
+
+| Trait | Cost | Page | Notes |
+|-------|------|------|-------|
+| Acute Senses | 2/level | B35 | +1/level to one sense roll |
+| Charisma | 5/level | B41 | +1/level reaction, influence |
+| Combat Reflexes | 15 | B43 | +1 all active defenses, +6 vs surprise, never freeze |
+| Danger Sense | 15 | B47 | GM rolls Per secretly when danger threatens |
+| Fearlessness | 2/level | B55 | +1/level to Fright Checks |
+| Fit | 5 | B55 | +1 all HT rolls except death |
+| Very Fit | 15 | B55 | +2 all HT rolls, double FP recovery |
+| Hard to Kill | 2/level | B58 | +1/level to HT rolls for death checks |
+| Hard to Subdue | 2/level | B59 | +1/level to HT rolls to stay conscious |
+| High Pain Threshold | 10 | B59 | No shock penalties, +3 knockdown/stun |
+| Luck | 15 | B66 | Reroll any bad roll 1×/hour |
+| Extraordinary Luck | 30 | B66 | Reroll 1×/30 min |
+| Magery 0 | 5 | B66 | Can learn spells |
+| Magery | +10/level | B66 | +level to spell skill and learning |
+| Night Vision | 1/level | B71 | Reduce darkness penalties |
+| Rapid Healing | 5 | B79 | +5 to HT rolls for natural healing |
+| Talent | 5/10/15 per level | B89 | +1/level to a skill group + reactions |
+| Trained by a Master | 30 | B93 | Cinematic. Halves Rapid Strike penalty |
+| Voice | 10 | B97 | +2 to Diplomacy, Fast-Talk, Performance, etc. |
+| Weapon Master | 20-45 | B99 | +1/die to damage, halves Rapid Strike |
+
+### Common Disadvantages
+
+| Trait | Cost | Page | Notes |
+|-------|------|------|-------|
+| Bad Temper | -10* | B124 | CR. Snap under stress |
+| Bloodlust | -10* | B125 | CR. Fight to kill |
+| Code of Honor | -5 to -15 | B127 | -5 Professional, -10 Soldier's, -15 Chivalric |
+| Compulsive Behavior | -5* to -15* | B128 | CR. Various compulsions |
+| Curious | -5* | B129 | CR. Must investigate |
+| Duty | varies | B133 | Freq × hazard. 12 or less = -10, EH ×2 |
+| Enemy | varies | B135 | Power × frequency |
+| Flashbacks | -5 to -20 | B136 | -5 mild, -10 moderate, -20 severe |
+| Honesty | -10* | B138 | CR. Follow the law |
+| Loner | -5* | B142 | CR. Avoid working with others |
+| Nightmares | -5* | B144 | CR. Roll each morning |
+| Overconfidence | -5* | B148 | CR. Underestimate threats |
+| Pacifism | -5 to -30 | B148 | -5 Reluctant Killer to -30 Total Nonviolence |
+| Phobia | -5* to -15* | B148 | CR. Various fears |
+| Post-Combat Shakes | -5* | B150 | CR. After combat stress |
+| Secret | -5 to -30 | B152 | Severity determines cost |
+| Sense of Duty | -2 to -20 | B153 | -2 small group to -20 all sapients |
+| Stubbornness | -5 | B157 | Won't back down |
+| Vow | -5 to -15 | B160 | -5 minor to -15 major |
+| Weirdness Magnet | -15 | B162 | Paranormal. Strange things happen |
+
+*CR = has Self-Control Roll. Base cost at CR 12 (×1).
+CR 15 = ×0.5, CR 9 = ×1.5, CR 6 = ×2.
+
+**Disadvantage Limits:** Most campaigns cap at -50 to -75
+points (not counting quirks). Quirks cap at -5 (5 × -1).
+
 ## Cross-References
 
 - Expanded rules (combat, advantages, powers, magic, martial
