@@ -1,0 +1,529 @@
+{
+  "version": 1,
+  "base_url": "https://raw.githubusercontent.com/richardwilkes/gcs_master_library/master/",
+  "core_books": [
+    "Basic Set",
+    "Martial Arts",
+    "Power Ups"
+  ],
+  "bundles": {
+    "Fantasy": {
+      "description": "Magic, monsters, and medieval adventure",
+      "books": [
+        "Magic",
+        "Dungeon Fantasy",
+        "Dungeon Fantasy RPG",
+        "Low Tech",
+        "Thaumatology",
+        "Fantasy",
+        "Fantasy Folk"
+      ]
+    },
+    "Modern Action": {
+      "description": "Guns, gadgets, and cinematic thrills",
+      "books": [
+        "Action",
+        "Gun Fu",
+        "High Tech",
+        "Tactical Shooting",
+        "Monster Hunters"
+      ]
+    },
+    "Sci-Fi": {
+      "description": "Spaceships, aliens, and future tech",
+      "books": [
+        "Ultra Tech",
+        "Space",
+        "Bio-Tech",
+        "Psionics"
+      ]
+    },
+    "Horror": {
+      "description": "Dread, investigation, and the supernatural",
+      "books": [
+        "Horror",
+        "Mysteries"
+      ]
+    },
+    "Supers": {
+      "description": "Powers, capes, and world-shaking abilities",
+      "books": [
+        "Supers",
+        "Powers",
+        "Psionics"
+      ]
+    },
+    "Historical": {
+      "description": "Ancient, medieval, and period adventures",
+      "books": [
+        "Low Tech",
+        "Martial Arts"
+      ]
+    }
+  },
+  "books": {
+    "Action": {
+      "description": "Cinematic action-adventure campaigns",
+      "files": [
+        "Library/Action/Action Equipment.eqp",
+        "Library/Action/Action Skills.skl",
+        "Library/Action/Action Traits.adq"
+      ]
+    },
+    "After the End": {
+      "description": "Post-apocalyptic survival and scavenging",
+      "files": [
+        "Library/After the End/After the End Equipment Modifiers.eqm",
+        "Library/After the End/After the End Equipment.eqp",
+        "Library/After the End/After the End Mutations.adq"
+      ]
+    },
+    "Aliens": {
+      "description": "Alien species and racial templates",
+      "files": [
+        "Library/Aliens/Sparrials/Sparrials Skills.skl",
+        "Library/Aliens/Sparrials/Sparrials Traits.adq"
+      ]
+    },
+    "Alphabet Arcane": {
+      "description": "Magical alphabets and runic spells",
+      "files": [
+        "Library/Alphabet Arcane/Alphabet Arcane Spells.spl"
+      ]
+    },
+    "Banestorm": {
+      "description": "Yrth campaign setting — magic meets medieval",
+      "files": [
+        "Library/Banestorm/Banestorm Traits.adq"
+      ]
+    },
+    "Basic Set": {
+      "description": "Core GURPS rules — Characters and Campaigns",
+      "files": [
+        "Library/Basic Set/Basic Set Equipment Modifiers.eqm",
+        "Library/Basic Set/Basic Set Equipment.eqp",
+        "Library/Basic Set/Basic Set Rules.not",
+        "Library/Basic Set/Basic Set Skills.skl",
+        "Library/Basic Set/Basic Set TL Cost Modifiers.eqm",
+        "Library/Basic Set/Basic Set Traits.adq",
+        "Library/Basic Set/Conditions.adq"
+      ]
+    },
+    "Bio-Tech": {
+      "description": "Biological technology, genetic engineering, and bioware",
+      "files": [
+        "Library/Bio-Tech/Bio-Tech Equipment Modifiers.eqm",
+        "Library/Bio-Tech/Bio-Tech Equipment.eqp",
+        "Library/Bio-Tech/Bio-Tech Spells.spl",
+        "Library/Bio-Tech/Bio-Tech Traits.adq"
+      ]
+    },
+    "Delvers to Grow": {
+      "description": "Streamlined dungeon delver progression",
+      "files": [
+        "Library/Delvers to Grow/DTG Advantages.adq",
+        "Library/Delvers to Grow/DTG Disadvantages.adq"
+      ]
+    },
+    "Discworld Roleplaying Game": {
+      "description": "Terry Pratchett's Discworld campaign setting",
+      "files": [
+        "Library/Discworld Roleplaying Game/Discworld Roleplaying Game Equipment.eqp",
+        "Library/Discworld Roleplaying Game/Discworld Roleplaying Game Notes.not",
+        "Library/Discworld Roleplaying Game/Discworld Roleplaying Game Skills.skl",
+        "Library/Discworld Roleplaying Game/Discworld Roleplaying Game Traits.adq"
+      ]
+    },
+    "Dragons": {
+      "description": "Draconic abilities and lore",
+      "files": [
+        "Library/Dragons/Dragons Skills.skl"
+      ]
+    },
+    "Dungeon Fantasy": {
+      "description": "GURPS-powered dungeon crawling supplements",
+      "files": [
+        "Library/Dungeon Fantasy/Dungeon Fantasy 1/Dungeon Fantasy 1 Equipment Enchantments.eqm",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 1/Dungeon Fantasy 1 Equipment.eqp",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 1/Dungeon Fantasy 1 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 11/Dungeon Fantasy 11 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 12/Dungeon Fantasy 12 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 14/Dungeon Fantasy 14 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 16/Dungeon Fantasy Adventure 16 - Rules.not",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 19/Dungeon Fantasy 19 Equipment.eqp",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 19/Dungeon Fantasy 19 Skills.skl",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 19/Dungeon Fantasy 19 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 20/Dungeon Fantasy 20 Skills.skl",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 20/Dungeon Fantasy 20 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 3/Dungeon Fantasy 3 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 4/Dungeon Fantasy 4 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 5/Familiars.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 6/Dungeon Fantasy 6 Equipment.eqp",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 8/Dungeon Fantasy 8 Equipment.eqp",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 9/Dungeon Fantasy 9 Spells.spl",
+        "Library/Dungeon Fantasy/Dungeon Fantasy 9/Dungeon Fantasy 9 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy Adventure 1/Dungeon Fantasy Adventure 1 - Mirror of the Fire Demons Contents.not",
+        "Library/Dungeon Fantasy/Dungeon Fantasy Monsters 1/Dungeon Fantasy Monsters 1 Traits.adq",
+        "Library/Dungeon Fantasy/Dungeon Fantasy Spells.spl"
+      ]
+    },
+    "Dungeon Fantasy RPG": {
+      "description": "Standalone dungeon crawling boxed set",
+      "files": [
+        "Library/Dungeon Fantasy RPG/Dungeon Fantasy RPG Equipment Modifiers.eqm",
+        "Library/Dungeon Fantasy RPG/Dungeon Fantasy RPG Equipment.eqp",
+        "Library/Dungeon Fantasy RPG/Dungeon Fantasy RPG Skills.skl",
+        "Library/Dungeon Fantasy RPG/Dungeon Fantasy RPG Spells.spl",
+        "Library/Dungeon Fantasy RPG/Dungeon Fantasy RPG Traits.adq"
+      ]
+    },
+    "Engine Heart": {
+      "description": "Robots in a post-human world",
+      "files": [
+        "Library/Engine Heart/Engine Heart Traits.adq"
+      ]
+    },
+    "Fantasy": {
+      "description": "Generic fantasy campaign building",
+      "files": [
+        "Library/Fantasy/Fantasy Skills.skl",
+        "Library/Fantasy/Fantasy Traits.adq"
+      ]
+    },
+    "Fantasy Folk": {
+      "description": "Non-human fantasy races and cultures",
+      "files": [
+        "Library/Fantasy Folk/Elves/Traits and Skills/Elvish Skills.skl",
+        "Library/Fantasy Folk/Elves/Traits and Skills/Elvish Spells.spl",
+        "Library/Fantasy Folk/Elves/Traits and Skills/Elvish Traits.adq",
+        "Library/Fantasy Folk/Goblins and Hobgoblins/Equipment/Goblin Equipment.eqp",
+        "Library/Fantasy Folk/Goblins and Hobgoblins/Traits and Skills/Goblin and Hobgoblin Traits.adq",
+        "Library/Fantasy Folk/Kobolds/Traits and Skills/Kobold Skills.skl",
+        "Library/Fantasy Folk/Kobolds/Traits and Skills/Kobold Traits.adq",
+        "Library/Fantasy Folk/Winged Folk/Equipment/Winged Folk Equipment Modifiers.eqm",
+        "Library/Fantasy Folk/Winged Folk/Equipment/Winged Folk Equipment.eqp",
+        "Library/Fantasy Folk/Winged Folk/Traits, Skills and Spells/Winged Folk Spells.spl",
+        "Library/Fantasy Folk/Winged Folk/Traits, Skills and Spells/Winged Folk Traits.adq"
+      ]
+    },
+    "Gun Fu": {
+      "description": "Cinematic gunplay and firearm stunts",
+      "files": [
+        "Library/Gun Fu/Gun Fu Equipment.eqp",
+        "Library/Gun Fu/Gun Fu Skills.skl",
+        "Library/Gun Fu/Gun Fu Traits.adq"
+      ]
+    },
+    "High Tech": {
+      "description": "Modern and near-future weapons and gear",
+      "files": [
+        "Library/High Tech/High Tech Equipment Modifiers.eqm",
+        "Library/High Tech/High Tech Equipment.eqp",
+        "Library/High Tech/High Tech Skills.skl",
+        "Library/High Tech/High Tech Traits.adq"
+      ]
+    },
+    "Home Brew": {
+      "description": "Community-contributed homebrew content",
+      "files": [
+        "Library/Home Brew/Arden Vul/Arden Vul Equipment.eqp",
+        "Library/Home Brew/Arden Vul/Arden Vul Traits.adq",
+        "Library/Home Brew/Based Cosmo/Cosmo's GURPS Magic + DF8 Enchantment Library.eqm",
+        "Library/Home Brew/Broken Empire/Broken Empire Equipment.eqp",
+        "Library/Home Brew/Broken Empire/Broken Empire Skills.skl",
+        "Library/Home Brew/CDRU TL9 Missile Weapons.eqp",
+        "Library/Home Brew/Enraged Eggplant/Magic/Sorcery Spells.adq",
+        "Library/Home Brew/Enraged Eggplant/Magic/Wizardry (Clerical).adq",
+        "Library/Home Brew/Enraged Eggplant/Magic/Wizardry Skills.skl",
+        "Library/Home Brew/Enraged Eggplant/Magic/Wizardry.adq",
+        "Library/Home Brew/Enraged Eggplant/Psionics/Psionics (Eggplant).adq",
+        "Library/Home Brew/Enraged Eggplant/Psionics/Psionics (RAW).adq",
+        "Library/Home Brew/Enraged Eggplant/Psionics/Psionics Skills (Eggplant).skl",
+        "Library/Home Brew/Historical Folks Skill Sets/Historical Folks Skill Sets Traits.adq",
+        "Library/Home Brew/Home Brew Equipment.eqp",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/1. Acknowledgements & Thanks.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/10. Diseases.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/2. Design Philosophy & General Remarks.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/3. Character Creation.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/4. Traits.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/5. Skills.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/6. Equipment.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/7. Magic.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/8. Enchanting.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/+Elder Scrolls Player's Guide/9. Alchemy.not",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/Elder Scrolls Diseases.adq",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/Elder Scrolls Equipment Modifiers.eqm",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/Elder Scrolls Equipment.eqp",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/Elder Scrolls Skills.skl",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/Elder Scrolls Spells.spl",
+        "Library/Home Brew/Ptolemy's Elder Scrolls/Elder Scrolls Traits.adq",
+        "Library/Home Brew/Traveller Equipment.eqp"
+      ]
+    },
+    "Horror": {
+      "description": "Fear, madness, and supernatural dread",
+      "files": [
+        "Library/Horror/Horror Traits.adq"
+      ]
+    },
+    "Infinite Worlds": {
+      "description": "Parallel-world hopping campaign setting",
+      "files": [
+        "Library/Infinite Worlds/Infinite Worlds Equipment.eqp"
+      ]
+    },
+    "Lite": {
+      "description": "Free introductory GURPS rules",
+      "files": [
+        "Library/Lite/Lite Equipment.eqp",
+        "Library/Lite/Lite Skills.skl",
+        "Library/Lite/Lite Traits.adq"
+      ]
+    },
+    "Low Tech": {
+      "description": "Pre-industrial weapons, armor, and equipment",
+      "files": [
+        "Library/Low Tech/Low Tech Armor (by location).eqp",
+        "Library/Low Tech/Low Tech Armor (by material).eqp",
+        "Library/Low Tech/Low Tech Companion 2 Equipment Modifiers.eqm",
+        "Library/Low Tech/Low Tech Equipment Modifiers.eqm",
+        "Library/Low Tech/Low Tech Equipment.eqp",
+        "Library/Low Tech/Low Tech Instant Armor.eqp"
+      ]
+    },
+    "Magic": {
+      "description": "The GURPS magic system — spells and enchantment",
+      "files": [
+        "Library/Magic/Magic - Artillery Spells/Magic - Artillery Spells.spl",
+        "Library/Magic/Magic - Death Spells/Magic - Death Spells Spells.spl",
+        "Library/Magic/Magic - Plant Spells/Magic - Plant Spells Spells.spl",
+        "Library/Magic/Magic - Plant Spells/Magic - Plant Spells Traits.adq",
+        "Library/Magic/Magic - The Least of Spells/Magic - The Least of Spells Spells.spl",
+        "Library/Magic/Magic Equipment.eqp",
+        "Library/Magic/Magic Rules.not",
+        "Library/Magic/Magic Skills.skl",
+        "Library/Magic/Magic Spells.spl",
+        "Library/Magic/Ritual Magic Spells.spl"
+      ]
+    },
+    "Martial Arts": {
+      "description": "Combat styles, techniques, and weapons",
+      "files": [
+        "Library/Martial Arts/Martial Arts Equipment.eqp",
+        "Library/Martial Arts/Martial Arts Rules.not",
+        "Library/Martial Arts/Martial Arts Skills.skl",
+        "Library/Martial Arts/Martial Arts Technical Grappling Rules.not",
+        "Library/Martial Arts/Martial Arts Technical Grappling Techniques.skl",
+        "Library/Martial Arts/Martial Arts Traits.adq"
+      ]
+    },
+    "Monster Hunters": {
+      "description": "Cinematic monster-hunting campaigns",
+      "files": [
+        "Library/Monster Hunters/Monster Hunters Equipment.eqp",
+        "Library/Monster Hunters/Monster Hunters Skills.skl",
+        "Library/Monster Hunters/Monster Hunters Traits.adq"
+      ]
+    },
+    "Mysteries": {
+      "description": "Investigation, clues, and detective campaigns",
+      "files": [
+        "Library/Mysteries/Mysteries Equipment.eqp",
+        "Library/Mysteries/Mysteries Skills.skl",
+        "Library/Mysteries/Mysteries Traits.adq"
+      ]
+    },
+    "Norðlond": {
+      "description": "Norse-inspired Nordlond campaign setting",
+      "files": [
+        "Library/Norðlond/Hand of Asgard Spells.spl",
+        "Library/Norðlond/Hand of Asgard Traits.adq",
+        "Library/Norðlond/Norðlond Money.eqp",
+        "Library/Norðlond/Norðlondr Fólk Traits.adq"
+      ]
+    },
+    "Power Ups": {
+      "description": "Character advancement and customization options",
+      "files": [
+        "Library/Power Ups/Power Ups Skills.skl",
+        "Library/Power Ups/Power Ups Traits.adq"
+      ]
+    },
+    "Powers": {
+      "description": "Superpowers, divine favor, and enhanced senses",
+      "files": [
+        "Library/Powers/Powers - Divine Favor Traits.adq",
+        "Library/Powers/Powers - Enhanced Senses Traits.adq",
+        "Library/Powers/Powers Traits.adq"
+      ]
+    },
+    "Psionics": {
+      "description": "Psychic abilities and psionic technology",
+      "files": [
+        "Library/Psionics/Psi-Tech Equipment Modifiers.eqm",
+        "Library/Psionics/Psi-Tech Equipment.eqp",
+        "Library/Psionics/Psionics Skills.skl",
+        "Library/Psionics/Psionics Traits.adq"
+      ]
+    },
+    "Pyramid Magazine": {
+      "description": "Content from Pyramid magazine issues",
+      "files": [
+        "Library/Pyramid Magazine/Pyramid 100/Pyramid 100 Equipment Modifiers.eqm",
+        "Library/Pyramid Magazine/Pyramid 100/Pyramid 100 Equipment.eqp",
+        "Library/Pyramid Magazine/Pyramid 103/Mad as Bones/Mad as Bones Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 111/Pyramid 111 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 112/Pyramid 112 Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 112/Pyramid 112 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 115/Pyramid 115 Equipment.eqp",
+        "Library/Pyramid Magazine/Pyramid 115/Pyramid 115 Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 115/Pyramid 115 Spells.spl",
+        "Library/Pyramid Magazine/Pyramid 115/Pyramid 115 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 120/Magic Spells (Based on QN).spl",
+        "Library/Pyramid Magazine/Pyramid 120/Pyramid 120 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 13/Pyramid 13 Spells.spl",
+        "Library/Pyramid Magazine/Pyramid 28/Pyramid 28 Spells.spl",
+        "Library/Pyramid Magazine/Pyramid 34/Pyramid 34 Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 36/Demolisher Equipment.eqp",
+        "Library/Pyramid Magazine/Pyramid 37/Pyramid 37 Equipment Modifiers.eqm",
+        "Library/Pyramid Magazine/Pyramid 37/Pyramid 37 Equipment.eqp",
+        "Library/Pyramid Magazine/Pyramid 4/Pyramid 4 Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 4/Pyramid 4 Spells.spl",
+        "Library/Pyramid Magazine/Pyramid 44/Pyramid 44 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 57/Pyramid 57 Equipment.eqp",
+        "Library/Pyramid Magazine/Pyramid 60/Wizardry Redefined Spells.spl",
+        "Library/Pyramid Magazine/Pyramid 65/Pyramid 65 Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 65/Pyramid 65 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 69/Mind and Body/Mind and Body Equipment.eqp",
+        "Library/Pyramid Magazine/Pyramid 69/Mind and Body/Mind and Body Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 69/Mind and Body/Mind and Body Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 83/Pyramid 83 Techniques.skl",
+        "Library/Pyramid Magazine/Pyramid 83/Pyramid 83 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid 91/Pyramid 91 Spells.spl",
+        "Library/Pyramid Magazine/Pyramid 99/Pyramid 99 Skills.skl",
+        "Library/Pyramid Magazine/Pyramid 99/Pyramid 99 Traits.adq",
+        "Library/Pyramid Magazine/Pyramid Magazine Equipment.eqp"
+      ]
+    },
+    "Reign of Steel Will to Live": {
+      "description": "Robot-dominated post-apocalyptic setting",
+      "files": [
+        "Library/Reign of Steel Will to Live/Reign of Steel Will to Live Skills.skl",
+        "Library/Reign of Steel Will to Live/Reign of Steel Will to Live Traits.adq"
+      ]
+    },
+    "Settings": {
+      "description": "Attribute and body type configuration files",
+      "files": [
+        "Library/Settings/Attributes/After the End.attr",
+        "Library/Settings/Attributes/Fantastic Dungeon Grappling.attr",
+        "Library/Settings/Attributes/Mad as Bones.attr",
+        "Library/Settings/Attributes/PY83 HT based PER.attr",
+        "Library/Settings/Attributes/QN and HT based PER.attr",
+        "Library/Settings/Attributes/Quintessence.attr",
+        "Library/Settings/Attributes/Separate Will and Per from IQ.attr",
+        "Library/Settings/Attributes/Star Wars - with Energy Reserve (Force).attr",
+        "Library/Settings/Attributes/Star Wars.attr",
+        "Library/Settings/Attributes/Stress and Derangement.attr",
+        "Library/Settings/Attributes/Threshold Magic.attr",
+        "Library/Settings/Body Types/Arachnoid.body",
+        "Library/Settings/Body Types/Avian.body",
+        "Library/Settings/Body Types/Cancroid.body",
+        "Library/Settings/Body Types/Centaur.body",
+        "Library/Settings/Body Types/Hexapod, Winged.body",
+        "Library/Settings/Body Types/Hexapod.body",
+        "Library/Settings/Body Types/Humanoid (Low-Tech).body",
+        "Library/Settings/Body Types/Humanoid.body",
+        "Library/Settings/Body Types/Ichthyoid.body",
+        "Library/Settings/Body Types/Octopod.body",
+        "Library/Settings/Body Types/Quadruped, Winged.body",
+        "Library/Settings/Body Types/Quadruped.body",
+        "Library/Settings/Body Types/Scorpion.body",
+        "Library/Settings/Body Types/Snakemen.body",
+        "Library/Settings/Body Types/Squid.body",
+        "Library/Settings/Body Types/Vermiform, Winged.body",
+        "Library/Settings/Body Types/Vermiform.body"
+      ]
+    },
+    "Social Engineering": {
+      "description": "Social interaction rules and skills",
+      "files": [
+        "Library/Social Engineering/Social Engineering Skills.skl",
+        "Library/Social Engineering/Social Engineering Traits.adq"
+      ]
+    },
+    "Space": {
+      "description": "Sci-fi campaigns, aliens, and space travel",
+      "files": [
+        "Library/Space/Space Traits.adq"
+      ]
+    },
+    "Star Wars": {
+      "description": "Star Wars universe adaptation for GURPS",
+      "files": [
+        "Library/Star Wars/Star Wars Equipment.eqp",
+        "Library/Star Wars/Star Wars Force Abilities.spl",
+        "Library/Star Wars/Star Wars Skills.skl",
+        "Library/Star Wars/Star Wars Traits.adq"
+      ]
+    },
+    "Supers": {
+      "description": "Superhero campaigns and powers",
+      "files": [
+        "Library/Supers/Supers Skills.skl",
+        "Library/Supers/Supers Traits.adq"
+      ]
+    },
+    "Tactical Shooting": {
+      "description": "Realistic modern firearms and tactics",
+      "files": [
+        "Library/Tactical Shooting/Tactical Shooting Equipment.eqp",
+        "Library/Tactical Shooting/Tactical Shooting Skills.skl",
+        "Library/Tactical Shooting/Tactical Shooting Traits.adq"
+      ]
+    },
+    "Tales of the Solar Patrol": {
+      "description": "Retro sci-fi space opera",
+      "files": [
+        "Library/Tales of the Solar Patrol/Solar Patrol Skills.skl",
+        "Library/Tales of the Solar Patrol/Solar Patrol Traits.adq"
+      ]
+    },
+    "Thaumatology": {
+      "description": "Advanced magic systems and theory",
+      "files": [
+        "Library/Thaumatology/Thaumatology - CEP Skills.skl",
+        "Library/Thaumatology/Thaumatology - CEP Traits.adq",
+        "Library/Thaumatology/Thaumatology - Magical Styles Traits.adq",
+        "Library/Thaumatology/Thaumatology - RPM Skills.skl",
+        "Library/Thaumatology/Thaumatology - RPM Traits.adq",
+        "Library/Thaumatology/Thaumatology - Sorcery Traits.adq",
+        "Library/Thaumatology/Thaumatology - Threshold Magic Traits.adq"
+      ]
+    },
+    "Traveller": {
+      "description": "Classic Traveller sci-fi RPG adaptation",
+      "files": [
+        "Library/Traveller/Traveller Interstellar Wars Traits.adq",
+        "Library/Traveller/Traveller Standard Licenses and Certificates.adq"
+      ]
+    },
+    "Ultra Tech": {
+      "description": "Far-future technology, weapons, and gear",
+      "files": [
+        "Library/Ultra Tech/Ultra Tech Equipment Modifiers.eqm",
+        "Library/Ultra Tech/Ultra Tech Equipment.eqp",
+        "Library/Ultra Tech/Ultra Tech Meta-Traits.adq",
+        "Library/Ultra Tech/Ultra Tech Traits.adq"
+      ]
+    },
+    "Vorkosigan Saga": {
+      "description": "Lois McMaster Bujold's Vorkosigan universe",
+      "files": [
+        "Library/Vorkosigan Saga/Vorkosigan Saga Equipment.eqp",
+        "Library/Vorkosigan Saga/Vorkosigan Saga Skills.skl",
+        "Library/Vorkosigan Saga/Vorkosigan Saga Traits.adq"
+      ]
+    }
+  }
+}
