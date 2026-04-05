@@ -12,6 +12,34 @@ This kit contains everything needed to build a combat-focused
 character. Read mechanics.md and character-generation.md
 first, then this file.
 
+## Build Framework
+
+Point allocation guidance for combat archetypes. Scale
+proportionally for other point totals.
+
+| Category | 150 pts | 175 pts | 250 pts |
+|----------|---------|---------|---------|
+| Attributes | 110-130 | 130-150 | 160-200 |
+| Secondary mods | 0-10 | 0-10 | 5-15 |
+| Advantages | 20-35 | 25-45 | 40-70 |
+| Disadvantages | -40 to -50 | -50 to -70 | -50 to -75 |
+| Quirks | -5 | -5 | -5 |
+| Skills | 30-50 | 40-70 | 60-100 |
+
+**Attribute priorities:** DX 13+ and HT 12+ are the foundation.
+ST 11-12 for melee relevance. IQ 11-12 for tactical skills.
+DX is the most impactful spend — it raises all physical skills
+and active defenses.
+
+**Near-mandatory advantages:** Combat Reflexes [15] (+1 all
+active defenses, +6 vs surprise, never freeze). High Pain
+Threshold [10] if budget allows. Fit [5] is efficient.
+
+**Realistic vs cinematic:** Realistic campaigns should NOT
+include Trained by a Master, Weapon Master, or Gunslinger.
+These are cinematic-only. If the user specifies cinematic,
+include one as a build centerpiece.
+
 ---
 
 ## Combat-Relevant Advantages

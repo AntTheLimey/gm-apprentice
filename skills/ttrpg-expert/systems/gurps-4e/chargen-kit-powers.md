@@ -15,6 +15,39 @@ character-generation.md first, then this file.
 Source: GURPS Basic Set, GURPS Powers, GURPS Psionic Powers,
 GURPS Supers.
 
+## Build Framework
+
+Point allocation guidance for powers/psionic archetypes.
+Scale proportionally for other point totals.
+
+| Category | 150 pts | 175 pts | 300 pts |
+|----------|---------|---------|---------|
+| Attributes | 60-100 | 80-120 | 100-160 |
+| Secondary mods | 0-10 | 0-10 | 5-20 |
+| Powers/Advantages | 40-80 | 50-100 | 100-200 |
+| Disadvantages | -40 to -50 | -50 to -70 | -50 to -75 |
+| Quirks | -5 | -5 | -5 |
+| Skills | 15-35 | 20-45 | 30-60 |
+
+**Attribute priorities:** Depends on power type. Psionic
+builds need IQ 12+ (many psi abilities roll vs IQ or Will).
+Physical supers need ST/DX. Prioritise the attribute your
+powers key off.
+
+**Power budget:** Powers are the centerpiece — expect 30-50%
+of total points on powers. Apply the power source modifier
+(usually -10%) to every advantage in the power. The -10%
+adds up significantly across multiple abilities.
+
+**Common trap:** Don't spread powers too thin. Two strong
+abilities beat five weak ones. A Telekinesis 10 [45] is far
+more useful than TK 3 [14] + five minor abilities.
+
+**Mundane foundation:** Even supers need Combat Reflexes,
+a few combat skills, and social/perception skills. Don't
+spend 100% on powers and leave the character helpless when
+powers are neutralised.
+
 ---
 
 ## How Powers Work

@@ -12,6 +12,36 @@ This kit contains everything needed to build a spell-casting
 character. Read mechanics.md and character-generation.md
 first, then this file.
 
+## Build Framework
+
+Point allocation guidance for magic archetypes. Scale
+proportionally for other point totals.
+
+| Category | 150 pts | 175 pts | 250 pts |
+|----------|---------|---------|---------|
+| Attributes | 60-80 | 80-100 | 100-140 |
+| Secondary mods | 0-10 | 0-10 | 5-15 |
+| Advantages | 30-50 | 35-55 | 50-80 |
+| Disadvantages | -40 to -50 | -50 to -70 | -50 to -75 |
+| Quirks | -5 | -5 | -5 |
+| Skills + Spells | 50-80 | 60-95 | 80-130 |
+
+**Attribute priorities:** IQ 13+ is the foundation — it
+raises all spell skills AND most knowledge/magical skills.
+Every +1 IQ saves ~2 pts per spell and per IQ-based skill,
+so investing in IQ before buying individual skills is almost
+always more efficient. ST 9-10 is fine (mages aren't
+fighters). DX 10-11, HT 10-12.
+
+**Near-mandatory advantages:** Magery 0 [5] (required for
+spells) + Magery 1-3 [10/level] (adds to spell skill and
+learning). Higher Magery is extremely efficient — each level
+adds +1 to every spell for only 10 pts.
+
+**Spell strategy:** Buy prereq spells at 1 pt (Attr-2 for
+Hard). Invest 2-4 pts in the spells you'll actually cast in
+play. Getting a core spell to 15+ reduces its casting cost.
+
 ---
 
 ## Magic-Relevant Advantages
