@@ -36,7 +36,7 @@
 | — (Journalist) | IQ/A | B215 | — | |
 | — (Prostitute) | IQ/A | B215 | — | |
 | — (Tanner) | IQ/A | B215 | — | |
-| — (Vinter) | IQ/A | B215 | — | |
+| — (Vintner) | IQ/A | B215 | — | |
 | — (Glassblower) | DX/A | B215 | — | |
 | — (Tailor) | DX/A | B215 | — | |
 | — (Weaver) | DX/A | B215 | — | |

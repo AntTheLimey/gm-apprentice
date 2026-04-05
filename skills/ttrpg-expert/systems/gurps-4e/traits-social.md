@@ -92,7 +92,7 @@
 | Social Stigma | varies | B155 | (Social) Marginalized status ¹³ |
 | Social Stigma (Criminal Record) | -5 | B155 | (Social) Known criminal |
 | Social Stigma (Disowned) | -5 | B155 | (Social) Cast out from family |
-| Social Stigma (Publically Disowned) | -10 | B155 | (Social) Publicly cast out |
+| Social Stigma (Publicly Disowned) | -10 | B155 | (Social) Publicly cast out |
 | Social Stigma (Excommunicated) | -5 | B155 | (Social) Cut off from faith community |
 | Social Stigma (Ignorant) | -5 | B155 | (Social) Perceived as uneducated |
 | Social Stigma (Minor) | -5 | B155 | (Social) Underage; limited rights |

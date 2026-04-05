@@ -36,7 +36,7 @@ a separate skill with prerequisites.
 
 Each spell is an **IQ/Hard** skill. Effective level:
 
-```
+```text
 Spell Skill = IQ + Magery + (points spent per IQ/H cost table)
 ```
 

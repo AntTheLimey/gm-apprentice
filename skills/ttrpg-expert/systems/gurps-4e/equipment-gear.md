@@ -103,7 +103,7 @@ CoL = Cost of Living for the character's Status level.
 |------|-----|------|-----|------|-------|
 | Drum | 0 | $40 | 2 | B288 | Audible for several miles |
 | Wax Tablet | 1 | $10 | 2 | B289 | For writing, erasable |
-| Scribe's Kit | 3 | varies | varies | B288 | Quills, inkbottles, penknife, paper |
+| Scribe's Kit | 3 | varies | varies | B288 | Quills, ink bottles, penknife, paper |
 | Batteries | 6 | $1 | neg. | B288 | Standard size |
 | Transistor Radio | 7 | $15 | 0.5 | B288 | Receive-only; 8 hrs |
 | Mini-Recorder | 7 | $200 | 0.5 | B288 | Palm-sized, 3-hour tape |

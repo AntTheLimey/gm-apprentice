@@ -117,9 +117,9 @@ reaction rolls from those who recognize the character.
 
 | Recognition | Multiplier |
 |------------|-----------|
-| All the time (10+) | x1 |
-| Sometimes (7-9) | x1/2 |
-| Occasionally (10-) | x1/3 |
+| All the time | x1 |
+| Sometimes (10 or less) | x1/2 |
+| Occasionally (7 or less) | x1/3 |
 
 ### Scope Modifier
 

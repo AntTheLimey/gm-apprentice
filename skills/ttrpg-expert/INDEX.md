@@ -36,7 +36,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
 | **Advantages, traits, or costs** | For GURPS: `systems/gurps-4e/traits-*.md` (pick by nature). Others: `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building |
 | **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). Others: `systems/{system}/rules-reference.md` | — |
-| **Powers, magic, or special abilities** | For GURPS: `powers-rules.md` or `magic-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Powers, magic, or special abilities** | For GURPS: `systems/gurps-4e/powers-rules.md` or `systems/gurps-4e/magic-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
 | **Spells** | For GURPS: `systems/gurps-4e/spells.md`. Others: `systems/{system}/rules-reference.md` | — |
 | **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). Others: `systems/{system}/rules-reference.md` | — |
 
