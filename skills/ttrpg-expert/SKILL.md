@@ -27,7 +27,9 @@ sheet"** / **"I need a [system] character"** / **"create a PC"**
 
 **"How much does [trait] cost?"** / **"what are the rules
 for [mechanic]?"** / **"how does combat work?"**
-→ Determine the game system first. Read
+→ Determine the game system first. For GURPS, use the file
+  routing table in "Game System Data" below to load the
+  right topic file(s). For other systems, read
   `systems/{system}/rules-reference.md`. Provide the specific
   rule with page references where possible. For deeper
   context, also read `systems/{system}/mechanics.md`.
@@ -38,8 +40,9 @@ for [mechanic]?"** / **"how does combat work?"**
   Checks section). Run the full validation: point budget,
   illegal combos, missing prerequisites, disadvantage limits,
   skill level sanity, equipment affordability, active
-  defenses. Also read `systems/{system}/rules-reference.md`
-  for cost verification.
+  defenses. For GURPS, use the topic-based trait/skill files
+  for cost verification. For other systems, read
+  `systems/{system}/rules-reference.md`.
 
 **"Make me an NPC"** / **"I need a villain"** / **"generate
 a character"**
@@ -129,10 +132,12 @@ mapping request types to files and brief summaries of all
 knowledge base files.
 
 Each supported game system has its own subfolder under
-`systems/` with five reference files: `mechanics.md`,
-`character-generation.md`, `rules-reference.md`,
-`session-procedures.md`, and `character-sheet.md`. For
-unsupported systems, use `systems/generic/`.
+`systems/` with core reference files: `mechanics.md`,
+`character-generation.md`, `session-procedures.md`, and
+`character-sheet.md`. Most systems also have a single
+`rules-reference.md`; GURPS 4e uses topic-based files
+instead (see "Game System Data" below). For unsupported
+systems, use `systems/generic/`.
 
 **Critical rule:** Always read the relevant knowledge base
 file before generating content or providing guidance. The
@@ -141,10 +146,11 @@ knowledge base files are essential for quality output.
 
 **System-specific deep-dives**: For any system-specific
 request, the routing table will direct you to the correct
-subfolder. Each system's `rules-reference.md` contains the
-deep mechanical detail (combat, traits, equipment, powers,
-etc.) and `character-generation.md` contains the full
-character building workflow.
+subfolder. For GURPS, use the file routing table below to
+load only the relevant topic files. For other systems,
+`rules-reference.md` contains the deep mechanical detail.
+`character-generation.md` contains the full character
+building workflow for all systems.
 
 **Sourcebook citations**: When providing rules answers, cite
 the canonical source book and page number where possible
@@ -152,6 +158,48 @@ the canonical source book and page number where possible
 Handbook, p.73" for D&D). The rules reference files within
 each system subfolder contain all the mechanics needed for
 accurate rulings.
+
+## Game System Data
+
+### Built-in Systems (No Setup Required)
+
+All four supported game systems have reference content
+built into their system subfolders. No additional setup
+is needed.
+
+### GURPS 4e — File Routing
+
+The GURPS system has topic-based reference files for
+efficient lookup. Load only the files relevant to the
+request — never load all files at once.
+
+**Character Generation** (always read mechanics.md +
+character-generation.md first, then add 2-3 reference
+files based on concept):
+
+| Character Concept | Also Read |
+|-------------------|-----------|
+| Combat/military | skills-combat.md + traits-physical.md + equipment-weapons.md |
+| Social/political | skills-social.md + traits-social.md + traits-mental.md |
+| Wizard/mage | skills-esoteric.md + spells.md + traits-mental.md |
+| Thief/spy | skills-military-police.md + traits-mental.md + equipment-gear.md |
+| Martial artist | skills-combat.md + traits-physical.md + equipment-weapons.md |
+| Scientist/medic | skills-knowledge.md + skills-technical.md + traits-mental.md |
+| Outdoorsman/scout | skills-athletic-outdoor.md + traits-physical.md + equipment-gear.md |
+
+**Procedural Rules** (in-play reference):
+
+| Situation | Read |
+|-----------|------|
+| Running combat | combat.md |
+| Casting spells | magic-rules.md |
+| Using powers | powers-rules.md |
+| Social encounters | social-rules.md |
+| Session management | session-procedures.md |
+
+**Book Coverage:** Check `sources.md` for which books
+are currently integrated. If a user references content
+from a non-integrated book, flag it.
 
 ## Content Generation Workflow
 
