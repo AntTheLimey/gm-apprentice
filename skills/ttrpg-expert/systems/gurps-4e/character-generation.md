@@ -48,7 +48,7 @@ parameters. These constrain every decision that follows.
 | Special rules | Magic, psionics, powers, supers | None |
 | House rules | GM-specific modifications | None |
 
-**Point Total Guidelines** (Basic Set Characters p.487):
+**Point Total Guidelines** (B487):
 
 | Points | Power Level | Examples |
 |--------|------------|---------|
@@ -126,7 +126,7 @@ Derive from primary attributes; can be bought up or down.
 | Basic Move | = Basic Speed (drop fractions) | 5 pts/level |
 
 **Derived values to calculate:**
-- **Damage**: Based on ST via the Damage Table (Characters p.16).
+- **Damage**: Based on ST via the Damage Table (B16).
   Key breakpoints: ST 10 = 1d-2 thr / 1d sw; ST 12 = 1d-1 / 1d+2;
   ST 14 = 1d / 2d; ST 16 = 1d+1 / 2d+2
 - **Basic Lift**: ST×ST/5 lbs
@@ -406,4 +406,4 @@ source books: Basic Set — Characters (chargen core), Basic
 Set — Campaigns (combat, campaign rules), Powers, Supers,
 Martial Arts, High-Tech, Tactical Shooting, Ultra-Tech,
 Low-Tech, Bio-Tech, Psionic Powers, Magic, Action 1: Heroes.
-Cite these by name and page number where possible.
+Cite these using GCS page reference codes where possible (e.g., "B14" for Basic Set Characters, "M74" for Magic).

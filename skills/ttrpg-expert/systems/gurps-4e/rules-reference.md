@@ -15,7 +15,8 @@ and disadvantages, equipment, powers, magic, and martial arts.
 This file is the authoritative GURPS rules reference within
 this skill. All point costs, formulas, and mechanics are based
 on GURPS 4th Edition sourcebooks. Cite source book and page
-number where possible (e.g., "Basic Set — Characters, p.14").
+number where possible (e.g., "B14" for Basic Set Characters,
+"M74" for Magic).
 
 ## Table of Contents
 
@@ -151,63 +152,63 @@ without requiring backward movement.
 
 **Combat Reflexes** [15]: +1 all active defenses, +6 vs surprise,
 +2 Fright Checks, never freeze. One of the best combat advantages
-in the game. (Characters p.43)
+in the game. (B43)
 
 **High Pain Threshold** [10]: Never suffer shock penalties, +3 to
-resist knockdown/stun, +3 to resist torture. (Characters p.59)
+resist knockdown/stun, +3 to resist torture. (B59)
 
 **Danger Sense** [15]: GM rolls Per (or IQ) secretly when danger
-threatens; success = warning. (Characters p.47)
+threatens; success = warning. (B47)
 
 **Fit** [5] / **Very Fit** [15]: Fit = +1 to all HT rolls
 (except resist death). Very Fit = +2 to all HT rolls, recover FP
-at double rate. (Characters p.55)
+at double rate. (B55)
 
 **Luck** [15] / **Extraordinary Luck** [30] / **Ridiculous Luck**
 [60]: Reroll any one roll (take best) once per hour of play /
 30 min / 10 min. Cinematic campaigns may allow higher levels.
-(Characters p.66)
+(B66)
 
 **Talent** [varies]: +1/level to a group of skills plus reaction
 bonuses from those who value the talent. Cost = 5/10/15 pts per
-level depending on breadth. (Characters p.89)
+level depending on breadth. (B89)
 
 **Trained by a Master** [30]: Halves skill penalties for rapid
 strikes, allows cinematic martial arts techniques. Prerequisite
-for many Martial Arts options. Cinematic. (Characters p.93)
+for many Martial Arts options. Cinematic. (B93)
 
 **Weapon Master** [20-45]: +1/die to damage with chosen
 weapon(s), halves penalties for Rapid Strike. Cost varies by
-breadth. (Characters p.99)
+breadth. (B99)
 
 **Magery** [5 + 10/level]: Prerequisite for spells. Level adds
 to spell skill and to IQ for learning spells. Magery 0 [5] =
-can learn spells but no bonus. (Characters p.66)
+can learn spells but no bonus. (B66)
 
 ### Key Disadvantages with Rules Notes
 
 **Duty** [varies]: Frequency × hazard. Base: 6 or less [-2],
 9 or less [-5], 12 or less [-10], 15 or less [-15]. Extremely
-Hazardous = ×2. Involuntary = extra -5. (Characters p.133)
+Hazardous = ×2. Involuntary = extra -5. (B133)
 
 **Enemy** [varies]: Frequency × power. Less powerful than PC
 [-5 base], equal [-10 base], more powerful [-20 base], entire
 government [-30 base]. Frequency multiplier same as Duty.
-(Characters p.135)
+(B135)
 
 **Sense of Duty** [varies]: -2 to small group, -5 to large
 group, -10 to nation, -15 to all living things, -20 to all
-sapient beings. (Characters p.153)
+sapient beings. (B153)
 
 **Code of Honor** [varies]: -5 (Professional), -10 (Gentleman's
-or Soldier's), -15 (Chivalric). (Characters p.127)
+or Soldier's), -15 (Chivalric). (B127)
 
 **Overconfidence** [-5*]: Self-control roll to avoid rash
-actions. Asterisk = modified by CR. (Characters p.148)
+actions. Asterisk = modified by CR. (B148)
 
 **Compulsive Behavior** [-5* to -15*]: Various. -5 for minor,
 -10 for moderate, -15 for seriously inconvenient. Modified by
-CR. (Characters p.128)
+CR. (B128)
 
 ### Disadvantage Limits
 
