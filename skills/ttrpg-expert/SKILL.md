@@ -179,7 +179,9 @@ efficient lookup. Load only the files relevant to the
 request — never load all files at once.
 
 **Character Generation** (always read mechanics.md +
-character-generation.md first, then ONE kit file):
+character-generation.md first, then the relevant kit
+file(s) — one for focused builds, multiple for mixed
+concepts like a magic-using spy or a scholar-soldier):
 
 | Character Concept | Kit File |
 |-------------------|----------|
@@ -190,11 +192,13 @@ character-generation.md first, then ONE kit file):
 | Doctor/scientist/scholar/inventor | chargen-kit-scholar.md |
 | Thief/spy/infiltrator/assassin | chargen-kit-thief.md |
 | Explorer/ranger/survivalist/scout | chargen-kit-outdoor.md |
-| Mixed or unusual concept | Read individual topic files as needed |
+| Mixed or highly unusual concept | Read individual topic files as needed |
 
 Kit files bundle the relevant traits, skills, equipment,
-and mechanics for that archetype. Only read additional
-topic files if the kit doesn't cover a specific need.
+and mechanics for that archetype. For mixed concepts,
+combine kits (e.g., magic bard → magic + social kits).
+Only fall back to individual topic files if no kit covers
+a specific need.
 
 **Procedural Rules** (in-play reference):
 
