@@ -54,12 +54,12 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 
 | Request Type | Read This File | Also Read |
 |---|---|---|
-| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats |
-| **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks |
-| **Location** generation | `content-generation.md` | — |
+| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/professions.md`. For FitD: also `systems/fitd/playbooks.md`. For D&D: also `systems/dnd-5e-2024/classes.md`. For GURPS: also `systems/gurps-4e/character-generation.md` |
+| **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks; also `systems/{system}/session-procedures.md` for system pacing conventions |
+| **Location** generation | `content-generation.md` | For CoC: also `systems/coc-7e/setting-lovecraft.md`. For FitD: also `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` for setting context |
 | **Faction** generation | `content-generation.md` | `relationship-patterns.md` for webs |
 | **Item or artifact** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
-| **Creature or monster** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
+| **Creature or monster** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/creatures.md`. For D&D: also `systems/dnd-5e-2024/monsters.md`. Others: `systems/{system}/rules-reference.md` for creature data |
 | **Scenario or adventure** outline | `content-generation.md` | `scenario-writing.md` for structure |
 | **Handout, letter, newspaper, diary** | `handouts-and-props.md` | — |
 | **Official document** (autopsy, police report, warrant, will) | `handouts-and-props.md` | — |
