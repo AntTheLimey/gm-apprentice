@@ -252,7 +252,22 @@ replace or extend it.
 
 2. **What would this faction do if the PCs didn't exist?**
    Their plan advances on its own timeline. Describe the next
-   step the faction would take unopposed.
+   step the faction would take unopposed. Then classify its
+   impact:
+
+   | Impact | Meaning | If PCs miss it |
+   |--------|---------|----------------|
+   | **Critical** | Irreversible turning point — changes the campaign's trajectory | The world shifts permanently. New alliances lock in, rituals complete, leaders are assassinated. The PCs face a harder, different campaign from this point forward. |
+   | **Significant** | Major advantage gained or lost — but recoverable with effort | The faction is stronger or the PCs' position is weaker, but creative action can still reverse it. The cost of catching up increases. |
+   | **Minor** | Incremental progress — advances the plan without decisive change | A resource acquired, a contact made, territory scouted. Creates ripples and rumours but doesn't reshape the landscape. Missing it is a lost opportunity, not a disaster. |
+   | **Flavour** | World texture — life goes on | A shipment moves, a meeting happens, a patrol changes route. Makes the world feel alive but has no mechanical or narrative consequence if missed. |
+
+   When proposing faction actions to the GM, always state the
+   impact level. This helps the GM decide which events to
+   surface prominently (Critical/Significant) vs mention in
+   passing (Minor) vs leave as background colour (Flavour).
+   It also helps with session prep — Critical events should
+   be scenes; Flavour events are rumours at best.
 
 3. **Did the PCs affect this faction this session?**
    Directly (confrontation, alliance, theft) or indirectly
