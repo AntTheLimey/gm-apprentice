@@ -196,10 +196,14 @@ then Continuity.
 
 ## Knowledge Base
 
-Read `INDEX.md` first to find the correct knowledge base
-file for any request. The index contains a routing table
-mapping request types to files and brief summaries of all
-knowledge base files.
+**Routing priority:**
+1. Check the **Quick Commands** above first — if the request
+   matches, go directly to the specified file(s).
+2. Check the **Game System Data** routing tables below — if
+   the system and request type match, go directly to the
+   specified file(s).
+3. Only if neither matches, read `INDEX.md` for the full
+   routing table and file summaries.
 
 Each supported game system has its own subfolder under
 `systems/` with core reference files: `mechanics.md`,
