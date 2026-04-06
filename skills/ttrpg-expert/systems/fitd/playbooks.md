@@ -31,7 +31,7 @@ Sawtooth (a physicker)
   combat or push yourself during a fight.
 - **Bodyguard**: When you protect a teammate, +1d to resistance.
   When you gather info to anticipate threats, +1 effect.
-- **Ghost Fighter**: You may imbue your hands, melee weapons,
+- **Arcane Fighter**: You may imbue your hands, melee weapons,
   or tools with spirit energy. You gain potency in combat vs.
   the supernatural.
 - **Leader**: When you Command a cohort in combat, they

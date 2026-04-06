@@ -25,7 +25,7 @@ Ransom
 
 - **Deadly**: Each PC may add +1 action rating to Hunt, Prowl,
   or Skirmish (max 3).
-- **Crow's Veil**: Due to hard-won experience or occult ritual,
+- **Death Veil**: Due to hard-won experience or occult ritual,
   you don't take extra heat when killing is involved on a
   score.
 - **Emberdeath**: Due to arcane ritual, you don't leave behind
