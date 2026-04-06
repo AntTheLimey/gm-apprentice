@@ -194,6 +194,27 @@ Many requests combine modes. "Generate an NPC and check they
 don't conflict with existing characters" uses Generation
 then Continuity.
 
+## Companion Skills
+
+- **campaign-organizer** — Vault structure and entity filing.
+  After generating NPCs, locations, factions, or items,
+  suggest filing them in the vault with campaign-organizer.
+  After character creation, suggest organizing PC files.
+  Campaign-organizer handles structure; this skill handles
+  content.
+
+- **session-lifecycle** — Prep → Play → Wrap-up cycle.
+  After session planning is complete, suggest transitioning
+  to session-lifecycle Prep mode for the full session cycle.
+  After a session ends, suggest session-lifecycle Wrap-up
+  for processing play notes and capturing new entities.
+
+- **campaign-qa** — Validation and contradiction detection.
+  After session prep (especially after Canon Grounding in
+  Step 7), suggest a campaign-qa validation pass. After
+  major content generation, suggest a QA check to catch
+  contradictions before they reach the table.
+
 ## Knowledge Base
 
 **Routing priority:**
