@@ -1,6 +1,3 @@
-> This file is based on Blades in the Dark by John Harper /
-> One Seven Design (CC-BY 3.0). See ATTRIBUTION.md.
-
 # Forged in the Dark -- Session Procedures
 
 ## The Core Loop
@@ -153,7 +150,7 @@ Rep earned: 2 base, +1 per tier the target is above your crew,
 the operation. Coin earned based on the score's nature:
 
 | Score Size | Coin |
-|-----------|------|
+|-----------|:----:|
 | Minor job | 2 |
 | Small job | 4 |
 | Standard score | 6 |
@@ -163,72 +160,6 @@ the operation. Coin earned based on the score's nature:
 Pay tithe to local crime boss if applicable: subtract coin
 equal to crew Tier + 1. If you don't pay, start a patience
 clock; each time it fills, lose 1 faction status.
-
-### Heat
-
-| Base Exposure | Heat |
-|--------------|------|
-| Smooth and quiet; low exposure | 0 |
-| Contained; standard exposure | 2 |
-| Loud and chaotic; high exposure | 4 |
-| Wild; devastating exposure | 6 |
-
-| Additional Factor | Heat |
-|-------------------|------|
-| High-profile or well-connected target | +1 |
-| Situation on hostile turf | +1 |
-| Crew is at war with another faction | +1 |
-| Killing was involved | +2 |
-
-When heat reaches 9, gain a wanted level and clear heat (excess
-rolls over). Higher wanted level means stronger law enforcement
-response. The only way to reduce wanted level is incarceration.
-
-### Entanglements
-
-After heat is determined, the GM rolls for an entanglement
-based on the crew's current heat level and wanted level.
-Entanglements represent the complex background of debts,
-rivals, and complications in the crew's life.
-
-| Result | Heat 0-3 | Heat 4-5 | Heat 6+ |
-|--------|----------|----------|---------|
-| 1-3 | Gang Trouble or The Usual Suspects | Gang Trouble or Questioning | Flipped or Interrogation |
-| 4-5 | Rivals or Unquiet Dead | Reprisals or Unquiet Dead | Demonic Notice or Show of Force |
-| 6 | Cooperation | Show of Force | Arrest |
-
-Roll dice equal to wanted level (if wanted level is 0, roll 2d
-and keep the lowest). Entanglements manifest fully before the
-PCs can act to prevent them.
-
-### Entanglement Descriptions
-
-- **Arrest**: Inspector sends a detail. Pay coin equal to wanted
-  level + 3, hand someone over (clears heat), or evade.
-- **Cooperation**: A +3 status faction asks a favor. Agree, or
-  forfeit 1 rep per their Tier, or lose 1 status.
-- **Demonic Notice**: A demon offers a dark bargain. Accept,
-  hide (forfeit 3 rep), or deal with it.
-- **Flipped**: A rival arranges for one of your contacts or
-  customers to switch allegiance.
-- **Gang Trouble**: A cohort causes trouble from their flaws.
-  Lose face (rep equal to Tier + 1), make an example, or face
-  reprisals.
-- **Interrogation**: Officers question a PC. Pay 3 coin, or
-  take level 2 harm and +3 heat (each resistible separately).
-- **Questioning**: Officers question an NPC associate. Fortune
-  roll to see how much they talk (1-3: +2 heat, 4/5: +1 heat),
-  or pay 2 coin.
-- **Reprisals**: An enemy faction acts against you. Pay 1 rep
-  and 1 coin per their Tier, allow it, or fight back.
-- **Rivals**: A neutral faction threatens you. Forfeit 1 rep or
-  1 coin per their Tier, or stand up and lose 1 status.
-- **Show of Force**: A negative-status faction moves against
-  your holdings. Give them 1 claim or go to war (-3 status).
-- **Unquiet Dead**: A rogue spirit is drawn to you. Hire an
-  occultist or deal with it yourself.
-- **The Usual Suspects**: Cops grab someone peripheral. Fortune
-  roll (1-3: +2 heat, 4/5: level 2 harm), or pay 1 coin.
 
 ### Downtime Activities
 
@@ -340,14 +271,51 @@ Common bargains:
 - Add heat from evidence or witnesses
 - Suffer harm
 
-## Sources
+## GM Guidance: Keeping the Score Moving
 
-- Blades in the Dark SRD by John Harper / One Seven Design
-  (CC-BY 3.0)
+**Cut to the action.** After the engagement roll, describe the
+first obstacle. Don't narrate the approach.
 
-## External References
+**Use consequences, not blocks.** On a 4/5, the PC succeeds
+with a cost. On a 1-3, things go badly -- but avoid shutting
+down all options. Present new problems, not dead ends.
 
-- Blades in the Dark SRD:
-  https://bladesinthedark.com/
-- Forged in the Dark game list:
-  https://bladesinthedark.com/forged-dark
+**Let flashbacks do the planning.** Players will learn to
+trust the system when they see that flashback planning is
+focused on actual problems rather than speculative ones.
+
+**Track the fiction.** Who knows what? What's happening
+off-screen? Which clocks are ticking? These questions drive
+the narrative forward.
+
+**Describe the position.** Before each roll, briefly frame
+why it's controlled, risky, or desperate. This gives players
+the information they need to make meaningful choices about
+pushing, resisting, or trading position for effect.
+
+## GM Guidance: Managing Downtime
+
+**Don't skip downtime.** It provides pacing, character
+development, and mechanical recovery. Even if the group is
+eager for the next score, the downtime systems create texture.
+
+**Entanglements are opportunities.** They generate drama and
+complicate the crew's life in interesting ways. Play them as
+story hooks, not punishments.
+
+**Advance faction clocks.** Between sessions, tick forward the
+clocks for factions you're interested in. When you turn
+attention to a neglected faction, catch them up with several
+ticks. Use fortune rolls (faction Tier) if uncertain.
+
+**Share the world.** When factions do things, tell the players
+through their friends, contacts, or vice purveyors. Rumors and
+gossip lead to future scores.
+
+**Don't shortchange payoff.** When the crew earns coin, give
+them what they earned. Don't set up traps at the meeting with
+the client. The PCs have enough problems without the GM
+undermining their payoff.
+
+---
+*This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*

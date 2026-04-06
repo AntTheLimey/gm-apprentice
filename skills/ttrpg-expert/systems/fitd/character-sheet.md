@@ -1,75 +1,71 @@
-> This file is based on Blades in the Dark by John Harper /
-> One Seven Design (CC-BY 3.0). See ATTRIBUTION.md.
+# Forged in the Dark -- Character & Crew Sheets
 
-# Blades in the Dark -- Character Sheet
+This is the core reference for what lives on the character
+sheet and crew sheet. Playbook-specific and crew-type-specific
+details are in playbooks.md and crew-types.md.
 
-## Identity
+---
 
-| Field | Value |
+## Character Sheet
+
+### Identity
+
+| Field | Notes |
 |-------|-------|
-| **Name** | |
-| **Alias** | |
-| **Look** | |
-| **Heritage** | |
-| **Heritage Detail** | |
-| **Background** | |
-| **Background Detail** | |
+| **Name** | From sample list or custom |
+| **Alias** | Underworld nickname |
+| **Look** | A few evocative words |
+| **Heritage** | Akoros, Dagger Isles, Iruvia, Severos, Skovlan, Tycheros |
+| **Heritage Detail** | Family life note |
+| **Background** | Academic, Labor, Law, Trade, Military, Noble, Underworld |
+| **Background Detail** | Specific history |
 
-## Vice
+### Vice
 
-| Field | Value |
+| Field | Notes |
 |-------|-------|
 | **Vice Type** | Faith / Gambling / Luxury / Obligation / Pleasure / Stupor / Weird |
-| **Vice Description** | |
-| **Vice Purveyor** | |
-| **Purveyor Location** | |
+| **Vice Description** | Specific details of indulgence |
+| **Vice Purveyor** | Name and location |
 
-## Action Ratings
+### Action Ratings
 
-### Insight (Attribute Rating: ___)
+#### Insight (Attribute Rating: ___)
 
-| Action | Rating (0-4) | Dots |
-|--------|:------------:|------|
-| Hunt | | [ ] [ ] [ ] [ ] |
-| Study | | [ ] [ ] [ ] [ ] |
-| Survey | | [ ] [ ] [ ] [ ] |
-| Tinker | | [ ] [ ] [ ] [ ] |
+| Action | Rating (0-4) |
+|--------|:------------:|
+| Hunt | |
+| Study | |
+| Survey | |
+| Tinker | |
 
-### Prowess (Attribute Rating: ___)
+#### Prowess (Attribute Rating: ___)
 
-| Action | Rating (0-4) | Dots |
-|--------|:------------:|------|
-| Finesse | | [ ] [ ] [ ] [ ] |
-| Prowl | | [ ] [ ] [ ] [ ] |
-| Skirmish | | [ ] [ ] [ ] [ ] |
-| Wreck | | [ ] [ ] [ ] [ ] |
+| Action | Rating (0-4) |
+|--------|:------------:|
+| Finesse | |
+| Prowl | |
+| Skirmish | |
+| Wreck | |
 
-### Resolve (Attribute Rating: ___)
+#### Resolve (Attribute Rating: ___)
 
-| Action | Rating (0-4) | Dots |
-|--------|:------------:|------|
-| Attune | | [ ] [ ] [ ] [ ] |
-| Command | | [ ] [ ] [ ] [ ] |
-| Consort | | [ ] [ ] [ ] [ ] |
-| Sway | | [ ] [ ] [ ] [ ] |
+| Action | Rating (0-4) |
+|--------|:------------:|
+| Attune | |
+| Command | |
+| Consort | |
+| Sway | |
 
 Attribute rating = number of actions under that attribute with
-at least one dot.
+at least one dot. Used for resistance rolls.
 
-## Stress Track
+### Stress Track (9 boxes)
 
-```
-[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]
- 1   2   3   4   5   6   7   8   9
-```
+When the last box is marked, suffer a trauma and clear all
+stress. Vice is satisfied for the next downtime.
 
-When the last box is marked, suffer trauma and clear stress.
-
-## Trauma
-
-```
-[ ] [ ] [ ] [ ]
-```
+### Trauma (4 boxes)
 
 Conditions (circle one per trauma):
 Cold / Haunted / Obsessed / Paranoid /
@@ -77,339 +73,240 @@ Reckless / Soft / Unstable / Vicious
 
 At four trauma, the character must retire.
 
-## Harm
+### Harm
 
-```
-Level 3 (Severe):  [___________________]  Need help
-Level 2 (Moderate): [_________] [_________]  -1d
-Level 1 (Lesser):  [_________] [_________]  Reduced effect
-```
+| Level | Slots | Penalty |
+|-------|:-----:|---------|
+| 3 (Severe) | 1 | Need help to act |
+| 2 (Moderate) | 2 | -1d |
+| 1 (Lesser) | 2 | Reduced effect |
 
-If a harm row is full, new harm of that level moves up to the
-next level. Level 4 harm is fatal.
+If a harm row is full, new harm of that level moves up. Level
+4 is fatal. Penalties apply when the harm is relevant.
 
-## Armor
+### Armor
 
-```
-[ ] Standard    [ ] Heavy    [ ] Special
-```
+Three boxes:
+- **Standard**: Mark to reduce/avoid a consequence
+- **Heavy**: Mark for further reduction (requires heavy armor
+  in load)
+- **Special**: Tied to specific playbook abilities
 
-All armor restored when you choose load for the next score.
+All standard/heavy armor restored when you choose load. Special
+armor restores at the beginning of downtime.
 
-## Special Abilities
+### Special Abilities
 
-```
-1. [___________________________________________]
-2. [___________________________________________]
-3. [___________________________________________]
-4. [___________________________________________]
-5. [___________________________________________]
-6. [___________________________________________]
-7. [___________________________________________]
-```
+Seven slots. First ability chosen at creation. Additional
+abilities earned through playbook xp advancement.
 
-## Items and Load
+### Items and Load
 
 Choose load level at the start of each score:
 
-| Load Level | Item Slots |
-|------------|:----------:|
-| Light | 3 |
-| Normal | 5 |
-| Heavy | 6 |
+| Load | Item Slots | Description |
+|------|:----------:|-------------|
+| 1-3 (Light) | 3 | Faster, less conspicuous |
+| 4-5 (Normal) | 5 | Look like a scoundrel |
+| 6 (Heavy) | 6 | Slower, look like an operative |
+| 7-9 (Encumbered) | 7-9 | Can only move very slowly |
 
-### Standard Items (available to all)
+**Standard items** (available to all characters):
+- A Blade or Two (1 load)
+- Throwing Knives (1 load)
+- A Pistol (1 load)
+- A 2nd Pistol (2 load)
+- A Large Weapon (2 load)
+- An Unusual Weapon (1 load)
+- Armor (1 load; enables standard armor box)
+- Heavy Armor (1 additional load; enables heavy armor box)
+- Burglary Gear (1 load)
+- Climbing Gear (1 load)
+- Arcane Implements (1 load)
+- Documents (1 load)
+- Subterfuge Supplies (1 load)
+- Demolition Tools (1 load)
+- Tinkering Tools (1 load)
+- Lantern (1 load)
 
-```
-[ ] A Blade or Two
-[ ] Throwing Knives
-[ ] A Pistol
-[ ][ ] A 2nd Pistol (counts as 2 load)
-[ ][ ] A Large Weapon (counts as 2 load)
-[ ] An Unusual Weapon
-[ ] Armor (+1 load, lets you use armor box)
-[ ][ ] Heavy Armor (+1 more load, 2nd armor box)
-[ ] Burglary Gear
-[ ] Climbing Gear
-[ ] Arcane Implements
-[ ] Documents
-[ ] Subterfuge Supplies
-[ ] Demolition Tools
-[ ] Tinkering Tools
-[ ] Lantern
-```
+Each playbook also has five distinctive personal items (Fine
+quality, light, rare, or otherwise specific to the type).
 
-### Playbook-Specific Items
+### XP Triggers
 
-```
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-```
+**During play**: Mark 1 xp in an attribute when you make a
+desperate action roll using an action under that attribute
+(including desperate group actions).
 
-## XP Triggers
+**End of session** (mark 1 xp each, or 2 if a lot):
+- Playbook-specific trigger (e.g., "Address a challenge with
+  violence or coercion")
+- Expressed beliefs, drives, heritage, or background
+- Struggled with issues from vice or traumas
 
-**Playbook XP Trigger:**
-_"Earn xp when you address a challenge with: _______________"_
-
-**Attribute XP (during play):**
-Mark 1 xp in an attribute when you make a desperate action roll
-using an action under that attribute.
-
-**End-of-Session Triggers** (mark 1 xp each, or 2 if a lot):
-- [ ] Playbook-specific trigger (see above)
-- [ ] Expressed beliefs, drives, heritage, or background
-- [ ] Struggled with issues from vice or traumas
+End-of-session xp may go on any track.
 
 ### XP Tracks
 
-```
-Insight:  [ ] [ ] [ ] [ ] [ ] [ ]  -> Advance: +1 action dot
-Prowess:  [ ] [ ] [ ] [ ] [ ] [ ]  -> Advance: +1 action dot
-Resolve:  [ ] [ ] [ ] [ ] [ ] [ ]  -> Advance: +1 action dot
-Playbook: [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]  -> Advance: new special ability
-```
+| Track | Segments | Advance Reward |
+|-------|:--------:|----------------|
+| Insight | 6 | +1 action dot under Insight |
+| Prowess | 6 | +1 action dot under Prowess |
+| Resolve | 6 | +1 action dot under Resolve |
+| Playbook | 8 | New special ability |
 
-## Coin and Stash
+### Coin and Stash
 
-**Coin on hand:** ___
+**Coin on hand**: Liquid cash for immediate use (max 4 without
+crew vault).
 
-**Stash** (determines retirement fate):
+**Stash** (40 boxes in 4 rows of 10):
 
-```
-[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]  = Lifestyle 1
-[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]  = Lifestyle 2
-[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]  = Lifestyle 3
-[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]  = Lifestyle 4
-```
+| Stash | Lifestyle | Retirement Fate |
+|-------|:---------:|-----------------|
+| 0-10 | 0-1 | Poor soul; gutter, vice, misery |
+| 11-20 | 2 | Meager; a tiny hovel |
+| 21-39 | 3 | Modest; simple home, small business |
+| 40 | 4 | Fine; well-appointed home, medium business |
 
-| Stash | Retirement Fate |
-|-------|----------------|
-| 0-10 | Poor soul; gutter, vice, and misery |
-| 11-20 | Meager; a tiny hovel |
-| 21-39 | Modest; a simple home, maybe a small business |
-| 40 | Fine; a well-appointed home, a medium business |
+Withdrawing: for every 2 stash removed, get 1 coin.
 
-Removing stash: for every 2 stash removed, get 1 coin.
+### Contacts
 
-## Notes
-
-```
-[                                           ]
-[                                           ]
-[                                           ]
-```
-
-## Contacts and Rivals
-
-| NPC | Relationship | Notes |
-|-----|:------------:|-------|
-| | Friend (+) | |
-| | | |
-| | | |
-| | | |
-| | Rival (-) | |
+Each playbook lists five NPCs. At creation, mark one as a close
+friend (upward triangle) and one as a rival (downward triangle).
 
 ---
 
-# Blades in the Dark -- Crew Sheet
+## Crew Sheet
 
-## Crew Identity
+### Crew Identity
 
-| Field | Value |
+| Field | Notes |
 |-------|-------|
 | **Crew Name** | |
-| **Crew Type** | |
+| **Crew Type** | Determines available abilities and operations |
 | **Reputation** | Ambitious / Brutal / Daring / Honorable / Professional / Savvy / Subtle / Strange |
-| **Hunting Grounds** | |
-| **Hunting Grounds District** | |
-| **Preferred Operation** | |
+| **Lair Location** | District and description |
+| **Hunting Grounds** | 3-4 city blocks in a district |
+| **Preferred Operation** | One type from crew list; +1d gather info, free downtime activity |
 
-## Lair
+### Tier, Hold, Heat, and Wanted Level
 
-| Field | Value |
-|-------|-------|
-| **Location** | |
-| **Description** | |
+| Tracker | Range | Notes |
+|---------|-------|-------|
+| **Tier** | 0-VI | Wealth, influence, scale. Determines item quality and gang scale. |
+| **Hold** | Weak / Strong | How well the crew maintains position. Start strong at Tier 0. |
+| **Heat** | 0-9 track | When it reaches 9: gain 1 wanted level, clear heat (excess rolls over). |
+| **Wanted Level** | 0-4 | Reduced only by incarceration. Higher = stronger law enforcement response. |
 
-## Tier, Hold, Heat, and Wanted Level
+### Rep and Turf
 
-| Tracker | Value |
-|---------|-------|
-| **Tier** | 0 / I / II / III / IV / V / VI |
-| **Hold** | Weak / Strong |
+**Rep track**: 12 boxes. Earn 2 rep per score (+/- tier
+difference). Each piece of turf (max 6) reduces rep needed by
+one (minimum 6 to advance).
 
-### Heat Track
+When filled:
+- Weak hold -> strong hold. Reset rep.
+- Strong hold -> pay coin (new Tier x 8) to increase Tier.
+  Reset rep, hold becomes weak.
 
-```
-[ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]
- 1   2   3   4   5   6   7   8   9
-```
+Turf marks persist through rep resets.
 
-When heat reaches 9: gain 1 wanted level, clear heat (excess
-rolls over).
+### Coin Vault
 
-### Wanted Level
+Default storage: 4 coin. Vault upgrade: 8. Double vault: 16.
 
-```
-[ ] [ ] [ ] [ ]
- 1   2   3   4
-```
+### Crew XP
 
-Reduced only by incarceration.
+**Crew xp track**: 8 boxes.
 
-## Rep and Turf
-
-```
-Rep: [ ] [ ] [ ] [ ] [ ] [ ] | [ ] [ ] [ ] [ ] [ ] [ ] :Turf
-```
-
-12 rep to advance (minus turf, minimum 6). Mark turf from the
-right side. Turf marks persist through rep resets.
-
-## Coin
-
-```
-Vault: [ ] [ ] [ ] [ ] (default 4; 8 with vault; 16 with double vault)
-```
-
-## Crew XP
-
-**Crew XP Trigger:** ________________________________
-
-```
-Crew XP: [ ] [ ] [ ] [ ] [ ] [ ] [ ] [ ]
-```
+**Crew xp triggers** (end of session, 1 xp each or 2 if major):
+- Crew-specific trigger (e.g., "Execute a smuggling operation")
+- Contend with challenges above your current station
+- Bolster your crew's reputation or develop a new one
+- Express the goals, drives, inner conflict, or essential
+  nature of the crew
 
 When filled: take a new crew special ability OR mark two crew
 upgrade boxes. Each advance gives every PC stash equal to
 Tier + 2.
 
-**Additional Crew XP Triggers** (end of session):
-- [ ] Contend with challenges above your current station
-- [ ] Bolster your crew's reputation or develop a new one
-- [ ] Express the goals, drives, inner conflict, or essential
-      nature of the crew
+### Crew Special Abilities
 
-## Crew Special Abilities
+Seven slots. First chosen at creation; more earned through
+crew xp advancement.
 
-```
-1. [___________________________________________]
-2. [___________________________________________]
-3. [___________________________________________]
-4. [___________________________________________]
-5. [___________________________________________]
-6. [___________________________________________]
-7. [___________________________________________]
-```
+### Upgrades
 
-## Upgrades
+**Crew-specific upgrades**: Five slots (vary by crew type).
 
-### Crew-Specific Upgrades
+**General upgrades**:
+- Boat House / Carriage House (improvable)
+- Cohort (gang or expert; costs 2 boxes)
+- Hidden Lair
+- Mastery (costs 4 boxes; unlocks action rating 4)
+- Quality: Documents / Gear / Implements / Supplies / Tools /
+  Weapons
+- Quarters
+- Secure Lair (improvable with arcane)
+- Training: Insight / Prowess / Resolve / Playbook
+- Vault (improvable)
+- Workshop
 
-```
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-[ ] [___________________________________________]
-```
+### Cohorts
 
-### General Upgrades
+For each cohort, track:
 
-```
-[ ] Boat House          [ ][ ] Boat House (improved)
-[ ] Carriage House      [ ][ ] Carriage House (improved)
-[ ] Cohort: ________    [ ][ ] Cohort: ________
-[ ] Hidden Lair
-[ ][ ][ ][ ] Mastery (4 boxes)
-[ ] Quality: Documents  [ ] Quality: Gear
-[ ] Quality: Implements [ ] Quality: Supplies
-[ ] Quality: Tools      [ ] Quality: Weapons
-[ ] Quarters
-[ ] Secure Lair         [ ][ ] Secure Lair (arcane)
-[ ] Training: Insight   [ ] Training: Prowess
-[ ] Training: Resolve   [ ] Training: Playbook
-[ ] Vault               [ ][ ] Vault (expanded)
-[ ] Workshop
-```
-
-## Cohorts
-
-### Cohort 1
-
-| Field | Value |
+| Field | Notes |
 |-------|-------|
-| **Type** | Gang / Expert |
-| **Gang Type** | Adepts / Rooks / Rovers / Skulks / Thugs |
-| **Expertise** | (for experts) |
-| **Scale** | (equals crew Tier for gangs; 0 for experts) |
-| **Quality** | (equals crew Tier for gangs; Tier + 1 for experts) |
-| **Edges** | |
-| **Flaws** | |
+| Type | Gang or Expert |
+| Gang Type | Adepts / Rooks / Rovers / Skulks / Thugs |
+| Expertise | (for experts only) |
+| Scale | Equals crew Tier for gangs; 0 for experts |
+| Quality | Equals crew Tier for gangs; Tier + 1 for experts |
+| Edges | Fearsome, Independent, Loyal, Tenacious |
+| Flaws | Principled, Savage, Unreliable, Wild |
+| Harm | Weakened / Impaired / Broken / Dead |
 
-Harm: [ ] Weakened  [ ] Impaired  [ ] Broken  [ ] Dead
+### Claims Map
 
-### Cohort 2
+Each crew type has its own claim map. Claims are seized by
+following paths from the central lair square. Seizing a claim
+is a score against the controlling faction (typically -2 status
+with target, +1 with their enemies).
 
-| Field | Value |
-|-------|-------|
-| **Type** | Gang / Expert |
-| **Gang Type** | Adepts / Rooks / Rovers / Skulks / Thugs |
-| **Expertise** | (for experts) |
-| **Scale** | |
-| **Quality** | |
-| **Edges** | |
-| **Flaws** | |
-
-Harm: [ ] Weakened  [ ] Impaired  [ ] Broken  [ ] Dead
-
-## Turf and Claims
-
-(Draw or reference the claim map for your crew type. Claims
-are seized by following paths from the central lair square.)
-
+Sample claim map layout:
 ```
-[          ] --- [          ] --- [          ]
-     |                |                |
-[          ] --- [  LAIR   ] --- [          ]
-     |                |                |
-[          ] --- [          ] --- [          ]
+[        ] --- [        ] --- [        ]
+     |              |              |
+[        ] --- [  LAIR  ] --- [        ]
+     |              |              |
+[        ] --- [        ] --- [        ]
 ```
 
-## Faction Status
+### Faction Status
 
-| Faction | Tier | Status (-3 to +3) | Notes |
-|---------|:----:|:-----------------:|-------|
-| | | | |
-| | | | |
-| | | | |
-| | | | |
-| | | | |
-| | | | |
-| | | | |
-| | | | |
+Track status with each faction (-3 to +3):
 
-## Crew Contacts
+| Status | Meaning |
+|--------|---------|
+| +3 Allies | Will help even at cost to themselves |
+| +2 Friendly | Will help if no serious problems |
+| +1 Helpful | Will help if no problems or cost |
+| 0 Neutral | No particular relationship |
+| -1 Interfering | Look for free trouble opportunities |
+| -2 Hostile | Actively seek to hurt you |
+| -3 War | Go out of their way to hurt you, even at cost |
 
-| Contact | Relationship | Notes |
-|---------|:------------:|-------|
-| | Favorite (+) | |
-| | | |
-| | | |
-| | | |
-| | | |
+**War consequences**: +1 heat from every score, temporarily
+lose 1 hold, PCs get only one downtime activity. End by
+eliminating enemy or negotiating new status.
 
-## Sources
+### Crew Contacts
 
-- Blades in the Dark SRD by John Harper / One Seven Design
-  (CC-BY 3.0)
+Five contacts per crew type. One marked as favorite at
+creation.
 
-## External References
-
-- Blades in the Dark SRD:
-  https://bladesinthedark.com/
-- Forged in the Dark game list:
-  https://bladesinthedark.com/forged-dark
+---
+*This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*
