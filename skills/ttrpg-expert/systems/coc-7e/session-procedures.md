@@ -190,6 +190,46 @@ reminders for Keepers:
 5. **Confrontation** (30-45 min): Climactic encounter.
 6. **Resolution/Escape** (15-20 min): Aftermath and hooks.
 
+## Faction Turn (CoC-Specific)
+
+Called by `world-evolution.md` Step 2 during post-session
+updates. Overrides Step 4 of the Universal Faction Turn
+with CoC-specific pacing and mechanics.
+
+**Narrative timeline (not mechanical clocks):**
+CoC antagonists advance on a narrative arc, not segmented
+clocks. Their plan has stages: Preparation → Gathering →
+Ritual → Culmination. Propose advancing one stage every
+2-3 sessions if uninhibited by investigators.
+
+**Investigator heat:**
+- If investigators asked public questions, searched records,
+  or visited suspicious locations: the antagonists may
+  become aware. Propose increasing surveillance.
+- If investigators confronted cultists or disrupted
+  operations: propose direct retaliation (threats, attacks,
+  framing, kidnapping allies).
+- If investigators were discreet: no change in awareness.
+
+**NPC loyalty shifts:**
+- NPCs who witnessed investigator bravery or competence:
+  propose loyalty increase (more willing to help).
+- NPCs who were endangered by investigator actions: propose
+  loyalty decrease (reluctant, resentful, or compromised).
+- NPCs under cult influence: propose gradual corruption
+  (subtle behaviour changes over 2-3 sessions).
+
+**Mythos exposure:**
+- Track how close the cosmic threat is to manifesting.
+- If investigators destroyed a ritual component: set back
+  by one stage.
+- If investigators did nothing: advance toward culmination.
+- The horror is that the timeline advances relentlessly.
+
+**Pacing note:** CoC campaigns build slowly. Propose faction
+changes every 2-3 sessions rather than every session. Let
+dread accumulate.
+
 ## External References
 
 - [Chaosium Inc. (publisher)](https://www.chaosium.com/)
