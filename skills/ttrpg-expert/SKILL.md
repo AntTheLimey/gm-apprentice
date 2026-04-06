@@ -59,6 +59,27 @@ for [mechanic]?"** / **"how does combat work?"**
 **CoC combat rules** / **"how does fighting work in CoC?"**
 → Read `systems/coc-7e/combat-reference.md`.
 
+**FitD faction lookup** / **"tell me about [faction]"**
+→ Read `systems/fitd/factions.md`.
+
+**FitD playbook** / **"what does a [playbook] do?"**
+→ Read `systems/fitd/playbooks.md`.
+
+**FitD crew type** / **"what crew abilities does [crew] get?"**
+→ Read `systems/fitd/crew-types.md`.
+
+**FitD Doskvol / setting** / **"tell me about [district/location]"**
+→ Read `systems/fitd/setting-doskvol.md`.
+
+**FitD ritual / crafting** / **"how do rituals work in FitD?"**
+→ Read `systems/fitd/rituals-crafting.md`.
+
+**FitD entanglement / heat** / **"what happens when heat reaches [level]?"**
+→ Read `systems/fitd/entanglements.md`.
+
+**FitD magnitude** / **"what magnitude is [effect]?"**
+→ Read `systems/fitd/magnitude.md`.
+
 **"Validate my character"** / **"check my character sheet"**
 → Determine the game system first. Read
   `systems/{system}/character-generation.md` (Validation
@@ -257,6 +278,27 @@ lookup. Load only the files relevant to the request.
 | Creatures and Lovecraftian entities | creatures.md |
 | Magic, sorcery, and psychic powers | powers-magic.md |
 | Lovecraft setting, locations, themes | setting-lovecraft.md |
+
+### FitD — File Routing
+
+**Path prefix:** `systems/fitd/` — all FitD files listed
+below are in this directory.
+
+The FitD system has topic-based reference files for
+efficient lookup. Load only the files relevant to the
+request.
+
+| Request | Read |
+|---------|------|
+| Doskvol districts, landmarks, atmosphere | setting-doskvol.md |
+| Factions, tier, hold, NPCs, operations | factions.md |
+| Character playbooks, abilities, items, XP | playbooks.md |
+| Crew types, abilities, upgrades, claims | crew-types.md |
+| Ritual and crafting systems | rituals-crafting.md |
+| Heat, entanglements, incarceration, prison | entanglements.md |
+| Magnitude scale tables | magnitude.md |
+| Combat and core action rules | rules-reference.md |
+| Items and load | character-sheet.md |
 
 ## Content Generation Workflow
 
