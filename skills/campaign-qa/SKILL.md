@@ -15,22 +15,25 @@ decides what to do.
 
 ## Companion Skills
 
-- **ttrpg-expert** — Content creation and deep continuity
-  analysis. When a QA finding requires new content (rewriting
-  an NPC profile, generating a missing clue), hand off to
-  ttrpg-expert. Its `continuity-engine.md` defines the
-  detection categories this skill operationalises.
-- **campaign-organizer** — Vault structure and entity management.
-  When findings involve structural graph issues (orphans,
-  missing relationships), campaign-organizer's Validate mode
-  handles the repair. This skill detects; campaign-organizer
-  restructures.
-- **session-lifecycle** — Session prep and wrap-up. Suggest a
-  QA pass after wrap-up produces changes, or before prep to
-  catch stale data.
-- **narrative-tracker** — Thread and foreshadowing tracking.
-  The clue redundancy check overlaps with narrative-tracker's
-  domain; hand off thread-level findings there.
+- **ttrpg-expert** — Content creation and continuity
+  analysis. When a QA finding requires new content
+  (rewriting an NPC profile, generating a missing clue),
+  hand off to ttrpg-expert. Its `continuity-engine.md`
+  defines the detection categories this skill
+  operationalises. It also handles thread and foreshadowing
+  tracking (Chekhov Protocol for stale threads, Canon
+  Grounding for fact verification). Has per-system topic
+  files for rules and stat lookups.
+
+- **campaign-organizer** — Vault structure and entity
+  management. When findings involve structural graph issues
+  (orphans, missing relationships), campaign-organizer's
+  Validate mode handles the repair. This skill detects;
+  campaign-organizer restructures.
+
+- **session-lifecycle** — Session prep and wrap-up. Suggest
+  a QA pass after wrap-up produces changes, or before prep
+  to catch stale data.
 
 ## Vault Integration
 

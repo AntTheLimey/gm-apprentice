@@ -17,16 +17,21 @@ flag it rather than inventing content.
 
 ## Companion Skills
 
-- **ttrpg-expert** — Content creation (NPCs, scenes, stat blocks,
-  handouts). Also has authoritative schema definitions: read its
-  `entity-types.md`, `relationship-patterns.md`, and
-  `canon-management.md` for canonical type definitions.
-- **session-lifecycle** — Prep → Play → Wrap-up cycle. Suggest
-  after organizing session-related content.
-- **campaign-qa** — Canon/timeline/graph validation. Suggest after
-  major Organize or Weave passes.
-- **narrative-tracker** — Foreshadowing, discovery state, plot
-  threads. Suggest after session wrap-up processing.
+- **ttrpg-expert** — Content creation (NPCs, scenes, stat
+  blocks, handouts). Has authoritative schema definitions:
+  read its `entity-types.md`, `relationship-patterns.md`,
+  and `canon-management.md` for canonical type definitions.
+  Also has per-system topic files (creatures, spells,
+  factions, equipment) for quick reference and system-
+  specific routing via Quick Commands.
+
+- **session-lifecycle** — Prep → Play → Wrap-up cycle.
+  Suggest after organizing session-related content.
+
+- **campaign-qa** — Canon/timeline/graph validation. Suggest
+  after major Organize or Weave passes. For thread and
+  foreshadowing tracking, ttrpg-expert's continuity-engine.md
+  handles the narrative state.
 
 ## Environment Detection
 
