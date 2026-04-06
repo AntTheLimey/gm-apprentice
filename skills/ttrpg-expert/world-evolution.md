@@ -25,6 +25,28 @@ reject each one before filing anything.
 Never silently update campaign state. Every proposed change
 must be visible to the GM before it becomes canon.
 
+## Output Quality
+
+Proposals must read like a living world, not a spreadsheet.
+
+- **Be decisive.** "The cult dispatches two agents within 48
+  hours" — not "the cult may send agents." Propose specific
+  committed actions. The GM can reject or modify; your job
+  is to present a world that has already moved.
+- **Name everyone.** Every NPC, faction, and location in a
+  proposal gets a name. "Inspector Brennan starts asking
+  questions" — not "a law enforcement figure investigates."
+- **Surprise the GM.** The best proposals make the GM think
+  "I wouldn't have thought of that, but yes, that's exactly
+  what would happen." Look for unexpected-but-logical
+  second-order consequences.
+- **Write scenes, not summaries.** "A flat-faced stranger
+  appears near the boarding house twice in one week" — not
+  "Innsmouth agents begin surveillance."
+- **Match the system's tone.** CoC proposals should drip with
+  creeping dread. FitD should feel like noir crime fiction.
+  D&D should feel like a living political/adventure landscape.
+
 ---
 
 ## Storage Checkpoint

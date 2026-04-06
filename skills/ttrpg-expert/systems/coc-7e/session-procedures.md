@@ -196,39 +196,85 @@ Called by `world-evolution.md` Step 2 during post-session
 updates. Overrides Step 4 of the Universal Faction Turn
 with CoC-specific pacing and mechanics.
 
-**Narrative timeline (not mechanical clocks):**
-CoC antagonists advance on a narrative arc, not segmented
-clocks. Their plan has stages: Preparation → Gathering →
-Ritual → Culmination. Propose advancing one stage every
-2-3 sessions if uninhibited by investigators.
+**IMPORTANT: CoC does NOT use clocks, ticks, or segments.**
+Those are Forged in the Dark mechanics. CoC antagonists
+advance on a **narrative arc** — stages of a plan that
+unfold through fiction, not through mechanical counters.
 
-**Investigator heat:**
-- If investigators asked public questions, searched records,
-  or visited suspicious locations: the antagonists may
-  become aware. Propose increasing surveillance.
-- If investigators confronted cultists or disrupted
-  operations: propose direct retaliation (threats, attacks,
-  framing, kidnapping allies).
-- If investigators were discreet: no change in awareness.
+**Narrative timeline stages:**
+Each antagonist group has a plan with named stages. Example
+for a summoning cult:
+
+| Stage | What's happening | Visible signs |
+|-------|-----------------|---------------|
+| Preparation | Cult gathers members, secures a location | Strange meetings at night, new faces in town |
+| Gathering | Collecting ritual components, kidnapping victims | Disappearances, odd purchases, nervous locals |
+| Ritual | Active ceremony, final preparations | Chanting heard at night, lights on the reef, animals flee |
+| Culmination | The summoning attempt | The sky changes, the sea rises, it's too late to stop quietly |
+
+Advance one stage every 2-3 sessions if investigators don't
+intervene. If they destroy a component or disrupt operations,
+the cult adapts — they don't go backwards on a track, they
+change their approach: find a substitute, accelerate the
+timeline, or retaliate against whoever interfered.
+
+**Investigator heat (narrative, not mechanical):**
+CoC doesn't track heat as a number. Instead, describe the
+cult's awareness as escalating fiction:
+
+- **Unaware:** The cult doesn't know investigators exist.
+  This is their most vulnerable state — and the investigators'
+  greatest advantage. Protect it.
+- **Suspicious:** Someone asked the wrong questions or was
+  seen near a cult location. A watcher is assigned — a
+  nervous shopkeeper who reports back, a car that follows
+  at a distance.
+- **Aware:** The cult knows investigators are actively
+  working against them. Named cult members avoid routines,
+  security tightens, a warning is delivered (a dead animal
+  on the doorstep, a threatening note in archaic script).
+- **Hostile:** The cult is actively trying to stop the
+  investigators. Ambushes, kidnapping of allies, framing
+  for crimes, or direct supernatural attack.
+
+Escalation is slow and deliberate. Move one level per
+session at most. The dread comes from the investigators
+realising they're being watched before anything violent
+happens.
 
 **NPC loyalty shifts:**
-- NPCs who witnessed investigator bravery or competence:
-  propose loyalty increase (more willing to help).
-- NPCs who were endangered by investigator actions: propose
-  loyalty decrease (reluctant, resentful, or compromised).
-- NPCs under cult influence: propose gradual corruption
-  (subtle behaviour changes over 2-3 sessions).
+NPCs in CoC are fragile. They have their own fears, debts,
+and secrets. Track loyalty as a gut feeling, not a number:
+
+- **Becoming more helpful:** The NPC witnessed investigator
+  competence or bravery. They share something they'd been
+  holding back — a name, a document, a key.
+- **Becoming less helpful:** The NPC was endangered by
+  association. They stop answering the phone, aren't home
+  when investigators call, or give a terse "I can't help
+  you any more."
+- **Being corrupted:** An NPC under cult influence changes
+  subtly over 2-3 sessions. First their opinions shift,
+  then their habits, then their appearance. The investigators
+  should notice something is wrong before they can name it.
 
 **Mythos exposure:**
-- Track how close the cosmic threat is to manifesting.
-- If investigators destroyed a ritual component: set back
-  by one stage.
-- If investigators did nothing: advance toward culmination.
-- The horror is that the timeline advances relentlessly.
+The cosmic threat advances independently of the cult:
 
-**Pacing note:** CoC campaigns build slowly. Propose faction
-changes every 2-3 sessions rather than every session. Let
-dread accumulate.
+- The stars align on a calendar the investigators can't
+  change.
+- Environmental signs accumulate: fish die in the harbour,
+  the fog doesn't lift, the temperature drops in one room.
+- Dreams intensify for anyone who's encountered the Mythos.
+- Each session, ask: is the cosmic threat one step closer
+  to manifesting? If yes, describe one new environmental
+  sign.
+
+**Pacing principle:** CoC is slow dread, not fast action.
+Propose faction changes every 2-3 sessions. Let the
+investigators feel the weight of time passing. The most
+terrifying sessions are the ones where nothing overtly
+happens — but everything feels slightly wrong.
 
 ## External References
 
