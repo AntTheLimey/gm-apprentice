@@ -100,6 +100,29 @@ When content doesn't fit existing types:
 This is just editing the vault's own schema. Built-in and evolved
 types are identical.
 
+### World Evolution Fields
+
+The `ttrpg-expert` skill's `world-evolution.md` procedure
+may update entities with living state fields. Preserve
+these fields when reorganising:
+
+**On Faction entities:**
+- `currentPlan`, `planProgress`, `alliances`,
+  `recentActions`, `status`
+
+**On Clue entities:**
+- `discoveryState` (per-PC knowledge level object)
+
+**Thread entities** (type: `thread`):
+- `threadType`, `status`, `introduced`, `lastAdvanced`,
+  `knownBy`, `nextBeat`, `resolutionCondition`,
+  `plantedDetail`, `intendedPayoff`, `ripeness`
+
+**Campaign-tracker.md** may exist at the vault root with
+consequence logs, foreshadowing logs, world state snapshots,
+and rumour boards. Do not reorganise this file — it is
+updated by the world-evolution procedure.
+
 ## The Two Layers
 
 ### Narrative Layer (linear)
