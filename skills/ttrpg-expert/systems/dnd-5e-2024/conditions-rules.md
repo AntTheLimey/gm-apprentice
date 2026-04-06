@@ -124,7 +124,7 @@ Every foot of movement costs 1 extra foot. Sources: hostile creatures, furniture
 
 ## Falling
 
-1d6 Bludgeoning per 10 ft fallen (max 20d10). Land Prone. Fall instantly up to 500 ft.
+1d6 Bludgeoning per 10 ft fallen (max 20d6). Land Prone. Fall instantly up to 500 ft.
 
 ## Suffocating
 

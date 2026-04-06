@@ -2,7 +2,7 @@
 
 242 magic items from SRD 5.2, organised by category.
 
-**Format:** Name | Rarity | Attunement | Effect
+**Format:** Name | Rarity (A = requires Attunement) | Effect
 
 **Rarity:** Common, Uncommon, Rare, Very Rare, Legendary
 

@@ -76,7 +76,7 @@
 - **Giant Seahorse** | L | AC 14 | HP 16 | 5 ft., Swim 40 ft. | Ram, Bubble Dash
 - **Giant Wasp** | M | AC 13 | HP 22 | 10 ft., Fly 50 ft. | Flyby, Sting
 - **Reef Shark** | M | AC 12 | HP 22 | 5 ft., Swim 30 ft. | Bite
-- **Swarm of Insects** | M | AC 11 | HP 19 | 20 ft., Choose ? ft. | Swarm; Bites
+- **Swarm of Insects** | M | AC 11 | HP 19 | 20 ft., Climb 20 ft. or Fly 20 ft. (DM's choice) | Swarm; Bites
 - **Warhorse** | L | AC 11 | HP 19 | 60 ft. | Hooves
 
 ## CR 1 (XP 200)

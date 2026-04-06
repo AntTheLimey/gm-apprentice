@@ -91,7 +91,7 @@ Roll 2d20, take highest (Advantage) or lowest (Disadvantage). Multiple sources d
 | Initiative | DEX mod (+ bonuses from feats/features) |
 | Spell Save DC | 8 + proficiency bonus + spellcasting ability mod |
 | Spell Attack Bonus | Proficiency bonus + spellcasting ability mod |
-| Passive Perception | 10 + WIS (Perception) mod |
+| Passive Perception | 10 + Perception modifier (WIS mod + PB if proficient) |
 | Speed | Typically 30 ft (varies by species) |
 
 ## Skills (18)

@@ -1,6 +1,7 @@
 > BRP creature stats: BRP ORC License. See ATTRIBUTION.md.
 > Lovecraft creature descriptions: Public domain fiction by
-> H.P. Lovecraft (published pre-1929).
+> H.P. Lovecraft (composed pre-1932; all works listed by
+> composition date, which precedes any US publication date).
 
 # Call of Cthulhu 7e -- Creatures Reference
 
@@ -23,7 +24,7 @@ Each entry is labelled with its source:
 - **[ORC]** -- Stats and descriptions from the BRP UGE ORC
   Content Document.
 - **[Lovecraft]** -- Descriptions drawn from H.P. Lovecraft's
-  published fiction (public domain, pre-1929). Names, physical
+  fiction, cited by composition date. Names, physical
   descriptions, behaviours, and locations only. No game stats
   are provided for these entries as they are not part of the
   ORC content.
@@ -209,10 +210,10 @@ poison, disease, impaling. Takes minimum damage from bullets
 ## Lovecraft Entities [Lovecraft]
 
 The following entries are drawn entirely from H.P. Lovecraft's
-published fiction (pre-1929, public domain). They present his
-literary descriptions only — physical appearance, behaviour,
-associated locations, and thematic role. No game statistics are
-provided; these are not Chaosium game content.
+fiction, cited by composition date. They present his literary
+descriptions only — physical appearance, behaviour, associated
+locations, and thematic role. No game statistics are provided;
+these are not Chaosium game content.
 
 ### Cthulhu [Lovecraft]
 **Source**: "The Call of Cthulhu" (1928).
@@ -238,7 +239,7 @@ coastal communities.
 incomprehensible.
 
 ### Deep Ones [Lovecraft]
-**Source**: "The Shadow over Innsmouth" (1931 — written 1927).
+**Source**: "The Shadow over Innsmouth" (written 1927).
 **Description**: Amphibious humanoid creatures with greyish-
 green skin, white bellies, webbed hands and feet, bulging
 eyes, and gills. They dwell in vast cities beneath the ocean
@@ -250,7 +251,7 @@ in exchange for human mates.
 decay, xenophobia.
 
 ### Elder Things [Lovecraft]
-**Source**: "At the Mountains of Madness" (1936 — written 1931).
+**Source**: "At the Mountains of Madness" (written 1931).
 **Description**: Barrel-shaped beings roughly six feet long with
 starfish-shaped heads and bases, five-ridged bodies, fan-like
 folding wings, and clusters of tentacles. An incredibly ancient
@@ -273,7 +274,7 @@ appetites.
 savagery, hidden worlds beneath the familiar.
 
 ### Mi-Go (Fungi from Yuggoth) [Lovecraft]
-**Source**: "The Whisperer in Darkness" (1931 — written 1930).
+**Source**: "The Whisperer in Darkness" (written 1930).
 **Description**: Pinkish, fungoid, crustacean-like beings about
 five feet long with many-jointed limbs, clusters of pyramided
 fleshy rings as heads, and membranous bat-like wings. They mine
@@ -297,7 +298,7 @@ takes apparent delight in driving mortals to despair.
 corruption of knowledge, entropy.
 
 ### Shoggoths [Lovecraft]
-**Source**: "At the Mountains of Madness" (1936 — written 1931).
+**Source**: "At the Mountains of Madness" (written 1931).
 **Description**: Immense, protoplasmic masses capable of
 shaping any limbs or organs at will — a shapeless congeries
 of bubbling, protoplasmic matter, roughly fifteen feet in
@@ -355,7 +356,7 @@ the impossibility of understanding alien life.
 
 > **Attribution:** ORC creature stats from *Basic Roleplaying:
 > Universal Game Engine* by Chaosium Inc., used under the ORC
-> License. Lovecraft entity descriptions from the published
-> fiction of H.P. Lovecraft, in the public domain. No Chaosium
+> License. Lovecraft entity descriptions drawn from the fiction
+> of H.P. Lovecraft, cited by composition date. No Chaosium
 > game-mechanical content is used for the Lovecraft entries.
 > See ATTRIBUTION.md for full license details.

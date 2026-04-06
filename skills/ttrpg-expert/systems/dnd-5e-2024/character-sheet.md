@@ -50,7 +50,7 @@ Determined by total character level, not class level.
 | **Current HP** | Track during play |
 | **Temporary HP** | Don't stack; take highest. Don't restore; buffer before real HP |
 | **Hit Dice** | One per level, die size from class. Spend on Short Rest to heal |
-| **Passive Perception** | 10 + WIS (Perception) mod. Adv = +5, Disadv = -5 |
+| **Passive Perception** | 10 + Perception modifier (WIS mod + PB if proficient). Adv = +5, Disadv = -5 |
 
 ## Death Saves
 
