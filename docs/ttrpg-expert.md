@@ -85,9 +85,10 @@ All generated content starts as DRAFT status. It becomes canon when you confirm 
 ## Game System Data Sources
 
 Each supported game system has its own subfolder under
-`systems/` with five consistent reference files: mechanics,
-character generation, rules reference, session procedures,
-and a character sheet template.
+`systems/` with core reference files: mechanics, character
+generation, session procedures, and a character sheet
+template. Most systems also have a rules reference file;
+GURPS uses topic-based files for efficient lookup.
 
 - **D&D 5e (2024)** — `systems/dnd-5e-2024/`. Content sourced
   from the SRD 5.2, licensed under CC-BY 4.0 by Wizards of
@@ -104,11 +105,15 @@ and a character sheet template.
   Sanity system) attributed to the official free character
   sheet. Built into the skill.
 
-- **GURPS 4e** — `systems/gurps-4e/`. No open license exists
-  for GURPS. A future update will add a connector to read
-  your own GCA4 data files for full mechanical support.
-  Currently includes workflow guidance and embedded reference
-  data.
+- **GURPS 4e** — `systems/gurps-4e/`. Uses topic-based
+  reference files (traits, skills, equipment, spells, combat,
+  magic, powers, social rules) instead of a single rules
+  reference. All curated Basic Set content (point costs,
+  tables, workflows) is distributed under the SJG Online
+  Policy. Check `sources.md` for which books are currently
+  integrated. Users with GURPS PDFs can add personal
+  reference files to `systems/gurps-4e/personal/` for richer
+  lookups.
 
 - **Other systems** — `systems/generic/`. Universal RPG
   guidance for any system not listed above. Covers common

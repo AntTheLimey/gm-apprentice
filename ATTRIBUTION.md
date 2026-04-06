@@ -14,10 +14,10 @@ https://creativecommons.org/licenses/by/4.0/legalcode.
 ### Blades in the Dark / Forged in the Dark
 
 This work is based on Blades in the Dark (found at
-http://www.bladesinthedark.com/), product of One Seven Design,
+https://www.bladesinthedark.com/), product of One Seven Design,
 developed and authored by John Harper, and licensed for our use
 under the Creative Commons Attribution 3.0 Unported license
-(http://creativecommons.org/licenses/by/3.0/).
+(https://creativecommons.org/licenses/by/3.0/).
 
 ### Basic Roleplaying Universal Game Engine
 
@@ -29,10 +29,21 @@ Copyright Chaosium Inc.
 
 ## GURPS
 
-GURPS is a registered trademark of Steve Jackson Games
-Incorporated. This project does not reproduce GURPS game
-mechanics. GURPS support requires the user's own licensed
-data files (e.g., GCA4 data files) or rulebooks.
+GURPS is a trademark of Steve Jackson Games, and its rules
+and art are copyrighted by Steve Jackson Games. All rights
+are reserved by Steve Jackson Games. This game aid is the
+original creation of AntTheLimey and is released for free
+distribution, and not for resale, under the permissions
+granted in the
+[Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
+
+The GURPS skill files in this project contain trait names,
+point costs, page references, and short mechanical notes as
+permitted by the SJG Online Policy. Content is curated from
+the GURPS Basic Set (Characters and Campaigns) and organized
+into topic-based reference files and archetype chargen kits.
+See `skills/ttrpg-expert/systems/gurps-4e/sources.md` for
+book coverage status.
 
 ## Referenced Frameworks and Concepts
 

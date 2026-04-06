@@ -27,7 +27,9 @@ sheet"** / **"I need a [system] character"** / **"create a PC"**
 
 **"How much does [trait] cost?"** / **"what are the rules
 for [mechanic]?"** / **"how does combat work?"**
-→ Determine the game system first. Read
+→ Determine the game system first. For GURPS, use the file
+  routing table in "Game System Data" below to load the
+  right topic file(s). For other systems, read
   `systems/{system}/rules-reference.md`. Provide the specific
   rule with page references where possible. For deeper
   context, also read `systems/{system}/mechanics.md`.
@@ -38,8 +40,9 @@ for [mechanic]?"** / **"how does combat work?"**
   Checks section). Run the full validation: point budget,
   illegal combos, missing prerequisites, disadvantage limits,
   skill level sanity, equipment affordability, active
-  defenses. Also read `systems/{system}/rules-reference.md`
-  for cost verification.
+  defenses. For GURPS, use the topic-based trait/skill files
+  for cost verification. For other systems, read
+  `systems/{system}/rules-reference.md`.
 
 **"Make me an NPC"** / **"I need a villain"** / **"generate
 a character"**
@@ -95,6 +98,7 @@ an item"**
 → Read `random-generation.md`. Use the appropriate oracle
   or table system. Interpret results in campaign context.
 
+
 ## Three Modes of Operation
 
 **Analysis Mode** — Validate, review, check, and advise.
@@ -128,10 +132,14 @@ mapping request types to files and brief summaries of all
 knowledge base files.
 
 Each supported game system has its own subfolder under
-`systems/` with five reference files: `mechanics.md`,
-`character-generation.md`, `rules-reference.md`,
-`session-procedures.md`, and `character-sheet.md`. For
-unsupported systems, use `systems/generic/`.
+`systems/` with core reference files: `mechanics.md`,
+`character-generation.md`, `session-procedures.md`, and
+`character-sheet.md`. Most systems also have a single
+`rules-reference.md`; GURPS 4e uses topic-based files
+instead (see "Game System Data" below). GURPS 4e also has
+chargen kit files for efficient character generation — see
+the routing table below. For unsupported
+systems, use `systems/generic/`.
 
 **Critical rule:** Always read the relevant knowledge base
 file before generating content or providing guidance. The
@@ -140,10 +148,11 @@ knowledge base files are essential for quality output.
 
 **System-specific deep-dives**: For any system-specific
 request, the routing table will direct you to the correct
-subfolder. Each system's `rules-reference.md` contains the
-deep mechanical detail (combat, traits, equipment, powers,
-etc.) and `character-generation.md` contains the full
-character building workflow.
+subfolder. For GURPS, use the file routing table below to
+load only the relevant topic files. For other systems,
+`rules-reference.md` contains the deep mechanical detail.
+`character-generation.md` contains the full character
+building workflow for all systems.
 
 **Sourcebook citations**: When providing rules answers, cite
 the canonical source book and page number where possible
@@ -151,6 +160,59 @@ the canonical source book and page number where possible
 Handbook, p.73" for D&D). The rules reference files within
 each system subfolder contain all the mechanics needed for
 accurate rulings.
+
+## Game System Data
+
+### Built-in Systems (No Setup Required)
+
+All four supported game systems have reference content
+built into their system subfolders. No additional setup
+is needed.
+
+### GURPS 4e — File Routing
+
+**Path prefix:** `systems/gurps-4e/` — all GURPS files
+listed below are in this directory.
+
+The GURPS system has topic-based reference files for
+efficient lookup. Load only the files relevant to the
+request — never load all files at once.
+
+**Character Generation** (always read mechanics.md +
+character-generation.md first, then the relevant kit
+file(s) — one for focused builds, multiple for mixed
+concepts like a magic-using spy or a scholar-soldier):
+
+| Character Concept | Kit File |
+|-------------------|----------|
+| Combat/military/operative | chargen-kit-combat.md |
+| Wizard/mage/spellcaster | chargen-kit-magic.md |
+| Super/psionic/powers | chargen-kit-powers.md |
+| Diplomat/politician/con artist/face | chargen-kit-social.md |
+| Doctor/scientist/scholar/inventor | chargen-kit-scholar.md |
+| Thief/spy/infiltrator/assassin | chargen-kit-thief.md |
+| Explorer/ranger/survivalist/scout | chargen-kit-outdoor.md |
+| Mixed or highly unusual concept | Read individual topic files as needed |
+
+Kit files bundle the relevant traits, skills, equipment,
+and mechanics for that archetype. For mixed concepts,
+combine kits (e.g., magic bard → magic + social kits).
+Only fall back to individual topic files if no kit covers
+a specific need.
+
+**Procedural Rules** (in-play reference):
+
+| Situation | Read |
+|-----------|------|
+| Running combat | combat.md |
+| Casting spells | magic-rules.md |
+| Using powers | powers-rules.md |
+| Social encounters | social-rules.md |
+| Session management | session-procedures.md |
+
+**Book Coverage:** Check `sources.md` for which books
+are currently integrated. If a user references content
+from a non-integrated book, flag it.
 
 ## Content Generation Workflow
 

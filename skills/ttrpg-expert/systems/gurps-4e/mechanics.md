@@ -1,11 +1,12 @@
 # GURPS 4th Edition — Core Mechanics
 
-> **Copyright Notice:** GURPS is a registered trademark of
-> Steve Jackson Games Incorporated. The mechanical data in
-> this section is derived from GURPS sourcebooks and is
-> included for personal reference only. A future update will
-> replace embedded data with a connector to the user's own
-> licensed GCA data files. See ATTRIBUTION.md for details.
+> GURPS is a trademark of Steve Jackson Games, and its rules
+> and art are copyrighted by Steve Jackson Games. All rights
+> are reserved by Steve Jackson Games. This game aid is the
+> original creation of AntTheLimey and is released for free
+> distribution, and not for resale, under the permissions
+> granted in the
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 ## Overview
 
@@ -14,7 +15,8 @@ Point-buy character creation with no fixed classes or levels.
 Covers any genre via modular supplements. Detailed combat
 with 1-second turns, hit locations, and active defenses.
 
-For deep rules coverage, see `rules-reference.md`.
+For deep rules coverage, see the topic files (combat.md,
+traits-*.md, skills-*.md, equipment-*.md, etc.).
 For character generation workflows, see
 `character-generation.md`.
 
@@ -90,7 +92,7 @@ Combat Reflexes: +1 to all active defenses.
 ## Advantages/Disadvantages
 
 Point-buy system for traits. Full lists with costs in
-`rules-reference.md`.
+`traits-*.md` files.
 
 - **Advantages**: Beneficial traits (cost points)
 - **Disadvantages**: Limiting traits (give points back,
