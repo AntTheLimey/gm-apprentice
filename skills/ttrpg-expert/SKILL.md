@@ -80,6 +80,30 @@ for [mechanic]?"** / **"how does combat work?"**
 **FitD magnitude** / **"what magnitude is [effect]?"**
 → Read `systems/fitd/magnitude.md`.
 
+**D&D monster / creature** / **"stats for [monster]"**
+→ Read `systems/dnd-5e-2024/monsters.md`.
+
+**D&D animal / beast** / **"stats for [animal]"**
+→ Read `systems/dnd-5e-2024/animals.md`.
+
+**D&D spell lookup** / **"how does [spell] work in D&D?"**
+→ Read `systems/dnd-5e-2024/spells.md`.
+
+**D&D magic item** / **"what does [item] do?"**
+→ Read `systems/dnd-5e-2024/magic-items.md`.
+
+**D&D equipment / weapon / armor** / **"damage for [weapon]"** / **"AC from [armor]"**
+→ Read `systems/dnd-5e-2024/equipment.md`.
+
+**D&D class** / **"what does a [class] get at level [N]?"**
+→ Read `systems/dnd-5e-2024/classes.md`.
+
+**D&D feat** / **"what does [feat] do?"**
+→ Read `systems/dnd-5e-2024/feats.md`.
+
+**D&D condition / rule** / **"what does [condition] do?"** / **"how does [hazard/poison/disease] work?"**
+→ Read `systems/dnd-5e-2024/conditions-rules.md`.
+
 **"Validate my character"** / **"check my character sheet"**
 → Determine the game system first. Read
   `systems/{system}/character-generation.md` (Validation
@@ -299,6 +323,26 @@ request.
 | Magnitude scale tables | magnitude.md |
 | Combat and core action rules | rules-reference.md |
 | Items and load | character-sheet.md |
+
+### D&D 5e 2024 — File Routing
+
+**Path prefix:** `systems/dnd-5e-2024/` — all D&D files
+listed below are in this directory.
+
+The D&D system has topic-based reference files for efficient
+lookup. Load only the files relevant to the request.
+
+| Request | Read |
+|---------|------|
+| Monsters by CR | monsters.md |
+| Animals and beasts by CR | animals.md |
+| Spells by level, class lists | spells.md |
+| Magic items by category | magic-items.md |
+| Weapons, armour, and gear | equipment.md |
+| Class summaries and feature tables | classes.md |
+| Feats | feats.md |
+| Conditions, damage types, hazards, poisons, diseases | conditions-rules.md |
+| Combat and core action rules | rules-reference.md |
 
 ## Content Generation Workflow
 
