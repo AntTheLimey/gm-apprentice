@@ -37,11 +37,32 @@ Then reload:
 gm-apprentice supports four systems:
 
 - **Call of Cthulhu 7th Edition** (CoC 7e) — percentile-based investigation and cosmic horror
-- **GURPS 4th Edition** — point-buy, any-genre, 3d6 roll-under. Includes curated Basic Set content built in with topic-based reference files (traits, skills, equipment, spells, combat, powers, magic, social rules). Check `sources.md` for book coverage.
+- **GURPS 4th Edition** — point-buy, any-genre, 3d6 roll-under. Includes curated Basic Set content with 24 topic-based reference files and 7 chargen kits (see below). Check `sources.md` for book coverage.
 - **Forged in the Dark** (Blades in the Dark) — d6 dice pool, position and effect
 - **D&D 5th Edition, 2024 Revision** — d20 core, classes and spell slots
 
 Tell Claude which system you're using when you start. It won't assume.
+
+### GURPS Chargen Kits
+
+If you're running GURPS, character generation uses archetype
+kits — bundled reference files that give Claude everything it
+needs for a character type in a single read. Just ask for a
+character and Claude picks the right kit automatically:
+
+| Kit | Archetype |
+|-----|-----------|
+| Combat / Military | Soldier, operative, martial artist |
+| Magic User | Wizard, mage, hedge witch |
+| Powers / Psionic | Super, psion, powered hero |
+| Social / Political | Diplomat, con artist, noble, face |
+| Scholar / Medic | Doctor, scientist, professor, inventor |
+| Thief / Spy | Burglar, infiltrator, intelligence agent |
+| Outdoorsman / Scout | Explorer, ranger, survivalist, tracker |
+
+For mixed concepts (e.g., a magic-using spy), Claude combines
+multiple kits. You don't need to specify which kit to use —
+just describe the character you want.
 
 ## Step 3: Set Up Obsidian (Recommended)
 
