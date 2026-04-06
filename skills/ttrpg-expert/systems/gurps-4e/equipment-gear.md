@@ -6,7 +6,7 @@
 > original creation of AntTheLimey and is released for free
 > distribution, and not for resale, under the permissions
 > granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 All items are from the Basic Set (B266, B288-289) unless
 otherwise noted. Costs and weights are at the item's base TL.

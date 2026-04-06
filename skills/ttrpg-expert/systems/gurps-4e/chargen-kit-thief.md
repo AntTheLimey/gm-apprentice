@@ -6,7 +6,7 @@
 > original creation of AntTheLimey and is released for free
 > distribution, and not for resale, under the permissions
 > granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 This kit contains everything needed to build an infiltration-focused
 character. Read mechanics.md and character-generation.md
@@ -332,7 +332,7 @@ Equipment drawn from equipment-gear.md. Grouped by function.
 
 | Item | TL | Cost | Wt | Page | Notes |
 |------|-----|------|-----|------|-------|
-| Bug, Audio | 7 | $200 | neg. | B289 | -7 to spot; 1/4-mile range; 1 week battery |
+| Bug, Audio | 7 | $200 | neg. | B289 | -7 to spot; 1/4-mile range; 1-week battery |
 | Bug Stomper | 7 | $1,200 | 2 | B289 | Jams bugs in 10-yard radius; 8 hours |
 | Shotgun Mike | 6 | $250 | 2 | B289 | (TL-4) levels Parabolic Hearing |
 | Laser Microphone | 8 | $500 | 2 | B289 | Eavesdrop through glass; 300-yard range |

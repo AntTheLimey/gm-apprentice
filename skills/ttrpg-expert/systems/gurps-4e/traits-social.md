@@ -6,7 +6,7 @@
 > original creation of AntTheLimey and is released for free
 > distribution, and not for resale, under the permissions
 > granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 ## Advantages
 
@@ -19,9 +19,9 @@
 | Pitiable | 5 | B22 | (Social) +3 reaction when begging for help |
 | Cultural Familiarity | 1 | B23 | (Social) No penalty for one foreign culture |
 | Cultural Familiarity (Alien) | 2 | B23 | (Social) Familiarity with an alien culture |
-| Language (Spoken + Written) | 2–4 | B24 | (Social) Accented [2], Native [4] per component ¹ |
-| Language (Spoken only) | 1–2 | B24 | (Social) Spoken component only |
-| Language (Written only) | 1–2 | B24 | (Social) Written component only |
+| Language (Spoken + Written) | 2–6 | B24 | (Social) Accented [2] or Native [3] per component ¹ |
+| Language (Spoken only) | 1–3 | B24 | (Social) Spoken component only |
+| Language (Written only) | 1–3 | B24 | (Social) Written component only |
 | Wealth | varies | B25 | (Social) Starting wealth multiplier ² |
 | Independent Income | 1/level | B26 | (Social) Guaranteed income |
 | Reputation (Positive) | varies | B27 | (Social) Reaction bonus from those who know you ³ |

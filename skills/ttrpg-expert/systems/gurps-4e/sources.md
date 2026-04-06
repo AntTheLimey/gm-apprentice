@@ -5,7 +5,7 @@
 > Jackson Games. This game aid is the original creation of AntTheLimey
 > and is released for free distribution, and not for resale, under the
 > permissions granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 ## Currently Integrated
 

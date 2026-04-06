@@ -6,7 +6,7 @@
 > original creation of AntTheLimey and is released for free
 > distribution, and not for resale, under the permissions
 > granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 In-play procedural reference for GURPS 4e social interaction
 mechanics. Covers reaction rolls, influence rolls, reputation,
@@ -146,7 +146,7 @@ appropriate), roll to see if a Patron provides assistance.
 | Quite rarely | 6 or less | x1/2 |
 | Fairly often | 9 or less | x1 |
 | Quite often | 12 or less | x2 |
-| Almost all the time | 15 or less | x3 |
+| Almost all the time | 15 or less | x4 |
 
 **On success**: The Patron provides useful assistance --
 information, equipment, backup, political cover, etc.
@@ -163,7 +163,7 @@ the Ally appears and is available to help.
 | Quite rarely | 6 or less | x1/2 |
 | Fairly often | 9 or less | x1 |
 | Quite often | 12 or less | x2 |
-| Almost all the time | 15 or less | x3 |
+| Almost all the time | 15 or less | x4 |
 
 ### Enemy Frequency
 

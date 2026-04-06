@@ -6,7 +6,7 @@
 > original creation of AntTheLimey and is released for free
 > distribution, and not for resale, under the permissions
 > granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 This kit contains everything needed to build a character
 with superhuman or psionic powers. Read mechanics.md and
@@ -46,7 +46,7 @@ more useful than TK 3 [14] + five minor abilities.
 **Mundane foundation:** Even supers need Combat Reflexes,
 a few combat skills, and social/perception skills. Don't
 spend 100% on powers and leave the character helpless when
-powers are neutralised.
+powers are neutralized.
 
 ---
 

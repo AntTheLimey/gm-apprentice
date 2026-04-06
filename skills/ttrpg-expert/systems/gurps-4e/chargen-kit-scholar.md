@@ -6,7 +6,7 @@
 > original creation of AntTheLimey and is released for free
 > distribution, and not for resale, under the permissions
 > granted in the
-> [Steve Jackson Games Online Policy](http://www.sjgames.com/general/online_policy.html).
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
 This kit contains everything needed to build a knowledge-focused
 character. Read mechanics.md and character-generation.md
@@ -233,7 +233,7 @@ Scholars typically have little combat training. Budget 2-4 points for basic surv
 | Staff | DX/A | B208 | 2-4 pts | Walking cane or field-improvised pole |
 | First Aid | IQ/E | B195 | Already in kit | Stabilizing self or allies after a fight |
 
-**Dodge:** Basic Speed / 4 (drop fractions) + 3. Scholar with DX 10, HT 10 has Basic Speed 5.00, Dodge 8. Retreating adds +3 (to 11). Advise players to run or hide rather than fight.
+**Dodge:** floor(Basic Speed) + 3. Scholar with DX 10, HT 10 has Basic Speed 5.00, Dodge 8. Retreating adds +3 (to 11). Advise players to run or hide rather than fight.
 
 **Recommended spend:** 1-2 pts Brawling for unarmed Parry; rely on Dodge and retreating.
 
@@ -267,7 +267,7 @@ Scholar-appropriate gear. TL 8 (modern) unless noted.
 | Binoculars | 6 | $400 | 2 | B289 | Field observation; Telescopic Vision (TL-4) |
 | Metal Detector Wand | 7 | $50 | 3 | B289 | +3 to find metal items |
 | Wristwatch | 6 | $20 | neg. | B288 | Time experiments and procedures |
-| Scribe's Kit | 3 | varies | varies | B288 | Pre-TL6: quills, inkbottles, paper |
+| Scribe's Kit | 3 | varies | varies | B288 | Pre-TL6: quills, ink bottles, paper |
 
 ### Field Kit (TL8 Scholar)
 
