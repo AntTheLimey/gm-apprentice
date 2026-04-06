@@ -1,6 +1,8 @@
 > BRP equipment data: BRP ORC License. See ATTRIBUTION.md.
+> CoC 7e uses the same basic weapon tables as BRP. Skill names
+> below use CoC 7e conventions (Fighting, Firearms).
 
-# Call of Cthulhu 7e — Weapons Reference
+# Call of Cthulhu 7e -- Weapons Reference
 
 Melee, missile, and firearm tables with damage, special
 effects, range, and requirements. Used during character
@@ -15,10 +17,11 @@ during combat).
   "+1/2dm" = add half damage modifier (round up).
 - **Attk**: Attacks per round. Fractions (1/2, 1/3) mean one
   attack every 2 or 3 rounds.
-- **Special**: Type of special success damage (bleeding,
-  crushing, entangling, impaling, knockback).
-- **Rng**: Base range. Medium range (2x base) is Difficult.
-  Long range (4x base) is 1/5 skill chance.
+- **Special**: Type of enhanced damage on an Extreme success
+  (bleeding, crushing, entangling, impaling, knockback).
+- **Rng**: Base range. Long range (2x base) warrants a
+  penalty die. Extreme range (4x base) requires an Extreme
+  success.
 - **Hands**: 1H = one-handed, 2H = two-handed.
 - **HP**: Weapon hit points.
 - **STR/DEX**: Minimum requirements to wield without penalty.

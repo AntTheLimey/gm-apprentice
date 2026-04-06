@@ -53,8 +53,8 @@ for [mechanic]?"** / **"how does combat work?"**
 **CoC magic / spells** / **"how does [spell/power] work in CoC?"**
 → Read `systems/coc-7e/powers-magic.md`.
 
-**CoC profession** / **"what skills does a [occupation] get?"**
-→ Read `systems/coc-7e/professions.md`.
+**CoC occupation** / **"what skills does a [occupation] get?"**
+→ Read `systems/coc-7e/occupations.md`.
 
 **CoC combat rules** / **"how does fighting work in CoC?"**
 → Read `systems/coc-7e/combat-reference.md`.
@@ -299,7 +299,7 @@ lookup. Load only the files relevant to the request.
 | Request | Read |
 |---------|------|
 | Skills and base chances | skills.md |
-| Profession templates | professions.md |
+| Occupation templates | occupations.md |
 | Melee, missile, and firearms | equipment-weapons.md |
 | Armour and protection | equipment-armor.md |
 | Combat procedure and spot rules | combat-reference.md |

@@ -45,7 +45,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Creatures or monsters** | For CoC: `systems/coc-7e/creatures.md`. For D&D: `systems/dnd-5e-2024/monsters.md` (animals: `systems/dnd-5e-2024/animals.md`). Others: `systems/{system}/rules-reference.md` | — |
 | **Setting or world lore** | For CoC: `systems/coc-7e/setting-lovecraft.md`. For FitD: `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` | — |
 | **Factions** | For FitD: `systems/fitd/factions.md`. Others: `content-generation.md` | `relationship-patterns.md` for webs |
-| **Professions or character classes** | For CoC: `systems/coc-7e/professions.md`. For FitD: `systems/fitd/playbooks.md`. For D&D: `systems/dnd-5e-2024/classes.md`. Others: `systems/{system}/character-generation.md` | — |
+| **Occupations or character classes** | For CoC: `systems/coc-7e/occupations.md`. For FitD: `systems/fitd/playbooks.md`. For D&D: `systems/dnd-5e-2024/classes.md`. Others: `systems/{system}/character-generation.md` | — |
 | **Crew or party type** | For FitD: `systems/fitd/crew-types.md`. Others: `systems/{system}/character-generation.md` | — |
 | **Entanglements or heat** | For FitD: `systems/fitd/entanglements.md`. Others: `systems/{system}/rules-reference.md` | — |
 | **Magnitude or scale** | For FitD: `systems/fitd/magnitude.md`. Others: `systems/{system}/rules-reference.md` | — |
@@ -54,7 +54,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 
 | Request Type | Read This File | Also Read |
 |---|---|---|
-| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/professions.md`. For FitD: also `systems/fitd/playbooks.md`. For D&D: also `systems/dnd-5e-2024/classes.md`. For GURPS: also `systems/gurps-4e/character-generation.md` |
+| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/occupations.md`. For FitD: also `systems/fitd/playbooks.md`. For D&D: also `systems/dnd-5e-2024/classes.md`. For GURPS: also `systems/gurps-4e/character-generation.md` |
 | **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks; also `systems/{system}/session-procedures.md` for system pacing conventions |
 | **Location** generation | `content-generation.md` | For CoC: also `systems/coc-7e/setting-lovecraft.md`. For FitD: also `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` for setting context |
 | **Faction** generation | `content-generation.md` | `relationship-patterns.md` for webs |
@@ -105,13 +105,13 @@ core reference files:
 
 **CoC 7e expanded file structure:** In addition to the
 standard files, CoC has topic-based reference files:
-`skills.md` (BRP skill list with base % and usage notes),
-`professions.md` (BRP profession templates),
-`equipment-weapons.md` (melee/missile/firearms tables),
-`equipment-armor.md` (armour types with protection values),
-`combat-reference.md` (attack/defence matrix, spot rules),
-`creatures.md` (BRP ORC creatures and Lovecraft entities),
-`powers-magic.md` (BRP magic/sorcery/psychic systems),
+`skills.md` (CoC 7e skill list with base % and usage notes),
+`occupations.md` (CoC 7e occupation templates with Credit
+Rating ranges), `equipment-weapons.md` (melee/missile/firearms
+tables), `equipment-armor.md` (armour types with protection
+values), `combat-reference.md` (combat flow, defensive
+reactions, spot rules), `creatures.md` (BRP ORC creatures
+and Lovecraft entities), `powers-magic.md` (magic systems),
 `setting-lovecraft.md` (public domain Lovecraft locations,
 entities, and themes). See SKILL.md for which files to
 load for each request type.

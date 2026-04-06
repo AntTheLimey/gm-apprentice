@@ -1,17 +1,19 @@
-> BRP mechanics: BRP ORC License. See ATTRIBUTION.md.
+> BRP mechanical foundation: BRP ORC License. See ATTRIBUTION.md.
+> CoC 7e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
 
-# Call of Cthulhu 7e — Rules Reference
+# Call of Cthulhu 7e -- Rules Reference
 
 Advanced mechanics for play: detailed skill resolution, opposed
 rolls, combat flow, pushing rolls, sanity, luck spending, chase
 rules, recovery, and experience.
 
-## Skill Rolls and Success Levels (BRP ORC License)
+## Skill Rolls and Success Levels
 
 ### Basic Resolution
 
 Roll D100 (two ten-sided dice) equal to or under the skill
-rating to succeed. The roll produces five possible outcomes:
+rating to succeed. The roll produces six possible outcomes:
 
 | Result | Threshold | Effect |
 |--------|-----------|--------|
@@ -48,34 +50,22 @@ dice. Roll an extra tens die:
 Multiple bonus/penalty dice can stack (up to 2). If both apply,
 they cancel one-for-one.
 
-## Opposed Rolls (BRP ORC License)
+## Opposed Rolls
 
 When two characters' skills or characteristics directly contest
-each other, use an opposed roll. Three methods from BRP:
+each other, use an opposed roll. Both participants roll and
+compare success levels:
 
-### Method 1: Highest Success Level
-
-Both participants roll. Compare success levels:
 1. Higher success level wins (Extreme > Hard > Regular).
 2. If tied, the higher roll that still succeeded wins.
 3. If still tied, the higher skill rating wins.
 
-This is the default method in CoC 7e.
+This is the standard method in CoC 7e. When characteristics
+directly oppose each other (e.g., STR vs STR in a grapple),
+both parties roll against their characteristic as if it were
+a skill, comparing success levels the same way.
 
-### Method 2: Subtraction
-
-The passive party rolls first. If successful, their full skill
-value is subtracted from the active party's skill rating before
-the active roll. Used when one party is actively resisting.
-
-### Method 3: Resistance Table
-
-Convert both skills to a characteristic-scale value (divide
-by 5) and resolve using the resistance table formula:
-Chance = 50% + (active x 5) - (passive x 5). Used when
-comparing raw capabilities rather than trained skills.
-
-## Combat Flow (BRP ORC License)
+## Combat Flow
 
 ### Round Structure
 
@@ -84,12 +74,12 @@ in DEX rank order (highest DEX acts first).
 
 **Round phases:**
 
-1. **Declaration**: In reverse DEX order (lowest first), each
-   combatant states their intended action.
-2. **Action Resolution**: In DEX rank order (highest first),
-   each combatant resolves their action.
+1. **Determine Initiative**: Characters act in DEX order
+   (highest first). Ties are simultaneous.
+2. **Actions**: Each combatant resolves their action in DEX
+   order. Defensive reactions are declared when attacked.
 3. **End of Round**: Apply ongoing effects, check for
-   unconsciousness or death.
+   unconsciousness, dying, or death.
 
 ### Actions per Round
 
@@ -134,16 +124,19 @@ penalty die.
 
 ### Firearms Specifics
 
-| Weapon | Skill | Base | Damage | Hands | Range |
-|--------|-------|------|--------|-------|-------|
-| Pistol | Firearm | 20 | 1D8 | 1H | 20 metres |
-| Rifle | Firearm | 25 | 2D6 | 2H | 80 metres |
+| Weapon Type | Base Skill | Damage | Attacks/Round |
+|-------------|-----------|--------|---------------|
+| .32 Revolver | 20% | 1D8 | 1 (3 per round) |
+| .45 Automatic | 20% | 1D10+2 | 1 (3 per round) |
+| Shotgun (12-gauge) | 25% | 4D6/2D6/1D6 | 1 or 2 |
+| Hunting Rifle | 25% | 2D6+4 | 1 (1 per 2 rounds) |
 
-Range penalties: point-blank (bonus die), base range (no
-modifier), long range (penalty die), extreme range (not
-possible for most weapons).
+Range modifiers use bonus/penalty dice: point-blank (bonus
+die), base range (no modifier), long range (penalty die),
+extreme range (not possible for most weapons). No damage
+bonus applies to firearms.
 
-## Pushing Rolls (CoC-Specific)
+## Pushing Rolls
 
 CoC 7e's signature addition to BRP resolution. When a
 regular skill roll fails, the player may request to "push"
@@ -170,13 +163,13 @@ risk.
 Pushing creates dramatic tension: the player chooses between
 accepting a failure and risking something worse.
 
-## Sanity System Overview (CoC-Specific)
+## Sanity System
 
-CoC's signature mechanic. This overview is conceptual.
+CoC's signature mechanic and central dramatic engine.
 
 ### Sanity Points
 
-- **Starting SAN**: POW x 5.
+- **Starting SAN**: Equal to POW (the percentile value).
 - **Maximum SAN**: 99 minus Cthulhu Mythos skill.
 - **Current SAN**: Tracks moment-to-moment mental state.
 
@@ -218,7 +211,7 @@ As Cthulhu Mythos skill increases, maximum SAN decreases.
 The most knowledgeable investigators are the most fragile.
 This is the core dramatic engine of CoC.
 
-## Luck Spending (CoC-Specific)
+## Luck Spending
 
 Luck is a spendable resource in CoC 7e:
 
@@ -235,7 +228,7 @@ Luck is a spendable resource in CoC 7e:
 Luck spending cannot be used on SAN rolls, damage rolls, or
 to improve pushed rolls.
 
-## Chase Rules (CoC-Specific)
+## Chase Rules
 
 CoC 7e uses a structured chase system with an abstract track:
 
@@ -297,27 +290,7 @@ CoC 7e uses a structured chase system with an abstract track:
 Magic points regenerate at a rate of 1 per 2 hours of rest,
 fully recovering after 24 hours.
 
-## Resistance Table Usage (BRP ORC License)
-
-The resistance table resolves contests between characteristics:
-
-**Formula**: Chance = 50% + (active x 5) - (passive x 5)
-
-| Active - Passive | Chance | Active - Passive | Chance |
-|-----------------|--------|-----------------|--------|
-| -10 or less | 01% (auto-fail) | +1 | 55% |
-| -5 | 25% | +5 | 75% |
-| -3 | 35% | +7 | 85% |
-| -1 | 45% | +10 or more | 99% (auto-succeed) |
-| 0 | 50% | | |
-
-Common uses:
-- STR vs SIZ: forcing doors, grappling, lifting
-- POT vs CON: poison and disease resistance
-- POW vs POW: magical resistance, willpower contests
-- STR vs STR: arm wrestling, tug-of-war
-
-## Experience Checks (BRP ORC License)
+## Experience and Improvement
 
 ### During Play
 
@@ -332,12 +305,13 @@ For each checked skill, roll D100:
 - If the roll is equal to or under the current skill, no
   improvement occurs.
 
-**Skill deterioration**: Skills above 90% are harder to
-improve (the roll must exceed 90+). This creates a natural
-ceiling on expertise.
+**High skills**: Skills above 90% are harder to improve (the
+roll must exceed 90+). This creates a natural ceiling on
+expertise.
 
 **Cthulhu Mythos**: Cannot be improved through experience
-checks. Only increases through encounters with the Mythos.
+checks. Only increases through reading Mythos tomes and
+encounters with Mythos entities.
 
 ## External References
 

@@ -2,17 +2,27 @@
 > Lovecraft creature descriptions: Public domain fiction by
 > H.P. Lovecraft (published pre-1929).
 
-# Call of Cthulhu 7e — Creatures Reference
+# Call of Cthulhu 7e -- Creatures Reference
+
+**Important note on Lovecraft entities:** For iconic Mythos
+creatures (Deep Ones, Shoggoths, Mi-Go, etc.), no official
+CoC stat blocks are provided here -- those are Chaosium's
+intellectual property. The Lovecraft entries below contain
+only literary descriptions from public domain fiction. Use
+the Ghoul [ORC] and other ORC creatures as mechanical
+baselines, adapting stats as needed for your scenario. A
+Ghoul-equivalent stat block can serve as a starting point for
+many humanoid Mythos creatures; scale characteristics up for
+larger or more powerful entities.
 
 BRP ORC sample creatures with stat blocks, plus public domain
-Lovecraft entities with literary descriptions (no Chaosium
-stat blocks). Used during prep (encounter building) and play
-(stat lookups).
+Lovecraft entities with literary descriptions. Used during
+prep (encounter building) and play (stat lookups).
 
 Each entry is labelled with its source:
-- **[ORC]** — Stats and descriptions from the BRP UGE ORC
+- **[ORC]** -- Stats and descriptions from the BRP UGE ORC
   Content Document.
-- **[Lovecraft]** — Descriptions drawn from H.P. Lovecraft's
+- **[Lovecraft]** -- Descriptions drawn from H.P. Lovecraft's
   published fiction (public domain, pre-1929). Names, physical
   descriptions, behaviours, and locations only. No game stats
   are provided for these entries as they are not part of the

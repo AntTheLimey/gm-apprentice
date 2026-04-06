@@ -1,30 +1,29 @@
-> BRP mechanics: BRP ORC License. See ATTRIBUTION.md.
-> CoC character sheet data: From the official Call of Cthulhu
-> 7th Edition character sheet, freely distributed by
-> Chaosium Inc.
+> BRP mechanical foundation: BRP ORC License. See ATTRIBUTION.md.
+> CoC 7e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
 
-# Call of Cthulhu 7e — Character Generation
+# Call of Cthulhu 7e -- Character Generation
 
 Step-by-step guide for building a Call of Cthulhu 7th Edition
 investigator from scratch.
 
 ## Investigator Creation Workflow
 
-1. **Roll Characteristics** — generate eight stats.
-2. **Calculate Derived Values** — HP, MP, SAN, Luck, Move,
-   Build, Damage Bonus.
-3. **Apply Age Modifiers** — adjust stats if the investigator
+1. **Roll Characteristics** -- generate eight stats.
+2. **Calculate Derived Values** -- HP, MP, SAN, Luck, Move,
+   Build, Damage Bonus, Dodge.
+3. **Apply Age Modifiers** -- adjust stats if the investigator
    is younger or older than the default range.
-4. **Choose an Occupation** — determines occupation skill points
+4. **Choose an Occupation** -- determines occupation skill points
    and Credit Rating range.
-5. **Allocate Occupation Skill Points** — based on EDU (and
+5. **Allocate Occupation Skill Points** -- based on EDU (and
    sometimes other characteristics).
-6. **Allocate Personal Interest Skill Points** — based on INT.
-7. **Determine Credit Rating and Wealth** — within occupation
+6. **Allocate Personal Interest Skill Points** -- based on INT.
+7. **Determine Credit Rating and Wealth** -- within occupation
    range.
-8. **Create Backstory** — ideology, connections, treasured
+8. **Create Backstory** -- ideology, connections, treasured
    possessions, traits.
-9. **Select Equipment** — based on wealth level and era.
+9. **Select Equipment** -- based on wealth level and era.
 
 ## Step 1: Roll Characteristics
 
@@ -49,21 +48,35 @@ calculate half and one-fifth values for each characteristic
 
 **Example**: STR 12 -> STR 60 (half 30, fifth 12).
 
-### Point-Buy Alternative
+### Alternative: Point Assignment
 
-Some groups prefer point-buy. Allocate a total of 460 points
-among the eight characteristics (each as the percentile value).
-No characteristic may exceed 80 before age modifiers, and
-EDU/SIZ/INT must be at least 40.
+Allocate a total of 460 points among the eight characteristics
+(each as the percentile value). No characteristic may exceed
+80 before age modifiers. EDU, SIZ, and INT must be at least 40
+(reflecting their 2D6+6 base).
+
+### Alternative: Quick-Fire Array
+
+Assign the following pre-generated set of values among the
+eight characteristics in any order: **80, 70, 60, 60, 50,
+50, 50, 40**. This totals 460 (same budget as point
+assignment) and guarantees a viable investigator without
+rolling or calculating. EDU, SIZ, and INT should receive
+values of 40 or higher.
+
+The array produces a competent investigator with one strong
+suit (80), one good area (70), and no dump stats. It's the
+fastest method for one-shots and convention games.
 
 ## Step 2: Calculate Derived Values
 
 | Derived Value | Formula |
 |---------------|---------|
-| **Hit Points (HP)** | (CON + SIZ) / 2, rounded down. Use raw values before x5 multiplication. Typical range: 8-14. |
-| **Magic Points (MP)** | Equal to POW (raw value, not x5). Typical range: 3-18. |
-| **Sanity (SAN)** | Starting SAN = POW x 5. Maximum starting SAN = 99. |
-| **Luck** | Roll 3D6 x 5. This is a separate roll, not derived from POW. |
+| **Hit Points (HP)** | (CON + SIZ) / 10, rounded down. Use the percentile values. Typical range: 8-14. |
+| **Magic Points (MP)** | POW / 5. Use the percentile value divided by 5. Typical range: 3-18. |
+| **Sanity (SAN)** | Starting SAN = POW (the percentile value). Maximum starting SAN = 99. |
+| **Luck** | Roll 3D6 x 5. Separate roll, not derived from any characteristic. Spendable resource. |
+| **Dodge** | DEX / 2. Half the DEX percentile value. This is the base for the Dodge skill. |
 | **Move Rate (MOV)** | See MOV table below. |
 | **Damage Bonus** | See damage modifier table below. |
 | **Build** | See build table below. |
@@ -80,12 +93,12 @@ Compare STR, DEX, and SIZ (raw values):
 
 Age modifiers reduce MOV further (see Step 3).
 
-### Damage Bonus and Build (BRP ORC License)
+### Damage Bonus and Build
 
-Based on STR + SIZ (raw values added together):
+Based on STR + SIZ (add the percentile values together):
 
-| STR+SIZ | Damage Bonus | Build |
-|---------|-------------|-------|
+| STR + SIZ | Damage Bonus | Build |
+|-----------|-------------|-------|
 | 2-64 | -2 | -2 |
 | 65-84 | -1 | -1 |
 | 85-124 | None | 0 |
@@ -94,9 +107,10 @@ Based on STR + SIZ (raw values added together):
 | 205-284 | +2D6 | +3 |
 | Each +80 | +1D6 | +1 |
 
-Note: CoC 7e uses the percentile (x5) values of STR and SIZ
-added together for this table, unlike core BRP which uses the
-raw 3-18 values.
+CoC 7e uses the percentile (x5) values of STR and SIZ added
+together for this table. Damage bonus applies to melee and
+thrown attacks. Firearms never apply the damage bonus. Build
+affects grappling contests.
 
 ## Step 3: Age Modifiers
 
@@ -252,10 +266,10 @@ Common investigator equipment (1920s era):
 
 ## Quick-Start Checklist
 
-- [ ] Eight characteristics rolled and recorded (raw and x5)
-- [ ] Half and fifth values calculated for each characteristic
-- [ ] Derived values calculated (HP, MP, SAN, Luck, MOV,
-      Damage Bonus, Build)
+- [ ] Eight characteristics rolled and recorded (percentile
+      values, with half and fifth values)
+- [ ] Derived values calculated (HP, MP, SAN, Luck, Dodge,
+      MOV, Damage Bonus, Build)
 - [ ] Age modifiers applied (if outside 20-39 range)
 - [ ] Occupation selected with Credit Rating range noted
 - [ ] Occupation skill points distributed (8 skills, max 75%)

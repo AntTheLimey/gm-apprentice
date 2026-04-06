@@ -1,6 +1,7 @@
 > BRP equipment data: BRP ORC License. See ATTRIBUTION.md.
+> CoC 7e uses the same basic armour tables as BRP.
 
-# Call of Cthulhu 7e — Armour and Shields
+# Call of Cthulhu 7e -- Armour and Shields
 
 Armour types with protection values, skill penalties, and
 encumbrance. Shield stats for parrying. Used during play for

@@ -119,19 +119,19 @@ knowledge. Most investigators never learn spells.
 
 **How do investigators encounter magic?** Through Mythos tomes,
 cult rituals, alien artefacts, and the effects of spells cast
-against them. Understanding magic often requires Knowledge
-(Occult) or the forbidden Knowledge (Blasphemous Lore).
+against them. Understanding magic often requires Occult or the forbidden
+Cthulhu Mythos skill.
 
-**What is the cost?** Beyond power points, learning and using
-Mythos magic typically costs Sanity. Knowledge (Blasphemous
-Lore) permanently reduces maximum Sanity. Each spell learned
-may cost additional SAN. The more an investigator knows about
-the true nature of the universe, the less grip they have on
-their own sanity.
+**What is the cost?** Beyond magic points, learning and using
+Mythos magic typically costs Sanity. The Cthulhu Mythos skill
+permanently reduces maximum Sanity (Max SAN = 99 minus Cthulhu
+Mythos). Each spell learned may cost additional SAN. The more
+an investigator knows about the true nature of the universe,
+the less grip they have on their own sanity.
 
 **Mythos tomes** are the primary source of spells. Reading a
 tome takes weeks or months. Successful study grants spells
-but costs Sanity and raises Knowledge (Blasphemous Lore).
+but costs Sanity and raises the Cthulhu Mythos skill.
 
 ## Power Level Guidelines
 

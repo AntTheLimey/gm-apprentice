@@ -1,61 +1,61 @@
-> BRP combat data: BRP ORC License. See ATTRIBUTION.md.
+> BRP combat foundation: BRP ORC License. See ATTRIBUTION.md.
+> CoC 7e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
 
-# Call of Cthulhu 7e — Combat and Spot Rules Reference
+# Call of Cthulhu 7e -- Combat and Spot Rules Reference
 
-Quick-reference for combat flow, the attack/defence matrix,
-fumble tables, and common spot rules. Used during play for
-fast resolution of combat and hazards.
+Quick-reference for combat flow, defensive reactions, fighting
+manoeuvres, firearms rules, and common spot rules. Used during
+play for fast resolution of combat and hazards.
 
-## Combat Round Structure (12 seconds)
+## Combat Round Structure (approx. 12 seconds)
 
-1. **Statements** — All participants declare intent in DEX
-   order (highest first). Defensive actions need not be
-   declared. Actions may be delayed to a later DEX rank.
+1. **Determine Initiative** -- Characters act in DEX order
+   (highest DEX first). Ties are simultaneous.
 
-2. **Powers** — Instantaneous powers activate in INT order
-   (highest first). Non-instantaneous powers resolve at the
-   start of the next round. Using a power counts as the
-   round's action.
+2. **Actions** -- Each combatant gets one action per round,
+   resolved in DEX order:
+   - **Attack (melee)**: Roll Fighting (Brawl) or weapon skill.
+   - **Attack (ranged)**: Roll Firearms skill.
+   - **Move**: Up to MOV x 5 yards if taking no other action.
+   - **Flee**: Initiate a chase (see Chase Rules).
+   - **Skill use**: One non-combat skill (First Aid, etc.).
+   - **Other**: Draw weapon, stand up, etc.
 
-3. **Actions** — Execute in DEX rank order:
-   - **Move**: Up to 30m (defence only). 6-15m = 1/2 DEX
-     rank. 16-29m = 1/4 DEX rank.
-   - **Attack**: Strike a target (+up to 5m movement).
-   - **Noncombat action**: Use a skill, draw a weapon, open a
-     door (5 DEX ranks per extra action).
-   - **Engage**: Move up to 5m and attack.
-   - **Disengage**: Declare at start; only dodge/parry/move.
-     If all defences succeed, escape combat.
+3. **Defensive Reactions** -- Taken in response to attacks;
+   do not consume the character's action:
+   - **Dodge**: Roll Dodge to avoid the attack entirely.
+   - **Fight Back**: Roll Fighting against a melee attacker;
+     if your success level is higher, you avoid the attack
+     AND deal damage.
+   - **Use Cover**: Drop behind available cover (ranged only).
+   One free reaction per round. Each additional reaction
+   incurs a cumulative penalty die.
 
-4. **Resolution** — Compare rolls on the Attack and Defence
-   Matrix. Apply damage, check for wounds.
+4. **End of Round** -- Apply ongoing effects, check for
+   unconsciousness, dying, or death.
 
-**At any time**: Parry, Dodge, fight defensively, speak.
+## Attack vs Defence Resolution
 
-## Attack and Defence Matrix
+When an attacker rolls and the defender uses a reaction (Dodge
+or Fight Back), compare success levels:
 
-| Attack | vs Parry/Dodge | Result |
-|--------|---------------|--------|
-| Critical | Critical | Parried/dodged, no effect |
-| Critical | Special | Normal success; armour applies; parrying weapon takes 2 HP |
-| Critical | Success | Special success; full dmg + modifier + special type; armour applies; parrying weapon takes 4 HP |
-| Critical | Failure | Critical hit: full damage + modifier, bypasses armour |
-| Critical | Fumble | Critical hit (as above); defender also rolls on fumble table |
-| Special | Critical | Parried/dodged; attacking weapon takes 1 HP |
-| Special | Special | Parried/dodged, no effect |
-| Special | Success | Normal success; armour applies; parrying weapon takes 2 HP |
-| Special | Failure | Special success: full dmg + modifier + special type; armour applies |
-| Special | Fumble | Special success (as above); defender fumble table |
-| Success | Critical | Parried; attacker's weapon takes 2 HP |
-| Success | Special | Parried; attacker's weapon takes 1 HP |
-| Success | Success | Parried/dodged, no effect |
-| Success | Failure | Hit: roll damage, subtract armour |
-| Success | Fumble | Hit (as above); defender fumble table |
-| Failure | -- | Miss, no effect |
-| Fumble | -- | Miss; attacker rolls on fumble table |
+| Attacker | Defender | Result |
+|----------|----------|--------|
+| Higher level | -- | Attacker hits; roll damage |
+| -- | Higher level (Dodge) | Attack avoided entirely |
+| -- | Higher level (Fight Back) | Attack avoided; defender deals damage |
+| Same level | -- | Compare actual die rolls; higher successful roll wins |
+| Failure | -- | Miss, no damage |
+| Fumble | -- | Miss; attacker suffers a mishap |
 
-"Full damage" = maximum die result for the weapon (not damage
-modifier). This is NOT the same as "maximum possible damage."
+**Success level hierarchy**: Extreme > Hard > Regular > Failure.
+Critical (01) counts as the highest possible success level.
+
+When an attack hits with an Extreme success, it deals
+enhanced damage (impale for piercing weapons, knockback for
+blunt weapons, or other effects at Keeper's discretion).
+Armour is subtracted from damage as normal.
 
 ## Fumble Tables (Condensed)
 
@@ -91,53 +91,50 @@ modifier). This is NOT the same as "maximum possible damage."
 - 86-98: Hit ally or hard surface
 - 99-00: Roll again 2-3 more times
 
-## Multiple Actions
+## Multiple Defensive Reactions
 
-- **Multiple attacks**: Skill over 100% allows extra attacks.
-  Each successive attack at -5 DEX ranks.
-- **Multiple parries**: Each after the first at cumulative -30%.
-- **Multiple dodges**: Each after the first at cumulative -30%.
-- **Parry OR Dodge**: Choose one type per round (unless fully
-  defensive, which allows both but at -30% cumulative).
-- **Fighting defensively**: Forfeit attacks to gain one extra
-  Dodge without the -30% penalty.
+- Each investigator gets **one free** defensive reaction per
+  round (Dodge or Fight Back).
+- Each additional reaction beyond the first incurs a
+  **cumulative penalty die**.
+- Fighting defensively (forfeiting your action) grants one
+  additional free reaction without the penalty die.
 
-## Spot Rules — Quick Reference
+## Spot Rules -- Quick Reference
 
 ### Ambush
-Attackers must succeed at Stealth opposed by target's Listen,
-Sense, or Spot. Unseen missile attackers get a free round of
-Easy attacks; targets cannot dodge or parry. Melee ambushers
-who are undetected make Easy attacks; targets' defences are
-Difficult.
+Attackers must succeed at Stealth opposed by target's Listen
+or Spot Hidden. Surprise grants the attackers a free round
+of attacks with a bonus die; targets cannot use defensive
+reactions. After the surprise round, combat proceeds normally.
 
 ### Backstab and Helpless Opponents
-Attacking an unprotected back in melee: the attack is Easy.
-Target can attempt a Difficult Listen/Sense, then Difficult
-Dodge/Parry. Helpless targets (unconscious, restrained):
-attack is Easy, no defence possible.
+Attacking from behind in melee: roll with a bonus die. Target
+may attempt a Hard Listen roll to notice, then a Hard Dodge.
+Helpless targets (unconscious, restrained): attack succeeds
+automatically, no defence possible.
 
 ### Cover
-Partial cover makes attacks Difficult. A roll between the
-adjusted and normal skill rating hits the cover instead. Thick
-cover may stop the attack entirely; thin cover may let damage
-through (compare damage vs obstacle's AV/HP).
+Partial cover imposes a penalty die on attacks. If the attack
+roll would have hit without the penalty but misses with it,
+the shot hits the cover instead. Thick cover may stop the
+attack entirely; thin cover may let damage through (compare
+damage vs material's armour value).
 
 ### Darkness
-- Semi-darkness: -10% to relevant skills
-- Light fog: -25%
-- Full darkness: skills are Difficult
-- Complete darkness: visual Spot is Impossible
-Detect opponents in total dark with Difficult Sense or Listen.
+- Semi-darkness: one penalty die
+- Light fog/smoke: one penalty die
+- Full darkness: two penalty dice (or impossible for visual
+  tasks)
+- Complete darkness: visual Spot Hidden is impossible
+Detect opponents in total dark with a Hard Listen roll.
 
 ### Disease
-Minor disease: Stamina roll to avoid. If caught, CON x2 roll
-next morning to recover; multiplier increases by 1 each day
-until cured. Major disease attacks a characteristic:
-- 1 failure: lose 1 char point/week (mild)
-- 2 failures: 1/day (acute)
-- 3 failures: 1/hour (severe)
-- 4+: 1/minute (terminal)
+Roll CON to resist infection. If caught, roll CON daily to
+fight off the disease. Failure means the disease progresses
+(losing HP or characteristic points depending on severity).
+Medicine rolls can assist recovery. Specific diseases have
+their own progression and treatment rules.
 
 ### Poison
 Poison has a Potency (POT). Resist with CON vs POT on the
@@ -159,19 +156,22 @@ hit (Luck rolls to determine who). Firing while engaged in
 melee is Difficult (but point-blank Easy cancels this).
 
 ### Knockout Attacks
-Declare intent. Make a Difficult attack (targeting head).
-Roll damage normally:
-- If damage < major wound threshold (after armour): target
-  takes minimum damage, not knocked out.
-- If damage >= major wound threshold (after armour): target
-  takes 1 damage and is unconscious for 1D10+10 rounds.
+Declare intent before rolling. Make a Fighting roll (targeting
+the head). If the attack succeeds, compare damage to half the
+target's max HP:
+- Damage < half max HP: target takes minimum damage, stays
+  conscious.
+- Damage >= half max HP: target takes 1 HP damage and is
+  knocked unconscious.
 
 ### Choking, Drowning, Asphyxiation
-First round: CON x10 (Easy Stamina). Each subsequent round:
-reduce multiplier by 1. When the roll fails: take damage each
-round (1D8 for water, 1D4 for smoke, 1D6 for dense smoke,
-1D8+corrosion for poison gas). If surprised, start at CON x3
-(with successful Luck roll) or CON x1 (without).
+An investigator can hold their breath for a number of rounds
+equal to their CON/10 (round down). After that, roll CON
+each round with increasing difficulty. Failure means the
+investigator begins drowning/suffocating, taking 1D8 damage
+per round (water), 1D4 (smoke), or 1D6 (dense smoke). If
+surprised (no chance to prepare), the situation is immediately
+dangerous.
 
 ### Fire and Heat
 - Candle/lantern: 1 HP/round of direct contact
@@ -183,10 +183,9 @@ retardant gear protects normally.
 
 ### Explosions
 Damage = XD6 at epicentre. Reduce by 1D6 per 2m from centre.
-Dodge roll to avoid entirely, or Agility roll to halve damage
-(both leave you prone). Damage is general (not by hit location)
-unless using hit locations, where divide among 1D4 random
-locations.
+A successful Dodge roll allows diving for cover (reduces
+damage and leaves the investigator prone). Damage is applied
+to the investigator as a whole (not by hit location).
 
 ### Autofire
 Burst: +20% to hit. Full auto: +40%. Roll one attack. On
@@ -197,7 +196,9 @@ Narrow field of fire (corridor): +20% additional.
 
 ---
 
-> **Attribution:** Combat and spot rule data from *Basic
+> **Attribution:** Combat framework adapted from *Basic
 > Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. See ATTRIBUTION.md for full license
-> details.
+> under the ORC License. CoC 7e-specific combat mechanics
+> (fight back, bonus/penalty dice, success level comparison)
+> are our own descriptions of uncopyrightable game mechanics.
+> See ATTRIBUTION.md for full license details.
