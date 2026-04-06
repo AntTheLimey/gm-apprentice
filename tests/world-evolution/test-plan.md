@@ -121,6 +121,17 @@ reference files. Score each independently.
 Score each answer on all 5 dimensions.
 ```
 
+### Event Impact Classification (added v2)
+
+**Q11 (Multiple events, different impacts):**
+"Between sessions, three things happen in my campaign world: (a) the cult completes their alliance with the smugglers guild, (b) a cult messenger delivers a routine supply request to a village contact, and (c) the cult leader begins the final ritual preparation that requires a specific lunar alignment in two weeks. Classify each event by how much it matters if the PCs miss it, and tell me which ones I should make into scenes vs background colour."
+
+**Q12 (GM prioritisation):**
+"I have limited prep time for next session. Four faction events are happening: the thieves guild is recruiting in the PCs' neighbourhood, the city watch is investigating the PCs' last job, the merchant prince is hosting a gala where two rival factions will meet, and a sewer cult is performing a minor summoning. Which of these MUST become scenes, which can be rumours, and which can happen offscreen?"
+
+**Q13 (Missed event consequences):**
+"My PCs spent last session on a personal side quest and completely ignored the main faction conflict. The warlord's army was marching on the border town, and the resistance was planning an ambush at the mountain pass. What happened while the PCs were away, and what do they find when they return to the main storyline? How bad is it that they missed this?"
+
 ## Metrics Collected
 
 - Tokens used (from agent usage report)
