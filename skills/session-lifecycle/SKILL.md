@@ -28,18 +28,25 @@ of a living campaign. This skill manages each stage.
 
 ## Companion Skills
 
-- **ttrpg-expert** — Content generation (scenes, NPCs, stat
-  blocks). When prep reveals a gap that needs new content, hand
-  off to ttrpg-expert. Its session-planner.md has the full PC
-  Roster Review and Arc Stage workflows for deep prep.
-- **campaign-organizer** — Vault structure and entity management.
-  When wrap-up produces new entities or scenes, hand off to
-  campaign-organizer for filing and linking. Its Dissect mode
-  extracts entities from large documents.
-- **campaign-qa** — Validation. After wrap-up or reconciliation
-  produces changes, suggest a QA pass to catch contradictions.
-- **narrative-tracker** — Thread and foreshadowing tracking. After
-  wrap-up, suggest a narrative pass to update thread states.
+- **ttrpg-expert** — Content generation and rules reference.
+  When prep reveals a gap that needs new content (scenes,
+  NPCs, stat blocks), hand off to ttrpg-expert. It has
+  per-system topic files for quick lookups (creatures,
+  spells, factions, equipment) and frameworks for session
+  planning (session-planner.md), NPC generation
+  (npc-generation.md), and continuity checking
+  (continuity-engine.md with Chekhov Protocol for stale
+  threads and Canon Grounding for fact verification).
+
+- **campaign-organizer** — Vault structure and entity
+  management. When wrap-up produces new entities or scenes,
+  hand off to campaign-organizer for filing and linking.
+  Its Dissect mode extracts entities from large documents.
+
+- **campaign-qa** — Validation. After wrap-up or
+  reconciliation produces changes, suggest a QA pass to
+  catch contradictions. For thread and foreshadowing state,
+  ttrpg-expert's continuity-engine.md handles tracking.
 
 ## Vault Integration
 

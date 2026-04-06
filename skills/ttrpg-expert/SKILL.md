@@ -168,6 +168,48 @@ an item"**
 → Read `random-generation.md`. Use the appropriate oracle
   or table system. Interpret results in campaign context.
 
+**"Check my facts"** / **"verify canon"** / **"am I
+contradicting anything?"** / **"ground this in canon"**
+→ Read `session-planner.md` (Step 7: Player Agency Audit &
+  Canon Grounding). Verify all facts trace to source files.
+  Flag any content that can't be grounded in established
+  canon.
+
+**"Check for stale threads"** / **"unresolved plot threads"**
+/ **"what loose ends do I have?"** / **"forgotten plot hooks"**
+→ Read `continuity-engine.md` (Chekhov Protocol section).
+  Identify threads that have been open longer than 3-5
+  sessions without advancement. Suggest: resolve, advance,
+  or deliberately retire each stale thread.
+
+**"Who hasn't had spotlight?"** / **"check PC balance"** /
+**"am I neglecting a player?"** / **"spotlight check"**
+→ Read `session-planner.md` (Step 6: Spotlight Forecast).
+  Review the last 2-3 sessions for per-PC touchpoint
+  distribution. Flag any PC with fewer touchpoints than
+  average and suggest scenes that feature them.
+
+**"Where is my PC in their arc?"** / **"character arc stage"**
+/ **"what's next for this character?"** / **"arc progression"**
+→ Read `session-planner.md` (Five-Stage Arc Model section).
+  Identify which stage the PC is in (Establishment, Testing,
+  Climax, Consequences, Resolution) and suggest what kind
+  of scenes advance them to the next stage.
+
+**"How do I handle a failed roll?"** / **"fail forward"** /
+**"the player failed, now what?"** / **"consequence ideas"**
+→ Read `active-play-management.md` (Fail Forward section).
+  Apply the appropriate pattern: Succeed at Cost, Partial
+  Info, Delayed Consequence, Resource Drain, Complication,
+  or Worse Position. Choose based on the fiction and pacing.
+
+**"Add sandbox time to my scene"** / **"give players room
+to explore"** / **"open interaction"** / **"sandbox phase"**
+→ Read `scene-encounter-patterns.md` (Open Interaction
+  Windows section). Insert a freeform phase into the current
+  scene where PCs can explore, interact, and pursue their
+  own goals before the next structured beat.
+
 
 ## Three Modes of Operation
 
@@ -193,6 +235,27 @@ campaign state snapshots, between-session world advancement.
 Many requests combine modes. "Generate an NPC and check they
 don't conflict with existing characters" uses Generation
 then Continuity.
+
+## Companion Skills
+
+- **campaign-organizer** — Vault structure and entity filing.
+  After generating NPCs, locations, factions, or items,
+  suggest filing them in the vault with campaign-organizer.
+  After character creation, suggest organizing PC files.
+  Campaign-organizer handles structure; this skill handles
+  content.
+
+- **session-lifecycle** — Prep → Play → Wrap-up cycle.
+  After session planning is complete, suggest transitioning
+  to session-lifecycle Prep mode for the full session cycle.
+  After a session ends, suggest session-lifecycle Wrap-up
+  for processing play notes and capturing new entities.
+
+- **campaign-qa** — Validation and contradiction detection.
+  After session prep (especially after Canon Grounding in
+  Step 7), suggest a campaign-qa validation pass. After
+  major content generation, suggest a QA check to catch
+  contradictions before they reach the table.
 
 ## Knowledge Base
 
