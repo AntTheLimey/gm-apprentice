@@ -70,7 +70,7 @@ appropriate:]
 
 - If new content is needed: suggest ttrpg-expert
 - If vault structure needs work: suggest campaign-organizer
-- If threads need tracking: suggest narrative-tracker
+- If threads need tracking: suggest ttrpg-expert (continuity-engine.md)
 - If session prep should incorporate fixes: suggest
   session-lifecycle
 
