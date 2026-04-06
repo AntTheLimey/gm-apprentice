@@ -264,9 +264,110 @@ Common investigator equipment (1920s era):
 - Shotgun (rural investigators)
 - Walking stick or club (gentleman's weapon)
 
-## Quick-Start Checklist
+## Quickstart Method (One-Shots and Convention Games)
 
-- [ ] Eight characteristics rolled and recorded (percentile
+For fast investigator creation, skip the full workflow and
+use this condensed path. Takes 5-10 minutes.
+
+### Step 1: Pick an archetype and assign characteristics
+
+Use the quick-fire array (**80, 70, 60, 60, 50, 50, 50, 40**)
+and assign values based on your archetype's suggested spread:
+
+| Archetype | STR | CON | SIZ | DEX | APP | INT | POW | EDU |
+|-----------|-----|-----|-----|-----|-----|-----|-----|-----|
+| **Academic** (Professor, Librarian, Author) | 40 | 50 | 50 | 50 | 50 | 70 | 60 | 80 |
+| **Doctor** (Physician, Nurse, Surgeon) | 40 | 50 | 50 | 60 | 50 | 70 | 50 | 80 |
+| **Detective** (PI, Police, Journalist) | 50 | 50 | 50 | 60 | 50 | 80 | 60 | 70 |
+| **Occultist** (Parapsychologist, Antiquarian) | 40 | 50 | 50 | 50 | 50 | 80 | 70 | 60 |
+| **Adventurer** (Soldier, Sailor, Explorer) | 70 | 60 | 60 | 60 | 50 | 50 | 50 | 40 |
+| **Socialite** (Dilettante, Entertainer, Clergy) | 40 | 50 | 50 | 50 | 80 | 60 | 60 | 70 |
+| **Criminal** (Burglar, Drifter, Spy) | 50 | 50 | 50 | 80 | 50 | 70 | 50 | 60 |
+| **Tough** (Mechanic, Farmer, Police Officer) | 80 | 70 | 60 | 50 | 40 | 50 | 50 | 60 |
+
+### Step 2: Record derived values
+
+- HP = (CON + SIZ) / 10
+- SAN = POW value
+- Luck = roll 3D6 × 5 (or use 50 for speed)
+- Dodge = DEX / 2
+- MOV = 8 (unless STR+DEX < SIZ, then 7)
+
+### Step 3: Pick skills from your archetype spread
+
+Pre-allocated skill spreads. Take them as-is or swap one
+skill of equal value with Keeper approval.
+
+**Academic:** Library Use 60%, History 50%, Language (Other)
+50%, Spot Hidden 45%, Persuade 40%, Psychology 40%,
+Archaeology or Science (any) 40%, one other at 30%.
+Credit Rating 30.
+
+**Doctor:** Medicine 70%, First Aid 60%, Science (Biology)
+50%, Psychology 50%, Persuade 40%, Spot Hidden 40%,
+Language (Latin) 35%, Library Use 35%.
+Credit Rating 50.
+
+**Detective:** Spot Hidden 60%, Psychology 55%, Library Use
+50%, one interpersonal (Fast Talk or Persuade) 50%, Listen
+45%, Law 40%, Disguise or Stealth 35%, Firearms (Handgun) 35%.
+Credit Rating 30.
+
+**Occultist:** Occult 60%, Library Use 55%, History 50%,
+Language (Other) 45%, Spot Hidden 40%, Archaeology or
+Anthropology 40%, Psychology 35%, one interpersonal 30%.
+Credit Rating 20.
+
+**Adventurer:** Firearms (Handgun or Rifle) 55%, Navigate
+50%, First Aid 45%, Climb 45%, Survival 40%, Spot Hidden
+40%, one interpersonal 35%, Stealth or Swim 30%.
+Credit Rating 15.
+
+**Socialite:** one interpersonal (Charm or Persuade) 60%,
+Psychology 50%, Art/Craft (any) 50%, Credit Rating 60%,
+Spot Hidden 40%, Listen 40%, History or Occult 35%,
+Language (Other) 30%.
+
+**Criminal:** Stealth 60%, Locksmith 55%, Spot Hidden 50%,
+Listen 45%, one interpersonal (Fast Talk or Intimidate) 45%,
+Climb or Disguise 40%, Mechanical Repair 35%,
+Firearms (Handgun) 30%.
+Credit Rating 10.
+
+**Tough:** Fighting (Brawl) 55%, Firearms (Handgun or
+Shotgun) 50%, First Aid 40%, Mechanical Repair 45%,
+Spot Hidden 45%, Intimidate 40%, Drive Auto 35%,
+Listen 30%.
+Credit Rating 15.
+
+### Step 4: Backstory (pick one from each)
+
+- **Belief:** Justice will prevail / Science explains all /
+  The old ways were better / Faith guides me /
+  Fate is inescapable
+- **Important person:** A mentor / A spouse or lover /
+  A sibling / A childhood friend / A former comrade
+- **Meaningful location:** The family home / A university /
+  A church or temple / A favourite pub / An ancestral estate
+- **Treasured possession:** A photograph / A journal /
+  A pocket watch / A locket / A lucky charm
+- **Trait:** Generous / Suspicious / Reckless / Methodical /
+  Compassionate
+
+### Step 5: Equipment
+
+Take a standard loadout (wallet, keys, notebook, pen) plus
+your archetype's professional kit. If Credit Rating 30+, add
+an automobile. If the scenario involves danger, take a .32
+revolver or a sturdy walking stick.
+
+**Done.** The investigator is ready to play.
+
+## Full-Process Checklist
+
+For the complete character creation workflow (Steps 1-8):
+
+- [ ] Eight characteristics generated and recorded (percentile
       values, with half and fifth values)
 - [ ] Derived values calculated (HP, MP, SAN, Luck, Dodge,
       MOV, Damage Bonus, Build)
