@@ -29,10 +29,35 @@ sheet"** / **"I need a [system] character"** / **"create a PC"**
 for [mechanic]?"** / **"how does combat work?"**
 → Determine the game system first. For GURPS, use the file
   routing table in "Game System Data" below to load the
-  right topic file(s). For other systems, read
+  right topic file(s). For CoC, use the CoC routing table
+  in "Game System Data" below. For other systems, read
   `systems/{system}/rules-reference.md`. Provide the specific
   rule with page references where possible. For deeper
   context, also read `systems/{system}/mechanics.md`.
+
+**CoC skill lookup** / **"what's the base chance for [skill]?"**
+→ Read `systems/coc-7e/skills.md`.
+
+**CoC creature / monster** / **"stats for [creature]"**
+→ Read `systems/coc-7e/creatures.md`.
+
+**CoC weapon / equipment** / **"damage for [weapon]"**
+→ Read `systems/coc-7e/equipment-weapons.md`.
+
+**CoC armour** / **"protection from [armour]"**
+→ Read `systems/coc-7e/equipment-armor.md`.
+
+**CoC setting / location** / **"tell me about [Lovecraft place]"**
+→ Read `systems/coc-7e/setting-lovecraft.md`.
+
+**CoC magic / spells** / **"how does [spell/power] work in CoC?"**
+→ Read `systems/coc-7e/powers-magic.md`.
+
+**CoC profession** / **"what skills does a [occupation] get?"**
+→ Read `systems/coc-7e/professions.md`.
+
+**CoC combat rules** / **"how does fighting work in CoC?"**
+→ Read `systems/coc-7e/combat-reference.md`.
 
 **"Validate my character"** / **"check my character sheet"**
 → Determine the game system first. Read
@@ -213,6 +238,25 @@ a specific need.
 **Book Coverage:** Check `sources.md` for which books
 are currently integrated. If a user references content
 from a non-integrated book, flag it.
+
+### CoC 7e — File Routing
+
+**Path prefix:** `systems/coc-7e/` — all CoC files listed
+below are in this directory.
+
+The CoC system has topic-based reference files for efficient
+lookup. Load only the files relevant to the request.
+
+| Request | Read |
+|---------|------|
+| Skills and base chances | skills.md |
+| Profession templates | professions.md |
+| Melee, missile, and firearms | equipment-weapons.md |
+| Armour and protection | equipment-armor.md |
+| Combat procedure and spot rules | combat-reference.md |
+| Creatures and Lovecraftian entities | creatures.md |
+| Magic, sorcery, and psychic powers | powers-magic.md |
+| Lovecraft setting, locations, themes | setting-lovecraft.md |
 
 ## Content Generation Workflow
 

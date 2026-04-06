@@ -33,12 +33,16 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Character validation** | `systems/{system}/character-generation.md` | For GURPS: topic trait/skill files. Others: `systems/{system}/rules-reference.md` |
 | **Session procedures** | `systems/{system}/session-procedures.md` | — |
 | **Character sheet reference** | `systems/{system}/character-sheet.md` | — |
-| **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
+| **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. For CoC: `systems/coc-7e/combat-reference.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
 | **Advantages, traits, or costs** | For GURPS: `systems/gurps-4e/traits-*.md` (pick by nature). Others: `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building |
-| **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). Others: `systems/{system}/rules-reference.md` | — |
-| **Powers, magic, or special abilities** | For GURPS: `systems/gurps-4e/powers-rules.md` or `systems/gurps-4e/magic-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Spells** | For GURPS: `systems/gurps-4e/spells.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). Others: `systems/{system}/rules-reference.md` | — |
+| **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). For CoC: `systems/coc-7e/equipment-weapons.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Armour** | For CoC: `systems/coc-7e/equipment-armor.md`. For GURPS: `systems/gurps-4e/equipment-*.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Powers, magic, or special abilities** | For GURPS: `systems/gurps-4e/powers-rules.md` or `systems/gurps-4e/magic-rules.md`. For CoC: `systems/coc-7e/powers-magic.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Spells** | For GURPS: `systems/gurps-4e/spells.md`. For CoC: `systems/coc-7e/powers-magic.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). For CoC: `systems/coc-7e/skills.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Creatures or monsters** | For CoC: `systems/coc-7e/creatures.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Setting or world lore** | For CoC: `systems/coc-7e/setting-lovecraft.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Professions or character classes** | For CoC: `systems/coc-7e/professions.md`. Others: `systems/{system}/character-generation.md` | — |
 
 ## Routing Table — System-Agnostic Requests
 
@@ -92,6 +96,19 @@ core reference files:
   procedures, phase structures, and GM workflows.
 - `character-sheet.md` — Character sheet layout reference,
   field descriptions, and recording conventions.
+
+**CoC 7e expanded file structure:** In addition to the
+standard files, CoC has topic-based reference files:
+`skills.md` (BRP skill list with base % and usage notes),
+`professions.md` (BRP profession templates),
+`equipment-weapons.md` (melee/missile/firearms tables),
+`equipment-armor.md` (armour types with protection values),
+`combat-reference.md` (attack/defence matrix, spot rules),
+`creatures.md` (BRP ORC creatures and Lovecraft entities),
+`powers-magic.md` (BRP magic/sorcery/psychic systems),
+`setting-lovecraft.md` (public domain Lovecraft locations,
+entities, and themes). See SKILL.md for which files to
+load for each request type.
 
 **GURPS 4e expanded file structure:** In addition to the
 standard files, GURPS has topic-based reference files:
