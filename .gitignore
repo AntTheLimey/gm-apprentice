@@ -26,3 +26,8 @@ _backup/
 
 # Personal GURPS reference files (not for distribution)
 skills/ttrpg-expert/systems/gurps-4e/personal/
+
+# Personal reference files per system (not for distribution)
+skills/ttrpg-expert/systems/coc-7e/personal/
+skills/ttrpg-expert/systems/fitd/personal/
+skills/ttrpg-expert/systems/dnd-5e-2024/personal/
