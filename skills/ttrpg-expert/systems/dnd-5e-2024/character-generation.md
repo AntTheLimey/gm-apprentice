@@ -1,27 +1,16 @@
-> This file includes material from the System Reference
-> Document 5.2 by Wizards of the Coast LLC (CC-BY 4.0).
-> See ATTRIBUTION.md for full details.
+# D&D 5e 2024 -- Character Generation
 
-# D&D 5e 2024 — Character Generation
+Step-by-step creation from the SRD 5.2 (2024 revision).
 
-Step-by-step guide for building a D&D 5e (2024 revision)
-player character from scratch.
+## Creation Workflow
 
-## Character Creation Workflow
-
-1. **Choose a Class** — pick from the 12 core classes (see
-   mechanics.md for the full class table with hit dice and roles).
-2. **Determine Origin** — select a background and a species.
-3. **Determine Ability Scores** — generate six scores and assign
-   them to STR, DEX, CON, INT, WIS, CHA.
-4. **Choose an Alignment** — pick one of the nine alignments
-   (LG, NG, CG, LN, N, CN, LE, NE, CE).
-5. **Fill in Details** — record class features, calculate derived
-   numbers, choose equipment and spells.
+1. **Choose a Class** -- pick from 12 core classes
+2. **Determine Origin** -- select background and species, choose languages
+3. **Determine Ability Scores** -- generate six scores, assign, adjust
+4. **Choose an Alignment** -- nine alignments (LG/NG/CG/LN/N/CN/LE/NE/CE)
+5. **Fill in Details** -- class features, derived numbers, equipment, spells
 
 ## Step 1: Choose a Class
-
-See mechanics.md for the class table. Key decision factors:
 
 | Class | Likes | Primary Ability | Complexity |
 |-------|-------|-----------------|------------|
@@ -38,94 +27,88 @@ See mechanics.md for the class table. Key decision factors:
 | Warlock | Occult lore | Charisma | High |
 | Wizard | Spellbooks | Intelligence | Average |
 
-- Write your level (typically 1) and XP (0 at level 1).
-- If starting at level 3+, also choose a subclass.
-- Note your class's armor training on your sheet.
+- Write level (typically 1) and XP (0 at level 1).
+- At level 3+, choose a subclass.
+- Note class's armor training.
 
 ## Step 2: Determine Origin
 
-### Choose a Background
+### Backgrounds (SRD 5.2)
 
-Your background provides:
-- A feat
-- Proficiency in two skills and one tool
-- Starting equipment and coins
-- Three ability scores for adjustment in Step 3
+Each background provides: a feat, proficiency in 2 skills + 1 tool, starting equipment or 50 GP, and 3 ability scores for Step 3 adjustment.
 
-SRD backgrounds include Acolyte and Soldier. Your GM may
-offer additional options.
+| Background | Abilities | Feat | Skills | Tool |
+|-----------|-----------|------|--------|------|
+| Acolyte | INT, WIS, CHA | Magic Initiate (Cleric) | Insight, Religion | Calligrapher's Supplies |
+| Criminal | DEX, CON, INT | Alert | Sleight of Hand, Stealth | Thieves' Tools |
+| Sage | CON, INT, WIS | Magic Initiate (Wizard) | Arcana, History | Calligrapher's Supplies |
+| Soldier | STR, DEX, CON | Savage Attacker | Athletics, Intimidation | Gaming Set (choice) |
 
-### Choose a Species
+### Species (SRD 5.2)
 
-SRD species: Dragonborn, Dwarf, Elf, Gnome, Goliath, Halfling,
-Human, Orc, Tiefling.
+| Species | Size | Speed | Key Traits |
+|---------|------|-------|------------|
+| Dragonborn | M | 30 ft | Breath Weapon (PB/day), Damage Resistance, Darkvision 60 ft, Draconic Flight (lv 5) |
+| Dwarf | M | 30 ft | Darkvision 120 ft, Poison Resistance, Dwarven Toughness (+1 HP/level), Stonecunning |
+| Elf | M | 30 ft | Darkvision 60 ft, Fey Ancestry, Keen Senses, Trance. Lineage: Drow/High/Wood |
+| Gnome | S | 30 ft | Darkvision 60 ft, Gnomish Cunning (Adv INT/WIS/CHA saves vs magic), Gnomish Lineage |
+| Goliath | M | 35 ft | Large Form, Powerful Build, Giant Ancestry (choose one: Cloud/Fire/Frost/Hill/Stone/Storm) |
+| Halfling | S | 30 ft | Brave (Adv vs Frightened), Halfling Nimbleness, Luck, Naturally Stealthy |
+| Human | M/S | 30 ft | Resourceful (Heroic Inspiration on Long Rest), Skillful (extra skill), Versatile (extra Origin feat) |
+| Orc | M | 30 ft | Adrenaline Rush, Darkvision 120 ft, Relentless Endurance (drop to 1 HP instead of 0, 1/LR) |
+| Tiefling | M/S | 30 ft | Darkvision 60 ft, Fiendish Legacy (choose Abyssal/Chthonic/Infernal), Otherworldly Presence |
 
-Your species determines:
-- **Size** (Small or Medium for most)
-- **Speed** (typically 30 ft)
-- **Species traits** (e.g. Darkvision, damage resistance)
+### Languages
 
-### Choose Languages
+Every character knows Common + 2 from the Standard Languages table.
 
-Every character knows Common plus two additional languages from:
+**Standard:** Common Sign Language, Draconic, Dwarvish, Elvish, Giant, Gnomish, Goblin, Halfling, Orc
 
-| Standard Languages |
-|--------------------|
-| Common Sign Language, Draconic, Dwarvish, Elvish, Giant, Gnomish, Goblin, Halfling, Orc |
-
-Rare languages (Abyssal, Celestial, Deep Speech, Druidic,
-Infernal, Primordial, Sylvan, Thieves' Cant, Undercommon)
-require special features to learn.
+**Rare:** Abyssal, Celestial, Deep Speech, Druidic, Infernal, Primordial (Aquan/Auran/Ignan/Terran), Sylvan, Thieves' Cant, Undercommon
 
 ## Step 3: Determine Ability Scores
 
 ### Generation Methods
 
-**Standard Array**: Use these six scores: 15, 14, 13, 12, 10, 8.
+**Standard Array:** 15, 14, 13, 12, 10, 8
 
-**Random Generation**: Roll 4d6, drop the lowest die. Repeat
-six times to produce six scores.
+**Random Generation:** Roll 4d6 drop lowest, six times.
 
-**Point Buy** (27 points):
+**Point Buy (27 points):**
 
 | Score | Cost | Score | Cost |
 |-------|------|-------|------|
-| 8     | 0    | 12    | 4    |
-| 9     | 1    | 13    | 5    |
-| 10    | 2    | 14    | 7    |
-| 11    | 3    | 15    | 9    |
+| 8 | 0 | 12 | 4 |
+| 9 | 1 | 13 | 5 |
+| 10 | 2 | 14 | 7 |
+| 11 | 3 | 15 | 9 |
 
 ### Suggested Standard Array by Class
 
-| Class     | STR | DEX | CON | INT | WIS | CHA |
-|-----------|-----|-----|-----|-----|-----|-----|
-| Barbarian | 15  | 13  | 14  | 10  | 12  | 8   |
-| Bard      | 8   | 14  | 12  | 13  | 10  | 15  |
-| Cleric    | 14  | 8   | 13  | 10  | 15  | 12  |
-| Druid     | 8   | 12  | 14  | 13  | 15  | 10  |
-| Fighter   | 15  | 14  | 13  | 8   | 10  | 12  |
-| Monk      | 12  | 15  | 13  | 10  | 14  | 8   |
-| Paladin   | 15  | 10  | 13  | 8   | 12  | 14  |
-| Ranger    | 12  | 15  | 13  | 8   | 14  | 10  |
-| Rogue     | 12  | 15  | 13  | 14  | 10  | 8   |
-| Sorcerer  | 10  | 13  | 14  | 8   | 12  | 15  |
-| Warlock   | 8   | 14  | 13  | 12  | 10  | 15  |
-| Wizard    | 8   | 12  | 13  | 15  | 14  | 10  |
+| Class | STR | DEX | CON | INT | WIS | CHA |
+|-------|-----|-----|-----|-----|-----|-----|
+| Barbarian | 15 | 13 | 14 | 10 | 12 | 8 |
+| Bard | 8 | 14 | 12 | 13 | 10 | 15 |
+| Cleric | 14 | 8 | 13 | 10 | 15 | 12 |
+| Druid | 8 | 12 | 14 | 13 | 15 | 10 |
+| Fighter | 15 | 14 | 13 | 8 | 10 | 12 |
+| Monk | 12 | 15 | 13 | 10 | 14 | 8 |
+| Paladin | 15 | 10 | 13 | 8 | 12 | 14 |
+| Ranger | 12 | 15 | 13 | 8 | 14 | 10 |
+| Rogue | 12 | 15 | 13 | 14 | 10 | 8 |
+| Sorcerer | 10 | 13 | 14 | 8 | 12 | 15 |
+| Warlock | 8 | 14 | 13 | 12 | 10 | 15 |
+| Wizard | 8 | 12 | 13 | 15 | 14 | 10 |
 
 ### Background Adjustment
 
-Your background lists three abilities. Increase one by 2 and
-a different one by 1, or increase all three by 1. No score
-can exceed 20.
+Your background lists 3 abilities. Increase one by 2 and a different one by 1, or increase all three by 1. No score above 20.
 
 ### Ability Modifiers
 
-See mechanics.md for the full modifier table. Formula:
-`floor((score - 10) / 2)`.
+Formula: `floor((score - 10) / 2)`. See mechanics.md for full table.
 
 ## Step 4: Choose Alignment
-
-The nine alignments are:
 
 | | Lawful | Neutral | Chaotic |
 |------|--------|---------|---------|
@@ -133,65 +116,50 @@ The nine alignments are:
 | Neutral | LN | N | CN |
 | Evil | LE | NE | CE |
 
-The game assumes PCs are not evil. Check with the GM before
-making an evil character.
+Game assumes PCs are not evil. Check with GM before making an evil character.
 
 ## Step 5: Fill in Details
 
-### Record Class Features
-
-Look at your class's level 1 features. Make any choices they
-offer (e.g. Fighting Style for Fighter, cantrip selection for
-casters).
-
 ### Calculate Numbers
 
-| Number | How to Calculate |
-|--------|-----------------|
-| Saving Throws | Ability modifier + Proficiency Bonus (if proficient) |
-| Skill Modifiers | Ability modifier + Proficiency Bonus (if proficient) |
-| Passive Perception | 10 + Wisdom (Perception) modifier |
-| Hit Points | See Level 1 HP table below |
-| Initiative | Dexterity modifier |
-| Armor Class | 10 + DEX modifier (unarmored); varies with armor |
-| Melee Attack | STR modifier + Proficiency Bonus |
-| Ranged Attack | DEX modifier + Proficiency Bonus |
-| Spell Save DC | 8 + spellcasting ability modifier + Proficiency Bonus |
-| Spell Attack | Spellcasting ability modifier + Proficiency Bonus |
+| Number | Formula |
+|--------|---------|
+| Saving Throws | Ability mod + PB (if proficient) |
+| Skill Modifiers | Ability mod + PB (if proficient) |
+| Passive Perception | 10 + WIS (Perception) mod |
+| Initiative | DEX mod |
+| Armor Class | 10 + DEX mod (unarmored); varies with armor |
+| Melee Attack | STR mod + PB |
+| Ranged Attack | DEX mod + PB |
+| Spell Save DC | 8 + spellcasting ability mod + PB |
+| Spell Attack | Spellcasting ability mod + PB |
 
-### Level 1 Hit Points by Class
+### Level 1 Hit Points
 
-| Class | Hit Point Maximum |
-|-------|-------------------|
-| Barbarian | 12 + CON modifier |
-| Fighter, Paladin, Ranger | 10 + CON modifier |
-| Bard, Cleric, Druid, Monk, Rogue, Warlock | 8 + CON modifier |
-| Sorcerer, Wizard | 6 + CON modifier |
+| Class | HP Maximum |
+|-------|-----------|
+| Barbarian | 12 + CON mod |
+| Fighter, Paladin, Ranger | 10 + CON mod |
+| Bard, Cleric, Druid, Monk, Rogue, Warlock | 8 + CON mod |
+| Sorcerer, Wizard | 6 + CON mod |
 
-### Choose Starting Equipment
+### Equipment
 
-Both your background and your class provide starting equipment.
-Any coins gained can be spent immediately on additional gear
-from the equipment tables. Record all equipment on your sheet.
+Both background and class provide starting equipment. Coins can be spent on additional gear from equipment tables.
 
 ### Spellcasting (if applicable)
 
-If your class grants the Spellcasting or Pact Magic feature:
-1. Note your number of spell slots from your class table.
-2. Note how many cantrips you know.
-3. Note how many spells you can prepare.
-4. Choose your cantrips and prepared spells.
-5. All classes in the 2024 revision use a prepared spell model.
+1. Note spell slots from class table
+2. Note cantrips known
+3. Note prepared spells count
+4. Choose cantrips and prepared spells
+5. All 2024 classes use prepared spell model
 
 ### Backstory Prompts
 
-Consider these questions to flesh out your character:
-- Who raised you?
-- Who was your dearest childhood friend?
-- Did you grow up with a pet?
-- Have you fallen in love? If so, with whom?
-- Did you join an organization? Are you still a member?
-- What drives you to adventure now?
+Who raised you? Dearest childhood friend? Pets? Fallen in love? Organisations? What drives adventure?
 
-Record your personality traits, ideals, bonds, and flaws on
-your character sheet.
+Record personality traits, ideals, bonds, and flaws.
+
+---
+*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*
