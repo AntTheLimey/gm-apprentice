@@ -133,5 +133,46 @@ When you need the full detail of a framework referenced above, fetch the origina
 - **Lazy DM:** https://slyflourish.com/
 - **Action-Oriented Monsters:** https://mcdm.gg/
 
+## Faction Turn (D&D-Specific)
+
+Called by `world-evolution.md` Step 2 during post-session
+updates. Overrides Step 4 of the Universal Faction Turn
+with D&D-specific mechanics.
+
+**Influence and territory:**
+- If the PCs cleared a dungeon or defeated a faction leader:
+  propose power vacuum. Which faction moves in? What changes
+  in the region?
+- If the PCs allied with a faction: propose that faction
+  expanding influence (new territory, new recruits, better
+  resources).
+- If the PCs angered a faction: propose escalation (bounty
+  hunters, political pressure, military response).
+
+**Quest hooks from faction responses:**
+- Each faction turn should produce 1-2 potential quest hooks
+  that the GM can use in future sessions.
+- A weakened faction might offer a desperate bargain.
+- A strengthened faction might demand tribute or service.
+- A rival faction might approach the PCs for an alliance
+  against their common enemy.
+
+**Political and military shifts:**
+- Track alliances between factions. PC actions may create
+  or break alliances.
+- Major military movements take 2-4 sessions to develop
+  (mustering troops, marching, sieging).
+- Political changes (new ruler, treaty, betrayal) can
+  happen in 1 session if triggered by PC actions.
+
+**NPC reactions:**
+- Propose specific NPC responses to PC actions:
+  - Grateful patron: offers reward, information, or future
+    favour.
+  - Vengeful villain: escalates plans, targets PC allies.
+  - Nervous ally: distances themselves, hedges bets.
+  - Opportunistic neutral: approaches whichever side is
+    winning.
+
 ---
 *This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*
