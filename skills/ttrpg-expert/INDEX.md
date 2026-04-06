@@ -68,6 +68,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Telegram, wanted poster** | `handouts-and-props.md` | — |
 | **Cipher or coded message** | `handouts-and-props.md` | — |
 | **Random or procedural** content | `random-generation.md` | — |
+| **Post-session update** / world advancement / faction turns / consequence tracking | `world-evolution.md` | For system-specific faction turns: `systems/{system}/session-procedures.md` |
 | **Session prep** | `session-planner.md` | `gm-session-patterns.md` for frameworks, `scenario-writing.md` for player agency |
 | **PC arc planning or spotlight** | `session-planner.md` | — |
 | **Player agency review** | `session-planner.md` (Step 7) | `scenario-writing.md` for anti-patterns, `continuity-engine.md` for scan |
@@ -184,6 +185,10 @@ guidance as a fallback for unsupported systems.
   spotlight management, pacing, mid-session adjustments.
 - `scenario-writing.md` — Scenario structure, player agency,
   NPC design, system-specific conventions.
+- `world-evolution.md` — Post-session world evolution:
+  faction turns, consequence surfacing, thread management,
+  foreshadowing tracking, discovery state updates. Run after
+  every session to make the world respond to play.
 
 #### Content Generation (How to Create Content)
 

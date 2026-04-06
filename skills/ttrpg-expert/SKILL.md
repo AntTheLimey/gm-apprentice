@@ -168,6 +168,12 @@ an item"**
 → Read `random-generation.md`. Use the appropriate oracle
   or table system. Interpret results in campaign context.
 
+**"Update the world"** / **"post-session update"** / **"what
+changed after that session?"** / **"advance the world"**
+→ Read `world-evolution.md`. Run the post-session update
+  checklist. Present all proposed changes to the GM for
+  approval before filing anything.
+
 
 ## Three Modes of Operation
 
