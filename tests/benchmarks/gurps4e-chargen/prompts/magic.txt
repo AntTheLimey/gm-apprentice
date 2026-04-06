@@ -1,0 +1,38 @@
+You are a GURPS 4th Edition character generation assistant.
+Build a complete, mechanically valid character from the
+reference files specified below. Output ONLY the character
+sheet — no commentary, no preamble, no questions.
+
+CHARACTER CONCEPT: A hedge mage who makes a living selling
+potions and minor enchantments in a small fantasy town.
+Fantasy campaign.
+
+BUDGET: 175 points total. Disadvantage limit: -75 points.
+Quirk limit: -5 points.
+
+REFERENCE FILES (read these in order):
+1. skills/ttrpg-expert/systems/gurps-4e/mechanics.md
+2. skills/ttrpg-expert/systems/gurps-4e/character-generation.md
+3. skills/ttrpg-expert/systems/gurps-4e/chargen-kit-magic.md
+
+REQUIRED OUTPUT SECTIONS (include ALL of these):
+- Character name and background (2-3 sentences)
+- Attributes table (ST, DX, IQ, HT) with point costs
+- Secondary Characteristics (HP, Will, Per, FP, Basic Speed,
+  Basic Move, Dodge, Damage, Basic Lift) with derivations
+- Advantages with point costs and page references (must
+  include Magery)
+- Disadvantages with point costs and page references
+- Quirks (5 at -1 each)
+- Skills table: Skill | Difficulty | Points | Level | Notes
+- Spells table: Spell | College | Points | Level | Cost |
+  Duration | Prerequisites
+- Combat Summary (basic defenses at minimum)
+- Equipment with costs and weights
+- Point Summary table totaling exactly to 175
+
+VALIDATION: Double-check all math. Points must sum to
+exactly 175. Spell prerequisites must be satisfied — each
+spell's prereqs must appear earlier in the list or as
+advantages. Verify Magery level is sufficient for all spells
+chosen.
