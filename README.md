@@ -16,7 +16,8 @@ generation to campaign management and session lifecycle support.
 ## Supported Game Systems
 
 - Call of Cthulhu 7th Edition (CoC 7e)
-- GURPS 4th Edition
+- GURPS 4th Edition — includes 7 archetype chargen kits,
+  24 topic-based reference files, and curated Basic Set content
 - Forged in the Dark (Blades in the Dark)
 - D&D 5th Edition (2024 Revision)
 
@@ -130,5 +131,14 @@ files) is licensed under [MIT](LICENSE-CODE).
 This project includes material from open game content
 licensed under CC-BY 4.0 (D&D SRD 5.2), CC-BY 3.0 (Blades
 in the Dark SRD), and the ORC License (Basic Roleplaying).
+
+GURPS is a trademark of Steve Jackson Games, and its rules
+and art are copyrighted by Steve Jackson Games. All rights
+are reserved by Steve Jackson Games. This game aid is the
+original creation of AntTheLimey and is released for free
+distribution, and not for resale, under the permissions
+granted in the
+[Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
+
 See [ATTRIBUTION.md](ATTRIBUTION.md) for full credits and
 licensing details.
