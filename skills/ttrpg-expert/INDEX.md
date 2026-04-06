@@ -33,23 +33,33 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Character validation** | `systems/{system}/character-generation.md` | For GURPS: topic trait/skill files. Others: `systems/{system}/rules-reference.md` |
 | **Session procedures** | `systems/{system}/session-procedures.md` | — |
 | **Character sheet reference** | `systems/{system}/character-sheet.md` | — |
-| **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
+| **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. For CoC: `systems/coc-7e/combat-reference.md`. For FitD: `systems/fitd/rules-reference.md`. For D&D: `systems/dnd-5e-2024/rules-reference.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
 | **Advantages, traits, or costs** | For GURPS: `systems/gurps-4e/traits-*.md` (pick by nature). Others: `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building |
-| **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). Others: `systems/{system}/rules-reference.md` | — |
-| **Powers, magic, or special abilities** | For GURPS: `systems/gurps-4e/powers-rules.md` or `systems/gurps-4e/magic-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Spells** | For GURPS: `systems/gurps-4e/spells.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). Others: `systems/{system}/rules-reference.md` | — |
+| **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). For CoC: `systems/coc-7e/equipment-weapons.md`. For FitD: `systems/fitd/character-sheet.md` (items listed there). For D&D: `systems/dnd-5e-2024/equipment.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Armour** | For CoC: `systems/coc-7e/equipment-armor.md`. For GURPS: `systems/gurps-4e/equipment-*.md`. For D&D: `systems/dnd-5e-2024/equipment.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Powers, magic, or special abilities** | For GURPS: `systems/gurps-4e/powers-rules.md` or `systems/gurps-4e/magic-rules.md`. For CoC: `systems/coc-7e/powers-magic.md`. For FitD: `systems/fitd/rituals-crafting.md`. For D&D: `systems/dnd-5e-2024/magic-items.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Spells** | For GURPS: `systems/gurps-4e/spells.md`. For CoC: `systems/coc-7e/powers-magic.md`. For D&D: `systems/dnd-5e-2024/spells.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). For CoC: `systems/coc-7e/skills.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Feats** | For D&D: `systems/dnd-5e-2024/feats.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Conditions or status effects** | For D&D: `systems/dnd-5e-2024/conditions-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Creatures or monsters** | For CoC: `systems/coc-7e/creatures.md`. For D&D: `systems/dnd-5e-2024/monsters.md` (animals: `systems/dnd-5e-2024/animals.md`). Others: `systems/{system}/rules-reference.md` | — |
+| **Setting or world lore** | For CoC: `systems/coc-7e/setting-lovecraft.md`. For FitD: `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Factions** | For FitD: `systems/fitd/factions.md`. Others: `content-generation.md` | `relationship-patterns.md` for webs |
+| **Occupations or character classes** | For CoC: `systems/coc-7e/occupations.md`. For FitD: `systems/fitd/playbooks.md`. For D&D: `systems/dnd-5e-2024/classes.md`. Others: `systems/{system}/character-generation.md` | — |
+| **Crew or party type** | For FitD: `systems/fitd/crew-types.md`. Others: `systems/{system}/character-generation.md` | — |
+| **Entanglements or heat** | For FitD: `systems/fitd/entanglements.md`. Others: `systems/{system}/rules-reference.md` | — |
+| **Magnitude or scale** | For FitD: `systems/fitd/magnitude.md`. Others: `systems/{system}/rules-reference.md` | — |
 
 ## Routing Table — System-Agnostic Requests
 
 | Request Type | Read This File | Also Read |
 |---|---|---|
-| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats |
-| **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks |
-| **Location** generation | `content-generation.md` | — |
+| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/occupations.md`. For FitD: also `systems/fitd/playbooks.md`. For D&D: also `systems/dnd-5e-2024/classes.md`. For GURPS: also `systems/gurps-4e/character-generation.md` |
+| **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks; also `systems/{system}/session-procedures.md` for system pacing conventions |
+| **Location** generation | `content-generation.md` | For CoC: also `systems/coc-7e/setting-lovecraft.md`. For FitD: also `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` for setting context |
 | **Faction** generation | `content-generation.md` | `relationship-patterns.md` for webs |
 | **Item or artifact** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
-| **Creature or monster** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
+| **Creature or monster** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/creatures.md`. For D&D: also `systems/dnd-5e-2024/monsters.md`. Others: `systems/{system}/rules-reference.md` for creature data |
 | **Scenario or adventure** outline | `content-generation.md` | `scenario-writing.md` for structure |
 | **Handout, letter, newspaper, diary** | `handouts-and-props.md` | — |
 | **Official document** (autopsy, police report, warrant, will) | `handouts-and-props.md` | — |
@@ -92,6 +102,42 @@ core reference files:
   procedures, phase structures, and GM workflows.
 - `character-sheet.md` — Character sheet layout reference,
   field descriptions, and recording conventions.
+
+**CoC 7e expanded file structure:** In addition to the
+standard files, CoC has topic-based reference files:
+`skills.md` (CoC 7e skill list with base % and usage notes),
+`occupations.md` (CoC 7e occupation templates with Credit
+Rating ranges), `equipment-weapons.md` (melee/missile/firearms
+tables), `equipment-armor.md` (armour types with protection
+values), `combat-reference.md` (combat flow, defensive
+reactions, spot rules), `creatures.md` (BRP ORC creatures
+and Lovecraft entities), `powers-magic.md` (magic systems),
+`setting-lovecraft.md` (public domain Lovecraft locations,
+entities, and themes). See SKILL.md for which files to
+load for each request type.
+
+**FitD expanded file structure:** In addition to the
+standard files, FitD has topic-based reference files:
+`setting-doskvol.md` (Doskvol districts, landmarks,
+atmosphere), `factions.md` (24 factions with tier/hold/
+NPCs/operations), `playbooks.md` (7 character playbooks
+with abilities, items, XP triggers), `crew-types.md` (6
+crew types with abilities, upgrades, claims),
+`rituals-crafting.md` (ritual and crafting systems),
+`entanglements.md` (heat, entanglements, incarceration,
+prison claims), `magnitude.md` (magnitude scale tables).
+See SKILL.md for which files to load for each request type.
+
+**D&D 5e 2024 expanded file structure:** In addition to the
+standard files, D&D has topic-based reference files:
+`monsters.md` (235 monsters grouped by CR), `animals.md`
+(94 animals grouped by CR), `spells.md` (337 spells by
+level with class lists), `magic-items.md` (242 magic items
+by category), `equipment.md` (weapons, armour, and gear
+tables), `classes.md` (12 class summaries with feature
+tables), `feats.md` (17 SRD feats), `conditions-rules.md`
+(conditions, damage types, hazards, poisons, diseases). See
+SKILL.md for which files to load for each request type.
 
 **GURPS 4e expanded file structure:** In addition to the
 standard files, GURPS has topic-based reference files:

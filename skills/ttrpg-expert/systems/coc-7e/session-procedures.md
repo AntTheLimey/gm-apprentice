@@ -1,34 +1,35 @@
-> BRP mechanics: BRP ORC License. See ATTRIBUTION.md.
+> BRP mechanical foundation: BRP ORC License. See ATTRIBUTION.md.
+> CoC 7e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
 
-# Call of Cthulhu 7e — Session Procedures
+# Call of Cthulhu 7e -- Session Procedures
 
 Detailed procedural guidance for running Call of Cthulhu 7e
 investigation sessions. Supplements the high-level checklists
 in gm-session-patterns.md with CoC-specific procedures.
 
-## BRP Procedural Foundations (ORC License)
+## Core Mechanical Reminders
 
-The session procedures below rest on the BRP percentile system.
-Key mechanical reminders for running CoC sessions:
+Key mechanical reminders for running CoC 7e sessions:
 
-**Skill rolls**: D100 roll-under. Difficulty modifiers apply
-before the roll: Easy (skill doubled), Average (unmodified),
-Difficult (skill halved). The GM should only call for rolls
-when the outcome is uncertain and dramatic -- routine actions
+**Skill rolls**: D100 roll-under. Difficulty levels: Regular
+(under skill), Hard (under half skill), Extreme (under
+one-fifth skill). The Keeper should only call for rolls when
+the outcome is uncertain and dramatic -- routine actions
 succeed automatically.
 
+**Bonus/penalty dice**: Instead of numeric modifiers, CoC 7e
+uses bonus and penalty dice (roll an extra tens die, take
+the lower or higher result). Assign based on circumstances.
+
 **Opposed rolls**: When skills directly contest each other
-(e.g., Stealth vs Listen), both sides roll; the highest
-successful result wins. Ties go to the higher skill rating.
+(e.g., Stealth vs Spot Hidden), both sides roll and compare
+success levels (Extreme > Hard > Regular). Ties go to the
+higher roll that still succeeded, then to the higher skill.
 
-**Resistance rolls**: When characteristics oppose each other
-(e.g., STR vs SIZ to force a door), use the formula:
-Chance = 50% + (active x 5) - (passive x 5). Equal values
-give 50%.
-
-**Success quality**: Critical (1/20 of skill), Special (1/5 of
-skill), Success, Failure, and Fumble (00 always fumbles). In
-investigation scenes, treat Critical/Special results as bonus
+**Success levels**: Critical (01), Extreme (1/5 of skill),
+Hard (1/2 of skill), Regular (under skill), Failure, Fumble.
+In investigation scenes, treat higher success levels as bonus
 detail or shortcuts rather than blocking progress on Failure.
 
 ## Investigation Structure Models
@@ -53,12 +54,9 @@ point to other nodes. Players choose which nodes to visit.
 
 ## Investigation Skill Selection
 
-Call of Cthulhu's investigation skills use the BRP percentile
-system (BRP, ORC License). The BRP skill categories (Combat,
-Communication, Manipulation, Mental, Perception, Physical)
-underpin the CoC skill list. Key investigation skills have
-deliberately low base values, encouraging players to specialise
-and work as a team:
+CoC 7e curates its own skill list from the BRP framework. Key
+investigation skills have deliberately low base values,
+encouraging players to specialise and work as a team:
 
 - **Spot Hidden** (Perception): Noticing physical objects, hidden doors, lurking figures.
 - **Library Use** (Mental): Searching archives, navigating catalogues.
@@ -67,10 +65,10 @@ and work as a team:
 - **Track** (Perception): Following physical trails, footprints.
 - **Appraise** (Mental): Determining value, authenticity, origin.
 
-Core clues should be found automatically (BRP "Automatic"
-difficulty -- no roll needed). Successful skill rolls reveal
-additional detail. Failed rolls mean the investigator finds the
-clue but misses the extra information.
+Core clues should be found automatically (no roll needed).
+Successful skill rolls reveal additional detail. Failed rolls
+mean the investigator finds the clue but misses the extra
+information.
 
 ## Skill Usage Patterns and Niches
 
@@ -108,10 +106,10 @@ Handout types ranked by player engagement:
 - Reserve Mythos texts for peak investigation success.
 - Limit handouts to 3-5 per session.
 
-## Sanity Pacing (CoC-Specific)
+## Sanity Pacing
 
-The Sanity system is CoC's signature extension of BRP's optional
-Sanity rule. The following pacing guidance is conceptual.
+The Sanity system is CoC's signature mechanic and central
+dramatic engine. The following pacing guidance is conceptual.
 
 **Session sanity budget:**
 
@@ -133,9 +131,9 @@ Sanity rule. The following pacing guidance is conceptual.
 
 ## NPC Interaction Patterns
 
-BRP Communication skills (Bargain, Command, Etiquette, Fast
-Talk, Persuade) drive NPC interactions. CoC layers in Credit
-Rating as a social-access mechanic.
+CoC 7e's four interpersonal skills (Charm, Fast Talk,
+Intimidate, Persuade) drive NPC interactions. Credit Rating
+serves as a social-access mechanic.
 
 **Willing witnesses:** Respond to Charm or Persuade. Provide core
 clues freely; successful roll reveals sensitive details.

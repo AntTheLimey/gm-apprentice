@@ -1,9 +1,9 @@
-> From the official Call of Cthulhu 7th Edition character
-> sheet, freely distributed by Chaosium Inc. at
-> https://www.chaosium.com/cthulhu-character-sheets/.
-> Call of Cthulhu is a trademark of Chaosium Inc.
+> Layout inspired by the official Call of Cthulhu 7th Edition
+> character sheet, freely distributed by Chaosium Inc.
+> CoC 7e field names and structure are uncopyrightable game
+> mechanics described in our own words.
 
-# Call of Cthulhu 7e — Investigator Sheet
+# Call of Cthulhu 7e -- Investigator Sheet
 
 Blank markdown investigator sheet for a Call of Cthulhu 7th
 Edition character.

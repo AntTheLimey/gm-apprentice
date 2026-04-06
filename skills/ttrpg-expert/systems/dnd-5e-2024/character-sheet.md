@@ -1,292 +1,159 @@
-> This file includes material from the System Reference
-> Document 5.2 by Wizards of the Coast LLC (CC-BY 4.0).
-> See ATTRIBUTION.md for full details.
+# D&D 5e 2024 -- Character Sheet Reference
 
-# D&D 5e 2024 — Character Sheet
+Complete sheet reference for the d20 system. Use this to build, audit, or understand any character sheet field.
 
-Blank markdown character sheet for a D&D 5e (2024 revision)
-player character.
+## Identity Block
 
----
+| Field | Source |
+|-------|--------|
+| Character Name | Player choice |
+| Class / Subclass | Class (lv 1) / Subclass (lv 3) |
+| Level | 1-20; see XP table in mechanics.md |
+| Experience Points | 0 at level 1; see advancement table |
+| Species | See character-generation.md |
+| Background | See character-generation.md |
+| Alignment | LG/NG/CG/LN/N/CN/LE/NE/CE |
+| Player Name | Real-world player |
 
-## Identity
+## Ability Scores and Modifiers
 
-| Field | Value |
-|-------|-------|
-| **Character Name** | |
-| **Class** | |
-| **Subclass** | |
-| **Level** | |
-| **Experience Points** | |
-| **Species** | |
-| **Background** | |
-| **Alignment** | |
-| **Player Name** | |
+Six scores (STR, DEX, CON, INT, WIS, CHA). Each has a modifier: `floor((score - 10) / 2)`.
 
----
+| Score Range | Modifier |
+|------------|----------|
+| 8-9 | -1 |
+| 10-11 | +0 |
+| 12-13 | +1 |
+| 14-15 | +2 |
+| 16-17 | +3 |
+| 18-19 | +4 |
+| 20 | +5 |
 
-## Ability Scores
+## Proficiency Bonus
 
-| Ability | Score | Modifier |
-|---------|-------|----------|
-| Strength (STR) | | |
-| Dexterity (DEX) | | |
-| Constitution (CON) | | |
-| Intelligence (INT) | | |
-| Wisdom (WIS) | | |
-| Charisma (CHA) | | |
+Determined by total character level, not class level.
 
----
+| Level | PB | Level | PB |
+|-------|----|-------|----|
+| 1-4 | +2 | 13-16 | +5 |
+| 5-8 | +3 | 17-20 | +6 |
+| 9-12 | +4 | | |
 
-## Core Stats
+## Core Combat Stats
 
-| Stat | Value |
-|------|-------|
-| **Proficiency Bonus** | |
-| **Armor Class (AC)** | |
-| **Initiative** | |
-| **Speed** | |
-| **Hit Point Maximum** | |
-| **Current Hit Points** | |
-| **Temporary Hit Points** | |
-| **Hit Dice** | |
-| **Hit Dice Remaining** | |
-| **Passive Perception** | |
-
----
+| Stat | How to Calculate |
+|------|-----------------|
+| **Armor Class** | 10 + DEX mod (unarmored). With armor: see armor table. Shield adds +2. |
+| **Initiative** | DEX mod + any bonuses (Alert feat adds PB) |
+| **Speed** | From species (typically 30 ft). Modified by armor, features |
+| **Hit Point Maximum** | Level 1: hit die max + CON mod. Higher levels: roll or average hit die + CON mod per level |
+| **Current HP** | Track during play |
+| **Temporary HP** | Don't stack; take highest. Don't restore; buffer before real HP |
+| **Hit Dice** | One per level, die size from class. Spend on Short Rest to heal |
+| **Passive Perception** | 10 + Perception modifier (WIS mod + PB if proficient). Adv = +5, Disadv = -5 |
 
 ## Death Saves
 
-| | 1 | 2 | 3 |
-|---|---|---|---|
-| Successes | [ ] | [ ] | [ ] |
-| Failures | [ ] | [ ] | [ ] |
-
----
+At 0 HP, roll d20 at start of each turn (DC 10):
+- 10+ = success. Three successes = stabilised.
+- 1-9 = failure. Three failures = death.
+- Nat 20 = regain 1 HP. Nat 1 = two failures.
+- Damage at 0 HP = auto failure (crit within 5 ft = two failures).
 
 ## Saving Throws
 
-| Save | Prof | Modifier |
-|------|------|----------|
-| Strength | [ ] | |
-| Dexterity | [ ] | |
-| Constitution | [ ] | |
-| Intelligence | [ ] | |
-| Wisdom | [ ] | |
-| Charisma | [ ] | |
+Each class grants proficiency in 2 saves. Formula: ability mod + PB (if proficient).
 
----
+| Class | Proficient Saves |
+|-------|-----------------|
+| Barbarian | STR, CON |
+| Bard | DEX, CHA |
+| Cleric | WIS, CHA |
+| Druid | INT, WIS |
+| Fighter | STR, CON |
+| Monk | STR, DEX |
+| Paladin | WIS, CHA |
+| Ranger | STR, DEX |
+| Rogue | DEX, INT |
+| Sorcerer | CON, CHA |
+| Warlock | WIS, CHA |
+| Wizard | INT, WIS |
 
-## Skills
+## Skills (18)
 
-| Skill | Prof | Ability | Modifier |
-|-------|------|---------|----------|
-| Acrobatics | [ ] | DEX | |
-| Animal Handling | [ ] | WIS | |
-| Arcana | [ ] | INT | |
-| Athletics | [ ] | STR | |
-| Deception | [ ] | CHA | |
-| History | [ ] | INT | |
-| Insight | [ ] | WIS | |
-| Intimidation | [ ] | CHA | |
-| Investigation | [ ] | INT | |
-| Medicine | [ ] | WIS | |
-| Nature | [ ] | INT | |
-| Perception | [ ] | WIS | |
-| Performance | [ ] | CHA | |
-| Persuasion | [ ] | CHA | |
-| Religion | [ ] | INT | |
-| Sleight of Hand | [ ] | DEX | |
-| Stealth | [ ] | DEX | |
-| Survival | [ ] | WIS | |
+Formula: ability mod + PB (if proficient). Expertise = double PB.
 
----
+| Skill | Ability | Skill | Ability |
+|-------|---------|-------|---------|
+| Acrobatics | DEX | Medicine | WIS |
+| Animal Handling | WIS | Nature | INT |
+| Arcana | INT | Perception | WIS |
+| Athletics | STR | Performance | CHA |
+| Deception | CHA | Persuasion | CHA |
+| History | INT | Religion | INT |
+| Insight | WIS | Sleight of Hand | DEX |
+| Intimidation | CHA | Stealth | DEX |
+| Investigation | INT | Survival | WIS |
 
-## Attacks and Spellcasting
+Proficiencies come from class (2-4 skills) + background (2 skills).
 
-| Name | Atk Bonus | Damage/Type | Properties |
-|------|-----------|-------------|------------|
-| | | | |
-| | | | |
-| | | | |
-| | | | |
-| | | | |
+## Attacks
 
----
+| Field | Formula |
+|-------|---------|
+| Melee attack bonus | STR mod + PB (or DEX for Finesse) |
+| Ranged attack bonus | DEX mod + PB |
+| Melee damage | Weapon die + STR mod (or DEX for Finesse) |
+| Ranged damage | Weapon die + DEX mod |
+| Spell attack bonus | Spellcasting ability mod + PB |
 
 ## Equipment
 
-| Item | Qty | Weight |
-|------|-----|--------|
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
-| | | |
+Record items, quantity, and weight. See equipment.md for full tables.
 
 ### Currency
 
 | CP | SP | EP | GP | PP |
 |----|----|----|----|----|
-| | | | | |
-
----
+| 100 CP = 1 GP | 10 SP = 1 GP | 2 EP = 1 GP | 1 GP | 1 PP = 10 GP |
 
 ## Features and Traits
 
-### Class Features
-
-- 
-
-### Species Traits
-
-- 
-
-### Feats
-
-- 
-
-### Background Feature
-
-- 
-
----
-
-## Weapon Masteries
-
-| Weapon | Mastery Property |
-|--------|-----------------|
-| | |
-| | |
-
----
+- **Class Features:** From class table by level
+- **Species Traits:** From species (see character-generation.md)
+- **Feats:** From background (lv 1) and Ability Score Improvement levels
+- **Weapon Masteries:** From class; number increases with level
 
 ## Proficiencies
 
-### Armor Training
+- **Armor Training:** From class (Light/Medium/Heavy/Shield)
+- **Weapons:** From class (Simple/Martial/specific)
+- **Tools:** From class + background
+- **Languages:** Common + 2 standard (from origin)
 
-- 
+## Spellcasting Block
 
-### Weapon Proficiencies
+| Field | Source |
+|-------|--------|
+| Spellcasting Ability | Class determines (INT/WIS/CHA) |
+| Spell Save DC | 8 + ability mod + PB |
+| Spell Attack Bonus | Ability mod + PB |
 
-- 
+### Spell Slots by Level
 
-### Tool Proficiencies
-
-- 
-
-### Languages
-
-- Common
-- 
-- 
-
----
-
-## Spellcasting
-
-| Field | Value |
-|-------|-------|
-| **Spellcasting Ability** | |
-| **Spell Save DC** | |
-| **Spell Attack Bonus** | |
-
-### Cantrips (at will)
-
-- 
-
-### Spell Slots
-
-| Level | Total | Expended |
-|-------|-------|----------|
-| 1st | | |
-| 2nd | | |
-| 3rd | | |
-| 4th | | |
-| 5th | | |
-| 6th | | |
-| 7th | | |
-| 8th | | |
-| 9th | | |
+Full casters (Bard, Cleric, Druid, Sorcerer, Wizard) use the standard spell slot progression. Half casters (Paladin, Ranger) get slots at half rate. Warlock uses Pact Magic (fewer slots, all same level, recharge on Short Rest).
 
 ### Prepared Spells
 
-**1st Level:**
-- 
+All 2024 classes use a prepared spell model. Number of prepared spells shown in class table. Cantrips are always available (no slot cost).
 
-**2nd Level:**
-- 
+## Backstory Fields
 
-**3rd Level:**
-- 
-
-**4th Level:**
-- 
-
-**5th Level:**
-- 
-
-**6th Level:**
-- 
-
-**7th Level:**
-- 
-
-**8th Level:**
-- 
-
-**9th Level:**
-- 
-
----
-
-## Backstory
-
-### Personality Traits
-
-- 
-
-### Ideals
-
-- 
-
-### Bonds
-
-- 
-
-### Flaws
-
-- 
-
----
+Personality Traits, Ideals, Bonds, Flaws -- from background or player invention.
 
 ## Appearance
 
-| Field | Value |
-|-------|-------|
-| **Age** | |
-| **Height** | |
-| **Weight** | |
-| **Eyes** | |
-| **Skin** | |
-| **Hair** | |
-
-### Description
-
- 
+Age, Height, Weight, Eyes, Skin, Hair, Description -- player choice guided by species.
 
 ---
-
-## Allies and Organizations
-
-| Organization | Relationship |
-|-------------|-------------|
-| | |
-| | |
-
-### Notes
-
- 
+*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

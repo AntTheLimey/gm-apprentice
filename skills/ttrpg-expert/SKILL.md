@@ -29,10 +29,80 @@ sheet"** / **"I need a [system] character"** / **"create a PC"**
 for [mechanic]?"** / **"how does combat work?"**
 → Determine the game system first. For GURPS, use the file
   routing table in "Game System Data" below to load the
-  right topic file(s). For other systems, read
+  right topic file(s). For CoC, use the CoC routing table
+  in "Game System Data" below. For other systems, read
   `systems/{system}/rules-reference.md`. Provide the specific
   rule with page references where possible. For deeper
   context, also read `systems/{system}/mechanics.md`.
+
+**CoC skill lookup** / **"what's the base chance for [skill]?"**
+→ Read `systems/coc-7e/skills.md`.
+
+**CoC creature / monster** / **"stats for [creature]"**
+→ Read `systems/coc-7e/creatures.md`.
+
+**CoC weapon / equipment** / **"damage for [weapon]"**
+→ Read `systems/coc-7e/equipment-weapons.md`.
+
+**CoC armour** / **"protection from [armour]"**
+→ Read `systems/coc-7e/equipment-armor.md`.
+
+**CoC setting / location** / **"tell me about [Lovecraft place]"**
+→ Read `systems/coc-7e/setting-lovecraft.md`.
+
+**CoC magic / spells** / **"how does [spell/power] work in CoC?"**
+→ Read `systems/coc-7e/powers-magic.md`.
+
+**CoC occupation** / **"what skills does a [occupation] get?"**
+→ Read `systems/coc-7e/occupations.md`.
+
+**CoC combat rules** / **"how does fighting work in CoC?"**
+→ Read `systems/coc-7e/combat-reference.md`.
+
+**FitD faction lookup** / **"tell me about [faction]"**
+→ Read `systems/fitd/factions.md`.
+
+**FitD playbook** / **"what does a [playbook] do?"**
+→ Read `systems/fitd/playbooks.md`.
+
+**FitD crew type** / **"what crew abilities does [crew] get?"**
+→ Read `systems/fitd/crew-types.md`.
+
+**FitD Doskvol / setting** / **"tell me about [district/location]"**
+→ Read `systems/fitd/setting-doskvol.md`.
+
+**FitD ritual / crafting** / **"how do rituals work in FitD?"**
+→ Read `systems/fitd/rituals-crafting.md`.
+
+**FitD entanglement / heat** / **"what happens when heat reaches [level]?"**
+→ Read `systems/fitd/entanglements.md`.
+
+**FitD magnitude** / **"what magnitude is [effect]?"**
+→ Read `systems/fitd/magnitude.md`.
+
+**D&D monster / creature** / **"stats for [monster]"**
+→ Read `systems/dnd-5e-2024/monsters.md`.
+
+**D&D animal / beast** / **"stats for [animal]"**
+→ Read `systems/dnd-5e-2024/animals.md`.
+
+**D&D spell lookup** / **"how does [spell] work in D&D?"**
+→ Read `systems/dnd-5e-2024/spells.md`.
+
+**D&D magic item** / **"what does [item] do?"**
+→ Read `systems/dnd-5e-2024/magic-items.md`.
+
+**D&D equipment / weapon / armor** / **"damage for [weapon]"** / **"AC from [armor]"**
+→ Read `systems/dnd-5e-2024/equipment.md`.
+
+**D&D class** / **"what does a [class] get at level [N]?"**
+→ Read `systems/dnd-5e-2024/classes.md`.
+
+**D&D feat** / **"what does [feat] do?"**
+→ Read `systems/dnd-5e-2024/feats.md`.
+
+**D&D condition / rule** / **"what does [condition] do?"** / **"how does [hazard/poison/disease] work?"**
+→ Read `systems/dnd-5e-2024/conditions-rules.md`.
 
 **"Validate my character"** / **"check my character sheet"**
 → Determine the game system first. Read
@@ -126,10 +196,14 @@ then Continuity.
 
 ## Knowledge Base
 
-Read `INDEX.md` first to find the correct knowledge base
-file for any request. The index contains a routing table
-mapping request types to files and brief summaries of all
-knowledge base files.
+**Routing priority:**
+1. Check the **Quick Commands** above first — if the request
+   matches, go directly to the specified file(s).
+2. Check the **Game System Data** routing tables below — if
+   the system and request type match, go directly to the
+   specified file(s).
+3. Only if neither matches, read `INDEX.md` for the full
+   routing table and file summaries.
 
 Each supported game system has its own subfolder under
 `systems/` with core reference files: `mechanics.md`,
@@ -213,6 +287,66 @@ a specific need.
 **Book Coverage:** Check `sources.md` for which books
 are currently integrated. If a user references content
 from a non-integrated book, flag it.
+
+### CoC 7e — File Routing
+
+**Path prefix:** `systems/coc-7e/` — all CoC files listed
+below are in this directory.
+
+The CoC system has topic-based reference files for efficient
+lookup. Load only the files relevant to the request.
+
+| Request | Read |
+|---------|------|
+| Skills and base chances | skills.md |
+| Occupation templates | occupations.md |
+| Melee, missile, and firearms | equipment-weapons.md |
+| Armour and protection | equipment-armor.md |
+| Combat procedure and spot rules | combat-reference.md |
+| Creatures and Lovecraftian entities | creatures.md |
+| Magic, sorcery, and psychic powers | powers-magic.md |
+| Lovecraft setting, locations, themes | setting-lovecraft.md |
+
+### FitD — File Routing
+
+**Path prefix:** `systems/fitd/` — all FitD files listed
+below are in this directory.
+
+The FitD system has topic-based reference files for
+efficient lookup. Load only the files relevant to the
+request.
+
+| Request | Read |
+|---------|------|
+| Doskvol districts, landmarks, atmosphere | setting-doskvol.md |
+| Factions, tier, hold, NPCs, operations | factions.md |
+| Character playbooks, abilities, items, XP | playbooks.md |
+| Crew types, abilities, upgrades, claims | crew-types.md |
+| Ritual and crafting systems | rituals-crafting.md |
+| Heat, entanglements, incarceration, prison | entanglements.md |
+| Magnitude scale tables | magnitude.md |
+| Combat and core action rules | rules-reference.md |
+| Items and load | character-sheet.md |
+
+### D&D 5e 2024 — File Routing
+
+**Path prefix:** `systems/dnd-5e-2024/` — all D&D files
+listed below are in this directory.
+
+The D&D system has topic-based reference files for efficient
+lookup. Load only the files relevant to the request.
+
+| Request | Read |
+|---------|------|
+| Monsters by CR | monsters.md |
+| Animals and beasts by CR | animals.md |
+| Spells by level, class lists | spells.md |
+| Magic items by category | magic-items.md |
+| Weapons, armour, and gear | equipment.md |
+| Class summaries and feature tables | classes.md |
+| Feats | feats.md |
+| Conditions, damage types, hazards, poisons, diseases | conditions-rules.md |
+| Combat and core action rules | rules-reference.md |
 
 ## Content Generation Workflow
 
