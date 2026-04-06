@@ -134,12 +134,10 @@ penalty die.
 
 ### Firearms Specifics
 
-| Weapon Type | Base Range | Damage | Attacks/Round |
-|-------------|-----------|--------|---------------|
-| .32 Revolver | 15 yards | 1D8 | 1 (3 in round) |
-| .45 Automatic | 15 yards | 1D10+2 | 1 (3 in round) |
-| Shotgun (12-gauge) | 10/20/50 | 4D6/2D6/1D6 | 1 or 2 |
-| Hunting Rifle | 110 yards | 2D6+4 | 1 (1/2 round) |
+| Weapon | Skill | Base | Damage | Hands | Range |
+|--------|-------|------|--------|-------|-------|
+| Pistol | Firearm | 20 | 1D8 | 1H | 20 metres |
+| Rifle | Firearm | 25 | 2D6 | 2H | 80 metres |
 
 Range penalties: point-blank (bonus die), base range (no
 modifier), long range (penalty die), extreme range (not
@@ -189,15 +187,20 @@ When an investigator encounters something horrifying:
 2. **Success**: Lose the smaller amount (often 0 or 1 point).
 3. **Failure**: Lose the larger amount (varies by encounter).
 
-Typical SAN losses:
+SAN losses are expressed as success/failure (e.g., 0/1D6 means
+zero points on a successful SAN roll, 1D6 on a failed roll).
+Typical ranges by threat severity:
 
-| Encounter | Success | Failure |
-|-----------|---------|---------|
-| Surprise corpse | 0 | 1 |
-| Ghoul | 0 | 1D6 |
-| Deep One | 0 | 1D6 |
-| Shoggoth | 1D6 | 1D20 |
-| Great Old One | 1D10 | 1D100 |
+| Threat Level | Typical Loss | Examples |
+|-------------|-------------|---------|
+| Mundane horror | 0/1 | Discovering a mutilated body, witnessing a violent death |
+| Minor unnatural | 0/1D4 | First sight of a minor supernatural creature or impossible event |
+| Significant unnatural | 0/1D6 | Encountering a clearly inhuman entity, reading a blasphemous text |
+| Major Mythos | 1/1D10 | Witnessing a powerful alien entity, experiencing dimensional warping |
+| Overwhelming | 1D10/1D100 | Direct encounter with a cosmic-scale entity |
+
+Specific SAN losses for individual creatures and events are
+listed in the Keeper Rulebook and published scenarios.
 
 ### Bouts of Madness
 
