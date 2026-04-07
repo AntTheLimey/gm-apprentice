@@ -317,5 +317,40 @@ them what they earned. Don't set up traps at the meeting with
 the client. The PCs have enough problems without the GM
 undermining their payoff.
 
+## Faction Turn (FitD-Specific)
+
+Called by `world-evolution.md` Step 2 during post-session
+updates. Overrides Step 4 of the Universal Faction Turn
+with FitD-specific mechanics.
+
+**Clock advancement:**
+- If the PCs' actions directly opposed a faction's goal,
+  propose ticking back their project clock by 1-2 segments.
+- If the PCs ignored a faction, propose advancing their
+  clock by 1-2 segments (the plan proceeds unopposed).
+- If the PCs helped a faction (intentionally or not),
+  propose advancing their clock by 2-3 segments.
+
+**Tier and Hold changes:**
+- A faction that lost significant resources or territory:
+  propose downgrading Hold (Strong → Weak) or Tier (-1).
+- A faction that consolidated power: propose upgrading Hold
+  (Weak → Strong).
+- Tier changes should be rare (once every 5-10 sessions).
+
+**Heat and entanglement consequences:**
+- High-heat scores create faction awareness. If the crew
+  generated 4+ heat, nearby factions notice.
+- Entanglement results from `entanglements.md` may create
+  new faction threads or advance existing ones.
+
+**Rep and turf:**
+- If the crew's score affected faction territory, propose
+  rep changes and turf shifts.
+- Seized turf creates new faction enemies automatically.
+
+**Reference:** `systems/fitd/factions.md` for canonical
+faction tiers, holds, clocks, and NPC names.
+
 ---
 *This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*

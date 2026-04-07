@@ -210,6 +210,12 @@ to explore"** / **"open interaction"** / **"sandbox phase"**
   scene where PCs can explore, interact, and pursue their
   own goals before the next structured beat.
 
+**"Update the world"** / **"post-session update"** / **"what
+changed after that session?"** / **"advance the world"**
+→ Read `world-evolution.md`. Run the post-session update
+  checklist. Present all proposed changes to the GM for
+  approval before filing anything.
+
 
 ## Three Modes of Operation
 

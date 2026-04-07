@@ -121,6 +121,11 @@ Groups with shared goals.
 | leadership | string | Who's in charge |
 | territory | string | Area of influence |
 | tier | number | Power level (FitD) |
+| currentPlan | string | What they're actively working toward |
+| planProgress | string | Clock value, narrative stage, or percentage |
+| alliances | array | Current allies and enemies |
+| recentActions | array | What they did in last 1-3 sessions |
+| status | string | active / weakened / destroyed / allied / dormant |
 
 **Example:**
 
@@ -133,7 +138,12 @@ Groups with shared goals.
         "factionType": "Cult",
         "goals": ["Summon Deep Ones", "Convert Innsmouth"],
         "leadership": "Obed Marsh",
-        "territory": "Innsmouth"
+        "territory": "Innsmouth",
+        "currentPlan": "Prepare the summoning ritual at Devil Reef",
+        "planProgress": "3/6 — ritual components gathered",
+        "alliances": ["Deep Ones"],
+        "recentActions": ["Recruited new acolytes from the waterfront"],
+        "status": "active"
     }
 }
 ```
@@ -151,6 +161,7 @@ Investigation elements.
 | foundBy | string | Who found it |
 | leadsTo | array | What it reveals |
 | reliability | string | How trustworthy |
+| discoveryState | object | Per-PC knowledge: {"PC name": "Unknown/Rumoured/Observed/Investigated/Understood"} |
 
 **Example:**
 
@@ -162,7 +173,52 @@ Investigation elements.
     "attributes": {
         "clueType": "Physical",
         "foundAt": "Victim's study",
-        "leadsTo": ["Cult meeting location"]
+        "leadsTo": ["Cult meeting location"],
+        "discoveryState": {
+            "Dr. Voss": "Investigated",
+            "Jack Riley": "Rumoured"
+        }
+    }
+}
+```
+
+### Thread
+
+Active narrative elements tracked across sessions.
+
+**Common Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| threadType | string | Plot / Faction / Mystery / Chekhov / Foreshadowing |
+| status | string | Active / Stale / Resolved / Retired |
+| introduced | string | Session number or date |
+| lastAdvanced | string | Session number or date |
+| knownBy | array | Which PCs and NPCs are aware |
+| nextBeat | string | What should happen next |
+| resolutionCondition | string | What resolves this thread |
+| plantedDetail | string | For Foreshadowing: what was planted |
+| intendedPayoff | string | For Foreshadowing: what it foreshadows |
+| ripeness | string | For Foreshadowing: Planted / Ripening / Ready / Paid Off / Retired |
+
+**Example:**
+
+```json
+{
+    "name": "The Marsh Bloodline",
+    "type": "thread",
+    "description": "Investigators may discover their own connection to Innsmouth",
+    "attributes": {
+        "threadType": "Foreshadowing",
+        "status": "Active",
+        "introduced": "Session 2",
+        "lastAdvanced": "Session 5",
+        "knownBy": ["Dr. Voss"],
+        "nextBeat": "Voss finds genealogy records at Miskatonic library",
+        "resolutionCondition": "Investigator confronts their Deep One heritage",
+        "plantedDetail": "Strange gold ring found in grandmother's belongings",
+        "intendedPayoff": "Investigator discovers they carry the Innsmouth look gene",
+        "ripeness": "Ripening"
     }
 }
 ```
