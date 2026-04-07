@@ -1,220 +1,94 @@
 # Knowledge Base Index
 
-This file maps request types to the correct knowledge base
-file. Read this file first, then read only the file(s)
-relevant to the current request.
+Fallback routing when SKILL.md Quick Commands don't match.
+Read only the file(s) relevant to the current request.
 
 ## System Selection
 
-Determine the user's game system first. If it matches one of
-the four supported systems, use that subfolder under
-`systems/`. Otherwise, use `systems/generic/`.
-
 | System | Subfolder |
 |--------|-----------|
-| D&D 5th Edition (2024) | `systems/dnd-5e-2024/` |
+| D&D 5e (2024) | `systems/dnd-5e-2024/` |
 | Forged in the Dark | `systems/fitd/` |
-| Call of Cthulhu 7th Edition | `systems/coc-7e/` |
-| GURPS 4th Edition | `systems/gurps-4e/` |
-| Anything else | `systems/generic/` |
+| CoC 7e | `systems/coc-7e/` |
+| GURPS 4e | `systems/gurps-4e/` |
+| Other | `systems/generic/` |
 
-For unsupported systems, use `systems/generic/` which
-provides universal RPG guidance.
+## Per-System Requests
 
-## Routing Table — Per-System Requests
+`{system}` = `dnd-5e-2024`, `fitd`, `coc-7e`, `gurps-4e`, or `generic`.
 
-In the table below, `{system}` is one of: `dnd-5e-2024`,
-`fitd`, `coc-7e`, `gurps-4e`, `generic`.
+| Request | File | Also Read |
+|---------|------|-----------|
+| Rules question | `{system}/mechanics.md` | GURPS: routing in SKILL.md. Others: `{system}/rules-reference.md` |
+| Character creation | `{system}/character-generation.md` | GURPS: `chargen-kit-{archetype}.md`. Others: `{system}/mechanics.md` |
+| Character validation | `{system}/character-generation.md` | `{system}/rules-reference.md` |
+| Session procedures | `{system}/session-procedures.md` | — |
+| Character sheet | `{system}/character-sheet.md` | — |
+| Combat | GURPS: `combat.md`. CoC: `combat-reference.md`. Others: `{system}/rules-reference.md` | `{system}/mechanics.md` |
+| Traits / costs | GURPS: `traits-*.md`. Others: `{system}/rules-reference.md` | — |
+| Equipment / weapons | GURPS: `equipment-*.md`. CoC: `equipment-weapons.md`. FitD: `character-sheet.md`. D&D: `equipment.md` | — |
+| Armour | CoC: `equipment-armor.md`. D&D: `equipment.md`. GURPS: `equipment-*.md` | — |
+| Powers / magic | GURPS: `powers-rules.md` or `magic-rules.md`. CoC: `powers-magic.md`. FitD: `rituals-crafting.md`. D&D: `magic-items.md` | — |
+| Spells | GURPS: `spells.md`. CoC: `powers-magic.md`. D&D: `spells.md` | — |
+| Skills | GURPS: `skills-*.md`. CoC: `skills.md`. Others: `{system}/rules-reference.md` | — |
+| Feats | D&D: `feats.md` | — |
+| Conditions | D&D: `conditions-rules.md` | — |
+| Creatures / monsters | CoC: `creatures.md`. D&D: `monsters.md` / `animals.md` | — |
+| Setting / lore | CoC: `setting-lovecraft.md`. FitD: `setting-doskvol.md` | — |
+| Factions | FitD: `factions.md`. Others: `content-generation.md` | `relationship-patterns.md` |
+| Classes / occupations | CoC: `occupations.md`. FitD: `playbooks.md`. D&D: `classes.md` | — |
+| Crew / party type | FitD: `crew-types.md` | — |
+| Entanglements / heat | FitD: `entanglements.md` | — |
+| Magnitude | FitD: `magnitude.md` | — |
 
-| Request Type | Read This File | Also Read |
-|---|---|---|
-| **Rules question** (any system) | `systems/{system}/mechanics.md` | For GURPS: use file routing in SKILL.md. Others: `systems/{system}/rules-reference.md` |
-| **Character creation** (any system) | `systems/{system}/character-generation.md` | For GURPS: also read `chargen-kit-{archetype}.md`. Others: `systems/{system}/mechanics.md` |
-| **Character validation** | `systems/{system}/character-generation.md` | For GURPS: topic trait/skill files. Others: `systems/{system}/rules-reference.md` |
-| **Session procedures** | `systems/{system}/session-procedures.md` | — |
-| **Character sheet reference** | `systems/{system}/character-sheet.md` | — |
-| **Combat or tactical question** | For GURPS: `systems/gurps-4e/combat.md`. For CoC: `systems/coc-7e/combat-reference.md`. For FitD: `systems/fitd/rules-reference.md`. For D&D: `systems/dnd-5e-2024/rules-reference.md`. Others: `systems/{system}/rules-reference.md` | `systems/{system}/mechanics.md` for overview |
-| **Advantages, traits, or costs** | For GURPS: `systems/gurps-4e/traits-*.md` (pick by nature). Others: `systems/{system}/rules-reference.md` | `systems/{system}/character-generation.md` if building |
-| **Equipment or weapons** | For GURPS: `systems/gurps-4e/equipment-*.md` (pick by type). For CoC: `systems/coc-7e/equipment-weapons.md`. For FitD: `systems/fitd/character-sheet.md` (items listed there). For D&D: `systems/dnd-5e-2024/equipment.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Armour** | For CoC: `systems/coc-7e/equipment-armor.md`. For GURPS: `systems/gurps-4e/equipment-*.md`. For D&D: `systems/dnd-5e-2024/equipment.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Powers, magic, or special abilities** | For GURPS: `systems/gurps-4e/powers-rules.md` or `systems/gurps-4e/magic-rules.md`. For CoC: `systems/coc-7e/powers-magic.md`. For FitD: `systems/fitd/rituals-crafting.md`. For D&D: `systems/dnd-5e-2024/magic-items.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Spells** | For GURPS: `systems/gurps-4e/spells.md`. For CoC: `systems/coc-7e/powers-magic.md`. For D&D: `systems/dnd-5e-2024/spells.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Skills** | For GURPS: `systems/gurps-4e/skills-*.md` (pick by category). For CoC: `systems/coc-7e/skills.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Feats** | For D&D: `systems/dnd-5e-2024/feats.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Conditions or status effects** | For D&D: `systems/dnd-5e-2024/conditions-rules.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Creatures or monsters** | For CoC: `systems/coc-7e/creatures.md`. For D&D: `systems/dnd-5e-2024/monsters.md` (animals: `systems/dnd-5e-2024/animals.md`). Others: `systems/{system}/rules-reference.md` | — |
-| **Setting or world lore** | For CoC: `systems/coc-7e/setting-lovecraft.md`. For FitD: `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Factions** | For FitD: `systems/fitd/factions.md`. Others: `content-generation.md` | `relationship-patterns.md` for webs |
-| **Occupations or character classes** | For CoC: `systems/coc-7e/occupations.md`. For FitD: `systems/fitd/playbooks.md`. For D&D: `systems/dnd-5e-2024/classes.md`. Others: `systems/{system}/character-generation.md` | — |
-| **Crew or party type** | For FitD: `systems/fitd/crew-types.md`. Others: `systems/{system}/character-generation.md` | — |
-| **Entanglements or heat** | For FitD: `systems/fitd/entanglements.md`. Others: `systems/{system}/rules-reference.md` | — |
-| **Magnitude or scale** | For FitD: `systems/fitd/magnitude.md`. Others: `systems/{system}/rules-reference.md` | — |
+## System-Agnostic Requests
 
-## Routing Table — System-Agnostic Requests
+| Request | File | Also Read |
+|---------|------|-----------|
+| NPC generation | `npc-generation.md` | `{system}/mechanics.md`; CoC: `occupations.md`, FitD: `playbooks.md`, D&D: `classes.md` |
+| Scene / encounter | `content-generation.md` | `scene-encounter-patterns.md`; `{system}/session-procedures.md` |
+| Location | `content-generation.md` | CoC: `setting-lovecraft.md`. FitD: `setting-doskvol.md` |
+| Faction generation | `content-generation.md` | `relationship-patterns.md` |
+| Item / artifact | `content-generation.md` | `{system}/mechanics.md` |
+| Creature generation | `content-generation.md` | CoC: `creatures.md`. D&D: `monsters.md` |
+| Scenario / adventure | `content-generation.md` | `scenario-writing.md` |
+| Handout / letter / document | `handouts-and-props.md` | — |
+| Random / procedural | `random-generation.md` | — |
+| Post-session update | `world-evolution.md` | `{system}/session-procedures.md` |
+| Campaign timeline / recap | `campaign-timeline.md` | — |
+| Session prep | `session-planner.md` | `gm-session-patterns.md` |
+| PC arc / spotlight | `session-planner.md` | — |
+| Player agency review | `session-planner.md` Step 7 | `scenario-writing.md` |
+| Canon / continuity | `continuity-engine.md` | — |
+| Canon conflict | `canon-management.md` | — |
+| Active play / mid-session | `active-play-management.md` | `{system}/rules-reference.md` |
+| Terminology | `rpg-terminology.md` | — |
+| Relationships | `relationship-patterns.md` | — |
+| Campaign structure | `campaign-structure.md` | — |
+| Cross-system tone | `systems/shared-patterns.md` | — |
 
-| Request Type | Read This File | Also Read |
-|---|---|---|
-| **NPC generation** (any depth) | `npc-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/occupations.md`. For FitD: also `systems/fitd/playbooks.md`. For D&D: also `systems/dnd-5e-2024/classes.md`. For GURPS: also `systems/gurps-4e/character-generation.md` |
-| **Scene or encounter** generation | `content-generation.md` | `scene-encounter-patterns.md` for frameworks; also `systems/{system}/session-procedures.md` for system pacing conventions |
-| **Location** generation | `content-generation.md` | For CoC: also `systems/coc-7e/setting-lovecraft.md`. For FitD: also `systems/fitd/setting-doskvol.md`. Others: `systems/{system}/rules-reference.md` for setting context |
-| **Faction** generation | `content-generation.md` | `relationship-patterns.md` for webs |
-| **Item or artifact** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats |
-| **Creature or monster** generation | `content-generation.md` | `systems/{system}/mechanics.md` for stats; For CoC: also `systems/coc-7e/creatures.md`. For D&D: also `systems/dnd-5e-2024/monsters.md`. Others: `systems/{system}/rules-reference.md` for creature data |
-| **Scenario or adventure** outline | `content-generation.md` | `scenario-writing.md` for structure |
-| **Handout, letter, newspaper, diary** | `handouts-and-props.md` | — |
-| **Official document** (autopsy, police report, warrant, will) | `handouts-and-props.md` | — |
-| **Mythos tome or occult text** | `handouts-and-props.md` | — |
-| **Item card** | `handouts-and-props.md` | `systems/{system}/mechanics.md` for stats |
-| **Telegram, wanted poster** | `handouts-and-props.md` | — |
-| **Cipher or coded message** | `handouts-and-props.md` | — |
-| **Random or procedural** content | `random-generation.md` | — |
-| **Post-session update** / world advancement / faction turns / consequence tracking | `world-evolution.md` | For system-specific faction turns: `systems/{system}/session-procedures.md` |
-| **Campaign timeline** / session recap / what happened | `campaign-timeline.md` (in vault root or campaign/) | — |
-| **Session prep** | `session-planner.md` | `gm-session-patterns.md` for frameworks, `scenario-writing.md` for player agency |
-| **PC arc planning or spotlight** | `session-planner.md` | — |
-| **Player agency review** | `session-planner.md` (Step 7) | `scenario-writing.md` for anti-patterns, `continuity-engine.md` for scan |
-| **Canon grounding / hallucination check** | `continuity-engine.md` | — |
-| **Continuity check or plot holes** | `continuity-engine.md` | — |
-| **Revision or retcon** | `continuity-engine.md` | — |
-| **Callback generation** | `continuity-engine.md` | — |
-| **Campaign state snapshot** | `continuity-engine.md` | — |
-| **Canon conflict** | `canon-management.md` | — |
-| **Active play / mid-session help** | `active-play-management.md` | For GURPS: `systems/gurps-4e/combat.md`. Others: `systems/{system}/rules-reference.md` |
-| **Terminology question** | `rpg-terminology.md` | — |
-| **Relationship modeling** | `relationship-patterns.md` | — |
-| **Campaign structure** | `campaign-structure.md` | — |
-| **Cross-system tone or patterns** | `systems/shared-patterns.md` | — |
+## File Reference
 
-## File Summaries
+**Per-system core** (all systems): `mechanics.md`, `character-generation.md`, `rules-reference.md`, `session-procedures.md`, `character-sheet.md`
 
-### Per-System Files (under `systems/{system}/`)
+**Per-system topic files:** See SKILL.md routing tables for complete listings per system.
 
-Each supported game system has its own subfolder containing
-core reference files:
-
-- `mechanics.md` — Core mechanics, attributes, skills, roll
-  mechanics, and key formulas for that system.
-- `character-generation.md` — Full character creation
-  workflow: concept development, attributes, abilities,
-  equipment, budget tracking, and validation checks.
-- `rules-reference.md` — Deep mechanical reference (CoC,
-  FitD, D&D, generic). GURPS uses topic-based files instead
-  — see SKILL.md "Game System Data" for routing.
-- `session-procedures.md` — System-specific session
-  procedures, phase structures, and GM workflows.
-- `character-sheet.md` — Character sheet layout reference,
-  field descriptions, and recording conventions.
-
-**CoC 7e expanded file structure:** In addition to the
-standard files, CoC has topic-based reference files:
-`skills.md` (CoC 7e skill list with base % and usage notes),
-`occupations.md` (CoC 7e occupation templates with Credit
-Rating ranges), `equipment-weapons.md` (melee/missile/firearms
-tables), `equipment-armor.md` (armour types with protection
-values), `combat-reference.md` (combat flow, defensive
-reactions, spot rules), `creatures.md` (BRP ORC creatures
-and Lovecraft entities), `powers-magic.md` (magic systems),
-`setting-lovecraft.md` (public domain Lovecraft locations,
-entities, and themes). See SKILL.md for which files to
-load for each request type.
-
-**FitD expanded file structure:** In addition to the
-standard files, FitD has topic-based reference files:
-`setting-doskvol.md` (Doskvol districts, landmarks,
-atmosphere), `factions.md` (24 factions with tier/hold/
-NPCs/operations), `playbooks.md` (7 character playbooks
-with abilities, items, XP triggers), `crew-types.md` (6
-crew types with abilities, upgrades, claims),
-`rituals-crafting.md` (ritual and crafting systems),
-`entanglements.md` (heat, entanglements, incarceration,
-prison claims), `magnitude.md` (magnitude scale tables).
-See SKILL.md for which files to load for each request type.
-
-**D&D 5e 2024 expanded file structure:** In addition to the
-standard files, D&D has topic-based reference files:
-`monsters.md` (235 monsters grouped by CR), `animals.md`
-(94 animals grouped by CR), `spells.md` (337 spells by
-level with class lists), `magic-items.md` (242 magic items
-by category), `equipment.md` (weapons, armour, and gear
-tables), `classes.md` (12 class summaries with feature
-tables), `feats.md` (17 SRD feats), `conditions-rules.md`
-(conditions, damage types, hazards, poisons, diseases). See
-SKILL.md for which files to load for each request type.
-
-**GURPS 4e expanded file structure:** In addition to the
-standard files, GURPS has topic-based reference files:
-`sources.md` (book catalog), `traits-*.md` (6 files),
-`skills-*.md` (7 files), `equipment-*.md` (3 files),
-`spells.md`, `combat.md`, `magic-rules.md`,
-`powers-rules.md`, `social-rules.md`. GURPS also has
-chargen kit files (`chargen-kit-combat.md`,
-`chargen-kit-magic.md`, `chargen-kit-powers.md`,
-`chargen-kit-social.md`, `chargen-kit-scholar.md`,
-`chargen-kit-thief.md`, `chargen-kit-outdoor.md`) for
-efficient character generation. See SKILL.md for
-which files to load for each request type.
-
-Supported systems: `dnd-5e-2024`, `fitd`, `coc-7e`,
-`gurps-4e`. The `generic` subfolder provides universal RPG
-guidance as a fallback for unsupported systems.
-
+**System-agnostic:**
+- `npc-generation.md` — 3-Line, AIMS, Five-Component NPC frameworks
+- `content-generation.md` — Scene, location, faction, item, creature templates
+- `continuity-engine.md` — Plot holes, threads, Chekhov protocol, callbacks
+- `session-planner.md` — 7-step workflow, Arc Model, Spotlight Forecast
+- `world-evolution.md` — Post-session: faction turns, consequences, foreshadowing
+- `active-play-management.md` — Improv, fail forward, spotlight, notes
+- `scene-encounter-patterns.md` — Scene types, Open Interaction Windows
+- `scenario-writing.md` — Scenario structure, player agency
+- `handouts-and-props.md` — In-game documents, voice guides, prop techniques
+- `random-generation.md` — Oracles, random tables, procedural generation
+- `gm-session-patterns.md` — Lazy DM, Three Clue Rule, Five Room Dungeon
+- `entity-types.md` — Entity schemas, universal temporal fields
+- `canon-management.md` — DRAFT → AUTHORITATIVE → SUPERSEDED
+- `relationship-patterns.md` — Relationship types, strength, modeling
+- `campaign-structure.md` — Session management, timelines, discovery
+- `rpg-terminology.md` — Cross-system terminology
+- `campaign-timeline.md` — Append-only session record (vault root or campaign/)
 - `systems/shared-patterns.md` — Cross-system tone guidance
-  and generation patterns shared across all systems.
-
-### System-Agnostic Files (root level)
-
-#### Core Reference (Analysis and Rules)
-
-- `entity-types.md` — Entity type definitions and
-  system-specific attribute schemas.
-- `canon-management.md` — Source confidence levels (DRAFT,
-  AUTHORITATIVE, SUPERSEDED), conflict detection, resolution.
-- `relationship-patterns.md` — Relationship types, tones,
-  strength values, and modeling.
-- `campaign-structure.md` — Session management, timelines,
-  discovery tracking.
-- `rpg-terminology.md` — Cross-system terminology reference.
-
-#### Operational Patterns (How to Run Games)
-
-- `gm-session-patterns.md` — Session prep frameworks: Lazy
-  DM, Three Clue Rule, Five Room Dungeon, Fronts, progress
-  clocks.
-- `scene-encounter-patterns.md` — Scene types, framing,
-  encounter design, node-based scenarios, pacing.
-- `active-play-management.md` — Real-time notes, improv,
-  spotlight management, pacing, mid-session adjustments.
-- `scenario-writing.md` — Scenario structure, player agency,
-  NPC design, system-specific conventions.
-- `world-evolution.md` — Post-session world evolution:
-  faction turns, consequence surfacing, thread management,
-  foreshadowing tracking, discovery state updates. Run after
-  every session to make the world respond to play.
-- `campaign-timeline.md` — Canonical campaign timeline:
-  append-only, one lean entry per session recording what
-  actually happened. Lives in vault root or campaign/.
-
-#### Content Generation (How to Create Content)
-
-- `npc-generation.md` — 3-Line NPC, AIMS framework,
-  Five-Component NPC, voice/mannerism design, stat blocks.
-- `content-generation.md` — Templates for scenes, locations,
-  items, factions, creatures, scenario outlines, tone
-  calibration.
-- `continuity-engine.md` — Plot hole detection, thread
-  tracking, Chekhov protocol, callbacks, memory-aware
-  revision, world state.
-- `random-generation.md` — Oracle systems, random tables
-  (NPCs, encounters, locations, hooks, rumours), procedural
-  generation.
-- `handouts-and-props.md` — In-game document templates
-  (letters, newspapers, diaries, official docs, Mythos
-  tomes, item cards, telegrams, ciphers), period voice
-  guides, physical prop techniques.
-
-#### Session Planning (How to Prep for Players)
-
-- `session-planner.md` — PC Roster Review, Five-Stage Arc
-  Model, A/B/C plot rotation, Touchpoint Planning Matrix,
-  Web of Connections, spotlight tracking, system-specific
-  arc drivers.
