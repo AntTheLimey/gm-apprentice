@@ -77,17 +77,22 @@ Match user intent → go directly to the file. Skip clarification.
 → `random-generation.md`.
 
 **"Check my facts"** / **"verify canon"**
-→ `session-planner.md` Step 7 (Canon Grounding).
+→ `session-planner.md` Step 7 (Canon Grounding). Trace all
+  facts to source files. Flag ungrounded content.
 
 **"Stale threads?"** / **"loose ends?"**
 → `continuity-engine.md` (Chekhov Protocol). Threads open 3-5
   sessions: resolve, advance, or retire.
 
 **"Spotlight check"** / **"PC balance"**
-→ `session-planner.md` Step 6 (Spotlight Forecast).
+→ `session-planner.md` Step 6 (Spotlight Forecast). Review
+  last 2-3 sessions per-PC. Flag below 15% floor. Assign
+  B/C plots to underserved PCs.
 
 **"Character arc stage"** / **"what's next for this PC?"**
-→ `session-planner.md` (Five-Stage Arc Model).
+→ `session-planner.md` (Five-Stage Arc Model). Map PC to
+  stage (Establishment → Testing → Crisis → Transformation
+  → New Equilibrium). Suggest scenes for next stage.
 
 **"Fail forward"** / **"failed roll, now what?"**
 → `active-play-management.md` (Fail Forward). Six patterns:
