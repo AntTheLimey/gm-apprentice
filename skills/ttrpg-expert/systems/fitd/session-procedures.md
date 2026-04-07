@@ -119,6 +119,21 @@ below (min 0). Zero if completely quiet.
 Tithe to crime boss if applicable: crew Tier + 1 coin. Don't
 pay → start patience clock; each fill = -1 faction status.
 
+### Heat
+
+Determine base exposure from the score:
+
+| Exposure | Heat |
+|----------|:---:|
+| Smooth, quiet | 0 |
+| Contained, standard | 2 |
+| Loud, chaotic | 4 |
+| Wild, out of control | 6 |
+
+Add: +1 high-profile target, +1 hostile turf, +1 at war,
++2 killing involved. Mark on 9-box track. If full: +1 wanted
+level, clear heat, excess rolls over.
+
 ### Downtime Activities
 
 Two free per PC (one if at war). Extra = 1 coin or 1 rep each.
