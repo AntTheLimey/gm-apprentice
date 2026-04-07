@@ -137,7 +137,7 @@ these fields when reorganising:
   `knownBy`, `nextBeat`, `resolutionCondition`,
   `plantedDetail`, `intendedPayoff`, `ripeness`
 
-**Campaign-tracker.md** may exist at the vault root with
+**campaign-tracker.md** may exist at the vault root with
 consequence logs, foreshadowing logs, world state snapshots,
 and rumour boards. Do not reorganise this file — it is
 updated by the world-evolution procedure.

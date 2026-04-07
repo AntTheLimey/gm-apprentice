@@ -254,7 +254,7 @@ state changed):
 
 **Timeline entry** — append to `campaign-timeline.md`:
 
-```
+```markdown
 ## Session [N] — [date]
 
 [One-line summary of what happened — the single sentence
@@ -281,7 +281,7 @@ it is a structured summary of what was just filed.
 **Simple files mode** (no vault):
 - Use the following directory structure:
 
-```
+```text
 campaign/
   campaign-timeline.md
   campaign-tracker.md
