@@ -1,367 +1,189 @@
 # Forged in the Dark -- Core Mechanics
 
-## Overview
+Heist/scoundrel games using d6 dice pools. Structured cycle:
+free play → score → downtime.
 
-Heist/scoundrel games using d6 dice pools. Players build a
-crew of daring scoundrels and play to find out whether the
-fledgling crew can thrive amid the teeming threats around it.
-The game follows a structured cycle: free play, score, downtime.
+**Related FitD files:**
+- Advanced rules (effect, harm, armor, wanted): `rules-reference.md`
+- Score/downtime procedures: `session-procedures.md`
+- Factions and clocks: `factions.md`
 
 ## Dice Pool Resolution
 
-- Roll d6s equal to action rating (or trait rating)
-- Read the **single highest** result:
-  - **6**: Full success -- things go well
-  - **4-5**: Partial success -- you do it, but with consequences
-  - **1-3**: Bad outcome -- things go poorly
-- **Critical**: Two or more 6s -- additional advantage
-- **Zero dice**: Roll 2d6, take the lowest (cannot crit)
+- Roll d6s equal to action rating
+- Read **single highest**: 6 = full success, 4-5 = partial
+  (consequences), 1-3 = bad outcome
+- **Critical:** two+ 6s = additional advantage
+- **Zero dice:** roll 2d6, take lowest (cannot crit)
 
 ## The 12 Actions
 
-There are 12 actions grouped into three attributes. Each action
-has a rating from 0 to 4 that determines the dice pool. Action
-ratings represent more than skill -- they reflect how the
-character approaches problems.
+### Insight (resists deception/understanding)
 
-### Insight (resists deception/understanding consequences)
-
-- **Hunt**: Carefully track a target. Follow, discover locations,
-  arrange ambushes, precision shooting.
-- **Study**: Scrutinize details and interpret evidence. Research,
-  analyze documents, read people for lies.
-- **Survey**: Observe the situation and anticipate outcomes.
-  Spot trouble, uncover weaknesses, detect intentions.
-- **Tinker**: Fiddle with devices and mechanisms. Create gadgets,
-  pick locks, crack safes, disable traps.
+- **Hunt** — track, follow, ambush, precision shooting
+- **Study** — research, analyze, detect lies
+- **Survey** — observe, spot trouble, detect intentions
+- **Tinker** — devices, locks, safes, traps
 
 ### Prowess (resists physical strain/injury)
 
-- **Finesse**: Employ dextrous manipulation or subtle
-  misdirection. Pick pockets, handle vehicles, formal dueling.
-- **Prowl**: Traverse skillfully and quietly. Sneak, hide, run
-  across rooftops, attack from hiding.
-- **Skirmish**: Entangle a target in close combat. Brawl,
-  wrestle, hack and slash, seize positions.
-- **Wreck**: Unleash savage force. Smash doors, use explosives,
-  employ chaos and sabotage.
+- **Finesse** — dexterity, pickpocket, vehicles, dueling
+- **Prowl** — sneak, hide, rooftops, attack from hiding
+- **Skirmish** — close combat, brawl, seize positions
+- **Wreck** — force, explosives, chaos, sabotage
 
 ### Resolve (resists mental strain/willpower)
 
-- **Attune**: Open your mind to arcane power. Communicate with
-  ghosts, perceive beyond sight.
-- **Command**: Compel swift obedience. Intimidate, threaten, or
-  lead a gang in a group action.
-- **Consort**: Socialize with friends and contacts. Gain access
-  to resources, information, people, or places.
-- **Sway**: Influence with guile, charm, or argument. Lie
-  convincingly, persuade, argue a compelling case.
+- **Attune** — arcane, ghosts, perceive beyond sight
+- **Command** — intimidate, threaten, lead gangs
+- **Consort** — socialize, leverage contacts
+- **Sway** — charm, lie, persuade, argue
 
-### Attribute Ratings
-
-Each attribute also has a rating (0-4), equal to the number of
-actions under that attribute that have at least one dot. The
-attribute rating is used for resistance rolls.
+**Attribute rating** = number of actions under that attribute
+with ≥1 dot (0-4). Used for resistance rolls.
 
 ## Four Roll Types
 
 ### Action Roll
 
-The core roll. Used when a PC attempts something dangerous or
-troublesome. The GM sets position and effect before the roll.
-
-**Procedure:**
-1. Player states their **goal**
-2. Player chooses the **action rating**
-3. GM sets the **position** (controlled / risky / desperate)
-4. GM sets the **effect level** (limited / standard / great)
-5. Add **bonus dice** (up to +2d: one from assistance, one from
-   pushing or Devil's Bargain)
-6. Roll the dice pool and judge the result
-
-### Downtime Roll
-
-Leisure activities in relative safety. Used for recovery,
-projects, acquiring assets, reducing heat, etc.
+Core roll for dangerous/troublesome attempts.
+1. Player states goal and chooses action
+2. GM sets position (controlled/risky/desperate)
+3. GM sets effect (limited/standard/great)
+4. Add bonus dice (max +2d: one assist, one push/bargain)
+5. Roll and judge result
 
 ### Fortune Roll
 
-Disclaim GM decisions and leave outcomes to chance. Roll a
-trait rating (Tier, quality, magnitude, or action rating) plus
-bonuses for major advantages, minus for disadvantages.
+Disclaim GM decisions. Roll trait rating + bonuses.
 
 | Result | Outcome |
-|--------|---------|
-| Critical | Exceptional result / great, extreme effect |
-| 6 | Good result / standard, full effect |
-| 4-5 | Mixed result / limited, partial effect |
-| 1-3 | Bad result / poor, little effect |
+|:---:|---------|
+| Crit | Exceptional / extreme effect |
+| 6 | Good / standard effect |
+| 4-5 | Mixed / limited effect |
+| 1-3 | Bad / poor effect |
 
 ### Resistance Roll
 
-Reduce or avoid consequences at a stress cost. Always succeeds.
-Roll attribute rating, suffer 6 stress minus highest die result.
-On a critical, also clear 1 stress.
+Reduce/avoid consequences. Always succeeds. Roll attribute
+rating; suffer 6 minus highest die in stress. Crit = also
+clear 1 stress.
 
-Which attribute resists which:
-- **Insight**: Consequences from deception or understanding
-- **Prowess**: Consequences from physical strain or injury
-- **Resolve**: Consequences from mental strain or willpower
+- Insight: deception/understanding consequences
+- Prowess: physical strain/injury
+- Resolve: mental strain/willpower
 
-Each consequence can only be resisted once.
+### Downtime Roll
+
+Same progression as fortune roll, used for recovery, projects,
+assets, heat reduction.
 
 ## Position & Effect
 
-The GM sets both position and effect before the roll. Default
-is risky/standard. Nine possible combinations.
+Default: risky/standard. Nine combinations.
 
-### Position (how dangerous)
+### Position Outcomes
 
-**Controlled** -- You act on your terms, exploit dominant
-advantage:
-- Crit: You do it with increased effect
-- 6: You do it
-- 4/5: You hesitate. Withdraw and try differently, or do it
-  with a minor consequence (minor complication, reduced effect,
-  lesser harm, or end up in risky position)
-- 1-3: You falter. Press on by seizing a risky opportunity, or
-  withdraw and try differently
+**Controlled** (dominant advantage):
+- 6/crit: success (crit: +effect)
+- 4-5: hesitate — minor consequence or try differently
+- 1-3: falter — seize risky opportunity or withdraw
 
-**Risky** -- You go head to head, act under fire:
-- Crit: You do it with increased effect
-- 6: You do it
-- 4/5: You do it, but consequence (harm, complication, reduced
-  effect, or end up in desperate position)
-- 1-3: Things go badly (harm, complication, desperate position,
-  or lose this opportunity)
+**Risky** (head to head):
+- 6/crit: success (crit: +effect)
+- 4-5: success + consequence (harm, complication, worse position)
+- 1-3: bad outcome (harm, complication, lost opportunity)
 
-**Desperate** -- You overreach, you're in serious trouble:
-- Crit: You do it with increased effect
-- 6: You do it
-- 4/5: You do it, but consequence (severe harm, serious
-  complication, or reduced effect)
-- 1-3: Worst outcome (severe harm, serious complication, or
-  lose this opportunity for action)
+**Desperate** (overreach/serious trouble):
+- 6/crit: success (crit: +effect)
+- 4-5: success + severe consequence
+- 1-3: worst outcome (severe harm, serious complication)
 
-### Effect Level (how impactful)
+### Effect Level
 
 | Level | Description | Clock Ticks |
-|-------|-------------|:-----------:|
-| Great | More than usual; extra benefit | 3 |
-| Standard | Normal expected outcome | 2 |
-| Limited | Partial or weak effect | 1 |
+|:---:|-------------|:---:|
+| Great | More than usual | 3 |
+| Standard | Normal | 2 |
+| Limited | Partial/weak | 1 |
 
-**Beyond the normal range**: Effect can drop to **zero effect**
-or rise to **extreme effect**. A PC's "+1 effect" ability or
-push applies after the GM's assessment.
+Zero effect and extreme effect exist beyond this range.
 
-### Effect Factors
+## Bonus Dice (max +2d)
 
-Three factors may modify effect above or below default:
-
-- **Potency**: Situational advantages, extra time/risk, arcane
-  power. An infiltrator is more potent in darkness.
-- **Quality/Tier**: Effectiveness of tools, weapons, resources.
-  Fine items = +1 quality, stacking with Tier.
-- **Scale**: Number of opponents, area covered, scope of
-  influence. Context-dependent (more people help in battle,
-  hinder in infiltration).
-
-### Trading Position for Effect
-
-After the GM announces position and effect, a player may trade
-one for the other. Example: risky/standard becomes
-desperate/great for a bigger payoff at greater risk.
-
-## Bonus Dice
-
-You can normally get up to two bonus dice:
-
-- **Assistance**: A teammate takes 1 stress and gives you +1d.
-  Only one assistant per roll.
-- **Push yourself**: Take 2 stress for +1d (also gives +1 effect
-  or lets you act despite incapacitation, but those cost the
-  same 2 stress -- pick one benefit per push).
-- **Devil's Bargain**: A bonus die offered by GM or any player,
-  in exchange for a complication that occurs regardless of the
-  roll outcome. Cannot combine with pushing (one or the other).
-
-### Common Devil's Bargains
-
-- Collateral damage or unintended harm
-- Sacrifice coin or an item
-- Betray a friend or loved one
-- Offend or anger a faction
-- Start or tick a troublesome clock
-- Add heat from evidence or witnesses
-- Suffer harm
+- **Assist:** teammate takes 1 stress → +1d (one per roll)
+- **Push:** 2 stress → +1d OR +1 effect OR act despite
+  incapacitation (pick one benefit per push)
+- **Devil's Bargain:** bonus die for complication regardless
+  of outcome. Cannot combine with pushing.
 
 ## Stress & Trauma
 
-**Stress** is a 9-box track. Spent to:
-- Resist consequences (variable cost: 6 minus resistance roll)
-- Push yourself (+1d, +1 effect, or act when incapacitated):
-  2 stress each
-- Assist a teammate: 1 stress for +1d
+**Stress** (9-box track): spent to resist consequences
+(6 minus roll), push (+1d/+1 effect: 2 stress), assist
+(1 stress).
 
-**Trauma**: When the last stress box is marked, the PC suffers
-a trauma condition (permanent). They are taken out of the
-current action, return later with zero stress and vice
-satisfied. At four trauma conditions, the character must retire.
+**Trauma:** when last stress box marked, suffer permanent
+trauma condition. Taken out of action, return with zero stress.
+Four traumas = retire.
 
-**Trauma conditions** (circle one per trauma):
-Cold, Haunted, Obsessed, Paranoid, Reckless, Soft, Unstable,
-Vicious
-
-## Harm
-
-Four levels with escalating penalties:
-
-| Level | Severity | Penalty | Examples |
-|-------|----------|---------|----------|
-| 1 | Lesser | Reduced effect | Battered, Drained, Distracted, Scared, Confused |
-| 2 | Moderate | -1d | Exhausted, Deep Cut, Concussion, Panicked, Seduced |
-| 3 | Severe | Need help to act | Impaled, Broken Leg, Shot in Chest, Badly Burned, Terrified |
-| 4 | Fatal | Death | Electrocuted, Drowned, Stabbed in the Heart |
-
-Penalties apply when the harm is relevant to the situation.
-If a harm row is already full, the harm moves up to the next
-level. Push yourself (2 stress) to act despite level 3 harm.
-
-## Armor
-
-- **Standard armor**: Mark the armor box to reduce or avoid a
-  consequence instead of rolling to resist
-- **Heavy armor**: Mark a second box for further reduction
-- **Special armor**: Certain abilities let you use this box to
-  completely avoid a specific consequence type, or push yourself
-  without taking stress
-- All armor restored when you choose load for the next score;
-  special armor restores at the beginning of downtime
+Conditions: Cold, Haunted, Obsessed, Paranoid, Reckless,
+Soft, Unstable, Vicious.
 
 ## Vice & Overindulgence
 
-Every PC has a vice they indulge to clear stress.
+Types: Faith, Gambling, Luxury, Obligation, Pleasure, Stupor,
+Weird. Roll lowest attribute; clear stress = highest die.
+Overindulge if clearing more than marked:
 
-**Vice types**: Faith, Gambling, Luxury, Obligation, Pleasure,
-Stupor, Weird
+- **Attract Trouble:** extra entanglement
+- **Brag:** +2 heat
+- **Lost:** vanish; play different PC until return
+- **Tapped:** purveyor cuts you off; find new one
 
-**Vice roll**: Roll dice equal to your lowest attribute rating.
-Clear stress equal to the highest die result. If you clear more
-stress than you had marked, you **overindulge**:
-
-- **Attract Trouble**: Roll an additional entanglement
-- **Brag**: The crew takes +2 heat
-- **Lost**: Character vanishes; play a different PC until return
-- **Tapped**: Vice purveyor cuts you off; find a new one
-
-If a PC does not or cannot indulge during downtime, they take
-stress equal to their trauma count.
-
-## Clocks
-
-Progress clocks are circles divided into segments to track
-ongoing effort or approaching danger. Name clocks after the
-obstacle, not the method ("Interior Patrols" not "Sneak Past
-the Guards").
-
-**Clock sizes:**
-- 4 segments: Moderate complexity
-- 6 segments: Complex, multi-step
-- 8 segments: Long or difficult
-
-**Clock types:**
-
-| Type | Use | Advances When |
-|------|-----|---------------|
-| Progress | Track effort toward a goal | PCs succeed |
-| Danger | Track mounting threat | Consequences, failures, time |
-| Racing | Two opposed clocks | Both sides act; first to fill wins |
-| Linked | Chain of obstacles | Filling one unlocks the next |
-| Tug-of-war | Back-and-forth situation | Events fill or empty it |
-| Mission | Time-sensitive window | Time passes; when full, window closes |
-| Faction | NPC long-term goals | GM advances between sessions |
+No indulgence = take stress equal to trauma count.
 
 ## Coin & Stash
 
-**Coin** is an abstract measure of cash and liquid assets. Crew
-can store up to 4 coin in the lair (8 with vault, 16 with
-double vault).
-
 | Amount | Example |
-|--------|---------|
-| 1 coin | A full purse of silver; a week's wages |
-| 2 coin | A fine weapon; weekly income for a small business |
-| 4 coin | A satchel of silver; a month's wages |
-| 6 coin | An exquisite jewel; a heavy burden of silver |
-| 8 coin | A monthly take for a small business; a small safe |
-| 10 coin | Liquidating a significant asset (carriage, horse, deed) |
+|:---:|---------|
+| 1 | Full purse of silver; week's wages |
+| 2 | Fine weapon; weekly small business income |
+| 4 | Satchel of silver; month's wages |
+| 6 | Exquisite jewel |
+| 8 | Monthly take for small business |
+| 10 | Liquidating significant asset |
 
-**Coin uses:**
-- 1 coin for an additional downtime activity
-- 1 coin to increase a downtime activity result by one level
-- Spend coin to avoid certain crew entanglements
-- Put coin in stash to improve retirement circumstances
-- Spend coin to advance crew Tier (new Tier x 8)
+Uses: 1 coin = extra downtime activity or +1 result level;
+avoid entanglements; stash for retirement; advance Tier
+(new Tier × 8).
 
-**Stash**: PCs stash coin for retirement. Each full row of
-stash (10 coins) indicates lifestyle quality (0 = street life,
-4 = luxury). Retirement fate: 0-10 poor, 11-20 meager,
-21-39 modest, 40 fine. Withdrawing: for every 2 stash removed,
-get 1 coin in cash.
+**Stash:** each row of 10 = lifestyle tier. Retire at 40.
+Withdraw: 2 stash → 1 coin.
 
 ## Faction Tier & Scale
 
-**Tier**: Measure of wealth, influence, and scale (0 to VI).
-Determines quality of items, scale of gangs, and dice pool for
-fortune rolls involving crew power.
-
-**Hold**: Weak or Strong. Reflects how well a faction maintains
-its position. Your crew starts with strong hold at Tier 0.
-
 | Tier | Gang Scale |
-|------|------------|
+|:---:|------------|
 | 0 | 1-2 people |
-| I | 3-6 people (small) |
-| II | 12 people (medium) |
-| III | 20 people (large) |
-| IV | 40 people (huge) |
-| V | 80 people (massive) |
+| I | 3-6 (small) |
+| II | 12 (medium) |
+| III | 20 (large) |
+| IV | 40 (huge) |
+| V | 80 (massive) |
 
-## Rep & Development
+**Hold:** Weak or Strong. Crew starts Strong at Tier 0.
 
-**Rep** is earned from scores: 2 base, +1 per tier the target
-is above you, -1 per tier below (minimum 0). Zero rep if no
-one knows about it.
+## Rep & Advancement
 
-**12 rep to advance** (minus turf held, minimum 6 rep):
-- If hold is weak: it becomes strong. Reset rep to zero.
-- If hold is strong: pay coin (new Tier x 8) to increase Tier
-  by one. Reset rep to zero, reduce hold to weak.
+Rep: 2 base +1 per tier above, -1 per tier below (min 0).
+12 rep to advance (minus turf, min 6):
+- Weak hold → becomes strong. Reset rep.
+- Strong hold → pay coin (new Tier × 8), +1 Tier, hold → weak.
 
-**Turf**: Each piece reduces rep needed by one (max 6 turf).
-Turf marks persist through rep resets. Acquiring turf expands
-hunting grounds.
-
-## Consequences
-
-Five types the GM may inflict from action rolls:
-
-- **Reduced effect**: Action underperforms; effect drops by one
-- **Complication**: Trouble or new threat. Minor = 1 clock tick,
-  standard = 2 ticks, serious = 3 ticks. Never negate a
-  successful roll.
-- **Lost opportunity**: Window closes; need a new approach
-- **Worse position**: Escalation (controlled -> risky ->
-  desperate); not failed yet but next attempt is harder
-- **Harm**: Long-lasting debility (see Harm table above)
-
-## Double-Duty Rolls
-
-NPCs don't roll. An action roll resolves both the PC's action
-and any involved NPCs. On a 6, the PC wins. On 4/5, both sides
-have effect. On 1-3, the NPC wins and their effect is a
-consequence on the PC.
+Turf: each piece = -1 rep needed (max 6). Persists through
+resets.
 
 ---
-*This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*
+*Based on Blades in the Dark by John Harper, CC BY 3.0.*
