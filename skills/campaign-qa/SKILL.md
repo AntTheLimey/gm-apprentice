@@ -24,6 +24,10 @@ decides what to do.
   tracking (Chekhov Protocol for stale threads, Canon
   Grounding for fact verification). Has per-system topic
   files for rules and stat lookups.
+  The canonical timeline (`campaign-timeline.md`) records
+  what happened each session. When validating entity temporal
+  state, cross-reference: does the entity's `createdSession`
+  match the timeline session that mentions its introduction?
 
 - **campaign-organizer** — Vault structure and entity
   management. When findings involve structural graph issues
