@@ -1,825 +1,315 @@
 # Handouts, Props, and In-Game Documents
 
-This document provides templates, voice guides, and design
-principles for generating in-game documents, physical props,
-and player handouts. Read this file whenever the user asks
-you to create letters, newspaper clippings, journal entries,
-official documents, Mythos tomes, item cards, coded messages,
-or any other in-world artefact the GM can hand to players.
+Templates, voice guides, and design principles for generating
+in-game documents and player handouts. Read when creating
+letters, newspapers, journals, official documents, Mythos
+tomes, item cards, coded messages, or any in-world artefact.
 
 ## When to Create Handouts
 
-Handouts serve two purposes simultaneously: they immerse
-players in the fiction, and they give the GM a concrete prep
-artefact that clarifies what actually matters in a scene.
-As Sly Flourish notes, "You can likely build an entire
-adventure with just a handout."
+**Use when:** players need persistent reference (names, dates,
+clues across sessions); document is a puzzle element; artefact
+creates dramatic weight; voice/period flavour matters; multiple
+embedded clues reward close reading.
 
-**Use a handout when:**
+**Skip when:** info takes 30 seconds verbally; purely
+atmospheric with no reference value; mid-action pacing break;
+duplicates existing info.
 
-- Players need to reference specific names, dates, places,
-  or clues across multiple scenes or sessions.
-- A document is a puzzle element (cipher, fragmentary text,
-  annotated map) that players need time to work through.
-- An in-world artefact creates dramatic weight (a dying
-  person's last letter hits harder on paper than paraphrased
-  by the GM).
-- The document establishes voice, tone, or period flavour
-  that verbal description cannot fully convey.
-- Multiple clues are embedded in a single source and players
-  need to examine it closely.
+## Design Principles
 
-**Do not use a handout when:**
+- **Length:** 1-2 pages optimal. Engagement drops sharply beyond.
+- **Skim Test:** Critical info visually distinct. Clues
+  discoverable on skim, rewarding on close read. Flavour
+  surrounds but doesn't bury clues.
+- **Information Density:** Every handout contains ≥1 actionable
+  piece (clue, name, date, contradiction). Purely atmospheric
+  handouts train players to ignore future ones.
+- **Authenticity:** Messy handwriting, stains, torn edges,
+  errors, marginalia. Match appearance to fictional creation
+  circumstances.
+- **The Reveal:** Reserve for moments of narrative weight.
+  Let players earn handouts through play; let discovery
+  moment breathe.
 
-- The information takes 30 seconds to deliver verbally.
-- The content is purely atmospheric with no reference value.
-- The group is mid-action and stopping to read would break
-  pacing.
-- The handout duplicates information players already have.
+## Document Templates
 
-## Handout Design Principles
-
-### Length
-
-One to two pages of text content is optimal. Player engagement
-drops sharply beyond two pages. A 40-70 page campaign primer
-will be skimmed by one player and ignored by the rest.
-
-If a handout must be longer (a Mythos tome, a lengthy report),
-break it into sections with clear visual hierarchy so players
-can find the important parts quickly.
-
-### The Skim Test
-
-Assume players will skim the handout in under 30 seconds
-before engaging deeply (if they engage deeply at all). Design
-for skimmability:
-
-- Critical information should be visually distinct (underlined,
-  in a different hand, circled, or placed in a conspicuous
-  position like the opening or closing line).
-- Clues should be discoverable on a skim but rewarding on a
-  close read. A name mentioned casually in a letter is a
-  skim-level clue. A subtle inconsistency in dates requires
-  close reading.
-- Flavour text should surround but not bury the clues.
-
-### Information Density
-
-Every handout should contain at least one piece of actionable
-information — a clue, a name, a date, a location, a
-contradiction. Purely atmospheric handouts with no game value
-train players to ignore future handouts.
-
-High-density handouts (a guild notice board covered in
-overlapping advertisements, a detective's evidence board)
-can work if the density is the point — players are meant to
-sift through the noise to find signal.
-
-### Authenticity Over Perfection
-
-Messy handwriting, tea stains, torn edges, spelling errors,
-and marginalia make handouts feel real. A pristine, perfectly
-typeset letter from a desperate person fleeing cultists breaks
-immersion. Match the physical appearance of the handout to
-the fictional circumstances of its creation.
-
-### The Reveal
-
-The moment a handout is introduced matters as much as its
-content. Reserve physical handouts for moments of narrative
-weight:
-
-- The investigators find the dead professor's final letter
-  in his desk drawer.
-- The party discovers the treasure map hidden inside the
-  false bottom of a chest.
-- The scoundrels intercept a faction's sealed orders.
-
-Do not hand out documents during exposition. Let the players
-earn them through play, then let the discovery moment breathe.
-
-## Document Types and Templates
-
-### Letters and Correspondence
-
-Letters are the most common handout type. They establish
-voice, deliver information, and create emotional connections
-to NPCs.
-
-**Letter Template:**
+### Letters
 
 ```
-[LETTERHEAD or SENDER ADDRESS — if appropriate to the
-character's social standing and the period]
+[LETTERHEAD/ADDRESS — if appropriate to social standing]
+[DATE — period-appropriate format]
+[SALUTATION]
 
-[DATE — in period-appropriate format]
+P1: Reason for writing. Urgency, emotion, or context.
+P2: Core information — the clue, request, warning, revelation.
+P3 (optional): Personal detail revealing character or subtext.
 
-[SALUTATION — formal or informal based on relationship]
-
-[BODY — 2-4 paragraphs maximum]
-
-Paragraph 1: The reason for writing. Establish urgency,
-emotion, or context.
-
-Paragraph 2: The core information. This is where the clue,
-request, warning, or revelation lives.
-
-Paragraph 3 (optional): Personal detail. A line that
-reveals character, relationship, or subtext.
-
-[CLOSING — formal or informal]
-[SIGNATURE — with any relevant titles or affiliations]
-
-[POSTSCRIPT — optional. A P.S. is one of the first things
-readers notice. Use it for the most important clue or the
-most emotional line.]
+[CLOSING + SIGNATURE with titles/affiliations]
+[P.S. — optional. First thing readers notice. Use for most
+ important clue or most emotional line.]
 ```
 
-**Voice calibration for letters:**
+**Voice by character type:**
 
-| Character Type | Language Style |
-|---------------|---------------|
-| Academic/Scholar | Formal, precise, subordinate clauses, technical terminology, Latin or Greek phrases |
-| Working class | Short sentences, colloquial, phonetic spelling, contractions, practical language |
-| Aristocrat | Elaborate courtesy, indirect phrasing, assumption of shared cultural reference |
-| Military | Clipped, factual, abbreviations, rank-conscious, passive voice for reports |
-| Child | Simple vocabulary, present tense, run-on sentences, concrete rather than abstract |
-| Non-native speaker | Stilted grammar, occasional wrong word, formal where a native speaker would be casual |
-| Desperate/panicked | Fragmentary sentences, dashes, exclamation marks, disorganised thought, repetition |
-| Calculated/deceptive | Smooth, persuasive, conspicuously missing specific details, misdirection through emphasis |
+| Type | Style |
+|------|-------|
+| Academic | Formal, precise, subordinate clauses, Latin/Greek |
+| Working class | Short sentences, colloquial, phonetic spelling |
+| Aristocrat | Elaborate courtesy, indirect, shared cultural refs |
+| Military | Clipped, factual, abbreviations, passive voice |
+| Child | Simple vocabulary, present tense, run-on, concrete |
+| Non-native | Stilted grammar, wrong words, overly formal |
+| Desperate | Fragmentary, dashes, exclamations, repetition |
+| Deceptive | Smooth, persuasive, conspicuously missing details |
 
 ### Newspaper Clippings
 
-Newspaper handouts are essential for Call of Cthulhu and
-useful in any setting with print media.
-
-**Newspaper Article Template:**
-
 ```
-[NEWSPAPER NAME] — [CITY, STATE/COUNTRY]
+[NEWSPAPER NAME] — [CITY]
 [DATE — day of week, full date]
-[SECTION — if relevant: Front Page, Local, Crime, Society]
+[SECTION]
 
 HEADLINE IN CAPITALS
-Subheading in title case if needed
+Subheading in title case
 
-[DATELINE] — [Opening paragraph: Who, What, Where, When.
-Lead with the most dramatic or relevant fact.]
-
-[Second paragraph: Expand on the lead. Add context, quotes
-from authorities, or eyewitness accounts.]
-
-[Third paragraph: Background information. Connect to
-previous events if this is a series. Include details that
-a careful reader might find significant.]
-
-[Optional closing paragraph: Future implications, ongoing
-investigation, or official statement.]
+[DATELINE] — [P1: Who, What, Where, When — lead with most
+dramatic fact.]
+[P2: Expand lead. Quotes, eyewitness accounts.]
+[P3: Background. Connect to previous events. Significant
+buried details.]
+[P4 (optional): Future implications, ongoing investigation.]
 ```
 
-**Period-specific newspaper conventions:**
+**Era conventions:** 1890s-1920s: formal, verbose, sensationalist;
+1930s-40s: punchier, wire service; Medieval/Fantasy: broadsheets,
+proclamations; Victorian: florid, euphemistic; Modern: inverted
+pyramid, short paragraphs.
 
-| Era | Style Notes |
-|-----|------------|
-| 1890s-1920s | Formal, verbose, complex sentences, full titles and honorifics, sensationalist headlines, racial and class assumptions of the period |
-| 1930s-1940s | Punchier prose, wire service style, datelines prominent, wartime censorship awareness |
-| Medieval/Fantasy | Town crier announcements, broadsheets, proclamations posted on boards rather than newspapers |
-| Victorian | Florid language, moral commentary woven into reporting, euphemism for violence and sex |
-| Modern | Inverted pyramid structure, short paragraphs, attribution in every paragraph, quotes prominent |
+**Clue embedding:** Main article = obvious info. Middle paragraph
+name/date = real clue. Adjacent articles = seemingly unrelated
+info connecting later. Ads = hidden messages or locations.
 
-**Clue embedding in newspapers:**
-- The main article delivers the obvious information.
-- A name, date, or detail buried in a middle paragraph is
-  the real clue.
-- Adjacent articles on the same "page" can contain
-  seemingly unrelated information that connects to the
-  investigation later.
-- Advertisements on the page can contain hidden messages
-  or point to locations.
-
-### Diary and Journal Entries
-
-Diary entries provide intimate access to an NPC's inner
-world. They are ideal for revealing secrets, building
-sympathy, and tracking an NPC's deterioration.
-
-**Diary Entry Template:**
+### Diary/Journal Entries
 
 ```
-[DATE — in the diarist's preferred format]
-
-[ENTRY — written in first person, present or past tense
-depending on the character's style]
-
-Entry structure:
-- Opening: What prompted the entry (an event, a thought,
-  an emotion).
-- Middle: The substance. What happened, what the diarist
-  thinks about it, what they plan to do.
-- Close: An unresolved thought, a worry, a hope, or an
-  abrupt stop.
-
-[Optional: marginalia, cross-outs, later additions in
-different ink, drawings or diagrams]
+[DATE]
+[ENTRY — first person]
+- Opening: what prompted the entry
+- Middle: substance, thoughts, plans
+- Close: unresolved thought, worry, hope, or abrupt stop
+[Optional: marginalia, cross-outs, later additions, diagrams]
 ```
 
-**Diary deterioration sequence:**
+**Deterioration sequence** (madness, obsession, despair):
 
-For NPCs descending into madness, obsession, or despair,
-show the deterioration across multiple diary entries:
-
-| Stage | Writing Characteristics |
-|-------|----------------------|
-| Normal | Coherent, regular entries, personal detail, mundane concerns alongside the extraordinary |
-| Anxious | Entries become more frequent, focused on a single topic, begins questioning own perceptions |
-| Obsessed | Other topics disappear, handwriting changes (tighter, more cramped, or larger and more erratic), technical jargon or occult terminology increases |
-| Deteriorating | Entries become fragmentary, pronouns shift (third person, royal we), time references become confused, drawings and symbols appear |
-| Final | Single words, repeated phrases, illegible passages, blank pages, entries that stop mid-sentence |
-
-This sequence is particularly valuable for Call of Cthulhu
-but applies to any genre where an NPC's mental state is
-deteriorating.
+| Stage | Writing |
+|-------|---------|
+| Normal | Coherent, regular entries, mundane + extraordinary |
+| Anxious | More frequent, single-topic focus, questioning perceptions |
+| Obsessed | Other topics vanish, handwriting changes, jargon increases |
+| Deteriorating | Fragmentary, pronoun shifts, time confusion, symbols appear |
+| Final | Single words, repeated phrases, illegible, mid-sentence stops |
 
 ### Official Documents
 
-Official documents include warrants, deeds, contracts, wills,
-certificates, military orders, police reports, autopsy
-reports, and bureaucratic correspondence.
-
-**Official Document Template:**
-
 ```
-[LETTERHEAD — organisation name, seal or crest description,
-address]
-
-[DOCUMENT TYPE — in formal header: "Certificate of Death",
-"Warrant for Arrest", "Last Will and Testament", etc.]
-
-[REFERENCE NUMBER — if bureaucratic: case number, file
-reference, or registry entry]
-
-[DATE — formal format]
-
-[BODY — written in the formal register of the issuing
-authority]
-
-Key characteristics:
-- Passive voice ("It was determined that..." not "I found
-  that...")
-- Formal terminology specific to the document type
-- Structured sections with headings or numbered clauses
-- Signatures, stamps, and official marks noted
-- Witness lines if appropriate
-
-[SIGNATURES AND MARKS]
-[OFFICIAL SEAL — described in brackets]
+[LETTERHEAD — org name, seal, address]
+[DOCUMENT TYPE — "Certificate of Death", "Warrant", etc.]
+[REFERENCE NUMBER]
+[DATE]
+[BODY — passive voice, formal terminology, structured sections]
+[SIGNATURES, STAMPS, OFFICIAL MARKS]
 ```
 
-**Document-specific conventions:**
+| Type | Key Features |
+|------|-------------|
+| Autopsy | Clinical, anatomical terms, COD, TOD, external/internal exam |
+| Police report | Incident #, officer, witnesses, evidence log, disposition |
+| Will | "Being of sound mind...", beneficiaries, executor, witnesses |
+| Military orders | Classification, authority, objective, ROE, reporting |
+| Warrant | Authority, subject, scope, expiration, magistrate |
+| Contract | Parties, obligations, penalties, duration, witnesses |
+| Certificate | Registry info, officiant, vital statistics, filing date |
 
-| Document Type | Key Features |
-|--------------|-------------|
-| Autopsy report | Clinical language, anatomical terms, cause of death, time of death, external/internal examination sections, toxicology if relevant |
-| Police report | Incident number, responding officer, witness statements, evidence log, disposition |
-| Will/Testament | "I, [name], being of sound mind...", beneficiaries, executor, witnesses, codicils |
-| Military orders | Classification marking, issuing authority, objective, rules of engagement, reporting requirements |
-| Warrant | Authority cited, subject named, scope of search/arrest, expiration, issuing magistrate |
-| Contract | Parties named, obligations, penalties, duration, signatures, witnesses |
-| Certificate (birth/death/marriage) | Registry information, officiant, vital statistics, filing date |
-
-### Mythos Tomes and Occult Texts
-
-Specific to Call of Cthulhu but adaptable to any game with
-forbidden knowledge. Mythos tome handouts are among the
-most rewarding props in the hobby.
-
-**Mythos Tome Fragment Template:**
+### Mythos Tomes
 
 ```
-[TITLE — in the original language if not English, with
-translation]
-
-[PHYSICAL DESCRIPTION — binding, condition, writing medium,
-illustrations, marginalia from previous owners]
-
-[FRAGMENT — the passage the investigator reads or translates]
-
-Fragment structure:
-- Opening: Context-setting prose that establishes the
-  author's perspective and era.
-- Core passage: The revelation. Describe the Mythos entity,
-  ritual, location, or concept in the author's voice.
-  Never use game terminology. The author does not know
-  they are describing "Cthulhu" — they are describing
-  "the dreaming god beneath the waves" or "that which
-  sleeps in R'lyeh."
-- Implication: What the passage suggests about the current
-  investigation. This may be oblique — the connection
-  should reward interpretation.
-
-[MARGINALIA — notes from previous readers, translations,
-corrections, warnings, or mad scribblings]
-
-[GM NOTE — not part of the handout. Record: SAN loss for
-reading, Cthulhu Mythos points gained, time required to
-study, languages required, and any spells or rituals
-contained.]
+[TITLE — original language + translation]
+[PHYSICAL DESCRIPTION — binding, condition, medium, marginalia]
+[FRAGMENT]
+- Opening: author's perspective and era
+- Core: describe entity/ritual/location in author's voice.
+  Never use game terminology. Not "Cthulhu" — "the dreaming
+  god beneath the waves."
+- Implication: what this suggests about current investigation
+[MARGINALIA — previous readers' notes, warnings, scribblings]
+[GM NOTE: SAN loss, Mythos points, study time, languages,
+ spells contained]
 ```
 
-**Mythos writing principles:**
-
-- Never name Mythos entities directly unless the in-world
-  text would plausibly do so. Use epithets, descriptions,
-  and circumlocution.
-- The author's understanding should be incomplete. They
-  describe what they witnessed or learned, filtered through
-  their own cultural lens and limitations.
-- Older texts should reflect their era's language and
-  worldview. A medieval monk describes things differently
-  from a 1920s professor.
-- Include passages that are ambiguous. Not everything in a
-  Mythos tome should be immediately useful. Some passages
-  are red herrings; some become relevant sessions later.
-- The physical description of the tome itself should be
-  unsettling. Unusual binding materials, stains of
-  uncertain origin, pages that feel wrong to the touch.
+Principles: use epithets not entity names; author's understanding
+incomplete; older texts reflect era's language; include ambiguous
+passages; physical description should be unsettling.
 
 ### Item Cards
 
-Item cards are physical or digital cards describing magic
-items, equipment, or significant possessions. They serve
-as both reference material and satisfying loot.
-
-**Item Card Template:**
-
 ```
-[ITEM NAME]
-[RARITY/VALUE — system appropriate]
-
-[PHYSICAL DESCRIPTION — 1-2 sentences of sensory detail]
-
-[MECHANICAL PROPERTIES — system-specific stats, bonuses,
-charges, limitations]
-
-[LORE — 1-2 sentences of history or flavour. Optional but
-recommended for significant items.]
-
-[ATTUNEMENT/REQUIREMENTS — if applicable]
+[ITEM NAME]  [RARITY/VALUE]
+[PHYSICAL DESCRIPTION — 1-2 sentences sensory detail]
+[MECHANICAL PROPERTIES — system stats, bonuses, charges, limits]
+[LORE — 1-2 sentences history/flavour (optional)]
+[ATTUNEMENT/REQUIREMENTS]
 ```
 
-**System-specific item card conventions:**
+| System | Focus |
+|--------|-------|
+| D&D 5e | Rarity, attunement, charges, school, weight |
+| CoC 7e | Mythos connection, SAN cost, skill reqs, era |
+| GURPS | Point cost, weight, required advantages, TL |
+| FitD | Load cost, quality, special tags, fiction-first |
 
-| System | Card Focus |
-|--------|-----------|
-| D&D 5e | Rarity, attunement, charges, school of magic, weight |
-| CoC 7e | Mythos connection, SAN cost to use, skill requirements, era of origin |
-| GURPS | Point cost, weight, required advantages, tech level |
-| FitD | Load cost, quality, special tags, fiction-first description |
+### Other Templates
 
-### Wanted Posters and Public Notices
+**Wanted Poster:** WANTED [DEAD/ALIVE] — Name, Charge,
+Physical description, Last seen, Reward amount, Authority,
+Contact info.
 
-**Wanted Poster Template:**
+**Telegram:** [COMPANY] [ORIGIN] [DATE] [TIME] TO: [RECIPIENT]
+[MESSAGE IN CAPS — STOP BETWEEN SENTENCES STOP] [SENDER].
+Word-cost constraint = natural tension; what they chose to
+include is itself a clue.
 
-```
-WANTED
-[DEAD AND/OR ALIVE — or period-appropriate equivalent]
+**Photograph:** Medium (era-appropriate), Subject, Notable
+details (background, expressions, annotations on reverse),
+Condition.
 
-[NAME or DESCRIPTION of fugitive]
-
-[CHARGE — what they are accused of]
-
-[PHYSICAL DESCRIPTION — height, build, distinguishing marks,
-last known clothing]
-
-[LAST SEEN — location and date]
-
-[REWARD — specific amount and who is offering]
-
-[AUTHORITY — who issued the warrant: sheriff, magistrate,
-guild, faction]
-
-[CONTACT — where to report sightings]
-```
-
-### Telegrams and Short Messages
-
-**Telegram Template:**
-
-```
-[TELEGRAPH COMPANY NAME]
-[OFFICE OF ORIGIN] — [DATE] — [TIME FILED]
-
-TO: [RECIPIENT NAME AND ADDRESS]
-
-[MESSAGE IN CAPITALS — STOP BETWEEN SENTENCES STOP
-TELEGRAMS CHARGED BY WORD STOP LANGUAGE IS COMPRESSED
-AND FORMAL STOP]
-
-[SENDER NAME]
-```
-
-Telegrams are ideal for urgent communication in 1890s-1940s
-settings. The compressed language creates natural tension.
-The word-cost constraint forces the sender to prioritise
-information, which itself becomes a clue — what did they
-choose to include?
-
-### Coded Messages and Ciphers
-
-Ciphers turn handouts into puzzles. The physical handout is
-essential — give players the coded text on paper so they can
-work it during and between sessions.
-
-**Cipher Types by Difficulty:**
+### Ciphers
 
 | Cipher | Difficulty | Description |
 |--------|-----------|-------------|
-| Symbol substitution | Easy | Each letter replaced by a unique symbol. Provide a partial key as a separate clue. |
-| Caesar shift | Easy | Alphabet shifted by a fixed number. Discoverable by frequency analysis or brute force. |
-| Fantasy font swap | Easy | Message typed in a readable font, then font changed to a constructed script. The "cipher" is recognising the letter shapes. |
-| Keyword cipher | Medium | A keyword reorders the cipher alphabet. The keyword is a separate clue. |
-| Rail fence | Medium | Message written in zigzag rows, then read row by row. |
-| Anagram | Medium | Words scrambled. Highlight first letters as a hint to reduce difficulty. |
-| Book cipher | Hard | Numbers reference page, line, and word in a specific book. Requires the book as a second prop. |
-| Vigenère | Hard | Polyalphabetic substitution using a keyword. Requires a keyword clue and some cryptographic knowledge. |
+| Symbol substitution | Easy | Each letter → unique symbol. Partial key as separate clue |
+| Caesar shift | Easy | Fixed-number alphabet shift |
+| Fantasy font swap | Easy | Readable font → constructed script |
+| Keyword cipher | Medium | Keyword reorders cipher alphabet |
+| Rail fence | Medium | Zigzag rows read sequentially |
+| Anagram | Medium | Scrambled words; highlight first letters as hint |
+| Book cipher | Hard | Numbers reference page/line/word in specific book |
+| Vigenère | Hard | Polyalphabetic substitution via keyword |
 
-**Cipher design principles:**
+Rules: solvable with clues provided (no outside knowledge);
+≥3 clues pointing to method/key (Three Clue Rule); decoded
+message worth the effort; test it yourself in 10-15 min;
+always provide a fallback (NPC, skill check, secondary clue).
 
-- The cipher must be solvable with the clues provided in
-  the scenario. Never create a cipher that requires
-  outside knowledge the players do not have.
-- Include at least three clues pointing toward the solution
-  method and/or the key (consistent with the Three Clue Rule).
-- The decoded message should be worth the effort. A cipher
-  that decodes to "the treasure is in the cave" is
-  anticlimactic. A cipher that decodes to a disturbing
-  revelation or a critical warning rewards the work.
-- Test the cipher yourself before the session. If you
-  cannot solve it cleanly in 10-15 minutes with the
-  available clues, simplify it.
-- Provide a fallback. If players are stuck, an NPC, a
-  skill check, or a secondary clue should be available
-  to break the cipher. Never let a puzzle become a wall.
+**Maps:** Player maps contain only plausible character
+knowledge. Errors are powerful tools (outdated bridge, liar's
+omissions). Annotate with in-character handwriting. Multi-part
+maps reward assembly.
 
-### Maps
+## Period Voice Guide
 
-**Player-Facing Map Principles:**
-
-- Player maps should contain only information the characters
-  would plausibly have.
-- Errors on player maps are a powerful tool. An outdated map
-  shows a bridge that no longer exists. A map drawn by a
-  liar omits critical features.
-- Annotate maps with in-character handwriting: warnings, route
-  markings, circled locations, cryptic notes.
-- Treasure maps work best as multi-part props — fragments
-  that must be assembled, or a map that only makes sense
-  when combined with another clue (a cipher key, a landmark
-  description, a compass bearing).
-
-### Photographs (Described)
-
-When generating a handout that is a "photograph," describe
-it as a GM would present it at the table:
-
-```
-[PHOTOGRAPH DESCRIPTION]
-
-Medium: [Daguerreotype / Silver gelatin print / Polaroid /
-Digital print — era-appropriate]
-
-Subject: [What the photograph depicts]
-
-Notable details: [What a careful observer would notice —
-background elements, expressions, objects, timestamps,
-annotations on the reverse]
-
-Condition: [Age, damage, cropping, developing quality]
-```
-
-## Voice and Period Writing Guide
-
-### 1920s American English (Call of Cthulhu default era)
-
-Vocabulary: icebox (not refrigerator), motor-car or
-automobile, wireless (radio), aeroplane, keen (enthusiastic),
-ritzy (fancy), bump off (kill), gat (gun), on the level
-(honest), copacetic (fine), jake (fine/okay).
-
-Formality: More formal than modern English in professional
-and written contexts. First names used only between close
-friends and family. Correspondence uses full titles.
-
-Social markers: Class, race, and gender assumptions of the
-period are present in authentic documents. Handle these
-with awareness — period authenticity does not require
-reproducing harmful content in detail. A 1920s police
-report can be dismissive of a marginalised victim without
-the handout reproducing slurs.
-
-### Medieval/Fantasy English
-
-Vocabulary: Avoid "ye olde" clichés. Use slightly archaic
-constructions: "I would that you consider..." rather than
-"I want you to think about..."; "forthwith" rather than
-"immediately"; "wherefore" (why) rather than "where".
-
-Formality: Extremely formal in written documents. Titles
-and forms of address are critical. A letter from a lord to
-a commoner reads very differently from a letter between
-equals.
-
-Literacy: Most medieval-setting commoners cannot read.
-Handouts from common folk should be dictated to a scribe
-(note the scribe's voice mixing with the speaker's) or
-should not exist at all — the information comes verbally.
-
-### Victorian English
-
-Vocabulary: Elaborate, euphemistic, morally loaded. Death is
-"passing" or "the great journey." Violence is described
-obliquely. Emotional language is restrained in formal
-contexts but florid in personal correspondence.
-
-Formality: Rigid social hierarchy reflected in every
-interaction. Letters follow strict conventions of address,
-opening, and closing. A breach of epistolary convention is
-itself a clue (a letter that skips the formal opening
-suggests urgency or emotional distress).
-
-### Modern/Contemporary
-
-Vocabulary: Current idiom, technical jargon where appropriate
-(medical, legal, police, military), abbreviations and
-acronyms common in official documents.
-
-Formality: Wide range from text-message casual to
-bureaucratic formal. Match the register to the character
-and context.
-
-Digital documents: Emails, text messages, social media posts,
-and chat logs are the modern equivalents of letters and
-telegrams. Format them appropriately (email headers, phone
-screen layouts, message timestamps).
+| Era | Key Traits |
+|-----|-----------|
+| 1920s American | Formal written contexts, full titles. Vocab: icebox, motor-car, wireless, keen, ritzy, bump off, gat, copacetic. Social markers of period present but handle with awareness — authenticity ≠ reproducing harmful content. |
+| Medieval/Fantasy | Avoid "ye olde." Slightly archaic: "I would that you consider...", "forthwith." Titles critical. Most commoners illiterate — handouts from commoners dictated to a scribe. |
+| Victorian | Elaborate, euphemistic, morally loaded. Death = "passing." Rigid hierarchy in every letter. Breach of convention = clue (skipping formal opening suggests urgency). |
+| Modern | Current idiom, technical jargon. Wide formality range. Digital formats: emails, texts, chat logs with proper headers/timestamps. |
 
 ## Physical Prop Techniques
 
-These techniques are for GMs who want to create physical
-handouts. When generating handout content, include a
-"Physical Prop Notes" section with these suggestions.
+Include as "Physical Prop Notes" section with generated handouts.
 
-### Aging Paper
+- **Aging:** tea staining (warm yellow-brown), coffee (darker/uneven),
+  edge burning (candle, work over sink), crumpling + ironing,
+  damp tearing for fibrous edges
+- **Seals:** hot glue gun + coloured sticks + stamp/coin;
+  custom rubber stamps for recurring orgs; ribbon/cord in
+  faction colours
+- **Envelopes:** seal in actual envelopes for tactile discovery;
+  quality matches sender (expensive stationery vs cheap manila);
+  multiple handouts in one envelope = searching a desk/cabinet
 
-- **Tea staining:** Brew strong black tea, brush or dip
-  paper, let dry on a wire rack. Creates warm yellow-brown
-  ageing effect.
-- **Coffee staining:** Similar to tea but produces darker,
-  more uneven results. Drip patterns suggest water damage.
-- **Edge burning:** Use a small candle. Hold paper edges
-  near (not in) the flame. Work over a sink with water
-  nearby. Creates charred edges suggesting fire damage.
-- **Crumpling:** Crumple the paper into a ball, then
-  flatten and iron (low heat). Creates worn creases.
-- **Tearing:** Tear edges rather than cutting for a
-  weathered look. Dampen the tear line first for a more
-  natural fibrous edge.
+## System-Specific Conventions
 
-### Seals and Marks
+### CoC 7e
 
-- **Wax seals:** Use a hot glue gun with coloured glue
-  sticks as a practical alternative to traditional sealing
-  wax. Press with a seal stamp or coin.
-- **Rubber stamps:** Custom stamps for recurring
-  organisations (police department, university, shipping
-  company).
-- **Ribbon and cord:** Tie documents with ribbon or cord
-  in faction-appropriate colours. Players can deduce the
-  sender from the heraldic colour before opening.
+Strongest handout tradition in the hobby. Number sequentially
+(e.g., "Handout Edge 1"). Include handout summary table:
+number, type, location found, information contained.
 
-### Envelopes and Packaging
+Types: newspaper clippings, letters, diary fragments, police/
+medical reports, Mythos tome excerpts, photographs, maps,
+telegrams, business/calling cards.
 
-- Seal handouts in actual envelopes. Opening a sealed
-  envelope at the table creates a tactile moment of
-  discovery.
-- Use different envelope qualities for different senders
-  (expensive stationery for aristocrats, cheap manila for
-  bureaucrats, no envelope for found documents).
-- Multiple handouts in a single envelope simulate
-  searching through a desk drawer or file cabinet.
+Tools: Dhole's House (https://www.dholeshouse.org/) — official
+generators for telegrams, business cards, newspapers, calendars.
+Propnomicon (http://propnomicon.blogspot.com/) — DIY tutorials,
+CC-BY-NC-SA.
 
-## System-Specific Handout Conventions
+### D&D 5e
 
-### Call of Cthulhu 7e
+Shorter, action-oriented. Types: quest board notices, patron
+letters, prophecies/riddles, magic item cards, maps, lore
+entries, wanted posters, faction briefings.
 
-CoC has the strongest handout tradition in the hobby.
-Published Chaosium scenarios number handouts sequentially
-with scenario-relevant prefixes (e.g., "Handout Edge 1"
-for the scenario "Edge of Darkness").
-
-**Standard CoC handout types:**
-- Newspaper clippings (1920s-era formatting)
-- Personal letters and correspondence
-- Diary/journal fragments
-- Police and medical reports
-- Mythos tome excerpts
-- Photographs (described)
-- Maps and floor plans
-- Telegrams
-- Business cards and calling cards
-
-**CoC handout tools:**
-- Dhole's House (https://www.dholeshouse.org/): Official
-  online toolkit with generators for telegrams (three
-  types), business cards, newspaper clippings, and
-  calendars across multiple eras.
-- Cthulhu Architect Handout Generator: Autopsy report
-  templates and investigation documents.
-- Propnomicon (http://propnomicon.blogspot.com/): DIY
-  tutorials and printable props under CC-BY-NC-SA licence.
-
-**CoC handout numbering convention:**
-When generating handouts for a CoC scenario, number them
-sequentially: Handout 1, Handout 2, etc. Include a
-handout summary table in the scenario document listing
-each handout, its type, where it is found, and what
-information it contains.
-
-### D&D 5e (2024 Revision)
-
-D&D handouts tend to be shorter and more action-oriented
-than CoC investigation handouts.
-
-**Standard D&D handout types:**
-- Quest board notices and bounty postings
-- Letters from patrons, allies, or villains
-- Prophecies and riddles
-- Magic item cards
-- Maps (dungeon, regional, treasure)
-- Lore entries (excerpts from in-world books)
-- Wanted posters
-- Faction dossiers and mission briefings
-
-**D&D handout conventions:**
-- Pre-campaign handouts should include: starting location,
-  introductory hook, race/class restrictions, house rules,
-  and a brief world primer.
-- Magic item cards are among the most popular D&D handouts.
-  Use the Item Card Template above with D&D-specific
-  fields (rarity, attunement, school).
-- Quest board notices work well as physical props pinned to
-  an actual board or laid on the table for players to
-  browse.
+Pre-campaign handouts: starting location, hook, restrictions,
+house rules, world primer. Quest boards work well as physical
+props pinned to an actual board.
 
 ### GURPS 4e
 
-GURPS handouts tend toward technical precision and
-comprehensive briefings.
+Technical precision. Types: mission briefings (1-2pp:
+objective, background, threats, equipment auth), schematics,
+NPC dossiers, rules cheat sheets, equipment manifests.
 
-**Standard GURPS handout types:**
-- Mission briefings (1-2 pages, structured with objective,
-  background, known threats, equipment authorisation)
-- Technical documents and schematics
-- Character dossiers (for NPCs the party is briefed on)
-- Rules cheat sheets (one-page quick references)
-- Equipment manifests
-
-**GURPS handout conventions:**
-- GURPS campaigns vary wildly in genre, so handout style
-  must match the specific setting.
-- The point-buy nature of GURPS means equipment and
-  resource handouts have mechanical weight. An equipment
-  manifest is both a prop and a game document.
+Genre varies wildly — match handout style to setting. Equipment
+manifests have mechanical weight (both prop and game document).
 
 ### Forged in the Dark
 
-FitD handouts are streamlined and action-focused, matching
-the system's emphasis on momentum.
+Streamlined, single page max. Types: score briefings (target,
+approach, obstacles), faction cards (tier, hold, members,
+goals, attitude), wanted notices, territory maps, vice
+purveyor descriptions.
 
-**Standard FitD handout types:**
-- Score briefings (target, approach, known obstacles)
-- Faction dossiers (name, tier, hold, notable members,
-  current goals, attitude toward crew)
-- Wanted notices and entanglement results
-- Territory maps with claim markers
-- Vice purveyor descriptions
-
-**FitD handout conventions:**
-- Keep handouts to a single page or less. FitD's pace
-  does not reward lengthy reading.
-- Faction cards (one card per faction with tier, hold,
-  and current status) are popular table aids.
-- Score briefings should provide enough information for
-  the engagement roll without dictating the approach.
+Score briefings: enough info for engagement roll without
+dictating approach.
 
 ## Handout Generation Workflow
 
-When asked to generate a handout, follow this workflow:
-
-### 1. Determine the Handout Type
-
-What kind of document is this? Use the templates above to
-select the appropriate format.
-
-### 2. Establish the Author's Voice
-
-Who wrote this document? Determine their:
-- Social class, education, and literacy level
-- Emotional state at the time of writing
-- Relationship to the reader
-- Era and cultural context
-- What they know and what they are trying to communicate
-  (or conceal)
-
-Use the Voice and Period Writing Guide above to calibrate
-the language.
-
-### 3. Embed the Information
-
-Identify what game-relevant information the handout must
-contain:
-- Primary clue or information (the reason this handout
-  exists)
-- Secondary details (flavour that rewards close reading)
-- Red herrings or ambiguities (if appropriate)
-- Connections to other handouts or campaign elements
-
-Place the primary information where it will be found on a
-skim. Place secondary details where they reward close
-reading.
-
-### 4. Write the Handout
-
-Use the appropriate template. Write in the author's voice.
-Keep to one to two pages of content.
-
-### 5. Add Physical Prop Notes
-
-Include a brief section for the GM describing how to
-present this handout as a physical prop:
-- Paper type and condition
-- Aging or weathering effects
-- Envelope or packaging
-- When in the session to introduce it
-- How players find or receive it
-
-### 6. Add GM Notes
-
-Include a section (clearly marked as not part of the
-handout) with:
-- What information the handout contains and its
-  significance
-- What skill checks (if any) are needed to find or
-  interpret the handout
-- What the handout connects to in the broader scenario
-- System-specific mechanical notes (SAN loss for Mythos
-  tomes, Cthulhu Mythos points, etc.)
+1. **Type:** select template from above
+2. **Author Voice:** social class, education, emotional state,
+   relationship to reader, era, what they know/conceal
+3. **Embed Info:** primary clue (skimmable position), secondary
+   details (reward close reading), red herrings, connections
+   to other handouts/campaign
+4. **Write:** use template, author's voice, 1-2 pages max
+5. **Prop Notes:** paper type/condition, aging effects,
+   packaging, when to introduce, how players find it
+6. **GM Notes:** significance, skill checks needed, scenario
+   connections, system mechanics (SAN loss, Mythos points, etc.)
 
 ## Handout Continuity
 
-Handouts should be tracked in the campaign's continuity
-records (see continuity-engine.md):
-
-- Record every handout given to players: number, type,
-  content summary, session delivered.
-- Track which handouts players have examined closely
-  versus skimmed or ignored.
-- Ensure handout content does not contradict established
-  canon (check dates, names, and facts against existing
-  campaign data).
-- Use handouts to create callbacks: a name mentioned in
-  Handout 3 reappears in Handout 12, rewarding players
-  who kept their notes.
-- Cross-reference handouts with the Chekhov protocol:
-  if a handout introduces an element (a name, a location,
-  a warning), that element should pay off within a
-  reasonable number of sessions.
+Track in campaign continuity records (`continuity-engine.md`):
+- Record every handout: number, type, content, session delivered
+- Track which handouts examined closely vs skimmed/ignored
+- Cross-check against established canon (dates, names, facts)
+- Create callbacks: name in Handout 3 reappears in Handout 12
+- Cross-ref with Chekhov protocol: introduced elements must
+  pay off within reasonable session count
 
 ## Sources
 
-- Mike Shea (Sly Flourish), "Making Great Handouts" and
-  "Lazy RPG Prep With Handouts."
-- Chaosium, published Call of Cthulhu scenario handout
-  conventions and free handout packs.
-- The Dhole's House (https://www.dholeshouse.org/),
-  official CoC handout toolkit.
-- Propnomicon (http://propnomicon.blogspot.com/), horror
-  and fantasy prop tutorials.
-- Cthulhu Architect Handout Generator.
-- Roleplaying Tips, "Tips On Making Creative And
-  Informative Player Handouts."
-- D&D Beyond, "New Player's Guide: How to Make Awesome
-  Handouts."
-- Sly Flourish, "Substitution Cipher Puzzles."
-- Dungeon Vault, "D&D Cipher and Code Puzzles."
-- Liminal Horror, layout and typography guidance for
-  TTRPG design.
+Sly Flourish (Making Great Handouts, Lazy RPG Prep With
+Handouts); Chaosium (CoC scenario handout conventions);
+Dhole's House (https://www.dholeshouse.org/); Propnomicon
+(http://propnomicon.blogspot.com/); Roleplaying Tips
+(Creative Handouts); D&D Beyond (Awesome Handouts); Sly
+Flourish (Substitution Cipher Puzzles); Dungeon Vault
+(Cipher/Code Puzzles); Liminal Horror (layout/typography).
 
 ## External References
 
-When you need the full detail of a framework referenced above,
-fetch the original source at runtime. Do not reproduce the
-content — summarize what you learn in your own words for the
-user.
-
-- **Dhole's House Handout Generator:** https://www.dholeshouse.org/ — Official Chaosium toolkit for generating CoC telegrams, newspapers, business cards, and calendars
+- **Dhole's House Handout Generator:** https://www.dholeshouse.org/

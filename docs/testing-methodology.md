@@ -130,6 +130,7 @@ methodology doc in `docs/` is the persistent reference.
 | #6 | Temporal Fields | 9,040 | 26,847 | 20.4s | 32.6s | +15/60 | Strongest per-question improvement (+3.75 avg) |
 | #7 | Canonical Timeline | 8,731 | 28,584 | 13.9s | 56.0s | +19/60 | Perfect 15/15 on fact-checking |
 | #8 | Compaction* | 42,533 | 41,371 | 48.1s | 45.9s | +15/75 | 59% smaller files, quality improved |
+| #9 | Compaction Pass 2* | 38,949 | 25,170 | 96.3s | 82.8s | +8/75 | 58% smaller (3 files), -35% tokens, system-native idiom improved |
 
 *Compaction control is pre-compaction (main), not no-skill.
 
