@@ -4,10 +4,10 @@ Core rules for effect, consequences, harm, armor, teamwork,
 and information gathering.
 
 **Related FitD files:**
-- Score/downtime procedures: `session-procedures.md`
-- Dice pools and 12 actions: `mechanics.md`
-- Faction details and clocks: `factions.md`
-- Entanglement tables: `entanglements.md`
+- Score/downtime procedures: `systems/fitd/session-procedures.md`
+- Dice pools and 12 actions: `systems/fitd/mechanics.md`
+- Faction details and clocks: `systems/fitd/factions.md`
+- Entanglement tables: `systems/fitd/entanglements.md`
 
 ## Effect Factors
 
@@ -167,12 +167,12 @@ Hardcase, Parole Influence, Smuggling.
 ## Topics in Other FitD Files
 
 These mechanics are covered in detail elsewhere:
-- **Dice pools, 12 actions, position/effect**: `mechanics.md`
-- **Score procedures** (engagement, flashbacks, linked plans): `session-procedures.md`
-- **Downtime phase** (payoff, heat, entanglements, activities): `session-procedures.md`
-- **XP and advancement** (PC + crew): `session-procedures.md`
-- **Faction turns** (clock advancement, maneuvers): `session-procedures.md`
-- **Faction details** (Doskvol factions, tiers, NPCs): `factions.md`
+- **Dice pools, 12 actions, position/effect**: `systems/fitd/mechanics.md`
+- **Score procedures** (engagement, flashbacks, linked plans): `systems/fitd/session-procedures.md`
+- **Downtime phase** (payoff, heat, entanglements, activities): `systems/fitd/session-procedures.md`
+- **XP and advancement** (PC + crew): `systems/fitd/session-procedures.md`
+- **Faction turns** (clock advancement, maneuvers): `systems/fitd/session-procedures.md`
+- **Faction details** (Doskvol factions, tiers, NPCs): `systems/fitd/factions.md`
 
 ---
 *Based on Blades in the Dark by John Harper, CC BY 3.0.*

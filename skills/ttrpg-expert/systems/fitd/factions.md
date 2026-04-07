@@ -3,9 +3,9 @@
 *GM activities: Prep, Track, Build*
 
 **Related FitD files:**
-- Score/downtime procedures: `session-procedures.md`
-- Core rules: `rules-reference.md`, `mechanics.md`
-- Entanglements: `entanglements.md`
+- Score/downtime procedures: `systems/fitd/session-procedures.md`
+- Core rules: `systems/fitd/rules-reference.md`, `systems/fitd/mechanics.md`
+- Entanglements: `systems/fitd/entanglements.md`
 
 Factions have Tier (0-VI), hold (weak/strong), and long-term
 goals tracked with clocks. GM advances clocks during downtime.

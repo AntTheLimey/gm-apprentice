@@ -1,10 +1,10 @@
 # Forged in the Dark -- Session Procedures
 
 **Related FitD files:**
-- Core rules (effect, harm, armor): `rules-reference.md`
-- Dice pools and 12 actions: `mechanics.md`
-- Faction details and clocks: `factions.md`
-- Entanglement tables: `entanglements.md`
+- Core rules (effect, harm, armor): `systems/fitd/rules-reference.md`
+- Dice pools and 12 actions: `systems/fitd/mechanics.md`
+- Faction details and clocks: `systems/fitd/factions.md`
+- Entanglement tables: `systems/fitd/entanglements.md`
 
 ## The Core Loop
 
@@ -255,7 +255,7 @@ Entanglement results may create new faction threads.
 **Rep/turf:** score affecting territory → propose rep changes
 and turf shifts. Seized turf creates new enemies automatically.
 
-Ref: `factions.md` for canonical tiers, holds, clocks, NPCs.
+Ref: `systems/fitd/factions.md` for canonical tiers, holds, clocks, NPCs.
 
 ---
 *Based on Blades in the Dark by John Harper, CC BY 3.0.*

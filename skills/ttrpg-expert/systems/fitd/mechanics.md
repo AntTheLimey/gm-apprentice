@@ -4,9 +4,9 @@ Heist/scoundrel games using d6 dice pools. Structured cycle:
 free play → score → downtime.
 
 **Related FitD files:**
-- Advanced rules (effect, harm, armor, wanted): `rules-reference.md`
-- Score/downtime procedures: `session-procedures.md`
-- Factions and clocks: `factions.md`
+- Advanced rules (effect, harm, armor, wanted): `systems/fitd/rules-reference.md`
+- Score/downtime procedures: `systems/fitd/session-procedures.md`
+- Factions and clocks: `systems/fitd/factions.md`
 
 ## Dice Pool Resolution
 
@@ -190,12 +190,12 @@ resets.
 
 These mechanics are covered in detail elsewhere to avoid
 duplication:
-- **Consequences** (5 types, harm table, armor): `rules-reference.md`
-- **Score procedures** (engagement roll, flashbacks, teamwork): `session-procedures.md`
-- **Downtime phase** (payoff, heat, entanglements, activities): `session-procedures.md`
-- **Clocks** (types, sizing, naming): `session-procedures.md`
-- **Faction turns** (clock advancement, maneuvers): `session-procedures.md`
-- **Faction details** (Doskvol factions, tiers, NPCs): `factions.md`
+- **Consequences** (5 types, harm table, armor): `systems/fitd/rules-reference.md`
+- **Score procedures** (engagement roll, flashbacks, teamwork): `systems/fitd/session-procedures.md`
+- **Downtime phase** (payoff, heat, entanglements, activities): `systems/fitd/session-procedures.md`
+- **Clocks** (types, sizing, naming): `systems/fitd/session-procedures.md`
+- **Faction turns** (clock advancement, maneuvers): `systems/fitd/session-procedures.md`
+- **Faction details** (Doskvol factions, tiers, NPCs): `systems/fitd/factions.md`
 
 ---
 *Based on Blades in the Dark by John Harper, CC BY 3.0.*
