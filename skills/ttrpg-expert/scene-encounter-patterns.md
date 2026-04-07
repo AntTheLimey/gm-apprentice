@@ -4,6 +4,13 @@ Practical patterns for designing, framing, and running scenes
 and encounters. Covers scene types, framing, encounter design,
 pacing, and system-specific patterns.
 
+**System-specific encounter mechanics:** for stat blocks, DCs,
+and combat rules when designing encounters, also read:
+- CoC 7e: `systems/coc-7e/combat-reference.md`, `systems/coc-7e/creatures.md`
+- D&D 5e: `systems/dnd-5e-2024/monsters.md`, `systems/dnd-5e-2024/conditions-rules.md`
+- GURPS 4e: `systems/gurps-4e/combat.md`
+- FitD: `systems/fitd/rules-reference.md`
+
 ## Scene Types
 
 ### Combat Encounters

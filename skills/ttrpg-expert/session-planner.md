@@ -5,6 +5,13 @@ per-PC content, tracking character arcs, and balancing
 spotlight time. Read when preparing a session, planning an
 arc, or ensuring each PC gets meaningful content.
 
+**System-specific session prep:** for system mechanics during
+session planning, also read:
+- CoC 7e: `systems/coc-7e/session-procedures.md`
+- D&D 5e: `systems/dnd-5e-2024/session-procedures.md`
+- GURPS 4e: `systems/gurps-4e/session-procedures.md`
+- FitD: `systems/fitd/session-procedures.md`
+
 ## PC Roster Review
 
 Complete for every PC before planning scenes. The touchpoint

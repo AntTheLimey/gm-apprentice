@@ -3,6 +3,13 @@
 Techniques for managing TTRPG sessions during active play.
 Complements `gm-session-patterns.md` (pre/post-session).
 
+**System-specific play mechanics:** for rules reference during
+active play, also read:
+- CoC 7e: `systems/coc-7e/combat-reference.md`, `systems/coc-7e/skills.md`
+- D&D 5e: `systems/dnd-5e-2024/conditions-rules.md`
+- GURPS 4e: `systems/gurps-4e/combat.md`
+- FitD: `systems/fitd/rules-reference.md`
+
 ## Real-Time Note-Taking
 
 ### What to Record

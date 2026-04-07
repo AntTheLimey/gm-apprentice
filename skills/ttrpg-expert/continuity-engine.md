@@ -5,6 +5,11 @@ plot holes, tracking threads, memory-aware revision, and
 managing living campaign state. Extends canon-management.md
 with active analysis and repair.
 
+**System-specific continuity:** for system mechanics when
+checking plot holes or tracking state, also read:
+- CoC 7e: `systems/coc-7e/session-procedures.md`
+- FitD: `systems/fitd/factions.md` (tier/hold/clock state)
+
 Continuity errors damage player trust. Prevention through
 systematic tracking is cheaper than repair through retcon.
 

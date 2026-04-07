@@ -5,6 +5,13 @@ respects player agency and serves the GM as reference.
 Scenarios are instruction manuals for GMs, not stories for
 readers.
 
+**System-specific scenario conventions:** for system mechanics
+and stat blocks when writing scenarios, also read:
+- CoC 7e: `systems/coc-7e/session-procedures.md`, `systems/coc-7e/creatures.md`
+- D&D 5e: `systems/dnd-5e-2024/monsters.md`, `systems/dnd-5e-2024/conditions-rules.md`
+- GURPS 4e: `systems/gurps-4e/combat.md`
+- FitD: `systems/fitd/rules-reference.md`
+
 ## Core Principle
 
 The writer tells the GM everything up front. Villain's plan,
