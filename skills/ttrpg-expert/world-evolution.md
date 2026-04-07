@@ -231,7 +231,9 @@ Rumour (world): "A trade ship from the east arrived with
 Present all proposals from steps 1-6 together, grouped by
 step. The GM confirms, modifies, or rejects each one. Only
 after GM approval, file the accepted updates to the chosen
-storage location.
+storage location. When filing, set `lastUpdated` and
+`asOfSession` to the current session number on every entity
+that changed (see entity-types.md Universal Fields).
 
 Suggest: "Updates filed. Would you like to run campaign-qa
 to validate, or proceed to session prep?"
