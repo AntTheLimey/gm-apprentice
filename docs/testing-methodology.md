@@ -131,8 +131,10 @@ methodology doc in `docs/` is the persistent reference.
 | #7 | Canonical Timeline | 8,731 | 28,584 | 13.9s | 56.0s | +19/60 | Perfect 15/15 on fact-checking |
 | #8 | Compaction* | 42,533 | 41,371 | 48.1s | 45.9s | +15/75 | 59% smaller files, quality improved |
 | #9 | Compaction Pass 2* | 38,949 | 25,170 | 96.3s | 82.8s | +8/75 | 58% smaller (3 files), -35% tokens, system-native idiom improved |
+| #10 | Compaction Pass 3*† | 53,805 | 29,296 | 122.0s | 84.4s | -2/75 (median) | 50% smaller (6 files), -46% tokens, quality-neutral within variance |
 
 *Compaction control is pre-compaction (main), not no-skill.
+†3-run average; median delta -2, mean -4 (Run 1 outlier at -9).
 
 **Averages (excluding compaction):**
 - Control: ~9,200 tokens, ~23s
