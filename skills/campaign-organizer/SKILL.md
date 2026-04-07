@@ -137,10 +137,15 @@ these fields when reorganising:
   `knownBy`, `nextBeat`, `resolutionCondition`,
   `plantedDetail`, `intendedPayoff`, `ripeness`
 
-**Campaign-tracker.md** may exist at the vault root with
+**campaign-tracker.md** may exist at the vault root with
 consequence logs, foreshadowing logs, world state snapshots,
 and rumour boards. Do not reorganise this file — it is
 updated by the world-evolution procedure.
+
+**Campaign-timeline.md** may exist at the vault root as an
+append-only session-by-session record of what happened. Do
+not reorganise or edit past entries — the timeline is the
+canonical record of collapsed reality.
 
 ## The Two Layers
 

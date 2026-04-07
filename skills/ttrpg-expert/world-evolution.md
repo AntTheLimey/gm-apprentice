@@ -229,14 +229,82 @@ Rumour (world): "A trade ship from the east arrived with
 ### After All Steps
 
 Present all proposals from steps 1-6 together, grouped by
-step. The GM confirms, modifies, or rejects each one. Only
-after GM approval, file the accepted updates to the chosen
-storage location. When filing, set `lastUpdated` and
-`asOfSession` to the current session number on every entity
-that changed (see entity-types.md Universal Fields).
+step. The GM confirms, modifies, or rejects each one.
 
-Suggest: "Updates filed. Would you like to run campaign-qa
-to validate, or proceed to session prep?"
+After GM approval, execute the filing protocol below.
+
+### Filing Protocol
+
+For each approved proposal, file the changes to the storage
+location chosen during the Storage Checkpoint.
+
+**New entities** (NPCs, locations, factions, items, threads
+introduced during play):
+1. Create an entity file using the schema in `entity-types.md`
+2. Set `source: "play"` (or `"prep"` if created during prep)
+3. Set `createdSession`, `lastUpdated`, and `asOfSession` to
+   the current session number
+4. Include all relevant attributes from the approved proposal
+
+**Changed entities** (existing NPCs, factions, items whose
+state changed):
+1. Update the entity file with the changed fields
+2. Set `lastUpdated` and `asOfSession` to the current session
+3. Do not overwrite unchanged fields
+
+**Timeline entry** — append to `campaign-timeline.md`:
+
+```markdown
+## Session [N] — [date]
+
+[One-line summary of what happened — the single sentence
+a GM would use to remind players next session]
+
+**Decisions:** [2-3 PC choices that changed campaign direction]
+**Introduced:** [New entity names — details live on entities]
+**Changed:** [Entity names with brief state change note]
+```
+
+Assemble this from the approved proposals — the summary
+comes from the key events, the decisions from faction turns
+and consequence surfacing, the introduced/changed lists from
+the entity filing above. This is not a separate writing task;
+it is a structured summary of what was just filed.
+
+### Filing Location by Configuration
+
+**Vault mode** (campaign-organizer available):
+- Entity files → hand to campaign-organizer for vault filing
+- `campaign-timeline.md` → vault root
+- `campaign-tracker.md` → vault root
+
+**Simple files mode** (no vault):
+- Use the following directory structure:
+
+```text
+campaign/
+  campaign-timeline.md
+  campaign-tracker.md
+  entities/
+    npcs/
+    locations/
+    factions/
+    items/
+    threads/
+    clues/
+```
+
+- One markdown file per entity, named after the entity
+- ttrpg-expert creates this structure on first use if it
+  does not exist
+
+**ttrpg-expert standalone** (only skill installed):
+- Same as simple files mode
+- ttrpg-expert uses `entity-types.md` as its schema guide
+- No dependency on campaign-organizer
+
+After filing, suggest: "Updates filed. Would you like to
+run campaign-qa to validate, or proceed to session prep?"
 
 ---
 

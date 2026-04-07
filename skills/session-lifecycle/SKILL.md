@@ -37,6 +37,9 @@ of a living campaign. This skill manages each stage.
   (npc-generation.md), and continuity checking
   (continuity-engine.md with Chekhov Protocol for stale
   threads and Canon Grounding for fact verification).
+  The world-evolution procedure now produces a timeline entry
+  as part of the filing step. The canonical timeline
+  (`campaign-timeline.md`) records collapsed reality.
 
 - **campaign-organizer** — Vault structure and entity
   management. When wrap-up produces new entities or scenes,
