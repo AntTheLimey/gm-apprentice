@@ -3,6 +3,15 @@
 Common patterns for organizing campaigns, preparing sessions,
 and maintaining continuity across game systems.
 
+**System-specific session procedures:** patterns here are
+system-agnostic. For system-specific post-session mechanics
+(faction clocks, XP, downtime), also read:
+- CoC 7e: `systems/coc-7e/session-procedures.md`
+- D&D 5e: `systems/dnd-5e-2024/session-procedures.md`
+- GURPS 4e: `systems/gurps-4e/session-procedures.md`
+- FitD: `systems/fitd/session-procedures.md` (coin, rep, heat,
+  entanglements, downtime, XP triggers)
+
 ## Campaign Structure
 
 | Level | Description | Duration |

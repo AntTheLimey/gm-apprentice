@@ -4,6 +4,13 @@ Terminology reference for tabletop RPGs. Use this file to
 resolve system-specific terms and map them to standard
 internal terminology.
 
+**System-specific rules:** for mechanics beyond terminology,
+read the relevant system reference:
+- CoC 7e: `systems/coc-7e/skills.md`, `combat-reference.md`
+- D&D 5e: `systems/dnd-5e-2024/conditions-rules.md`
+- GURPS 4e: `systems/gurps-4e/combat.md`, `mechanics.md`
+- FitD: `systems/fitd/rules-reference.md`
+
 ## GM Titles by System
 
 | Title | Abbreviation | Systems |

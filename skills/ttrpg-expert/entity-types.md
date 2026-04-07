@@ -3,6 +3,14 @@
 Schema guide for campaign entities. Used by ttrpg-expert and
 campaign-organizer for filing and updating campaign state.
 
+**System-specific field guidance:** schemas here are system-
+agnostic. For system-specific stat blocks, skill formats, and
+mechanical conventions, also read:
+- CoC 7e: `systems/coc-7e/occupations.md` (percentile stats)
+- D&D 5e: `systems/dnd-5e-2024/conditions-rules.md` (CR, proficiency)
+- GURPS 4e: `systems/gurps-4e/character-generation.md` (point-buy attributes)
+- FitD: `systems/fitd/factions.md` (tier, hold, clocks)
+
 ## Universal Fields
 
 Apply to **every** entity type. Enable temporal queries

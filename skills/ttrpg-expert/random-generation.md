@@ -5,6 +5,14 @@ and emergent content. Covers structured random generation
 (curated table entries) and procedural generation (rules
 producing novel combinations).
 
+**System-specific generation:** after rolling on tables here,
+read the relevant system file for stat blocks and mechanical
+grounding:
+- CoC 7e: `systems/coc-7e/occupations.md` (NPC stats, skill values)
+- D&D 5e: `systems/dnd-5e-2024/monsters.md` or `classes.md`
+- GURPS 4e: `systems/gurps-4e/character-generation.md`
+- FitD: `systems/fitd/factions.md` (NPC tier/action ratings)
+
 ## When to Use
 
 - **Improvisation:** PCs go somewhere unplanned, need content now
