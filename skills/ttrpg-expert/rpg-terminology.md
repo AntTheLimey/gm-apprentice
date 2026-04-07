@@ -6,7 +6,7 @@ internal terminology.
 
 **System-specific rules:** for mechanics beyond terminology,
 read the relevant system reference:
-- CoC 7e: `systems/coc-7e/skills.md`, `combat-reference.md`
+- CoC 7e: `systems/coc-7e/skills.md`, `systems/coc-7e/combat-reference.md`
 - D&D 5e: `systems/dnd-5e-2024/conditions-rules.md`
 - GURPS 4e: `systems/gurps-4e/combat.md`, `mechanics.md`
 - FitD: `systems/fitd/rules-reference.md`
@@ -24,7 +24,7 @@ read the relevant system reference:
 | Judge | Judge | DCC |
 | Warden | Warden | Mausritter, Cairn |
 
-Use "GM" as the standard term. Recognise all titles as the
+Use "GM" as the standard term. Recognize all titles as the
 same fundamental role.
 
 ## PC Titles by System

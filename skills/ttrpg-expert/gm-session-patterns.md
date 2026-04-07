@@ -136,9 +136,9 @@ Principle: cut into scenes late, cut out early.
 | State | Meaning |
 |-------|---------|
 | Unknown | No knowledge |
-| Mentioned | Know name/existence |
-| Met | Direct interaction |
-| Known | Significant information |
+| Rumoured | Heard about but unverified |
+| Observed | Directly witnessed |
+| Investigated | Actively examined and contextualized |
 | Understood | Full understanding |
 
 ## System-Specific Patterns

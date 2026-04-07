@@ -22,6 +22,7 @@ Apply to **every** entity type. Enable temporal queries
 | asOfSession | string | Session when current state was confirmed accurate |
 | createdSession | string | Session when first introduced |
 | source | string | How it entered canon: "play", "prep", or "backstory" |
+| confidence | string | Canon confidence: DRAFT / AUTHORITATIVE / SUPERSEDED |
 
 Always set `lastUpdated` and `asOfSession` to current session
 when filing or updating.

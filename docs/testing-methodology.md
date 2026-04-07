@@ -132,7 +132,7 @@ methodology doc in `docs/` is the persistent reference.
 | #8 | Compaction* | 42,533 | 41,371 | 48.1s | 45.9s | +15/75 | 59% smaller files, quality improved |
 | #9 | Compaction Pass 2* | 38,949 | 25,170 | 96.3s | 82.8s | +8/75 | 58% smaller (3 files), -35% tokens, system-native idiom improved |
 | #10 | Compaction Pass 3*† | 53,805 | 29,296 | 122.0s | 84.4s | -2/75 (median) | 50% smaller (6 files), -46% tokens, quality-neutral within variance |
-| #11 | Compaction Pass 4*‡ | 34,958 | 38,322 | 57.2s | 74.1s | +10.5/75 (avg) | 40% smaller (4 ref files) + cross-routing; routing drove +8 to +13 quality |
+| #11 | Compaction Pass 4*‡ | 34,958 | 38,322 | 57.2s | 74.1s | +10.5/75 (avg runs 2-3) | 40% smaller (4 ref files) + cross-routing; routing drove +8 to +13 quality |
 
 *Compaction control is pre-compaction (main), not no-skill.
 †3-run average; median delta -2, mean -4 (Run 1 outlier at -9).
