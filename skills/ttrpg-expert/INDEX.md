@@ -69,6 +69,7 @@ In the table below, `{system}` is one of: `dnd-5e-2024`,
 | **Cipher or coded message** | `handouts-and-props.md` | — |
 | **Random or procedural** content | `random-generation.md` | — |
 | **Post-session update** / world advancement / faction turns / consequence tracking | `world-evolution.md` | For system-specific faction turns: `systems/{system}/session-procedures.md` |
+| **Campaign timeline** / session recap / what happened | `campaign-timeline.md` (in vault root or campaign/) | — |
 | **Session prep** | `session-planner.md` | `gm-session-patterns.md` for frameworks, `scenario-writing.md` for player agency |
 | **PC arc planning or spotlight** | `session-planner.md` | — |
 | **Player agency review** | `session-planner.md` (Step 7) | `scenario-writing.md` for anti-patterns, `continuity-engine.md` for scan |
@@ -189,6 +190,9 @@ guidance as a fallback for unsupported systems.
   faction turns, consequence surfacing, thread management,
   foreshadowing tracking, discovery state updates. Run after
   every session to make the world respond to play.
+- `campaign-timeline.md` — Canonical campaign timeline:
+  append-only, one lean entry per session recording what
+  actually happened. Lives in vault root or campaign/.
 
 #### Content Generation (How to Create Content)
 

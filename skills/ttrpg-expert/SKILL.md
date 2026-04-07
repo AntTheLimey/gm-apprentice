@@ -216,6 +216,12 @@ changed after that session?"** / **"advance the world"**
   checklist. Present all proposed changes to the GM for
   approval before filing anything.
 
+**"What happened in session [N]?"** / **"campaign recap"** /
+**"timeline"** / **"what's the story so far?"**
+→ Read `campaign-timeline.md` from the campaign directory
+  or vault root. Summarise the requested session(s) or the
+  full campaign arc.
+
 
 ## Three Modes of Operation
 
