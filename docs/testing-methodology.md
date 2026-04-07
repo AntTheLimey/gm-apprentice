@@ -119,14 +119,22 @@ methodology doc in `docs/` is the persistent reference.
 
 ## Benchmark history
 
-| PR | Feature | Delta | Key finding |
-|----|---------|:-----:|-------------|
-| #3 | SRD Enrichment (CoC v3) | +23/72 | System-specific terms essential; BRP-generic caused regression |
-| #3 | SRD Enrichment (FitD) | +16/75 | Biggest win on least-known system (hallucination prevention) |
-| #3 | SRD Enrichment (D&D) | +9/75 | Mechanical precision improved |
-| #4 | Quick Commands | +22/75 (75/75 perfect) | Named frameworks >> general wisdom |
-| #5 | World Evolution v2 | +27/150 | Decisiveness guidance and CoC module fix flipped every question |
-| #5 | Impact Classification | +5/45 | Consistent teachable vocabulary |
-| #6 | Temporal Fields | +15/60 | Strongest per-question improvement (+3.75 avg) |
-| #7 | Canonical Timeline | +19/60 | Perfect 15/15 on fact-checking |
-| #8 | Compaction | +15/75 | 59% smaller files, quality improved — verbose prose dilutes signal |
+| PR | Feature | Ctrl Tokens | Test Tokens | Ctrl Time | Test Time | Quality Delta | Key finding |
+|----|---------|:-----------:|:-----------:|:---------:|:---------:|:------------:|-------------|
+| #3 | SRD (CoC v3) | 8,732 | 42,988 | 18.2s | 50.7s | +23/72 | System-specific terms essential; BRP-generic caused regression |
+| #3 | SRD (FitD) | 8,671 | 27,831 | 16.4s | 32.0s | +16/75 | Biggest win on least-known system (hallucination prevention) |
+| #3 | SRD (D&D) | 8,914 | 50,336 | 22.7s | 83.8s | +9/75 | Mechanical precision improved |
+| #4 | Quick Commands | 8,962 | 42,342 | 21.1s | 43.2s | +22/75 (75/75) | Named frameworks >> general wisdom |
+| #5 | World Evolution v2 | 10,710 | 44,123 | 57.0s | 124.7s | +27/150 | Decisiveness guidance flipped every question |
+| #5 | Impact Classification | 8,870 | 32,595 | 16.4s | 51.0s | +5/45 | Consistent teachable vocabulary |
+| #6 | Temporal Fields | 9,040 | 26,847 | 20.4s | 32.6s | +15/60 | Strongest per-question improvement (+3.75 avg) |
+| #7 | Canonical Timeline | 8,731 | 28,584 | 13.9s | 56.0s | +19/60 | Perfect 15/15 on fact-checking |
+| #8 | Compaction* | 42,533 | 41,371 | 48.1s | 45.9s | +15/75 | 59% smaller files, quality improved |
+
+*Compaction control is pre-compaction (main), not no-skill.
+
+**Averages (excluding compaction):**
+- Control: ~9,200 tokens, ~23s
+- Test: ~37,000 tokens, ~59s
+- Overhead: ~4x tokens, ~2.6x time
+- Quality delta: always positive (+5 to +27)
