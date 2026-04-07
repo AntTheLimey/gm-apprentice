@@ -1,380 +1,193 @@
 # NPC Generation
 
-Frameworks and procedures for generating NPCs across all
-supported game systems. This document covers quick-generation
-methods for improvised NPCs, deep-generation methods for
-recurring and antagonist NPCs, and system-specific stat block
-creation.
+Frameworks for generating NPCs across all supported systems.
+Quick methods for improvised NPCs, deep methods for recurring
+and antagonist NPCs, system-specific stat blocks.
 
-## Generation Philosophy
-
-NPC generation serves the narrative first and mechanics second.
-Every NPC exists because the campaign needs them, and their
-design should reflect their narrative purpose. A generated NPC
-should feel like a person the GM can inhabit at the table, not
-a stat block with a name attached.
-
-The generation process works outward from a core concept:
-
-1. **Purpose** answers why this NPC exists in the story.
-2. **Personality** answers how this NPC behaves.
-3. **Mechanics** answer what this NPC can do in game terms.
-
-Reversing this order (building stats first) produces NPCs that
-feel like game constructs rather than people.
+Generation order: Purpose (why they exist) → Personality
+(how they behave) → Mechanics (what they can do). Reversing
+this produces game constructs, not people.
 
 ## The 3-Line NPC (Quick Generation)
 
 For improvised or minor NPCs, define three elements:
 
-- **Appearance** is one sentence of distinctive physical detail.
-  Not a full description, but the one thing players will
-  remember. "A tall woman with ink-stained fingers and a
-  permanent squint" is better than a paragraph of height,
-  weight, hair colour, and clothing.
+- **Appearance:** one distinctive physical detail. "A tall
+  woman with ink-stained fingers and a permanent squint."
+- **Portrayal:** actionable behaviour the GM can perform.
+  "Speaks in questions, never makes statements."
+- **Hook:** story connection to the campaign. "Knows where
+  the cult meets but is terrified of being seen talking."
 
-- **Portrayal** is the NPC's personality expressed as a behaviour
-  the GM can perform at the table. Not a trait list, but an
-  actionable direction. "Speaks in questions, never makes
-  statements" or "laughs nervously before every sentence."
-
-- **Hook** is the story element that connects this NPC to the
-  campaign. What do they want, know, or fear that matters to
-  the PCs? "Knows where the cult meets but is terrified of
-  being seen talking to strangers."
-
-Record these three lines immediately. An unrecorded improvised
-NPC creates continuity errors on its next appearance.
+Record immediately. Unrecorded improvised NPCs create
+continuity errors.
 
 ## The AIMS Framework (Deep Generation)
 
-For recurring NPCs, antagonists, and quest-givers, use AIMS:
+For recurring NPCs, antagonists, and quest-givers.
 
-### Agenda
+**Agenda** — goals in three layers:
+- *Immediate:* what they want right now, this scene
+- *Short-term:* this week / this adventure
+- *Long-term:* campaign-spanning ambition
+- Goals at different layers can conflict (protect family vs
+  serve the cult = built-in tension)
 
-The NPC's goals, separated into layers:
+**Instinct** — reaction under pressure before rational planning:
+fight/flee/freeze/fawn; trusting/suspicious; generous/self-
+preserving; honest/deceptive.
 
-- **Immediate goal** is what they want right now, in this scene.
-  "Get the investigators to leave the library before closing."
+**Moves** — concrete observable actions advancing their agenda
+on a timeline: "Bribes harbour master for manifests." "Sends
+anonymous threatening letters." If PCs don't intervene, next
+move fires on schedule.
 
-- **Short-term goal** is what they are working toward this week
-  or this adventure. "Find the missing ledger before the
-  auditors arrive."
+**Secrets** — layered by discovery difficulty:
+- *Surface:* casual interaction ("limps slightly, tries to hide it")
+- *Investigation:* active effort ("limp from cult initiation wound")
+- *Deep:* significant investigation ("cult treasurer, launders
+  money through Merchant Guild")
 
-- **Long-term goal** is the ambition that defines their arc
-  across the campaign. "Become the next head of the Merchant
-  Guild."
+## Five-Component NPC (Scenario Writing)
 
-Goals at different layers can conflict with each other. An NPC
-whose immediate goal (protect my family) conflicts with their
-long-term goal (serve the cult) creates dramatic tension without
-the GM needing to force it.
+For NPCs in scenarios other GMs will run:
 
-### Instinct
+1. **Goal** — what they want
+2. **Plan** — how they intend to achieve it
+3. **Timeline** — when they act if unopposed
+4. **Reaction** — response if PCs intervene
+5. **Escalation** — what happens if PCs don't intervene
 
-How the NPC reacts under pressure, before they have time to
-think. Instinct is the emotional default:
+## Voice and Mannerism
 
-- Fight, flee, freeze, or fawn.
-- Trusting or suspicious.
-- Generous or self-preserving.
-- Honest or deceptive.
-
-Instinct matters because player actions often catch NPCs off
-guard. When the PCs kick down the door, the NPC's instinct
-determines the first beat of the scene before rational planning
-takes over.
-
-### Moves
-
-The concrete actions the NPC takes to pursue their agenda.
-Moves are specific and observable:
-
-- "Bribes the harbour master for shipping manifests."
-- "Sends anonymous threatening letters."
-- "Publicly discredits rivals at social gatherings."
-- "Hoards medical supplies during the plague."
-
-Moves advance the NPC's plans on a timeline. If the PCs do not
-intervene, the NPC takes their next move on schedule.
-
-### Secrets
-
-Information the NPC conceals, organised by discovery difficulty:
-
-- **Surface secret** is discoverable through casual interaction.
-  "She limps slightly, though she tries to hide it."
-
-- **Investigation secret** requires active effort to uncover.
-  "The limp is from a wound received at the cult's initiation."
-
-- **Deep secret** requires significant investigation or
-  confrontation. "She is the cult's treasurer and launders
-  their money through the Merchant Guild."
-
-Secrets create depth. An NPC with no secrets is transparent.
-An NPC with three layers of secrets rewards players who
-investigate further.
-
-## The Five-Component NPC (Scenario Writing)
-
-When writing NPCs for scenarios that other GMs will run, each
-significant NPC needs five components that enable the running GM
-to portray them effectively:
-
-1. **Goal** defines what the NPC wants to achieve.
-
-2. **Plan** describes how the NPC intends to achieve the goal.
-
-3. **Timeline** specifies when the NPC acts if left unopposed.
-
-4. **Reaction** describes how the NPC responds if PCs intervene.
-
-5. **Escalation** describes what happens if PCs do not intervene.
-
-This structure ensures the NPC functions as a dynamic element
-in the scenario regardless of what the PCs choose to do.
-
-## Voice and Mannerism Design
-
-### Speech Patterns
-
-Design one distinctive speech element per NPC:
+**Speech** — one distinctive element per NPC:
 
 | Pattern | Example |
 |---------|---------|
 | Always questions | "Is that so? And you think that's wise?" |
 | Formal diction | "One might consider the ramifications" |
-| Clipped and terse | "No. Won't work. Try again." |
+| Clipped/terse | "No. Won't work. Try again." |
 | Rambling tangents | "The bridge, yes, well, it reminds me of..." |
-| Specific verbal tic | "Allegedly" inserted into every claim |
-| Speaks in third person | "The Professor does not approve" |
+| Verbal tic | "Allegedly" inserted into every claim |
+| Third person | "The Professor does not approve" |
 | Whispers intensity | Drops volume for the most important words |
 
-### Physical Mannerisms
+**Mannerism** — limit to 1-2 per NPC: fidgets with object,
+avoids/forces eye contact, stands too close/far, drums fingers,
+adjusts clothing. Voice and mannerism should reinforce
+personality (contradictions only if intentional).
 
-Limit to one or two per NPC. More than two becomes a caricature:
+## Relationship Web
 
-- Fidgets with a specific object (ring, coin, pen).
-- Never makes eye contact, or makes too much.
-- Stands too close or maintains excessive distance.
-- Drums fingers when impatient.
-- Adjusts clothing nervously.
-- Always eating or drinking something.
-
-### Combining Voice and Mannerism
-
-The voice and mannerism should reinforce the NPC's personality.
-A nervous informant who whispers and fidgets with a cigarette
-lighter is coherent. A nervous informant who booms confidently
-and stands with hands on hips contradicts itself unless the
-contradiction is intentional (covering fear with bravado).
-
-## Relationship Web Generation
-
-When generating an NPC, immediately consider their relationships
-to existing campaign entities:
-
-### Relationship Questions
-
-- Who does this NPC report to or take orders from?
-- Who does this NPC trust with sensitive information?
-- Who does this NPC fear, resent, or avoid?
-- Who depends on this NPC for resources or protection?
-- Which factions benefit or suffer from this NPC's actions?
-- Which locations does this NPC frequent?
-- Which items does this NPC possess, guard, or seek?
-
-### Relationship Density
-
-The number of relationships signals an NPC's narrative importance:
+When generating, immediately consider relationships:
+- Reports to / takes orders from?
+- Trusts with sensitive info?
+- Fears, resents, avoids?
+- Who depends on them?
+- Which factions affected?
+- Locations frequented? Items possessed/sought?
 
 | NPC Importance | Relationships |
-|---------------|---------------|
-| Minor (walk-on) | 1-2 connections |
-| Supporting | 3-5 connections |
-| Major | 5-8 connections |
-| Antagonist | 6-10 connections |
+|---------------|:---:|
+| Minor (walk-on) | 1-2 |
+| Supporting | 3-5 |
+| Major | 5-8 |
+| Antagonist | 6-10 |
 
-An NPC with zero connections to existing entities is an orphan
-who exists in a vacuum. Either connect them or question whether
-they need to exist.
+Zero connections = orphan. Connect or question existence.
 
-## System-Specific NPC Generation
+## System-Specific Generation
 
-### Call of Cthulhu 7e NPCs
+### CoC 7e
 
-**Quick NPC (minor witness, bystander):**
+**Quick (minor):** name + occupation; 2-3 characteristics
+(avg 50, skilled 60-70, expert 75+); 2 relevant skills; 1
+trait + 1 secret.
 
-1. Name and occupation.
-2. Two or three characteristics at approximate values
-   (average 50, skilled 60-70, expert 75+).
-3. Two relevant skills with values.
-4. One personality trait and one secret.
+**Full (recurring):** all 8 characteristics (STR/CON/SIZ/DEX/
+APP/INT/POW/EDU, 15-90); derived stats (HP/MP/SAN/Luck/MOV/
+Build/DB); occupation skills; AIMS profile; sanity-relevant
+details (Mythos knowledge, what they've witnessed).
 
-**Full NPC (recurring investigator ally, key witness):**
+**Antagonist:** + Cthulhu Mythos skill + spells known +
+Mythos connection + plan/timeline/escalation + SAN loss for
+true nature.
 
-1. Roll or assign all eight characteristics (STR, CON, SIZ,
-   DEX, APP, INT, POW, EDU) within 15-90 range.
-2. Calculate derived stats (HP, MP, SAN, Luck, MOV, Build,
-   Damage Bonus).
-3. Assign occupation skills at appropriate values.
-4. Write AIMS profile.
-5. Define sanity-relevant details: what do they know about the
-   Mythos? What have they witnessed?
+### D&D 5e (2024)
 
-**Antagonist NPC (cultist, sorcerer, corrupted scholar):**
+**Quick:** name, species, occupation; standard stat block
+base (Commoner, Guard, Noble); 1 trait + 1 useful info.
 
-All of the above, plus:
-- Cthulhu Mythos skill value and what spells they know.
-- Their connection to the Mythos threat in the scenario.
-- Their plan, timeline, and escalation path.
-- SAN loss for witnessing their true nature (if applicable).
+**Full:** designed stat block with CR; ability scores per role;
+proficient skills + equipment; AIMS with quest hook; faction
+allegiances.
 
-### D&D 5e (2024 Revision) NPCs
+**Villain:** + Action-Oriented design (Colville/MCDM,
+https://mcdm.gg/) + Legendary Resistances (2-3) + lair
+actions + advancing timeline + minions/lieutenants.
 
-**Quick NPC (shopkeeper, guard, commoner):**
+### GURPS 4e
 
-1. Name, species, and occupation.
-2. Use a standard stat block (Commoner, Guard, Noble, etc.)
-   as a mechanical base.
-3. One personality trait and one useful piece of information.
+**Quick (25-50 pts):** name + concept; attributes near 10;
+1-2 advantages/disadvantages; 3-5 role-relevant skills.
 
-**Full NPC (quest-giver, ally, rival):**
+**Full (100-150 pts):** attributes per role; advantages for
+strengths/status; disadvantages for hooks/weaknesses; quirks
+(-1pt personality); skill list with levels; point total.
 
-1. Choose or design a stat block with appropriate CR.
-2. Assign ability scores that reflect their role.
-3. Select proficient skills and relevant equipment.
-4. Write AIMS profile with at least one quest hook.
-5. Note faction allegiances and attitude toward the party.
+**Major (200+ pts):** + detailed advantage/disadvantage
+interactions + combat secondaries + equipment lists +
+disadvantages actively driving behaviour.
 
-**Villain NPC (BBEG, arc antagonist):**
+### Forged in the Dark
 
-All of the above, plus:
-- Action-Oriented design (Matthew Colville / MCDM): boss monsters
-  should have scripted villain actions that create escalating
-  pressure across combat rounds, rather than just attacking each
-  turn. See Colville's Action-Oriented Monsters for the full
-  framework: https://mcdm.gg/
-- Legendary Resistances (2-3) to prevent early shutdown.
-- Lair actions if they have a stronghold.
-- A specific plan that advances on a timeline if PCs do not
-  intervene.
-- Minions and lieutenants with their own stat blocks.
+**Quick:** name + role (faction/district); 1-2 notable action
+ratings; vice + quirk; faction relationship (tier, status).
 
-### GURPS 4e NPCs
+**Full:** title + faction position; key action ratings (2-4
+at 1-3); stress threshold + existing trauma; clock (working
+toward what); what they want from crew + can offer; Devil's
+Bargains they might propose.
 
-**Quick NPC (25-50 points):**
-
-1. Name and concept.
-2. Four primary attributes (ST, DX, IQ, HT) at or near 10.
-3. One or two advantages and disadvantages that define them.
-4. Three to five skills relevant to their role.
-
-**Full NPC (100-150 points):**
-
-1. Set primary attributes based on role.
-2. Choose advantages that reflect their strengths and status.
-3. Choose disadvantages that create story hooks and weaknesses.
-4. Assign quirks (minor personality traits at -1 point each).
-5. Build skill list with levels reflecting competence.
-6. Calculate point total for balance reference.
-
-**Major NPC (200+ points):**
-
-All of the above, plus:
-- Detailed advantage/disadvantage interactions.
-- Combat-relevant secondary characteristics calculated.
-- Equipment and resource lists.
-- Disadvantages should actively drive their behaviour in play.
-
-### Forged in the Dark NPCs
-
-**Quick NPC:**
-
-1. Name and role (based on faction or district).
-2. One or two notable action ratings (what they are good at).
-3. A vice and a quirk.
-4. Their relationship to a faction (tier, status).
-
-**Full NPC (faction leader, score target):**
-
-1. Name, title, and faction position.
-2. Key action ratings (typically 2-4 ratings at 1-3).
-3. Stress threshold and any existing trauma.
-4. Their clock: what are they working toward?
-5. What they want from the crew and what they can offer.
-6. Devil's Bargains they might propose.
-
-## Generation Output Format
-
-When generating an NPC, produce the following structured output
-that the GM can use immediately:
+## Output Format
 
 ```
 ## [NPC Name]
+Concept: [One sentence]
+Appearance: [Distinctive detail]
+Portrayal: [How to play at table]
+Voice: [Speech pattern]
 
-**Concept:** [One-sentence summary]
-
-**Appearance:** [Distinctive physical detail]
-
-**Portrayal:** [How to play them at the table]
-
-**Voice:** [Speech pattern or verbal tic]
-
-**AIMS:**
-- Agenda: [Immediate / Short-term / Long-term goals]
-- Instinct: [Default reaction under pressure]
-- Moves: [2-3 specific actions they take]
+AIMS:
+- Agenda: [Immediate / Short-term / Long-term]
+- Instinct: [Under pressure]
+- Moves: [2-3 specific actions]
 - Secrets: [Surface / Investigation / Deep]
 
-**Relationships:**
-- [Entity]: [Relationship type and description]
+Relationships:
+- [Entity]: [Type + description]
 
-**Stat Block:** [System-specific mechanics]
-
-**GM Notes:** [Additional context for running this NPC]
+Stat Block: [System-specific]
+GM Notes: [Running context]
 ```
 
 ## Generation from Constraints
 
-When the user provides partial information, the generation
-process fills gaps while respecting constraints:
-
-- If the user specifies a role ("I need a corrupt judge"), the
-  generation builds outward from that role.
-- If the user specifies a relationship ("someone who betrayed
-  Faction X"), the generation builds the NPC's history around
-  that event.
-- If the user specifies a mechanical need ("a CR 5 spellcaster"),
-  the generation builds the stat block first, then wraps
-  personality around the mechanical framework.
-- If the user provides a name only, the generation infers
-  setting-appropriate characteristics from the name and the
-  campaign context.
-
-Always ask clarifying questions when the user's intent is
-ambiguous, but generate something usable even with minimal input.
+When user provides partial info, fill gaps while respecting
+constraints. Role specified → build from role. Relationship
+specified → build history around it. Mechanical need → stat
+block first, wrap personality. Name only → infer from setting.
+Always generate something usable even with minimal input.
 
 ## Sources
 
-- Johnn Four, The 3 Line NPC (Roleplaying Tips).
-- Mike Shea, NPC Generation (Sly Flourish).
-- The Alexandrian, Proactive NPC Design.
-- Robin D. Laws, DramaSystem Relationship Mapping.
-- Keith Ammann, The Monsters Know What They're Doing.
-- Chaosium, Call of Cthulhu Keeper Rulebook.
-- Steve Jackson Games, GURPS Basic Set: Characters.
-- John Harper, Blades in the Dark SRD.
-- Wizards of the Coast, 2024 Dungeon Master's Guide.
+Johnn Four (3 Line NPC); Sly Flourish (NPC Generation); The
+Alexandrian (Proactive NPC Design); Robin Laws (DramaSystem);
+Keith Ammann (Monsters Know); Chaosium (CoC Keeper Rulebook);
+SJG (GURPS Characters); John Harper (BitD SRD); WotC (2024 DMG).
 
 ## External References
 
-When you need the full detail of a framework referenced above,
-fetch the original source at runtime. Do not reproduce the
-content — summarize what you learn in your own words for the
-user.
-
-- **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)
-- **3-Line NPC:** https://roleplayingtips.com/ (Johnn Four)
-- **Dhole's House Character Library:** https://www.dholeshouse.org/ — Official Chaosium NPC/character library and generator for Call of Cthulhu 7e
+- **Action-Oriented Monsters:** https://mcdm.gg/
+- **3-Line NPC:** https://roleplayingtips.com/
+- **Dhole's House Character Library:** https://www.dholeshouse.org/

@@ -1,413 +1,218 @@
 # Scene and Encounter Structure Patterns
 
-Practical patterns for designing, framing, and running scenes and
-encounters across TTRPG systems. This document covers scene types,
-framing techniques, encounter design principles, pacing, and
-system-specific patterns.
+Practical patterns for designing, framing, and running scenes
+and encounters. Covers scene types, framing, encounter design,
+pacing, and system-specific patterns.
 
-## Scene Types and Templates
+## Scene Types
 
 ### Combat Encounters
 
-Combat scenes pit characters against hostile forces. Effective
-combat encounters go beyond stat blocks and challenge ratings.
+**Setup:** objective beyond "kill all enemies" (protect NPC,
+hold position, escape, retrieve object, stop ritual).
+Environment with cover, elevation, hazards, chokepoints.
+Enemies have motivation and a plan. Plan for PC loss/flee/negotiate.
 
-**Setup Checklist:**
+**Running:** enemies use tactics (ranged stay back, brutes
+close, casters behind minions). Environment changes mid-fight
+(fires spread, supports collapse, reinforcements). End when
+outcome decided, not when every enemy hits 0 HP.
 
-- Define the objective beyond "kill all enemies" (protect an NPC,
-  hold a position, escape, retrieve an object, stop a ritual).
-- Establish the environment with interactive elements: cover,
-  elevation, hazards, chokepoints, darkness, difficult terrain.
-- Give enemies a motivation and a plan. Enemies want something
-  and act intelligently toward that goal.
-- Determine what happens if the PCs lose, flee, or negotiate.
-
-**Running Principles:**
-
-- Enemies use tactics: ranged attackers stay at range, brutes
-  close distance, spellcasters protect themselves with minions.
-- The environment changes during combat: fires spread, supports
-  collapse, reinforcements arrive, weather shifts.
-- End combat when the outcome is decided, not when every enemy
-  reaches zero HP. Enemies surrender, flee, or regroup.
-
-**Resolution:**
-
-- Consequences follow from the fight: noise draws attention,
-  injuries limit future actions, alliances shift.
-- Loot and information emerge naturally from the scene.
+**Resolution:** consequences follow (noise, injuries, alliance
+shifts). Loot/info emerge naturally.
 
 ### Social Encounters
 
-Social scenes involve negotiation, persuasion, deception, or
-information gathering through conversation.
-
-**Structure:**
-
-1. Establish the NPC's goal, personality, and disposition.
-2. Present the stakes: what the PCs want and what the NPC wants.
+1. Establish NPC goal, personality, disposition
+2. Present stakes: what PCs want, what NPC wants
 3. Allow multiple approaches: charm, intimidation, bribery,
-   deception, appeal to shared interest.
-4. Track disposition shifts during the conversation rather than
-   resolving everything in a single roll.
+   deception, shared interest
+4. Track disposition shifts across conversation, not single roll
 
-**Key Techniques:**
-
-- Give NPCs a "price" they will accept and a "line" they will
-  not cross. This creates negotiation space.
-- Social encounters should change the world state: alliances
-  form, information flows, favours are owed.
-- Allow partial success. An NPC might share some information
-  but withhold a critical detail.
+Give NPCs a "price" (will accept) and a "line" (won't cross).
+Allow partial success. Social encounters should change world
+state.
 
 ### Open Interaction Windows
 
-Most structured scenes — social events, investigations,
-briefings, travel — contain a period of unstructured time
-before the scene's central event or revelation. This is the
-**open interaction window**: a sandbox phase where the PCs
-choose what to do, who to talk to, and what to observe
-before events take a fixed shape.
+Unstructured time before a scene's central event — PCs choose
+what to do, who to talk to, what to observe. Essential for
+player agency.
 
-Open interaction windows are essential for player agency.
-Without them, scenes feel railroaded: the PCs arrive, the
-scripted event happens, and the PCs react. With them, PCs
-arrive, explore the space on their own terms, and then the
-scripted event interrupts whatever they were already doing —
-which is dramatically richer because the interruption
-disrupts their chosen activity.
+**Include in:** social venues, travel to location, any scene
+with NPCs present before key event, planning/briefing scenes.
 
-**When to include an open interaction window:**
+**Must contain:**
+1. **Physical space** — exits, furniture, lighting, sightlines
+2. **Available NPCs** — who's present, what each offers if
+   approached (conditional language: "If a PC approaches Anna...")
+3. **Observable details** — passive vs active observation
+   (Spot Hidden, Listen, Psychology)
+4. **Timing** — real table time, transition trigger ("Allow
+   15-20 min mingling before the Countess calls for quiet")
+5. **Transition** — NPC action or environmental change closes
+   the window (not GM fiat)
 
-- Any scene set in a social venue (salon, ball, tavern,
-  market, court reception, dinner party)
-- Any scene involving travel to a location (the journey
-  itself is an interaction window)
-- Any scene where NPCs are present and available before
-  the scene's key event fires
-- Any briefing or planning scene where the PCs have time
-  to prepare
+**Failure mode:** omitting the window entirely, jumping from
+"who is present" to "key event." Every structured social scene
+needs at least a brief window.
 
-**What an open interaction window must contain:**
-
-1. **The physical space.** Describe the room, venue, or
-   location in enough detail for PCs to interact with it:
-   exits, furniture, food and drink, lighting, atmosphere,
-   sightlines, and tactical features. Players cannot engage
-   with a space they cannot visualise.
-
-2. **Available NPCs and interactions.** List every NPC
-   present and what they are doing. For each, describe what
-   a PC who approaches them can learn, observe, or
-   accomplish. Use conditional language: "If a PC approaches
-   Anna, she is polite but distracted." Include relevant
-   skill checks.
-
-3. **Observable details.** What can PCs notice passively?
-   What requires active observation (Spot Hidden, Listen,
-   Psychology)? Information gathered during the open window
-   should create context for the scripted event that follows.
-
-4. **Timing guidance.** Tell the Keeper how long to let the
-   window run (in real table time) and what triggers the
-   transition to the scripted event. Example: "Allow 15-20
-   minutes of mingling before the Countess calls for quiet."
-   Include flexibility: "If conversation is flowing, extend.
-   If players are eager, compress."
-
-5. **The transition.** Describe how the open window closes
-   and the structured event begins. This should be an NPC
-   action or environmental change, not a GM fiat: "The
-   Countess strikes her glass with a silver spoon and the
-   room falls silent" rather than "the GM tells the players
-   the performance is about to begin."
-
-**Common failure mode:** Omitting the open window entirely
-and jumping from "who is present" to "the key event." This
-denies players the chance to gather information, observe
-NPCs, or position themselves before things happen. Every
-structured social scene needs at least a brief interaction
-window, even if it is only 5 minutes of table time.
-
-(Reference: Justin Alexander, "Don't Prep Plots, Prep
-Situations" — the open interaction window is where
-situation-based design lives within a structured scene.)
+Ref: Justin Alexander, "Don't Prep Plots, Prep Situations."
 
 ### Investigation Scenes
 
-Investigation scenes are the backbone of mystery-driven games.
-The core challenge is interpretation of clues, not finding them.
+**Three Clue Rule** (The Alexandrian): for any conclusion PCs
+need, include ≥3 independent clues across ≥2 nodes.
 
-**The Three Clue Rule (Justin Alexander / The Alexandrian):**
+Anti-patterns: never gate progress behind single check; never
+include scenes that look investigative but reveal nothing;
+avoid deliberate red herrings (players generate their own).
 
-For any conclusion PCs need to reach, include at least three
-independent clues. Players will miss the first, ignore the
-second, and misinterpret the third. Alexander categorises
-clues by how players encounter them — ranging from those
-found passively through searching to those that come to the
-PCs directly.
-
-Full article: https://thealexandrian.net/
-
-**Anti-Patterns:**
-
-- Never gate progress behind a single skill check.
-- Never include scenes that look like investigation but reveal
-  nothing.
-- Avoid red herrings. Players generate their own false leads.
-
-**Fail Forward:** When a skill check fails, the PCs still get
-the information but with a complication: they are noticed, it
-takes longer, they get a partial version, or they arrive at the
-next location already in trouble.
+**Fail Forward:** failed check → PCs still get info but with
+complication (noticed, takes longer, partial version, arrive
+in trouble).
 
 ### Exploration Scenes
 
-**Description Techniques:**
-
-- Use three distinctive sensory details per location: what they
-  see, hear, and smell or feel.
-- Describe what is unusual or different, not the mundane.
-- Let players ask questions to uncover more detail rather than
-  front-loading narration.
-
-**Pacing:**
-
-- Montage through empty or safe areas.
-- Slow down for discovery: a hidden chamber, a strange
-  inscription, an unexpected vista.
-- Use random encounters sparingly and only when they advance
-  the story or build tension.
+- 3 distinctive sensory details per location (see, hear,
+  smell/feel)
+- Describe the unusual, not the mundane
+- Montage through safe/empty areas; slow down for discovery
+- Random encounters only when they advance story or build tension
 
 ### Downtime Scenes
 
-Downtime handles what happens between adventures: healing,
-crafting, training, socialising, and personal projects.
-
-- Give players structured choices: spend time, money, or social
-  capital.
-- Connect downtime to ongoing narrative. Training with a mentor
-  builds a relationship.
-- Ask character-driven questions: "What does your character do
-  when they can't sleep?"
+Structured choices: spend time, money, or social capital.
+Connect to ongoing narrative. Ask character-driven questions.
 
 ### Chase Scenes
 
-- Keep chases short: 3-4 rounds typical, 6-7 for a long one.
-- The environment is the real adversary. Obstacles, crowds,
-  terrain changes create the drama.
-- Give both sides meaningful choices each round.
-- Use progress clocks or distance tracks to visualise the gap.
-- End the chase when the gap closes or opens decisively.
+3-4 rounds typical (6-7 extended). Environment is the real
+adversary. Meaningful choices each round. Progress clocks or
+distance tracks to visualise gap. End when gap closes or
+opens decisively.
 
 ### Puzzle and Trap Scenes
 
-**Puzzles:**
+**Puzzles:** multiple solution paths, environmental clues,
+time pressure.
+**Traps:** discoverable, disarmable. Best traps force choices:
+disarm slowly or rush and accept risk.
 
-- Provide multiple solution paths.
-- Include environmental clues pointing toward the solution.
-- Set a time pressure or consequence for delay.
+## Scene Framing
 
-**Traps:**
+### Opening
 
-- Traps should be discoverable and disarmable.
-- The best traps force choices: disarm slowly and safely, or
-  rush through and accept the risk.
+- **Identify Agenda:** every scene answers a question or
+  resolves a situation. No agenda → scene may not need to exist.
+- **Deliver the Bang:** catalyst demanding response. Cut close
+  to the moment of decision.
+- **Cut In Late:** skip travel, small talk, logistics. Start
+  mid-argument, not walking to the tavern.
 
-## Scene Framing Techniques
+### Ending
 
-### Opening a Scene
+- **Cut On Resolution:** end within one minute of agenda resolved.
+- **Cut On Second Lull:** first lull is pivot; second means done.
+- **Cliffhangers:** end at maximum tension before resolution.
 
-**Identify the Agenda.** Every scene exists to answer a question
-or resolve a situation. If you cannot state the agenda, the
-scene may not need to exist.
-
-**Deliver the Bang.** The bang is the catalyst that demands a
-response. Cut as close to the moment of decision as possible.
-
-**Cut In Late.** Skip travel, small talk, and logistics unless
-they are the scene. Start mid-argument inside the tavern, not
-walking toward it.
-
-### Ending a Scene
-
-**Cut On Resolution.** End the scene within one minute of the
-agenda being resolved.
-
-**Cut On the Second Lull.** The first lull is often a pivot. The
-second signals the scene has run its course.
-
-**Use Cliffhangers.** End at maximum tension, before the
-resolution is known.
-
-**The Ken Hite Signal.** When players have extracted all available
-information, signal it clearly.
-
-### Transitions Between Scenes
+### Transitions
 
 | Type | Description | Use When |
 |------|-------------|----------|
-| Slow Time | Real time exceeds game time | Extended contests |
-| Now Time | Real time matches game time | Standard play |
+| Slow Time | Real time > game time | Extended contests |
+| Now Time | Real time = game time | Standard play |
 | Abstract Time | "Several days pass..." | Bridging scenes |
-| Sharp Cut | Jump directly to next action | Maximum momentum |
+| Sharp Cut | Jump to next action | Maximum momentum |
 
-### When to Call a Scene Break
-
-- The agenda is resolved and no new agenda has emerged.
-- The energy in the room has dropped noticeably.
-- A dramatic moment has peaked.
-- The focus needs to shift to different characters.
-
-## Encounter Design Principles
+## Encounter Design
 
 ### Situation-Based Design (Sly Flourish)
 
-Design situations, not scenes. A situation lays out components
-that create a scene when characters interact with it.
-
-**Situation Checklist:**
-
-1. **Location** - Multiple paths and exploration rewards.
-2. **Inhabitants** - Mix creature types. Include friendly NPCs.
-3. **Behaviours** - Activity patterns independent of players.
-4. **Goal** - The characters' primary objective.
-5. **Complications** - 2-3 potential complications.
+Design situations, not scenes. Checklist:
+1. **Location** — multiple paths, exploration rewards
+2. **Inhabitants** — mix types, include friendly NPCs
+3. **Behaviours** — activity patterns independent of players
+4. **Goal** — PC primary objective
+5. **Complications** — 2-3 potential complications
 
 ### The Monsters Know What They're Doing
 
-Every creature has a motivation: what it wants, what it fears,
-and what it will do to survive.
+Every creature has motivation: what it wants, fears, and will
+do to survive. Territory defenders use environment. Bosses
+surround themselves with complementary minions.
 
-- Creatures defending territory use the environment: chokepoints,
-  elevation, darkness, cover.
-- Boss monsters surround themselves with minions that fill
-  tactical roles the boss lacks.
+### Action-Oriented Design (Colville/MCDM)
 
-### Action-Oriented Encounter Design
-
-Matthew Colville (MCDM) developed the Action-Oriented Monster concept.
-The core insight is that boss monsters should have scripted villain
-actions that create escalating pressure across combat rounds, rather
-than just attacking each turn. This transforms solo boss fights from
-static damage exchanges into dynamic, memorable encounters.
-
-See Colville's Action-Oriented Monsters for the full framework:
-https://mcdm.gg/
+Boss monsters get scripted villain actions creating escalating
+pressure across rounds. See: https://mcdm.gg/
 
 ### Multi-Stage Encounters
 
-**Three-Stage Framework:**
+1. **Setup** — establish threat and environment
+2. **Complication** — reinforcements, terrain shift, revelation,
+   betrayal
+3. **Payoff** — highest stakes, decisive outcome
 
-1. **Setup** - Establish threat and environment.
-2. **Complication** - Reinforcements, environmental shift,
-   revelation, or betrayal.
-3. **Payoff** - Stakes are highest, outcome is decisive.
-
-**Escalation Techniques:**
-
-- The arena changes: floor collapses, water rises, fire spreads.
-- New information emerges that changes the moral calculus.
-- The boss shifts forms, tactics, or abilities between stages.
+Escalation: arena changes (floor collapses, water rises); new
+info changes moral calculus; boss shifts forms/tactics.
 
 ## Node-Based Scenario Design (The Alexandrian)
 
-Justin Alexander's node-based design structures scenarios as
-networks of interconnected nodes — locations, people, events,
-organisations, activities — linked by clues. Instead of a
-linear sequence, players choose which nodes to visit, and the
-clues they find point them toward other nodes. The Three Clue
-Rule applies at the node level: each node should be reachable
-via at least three clues from other nodes.
+Scenarios as networks of interconnected nodes (locations,
+people, events) linked by clues. Multiple paths through;
+Three Clue Rule at node level. See: https://thealexandrian.net/
 
-Full framework: https://thealexandrian.net/
+**Inverted Three Clue Rule:** if PCs access any three clues
+across all nodes, they reach at least one valid conclusion.
 
-**The Inverted Three Clue Rule:** If PCs have access to any
-three clues across all nodes, they will reach at least one
-valid conclusion. Design clue density to ensure this threshold
-is met regardless of which nodes PCs visit.
+## Pacing
 
-## Pacing Within Scenes
+**Speed up:** montage routine actions, skip to interesting
+part, batch similar actions, summarise known outcomes.
 
-### When to Speed Up
+**Slow down:** dramatic character decisions, significant
+revelations, combat turning points, emotional NPC interactions.
 
-- Montage through routine actions.
-- Skip to the interesting part when no meaningful choices remain.
-- Batch similar actions.
-- Summarise known outcomes.
-
-### When to Slow Down
-
-- A player is making a dramatic character decision.
-- The scene involves a significant revelation.
-- Combat reaches a turning point.
-- An NPC interaction has emotional weight.
-
-### Spotlight Management
-
-- Rotate focus deliberately after resolving each PC's moment.
-- Track who has not spoken recently and create openings.
-- During split-party scenes, cut between groups at tension, not
-  resolution.
+**Spotlight:** rotate focus after each PC's moment, track who
+hasn't spoken, cut between split groups at tension not
+resolution.
 
 ### Improv Response Framework
 
-| Response | When to Use | Example |
-|----------|-------------|---------|
-| Yes, and | Accept and expand | "Yes, the wall is climbable, and you notice a window" |
-| Yes, but | Accept with complication | "Yes, you pick the lock, but it triggers an alarm" |
-| No, but | Deny with alternative | "The door is sealed, but there's a ventilation shaft" |
-| No, and | Deny and escalate (rare) | "The spell fails, and the backlash alerts guards" |
+| Response | When | Example |
+|----------|------|---------|
+| Yes, and | Accept + expand | "Yes, climbable, and you notice a window" |
+| Yes, but | Accept + complication | "Yes, lock picked, but triggers alarm" |
+| No, but | Deny + alternative | "Door sealed, but there's a vent shaft" |
+| No, and | Deny + escalate (rare) | "Spell fails, backlash alerts guards" |
 
-## Practical Checklists
+## Checklists
 
-### Scene Design Checklist
+**Scene Design:** 1) Agenda in one sentence. 2) Who's present,
+what they want. 3) Opening technique. 4) 2-3 possible outcomes.
+5) Closing trigger.
 
-1. State the scene's agenda in one sentence.
-2. Identify who is present and what they want.
-3. Choose the opening technique (cut in late, bang, threshold).
-4. List 2-3 possible outcomes.
-5. Prepare the closing trigger.
+**Encounter Design:** 1) Objective beyond "defeat all." 2)
+Environment with 3 interactive elements. 3) Enemy motivation
+and tactics. 4) Mid-encounter complication. 5) Consequences
+of success, failure, flight. 6) System-appropriate difficulty.
 
-### Encounter Design Checklist
-
-1. Define the objective beyond "defeat all enemies."
-2. Design the environment with 3 interactive elements.
-3. Give each enemy a motivation and basic tactical plan.
-4. Prepare a complication for mid-encounter.
-5. Determine consequences of success, failure, and flight.
-6. Set difficulty using system-appropriate benchmarks.
-
-### Investigation Scene Checklist
-
-1. State the conclusion PCs should reach.
-2. Write at least three clues pointing to that conclusion.
-3. Place clues across at least two different nodes.
-4. Include one proactive clue that comes to the PCs.
-5. Prepare a fail-forward result for each skill-gated clue.
+**Investigation:** 1) State needed conclusion. 2) ≥3 clues
+pointing there. 3) Across ≥2 nodes. 4) One proactive clue.
+5) Fail-forward for each skill-gated clue.
 
 ## Sources
 
-- Mike Shea (Sly Flourish), The Lazy Dungeon Master.
-- Justin Alexander (The Alexandrian), The Three Clue Rule and
-  Node-Based Scenario Design.
-- John Harper, Blades in the Dark SRD.
-- Keith Ammann, The Monsters Know What They're Doing.
-- Matthew Colville, Action-Oriented Monster Design.
-- Robin Laws, GUMSHOE System and Robin's Laws of Good
-  Game Mastering (2002).
-- Chaosium, Call of Cthulhu Keeper's Rulebook.
-- Steve Jackson Games, GURPS Basic Set.
-- Wizards of the Coast, 2024 Dungeon Master's Guide.
+Sly Flourish (Lazy DM); The Alexandrian (Three Clue Rule,
+Node-Based Design); John Harper (BitD SRD); Keith Ammann
+(Monsters Know); Matthew Colville (Action-Oriented Monsters);
+Robin Laws (GUMSHOE, Robin's Laws); Chaosium (CoC Keeper's
+Rulebook); SJG (GURPS Basic Set); WotC (2024 DMG).
 
 ## External References
 
-When you need the full detail of a framework referenced above,
-fetch the original source at runtime. Do not reproduce the
-content — summarize what you learn in your own words for the
-user.
-
-- **Action-Oriented Monsters:** https://mcdm.gg/ (Matthew Colville / MCDM)
-- **Three Clue Rule:** https://thealexandrian.net/wordpress/1118/roleplaying-games/three-clue-rule (Justin Alexander)
-- **Node-Based Scenario Design:** https://thealexandrian.net/wordpress/7949/roleplaying-games/node-based-scenario-design-part-1-the-basics (Justin Alexander)
-- **The Monsters Know What They're Doing:** https://themonstersknow.com/ (Keith Ammann)
+- **Action-Oriented Monsters:** https://mcdm.gg/
+- **Three Clue Rule:** https://thealexandrian.net/wordpress/1118/roleplaying-games/three-clue-rule
+- **Node-Based Scenario Design:** https://thealexandrian.net/wordpress/7949/roleplaying-games/node-based-scenario-design-part-1-the-basics
+- **The Monsters Know:** https://themonstersknow.com/
