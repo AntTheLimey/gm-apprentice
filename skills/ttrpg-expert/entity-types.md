@@ -1,66 +1,56 @@
 # Entity Types
 
-Comprehensive guide to Imagineer entity types.
+Schema guide for campaign entities. Used by ttrpg-expert and
+campaign-organizer for filing and updating campaign state.
+
+**System-specific field guidance:** schemas here are system-
+agnostic. For system-specific stat blocks, skill formats, and
+mechanical conventions, also read:
+- CoC 7e: `systems/coc-7e/occupations.md` (percentile stats)
+- D&D 5e: `systems/dnd-5e-2024/conditions-rules.md` (CR, proficiency)
+- GURPS 4e: `systems/gurps-4e/character-generation.md` (point-buy attributes)
+- FitD: `systems/fitd/factions.md` (tier, hold, clocks)
 
 ## Universal Fields
 
-These fields apply to **every** entity type. They provide
-temporal context so the GM and companion skills can track
-when information was established and whether it's current.
+Apply to **every** entity type. Enable temporal queries
+("what changed in session 5?", "which entities are stale?").
 
 | Field | Type | Description |
 |-------|------|-------------|
-| lastUpdated | string | Session number or date when this entity was last modified (e.g., "Session 7" or "2026-04-06") |
-| asOfSession | string | Session number when this entity's current state was confirmed accurate. If asOfSession is much older than the current session, the entity may need review. |
-| createdSession | string | Session number when this entity was first introduced to the campaign |
-| source | string | How this entity entered canon: "play" (emerged during a session), "prep" (created during session prep), "backstory" (part of initial campaign setup) |
+| lastUpdated | string | Session number or date of last modification |
+| asOfSession | string | Session when current state was confirmed accurate |
+| createdSession | string | Session when first introduced |
+| source | string | How it entered canon: "play", "prep", or "backstory" |
+| confidence | string | Canon confidence: DRAFT / AUTHORITATIVE / SUPERSEDED |
 
-When filing or updating any entity, always set `lastUpdated`
-and `asOfSession` to the current session. Campaign-organizer
-should preserve these fields when reorganising.
-
-These fields enable temporal queries: "show me everything
-that changed in session 5," "which entities haven't been
-updated since session 3?" and "what was the faction's state
-as of session 4?"
+Always set `lastUpdated` and `asOfSession` to current session
+when filing or updating.
 
 ## Core Entity Types
 
-### NPC (Non-Player Character)
-
-People controlled by the Game Master.
-
-**Common Attributes:**
+### NPC
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | occupation | string | Job or role |
 | age | number | Character age |
 | gender | string | Character gender |
-| nationality | string | Origin/nationality |
-| characteristics | object | Game-system stats |
+| nationality | string | Origin |
+| characteristics | object | System stats |
 | skills | array | Skill list |
 | motivations | array | Goals and drives |
 | secrets | string | Hidden information |
-
-**Example:**
 
 ```json
 {
     "name": "Dr. Henry Armitage",
     "type": "npc",
-    "description": "Head librarian at Miskatonic University",
     "attributes": {
         "occupation": "Librarian",
         "age": 65,
-        "characteristics": {
-            "INT": 85,
-            "EDU": 90
-        },
-        "skills": [
-            {"name": "Library Use", "value": 90},
-            {"name": "Occult", "value": 60}
-        ]
+        "characteristics": {"INT": 85, "EDU": 90},
+        "skills": [{"name": "Library Use", "value": 90}]
     },
     "gmNotes": "Knows about the Necronomicon"
 }
@@ -68,113 +58,43 @@ People controlled by the Game Master.
 
 ### Location
 
-Places where action occurs.
-
-**Common Attributes:**
-
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | locationType | string | Building, outdoor, etc. |
 | address | string | Physical location |
-| size | string | Scale description |
-| atmosphere | string | Mood/feeling |
+| size | string | Scale |
+| atmosphere | string | Mood |
 | inhabitants | array | Who's here |
 | points_of_interest | array | Notable features |
 | secrets | string | Hidden aspects |
 
-**Example:**
-
-```json
-{
-    "name": "Orne Library",
-    "type": "location",
-    "description": "Gothic library at Miskatonic University",
-    "attributes": {
-        "locationType": "Building",
-        "address": "Miskatonic University, Arkham",
-        "atmosphere": "Scholarly, dusty, ominous"
-    }
-}
-```
-
 ### Item
-
-Objects, artifacts, and equipment.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | itemType | string | Weapon, book, artifact, etc. |
 | value | string | Worth/rarity |
-| origin | string | Where it came from |
+| origin | string | Provenance |
 | properties | object | Special abilities |
 | currentHolder | string | Who has it |
 
-**Example:**
-
-```json
-{
-    "name": "The Necronomicon",
-    "type": "item",
-    "description": "Blasphemous tome of forbidden knowledge",
-    "attributes": {
-        "itemType": "Tome",
-        "value": "Priceless",
-        "properties": {
-            "sanityLoss": "1d10/2d10",
-            "mythosGain": "+15%"
-        }
-    }
-}
-```
-
 ### Faction
-
-Groups with shared goals.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| factionType | string | Cult, organization, etc. |
+| factionType | string | Cult, org, etc. |
 | goals | array | Objectives |
 | resources | string | Available power |
 | leadership | string | Who's in charge |
 | territory | string | Area of influence |
 | tier | number | Power level (FitD) |
-| currentPlan | string | What they're actively working toward |
-| planProgress | string | Clock value, narrative stage, or percentage |
-| alliances | array | Current allies and enemies |
-| recentActions | array | What they did in last 1-3 sessions |
+| currentPlan | string | Active objective |
+| planProgress | string | Clock value or stage |
+| alliances | array | Current allies/enemies |
+| recentActions | array | Last 1-3 sessions |
 | status | string | active / weakened / destroyed / allied / dormant |
 
-**Example:**
-
-```json
-{
-    "name": "The Esoteric Order of Dagon",
-    "type": "faction",
-    "description": "Cult serving the Deep Ones",
-    "attributes": {
-        "factionType": "Cult",
-        "goals": ["Summon Deep Ones", "Convert Innsmouth"],
-        "leadership": "Obed Marsh",
-        "territory": "Innsmouth",
-        "currentPlan": "Prepare the summoning ritual at Devil Reef",
-        "planProgress": "3/6 — ritual components gathered",
-        "alliances": ["Deep Ones"],
-        "recentActions": ["Recruited new acolytes from the waterfront"],
-        "status": "active"
-    }
-}
-```
-
 ### Clue
-
-Investigation elements.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
@@ -182,74 +102,25 @@ Investigation elements.
 | foundAt | string | Location discovered |
 | foundBy | string | Who found it |
 | leadsTo | array | What it reveals |
-| reliability | string | How trustworthy |
-| discoveryState | object | Per-PC knowledge: {"PC name": "Unknown/Rumoured/Observed/Investigated/Understood"} |
-
-**Example:**
-
-```json
-{
-    "name": "Bloodstained Letter",
-    "type": "clue",
-    "description": "Letter found at the crime scene",
-    "attributes": {
-        "clueType": "Physical",
-        "foundAt": "Victim's study",
-        "leadsTo": ["Cult meeting location"],
-        "discoveryState": {
-            "Dr. Voss": "Investigated",
-            "Jack Riley": "Rumoured"
-        }
-    }
-}
-```
+| reliability | string | Trustworthiness |
+| discoveryState | object | Per-PC: `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}` |
 
 ### Thread
-
-Active narrative elements tracked across sessions.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | threadType | string | Plot / Faction / Mystery / Chekhov / Foreshadowing |
 | status | string | Active / Stale / Resolved / Retired |
-| introduced | string | Session number or date |
-| lastAdvanced | string | Session number or date |
-| knownBy | array | Which PCs and NPCs are aware |
+| introduced | string | Session number |
+| lastAdvanced | string | Session number |
+| knownBy | array | PCs and NPCs aware |
 | nextBeat | string | What should happen next |
 | resolutionCondition | string | What resolves this thread |
-| plantedDetail | string | For Foreshadowing: what was planted |
-| intendedPayoff | string | For Foreshadowing: what it foreshadows |
-| ripeness | string | For Foreshadowing: Planted / Ripening / Ready / Paid Off / Retired |
-
-**Example:**
-
-```json
-{
-    "name": "The Marsh Bloodline",
-    "type": "thread",
-    "description": "Investigators may discover their own connection to Innsmouth",
-    "attributes": {
-        "threadType": "Foreshadowing",
-        "status": "Active",
-        "introduced": "Session 2",
-        "lastAdvanced": "Session 5",
-        "knownBy": ["Dr. Voss"],
-        "nextBeat": "Voss finds genealogy records at Miskatonic library",
-        "resolutionCondition": "Investigator confronts their Deep One heritage",
-        "plantedDetail": "Strange gold ring found in grandmother's belongings",
-        "intendedPayoff": "Investigator discovers they carry the Innsmouth look gene",
-        "ripeness": "Ripening"
-    }
-}
-```
+| plantedDetail | string | Foreshadowing: what was planted |
+| intendedPayoff | string | Foreshadowing: what it foreshadows |
+| ripeness | string | Planted / Ripening / Ready / Paid Off / Retired |
 
 ### Creature
-
-Monsters, supernatural beings.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
@@ -260,68 +131,38 @@ Monsters, supernatural beings.
 | sanityLoss | string | SAN loss on sight |
 | stats | object | Combat statistics |
 
-**Example:**
-
-```json
-{
-    "name": "Deep One",
-    "type": "creature",
-    "description": "Amphibious fish-frog hybrid",
-    "attributes": {
-        "creatureType": "Mythos",
-        "size": "Human-sized",
-        "abilities": ["Amphibious", "Immortal"],
-        "sanityLoss": "0/1d6"
-    }
-}
-```
-
 ### Organization
-
-Formal groups and institutions.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | orgType | string | University, company, etc. |
 | purpose | string | Mission/function |
-| size | string | Number of members |
+| size | string | Member count |
 | resources | string | Available assets |
 | notable_members | array | Important people |
 
 ### Event
 
-Historical or plot moments.
-
-**Common Attributes:**
-
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | eventType | string | Battle, ritual, meeting, etc. |
-| date | string | When it happened |
-| location | string | Where it happened |
-| participants | array | Who was involved |
-| outcome | string | What resulted |
+| date | string | When |
+| location | string | Where |
+| participants | array | Who |
+| outcome | string | Result |
 | significance | string | Why it matters |
 
 ### Document
-
-In-game texts and records.
-
-**Common Attributes:**
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | docType | string | Letter, journal, map, etc. |
 | author | string | Who wrote it |
 | date | string | When written |
-| content | string | The actual text |
+| content | string | The text |
 | condition | string | Physical state |
 
 ## Entity Relationships
-
-### Common Relationship Types
 
 | Type | Example |
 |------|---------|
@@ -334,28 +175,13 @@ In-game texts and records.
 | leads | NPC leads Faction |
 | owns | NPC owns Item |
 
-### Relationship Guidelines
-
-1. Always set both source and target entities
-2. Consider bidirectionality
-3. Choose appropriate tone
-4. Add descriptive context
-5. Update when circumstances change
+Guidelines: set both source and target; consider bidirectionality;
+add descriptive context; update when circumstances change.
 
 ## Best Practices
 
-### Entity Creation
+**Creation:** check for duplicates; use appropriate type;
+include meaningful description; set source confidence.
 
-1. Check for duplicates first
-2. Use appropriate type
-3. Include meaningful description
-4. Add relevant tags
-5. Set source confidence
-
-### Entity Management
-
-1. Track source documents
-2. Update GM notes
-3. Maintain relationships
-4. Link to timeline events
-5. Flag canon conflicts
+**Management:** track source documents; update GM notes;
+maintain relationships; link to timeline; flag canon conflicts.

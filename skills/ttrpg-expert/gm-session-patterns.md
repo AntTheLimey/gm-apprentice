@@ -1,311 +1,195 @@
 # GM Session Patterns
 
-This document captures common patterns GMs use for organizing campaigns,
-preparing sessions, and maintaining continuity across game systems.
+Common patterns for organizing campaigns, preparing sessions,
+and maintaining continuity across game systems.
 
-## Campaign Content Structures
+**System-specific session procedures:** patterns here are
+system-agnostic. For system-specific post-session mechanics
+(faction clocks, XP, downtime), also read:
+- CoC 7e: `systems/coc-7e/session-procedures.md`
+- D&D 5e: `systems/dnd-5e-2024/session-procedures.md`
+- GURPS 4e: `systems/gurps-4e/session-procedures.md`
+- FitD: `systems/fitd/session-procedures.md` (coin, rep, heat,
+  entanglements, downtime, XP triggers)
 
-### Hierarchical Organization
+## Campaign Structure
 
-Experienced GMs organize campaigns using a hierarchical structure similar to
-television series. The following table shows the typical levels.
+| Level | Description | Duration |
+|-------|-------------|----------|
+| Campaign | Entire ongoing story | Months to years |
+| Arc / Season | Related adventures | 3-12 sessions |
+| Adventure / Chapter | Complete storyline | 1-4 sessions |
+| Session | Single play meeting | 3-5 hours |
+| Scene / Encounter | Discrete gameplay moment | 15-60 min |
 
-| Level | Description | Typical Duration |
-|-------|-------------|------------------|
-| Campaign | The entire ongoing story | Months to years |
-| Arc/Season | A series of related adventures | 3-12 sessions |
-| Adventure/Chapter | A complete storyline | 1-4 sessions |
-| Session | A single play session | 3-5 hours |
-| Scene/Encounter | A discrete gameplay moment | 15-60 minutes |
-
-Sessions represent player-facing units (when the group meets), while
-adventures represent narrative units (story beats). These rarely align
-perfectly, and experienced GMs plan for adventures to span multiple sessions.
+Sessions = player-facing units (when group meets). Adventures =
+narrative units (story beats). These rarely align perfectly.
 
 ### Campaign Metadata
 
-GMs track essential metadata for each campaign.
-
 | Field | Description |
 |-------|-------------|
-| Name | The campaign title |
-| Description | A brief overview of the campaign |
-| Game System | The rules being used, including house rules |
-| Setting | The world, time period, and location |
-| Tone | The style (comedic, serious, horror, pulp) |
-| Lethality | How deadly the game is |
-| Start Date | The in-game starting date |
-| Player Count | The number of active players |
-| Schedule | The frequency and typical session duration |
-| Custom Rules | Any house rules or optional mechanics |
+| Name | Campaign title |
+| Description | Brief overview |
+| Game System | Rules + house rules |
+| Setting | World, time period, location |
+| Tone | Style (comedic, serious, horror, pulp) |
+| Lethality | How deadly |
+| Start Date | In-game starting date |
+| Player Count | Active players |
+| Schedule | Frequency and session duration |
+| Custom Rules | House rules, optional mechanics |
 
 ## Session Prep Frameworks
 
-### The Lazy DM Framework
+### Lazy DM (Sly Flourish)
 
-Mike "Sly Flourish" Shea created the most widely adopted prep framework. The
-core insight is that session prep should start with a review of the player
-characters and their goals, then focus only on the elements that matter for
-the upcoming session. The method delivers roughly 30 minutes of focused prep
-for a 4-hour session by concentrating on what will actually hit the table.
+Start with PC review and goals, focus only on elements that
+matter for the upcoming session. ~30 min prep for 4-hour session.
+Full method: https://slyflourish.com/lazydm/
 
-See *Return of the Lazy Dungeon Master* for the full method:
-https://slyflourish.com/
+### Three Clue Rule (The Alexandrian)
 
-### The Three Clue Rule
+For every conclusion PCs need to reach, include ≥3 clues:
 
-For mystery and investigation scenarios, GMs should include at least three
-clues for each conclusion the players need to reach.
+- **Passive:** found through investigation (letter in desk)
+- **Reactive:** requires specific player action (right NPC, right question)
+- **Dynamic:** GM creates on the fly from player actions
+- **Proactive:** comes to the players (assassin attacks, NPC warning)
 
-The following clue types help ensure players can find information:
+### Five Room Dungeon (Johnn Four)
 
-- Passive clues are those the players find through investigation, such as a
-  letter hidden in a desk.
+Complete single-session adventure from five encounters, each
+with distinct dramatic purpose — entry challenge through
+complications to climax and resolution.
+Full framework: https://roleplayingtips.com/rptn/five-room-dungeons/
 
-- Reactive clues require specific actions from the players, such as asking
-  the right NPC the right question.
+### Fronts and Threats (Apocalypse World)
 
-- Dynamic clues are those the GM creates on the fly in response to player
-  actions.
+Track ongoing dangers developing between sessions:
+- **Threats:** active dangers in the world
+- **Countdown clocks:** visual progress toward bad outcomes
+- **Stakes questions:** uncertainties answered through play
+- **Fundamental scarcity:** core drive (hunger, fear, ambition)
 
-- Proactive clues come to the players directly, such as when an assassin
-  attacks the group.
+Fronts advance when players don't actively oppose threats.
 
-### The Five Room Dungeon
-
-Johnn Four (Roleplaying Tips) created the Five Room Dungeon as a flexible
-framework for single-session adventures. The core insight is that a complete
-adventure can be built from five encounters, each with a distinct dramatic
-purpose — progressing from an entry challenge through complications to a
-climax and resolution.
-
-See the original for the full framework:
-https://roleplayingtips.com/
-
-### Fronts and Threats
-
-The Apocalypse World system introduced fronts as a method for tracking
-ongoing dangers that develop between sessions.
-
-Each front contains the following components:
-
-- Threats are active dangers in the world.
-
-- Countdown clocks provide visual progress toward bad outcomes.
-
-- Stakes questions are uncertainties the GM wants to answer through play.
-
-- Fundamental scarcity is the core drive such as hunger, fear, or ambition.
-
-Fronts advance when players do not actively oppose the threats.
-
-### Progress Clocks
-
-Blades in the Dark uses progress clocks to visualize ongoing situations.
+### Progress Clocks (Blades in the Dark)
 
 | Clock Type | Description |
 |------------|-------------|
-| Danger Clock | The clock tracks a mounting threat |
-| Progress Clock | The clock tracks advancement toward a goal |
-| Racing Clocks | Two opposed clocks compete against each other |
-| Linked Clocks | One clock unlocks when another fills |
-| Faction Clocks | Long-term faction goals advance over time |
+| Danger | Mounting threat |
+| Progress | Advancement toward goal |
+| Racing | Two opposed clocks competing |
+| Linked | One unlocks when another fills |
+| Faction | Long-term faction goals |
 
-Clocks typically have 4, 6, or 8 segments. The GM fills segments when the
-situation progresses.
+Typically 4, 6, or 8 segments. GM fills on situation progress.
 
-## Session Structure
+## Session Zero
 
-### Session Zero
+Establish expectations before campaign starts:
 
-The session zero is a pre-campaign session that establishes expectations.
+1. Campaign pitch and setting overview
+2. Tone and style expectations
+3. Safety tools (X-Card, Lines and Veils)
+4. Collaborative character creation with connections
+5. Scheduling and logistics
+6. House rules and system choices
+7. Player expectations and goals
 
-The session zero covers the following topics:
+## Scene Framing
 
-1. The GM presents the campaign pitch and setting overview.
+**Open:** Cut to the Chase (mid-action), In Media Res
+(dramatic moment), Threshold (just before action).
 
-2. The group discusses tone and style expectations.
+**Close:** Hard Cut (abrupt at drama), Cliffhanger (before
+resolution).
 
-3. The group establishes safety tools such as X-Card or Lines and Veils.
-
-4. Players create characters collaboratively with connections between them.
-
-5. The group addresses scheduling and logistics.
-
-6. The GM explains house rules and system choices.
-
-7. Players share their expectations and goals.
-
-### Scene Framing Techniques
-
-GMs use various techniques to open and close scenes effectively.
-
-Opening techniques include:
-
-- Cut to the Chase starts the scene in the middle of action.
-
-- In Media Res begins at a dramatic moment.
-
-- Threshold Framing cuts to just before the action begins.
-
-Closing techniques include:
-
-- Hard Cut ends the scene abruptly at a dramatic moment.
-
-- Cliffhanger ends the scene before the resolution.
-
-The key principle is to cut into scenes late and cut out of scenes early.
+Principle: cut into scenes late, cut out early.
 
 ## Post-Session Practices
 
 ### Session Recap
 
-GMs should capture the following information immediately after each session.
-
 | Element | Description |
 |---------|-------------|
-| What Happened | A brief summary of events |
-| Player Decisions | The key choices the players made |
-| Consequences | What should change in the world |
-| Discoveries | What the players learned |
+| What Happened | Brief event summary |
+| Player Decisions | Key choices made |
+| Consequences | World changes to apply |
+| Discoveries | What players learned |
 | Open Questions | Unresolved matters |
-| Next Session Hooks | Where to start next time |
+| Next Session Hooks | Where to start next |
 
 ### Entity Updates
 
-After each session, the GM updates affected entities.
-
 | Update Type | Example |
 |-------------|---------|
-| Status changes | An NPC is injured or a location is destroyed |
-| Relationship shifts | A faction alliance forms |
-| Knowledge reveals | A secret is discovered |
-| Location changes | A new area is mapped |
-| Item transfers | An object is given or taken |
+| Status changes | NPC injured, location destroyed |
+| Relationship shifts | Faction alliance forms |
+| Knowledge reveals | Secret discovered |
+| Location changes | New area mapped |
+| Item transfers | Object given or taken |
 
 ### Discovery State Tracking
 
-The following states track what players know about entities.
-
 | State | Meaning |
 |-------|---------|
-| Unknown | The players have no knowledge of the entity |
-| Mentioned | The players know the name or existence |
-| Met | The players had direct interaction |
-| Known | The players have significant information |
-| Understood | The players have full understanding |
+| Unknown | No knowledge |
+| Rumoured | Heard about but unverified |
+| Observed | Directly witnessed |
+| Investigated | Actively examined and contextualized |
+| Understood | Full understanding |
 
 ## System-Specific Patterns
 
-### Call of Cthulhu
+**CoC:** handouts/props central; multiple clue paths; NPC
+relationships/secrets drive narrative; pace sanity revelations;
+plan backup investigators.
 
-Keepers (Call of Cthulhu GMs) focus their preparation on the following areas:
+**GURPS:** Campaign Planning Form for world parameters;
+character review (points, advantages, disadvantages); skill
+challenges matched to party; combat balance critical (lethal).
 
-- Handouts and props are central to gameplay and enhance immersion.
+**FitD:** 2-3 score opportunities available; faction clock
+updates between sessions; entanglement tables ready; Devil's
+Bargains prepared.
 
-- Investigation structures require multiple clue paths to avoid dead ends.
+## Checklists
 
-- NPC relationships and secrets drive the narrative.
+### Pre-Session
 
-- Sanity-affecting revelations require careful pacing.
+1. Review previous session notes
+2. Update entity states
+3. Review character sheets and goals
+4. Prepare strong start
+5. Outline 3-5 potential scenes
+6. Prepare 10 secrets or clues
+7. Have NPC names and traits ready
+8. Prepare stat blocks
+9. Ready maps and handouts
+10. Review relevant rules
 
-- Backup investigators help address the high lethality of the system.
+### Post-Session
 
-### GURPS
-
-GURPS GMs focus their preparation on the following areas:
-
-- The Campaign Planning Form establishes detailed world parameters.
-
-- Character review ensures point totals, advantages, and disadvantages are
-  correct.
-
-- Skill challenges must be appropriate to party capabilities.
-
-- Combat encounter balance is critical because GURPS combat is lethal.
-
-### Blades in the Dark
-
-Blades in the Dark GMs focus their preparation on the following areas:
-
-- Score opportunities should offer 2-3 available options at any time.
-
-- Faction clock updates reflect the ongoing machinations of various groups.
-
-- Entanglement tables are ready for use after each score.
-
-- Devil's Bargains offer tempting complications to players.
-
-## Practical Checklists
-
-### Pre-Session Checklist
-
-The following checklist helps GMs prepare for each session.
-
-1. Review the previous session notes.
-
-2. Update entity states from the last session.
-
-3. Review character sheets and goals.
-
-4. Prepare a strong start for the session.
-
-5. Outline 3-5 potential scenes.
-
-6. Prepare 10 secrets or clues.
-
-7. Have NPC names and traits ready.
-
-8. Prepare relevant stat blocks.
-
-9. Ready physical materials such as maps and handouts.
-
-10. Review relevant rules.
-
-### Post-Session Checklist
-
-The following checklist helps GMs capture information after each session.
-
-1. Write the session summary while details are fresh.
-
-2. Record key player decisions.
-
-3. Note consequences to apply to the world.
-
-4. Update entity states.
-
-5. Mark discoveries and knowledge changes.
-
-6. Update relationship states.
-
-7. Advance faction or threat clocks.
-
-8. Note timeline events.
-
-9. Flag any canon conflicts.
-
-10. Create seed notes for the next session.
+1. Write session summary while fresh
+2. Record key player decisions
+3. Note world consequences
+4. Update entity states
+5. Mark discoveries and knowledge changes
+6. Update relationship states
+7. Advance faction/threat clocks
+8. Note timeline events
+9. Flag canon conflicts
+10. Create seed notes for next session
 
 ## Sources
 
-The following sources informed the patterns in this document.
-
-- Sly Flourish created The Lazy DM's Workbook.
-
-- The Alexandrian authored The Three Clue Rule.
-
-- Vincent Baker developed the Fronts system in Apocalypse World.
-
-- John Harper designed Progress Clocks in Blades in the Dark.
-
-- Johnn Four created the Five Room Dungeon at Roleplaying Tips.
+Sly Flourish (Lazy DM); The Alexandrian (Three Clue Rule);
+Vincent Baker (Fronts, Apocalypse World); John Harper
+(Progress Clocks, BitD); Johnn Four (Five Room Dungeon).
 
 ## External References
 
-When you need the full detail of a framework referenced above,
-fetch the original source at runtime. Do not reproduce the
-content — summarize what you learn in your own words for the
-user.
-
-- **Lazy DM Prep Method:** https://slyflourish.com/lazydm/ (Mike Shea)
-- **Five Room Dungeon:** https://roleplayingtips.com/rptn/five-room-dungeons/ (Johnn Four)
+- **Lazy DM Prep:** https://slyflourish.com/lazydm/
+- **Five Room Dungeon:** https://roleplayingtips.com/rptn/five-room-dungeons/
