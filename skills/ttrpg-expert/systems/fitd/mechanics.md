@@ -186,5 +186,16 @@ Rep: 2 base +1 per tier above, -1 per tier below (min 0).
 Turf: each piece = -1 rep needed (max 6). Persists through
 resets.
 
+## Topics in Other FitD Files
+
+These mechanics are covered in detail elsewhere to avoid
+duplication:
+- **Consequences** (5 types, harm table, armor): `rules-reference.md`
+- **Score procedures** (engagement roll, flashbacks, teamwork): `session-procedures.md`
+- **Downtime phase** (payoff, heat, entanglements, activities): `session-procedures.md`
+- **Clocks** (types, sizing, naming): `session-procedures.md`
+- **Faction turns** (clock advancement, maneuvers): `session-procedures.md`
+- **Faction details** (Doskvol factions, tiers, NPCs): `factions.md`
+
 ---
 *Based on Blades in the Dark by John Harper, CC BY 3.0.*

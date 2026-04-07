@@ -164,5 +164,15 @@ Only reduced by incarceration.
 Prison claims: Allied Claim, Cell Block Control, Guard Payoff,
 Hardcase, Parole Influence, Smuggling.
 
+## Topics in Other FitD Files
+
+These mechanics are covered in detail elsewhere:
+- **Dice pools, 12 actions, position/effect**: `mechanics.md`
+- **Score procedures** (engagement, flashbacks, linked plans): `session-procedures.md`
+- **Downtime phase** (payoff, heat, entanglements, activities): `session-procedures.md`
+- **XP and advancement** (PC + crew): `session-procedures.md`
+- **Faction turns** (clock advancement, maneuvers): `session-procedures.md`
+- **Faction details** (Doskvol factions, tiers, NPCs): `factions.md`
+
 ---
 *Based on Blades in the Dark by John Harper, CC BY 3.0.*
