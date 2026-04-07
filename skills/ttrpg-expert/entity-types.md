@@ -2,6 +2,28 @@
 
 Comprehensive guide to Imagineer entity types.
 
+## Universal Fields
+
+These fields apply to **every** entity type. They provide
+temporal context so the GM and companion skills can track
+when information was established and whether it's current.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| lastUpdated | string | Session number or date when this entity was last modified (e.g., "Session 7" or "2026-04-06") |
+| asOfSession | string | Session number when this entity's current state was confirmed accurate. If asOfSession is much older than the current session, the entity may need review. |
+| createdSession | string | Session number when this entity was first introduced to the campaign |
+| source | string | How this entity entered canon: "play" (emerged during a session), "prep" (created during session prep), "backstory" (part of initial campaign setup) |
+
+When filing or updating any entity, always set `lastUpdated`
+and `asOfSession` to the current session. Campaign-organizer
+should preserve these fields when reorganising.
+
+These fields enable temporal queries: "show me everything
+that changed in session 5," "which entities haven't been
+updated since session 3?" and "what was the faction's state
+as of session 4?"
+
 ## Core Entity Types
 
 ### NPC (Non-Player Character)

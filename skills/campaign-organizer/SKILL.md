@@ -105,6 +105,20 @@ When content doesn't fit existing types:
 This is just editing the vault's own schema. Built-in and evolved
 types are identical.
 
+### Temporal Fields (Universal)
+
+Every entity has temporal tracking fields. **Always preserve
+these when reorganising or updating entities:**
+
+- `lastUpdated` — session/date when entity was last modified
+- `asOfSession` — session when entity's state was confirmed
+- `createdSession` — session when entity was introduced
+- `source` — how it entered canon: "play", "prep", "backstory"
+
+When filing a new entity, set `lastUpdated`, `asOfSession`,
+and `createdSession` to the current session. When updating
+an existing entity, update `lastUpdated` and `asOfSession`.
+
 ### World Evolution Fields
 
 The `ttrpg-expert` skill's `world-evolution.md` procedure
