@@ -5,41 +5,18 @@
 
 # Call of Cthulhu 7e -- Creatures Reference
 
-**Important note on Lovecraft entities:** For iconic Mythos
-creatures (Deep Ones, Shoggoths, Mi-Go, etc.), no official
-CoC stat blocks are provided here -- those are Chaosium's
-intellectual property. The Lovecraft entries below contain
-only literary descriptions from public domain fiction. Use
-the Ghoul [ORC] and other ORC creatures as mechanical
-baselines, adapting stats as needed for your scenario. A
-Ghoul-equivalent stat block can serve as a starting point for
-many humanoid Mythos creatures; scale characteristics up for
-larger or more powerful entities.
+ORC creatures with stat blocks + Lovecraft entities with
+literary descriptions (no Chaosium game stats). For encounter
+building and stat lookups.
 
-BRP ORC sample creatures with stat blocks, plus public domain
-Lovecraft entities with literary descriptions. Used during
-prep (encounter building) and play (stat lookups).
+**[ORC]** = BRP UGE ORC Content Document (full stats).
+**[Lovecraft]** = public domain fiction (descriptions only,
+no game stats). Use Ghoul [ORC] as mechanical baseline for
+humanoid Mythos creatures; scale for larger entities.
 
-Each entry is labelled with its source:
-- **[ORC]** -- Stats and descriptions from the BRP UGE ORC
-  Content Document.
-- **[Lovecraft]** -- Descriptions drawn from H.P. Lovecraft's
-  fiction, cited by composition date. Names, physical
-  descriptions, behaviours, and locations only. No game stats
-  are provided for these entries as they are not part of the
-  ORC content.
-
-## Reading ORC Stat Blocks
-
-- **Characteristics**: Rolled range and average in parentheses.
-- **HP**: Usually (CON+SIZ)/2.
-- **MOV**: Movement rate (Walk, Swim, Fly, Slither).
-- **DM**: Average damage modifier.
-- **Armour**: Natural protection and type.
-- **Attacks**: Weapon/natural attack, skill %, damage, special.
-- **Skills**: Relevant skills for a typical encounter.
-- **SAN Loss**: Sanity cost on seeing the creature (if Sanity
-  rules are used). Format: loss on success / loss on failure.
+**Stat block format:** Characteristics (rolled range, avg).
+HP = (CON+SIZ)/2. MOV = Walk/Swim/Fly/Slither. DM = damage
+modifier. SAN Loss = success/failure.
 
 ---
 
@@ -209,11 +186,8 @@ poison, disease, impaling. Takes minimum damage from bullets
 
 ## Lovecraft Entities [Lovecraft]
 
-The following entries are drawn entirely from H.P. Lovecraft's
-fiction, cited by composition date. They present his literary
-descriptions only — physical appearance, behaviour, associated
-locations, and thematic role. No game statistics are provided;
-these are not Chaosium game content.
+Literary descriptions from Lovecraft's fiction (composition
+dates). No game stats — use ORC creatures above as baselines.
 
 ### Cthulhu [Lovecraft]
 **Source**: "The Call of Cthulhu" (1928).
