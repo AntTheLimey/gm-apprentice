@@ -75,10 +75,16 @@ follow normal position rules.
 | 1 | Complex action or unlikely opportunity |
 | 2+ | Elaborate action, special contingencies |
 
-Cannot undo established facts; CAN recontextualize them.
-Downtime activities in flashbacks cost 1 coin or 1 rep.
-May require action/fortune rolls. Failed flashbacks produce
-present consequences. Stress is self-limiting (max 9).
+Cannot undo established facts; CAN recontextualize them
+("I bribed that guard" is valid; "that guard was never there"
+is not). Downtime activities in flashbacks cost 1 coin or
+1 rep. May require action/fortune rolls. Failed flashbacks
+produce present consequences (the bribe happened, but the
+guard reported it — now there's a complication).
+
+Best use: when the engagement roll goes badly, flashback to
+a preparation you made "just in case." Stress is self-limiting
+(max 9); raise cost to 2 if flashbacks trivialise problems.
 
 ## Linked Plans
 
@@ -213,13 +219,20 @@ clock, add heat, suffer harm.
 
 ## GM Guidance
 
-**Score:** cut to action after engagement roll. Use consequences
-not blocks. Let flashbacks do planning. Track the fiction.
-Describe position before each roll.
+**Score:** cut to action after engagement roll. Use
+consequences, not blocks — on a 4/5 the PC succeeds with a
+cost; on a 1-3 things go badly but avoid shutting down all
+options. Let flashbacks do planning. Track the fiction (who
+knows what? what's happening off-screen? which clocks tick?).
+Describe position before each roll so players can make
+meaningful choices about pushing, resisting, or trading.
 
-**Downtime:** don't skip it. Entanglements are story hooks.
-Advance faction clocks between sessions. Share the world
-through contacts/purveyors. Don't undermine payoff.
+**Downtime:** don't skip it — it provides pacing, character
+development, and recovery. Entanglements are story hooks, not
+punishments. Advance faction clocks between sessions; when
+you turn attention to a neglected faction, catch them up.
+Share the world through contacts and vice purveyors — rumours
+and gossip lead to future scores. Don't undermine payoff.
 
 ## Faction Turn (FitD-Specific)
 

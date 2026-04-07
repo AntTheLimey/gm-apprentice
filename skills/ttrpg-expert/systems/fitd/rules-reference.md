@@ -40,7 +40,10 @@ Five types from action rolls:
 level. Don't negate a successful roll.
 
 **Complication** — trouble, danger, new threat. Tick a clock:
-minor (1), standard (2), serious (3).
+minor (1), standard (2), serious (3). Don't inflict a
+complication that negates a successful roll. If a PC corners
+an enemy on 4-5, the enemy IS cornered — maybe they grab
+the PC's weapon during the scuffle, but they don't escape.
 
 **Lost Opportunity** — window closes; need new method or
 changed circumstances to try again.

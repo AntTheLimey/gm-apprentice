@@ -36,13 +36,16 @@ NPCs: Lyssa (leader, fierce), Roric (former leader, murdered).
 
 **The Lampblacks** — Tier II, Weak. Rough criminals in Crow's
 Foot, former laborers. Bitter Red Sash rivalry. Extortion,
-sabotage, arson. NPCs: Bazso Baz (leader, charismatic brute),
-Pickett (lieutenant, cunning).
+sabotage, arson. NPCs: Bazso Baz (leader, charismatic brute
+who drinks at the Leaky Bucket and calls in favours when
+threatened), Pickett (lieutenant, cunning — the one who
+quietly investigates while Bazso rages).
 
 **The Red Sashes** — Tier II, Weak. Iruvian sword school
 turned criminal. Elegant, deadly. High-quality vice, noble
 connections. At war with Lampblacks. NPCs: Mylera Klev
-(leader, refined and ruthless).
+(leader, refined and ruthless — cultivates Iruvian noble
+patrons and plays the long game).
 
 **The Billhooks** — Tier II, Strong. Brutal gang in Coalridge.
 Extreme violence/intimidation. Labor rackets, butchery front.
