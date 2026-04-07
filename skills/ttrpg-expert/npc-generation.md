@@ -151,7 +151,7 @@ Bargains they might propose.
 
 ## Output Format
 
-```
+```markdown
 ## [NPC Name]
 Concept: [One sentence]
 Appearance: [Distinctive detail]

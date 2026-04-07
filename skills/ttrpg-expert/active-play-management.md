@@ -177,7 +177,7 @@ encounter table; call a short break.
 
 | Field | Description |
 |-------|-------------|
-| Session | When |
+| Session | Session number the decision occurred in |
 | Description | What players chose |
 | Alternatives | What they didn't choose |
 | Affected Entities | NPCs, factions, locations |

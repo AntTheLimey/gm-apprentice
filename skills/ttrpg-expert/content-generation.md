@@ -20,7 +20,7 @@ system-specific guidance for ready-to-use TTRPG content.
 
 ## Scene Template
 
-```
+```markdown
 ## [Scene Title]
 Type: [Combat / Social / Investigation / Exploration /
   Chase / Downtime / Puzzle]
@@ -73,7 +73,7 @@ clear signal when scene should end.
 
 ## Location Template
 
-```
+```markdown
 ## [Location Name]
 Type: [Building / Outdoor / Underground / Vehicle]
 Atmosphere: [2-3 words]
@@ -95,7 +95,7 @@ routines; multiple entry points; include vertical space.
 
 ## Item Template
 
-```
+```markdown
 ## [Item Name]
 Type: [Weapon / Armor / Tool / Tome / Artifact / Mundane]
 Description: [Physical appearance, distinctive features]
@@ -117,7 +117,7 @@ enchantment energy/prereqs. FitD: Tier, type, effect, load.
 
 ## Faction Template
 
-```
+```markdown
 ## [Faction Name]
 Type: [Cult / Guild / Government / Criminal / etc.]
 Concept: [One sentence]
@@ -145,7 +145,7 @@ PCs can exploit.
 
 ## Creature Template
 
-```
+```markdown
 ## [Creature Name]
 Type: [Beast / Undead / Fiend / Aberration / Mythos / etc.]
 Concept: [One sentence — what it is, why dangerous]
@@ -162,7 +162,7 @@ GM Notes: [Running tips, atmosphere]
 
 ## Document Template
 
-```
+```markdown
 ## [Document Title]
 Type: [Letter / Diary / Newspaper / Map / Record / Tome]
 Author:  Date:  Physical Description:
@@ -178,7 +178,7 @@ Limit to 3-5 handouts per session. Every handout must contain
 
 ## Scenario Template
 
-```
+```markdown
 ## [Scenario Title]
 System:  Premise: [2-3 sentences]
 Hook(s): [≥3 hooks drawing PCs in]

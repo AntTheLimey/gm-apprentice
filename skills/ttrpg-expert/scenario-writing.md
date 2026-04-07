@@ -152,7 +152,7 @@ conventions.
 
 ### GURPS 4e
 
-Detailed NPC characterisation via disadvantages/quirks/
+Detailed NPC characterization via disadvantages/quirks/
 motivations. Multi-sensory descriptions. Specify relevant
 skills/mechanics per scene. Include debugging for PC deviations.
 
