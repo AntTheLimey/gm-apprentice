@@ -19,18 +19,25 @@ You talk to Claude normally. The skills handle the rest.
 
 ## Step 1: Install gm-apprentice
 
-In Claude Code, run:
+Choose your platform:
 
-```
+**Claude Code (CLI):**
+```bash
 /plugin marketplace add AntTheLimey/gm-apprentice
 /plugin install gm-apprentice
-```
-
-Then reload:
-
-```
 /reload-plugins
 ```
+
+**Claude Desktop:** Go to Settings > Plugins > Browse plugins >
+Personal tab > click **+** > enter
+`https://github.com/AntTheLimey/gm-apprentice` > Install.
+
+**VS Code / Cursor:** Install the Claude Code extension, type
+`/plugins` in the prompt, add the `AntTheLimey/gm-apprentice`
+marketplace from the Discover tab, then click Install.
+
+See the [README](../README.md#installation) for detailed
+per-platform instructions.
 
 ## Step 2: Pick Your Game System
 

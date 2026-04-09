@@ -23,7 +23,45 @@ generation to campaign management and session lifecycle support.
 
 ## Installation
 
+### Claude Code (CLI)
+
+```bash
+/plugin marketplace add AntTheLimey/gm-apprentice
+/plugin install gm-apprentice
+/reload-plugins
 ```
+
+### Claude Desktop (Mac / Windows)
+
+1. Open Claude Desktop
+2. Go to **Settings > Plugins > Browse plugins**
+3. Switch to the **Personal** tab
+4. Click **+** to add a marketplace
+5. Enter: `https://github.com/AntTheLimey/gm-apprentice`
+6. Once synced, click **Install** on the gm-apprentice plugin
+
+### VS Code
+
+1. Install the [Claude Code extension](vscode:extension/anthropic.claude-code)
+2. Open the Claude Code prompt and type `/plugins`
+3. Go to the **Discover** tab
+4. Add the marketplace: `AntTheLimey/gm-apprentice`
+5. Click **Install** and choose your scope (user, project, or local)
+
+### Cursor
+
+Cursor supports Claude Code plugins via its VS Code compatibility:
+
+1. Install the [Claude Code extension for Cursor](cursor:extension/anthropic.claude-code)
+2. Follow the same steps as VS Code above
+
+### JetBrains IDEs
+
+JetBrains IDEs (IntelliJ, PyCharm, WebStorm, etc.) support
+Claude Code but do not currently have a plugin management UI.
+Install via the CLI method instead:
+
+```bash
 /plugin marketplace add AntTheLimey/gm-apprentice
 /plugin install gm-apprentice
 ```
