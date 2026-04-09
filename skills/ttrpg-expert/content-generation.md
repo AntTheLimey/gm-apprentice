@@ -4,6 +4,13 @@ Frameworks for generating scenes, locations, items, factions,
 creatures, documents, and scenario outlines. Templates and
 system-specific guidance for ready-to-use TTRPG content.
 
+**System-specific content:** for stat blocks and mechanical
+detail when generating content, also read:
+- CoC 7e: `systems/coc-7e/creatures.md`, `systems/coc-7e/setting-lovecraft.md`
+- D&D 5e: `systems/dnd-5e-2024/monsters.md`, `systems/dnd-5e-2024/magic-items.md`
+- GURPS 4e: `systems/gurps-4e/character-generation.md`
+- FitD: `systems/fitd/factions.md`, `systems/fitd/setting-doskvol.md`
+
 ## Principles
 
 - **Situation over script.** Describe who is present, what

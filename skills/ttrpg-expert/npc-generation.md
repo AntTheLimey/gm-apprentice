@@ -4,6 +4,13 @@ Frameworks for generating NPCs across all supported systems.
 Quick methods for improvised NPCs, deep methods for recurring
 and antagonist NPCs, system-specific stat blocks.
 
+**System-specific NPC stats:** for stat blocks and skill
+values when generating NPCs, also read:
+- CoC 7e: `systems/coc-7e/occupations.md`, `systems/coc-7e/skills.md`
+- D&D 5e: `systems/dnd-5e-2024/classes.md`, `systems/dnd-5e-2024/monsters.md`
+- GURPS 4e: `systems/gurps-4e/character-generation.md`
+- FitD: `systems/fitd/playbooks.md`, `systems/fitd/factions.md`
+
 Generation order: Purpose (why they exist) → Personality
 (how they behave) → Mechanics (what they can do). Reversing
 this produces game constructs, not people.
