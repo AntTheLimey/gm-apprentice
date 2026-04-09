@@ -236,7 +236,7 @@ and gossip lead to future scores. Don't undermine payoff.
 
 ## Faction Turn (FitD-Specific)
 
-Called by `world-evolution.md` Step 2. Overrides Universal
+Called by the skill-root `world-evolution.md` Step 2. Overrides Universal
 Faction Turn with FitD mechanics.
 
 **Clock advancement:**

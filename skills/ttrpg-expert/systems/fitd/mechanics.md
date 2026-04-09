@@ -90,7 +90,7 @@ Default: risky/standard. Nine combinations.
 - 4-5: hesitate — minor consequence or try differently
 - 1-3: falter — seize risky opportunity or withdraw
 
-**Risky** (head to head, the default):
+**Risky** (head-to-head, the default):
 - 6/crit: success (crit: +effect)
 - 4-5: success + consequence (harm, complication, worse position).
   The consequence must not negate the success.
