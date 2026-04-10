@@ -6,6 +6,9 @@ description: "Use when answering TTRPG game system questions, validating mechani
 Expert TTRPG advisory agent and content engine for CoC 7e,
 GURPS 4e, Forged in the Dark, and D&D 5e (2024).
 
+**Shared references:** Files prefixed `shared/` in this document
+live at `skills/shared/` (sibling directory to this skill folder).
+
 ## Quick Commands
 
 Match user intent → go directly to the file. Skip clarification.

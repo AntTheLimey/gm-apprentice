@@ -15,6 +15,9 @@ handles generation. You classify, structure, cross-reference, link,
 and validate. When you find gaps, scaffold a placeholder note and
 flag it rather than inventing content.
 
+**Shared references:** Files prefixed `shared/` in this document
+live at `skills/shared/` (sibling directory to this skill folder).
+
 ## Companion Skills
 
 - **ttrpg-expert** — Content creation (NPCs, scenes, stat

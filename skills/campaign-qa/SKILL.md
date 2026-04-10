@@ -13,6 +13,9 @@ damage player trust in the fiction. Every finding gets a
 severity, an explanation, and a proposed fix — but the GM
 decides what to do.
 
+**Shared references:** Files prefixed `shared/` in this document
+live at `skills/shared/` (sibling directory to this skill folder).
+
 ## Companion Skills
 
 - **ttrpg-expert** — Content creation and continuity

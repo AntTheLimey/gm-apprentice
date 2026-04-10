@@ -9,6 +9,9 @@ feel alive: preparing for sessions, supporting play, processing
 what happened afterward, and feeding that reality back into the
 next round of preparation.
 
+**Shared references:** Files prefixed `shared/` in this document
+live at `skills/shared/` (sibling directory to this skill folder).
+
 ## The Core Idea
 
 Campaign content exists in two states: **potential** and **reality**.
