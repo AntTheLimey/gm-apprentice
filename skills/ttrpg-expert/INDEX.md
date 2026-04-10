@@ -85,7 +85,7 @@ Read only the file(s) relevant to the current request.
 - `handouts-and-props.md` — In-game documents, voice guides, prop techniques
 - `random-generation.md` — Oracles, random tables, procedural generation
 - `gm-session-patterns.md` — Lazy DM, Three Clue Rule, Five Room Dungeon
-- `entity-types.md` — Entity schemas, universal temporal fields
+- `shared/entity-schema.md` — Entity schemas, universal temporal fields
 - `canon-management.md` — DRAFT → AUTHORITATIVE → SUPERSEDED
 - `relationship-patterns.md` — Relationship types, strength, modeling
 - `campaign-structure.md` — Session management, timelines, discovery

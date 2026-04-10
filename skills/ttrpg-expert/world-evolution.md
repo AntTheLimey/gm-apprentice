@@ -96,7 +96,7 @@ or rejects each. Then execute the filing protocol.
 
 ### Filing Protocol
 
-**New entities:** create file per `entity-types.md` schema.
+**New entities:** create file per `shared/entity-schema.md` schema.
 Set `source: "play"`, `createdSession`, `lastUpdated`,
 `asOfSession` to current session.
 

@@ -212,10 +212,12 @@ Book coverage: `sources.md`.
 
 Generated content starts as DRAFT → GM confirms as
 AUTHORITATIVE → superseded by newer info = SUPERSEDED.
-See `canon-management.md`. On conflicts, ask — never assume.
+See `canon-management.md` and `shared/canon-confidence.md`.
+On conflicts, ask — never assume.
 
 All content must be mechanically correct and narratively
-consistent. See `entity-types.md` and `continuity-engine.md`.
+consistent. See `shared/entity-schema.md` and
+`continuity-engine.md`.
 No stale threads (3+ sessions), no unfired Chekhov's guns
 (5+ sessions).
 
