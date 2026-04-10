@@ -64,6 +64,14 @@ skill-internal storage.
 - `_Campaign/Timeline.md` — Master campaign timeline.
 - `_Campaign/Player Characters.md` — PC roster quick-reference.
 
+**Shared references** (read as needed):
+- `shared/vault-structure.md` — Default vault folder layout
+  and naming conventions.
+- `shared/entity-schema.md` — Entity type hierarchy, frontmatter
+  schemas, temporal fields, relationship types.
+- `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
+  state definitions and promotion rules.
+
 **Session note structure** (read `references/session-templates.md`
 for full templates):
 
@@ -439,6 +447,9 @@ bookkeeping automatically.
 
 Entity files start as DRAFT. The GM promotes to AUTHORITATIVE
 when they review the vault at their own pace.
+
+See `shared/canon-confidence.md` for the full confidence
+state definitions and promotion workflow.
 
 ## Session Note Naming
 
