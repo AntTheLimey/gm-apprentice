@@ -19,7 +19,7 @@ flag it rather than inventing content.
 
 - **ttrpg-expert** — Content creation (NPCs, scenes, stat
   blocks, handouts). Has authoritative schema definitions:
-  read its `entity-types.md`, `relationship-patterns.md`,
+  read its `shared/entity-schema.md`, `relationship-patterns.md`,
   and `canon-management.md` for canonical type definitions.
   Also has per-system topic files (creatures, spells,
   factions, equipment) for quick reference and system-
@@ -62,7 +62,7 @@ existing project directory. Once confirmed, use that path
 for the rest of the session without re-asking.
 
 For the full tool mapping and what is lost in filesystem mode,
-read `references/filesystem-mode.md`.
+read `shared/filesystem-mode.md`.
 
 ## The Vault Schema Layer: `_meta/`
 
@@ -85,7 +85,7 @@ On first contact with a vault:
 
 1. **`_meta/` exists** → Read all four files. These are the live
    schema. Do not assume defaults.
-2. **`_meta/` missing** → Read `references/ontology-reference.md`
+2. **`_meta/` missing** → Read `shared/entity-schema.md`
    for seed data. Create `_meta/` and write all four files. Read
    `references/index-template.md` for the index structure. The
    index starts empty.
@@ -188,7 +188,7 @@ tools used to read, write, and search differ.
 2. **Survey** — Inventory input files: chapters, entity types,
    time periods. Flag schema misfits.
 3. **Propose structure** — Present vault layout. Read
-   `references/vault-structure.md` for the default layout.
+   `shared/vault-structure.md` for the default layout.
    Adapt to content.
 4. **Extract and file** — Create notes with frontmatter per
    schema. Embed `[[wiki-links]]`.
@@ -247,6 +247,8 @@ with both names in `aliases`, flag for user confirmation.
 
 **Conflicts:** Don't pick a winner. Note one version, add
 `## Canon Conflicts`, set `canon_status: DRAFT`.
+  See `shared/canon-confidence.md` for the full confidence
+  state definitions.
 
 **Uncertain extractions:** Err toward creating a stub. A deleted
 stub is cheaper than a missed entity.
