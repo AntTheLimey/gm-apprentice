@@ -108,37 +108,16 @@ When content doesn't fit existing types:
 This is just editing the vault's own schema. Built-in and evolved
 types are identical.
 
-### Temporal Fields (Universal)
+### Temporal and Entity Fields
 
-Every entity has temporal tracking fields. **Always preserve
-these when reorganising or updating entities:**
+For universal temporal fields (`lastUpdated`, `asOfSession`,
+`createdSession`, `source`), world evolution fields on factions
+and clues, and thread entity fields, read
+`shared/entity-schema.md`.
 
-- `lastUpdated` — session/date when entity was last modified
-- `asOfSession` — session when entity's state was confirmed
-- `createdSession` — session when entity was introduced
-- `source` — how it entered canon: "play", "prep", "backstory"
-
-When filing a new entity, set `lastUpdated`, `asOfSession`,
-and `createdSession` to the current session. When updating
-an existing entity, update `lastUpdated` and `asOfSession`.
-
-### World Evolution Fields
-
-The `ttrpg-expert` skill's `world-evolution.md` procedure
-may update entities with living state fields. Preserve
-these fields when reorganising:
-
-**On Faction entities:**
-- `currentPlan`, `planProgress`, `alliances`,
-  `recentActions`, `status`
-
-**On Clue entities:**
-- `discoveryState` (per-PC knowledge level object)
-
-**Thread entities** (type: `thread`):
-- `threadType`, `status`, `introduced`, `lastAdvanced`,
-  `knownBy`, `nextBeat`, `resolutionCondition`,
-  `plantedDetail`, `intendedPayoff`, `ripeness`
+**Always preserve these fields when reorganising or updating
+entities.** Do not delete temporal tracking or world state
+fields during Organize or Weave passes.
 
 **campaign-tracker.md** may exist at the vault root with
 consequence logs, foreshadowing logs, world state snapshots,
