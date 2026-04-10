@@ -63,6 +63,12 @@ back to file Read tools if the MCP is unavailable.
 - `player_characters.md` — Alternative PC roster location.
 - `Chapters/` — Session notes, scene notes, prep plans.
 
+**Shared references** (read as needed for schema definitions):
+- `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
+  state definitions and rules.
+- `shared/entity-schema.md` — Entity type hierarchy, frontmatter
+  schemas, relationship types, required relationships.
+
 **QA report location:** `_QA/` folder at vault root. Reports
 are named `QA_{mode}_{YYYY-MM-DD}.md`. This keeps QA artefacts
 separate from campaign content. The `_QA/` folder is created
@@ -93,6 +99,9 @@ on first use.
     (conflicting facts in separate files, missing clue paths).
   - **Info** — Housekeeping issue (stale DRAFT status, minor
     naming inconsistency, orphaned entity).
+
+  See `shared/canon-confidence.md` for the full confidence
+  state definitions.
 
 - **Wiki-link everything.** Every entity reference in QA
   reports and findings must be a `[[wiki-link]]`.
