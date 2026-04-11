@@ -192,7 +192,7 @@ tools used to read, write, and search differ.
 4. **Extract** — One note per entity AND per narrative element:
    chapter overviews, scene notes, session notes, entity notes.
    Include frontmatter, body summary, `[[wiki-links]]`.
-5. **Stub** — `canon_status: STUB` for mentioned-but-undescribed
+5. **Stub** — `source_confidence: STUB` for mentioned-but-undescribed
    entities. Include `## Needs` section.
 6. **Update index** — Add new entries to `_meta/index.md`.
 7. **Report** — Extracted, stubbed, needs attention.
@@ -228,7 +228,7 @@ tools used to read, write, and search differ.
 with both names in `aliases`, flag for user confirmation.
 
 **Conflicts:** Don't pick a winner. Note one version, add
-`## Canon Conflicts`, set `canon_status: DRAFT`.
+`## Canon Conflicts`, set `source_confidence: DRAFT`.
   See `shared/canon-confidence.md` for the full confidence
   state definitions.
 
