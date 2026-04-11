@@ -98,7 +98,7 @@ Then do a find-and-replace pass through the file. Replace every instance of MCP-
 | `Use \`search_vault\` with date patterns and event-related keywords to find dated references across the vault.` | `Search for date patterns and event keywords across all vault files.` |
 | `Use \`list_vault_files\` and read frontmatter from entity files to build this list.` | `Enumerate all entity files and read frontmatter from each to build this list.` |
 | `Use \`list_vault_files\` to enumerate, then read frontmatter from each file.` | `Enumerate all entity files in scope, then read frontmatter from each.` |
-| `Use \`search_vault_simple\` to find \`[[...]]\` patterns, then verify each target exists.` | `Search for `[[...]]` patterns across all files, then verify each linked target file exists.` |
+| `Use \`search_vault_simple\` to find \`[[...]]\` patterns, then verify each target exists.` | Search for `[[...]]` patterns across all files, then verify each linked target file exists. |
 
 Also replace any remaining standalone references to `search_vault`, `search_vault_simple`, `list_vault_files`, or `get_vault_file` with the generic equivalent. Grep the file after editing to confirm zero MCP tool names remain (except in any "see also" references to the tool mapping).
 
@@ -164,9 +164,9 @@ folder path with the user.
 git add skills/session-lifecycle/SKILL.md
 git commit -m "feat: add filesystem fallback to session-lifecycle
 
-Add environment detection. Filesystem mode creates and
-updates entity files directly instead of handing off to
-campaign-organizer."
+Add environment detection. Workflow is unchanged — entity
+creation and updates still hand off to campaign-organizer
+which already supports filesystem mode."
 ```
 
 ---
