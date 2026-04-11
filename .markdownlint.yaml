@@ -1,0 +1,70 @@
+# .markdownlint.yaml
+# Rules disabled because this repo uses compact/dense markdown style
+# (reference tables, skill files, campaign data) that conflicts with
+# standard prose-oriented linting defaults.
+
+# Line length — reference tables and YAML frontmatter exceed 80 chars
+MD013: false
+
+# Inline HTML — used in some docs
+MD033: false
+
+# Duplicate headings — system reference files reuse section names across files
+MD024: false
+
+# Emphasis as heading — used as visual separators in reference tables
+MD036: false
+
+# Table column style — repo uses compact pipe tables without surrounding spaces
+MD060: false
+
+# Blanks around lists — dense reference content omits blank lines around lists
+MD032: false
+
+# Blanks around headings — dense reference content omits blank lines
+MD022: false
+
+# Bare URLs — URLs appear in attribution and reference sections
+MD034: false
+
+# Fenced code language — some code blocks intentionally have no language tag
+MD040: false
+
+# First line heading — SKILL.md files and reference fragments don't start with H1
+MD041: false
+
+# Multiple blank lines — some files use double blanks as visual separators
+MD012: false
+
+# Trailing spaces — character sheet files use trailing spaces for alignment
+MD009: false
+
+# Ordered list item prefix — some lists use intentional non-sequential numbering
+MD029: false
+
+# Blanks around fences — dense reference content omits blank lines around fences
+MD031: false
+
+# Multiple top-level headings — some reference files have multiple H1s
+MD025: false
+
+# Blank line in blockquote — used intentionally in some docs
+MD028: false
+
+# Space in emphasis markers — appears in reference content
+MD037: false
+
+# Unordered list style — mixed - and * used across files
+MD004: false
+
+# Heading levels — reference files skip heading levels intentionally
+MD001: false
+
+# Space in code span — appears in reference content
+MD038: false
+
+# Reference link labels defined — some reference tables use undefined labels
+MD052: false
+
+# Single trailing newline — some generated/large files lack final newline
+MD047: false
