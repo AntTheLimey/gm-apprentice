@@ -10,8 +10,8 @@ generation to campaign management and session lifecycle support.
 |-------|-------------|-------------------|
 | **ttrpg-expert** | Rules engine, content generation, canon management, continuity checking, session planning, encounter design, scenario writing | Optional |
 | **campaign-organizer** | Campaign architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata. Works with Obsidian or plain filesystem. | Recommended |
-| **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks | Primary |
-| **session-lifecycle** | Session lifecycle management -- prep, play, wrap-up, and reconciliation between planned and actual session content | Primary |
+| **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks. Works with Obsidian or plain filesystem. | Recommended |
+| **session-lifecycle** | Session lifecycle management -- prep, play, wrap-up, and reconciliation between planned and actual session content. Works with Obsidian or plain filesystem. | Recommended |
 
 ## Supported Game Systems
 
@@ -90,8 +90,8 @@ content. The ttrpg-expert skill works standalone.
 | Skill | No Obsidian | Obsidian (no MCP) | Full Setup (Obsidian + MCP) |
 |-------|-------------|-------------------|----------------------------|
 | ttrpg-expert | Fully functional | Enhanced continuity checks | Best experience |
-| campaign-qa | Not functional | Partial (file reads only) | Full QA auditing |
-| session-lifecycle | Advisory only (~40%) | Read-only analysis | Full lifecycle management |
+| campaign-qa | Functional (filesystem mode) | Partial (file reads only) | Full QA auditing |
+| session-lifecycle | Functional (filesystem mode) | Read-only analysis | Full lifecycle management |
 | campaign-organizer | Functional (filesystem mode) | Manual vault management | Full automation |
 
 ### Required Obsidian Community Plugins
@@ -157,8 +157,11 @@ frontmatter, and wiki-links, just without Obsidian's graph
 visualization and semantic search. Open the folder in Obsidian
 later for the full experience.
 
-The remaining two skills (campaign-qa, session-lifecycle)
-require an Obsidian vault to function meaningfully.
+**campaign-qa** and **session-lifecycle** also work in
+filesystem mode — same audit procedures and lifecycle
+workflows, using Glob/Grep/Read instead of MCP tools.
+Obsidian adds faster search and graph visualization but
+is not required.
 
 ## License
 

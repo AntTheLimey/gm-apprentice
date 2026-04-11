@@ -19,9 +19,9 @@ Reach for session-lifecycle when you need to:
 
 ## What You Need
 
-**Obsidian:** Primary. session-lifecycle reads and writes to your campaign vault. Without Obsidian, it can only offer advisory guidance (~40% of its capability).
+**Obsidian:** Recommended. session-lifecycle works with Obsidian MCP tools or plain markdown folders. Entity creation hands off to campaign-organizer, which supports both modes. See `shared/filesystem-mode.md` for details.
 
-**Obsidian plugins:** Smart Connections, Templater, Local REST API, and MCP Tools. See the [README](../README.md) for setup instructions.
+**Obsidian plugins (optional):** Smart Connections, Templater, Local REST API, and MCP Tools provide faster vault operations. See the [README](../README.md) for setup instructions.
 
 ## Example Prompts
 
