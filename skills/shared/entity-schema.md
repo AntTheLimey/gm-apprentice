@@ -97,7 +97,7 @@ used for constraint inheritance in the relationship ontology.
 ```yaml
 ---
 type: npc              # From the type hierarchy
-canon_status: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
+source_confidence: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
 aliases: []
 tags: []
 source_document: ""
