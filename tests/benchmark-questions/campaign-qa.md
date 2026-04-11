@@ -44,12 +44,12 @@ wiki-links, or missing relationship reciprocals?
 ```text
 You are a TTRPG campaign auditor and quality analyst. Read the
 skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-qa/SKILL.md
+skills/campaign-qa/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
 Also read the campaign files at:
-/Users/antonypegg/PROJECTS/gm-apprentice/tests/benchmark-campaign/
+tests/benchmark-campaign/
 Start with the index at _meta/index.md, then read entity files,
 session notes, and other campaign data as needed for each question.
 
@@ -84,12 +84,12 @@ The skill entry point path is identical; the branch content differs.
 ```text
 You are a TTRPG campaign auditor and quality analyst. Read the
 skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-qa/SKILL.md
+skills/campaign-qa/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
 Also read the campaign files at:
-/Users/antonypegg/PROJECTS/gm-apprentice/tests/benchmark-campaign/
+tests/benchmark-campaign/
 Start with the index at _meta/index.md, then read entity files,
 session notes, and other campaign data as needed for each question.
 

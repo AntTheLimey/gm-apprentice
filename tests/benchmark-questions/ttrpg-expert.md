@@ -41,7 +41,7 @@ campaign. How do thread entities work, and create one for me.
 ```text
 You are a TTRPG rules expert and campaign entity architect. Read
 the skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/ttrpg-expert/SKILL.md
+skills/ttrpg-expert/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
@@ -74,7 +74,7 @@ The skill entry point path is identical; the branch content differs.
 ```text
 You are a TTRPG rules expert and campaign entity architect. Read
 the skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/ttrpg-expert/SKILL.md
+skills/ttrpg-expert/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 

@@ -39,7 +39,7 @@ files? How does filesystem mode work?
 
 ```text
 You are a TTRPG campaign organizer. Read the skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-organizer/SKILL.md
+skills/campaign-organizer/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
@@ -70,7 +70,7 @@ The skill entry point path is identical; the branch content differs.
 
 ```text
 You are a TTRPG campaign organizer. Read the skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-organizer/SKILL.md
+skills/campaign-organizer/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
