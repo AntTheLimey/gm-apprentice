@@ -1,5 +1,10 @@
 # Check Procedures
 
+**Tool note:** These procedures use generic operation names —
+"enumerate files," "search for [pattern]," "read [file]." See
+`shared/filesystem-mode.md` for which specific tool to use in
+your environment (Obsidian MCP tools or filesystem Glob/Grep/Read).
+
 Detailed step-by-step procedures for each QA mode. The SKILL.md
 describes what each mode checks; this file describes how to
 perform each check systematically.
@@ -29,9 +34,8 @@ to get a complete list of entities. For each entity, note:
 - Canon status (DRAFT, AUTHORITATIVE, SUPERSEDED)
 - Primary file path
 
-Use `list_vault_files` to enumerate the scope (full vault or
-chapter folder). Use `search_vault_simple` to find entity
-references across files.
+Enumerate all entity files in scope. Search for entity names
+across all files in scope.
 
 ### Step 2: Cross-Reference Entity Facts
 
@@ -117,8 +121,8 @@ Build a unified chronological list:
 [In-game date] — [Event] — [Source file] — [Entities involved]
 ```
 
-Use `search_vault` with date patterns and event-related
-keywords to find dated references across the vault.
+Search for date patterns and event keywords across all vault
+files.
 
 ### Step 2: Entity Lifecycle Check
 
@@ -186,8 +190,8 @@ vault. For each, record:
 - File path
 - Entity type
 
-Use `list_vault_files` and read frontmatter from entity files
-to build this list.
+Enumerate all entity files and read frontmatter from each to
+build this list.
 
 ### Step 2: Exact Duplicate Check
 
@@ -321,9 +325,6 @@ Read all entity files in scope. For each, extract:
 - Body wiki-links (inline references)
 - Entity type and required relationships per schema
 
-Use `list_vault_files` to enumerate, then read frontmatter
-from each file.
-
 ### Step 2: Structural Checks
 
 **Orphaned entities:** Entities with zero inbound or outbound
@@ -331,8 +332,8 @@ relationships. These are disconnected from the graph and
 probably forgotten.
 
 **Broken links:** Wiki-links that point to files that don't
-exist. Use `search_vault_simple` to find `[[...]]` patterns,
-then verify each target exists.
+exist. Search for `[[...]]` patterns across all files, then
+verify each linked target file exists.
 
 **Bidirectional consistency:** If entity A's frontmatter says
 `ally_of: "[[B]]"`, does entity B's frontmatter acknowledge
