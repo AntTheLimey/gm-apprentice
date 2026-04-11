@@ -101,7 +101,7 @@ Read these files in full:
 
 Merge the two source files as described above. The structure should be:
 
-```
+```text
 # Entity Schema
 (preamble: what this file is, who uses it)
 
@@ -265,7 +265,7 @@ Replace these exact strings:
 Also add a brief cross-reference to `shared/canon-confidence.md` near the Handling Ambiguity section (line 243-252) where `canon_status: DRAFT` is referenced:
 
 After line 249 (`set \`canon_status: DRAFT\`.`), add:
-```
+```text
 See `shared/canon-confidence.md` for the full confidence state
 definitions.
 ```
@@ -350,7 +350,7 @@ Find all references to `entity-types.md` and `canon-management.md`.
 In the "Canon and Validation" section (lines 211-222):
 
 Replace:
-```
+```text
 See `canon-management.md`. On conflicts, ask — never assume.
 
 All content must be mechanically correct and narratively
@@ -358,7 +358,7 @@ consistent. See `entity-types.md` and `continuity-engine.md`.
 ```
 
 With:
-```
+```text
 See `canon-management.md` and `shared/canon-confidence.md`.
 On conflicts, ask — never assume.
 

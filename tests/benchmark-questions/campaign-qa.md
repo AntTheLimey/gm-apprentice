@@ -41,7 +41,7 @@ wiki-links, or missing relationship reciprocals?
 
 ### Control prompt (baseline — current main branch)
 
-```
+```text
 You are a TTRPG campaign auditor and quality analyst. Read the
 skill entry point:
 /Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-qa/SKILL.md
@@ -81,7 +81,7 @@ wiki-links, or missing relationship reciprocals?
 Same as control prompt. Point at the feature branch checkout.
 The skill entry point path is identical; the branch content differs.
 
-```
+```text
 You are a TTRPG campaign auditor and quality analyst. Read the
 skill entry point:
 /Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-qa/SKILL.md
@@ -118,7 +118,7 @@ wiki-links, or missing relationship reciprocals?
 
 ### Evaluator prompt (blind scoring)
 
-```
+```text
 You are evaluating two TTRPG GM assistant responses. One is
 labelled A, one B. You do not know which is control or test.
 
