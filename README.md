@@ -12,6 +12,7 @@ generation to campaign management and session lifecycle support.
 | **campaign-organizer** | Campaign architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata. Works with Obsidian or plain filesystem. | Recommended |
 | **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks. Works with Obsidian or plain filesystem. | Recommended |
 | **session-lifecycle** | Session lifecycle management -- prep, play, wrap-up, and reconciliation between planned and actual session content. Works with Obsidian or plain filesystem. | Recommended |
+| **publish-site** | Publish your campaign vault as a static website on GitHub Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
 
 ## Supported Game Systems
 
@@ -78,6 +79,10 @@ Install via the CLI method instead:
   auditing
 - [session-lifecycle](docs/session-lifecycle.md) -- session
   prep, play, and wrap-up
+- [publish-tool](docs/publish-tool.md) -- publishing your vault
+  as a static website
+- [gm-apprentice-publish](tools/publish/README.md) -- npm package
+  reference for the publish tool
 
 ## Obsidian Setup
 
