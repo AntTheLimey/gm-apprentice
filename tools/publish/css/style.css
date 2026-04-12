@@ -742,6 +742,18 @@ td .stat {
   margin: 0;
 }
 
+/* ===== FACTION MEMBERS/GOALS ===== */
+.members, .goals {
+  margin-bottom: 1rem;
+}
+.members h3, .goals h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+.members ul, .goals ul {
+  margin: 0;
+}
+
 /* ===== PRINT ===== */
 @media print {
   .site-header,
