@@ -4,7 +4,7 @@ createdSession: "Session 1"
 lastUpdated: "Session 2"
 asOfSession: "Session 2"
 source_confidence: AUTHORITATIVE
-status: "active"
+status: "alive"
 aliases:
   - "Crane"
   - "Detective Crane"

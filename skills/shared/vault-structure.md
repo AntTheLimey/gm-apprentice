@@ -5,6 +5,14 @@ Written to `_meta/vault-config.md` on first setup.
 ```text
 {Campaign Name}/
 ├── _meta/           (schema + index)
+├── _attachments/    (image files)
+│   ├── characters/  (PC and NPC portraits)
+│   ├── locations/   (location images)
+│   ├── factions/    (logos, HQ images)
+│   ├── items/       (item illustrations)
+│   ├── creatures/   (creature art)
+│   ├── events/      (scene art)
+│   └── documents/   (scans, letter images)
 ├── _Campaign/
 │   ├── Campaign Overview.md
 │   ├── Player Characters.md
@@ -41,3 +49,28 @@ frontmatter, section headings, Dataview backlink query,
 **Naming:** Entity notes use canonical name as filename. Sessions:
 `Session {NN} - {Title}.md`. Chapters: `Chapter {N} - {Title}/`.
 Aliases in frontmatter.
+
+## Image Attachments
+
+The `_attachments/` folder stores image files referenced by entity
+frontmatter or body embeds. Organize by entity type.
+
+**Naming convention:** Use slug format (lowercase, hyphens) matching
+entity files — e.g., `characters/ronnie-vint.jpg` for the entity
+`Ronnie Vint.md`. Multiple images per entity get suffixed:
+`ronnie-vint-young.jpg`, `ronnie-vint-scarred.jpg`.
+
+**Accepted formats:** jpg, jpeg, png, webp, gif. Avoid HEIC or RAW
+(not web-safe).
+
+**Frontmatter reference:** Entity types that support portraits use
+the `portrait` field with a vault-root-relative path:
+```yaml
+portrait: "_attachments/characters/ronnie-vint.jpg"
+```
+
+**Body embeds:** Use Obsidian's wiki-embed syntax for inline images:
+```markdown
+![[ronnie-vint-selection.jpg]]
+```
+Obsidian resolves these by searching configured attachment paths.

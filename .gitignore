@@ -24,6 +24,9 @@ _backup/
 # Git worktrees
 .worktrees/
 
+# Claude Code local settings
+.claude/
+
 # Personal GURPS reference files (not for distribution)
 skills/ttrpg-expert/systems/gurps-4e/personal/
 
