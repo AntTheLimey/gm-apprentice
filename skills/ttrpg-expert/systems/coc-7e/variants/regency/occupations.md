@@ -64,7 +64,7 @@ Skills: Art/Craft (Cooking/Sewing), Dodge, Etiquette, Fashion, Fast Talk, Listen
 | 4 | Gentry/Nouveau Riche | 50–90% | Gentleman, Gentlewoman, Nouveau Riche |
 | 5 | Aristocracy | 90–100% | Not routinely available. Rename Gentleman/Gentlewoman to Nobleman/Noblewoman, CR 90–100% |
 
-Notes: Butler/Housekeeper CR capped at 40%. Band 2 artistic occupations may
+Notes: Butler/Valet/Maid CR capped at 40% (reflects senior household staff status). Band 2 artistic occupations may
 raise CR to 70% with Keeper permission.
 
 ## Cross-Reference
