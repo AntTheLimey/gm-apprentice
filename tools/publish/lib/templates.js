@@ -50,7 +50,8 @@ function generateNav(pages) {
   };
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer }) {
+  const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,9 +76,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content }) {
 ${content}
 </main>
 
-<footer class="site-footer">
-  GURPS is a trademark of Steve Jackson Games. Fan creation for personal use. GURPS 4th Edition.
-</footer>
+${footerHtml}
 
 <script>
 document.querySelectorAll('.site-nav a').forEach(a => {
@@ -185,6 +184,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap) 
     navHtml: navFor(page.outputPath),
     rootHref: rootPath(page.outputPath),
     content,
+    footer: config.footer,
   });
 }
 
@@ -214,6 +214,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap) {
     navHtml: navFor(page.outputPath),
     rootHref: rootPath(page.outputPath),
     content,
+    footer: config.footer,
   });
 }
 
@@ -249,6 +250,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap) {
     navHtml: navFor(page.outputPath),
     rootHref: rootPath(page.outputPath),
     content,
+    footer: config.footer,
   });
 }
 
@@ -266,6 +268,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap) {
     navHtml: navFor(page.outputPath),
     rootHref: rootPath(page.outputPath),
     content,
+    footer: config.footer,
   });
 }
 
@@ -297,6 +300,7 @@ function indexTemplate(outputDir, title, pages, navFor, config) {
     navHtml: navFor(outputPath),
     rootHref: rootPath(outputPath),
     content,
+    footer: config.footer,
   });
 }
 
@@ -328,11 +332,14 @@ function landingTemplate(pages, navFor, config) {
 </div>`;
   }).join('\n');
 
+  const tagline = config.landingTagline || 'Welcome to the campaign.';
+  const params = config.landingParams || '';
+
   const content = `
 <div class="hero">
   <h1>${escapeHtml(config.siteTitle)}</h1>
-  <p class="tagline">2019. Meteor fragments grant superhuman abilities. You do NOT have a fragment.</p>
-  <p class="params">GURPS 4th Edition &bull; 200 points &bull; TL8 + experimental</p>
+  <p class="tagline">${escapeHtml(tagline)}</p>
+  ${params ? `<p class="params">${escapeHtml(params)}</p>` : ''}
 </div>
 
 <div class="nav-grid">
@@ -346,6 +353,7 @@ ${navCards}
     navHtml: navFor(outputPath),
     rootHref: './',
     content,
+    footer: config.footer,
   });
 }
 
