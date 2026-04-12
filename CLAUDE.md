@@ -29,7 +29,7 @@ above all other conventions.
 
 | System | License | What's allowed |
 |--------|---------|----------------|
-| CoC 7e / BRP | [BRP ORC License](https://www.chaosium.com/basic-roleplaying-brp-open-game-content/) | Mechanics, stat blocks, generic content. No proprietary Chaosium IP (Arkham, Lovecraft Country NPCs, published adventures, flavour text) |
+| CoC 7e / BRP | [BRP ORC License](https://www.chaosium.com/orclicense) | Mechanics, stat blocks, generic content. No proprietary Chaosium IP (Arkham, Lovecraft Country NPCs, published adventures, flavour text) |
 | D&D 5e (2024) | [CC-BY 4.0 SRD](https://dnd.wizards.com/resources/systems-reference-document) | Anything in the 5.2 SRD with attribution. No content outside the SRD |
 | FitD | [CC-BY 3.0](https://bladesinthedark.com/about-the-dark) | Blades in the Dark rules with attribution. No Deep Cuts, no publisher-specific content |
 | GURPS 4e | [SJG Online Policy](http://www.sjgames.com/general/online_policy.html) | **Names, point costs, short notes only.** No full rule text, no full character builds, no tables reproduced verbatim |
