@@ -9,7 +9,7 @@ Standards for all files under `skills/ttrpg-expert/systems/`.
 **Required** for files referencing copyrighted game content. First lines,
 before the H1:
 
-```
+```text
 > [Source] attribution: [License]. See ATTRIBUTION.md.
 > [System] adaptation: Our own descriptions of uncopyrightable
 > game mechanics (Baker v. Selden, 1879). Not [Publisher] text.
@@ -26,7 +26,7 @@ Immediately after the H1, no blank line between them. 2–4 lines of prose.
 States: what the file contains, when to use it (chargen / play / lookup),
 and what is **not** here (point to other files). No headers or lists.
 
-```
+```text
 # System Name -- Topic Reference
 
 What this file covers. When to reach for it. What's not covered:
@@ -42,7 +42,7 @@ must state in the priming paragraph: which base file this overlays,
 that only differences are listed, and that unlisted base content
 still applies.
 
-```
+```text
 Regency (1811-1820) overlay for CoC 7e. Use alongside base
 `../skills.md`. Only differences listed here; all unlisted
 base CoC skills remain available.
@@ -53,7 +53,7 @@ base CoC skills remain available.
 ## 4. Compact Writing Rules
 
 **One-line entries** for skills, traits, items:
-```
+```text
 **Skill Name** (base%) — what it does. Key mechanic if any.
 **Trait Name** [cost] — effect. Limitation if any.
 ```
@@ -88,7 +88,7 @@ relevant section.
 
 **Required** for licensed content files. Last lines, after all content:
 
-```
+```text
 ---
 *[System] content: [brief license statement]. See ATTRIBUTION.md.*
 ```
