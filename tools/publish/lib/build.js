@@ -1,49 +1,51 @@
 const fs = require('fs');
 const path = require('path');
-const { scanVault, buildLinkMap, scanAttachments } = require('./lib/scanner');
-const { processContent, extractSections, filterSections, stripDataview } = require('./lib/processor');
-const { generateNav, pcTemplate, npcTemplate, locationTemplate, wikiTemplate, indexTemplate, landingTemplate, DIR_LABELS } = require('./lib/templates');
+const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
+const { processContent, extractSections, filterSections, stripDataview } = require('./processor');
+const { generateNav, pcTemplate, npcTemplate, locationTemplate, wikiTemplate, indexTemplate, landingTemplate, DIR_LABELS } = require('./templates');
 
-const config = require(path.join(__dirname, 'vault.config.json'));
-const outputDir = path.resolve(__dirname, config.outputDir);
+function build(options = {}) {
+  const configPath = options.configPath || './vault.config.json';
+  const config = require(path.resolve(configPath));
+  const outputDir = path.resolve(path.dirname(path.resolve(configPath)), config.outputDir);
 
-// Clean output dir but preserve specs/plans subdirectory
-function cleanOutput() {
-  if (!fs.existsSync(outputDir)) return;
-  const preserve = ['superpowers'];
-  for (const entry of fs.readdirSync(outputDir)) {
-    if (preserve.includes(entry)) continue;
-    const full = path.join(outputDir, entry);
-    fs.rmSync(full, { recursive: true, force: true });
+  // Clean output dir but preserve specs/plans subdirectory
+  function cleanOutput() {
+    if (!fs.existsSync(outputDir)) return;
+    const preserve = ['superpowers'];
+    for (const entry of fs.readdirSync(outputDir)) {
+      if (preserve.includes(entry)) continue;
+      const full = path.join(outputDir, entry);
+      fs.rmSync(full, { recursive: true, force: true });
+    }
   }
-}
 
-function ensureDir(filePath) {
-  const dir = path.dirname(filePath);
-  fs.mkdirSync(dir, { recursive: true });
-}
+  function ensureDir(filePath) {
+    const dir = path.dirname(filePath);
+    fs.mkdirSync(dir, { recursive: true });
+  }
 
-function copyCSS() {
-  const src = path.join(__dirname, 'css/style.css');
-  const dest = path.join(outputDir, 'css/style.css');
-  ensureDir(dest);
-  fs.copyFileSync(src, dest);
-}
-
-function writeNoJekyll() {
-  fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
-}
-
-function copyImages(imageMap) {
-  for (const entry of Object.values(imageMap)) {
-    const dest = path.join(outputDir, 'images', entry.relPath);
+  function copyCSS() {
+    const src = path.join(__dirname, '../css/style.css');
+    const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
-    fs.copyFileSync(entry.sourcePath, dest);
+    fs.copyFileSync(src, dest);
   }
-  console.log(`Copied ${Object.keys(imageMap).length} images`);
-}
 
-function main() {
+  function writeNoJekyll() {
+    fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
+  }
+
+  function copyImages(imageMap) {
+    for (const entry of Object.values(imageMap)) {
+      const dest = path.join(outputDir, 'images', entry.relPath);
+      ensureDir(dest);
+      fs.copyFileSync(entry.sourcePath, dest);
+    }
+    console.log(`Copied ${Object.keys(imageMap).length} images`);
+  }
+
+  // Main build logic
   console.log('Scanning vault:', config.vaultPath);
   const pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
@@ -125,4 +127,9 @@ function main() {
   }
 }
 
-main();
+module.exports = { build };
+
+// Allow running directly: node lib/build.js
+if (require.main === module) {
+  build();
+}
