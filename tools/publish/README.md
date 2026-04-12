@@ -270,9 +270,10 @@ Replaces Obsidian `![[image.jpg]]` embeds with standard HTML `<img>` tags.
 
 An object exposing `pcTemplate`, `npcTemplate`, `creatureTemplate`,
 `locationTemplate`, `itemTemplate`, `factionTemplate`, `wikiTemplate`,
-`indexTemplate`, `landingTemplate`, and `generateNav`. Each template
-function accepts `(page, processed, navFor, config, imageMap)` — see
-`lib/build.js` for exact signatures.
+`indexTemplate`, `landingTemplate`, and `generateNav`. Template signatures
+vary slightly — most accept `(page, processed, navFor, config, imageMap)`,
+but `pcTemplate` adds a `sections` param, and `itemTemplate`/`factionTemplate`
+add `linkMap` for relationship resolution. See `lib/build.js` for exact usage.
 
 ---
 
