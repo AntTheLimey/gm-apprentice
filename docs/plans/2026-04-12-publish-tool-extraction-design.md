@@ -47,7 +47,7 @@ The tool ships as two coordinated layers, both inside the gm-apprentice repo:
 
 ### Repository layout
 
-```
+```text
 gm-apprentice/
 ├── skills/
 │   └── publish-site/              # NEW — orchestration skill
