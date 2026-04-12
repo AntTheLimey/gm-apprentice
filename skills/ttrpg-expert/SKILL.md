@@ -29,6 +29,12 @@ Match user intent → go directly to the file. Skip clarification.
 **CoC occupation** → `systems/coc-7e/occupations.md`
 **CoC combat** → `systems/coc-7e/combat-reference.md`
 
+**Regency CoC skill** → `systems/coc-7e/skills.md` + `systems/coc-7e/variants/regency/skills.md`
+**Regency CoC occupation** → `systems/coc-7e/occupations.md` + `systems/coc-7e/variants/regency/occupations.md`
+**Regency CoC equipment** → `systems/coc-7e/equipment-weapons.md` + `systems/coc-7e/variants/regency/equipment.md`
+**Regency CoC character** → `systems/coc-7e/character-generation.md` + `systems/coc-7e/variants/regency/character-generation.md`
+**Regency CoC session/social** → `systems/coc-7e/session-procedures.md` + `systems/coc-7e/variants/regency/gm-guidance.md`
+
 **FitD faction** → `systems/fitd/factions.md`
 **FitD playbook** → `systems/fitd/playbooks.md`
 **FitD crew type** → `systems/fitd/crew-types.md`
@@ -182,6 +188,22 @@ Book coverage: `sources.md`.
 | Creatures | creatures.md |
 | Magic / powers | powers-magic.md |
 | Lovecraft setting | setting-lovecraft.md |
+
+#### CoC 7e Variant: Regency
+
+If the user mentions "Regency" OR the active campaign is
+tagged as system "CoC 7e (Regency)":
+→ Load the base file above AND the matching overlay.
+
+| Request | Overlay |
+|---------|---------|
+| Skills | variants/regency/skills.md |
+| Occupations | variants/regency/occupations.md |
+| Equipment / weapons | variants/regency/equipment.md |
+| Character creation | variants/regency/character-generation.md |
+| Session / investigation | variants/regency/gm-guidance.md |
+
+No variant keyword or tag → use base CoC files only.
 
 ### FitD (`systems/fitd/`)
 
