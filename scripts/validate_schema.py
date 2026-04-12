@@ -54,7 +54,8 @@ PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "c
 
 def extract_frontmatter(content: str) -> dict | None:
     """Extract YAML frontmatter from markdown content."""
-    match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    # Handle both LF and CRLF line endings
+    match = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", content, re.DOTALL)
     if not match:
         return None
 
@@ -126,7 +127,9 @@ def validate_file(filepath: Path) -> list[str]:
     # Validate source_confidence enum
     if "source_confidence" in frontmatter:
         value = frontmatter["source_confidence"]
-        if value not in SOURCE_CONFIDENCE:
+        if not isinstance(value, str):
+            errors.append("Field 'source_confidence' must be a string")
+        elif value not in SOURCE_CONFIDENCE:
             errors.append(
                 f"Invalid source_confidence '{value}' — "
                 f"must be one of: {', '.join(sorted(SOURCE_CONFIDENCE))}"
@@ -135,7 +138,9 @@ def validate_file(filepath: Path) -> list[str]:
     # Validate session status
     if entity_type == "session" and "status" in frontmatter:
         value = frontmatter["status"]
-        if value not in SESSION_STATUS:
+        if not isinstance(value, str):
+            errors.append("Field 'status' must be a string")
+        elif value not in SESSION_STATUS:
             errors.append(
                 f"Invalid session status '{value}' — "
                 f"must be one of: {', '.join(sorted(SESSION_STATUS))}"
@@ -145,14 +150,18 @@ def validate_file(filepath: Path) -> list[str]:
     if entity_type == "scene":
         if "status" in frontmatter:
             value = frontmatter["status"]
-            if value not in SCENE_STATUS:
+            if not isinstance(value, str):
+                errors.append("Field 'status' must be a string")
+            elif value not in SCENE_STATUS:
                 errors.append(
                     f"Invalid scene status '{value}' — "
                     f"must be one of: {', '.join(sorted(SCENE_STATUS))}"
                 )
         if "scene_type" in frontmatter:
             value = frontmatter["scene_type"]
-            if value not in SCENE_TYPES:
+            if not isinstance(value, str):
+                errors.append("Field 'scene_type' must be a string")
+            elif value not in SCENE_TYPES:
                 errors.append(
                     f"Invalid scene_type '{value}' — "
                     f"must be one of: {', '.join(sorted(SCENE_TYPES))}"
@@ -161,7 +170,9 @@ def validate_file(filepath: Path) -> list[str]:
     # Validate NPC/PC status if present
     if entity_type in ("npc", "pc") and "status" in frontmatter:
         value = frontmatter["status"]
-        if value not in NPC_STATUS:
+        if not isinstance(value, str):
+            errors.append("Field 'status' must be a string")
+        elif value not in NPC_STATUS:
             errors.append(
                 f"Invalid status '{value}' — "
                 f"must be one of: {', '.join(sorted(NPC_STATUS))}"
@@ -170,7 +181,9 @@ def validate_file(filepath: Path) -> list[str]:
     # Validate portrait field — only allowed for supported entity types
     portrait = frontmatter.get("portrait")
     if portrait:
-        if entity_type not in PORTRAIT_TYPES:
+        if not isinstance(portrait, str):
+            errors.append("Field 'portrait' must be a string path")
+        elif entity_type not in PORTRAIT_TYPES:
             errors.append(
                 f"Field 'portrait' not allowed for type '{entity_type}' — "
                 f"only supported for: {', '.join(sorted(PORTRAIT_TYPES))}"
