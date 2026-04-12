@@ -78,7 +78,7 @@ Replaced by newer information.
 
 1. **Same entity, different values**
 
-   ```
+   ```text
    Entity "Dr. Smith"
    Source A: "Age: 45"
    Source B: "Age: 52"
@@ -87,7 +87,7 @@ Replaced by newer information.
 
 2. **Contradicting relationships**
 
-   ```
+   ```text
    Entity "John"
    Source A: "Married to Mary"
    Source B: "Single"
@@ -96,7 +96,7 @@ Replaced by newer information.
 
 3. **Timeline inconsistencies**
 
-   ```
+   ```text
    Event A: "Smith died in 1925"
    Event B: "Smith attended meeting in 1926"
    → Conflict detected
@@ -104,7 +104,7 @@ Replaced by newer information.
 
 4. **Entity duplication**
 
-   ```
+   ```text
    Entity "Dr. John Smith"
    Entity "John Smith, M.D."
    → Potential duplicate detected

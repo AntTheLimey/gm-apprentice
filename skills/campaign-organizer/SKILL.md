@@ -133,7 +133,7 @@ canonical record of collapsed reality.
 
 ### Narrative Layer (linear)
 
-```
+```text
 Campaign → Chapter → Session → Scene
 ```
 

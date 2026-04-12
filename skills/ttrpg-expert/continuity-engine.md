@@ -103,7 +103,7 @@ AI-assisted session planning.
 
 ### Thread Tracker
 
-```
+```markdown
 ## [Thread Name]
 Type:  Introduced: [session + context]
 State: [Active / Dormant / Resolved / Retired]
@@ -188,7 +188,7 @@ SUPERSEDED, note in session records.
 
 ### State Snapshot
 
-```
+```markdown
 ## Campaign State: [Date]
 
 Active Threats:

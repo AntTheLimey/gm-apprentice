@@ -328,7 +328,7 @@ Dodge. Always calculate this for combat characters.
 
 ## Character Sheet Output Format
 
-```
+```text
 [CHARACTER NAME]
 [Concept] — [Point Total] points
 
@@ -382,7 +382,7 @@ Unspent:         [x] pts
 For complex characters, build incrementally. After each step,
 present running point total and remaining budget:
 
-```
+```text
 After Step 2 (Attributes):
   Spent: 80 pts | Remaining: 120 pts of 200
 

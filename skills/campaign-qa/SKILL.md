@@ -236,7 +236,7 @@ findings; every finding goes through this workflow.
 
 ### 1. Present the Finding
 
-```
+```markdown
 ### [Severity] Finding Title
 
 **Files:** [[file_a]], [[file_b]]

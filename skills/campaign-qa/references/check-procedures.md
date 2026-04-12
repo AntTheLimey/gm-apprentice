@@ -113,7 +113,7 @@ Read the master timeline (`_Campaign/Timeline.md` or
 equivalent). Then scan session notes for dated events.
 Build a unified chronological list:
 
-```
+```text
 [In-game date] — [Event] — [Source file] — [Entities involved]
 ```
 

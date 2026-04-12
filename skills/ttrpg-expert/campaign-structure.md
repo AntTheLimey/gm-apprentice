@@ -31,7 +31,7 @@ Guide to organizing campaign content.
 
 ### Session Lifecycle
 
-```
+```text
 PLANNED → COMPLETED
     ↓
   SKIPPED
@@ -153,7 +153,7 @@ Night watchman was avoided entirely.
 
 ### Recommended Structure
 
-```
+```text
 Campaign
 ├── Core NPCs (10-20)
 │   ├── Allies

@@ -27,8 +27,8 @@ MD022: false
 # Bare URLs — URLs appear in attribution and reference sections
 MD034: false
 
-# Fenced code language — some code blocks intentionally have no language tag
-MD040: false
+# Fenced code language — enforced (use `text` for plain content)
+MD040: true
 
 # First line heading — SKILL.md files and reference fragments don't start with H1
 MD041: false

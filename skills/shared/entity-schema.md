@@ -30,7 +30,7 @@ when filing or updating.
 
 ## Entity Type Hierarchy
 
-```
+```text
 person (abstract)
 ├── player
 ├── game_master

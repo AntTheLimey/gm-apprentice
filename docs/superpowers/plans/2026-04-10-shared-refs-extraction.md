@@ -204,7 +204,7 @@ Some vaults use `canon_status` instead — treat them as equivalent.
 For detailed conflict detection rules, source tracking,
 and the full promotion workflow, read:
 `ttrpg-expert/canon-management.md`
-```
+```text
 
 - [ ] **Step 6: Verify all four files exist and cross-references resolve**
 

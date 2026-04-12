@@ -433,7 +433,7 @@ examples for different campaign tones.
 
 Entity creation is automatic. Don't ask — do it.
 
-```
+```text
 Play: new entity mentioned → noted in play notes
 Wrap-up: new entity found → hand off to campaign-organizer
   → vault file created with source_confidence: DRAFT

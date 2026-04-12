@@ -110,7 +110,7 @@ to be shared with players.
 Organize by scene (in order played), with consistent sub-
 headings:
 
-```
+```markdown
 ### [Scene Name] — [played/modified/skipped]
 
 **What happened:** Factual narrative (2-4 sentences)
