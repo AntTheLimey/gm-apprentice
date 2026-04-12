@@ -5,13 +5,13 @@ Read only the file(s) relevant to the current request.
 
 ## System Selection
 
-| System | Subfolder |
-|--------|-----------|
-| D&D 5e (2024) | `systems/dnd-5e-2024/` |
-| Forged in the Dark | `systems/fitd/` |
-| CoC 7e | `systems/coc-7e/` |
-| GURPS 4e | `systems/gurps-4e/` |
-| Other | `systems/generic/` |
+| System | Subfolder | Variants |
+|--------|-----------|----------|
+| D&D 5e (2024) | `systems/dnd-5e-2024/` | — |
+| Forged in the Dark | `systems/fitd/` | — |
+| CoC 7e | `systems/coc-7e/` | `variants/regency/` |
+| GURPS 4e | `systems/gurps-4e/` | — |
+| Other | `systems/generic/` | — |
 
 ## Per-System Requests
 
@@ -35,6 +35,7 @@ Read only the file(s) relevant to the current request.
 | Conditions | D&D: `conditions-rules.md` | — |
 | Creatures / monsters | CoC: `creatures.md`. D&D: `monsters.md` / `animals.md` | — |
 | Setting / lore | CoC: `setting-lovecraft.md`. FitD: `setting-doskvol.md` | — |
+| Variant-specific rules | `{system}/variants/{variant}/*.md` | Base system file for same topic |
 | Factions | FitD: `factions.md`. Others: `content-generation.md` | `relationship-patterns.md` |
 | Classes / occupations | CoC: `occupations.md`. FitD: `playbooks.md`. D&D: `classes.md` | — |
 | Crew / party type | FitD: `crew-types.md` | — |
