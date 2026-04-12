@@ -1,4 +1,4 @@
-# gm-apprentice — Ranked Backlog
+# gm-apprentice — Roadmap
 
 Items are force-ranked by score. Higher score = do first.
 
@@ -33,15 +33,22 @@ Items are force-ranked by score. Higher score = do first.
 
 | Rank | Item | Impact | Urgency | Effort | Score | Status |
 |:----:|------|:------:|:-------:|:------:|:-----:|--------|
-| — | ~~Regency Cthulhu system support~~ | 5 | 4 | M (2) | 7.0 | Done |
+| 1 | Publish tool: Event dedicated template | 3 | 2 | M (2) | 4.0 | Idea |
 | 2 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
-| 3 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
-| 4 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
-| 5 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
-| 6 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
-| 7 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
-| 8 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
-| 9 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
+| 3 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea |
+| 4 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea |
+| 5 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
+| 6 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea |
+| 7 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
+| 8 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
+| 9 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
+| 10 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
+| 11 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea |
+| 12 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
+| 13 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea |
+| 14 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
+| 15 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
+| 16 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
 
 ## Completed
 
@@ -66,3 +73,13 @@ Items are force-ranked by score. Higher score = do first.
 
 - **GURPS enrichment** is not on the list — already done in
   Phase 4 (24 topic files, 7 chargen kits).
+
+- **Publish tool** (`tools/publish/`, planned) is a separate npm
+  package that lives inside this repo. Publishable as
+  `gm-apprentice-publish` on npm. Ships with dedicated templates
+  for PC, NPC, Location, Creature, Item, Faction in v1.0.
+  Remaining entity types (Event, Clue, Document, Chapter,
+  Session, Scene) use a smart wiki fallback template with
+  frontmatter-based metadata badges until their dedicated
+  templates ship in v1.1+. Working prototype lives at
+  `AntTheLimey/gurps-special-forces` until extracted.
