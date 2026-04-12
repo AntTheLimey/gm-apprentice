@@ -382,4 +382,202 @@ describe('build integration', () => {
       assert.ok(fs.existsSync(townPath));
     });
   });
+
+  describe('with-creature fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-creature-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-creature'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Creature Test',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: {
+          'Creatures': 'creatures',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('creates creature page with stat block', () => {
+      const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
+      assert.ok(fs.existsSync(creaturePath));
+      const html = fs.readFileSync(creaturePath, 'utf-8');
+      assert.ok(html.includes('stat-block'));
+      assert.ok(html.includes('HP'));
+      assert.ok(html.includes('15'));
+    });
+
+    it('renders abilities list', () => {
+      const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
+      const html = fs.readFileSync(creaturePath, 'utf-8');
+      assert.ok(html.includes('Night Vision'));
+    });
+
+    it('renders weaknesses list', () => {
+      const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
+      const html = fs.readFileSync(creaturePath, 'utf-8');
+      assert.ok(html.includes('Vulnerable to fire'));
+    });
+
+    it('renders creature type badge', () => {
+      const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
+      const html = fs.readFileSync(creaturePath, 'utf-8');
+      assert.ok(html.includes('Undead'));
+    });
+
+    it('renders threat level badge', () => {
+      const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
+      const html = fs.readFileSync(creaturePath, 'utf-8');
+      assert.ok(html.includes('Threat: High'));
+    });
+  });
+
+  describe('with-item fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-item-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-item'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Item Test',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: {
+          'Items & Artifacts': 'items',
+          'Characters/NPCs': 'characters/npcs',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('creates item page with stat block', () => {
+      const itemPath = path.join(outputDir, 'docs', 'items', 'test-sword.html');
+      assert.ok(fs.existsSync(itemPath));
+      const html = fs.readFileSync(itemPath, 'utf-8');
+      assert.ok(html.includes('stat-block'));
+      assert.ok(html.includes('Damage'));
+      assert.ok(html.includes('2d+1 cut'));
+    });
+
+    it('renders item type badge', () => {
+      const itemPath = path.join(outputDir, 'docs', 'items', 'test-sword.html');
+      const html = fs.readFileSync(itemPath, 'utf-8');
+      assert.ok(html.includes('Weapon'));
+    });
+
+    it('renders rarity badge', () => {
+      const itemPath = path.join(outputDir, 'docs', 'items', 'test-sword.html');
+      const html = fs.readFileSync(itemPath, 'utf-8');
+      assert.ok(html.includes('Rare'));
+    });
+
+    it('renders holder link', () => {
+      const itemPath = path.join(outputDir, 'docs', 'items', 'test-sword.html');
+      const html = fs.readFileSync(itemPath, 'utf-8');
+      assert.ok(html.includes('Current Holder'));
+      assert.ok(html.includes('Test Hero'));
+      // Should be a link to the holder page
+      assert.ok(html.includes('href='));
+    });
+
+    it('creates holder NPC page', () => {
+      const heroPath = path.join(outputDir, 'docs', 'characters', 'npcs', 'test-hero.html');
+      assert.ok(fs.existsSync(heroPath));
+    });
+  });
+
+  describe('with-faction fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-faction-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-faction'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Faction Test',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: {
+          'Factions & Organizations': 'factions',
+          'Characters/NPCs': 'characters/npcs',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('creates faction page', () => {
+      const factionPath = path.join(outputDir, 'docs', 'factions', 'test-guild.html');
+      assert.ok(fs.existsSync(factionPath));
+    });
+
+    it('renders faction type badge', () => {
+      const factionPath = path.join(outputDir, 'docs', 'factions', 'test-guild.html');
+      const html = fs.readFileSync(factionPath, 'utf-8');
+      assert.ok(html.includes('Guild'));
+    });
+
+    it('renders goals list', () => {
+      const factionPath = path.join(outputDir, 'docs', 'factions', 'test-guild.html');
+      const html = fs.readFileSync(factionPath, 'utf-8');
+      assert.ok(html.includes('Goals'));
+      assert.ok(html.includes('Control the trade routes'));
+      assert.ok(html.includes('Expand influence'));
+    });
+
+    it('renders leadership link', () => {
+      const factionPath = path.join(outputDir, 'docs', 'factions', 'test-guild.html');
+      const html = fs.readFileSync(factionPath, 'utf-8');
+      assert.ok(html.includes('Leadership'));
+      assert.ok(html.includes('Guild Master'));
+    });
+
+    it('renders member rollup with both Guild Master and Guild Member', () => {
+      const factionPath = path.join(outputDir, 'docs', 'factions', 'test-guild.html');
+      const html = fs.readFileSync(factionPath, 'utf-8');
+      assert.ok(html.includes('Members'));
+      assert.ok(html.includes('Guild Master'));
+      assert.ok(html.includes('Guild Member'));
+    });
+
+    it('creates member NPC pages', () => {
+      const masterPath = path.join(outputDir, 'docs', 'characters', 'npcs', 'guild-master.html');
+      const memberPath = path.join(outputDir, 'docs', 'characters', 'npcs', 'guild-member.html');
+      assert.ok(fs.existsSync(masterPath));
+      assert.ok(fs.existsSync(memberPath));
+    });
+  });
 });
