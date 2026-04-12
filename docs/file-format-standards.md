@@ -37,13 +37,15 @@ see other-file.md.
 
 ## 3. Overlay Priming (variant files)
 
-Files in `personal/` or other variant subdirectories must state in the
-priming paragraph: which base file this overlays, that only differences
-are listed, and that unlisted base content still applies.
+Files in `variants/` subdirectories (e.g., `variants/regency/`)
+must state in the priming paragraph: which base file this overlays,
+that only differences are listed, and that unlisted base content
+still applies.
 
 ```
-Overlays `systems/coc-7e/mechanics.md`. Only differences and additions
-are listed. All base mechanics apply unless explicitly replaced.
+Regency (1811-1820) overlay for CoC 7e. Use alongside base
+`../skills.md`. Only differences listed here; all unlisted
+base CoC skills remain available.
 ```
 
 ---
