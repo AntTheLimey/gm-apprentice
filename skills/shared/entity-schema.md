@@ -141,6 +141,7 @@ Extraction defaults:
 | skills | array | Skill list |
 | motivations | array | Goals and drives |
 | secrets | string | Hidden information |
+| portrait | string | Optional: path to portrait image under `_attachments/` |
 
 ```json
 {
@@ -167,6 +168,7 @@ Extraction defaults:
 | inhabitants | array | Who's here |
 | points_of_interest | array | Notable features |
 | secrets | string | Hidden aspects |
+| portrait | string | Optional: path to establishing shot under `_attachments/` |
 
 ### Item
 
@@ -177,6 +179,7 @@ Extraction defaults:
 | origin | string | Provenance |
 | properties | object | Special abilities |
 | currentHolder | string | Who has it |
+| portrait | string | Optional: path to item illustration under `_attachments/` |
 
 ### Faction
 
@@ -193,6 +196,7 @@ Extraction defaults:
 | alliances | array | Current allies/enemies |
 | recentActions | array | Last 1-3 sessions |
 | status | string | active / weakened / destroyed / allied / dormant |
+| portrait | string | Optional: path to logo or HQ image under `_attachments/` |
 
 ### Clue
 
@@ -230,6 +234,7 @@ Extraction defaults:
 | weaknesses | array | Vulnerabilities |
 | sanityLoss | string | SAN loss on sight |
 | stats | object | Combat statistics |
+| portrait | string | Optional: path to creature art under `_attachments/` |
 
 ### Organization
 
@@ -240,6 +245,7 @@ Extraction defaults:
 | size | string | Member count |
 | resources | string | Available assets |
 | notable_members | array | Important people |
+| portrait | string | Optional: path to logo or HQ image under `_attachments/` |
 
 ### Event
 
@@ -326,19 +332,20 @@ attribute tables. This section is the compact summary used
 during Dissect mode.
 
 **NPC:** `occupation`, `age`, `gender`, `nationality`, `status`
-(alive/dead/missing/unknown)
+(alive/dead/missing/unknown), `portrait` (optional)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
-`status` (alive/dead/missing/unknown), `key_traits`
+`status` (alive/dead/missing/unknown), `key_traits`, `portrait` (optional)
 
 **Location:** `location_type`, `parent_location` (wiki-link),
-`atmosphere`
+`atmosphere`, `portrait` (optional)
 
 **Faction/Organization:** `faction_type` (cult, guild, military,
-etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link)
+etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
+`portrait` (optional)
 
 **Item:** `item_type` (weapon, armor, relic, etc.),
-`current_holder` (wiki-link), `origin`
+`current_holder` (wiki-link), `origin`, `portrait` (optional)
 
 **Event:** `event_type` (battle, ritual, etc.), `date` (in-game),
 `location` (wiki-link), `participants` (wiki-links), `outcome`
@@ -347,7 +354,7 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link)
 `found_at` (wiki-link), `found_by`, `leads_to`, `reliability`
 
 **Creature:** `creature_type` (beast, undead, aberration, etc.),
-`location` (wiki-link), `abilities`, `weaknesses`
+`location` (wiki-link), `abilities`, `weaknesses`, `portrait` (optional)
 
 ## Relationship Types
 

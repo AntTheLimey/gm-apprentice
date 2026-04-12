@@ -129,6 +129,28 @@ append-only session-by-session record of what happened. Do
 not reorganise or edit past entries — the timeline is the
 canonical record of collapsed reality.
 
+## Image Attachments
+
+When creating or editing entities that support portraits (PC, NPC,
+Location, Faction, Organization, Item, Creature), accept an optional
+image path. Store images in `_attachments/<entity-type>/<slug>.<ext>`
+under the vault root. Write the relative path into the frontmatter
+`portrait` field:
+
+```yaml
+portrait: "_attachments/characters/ronnie-vint.jpg"
+```
+
+The `portrait` field is optional — entities without images render
+cleanly. Users add portraits incrementally as images become available.
+
+For body-embedded images, Obsidian's `![[filename.ext]]` syntax works
+natively. Downstream consumers (site generators, PDF exporters)
+detect these patterns independently.
+
+Read `shared/vault-structure.md` for naming conventions and accepted
+formats.
+
 ## The Two Layers
 
 ### Narrative Layer (linear)
