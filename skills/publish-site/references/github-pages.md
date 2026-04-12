@@ -31,8 +31,8 @@ automation** section and click **Pages**.
 
 Under **Build and deployment**, find the **Source** dropdown.
 
-1. Change the source from "Deploy from a GitHub Action" to
-   **Deploy from a branch**.
+1. If the source shows "None" or "Deploy from a GitHub Action",
+   change it to **Deploy from a branch**.
 2. In the **Branch** dropdown, select **main** (or whichever
    branch your site lives on — this is almost always `main`).
 3. In the **Folder** dropdown that appears next to the branch,

@@ -41,10 +41,11 @@ in the vault file to divide the character sheet into sections
 | Field | Status | Description |
 |-------|--------|-------------|
 | `name` | Required | Display name |
-| `entity_type` | Optional | Subtype label (e.g. "Patron", "Antagonist") |
-| `role` | Optional | Narrative function |
+| `occupation` | Optional | Role label (e.g. "Patron", "Antagonist", "Shopkeeper") |
+| `nationality` | Optional | Origin or nationality |
 | `status` | Optional | active, dead, missing, unknown |
-| `relationships` | Optional | List of `[[wiki-linked]]` relationships |
+| `age` | Optional | Character age |
+| `rank` | Optional | Military or organizational rank |
 | `portrait` | Optional | Path relative to vault root |
 
 Body content renders below the header card. The `Relationships`
@@ -110,9 +111,11 @@ in the body is rendered if present.
 
 ---
 
-### Faction
+### Faction / Organization
 
-`type: faction`
+`type: faction` or `type: organization`
+
+Both factions and organizations use the same template.
 
 | Field | Status | Description |
 |-------|--------|-------------|
