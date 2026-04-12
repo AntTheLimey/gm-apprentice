@@ -4,6 +4,7 @@ const { pcTemplate } = require('./pc');
 const { npcTemplate } = require('./npc');
 const { creatureTemplate } = require('./creature');
 const { locationTemplate } = require('./location');
+const { itemTemplate } = require('./item');
 const { wikiTemplate } = require('./wiki');
 const { indexTemplate } = require('./index-page');
 const { landingTemplate } = require('./landing');
@@ -22,6 +23,7 @@ module.exports = {
   npcTemplate,
   creatureTemplate,
   locationTemplate,
+  itemTemplate,
   wikiTemplate,
   indexTemplate,
   landingTemplate,

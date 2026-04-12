@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
 const { processContent, extractSections, filterSections, stripDataview } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, wikiTemplate, indexTemplate, landingTemplate, DIR_LABELS } = require('./templates/index');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, wikiTemplate, indexTemplate, landingTemplate, DIR_LABELS } = require('./templates/index');
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
@@ -86,6 +86,9 @@ function build(options = {}) {
           break;
         case 'location':
           html = locationTemplate(page, processed, navFor, config, imageMap);
+          break;
+        case 'item':
+          html = itemTemplate(page, processed, navFor, config, imageMap, linkMap);
           break;
         default:
           html = wikiTemplate(page, processed, navFor, config, imageMap);
