@@ -98,7 +98,7 @@ and see if the work is already listed.
 
 **If work isn't listed but should be**, add it using the formula:
 
-```
+```text
 Score = (Impact × 2 + Urgency) / Effort
 ```
 

@@ -2,9 +2,9 @@
 
 **Target:** Extract the gurps-special-forces vault-to-GitHub-Pages converter into a reusable tool that works for any gm-apprentice-based campaign, regardless of game system.
 
-**Target repo:** `/Users/antonypegg/PROJECTS/gm-apprentice` (lives inside the existing plugin repo)
+**Target repo:** `AntTheLimey/gm-apprentice` (lives inside the existing plugin repo at `tools/publish/`)
 **Published as:** `gm-apprentice-publish` on npm
-**Prototype source:** `/Users/antonypegg/PROJECTS/gurps-special-forces`
+**Prototype source:** `AntTheLimey/gurps-special-forces`
 **Brainstorm date:** 2026-04-12
 
 ## Purpose
