@@ -7,7 +7,7 @@
     "gm-apprentice-publish": "./bin/gm-publish.js"
   },
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test 'test/**/*.test.js'",
     "build": "node lib/build.js"
   },
   "engines": {
