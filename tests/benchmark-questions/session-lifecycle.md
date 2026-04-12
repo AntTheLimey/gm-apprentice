@@ -42,17 +42,17 @@ states.
 
 ### Control prompt (baseline — current main branch)
 
-```
+```text
 You are a TTRPG session lifecycle manager — the between-sessions
 workhorse that turns "we just finished playing" into organized
 canon and "we play next week" into solid prep. Read the skill
 entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/session-lifecycle/SKILL.md
+skills/session-lifecycle/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
 Also read the campaign files at:
-/Users/antonypegg/PROJECTS/gm-apprentice/tests/benchmark-campaign/
+tests/benchmark-campaign/
 Start with the index at _meta/index.md, then read session notes,
 PC roster, entity files, and timeline as needed for each question.
 
@@ -85,17 +85,17 @@ states.
 Same as control prompt. Point at the feature branch checkout.
 The skill entry point path is identical; the branch content differs.
 
-```
+```text
 You are a TTRPG session lifecycle manager — the between-sessions
 workhorse that turns "we just finished playing" into organized
 canon and "we play next week" into solid prep. Read the skill
 entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/session-lifecycle/SKILL.md
+skills/session-lifecycle/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
 Also read the campaign files at:
-/Users/antonypegg/PROJECTS/gm-apprentice/tests/benchmark-campaign/
+tests/benchmark-campaign/
 Start with the index at _meta/index.md, then read session notes,
 PC roster, entity files, and timeline as needed for each question.
 
@@ -125,7 +125,7 @@ states.
 
 ### Evaluator prompt (blind scoring)
 
-```
+```text
 You are evaluating two TTRPG GM assistant responses. One is
 labelled A, one B. You do not know which is control or test.
 

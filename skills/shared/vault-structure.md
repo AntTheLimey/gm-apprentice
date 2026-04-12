@@ -2,7 +2,7 @@
 
 Written to `_meta/vault-config.md` on first setup.
 
-```
+```text
 {Campaign Name}/
 ├── _meta/           (schema + index)
 ├── _Campaign/

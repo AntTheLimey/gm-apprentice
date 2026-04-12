@@ -1,49 +1,67 @@
-# gm-apprentice Future Work
+# gm-apprentice — Ranked Backlog
 
-Backlog of ideas and planned work identified during
-brainstorming sessions. Items move out of here when they
-get their own spec and implementation plan.
+Items are force-ranked by score. Higher score = do first.
 
-## Phase 5: Per-System Content Knowledgebases
+**Formula:** Score = (Impact × 2 + Urgency) / Effort
 
-Enrich each system subfolder with non-rules SRD content
-using multiple topic files (option B from brainstorming).
+| Impact | Meaning |
+|:------:|---------|
+| 5 | Directly improves the user's active game |
+| 4 | Improves the user's primary system |
+| 3 | Improves general plugin quality |
+| 2 | Adds support for secondary systems |
+| 1 | Nice to have |
 
-Per system, as applicable:
-- `monsters.md` / `creatures.md`
-- `spells.md`
-- `magic-items.md`
-- `setting.md` (Doskvol for FitD, etc.)
-- `factions.md`
-- Other system-specific topics
+| Urgency | Meaning |
+|:-------:|---------|
+| 5 | Blocks other work |
+| 4 | Active need (user's current campaign) |
+| 3 | Next logical step |
+| 2 | Eventually |
+| 1 | Whenever |
 
-Source from SRDs where available (CC-BY 4.0 for D&D,
-CC-BY 3.0 for FitD, ORC for BRP). For GURPS, generated
-from user's GCA data via connector.
+| Effort | Meaning |
+|:------:|---------|
+| S (1) | < 1 hour |
+| M (2) | 1-4 hours |
+| L (3) | 4-12 hours |
+| XL (4) | 12+ hours |
 
-## Phase 5+: Additional Connectors
+---
 
-- **PDF-to-markdown converter** for CoC rulebooks and
-  other systems without structured data files
-- **Auto-download of freely available SRDs** on first
-  setup (D&D SRD 5.2 from GitHub, FitD SRD, BRP ORC
-  Content Document)
-- **Connector for new game systems** as they're added
+## The List
 
-## Unfinished from Earlier Phases
+| Rank | Item | Impact | Urgency | Effort | Score | Status |
+|:----:|------|:------:|:-------:|:------:|:-----:|--------|
+| 1 | Regency Cthulhu system support | 5 | 4 | M (2) | 7.0 | Planned |
+| 2 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
+| 3 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
+| 4 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
+| 5 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
+| 6 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
+| 7 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
+| 8 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
+| 9 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
 
-- campaign-qa and session-lifecycle could potentially
-  get filesystem fallbacks similar to campaign-organizer
-  (lower priority — campaign-organizer was the most
-  impactful)
+## Completed
 
-## Ideas Under Consideration
+- ~~Codebase QA pass~~ — Score 11.0 (Impact 3, Urgency 5, Effort S)
+- ~~Filesystem fallback (campaign-qa, session-lifecycle)~~ — PR #14
+- ~~Shared-refs extraction~~ — Merged to main
+- ~~GURPS content restructure (Phase 4)~~ — 31 files, 7 kits
+- ~~Copyright compliance (Phases 1-3)~~ — All systems
 
-- Character sheet templates per system (see Phase 4 spec —
-  included there)
-- GCA `.gcs` sheet template parsing (character sheet
-  formats from GCA4's sheets/ directory)
-- skill-creator description optimization loop for all
-  four skills
-- Eval suite for each skill (beyond the campaign-organizer
-  evals already done)
+## Notes
+
+- **Regency Cthulhu** is the user's active campaign system.
+  Source material: `docs/supplemental/regency_cthulhu_reference_tables.md`
+  (skills, occupations, equipment, weapons, chase rules from
+  Chaosium 2022). Add as CoC variant topic file with Regency-
+  specific skill/occupation/equipment overrides.
+
+- **Phase 5 order** (confirmed): CoC/BRP → FitD → D&D.
+  Each system is a discrete unit — complete one before starting
+  the next.
+
+- **GURPS enrichment** is not on the list — already done in
+  Phase 4 (24 topic files, 7 chargen kits).

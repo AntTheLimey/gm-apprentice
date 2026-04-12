@@ -1,0 +1,41 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  markdown-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: |
+            skills/**/*.md
+            docs/**/*.md
+            tests/**/*.md
+            README.md
+
+  consistency-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No hardcoded absolute paths
+        run: |
+          if grep -rn '/Users/' skills/ docs/ tests/ README.md 2>/dev/null; then
+            echo "::error::Found hardcoded absolute paths"
+            exit 1
+          fi
+
+      - name: Schema field naming consistency
+        run: |
+          if grep -rn 'canon_status:' skills/ tests/ 2>/dev/null; then
+            echo "::error::Found 'canon_status:' — use 'source_confidence:' instead"
+            exit 1
+          fi

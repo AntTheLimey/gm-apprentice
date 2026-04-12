@@ -17,7 +17,7 @@ session planning, also read:
 Complete for every PC before planning scenes. The touchpoint
 at the bottom is the critical output.
 
-```
+```text
 PC NAME: ___  PLAYER: ___
 
 BACKSTORY HOOKS (unresolved elements from history):
@@ -46,7 +46,7 @@ storylines weaving through the ensemble narrative.
 
 ### Arc Tracker
 
-```
+```text
 CAMPAIGN: ___  SESSION: ___
 
 | PC | Arc Theme | Stage | Next Beat | Target Session |
@@ -73,7 +73,7 @@ every arc simultaneously.
 
 Rotate the featured PC. Track explicitly:
 
-```
+```text
 | Session | A-Plot | B-Plot (Featured PC) | C-Plot (Secondary) |
 |---------|--------|----------------------|--------------------|
 ```
@@ -85,7 +85,7 @@ Rules:
 
 ### Spotlight Tracking
 
-```
+```text
 SESSION: ___
 
 | PC | Spotlight Share | Notes |
@@ -127,7 +127,7 @@ to be major — some signal the campaign remembers the character.
 
 ### Touchpoint Planning Matrix
 
-```
+```text
 SESSION: ___
 
 | PC | Touchpoint Type | Description | When in Session |
@@ -146,7 +146,7 @@ COVERAGE CHECK:
 
 Map during campaign planning (not session-by-session):
 
-```
+```text
 MAIN ARC: ___  ANTAGONIST: ___
 
 | PC | Backstory Element | Connection to Main Arc |

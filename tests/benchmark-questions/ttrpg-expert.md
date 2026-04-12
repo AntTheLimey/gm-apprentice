@@ -38,10 +38,10 @@ campaign. How do thread entities work, and create one for me.
 
 ### Control prompt (baseline — current main branch)
 
-```
+```text
 You are a TTRPG rules expert and campaign entity architect. Read
 the skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/ttrpg-expert/SKILL.md
+skills/ttrpg-expert/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
@@ -71,10 +71,10 @@ campaign. How do thread entities work, and create one for me.
 Same as control prompt. Point at the feature branch checkout.
 The skill entry point path is identical; the branch content differs.
 
-```
+```text
 You are a TTRPG rules expert and campaign entity architect. Read
 the skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/ttrpg-expert/SKILL.md
+skills/ttrpg-expert/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
@@ -101,7 +101,7 @@ campaign. How do thread entities work, and create one for me.
 
 ### Evaluator prompt (blind scoring)
 
-```
+```text
 You are evaluating two TTRPG GM assistant responses. One is
 labelled A, one B. You do not know which is control or test.
 

@@ -277,7 +277,7 @@ is a score against the controlling faction (typically -2 status
 with target, +1 with their enemies).
 
 Sample claim map layout:
-```
+```text
 [        ] --- [        ] --- [        ]
      |              |              |
 [        ] --- [  LAIR  ] --- [        ]

@@ -8,7 +8,7 @@
 
 ## The Core Loop
 
-```
+```text
 Free Play -> Score Setup -> Engagement Roll -> Score Execution
     -> Payoff & Heat -> Entanglements -> Downtime -> Free Play
 ```

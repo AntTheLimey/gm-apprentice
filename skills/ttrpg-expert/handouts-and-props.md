@@ -43,7 +43,7 @@ duplicates existing info.
 
 ### Letters
 
-```
+```text
 [LETTERHEAD/ADDRESS — if appropriate to social standing]
 [DATE — period-appropriate format]
 [SALUTATION]
@@ -72,7 +72,7 @@ P3 (optional): Personal detail revealing character or subtext.
 
 ### Newspaper Clippings
 
-```
+```text
 [NEWSPAPER NAME] — [CITY]
 [DATE — day of week, full date]
 [SECTION]
@@ -99,7 +99,7 @@ info connecting later. Ads = hidden messages or locations.
 
 ### Diary/Journal Entries
 
-```
+```text
 [DATE]
 [ENTRY — first person]
 - Opening: what prompted the entry
@@ -120,7 +120,7 @@ info connecting later. Ads = hidden messages or locations.
 
 ### Official Documents
 
-```
+```text
 [LETTERHEAD — org name, seal, address]
 [DOCUMENT TYPE — "Certificate of Death", "Warrant", etc.]
 [REFERENCE NUMBER]
@@ -141,7 +141,7 @@ info connecting later. Ads = hidden messages or locations.
 
 ### Mythos Tomes
 
-```
+```text
 [TITLE — original language + translation]
 [PHYSICAL DESCRIPTION — binding, condition, medium, marginalia]
 [FRAGMENT]
@@ -161,7 +161,7 @@ passages; physical description should be unsettling.
 
 ### Item Cards
 
-```
+```text
 [ITEM NAME]  [RARITY/VALUE]
 [PHYSICAL DESCRIPTION — 1-2 sentences sensory detail]
 [MECHANICAL PROPERTIES — system stats, bonuses, charges, limits]

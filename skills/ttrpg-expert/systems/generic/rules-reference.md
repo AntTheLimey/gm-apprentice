@@ -31,7 +31,7 @@ determine who acts first in combat?" and map to one of these.
 Despite surface differences, most tactical combat follows the
 same universal loop:
 
-```
+```text
 1. Determine turn order (initiative)
 2. Active combatant declares action
 3. Resolve the action (roll dice, compare to target)

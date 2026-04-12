@@ -26,14 +26,14 @@ what a GM would actually ask during play or prep.
 ### 2. Run control and test
 
 **Control agent** (sonnet, no file access):
-```
+```text
 You are a TTRPG GM assistant. Answer each question concisely
 (under 150 words each). Do NOT read any files.
 [questions]
 ```
 
 **Test agent** (sonnet, with SKILL.md entry point):
-```
+```text
 You are a TTRPG GM assistant. Read the skill entry point:
 /path/to/skills/ttrpg-expert/SKILL.md
 Follow routing to find the right files for each question.

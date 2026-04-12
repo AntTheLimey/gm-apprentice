@@ -143,7 +143,7 @@ Scale of 1-10:
 
 ### Family Networks
 
-```
+```text
 Grandfather ─┬─ Grandmother
              │
              ├─ Father ─┬─ Mother
@@ -162,7 +162,7 @@ Relationships:
 
 ### Faction Hierarchy
 
-```
+```text
 Faction Leader
      │
      ├── Lieutenant 1
@@ -181,7 +181,7 @@ Relationships:
 
 ### Love Triangle
 
-```
+```text
     Character A
       /     \
      /       \

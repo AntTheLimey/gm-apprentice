@@ -40,7 +40,7 @@ multiple places, risking drift.
 
 Four shared reference files extracted from existing content:
 
-```
+```text
 skills/
   shared/
     filesystem-mode.md    — tool mapping, detection, override

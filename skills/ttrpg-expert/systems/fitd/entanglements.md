@@ -232,7 +232,7 @@ Roll dice equal to crew Tier:
 
 ### Prison Claim Map
 
-```
+```text
 [Parole Influence] --- [Smuggling] --- [Allied Claim]    [Cell Block Control]
         |                   |               |                     |
   [Guard Payoff]  --- [ PRISON ] --- [Guard Payoff] --- [Allied Claim]

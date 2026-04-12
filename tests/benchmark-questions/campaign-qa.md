@@ -41,15 +41,15 @@ wiki-links, or missing relationship reciprocals?
 
 ### Control prompt (baseline — current main branch)
 
-```
+```text
 You are a TTRPG campaign auditor and quality analyst. Read the
 skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-qa/SKILL.md
+skills/campaign-qa/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
 Also read the campaign files at:
-/Users/antonypegg/PROJECTS/gm-apprentice/tests/benchmark-campaign/
+tests/benchmark-campaign/
 Start with the index at _meta/index.md, then read entity files,
 session notes, and other campaign data as needed for each question.
 
@@ -81,15 +81,15 @@ wiki-links, or missing relationship reciprocals?
 Same as control prompt. Point at the feature branch checkout.
 The skill entry point path is identical; the branch content differs.
 
-```
+```text
 You are a TTRPG campaign auditor and quality analyst. Read the
 skill entry point:
-/Users/antonypegg/PROJECTS/gm-apprentice/skills/campaign-qa/SKILL.md
+skills/campaign-qa/SKILL.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
 Also read the campaign files at:
-/Users/antonypegg/PROJECTS/gm-apprentice/tests/benchmark-campaign/
+tests/benchmark-campaign/
 Start with the index at _meta/index.md, then read entity files,
 session notes, and other campaign data as needed for each question.
 
@@ -118,7 +118,7 @@ wiki-links, or missing relationship reciprocals?
 
 ### Evaluator prompt (blind scoring)
 
-```
+```text
 You are evaluating two TTRPG GM assistant responses. One is
 labelled A, one B. You do not know which is control or test.
 
