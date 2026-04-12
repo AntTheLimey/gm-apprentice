@@ -19,9 +19,9 @@ Reach for campaign-qa when you need to:
 
 ## What You Need
 
-**Obsidian:** Primary. campaign-qa reads your vault files using MCP tools. Without Obsidian, it has nothing to audit.
+**Obsidian:** Recommended. campaign-qa works with Obsidian MCP tools or plain markdown folders. Without Obsidian, it uses Glob/Grep/Read tools for the same audits — same procedures, different tools. See `shared/filesystem-mode.md` for details.
 
-**Obsidian plugins:** Smart Connections, Templater, Local REST API, and MCP Tools. See the [README](../README.md) for setup instructions.
+**Obsidian plugins (optional):** Smart Connections, Templater, Local REST API, and MCP Tools provide faster vault search. See the [README](../README.md) for setup instructions.
 
 ## Example Prompts
 

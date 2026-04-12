@@ -56,9 +56,20 @@ of a living campaign. This skill manages each stage.
 
 ## Vault Integration
 
-This skill reads and writes to the campaign's Obsidian vault.
-All persistent state lives in the vault — never in memory or
-skill-internal storage.
+This skill reads and writes to the campaign vault (Obsidian
+or plain folder). All persistent state lives in the vault —
+never in memory or skill-internal storage.
+
+**Environment detection:** On first invocation, check for
+Obsidian MCP tools. See `shared/filesystem-mode.md` for the
+detection procedure and tool mapping.
+
+Both modes use the same workflow. Entity creation and updates
+still hand off to campaign-organizer (which has its own
+filesystem mode support).
+
+Announce which mode you're in, then confirm the campaign
+folder path with the user.
 
 **Key vault locations:**
 - `_meta/index.md` — Master registry. Read first to orient.

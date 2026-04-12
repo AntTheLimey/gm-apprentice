@@ -52,11 +52,11 @@ Two changes:
 
 Add a brief note at the top of check-procedures.md explaining this: "These procedures use generic operation names. See shared/filesystem-mode.md for which tool to use in each environment."
 
-- [ ] **Step 1: Read both files in full**
+- [x] **Step 1: Read both files in full**
 
 Read `skills/campaign-qa/SKILL.md` and `skills/campaign-qa/references/check-procedures.md`.
 
-- [ ] **Step 2: Update SKILL.md Vault Integration section**
+- [x] **Step 2: Update SKILL.md Vault Integration section**
 
 Replace the "Primary tools" paragraph (lines 54-58, from "**Primary tools:** Use the Obsidian MCP tools" through "Fall back to file Read tools if the MCP is unavailable.") with:
 
@@ -79,7 +79,7 @@ Also replace "This skill reads the campaign's Obsidian vault." (line 50) with:
 This skill reads the campaign vault (Obsidian or plain folder).
 ```
 
-- [ ] **Step 3: Make check-procedures.md tool-agnostic**
+- [x] **Step 3: Make check-procedures.md tool-agnostic**
 
 Add a note after the title (line 1) and before the Table of Contents:
 
@@ -98,11 +98,11 @@ Then do a find-and-replace pass through the file. Replace every instance of MCP-
 | `Use \`search_vault\` with date patterns and event-related keywords to find dated references across the vault.` | `Search for date patterns and event keywords across all vault files.` |
 | `Use \`list_vault_files\` and read frontmatter from entity files to build this list.` | `Enumerate all entity files and read frontmatter from each to build this list.` |
 | `Use \`list_vault_files\` to enumerate, then read frontmatter from each file.` | `Enumerate all entity files in scope, then read frontmatter from each.` |
-| `Use \`search_vault_simple\` to find \`[[...]]\` patterns, then verify each target exists.` | `Search for `[[...]]` patterns across all files, then verify each linked target file exists.` |
+| `Use \`search_vault_simple\` to find \`[[...]]\` patterns, then verify each target exists.` | Search for `[[...]]` patterns across all files, then verify each linked target file exists. |
 
 Also replace any remaining standalone references to `search_vault`, `search_vault_simple`, `list_vault_files`, or `get_vault_file` with the generic equivalent. Grep the file after editing to confirm zero MCP tool names remain (except in any "see also" references to the tool mapping).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add skills/campaign-qa/
@@ -131,11 +131,11 @@ Changes:
 
 That's it. The Prep, Play, Wrap-up, and Reconcile modes work as-is. campaign-organizer handles the filesystem tool mapping for entity creation.
 
-- [ ] **Step 1: Read the full SKILL.md**
+- [x] **Step 1: Read the full SKILL.md**
 
 Read `skills/session-lifecycle/SKILL.md`.
 
-- [ ] **Step 2: Update Vault Integration section**
+- [x] **Step 2: Update Vault Integration section**
 
 Replace lines 57-62 (from "## Vault Integration" through "skill-internal storage." and the blank line after) with:
 
@@ -158,15 +158,15 @@ Announce which mode you're in, then confirm the campaign
 folder path with the user.
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add skills/session-lifecycle/SKILL.md
 git commit -m "feat: add filesystem fallback to session-lifecycle
 
-Add environment detection. Filesystem mode creates and
-updates entity files directly instead of handing off to
-campaign-organizer."
+Add environment detection. Workflow is unchanged — entity
+creation and updates still hand off to campaign-organizer
+which already supports filesystem mode."
 ```
 
 ---
@@ -175,7 +175,7 @@ campaign-organizer."
 
 **Purpose:** Verify filesystem fallback additions don't degrade quality.
 
-- [ ] **Step 1: Run one A/B benchmark**
+- [x] **Step 1: Run one A/B benchmark**
 
 Launch two agents with the campaign-qa benchmark questions:
 - Agent A: reads SKILL.md from **main branch** (control)
@@ -183,7 +183,7 @@ Launch two agents with the campaign-qa benchmark questions:
 
 Same questions, same evaluator, blind scoring.
 
-- [ ] **Step 2: Evaluate**
+- [x] **Step 2: Evaluate**
 
 If delta is within ±5 points: **pass**.
 If delta is worse than -5: investigate which questions regressed.
@@ -194,5 +194,5 @@ If delta is worse than -5: investigate which questions regressed.
 
 Same as Task 3 but for session-lifecycle.
 
-- [ ] **Step 1: Run one A/B benchmark**
-- [ ] **Step 2: Evaluate**
+- [x] **Step 1: Run one A/B benchmark**
+- [x] **Step 2: Evaluate**

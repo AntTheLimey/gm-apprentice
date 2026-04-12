@@ -47,15 +47,20 @@ live at `skills/shared/` (sibling directory to this skill folder).
 
 ## Vault Integration
 
-This skill reads the campaign's Obsidian vault. All persistent
+This skill reads the campaign vault (Obsidian or plain folder). All persistent
 state lives in the vault — never in memory or skill-internal
 storage.
 
-**Primary tools:** Use the Obsidian MCP tools when available
-(`search_vault`, `search_vault_simple`, `search_vault_smart`,
-`list_vault_files`, `get_vault_file`). These are faster and
-more reliable for systematic audits than raw file reads. Fall
-back to file Read tools if the MCP is unavailable.
+**Environment detection:** On first invocation, check for
+Obsidian MCP tools (`search_vault`, `list_vault_files`,
+`get_vault_file`). See `shared/filesystem-mode.md` for the
+full tool mapping and environment detection procedure.
+
+Both Obsidian mode and filesystem mode run the same audit
+procedures — only the tools differ. The procedures in
+`references/check-procedures.md` use generic operation names
+(enumerate files, search for pattern, read file). Map these
+to your environment's tools per `shared/filesystem-mode.md`.
 
 **Key vault locations:**
 - `_meta/index.md` — Master registry. Read first to orient.
@@ -252,7 +257,7 @@ or fields from the vault files]
 
 The GM can say:
 - **Fix it** — Apply the proposed fix. Update the vault
-  file(s) directly using Obsidian MCP tools or file Edit.
+  file(s) directly.
   Show what changed.
 - **Fix it differently** — The GM provides an alternative.
   Apply that instead.
