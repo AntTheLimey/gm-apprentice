@@ -106,7 +106,7 @@ Five capabilities exposed by `skills/publish-site/`:
 Triggered by phrases like "publish my campaign site" or "set up a site for my vault."
 
 Flow:
-1. Ask for vault path; validate it's a gm-apprentice vault (check for `_meta/entity-types.md`)
+1. Ask for vault path; validate it's a gm-apprentice vault by checking for a `_meta/` directory (matching the existing convention in campaign-organizer; `_meta/index.md` is the minimum marker, with optional `_meta/entity-types.md` and `_meta/vault-config.md` if they exist)
 2. Ask for campaign display name (default from `_Campaign/Campaign Overview.md` if present)
 3. Ask for GitHub username and desired repo name
 4. Ask for landing page tagline
