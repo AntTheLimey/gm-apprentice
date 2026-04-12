@@ -133,9 +133,18 @@ canonical record of collapsed reality.
 
 When creating or editing entities that support portraits (PC, NPC,
 Location, Faction, Organization, Item, Creature), accept an optional
-image path. Store images in `_attachments/<entity-type>/<slug>.<ext>`
-under the vault root. Write the relative path into the frontmatter
-`portrait` field:
+image path. Store images in `_attachments/<folder>/<slug>.<ext>`
+under the vault root, using the folder mapping:
+
+| Entity Type | Folder |
+|-------------|--------|
+| PC, NPC | `characters/` |
+| Location | `locations/` |
+| Faction, Organization | `factions/` |
+| Item | `items/` |
+| Creature | `creatures/` |
+
+Write the relative path into the frontmatter `portrait` field:
 
 ```yaml
 portrait: "_attachments/characters/ronnie-vint.jpg"

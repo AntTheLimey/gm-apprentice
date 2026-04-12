@@ -98,7 +98,7 @@ def validate_file(filepath: Path) -> list[str]:
 
     try:
         content = filepath.read_text(encoding="utf-8")
-    except Exception as e:
+    except (OSError, UnicodeError) as e:
         return [f"Could not read file: {e}"]
 
     frontmatter = extract_frontmatter(content)
@@ -111,8 +111,14 @@ def validate_file(filepath: Path) -> list[str]:
         errors.append("Missing 'type' field")
         return errors
 
-    # Check required fields
-    required = REQUIRED_FIELDS.get(entity_type, ["type"])
+    # Check required fields — reject unknown entity types
+    if entity_type not in REQUIRED_FIELDS:
+        errors.append(
+            f"Unknown type '{entity_type}' — "
+            f"must be one of: {', '.join(sorted(REQUIRED_FIELDS))}"
+        )
+        return errors
+    required = REQUIRED_FIELDS[entity_type]
     for field in required:
         if field not in frontmatter:
             errors.append(f"Missing required field '{field}' for type '{entity_type}'")
@@ -161,10 +167,15 @@ def validate_file(filepath: Path) -> list[str]:
                 f"must be one of: {', '.join(sorted(NPC_STATUS))}"
             )
 
-    # Validate portrait path format if present
-    if "portrait" in frontmatter and frontmatter["portrait"]:
-        portrait = frontmatter["portrait"]
-        if not portrait.startswith("_attachments/"):
+    # Validate portrait field — only allowed for supported entity types
+    portrait = frontmatter.get("portrait")
+    if portrait:
+        if entity_type not in PORTRAIT_TYPES:
+            errors.append(
+                f"Field 'portrait' not allowed for type '{entity_type}' — "
+                f"only supported for: {', '.join(sorted(PORTRAIT_TYPES))}"
+            )
+        elif not portrait.startswith("_attachments/"):
             errors.append(
                 f"Invalid portrait path '{portrait}' — "
                 f"must start with '_attachments/'"

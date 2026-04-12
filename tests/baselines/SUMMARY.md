@@ -26,8 +26,9 @@
 ## Pass Criteria
 
 Post-refactor median must meet or exceed the pass threshold for each skill.
-Pass threshold = baseline median minus variance (the range width).
-A score below the threshold indicates a regression beyond normal variance.
+Pass threshold = floor(baseline median - variance). Thresholds are integers
+because individual scores are integers. A score below the threshold indicates
+a regression beyond normal variance.
 
 ## Observations
 
