@@ -33,7 +33,7 @@ Items are force-ranked by score. Higher score = do first.
 
 | Rank | Item | Impact | Urgency | Effort | Score | Status |
 |:----:|------|:------:|:-------:|:------:|:-----:|--------|
-| 1 | Regency Cthulhu system support | 5 | 4 | M (2) | 7.0 | Planned |
+| — | ~~Regency Cthulhu system support~~ | 5 | 4 | M (2) | 7.0 | Done |
 | 2 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
 | 3 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
 | 4 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
@@ -45,6 +45,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~Regency Cthulhu system support~~ — 5 overlay files in variants/regency/, routing updates
 - ~~Codebase QA pass~~ — Score 11.0 (Impact 3, Urgency 5, Effort S)
 - ~~Filesystem fallback (campaign-qa, session-lifecycle)~~ — PR #14
 - ~~Shared-refs extraction~~ — Merged to main
