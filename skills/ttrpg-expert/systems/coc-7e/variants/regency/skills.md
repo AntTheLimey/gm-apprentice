@@ -4,7 +4,7 @@
 # Regency Cthulhu — Skills
 
 Regency (1811-1820) overlay for CoC 7e. Use alongside base
-`../skills.md`. Only differences listed here; all unlisted
+`../../skills.md`. Only differences listed here; all unlisted
 base CoC skills remain available.
 
 ## Unavailable Skills

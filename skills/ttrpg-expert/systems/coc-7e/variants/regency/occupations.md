@@ -4,7 +4,7 @@
 # Regency Cthulhu — Occupations
 
 Regency (1811–1820) overlay for CoC 7e. Use alongside base
-`../occupations.md` for skill point formula table. Regency
+`../../occupations.md` for skill point formula table. Regency
 occupation list replaces base list for Regency play.
 
 ## Occupation List
@@ -58,7 +58,7 @@ Skills: Art/Craft (Cooking/Sewing), Dodge, Etiquette, Fashion, Fast Talk, Listen
 
 | Band | Name | CR Range | Occupations |
 |------|------|----------|-------------|
-| 1 | Laborer/Servant | 9–30% | Burglar, Butler/Valet/Maid, Criminal, Driver, Miner, Missionary, Sailor, Servant (Footman), Servant (Housemaid), Smuggler, Soldier/Marine, Zealot |
+| 1 | Laborer/Servant | 9–30% | Burglar, Butler/Valet/Maid, Criminal, Driver (Carriage), Miner, Missionary, Sailor, Servant (Footman), Servant (Housemaid), Smuggler, Soldier/Marine, Zealot |
 | 2 | Shopkeeper/Craftsperson | 20–60% | Actor, Antique Dealer, Archaeologist, Artist, Author, Book Dealer, Boxer, Craftsperson, Entertainer, Farmer, Gambler, Journalist, Librarian, Museum Curator, Musician, Occultist, Pharmacist, Prostitute, Shopkeeper, Spy, Undertaker, Zookeeper |
 | 3 | Professional | 30–70% | Accountant, Antiquarian, Architect, Clergy, Doctor, Explorer, Lawyer, Military Officer, Professor, Researcher |
 | 4 | Gentry/Nouveau Riche | 50–90% | Gentleman, Gentlewoman, Nouveau Riche |
@@ -69,7 +69,7 @@ raise CR to 70% with Keeper permission.
 
 ## Cross-Reference
 
-See `../occupations.md` for the skill point formula table and base occupation
+See `../../occupations.md` for the skill point formula table and base occupation
 skill lists. Regency occupations not listed above use the nearest base
 equivalent with period-appropriate skill substitutions (Keeper approval).
 

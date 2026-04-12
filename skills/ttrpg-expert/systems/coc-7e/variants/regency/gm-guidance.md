@@ -1,7 +1,7 @@
 # Regency Cthulhu — GM Guidance
 
 How running Regency (1811-1820) sessions differs from standard
-1920s CoC. Use alongside base `../session-procedures.md` for
+1920s CoC. Use alongside base `../../session-procedures.md` for
 core investigation structure (node-based, Three Clue Rule).
 
 ---
@@ -81,4 +81,4 @@ When in doubt: narrate what people are wearing, who is watching, and what everyo
 
 ## Cross-reference
 
-See `../session-procedures.md` for core investigation structure: node-based design, Three Clue Rule, linear vs non-linear approaches. Those frameworks apply unchanged to Regency play — only the setting details and social mechanics differ.
+See `../../session-procedures.md` for core investigation structure: node-based design, Three Clue Rule, linear vs non-linear approaches. Those frameworks apply unchanged to Regency play — only the setting details and social mechanics differ.

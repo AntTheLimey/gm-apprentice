@@ -4,7 +4,7 @@
 # Regency Cthulhu — Equipment & Weapons
 
 Regency (1811-1820) overlay for CoC 7e. Replaces base weapon
-tables for Regency play. See `../equipment-weapons.md` for
+tables for Regency play. See `../../equipment-weapons.md` for
 table-reading conventions and special success types.
 
 ---

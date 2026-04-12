@@ -4,7 +4,7 @@
 # Regency Cthulhu — Character Generation
 
 Regency (1811-1820) overlay for CoC 7e. Use alongside base
-`../character-generation.md` for core attribute generation,
+`../../character-generation.md` for core attribute generation,
 derived values, and age modifiers. This file covers Regency-
 specific social economics only.
 
@@ -52,7 +52,9 @@ maximum. See `occupations.md` for the full band table.
 
 ## Estate Standards
 
-Roll 1D6. Ignore results that don't fit the investigator's Living Standard.
+Roll 1D6. Ignore results above the investigator's means:
+CR 50-69 (Poor Gentry): results 1-3. CR 70-82 (Average Gentry):
+results 1-5. CR 83+ (Wealthy/Aristocracy): any result.
 
 | 1D6 | Standard | Description |
 |:---:|----------|-------------|
@@ -83,7 +85,7 @@ Optional rule for gentry and those in high society.
 
 ## Cross-Reference
 
-See `../character-generation.md` for core attribute generation (STR, CON,
+See `../../character-generation.md` for core attribute generation (STR, CON,
 SIZ, DEX, APP, INT, POW, EDU), derived values (HP, SAN, MOV, damage
 modifier), age modifiers, and personal interest points.
 
