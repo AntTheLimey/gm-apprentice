@@ -39,13 +39,13 @@ if (command === '--version' || command === '-v') {
 if (command === 'init') {
   const targetDir = args[1] || '.';
   const { init } = require('../lib/init');
-  try {
-    init(targetDir);
-  } catch (err) {
+  init(targetDir, { verbose: true }).then(() => {
+    process.exit(0);
+  }).catch((err) => {
     console.error(`Init failed: ${err.message}`);
     process.exit(1);
-  }
-  process.exit(0);
+  });
+  return;
 }
 
 if (command === 'build') {

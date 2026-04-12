@@ -1,0 +1,24 @@
+# {{SITE_TITLE}}
+
+A static site generated from a gm-apprentice campaign vault.
+
+## Getting started
+
+1. Install dependencies:
+   ```
+   npm install
+   ```
+
+2. Edit `vault.config.json` to point `vaultPath` at your Obsidian vault.
+
+3. Build the site:
+   ```
+   npm run build
+   ```
+
+The generated site will be written to the `outputDir` specified in `vault.config.json`.
+
+## Deployment
+
+Push the contents of your output directory to GitHub Pages or any static host.
+The included `.nojekyll` file ensures GitHub Pages serves the site without Jekyll processing.
