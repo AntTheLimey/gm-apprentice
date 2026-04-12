@@ -39,3 +39,20 @@ jobs:
             echo "::error::Found 'canon_status:' — use 'source_confidence:' instead"
             exit 1
           fi
+
+      - name: Relative path validation
+        run: |
+          errors=0
+          while IFS= read -r file; do
+            dir=$(dirname "$file")
+            grep -oP '`(\.\./[^`]+\.md)`' "$file" | tr -d '`' | while read -r ref; do
+              target="$dir/$ref"
+              if [ ! -f "$target" ]; then
+                echo "::error file=$file::Broken relative path: $ref (resolved to $target)"
+                errors=$((errors + 1))
+              fi
+            done
+          done < <(find skills/ docs/ tests/ -name '*.md' -not -path '*/personal/*')
+          if [ "$errors" -gt 0 ]; then
+            exit 1
+          fi
