@@ -2,6 +2,7 @@ const { DIR_LABELS, cssPath, rootPath, baseShell, stubBadge, TYPE_BADGE_FIELDS, 
 const { generateNav } = require('./nav');
 const { pcTemplate } = require('./pc');
 const { npcTemplate } = require('./npc');
+const { creatureTemplate } = require('./creature');
 const { locationTemplate } = require('./location');
 const { wikiTemplate } = require('./wiki');
 const { indexTemplate } = require('./index-page');
@@ -19,6 +20,7 @@ module.exports = {
   generateNav,
   pcTemplate,
   npcTemplate,
+  creatureTemplate,
   locationTemplate,
   wikiTemplate,
   indexTemplate,

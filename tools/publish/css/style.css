@@ -703,6 +703,45 @@ td .stat {
   margin: 0.75rem 0;
 }
 
+/* ===== CREATURE/ITEM STAT BLOCK ===== */
+.stat-block {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  gap: 0.5rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.stat-block .stat-item {
+  text-align: center;
+}
+.stat-block .stat-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.stat-block .stat-value {
+  display: block;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.abilities, .weaknesses {
+  margin-bottom: 1rem;
+}
+.abilities h3, .weaknesses h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+.abilities ul, .weaknesses ul {
+  margin: 0;
+}
+
 /* ===== PRINT ===== */
 @media print {
   .site-header,
