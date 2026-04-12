@@ -56,3 +56,16 @@ jobs:
           if [ "$errors" -gt 0 ]; then
             exit 1
           fi
+
+  schema-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate campaign entity schemas
+        run: python scripts/validate_schema.py tests/benchmark-campaign

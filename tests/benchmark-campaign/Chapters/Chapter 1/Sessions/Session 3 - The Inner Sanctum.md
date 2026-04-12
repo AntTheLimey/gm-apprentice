@@ -5,7 +5,7 @@ title: "The Inner Sanctum"
 status: planned
 date_planned: "2024-02-17"
 chapter: "Chapter 1"
-source_confidence: SPECULATIVE
+source_confidence: DRAFT
 asOfSession: "Session 2"
 ---
 
