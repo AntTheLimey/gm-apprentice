@@ -15,6 +15,7 @@ evals/
 
 # Go build artifacts
 bin/
+!tools/publish/bin/
 *.exe
 gca-converter-*
 
