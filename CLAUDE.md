@@ -124,7 +124,7 @@ and move it to the "Completed" section with a PR number or commit SHA.
 
 ## Testing
 
-- Schema validation: `python tests/validate_schema.py`
+- Schema validation: `python3 scripts/validate_schema.py`
 - Benchmarks live in `tests/benchmark-campaign/` and `tests/benchmark-questions/`
   — do not delete these
 - One benchmark run is enough; fix issues before benchmarking; use A/B
