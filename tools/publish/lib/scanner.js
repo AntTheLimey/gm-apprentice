@@ -12,10 +12,15 @@ function slugify(name) {
   return slug || 'untitled';
 }
 
+function toPosix(p) {
+  return p.split(path.sep).join('/');
+}
+
 function mapFolder(vaultRelPath, folderMap) {
+  const rel = toPosix(vaultRelPath);
   for (const [vaultDir, outputDir] of Object.entries(folderMap)) {
-    if (vaultRelPath === vaultDir || vaultRelPath.startsWith(vaultDir + path.sep)) {
-      return outputDir + vaultRelPath.substring(vaultDir.length);
+    if (rel === vaultDir || rel.startsWith(vaultDir + '/')) {
+      return outputDir + rel.substring(vaultDir.length);
     }
   }
   return null;
@@ -29,7 +34,7 @@ function scanVault(config) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      const relPath = path.relative(vaultPath, fullPath);
+      const relPath = toPosix(path.relative(vaultPath, fullPath));
 
       if (entry.isDirectory()) {
         if (excludeDirs.some(ex => relPath.startsWith(ex)) || entry.name.startsWith('.')) continue;
@@ -53,7 +58,7 @@ function scanVault(config) {
         const baseName = path.basename(entry.name, '.md');
         const slug = slugify(baseName);
         const outputPath = outputDir
-          ? path.join(outputDir, slug + '.html')
+          ? outputDir + '/' + slug + '.html'
           : slug + '.html';
 
         pages.push({
@@ -127,7 +132,7 @@ function scanAttachments(config) {
       if (entry.isDirectory()) {
         walk(full);
       } else if (IMAGE_EXTS.test(entry.name)) {
-        const relPath = path.relative(attachmentsPath, full);
+        const relPath = toPosix(path.relative(attachmentsPath, full));
         map[entry.name] = {
           sourcePath: full,
           relPath, // e.g., "characters/ronnie-vint.jpg"

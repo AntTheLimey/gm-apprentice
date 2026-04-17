@@ -190,8 +190,8 @@ These fields are read by all templates if present:
 |-------|-------------|
 | `title` | Overrides the filename as the page title if present |
 | `aliases` | List of alternate names used for wiki-link resolution |
-| `source_confidence` | DRAFT / AUTHORITATIVE / SUPERSEDED — SUPERSEDED entities render a redirect banner |
-| `superseded_by` | `[[wiki-link]]` shown in the redirect banner if `source_confidence` is SUPERSEDED |
+| `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED — SUPERSEDED entities render a redirect banner |
+| `superseded_by` | `[[wiki-link]]` shown in the redirect banner if `canon_status` is SUPERSEDED |
 | `tags` | Stored but not rendered in v1.0 |
 
 ---

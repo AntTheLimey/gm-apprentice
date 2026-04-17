@@ -132,9 +132,11 @@ function build(options = {}) {
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);
-  } else {
-    console.log('Done!');
+    const err = new Error(`Build completed with ${errorCount} render error(s)`);
+    err.errorCount = errorCount;
+    throw err;
   }
+  console.log('Done!');
 }
 
 module.exports = { build };
