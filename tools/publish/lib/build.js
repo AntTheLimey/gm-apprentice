@@ -9,10 +9,9 @@ function build(options = {}) {
   const config = require(path.resolve(configPath));
   const outputDir = path.resolve(path.dirname(path.resolve(configPath)), config.outputDir);
 
-  // Clean output dir but preserve specs/plans subdirectory
   function cleanOutput() {
     if (!fs.existsSync(outputDir)) return;
-    const preserve = ['superpowers'];
+    const preserve = Array.isArray(config.preserveDirs) ? config.preserveDirs : [];
     for (const entry of fs.readdirSync(outputDir)) {
       if (preserve.includes(entry)) continue;
       const full = path.join(outputDir, entry);

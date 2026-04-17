@@ -53,7 +53,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
-- ~~Publish tool v1.0~~ — npm package + skill for vault-to-static-site generation
+- ~~Publish tool v1.0~~ — npm package + skill for vault-to-static-site generation (PR #19)
 - ~~Regency Cthulhu system support~~ — 5 overlay files in variants/regency/, routing updates
 - ~~Codebase QA pass~~ — Score 11.0 (Impact 3, Urgency 5, Effort S)
 - ~~Filesystem fallback (campaign-qa, session-lifecycle)~~ — PR #14

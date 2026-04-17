@@ -77,7 +77,7 @@ Read it before adding any content derived from a published source.**
 ## Repository structure
 
 - `skills/` — one directory per skill (`SKILL.md` + `references/`)
-- `docs/` — user-facing documentation; `docs/plans/` for internal planning
+- `docs/` — user-facing documentation
 - `tests/` — schema validation, benchmark infrastructure, compaction tests
 - `scripts/` — utility scripts (not user-facing)
 - `tools/` — standalone tools (e.g., future `tools/publish/` npm package)
@@ -87,7 +87,7 @@ Read it before adding any content derived from a published source.**
 - `ROADMAP.md` — force-ranked backlog (see workflow below)
 
 Note: `.claude/` is gitignored (local Claude Code settings and worktrees).
-`docs/superpowers/` is gitignored (local specs and plans).
+`docs/superpowers/` and `docs/plans/` are gitignored (local specs and plans).
 `skills/ttrpg-expert/systems/*/personal/` are gitignored (user's private
 licensed reference files — see copyright rules above).
 

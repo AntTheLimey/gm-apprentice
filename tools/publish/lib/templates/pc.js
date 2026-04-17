@@ -3,7 +3,9 @@ const { baseShell, cssPath, rootPath, portraitImg } = require('./base');
 
 function pcTemplate(page, processedContent, sections, navFor, config, imageMap) {
   const fm = page.frontmatter;
-  const traits = fm.key_traits ? escapeHtml(fm.key_traits.join(', ')) : '';
+  const traits = fm.key_traits
+    ? escapeHtml(Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits))
+    : '';
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
   const headerCard = `
 <div class="char-header">

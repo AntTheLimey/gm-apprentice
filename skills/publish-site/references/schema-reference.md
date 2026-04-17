@@ -134,13 +134,14 @@ pointing to this faction will be listed in a **Members** section.
 
 ## Smart Wiki Fallback
 
-If `type` is set to one of the following values, the entity
+Any entity whose `type` does not match a dedicated template
 renders using the smart wiki template. This template reads all
 frontmatter fields and displays them as metadata badges above
 the body content. No fields are required beyond `name`.
 
-The smart wiki fallback is the intended v1.0 behaviour for
-these types. Dedicated templates will be added in later versions.
+The types listed below are common smart-wiki entities.
+Dedicated templates for them will be added in later versions.
+Any other unrecognised `type` value also falls through here.
 
 ### Event
 

@@ -23,12 +23,11 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap) {
     : '';
 
   // Abilities list
-  const abilities = fm.abilities && Array.isArray(fm.abilities)
+  const abilities = Array.isArray(fm.abilities) && fm.abilities.length > 0
     ? `<div class="abilities"><h3>Abilities</h3><ul>${fm.abilities.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul></div>`
     : '';
 
-  // Weaknesses list
-  const weaknesses = fm.weaknesses && Array.isArray(fm.weaknesses)
+  const weaknesses = Array.isArray(fm.weaknesses) && fm.weaknesses.length > 0
     ? `<div class="weaknesses"><h3>Weaknesses</h3><ul>${fm.weaknesses.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
     : '';
 

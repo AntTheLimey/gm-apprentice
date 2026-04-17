@@ -41,7 +41,7 @@ cd my-campaign-site
 
 This creates:
 
-```
+```text
 my-campaign-site/
   package.json
   vault.config.json   ← edit this
@@ -70,7 +70,7 @@ GitHub Pages from the `docs/` folder in your repo settings.
 
 ## CLI reference
 
-```
+```text
 gm-apprentice-publish init [dir]          Scaffold a new site
 gm-apprentice-publish build [options]     Build the site from vault
 gm-apprentice-publish --version           Print version

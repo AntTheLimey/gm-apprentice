@@ -39,8 +39,9 @@ skills/ttrpg-expert/systems/coc-7e/personal/
 skills/ttrpg-expert/systems/fitd/personal/
 skills/ttrpg-expert/systems/dnd-5e-2024/personal/
 
-# Superpowers specs and plans (local development artifacts)
+# Specs, plans, and design docs (local development artifacts)
 docs/superpowers/
+docs/plans/
 
 # Test results (run-specific artifacts)
 tests/compaction/

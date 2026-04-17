@@ -88,11 +88,14 @@ async function init(targetDir = '.', options = {}) {
     created.push(entry.dest);
   }
 
-  // Create empty .nojekyll for GitHub Pages
   const nojekyllPath = path.join(dest, '.nojekyll');
-  await fs.writeFile(nojekyllPath, '');
-  log('  created .nojekyll');
-  created.push('.nojekyll');
+  try {
+    await fs.access(nojekyllPath);
+  } catch {
+    await fs.writeFile(nojekyllPath, '');
+    log('  created .nojekyll');
+    created.push('.nojekyll');
+  }
 
   return { success: true, files: created };
 }

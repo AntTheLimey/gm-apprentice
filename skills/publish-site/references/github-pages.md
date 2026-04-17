@@ -81,9 +81,9 @@ Go to **Settings → General → Danger Zone → Change visibility**
 and set the repository to Public.
 
 **"The site shows a 404 after deployment"**
-The `docs/` folder may be empty. Run `npm run build` again from
-the site directory and confirm it populates a `docs/index.html`
-file, then push again.
+The `docs/` folder may be empty. Rebuild from the site directory
+with `npm run build`, confirm it populates a `docs/index.html`
+file, then push the updated `docs/` folder.
 
 **"The Actions tab shows no workflows"**
 GitHub Pages workflows are created automatically when you enable

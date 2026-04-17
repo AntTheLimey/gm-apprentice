@@ -40,11 +40,7 @@ describe('mapFolder', () => {
   });
 
   it('maps nested paths within mapped folder', () => {
-    // Uses path.sep internally, test with platform separator
-    const path = require('path');
-    const input = 'Characters/PCs' + path.sep + 'subfolder';
-    const expected = 'characters/pcs' + path.sep + 'subfolder';
-    assert.strictEqual(mapFolder(input, folderMap), expected);
+    assert.strictEqual(mapFolder('Characters/PCs/subfolder', folderMap), 'characters/pcs/subfolder');
   });
 
   it('returns null for unmapped folders', () => {

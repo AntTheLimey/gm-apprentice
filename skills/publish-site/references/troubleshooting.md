@@ -132,7 +132,7 @@ One of:
   `vault.config.json`
 - The entity's vault folder name is listed in `excludeDirs`
 - The entity's markdown file does not have a `type` frontmatter
-  field (or the value does not match any known type)
+  field
 
 ### Diagnosis steps
 
@@ -141,7 +141,8 @@ One of:
 2. Check `excludeDirs` — if the folder is listed there, it is
    being intentionally skipped.
 3. Open the entity's markdown file and check its frontmatter
-   for a `type` field. If missing, the build may skip it.
+   for a `type` field. If missing, the scanner skips it.
+   Unknown `type` values still render via the smart wiki fallback.
 
 ### Fix
 

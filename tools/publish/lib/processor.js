@@ -56,20 +56,6 @@ function filterSections(markdown, excludeSections = []) {
         continue;
       }
 
-      // Also exclude Appearances sections that are just placeholder text (case-insensitive)
-      if (title.toLowerCase() === 'appearances') {
-        const nextContentLines = [];
-        for (let j = i + 1; j < lines.length; j++) {
-          if (lines[j].match(/^#{1,6}\s/)) break;
-          if (lines[j].trim()) nextContentLines.push(lines[j].trim());
-        }
-        const content = nextContentLines.join(' ');
-        if (!content || content.startsWith('*Scenes') || content.startsWith('*Events')) {
-          excluding = true;
-          excludeLevel = level;
-          continue;
-        }
-      }
     }
 
     if (!excluding) {
