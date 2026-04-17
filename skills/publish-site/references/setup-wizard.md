@@ -188,7 +188,7 @@ npm run build
 
 Watch the output. A successful build ends with a summary line like:
 
-```
+```text
 Built N pages → docs/
 ```
 
@@ -271,7 +271,7 @@ Summarise:
 Once GitHub Pages is enabled and the first deployment finishes,
 the site will be live at:
 
-```
+```text
 https://<githubUsername>.github.io/<repoName>/
 ```
 

@@ -36,7 +36,7 @@ One of two things:
 3. Open the entity's markdown file (e.g. the character note).
    Check the `portrait` frontmatter field. It should be a path
    relative to the vault root, such as:
-   ```
+   ```yaml
    portrait: "_attachments/characters/alice-morgan.jpg"
    ```
 4. Navigate to that path inside the vault folder and confirm the
@@ -100,7 +100,7 @@ Use a JSON validator (search "JSON validator" online) if unsure.
 Update `vaultPath` in `vault.config.json` to the correct absolute
 path to your vault. On Windows, use forward slashes:
 ```json
-"vaultPath": "C:/Users/alice/Documents/MyVault"
+"vaultPath": "C:/CampaignVaults/MyVault"
 ```
 
 **Malformed vault YAML:**
