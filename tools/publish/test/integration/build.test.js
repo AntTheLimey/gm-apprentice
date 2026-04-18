@@ -586,6 +586,7 @@ describe('build integration', () => {
     let configPath;
 
     before(() => {
+      process.env.DEBUG_MANIFEST = '1';
       outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-manifest-'));
       configPath = path.join(outputDir, 'config.json');
 
@@ -605,6 +606,7 @@ describe('build integration', () => {
 
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
       build({ configPath });
+      delete process.env.DEBUG_MANIFEST;
     });
 
     after(() => {

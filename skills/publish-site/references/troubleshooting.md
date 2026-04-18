@@ -91,7 +91,7 @@ Usually one of:
 Open `vault.config.json` and look for the problem near the line
 number the error mentions. Common mistakes:
 - Missing comma between two fields
-- A Windows path using single backslashes: use `/` or `\\`
+- A Windows path using single backslashes: use `/` instead
 - A trailing comma after the last field in an object
 
 Use a JSON validator (search "JSON validator" online) if unsure.

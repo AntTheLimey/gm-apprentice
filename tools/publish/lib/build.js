@@ -83,6 +83,9 @@ function build(options = {}) {
     pages = pages.filter(page => {
       const vaultRelPath = path.relative(config.vaultPath, page.sourcePath);
       const posixPath = vaultRelPath.split(path.sep).join('/');
+      if (process.env.DEBUG_MANIFEST) {
+        console.log(`  manifest check: "${posixPath}" in set? ${allowSet.has(posixPath)} (set: ${JSON.stringify([...allowSet].slice(0, 5))})`);
+      }
       return allowSet.has(posixPath);
     });
     console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);
