@@ -215,4 +215,14 @@ function extractSections(markdown) {
   }));
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, escapeHtml, resolveImageEmbeds };
+function filterFields(frontmatter, excludeFields = [], overrides = {}) {
+  const filtered = { ...frontmatter };
+  const reInclude = overrides.include || [];
+  for (const field of excludeFields) {
+    if (reInclude.includes(field)) continue;
+    delete filtered[field];
+  }
+  return filtered;
+}
+
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, escapeHtml, resolveImageEmbeds, filterFields };

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly } = require('../../lib/processor');
+const { escapeHtml, relativePath, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -130,5 +130,43 @@ describe('stripGmOnly', () => {
     const md = 'Public\n<!--  gm-only  -->\nSecret\n<!--  /gm-only  -->\nMore';
     const result = stripGmOnly(md);
     assert.strictEqual(result, 'Public\n\nMore');
+  });
+});
+
+describe('filterFields', () => {
+  it('removes specified fields from frontmatter', () => {
+    const fm = { type: 'npc', occupation: 'Spy', secrets: 'Works for the enemy' };
+    const result = filterFields(fm, ['secrets']);
+    assert.deepStrictEqual(result, { type: 'npc', occupation: 'Spy' });
+  });
+
+  it('does not mutate the original frontmatter', () => {
+    const fm = { type: 'npc', secrets: 'Hidden' };
+    filterFields(fm, ['secrets']);
+    assert.strictEqual(fm.secrets, 'Hidden');
+  });
+
+  it('handles missing fields gracefully', () => {
+    const fm = { type: 'npc', occupation: 'Guard' };
+    const result = filterFields(fm, ['secrets', 'current_plan']);
+    assert.deepStrictEqual(result, { type: 'npc', occupation: 'Guard' });
+  });
+
+  it('applies per-entity overrides to re-include fields', () => {
+    const fm = { type: 'faction', current_plan: 'Take over the docks' };
+    const result = filterFields(fm, ['current_plan'], { include: ['current_plan'] });
+    assert.deepStrictEqual(result, { type: 'faction', current_plan: 'Take over the docks' });
+  });
+
+  it('removes multiple fields at once', () => {
+    const fm = { type: 'faction', name: 'Guild', secrets: 'X', current_plan: 'Y', plan_progress: 'Z' };
+    const result = filterFields(fm, ['secrets', 'current_plan', 'plan_progress']);
+    assert.deepStrictEqual(result, { type: 'faction', name: 'Guild' });
+  });
+
+  it('returns copy unchanged when excludeFields is empty', () => {
+    const fm = { type: 'npc', secrets: 'Still here' };
+    const result = filterFields(fm, []);
+    assert.deepStrictEqual(result, { type: 'npc', secrets: 'Still here' });
   });
 });
