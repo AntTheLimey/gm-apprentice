@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview, filterFields } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -21,8 +21,21 @@ function build(options = {}) {
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
 
+  function assertSafeOutputDir() {
+    const resolved = path.resolve(outputDir);
+    const root = path.parse(resolved).root;
+    if (resolved === root) {
+      throw new Error(`Refusing to clean filesystem root: ${resolved}`);
+    }
+    const resolvedVault = path.resolve(config.vaultPath);
+    if (resolved === resolvedVault || resolvedVault.startsWith(resolved + path.sep)) {
+      throw new Error(`Refusing to clean outputDir that contains the vault: ${resolved}`);
+    }
+  }
+
   function cleanOutput() {
     if (!fs.existsSync(outputDir)) return;
+    assertSafeOutputDir();
     const preserve = Array.isArray(config.preserveDirs) ? config.preserveDirs : [];
     for (const entry of fs.readdirSync(outputDir)) {
       if (preserve.includes(entry)) continue;
@@ -92,15 +105,15 @@ function build(options = {}) {
     console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);
   }
 
-  // Apply field filtering to each page's frontmatter
+  const linkMap = buildLinkMap(pages);
+  console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
+
+  // Apply field filtering after link map is built (aliases/canon_status needed for resolution)
   for (const page of pages) {
     const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
     const overridesForFile = fieldOverrides[vaultRelPath] || {};
     page.frontmatter = filterFields(page.frontmatter, excludeFields, overridesForFile);
   }
-
-  const linkMap = buildLinkMap(pages);
-  console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
   const imageMap = scanAttachments(config);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
@@ -124,6 +137,8 @@ function build(options = {}) {
       switch (page.frontmatter.type) {
         case 'pc': {
           let filtered = stripDataview(page.markdown.replace(/\r/g, ''));
+          const gmResult = stripGmOnly(filtered);
+          filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
           filtered = filterSections(filtered, excludeSections);
           const sections = extractSections(filtered);
           html = pcTemplate(page, processed, sections, navFor, config, imageMap);
