@@ -8,19 +8,26 @@
 }
 
 :root {
-  --dark: #1a2f3a;
-  --medium: #2d5a6b;
-  --light: #e8f0f3;
-  --accent: #3d8a7a;
+  /* Theme-overridable properties (set by theme.css if present) */
+  --dark: var(--theme-primary, #1a2f3a);
+  --medium: var(--theme-primary, #2d5a6b);
+  --accent: var(--theme-accent, #3d8a7a);
+  --light: var(--theme-bg, #e8f0f3);
+  --text: var(--theme-text, #1a1a1a);
+
+  /* Non-themed properties */
   --white: #ffffff;
-  --text: #1a1a1a;
   --text-muted: #5a6a72;
   --border: #c0d0d8;
   --card-bg: #f4f8fa;
   --danger: #c0392b;
   --warning: #d4a017;
   --mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", "Liberation Mono", Menlo, Monaco, Consolas, monospace;
-  --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sans: var(--theme-body-font, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--theme-heading-font, var(--sans));
 }
 
 @media (prefers-color-scheme: dark) {
