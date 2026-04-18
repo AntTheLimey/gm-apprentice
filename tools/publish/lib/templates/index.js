@@ -9,6 +9,7 @@ const { factionTemplate } = require('./faction');
 const { wikiTemplate } = require('./wiki');
 const { indexTemplate } = require('./index-page');
 const { landingTemplate } = require('./landing');
+const { fourOhFourTemplate } = require('./four-oh-four');
 
 module.exports = {
   DIR_LABELS,
@@ -29,4 +30,5 @@ module.exports = {
   wikiTemplate,
   indexTemplate,
   landingTemplate,
+  fourOhFourTemplate,
 };
