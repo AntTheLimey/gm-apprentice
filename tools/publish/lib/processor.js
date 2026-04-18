@@ -70,6 +70,49 @@ function stripDataview(markdown) {
   return markdown.replace(/```dataview[\s\S]*?```/g, '');
 }
 
+function stripGmOnly(markdown) {
+  const lines = markdown.split('\n');
+  const result = [];
+  const warnings = [];
+  let excluding = false;
+  let inCodeFence = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (/^```/.test(line)) {
+      inCodeFence = !inCodeFence;
+    }
+
+    if (inCodeFence) {
+      if (!excluding) result.push(line);
+      continue;
+    }
+
+    if (/^<!--\s*gm-only\s*-->/.test(line.trim())) {
+      excluding = true;
+      result.push('');
+      continue;
+    }
+
+    if (/^<!--\s*\/gm-only\s*-->/.test(line.trim())) {
+      excluding = false;
+      continue;
+    }
+
+    if (!excluding) {
+      result.push(line);
+    }
+  }
+
+  if (excluding) {
+    warnings.push('unclosed <!-- gm-only --> marker — content stripped to end of file');
+  }
+
+  const text = result.join('\n');
+  return warnings.length > 0 ? { text, warnings } : text;
+}
+
 // Strip a single leading H1 from the markdown body. Templates inject their own H1
 // from the page title, so the author's `# Title` line at the top would render as a duplicate.
 function stripLeadingH1(markdown) {
@@ -128,16 +171,24 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath) {
   });
 }
 
-function processContent(page, linkMap, excludeSections, imageMap = {}) {
+function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
   let markdown = page.markdown;
+  const warnings = [];
   markdown = stripDataview(markdown);
+  const gmResult = stripGmOnly(markdown);
+  if (gmResult.warnings) {
+    warnings.push(...gmResult.warnings);
+    markdown = gmResult.text;
+  } else {
+    markdown = gmResult;
+  }
   markdown = stripLeadingH1(markdown);
   markdown = filterSections(markdown, excludeSections);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath);
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   const html = md.render(markdown);
   const relationships = renderRelationships(page.frontmatter, linkMap, page.outputPath);
-  return { html, relationships };
+  return { html, relationships, warnings };
 }
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates)
@@ -164,4 +215,4 @@ function extractSections(markdown) {
   }));
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, renderRelationships, relativePath, escapeHtml, resolveImageEmbeds };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, escapeHtml, resolveImageEmbeds };

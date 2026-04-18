@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1 } = require('../../lib/processor');
+const { escapeHtml, relativePath, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -90,5 +90,45 @@ describe('stripLeadingH1', () => {
     const md = 'Intro\n\n# Title\n\nContent';
     const result = stripLeadingH1(md);
     assert.ok(result.includes('# Title'));
+  });
+});
+
+describe('stripGmOnly', () => {
+  it('removes content between gm-only markers', () => {
+    const md = 'Public text\n<!-- gm-only -->\nSecret stuff\n<!-- /gm-only -->\nMore public';
+    const result = stripGmOnly(md);
+    assert.strictEqual(result, 'Public text\n\nMore public');
+  });
+
+  it('handles multiple gm-only blocks', () => {
+    const md = 'A\n<!-- gm-only -->\nB\n<!-- /gm-only -->\nC\n<!-- gm-only -->\nD\n<!-- /gm-only -->\nE';
+    const result = stripGmOnly(md);
+    assert.strictEqual(result, 'A\n\nC\n\nE');
+  });
+
+  it('strips from unclosed marker to end of file', () => {
+    const md = 'Public\n<!-- gm-only -->\nSecret to end';
+    const { text, warnings } = stripGmOnly(md);
+    assert.strictEqual(text, 'Public\n');
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(warnings[0].includes('unclosed'));
+  });
+
+  it('ignores markers inside fenced code blocks', () => {
+    const md = 'Text\n```\n<!-- gm-only -->\ncode\n<!-- /gm-only -->\n```\nAfter';
+    const result = stripGmOnly(md);
+    assert.strictEqual(result, md);
+  });
+
+  it('returns input unchanged when no markers present', () => {
+    const md = 'Just normal text\nWith multiple lines';
+    const result = stripGmOnly(md);
+    assert.strictEqual(result, md);
+  });
+
+  it('handles markers with extra whitespace', () => {
+    const md = 'Public\n<!--  gm-only  -->\nSecret\n<!--  /gm-only  -->\nMore';
+    const result = stripGmOnly(md);
+    assert.strictEqual(result, 'Public\n\nMore');
   });
 });
