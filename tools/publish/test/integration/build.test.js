@@ -580,4 +580,77 @@ describe('build integration', () => {
       assert.ok(fs.existsSync(memberPath));
     });
   });
+
+  describe('with-manifest fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-manifest-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-manifest'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Manifest Test',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: {
+          'Characters/NPCs': 'characters/npcs',
+          'Locations': 'locations',
+          'Sessions': 'sessions',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('publishes files listed in manifest', () => {
+      assert.ok(fs.existsSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'public-npc.html')));
+      assert.ok(fs.existsSync(path.join(outputDir, 'docs', 'locations', 'tavern.html')));
+    });
+
+    it('excludes files not in manifest publishing list', () => {
+      assert.ok(!fs.existsSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'secret-villain.html')));
+      assert.ok(!fs.existsSync(path.join(outputDir, 'docs', 'sessions', 'planned-session.html')));
+    });
+
+    it('strips GM Notes sections from published pages', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'public-npc.html'), 'utf-8');
+      assert.ok(!html.includes('Crimson Court'));
+      assert.ok(html.includes('friendly face'));
+    });
+
+    it('strips gm-only inline markers from published pages', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'tavern.html'), 'utf-8');
+      assert.ok(!html.includes('smuggler tunnels'));
+      assert.ok(!html.includes('gm-only'));
+      assert.ok(html.includes('notice board'));
+    });
+
+    it('strips excluded frontmatter fields', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'public-npc.html'), 'utf-8');
+      assert.ok(!html.includes('Actually a spy'));
+    });
+
+    it('generates 404.html', () => {
+      const fourOhFour = path.join(outputDir, 'docs', '404.html');
+      assert.ok(fs.existsSync(fourOhFour));
+      const html = fs.readFileSync(fourOhFour, 'utf-8');
+      assert.ok(html.includes('The stars are not yet right'));
+    });
+
+    it('generates theme.css', () => {
+      const themePath = path.join(outputDir, 'docs', 'css', 'theme.css');
+      assert.ok(fs.existsSync(themePath));
+      const css = fs.readFileSync(themePath, 'utf-8');
+      assert.ok(css.includes('--theme-primary'));
+    });
+  });
 });

@@ -1,13 +1,22 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, wikiTemplate, indexTemplate, landingTemplate, DIR_LABELS } = require('./templates/index');
+const { processContent, extractSections, filterSections, stripDataview, filterFields } = require('./processor');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS } = require('./templates/index');
+const { loadPublishConfig } = require('./config');
+const { loadManifest } = require('./manifest');
+const { generateThemeCSS } = require('./theme');
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
   const config = require(path.resolve(configPath));
   const outputDir = path.resolve(path.dirname(path.resolve(configPath)), config.outputDir);
+
+  const publishConfig = loadPublishConfig(config.vaultPath, config);
+  const manifest = loadManifest(config.vaultPath);
+  const excludeSections = publishConfig.exclude_sections;
+  const excludeFields = publishConfig.exclude_fields;
+  const fieldOverrides = publishConfig.overrides.fields || {};
 
   function cleanOutput() {
     if (!fs.existsSync(outputDir)) return;
@@ -31,8 +40,26 @@ function build(options = {}) {
     fs.copyFileSync(src, dest);
   }
 
+  function writeThemeCSS() {
+    const css = generateThemeCSS(publishConfig.theme);
+    const dest = path.join(outputDir, 'css/theme.css');
+    ensureDir(dest);
+    fs.writeFileSync(dest, css);
+    console.log('  wrote css/theme.css');
+  }
+
   function writeNoJekyll() {
     fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
+  }
+
+  function write404() {
+    const html = fourOhFourTemplate({
+      siteTitle: config.siteTitle,
+      four_oh_four: publishConfig.four_oh_four,
+      theme: publishConfig.theme,
+    });
+    fs.writeFileSync(path.join(outputDir, '404.html'), html);
+    console.log('  wrote 404.html');
   }
 
   function copyImages(imageMap) {
@@ -46,8 +73,27 @@ function build(options = {}) {
 
   // Main build logic
   console.log('Scanning vault:', config.vaultPath);
-  const pages = scanVault(config);
+  let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
+
+  // Filter pages by manifest if present
+  if (manifest && publishConfig.mode === 'player') {
+    const allowSet = new Set(manifest.publishing);
+    const beforeCount = pages.length;
+    pages = pages.filter(page => {
+      const vaultRelPath = path.relative(config.vaultPath, page.sourcePath);
+      const posixPath = vaultRelPath.split(path.sep).join('/');
+      return allowSet.has(posixPath);
+    });
+    console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);
+  }
+
+  // Apply field filtering to each page's frontmatter
+  for (const page of pages) {
+    const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
+    const overridesForFile = fieldOverrides[vaultRelPath] || {};
+    page.frontmatter = filterFields(page.frontmatter, excludeFields, overridesForFile);
+  }
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
@@ -57,8 +103,10 @@ function build(options = {}) {
 
   cleanOutput();
   copyCSS();
+  writeThemeCSS();
   copyImages(imageMap);
   writeNoJekyll();
+  write404();
 
   const navFor = generateNav(pages);
 
@@ -66,13 +114,13 @@ function build(options = {}) {
   let errorCount = 0;
   for (const page of pages) {
     try {
-      const processed = processContent(page, linkMap, config.excludeSections, imageMap);
+      const processed = processContent(page, linkMap, excludeSections, imageMap);
       let html;
 
       switch (page.frontmatter.type) {
         case 'pc': {
           let filtered = stripDataview(page.markdown);
-          filtered = filterSections(filtered, config.excludeSections);
+          filtered = filterSections(filtered, excludeSections);
           const sections = extractSections(filtered);
           html = pcTemplate(page, processed, sections, navFor, config, imageMap);
           break;
