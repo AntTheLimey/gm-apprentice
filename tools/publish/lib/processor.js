@@ -172,7 +172,7 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath) {
 }
 
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
-  let markdown = page.markdown;
+  let markdown = page.markdown.replace(/\r/g, '');
   const warnings = [];
   markdown = stripDataview(markdown);
   const gmResult = stripGmOnly(markdown);
@@ -193,7 +193,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates)
 function extractSections(markdown) {
-  const lines = markdown.split('\n');
+  const lines = markdown.replace(/\r/g, '').split('\n');
   const sections = [];
   let current = null;
 

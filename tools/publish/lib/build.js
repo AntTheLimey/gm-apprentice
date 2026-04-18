@@ -123,7 +123,7 @@ function build(options = {}) {
 
       switch (page.frontmatter.type) {
         case 'pc': {
-          let filtered = stripDataview(page.markdown);
+          let filtered = stripDataview(page.markdown.replace(/\r/g, ''));
           filtered = filterSections(filtered, excludeSections);
           const sections = extractSections(filtered);
           html = pcTemplate(page, processed, sections, navFor, config, imageMap);
