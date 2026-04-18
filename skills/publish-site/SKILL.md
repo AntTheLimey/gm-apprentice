@@ -32,7 +32,7 @@ npx gm-apprentice-publish --help
 Node 22 or later is required. If the GM hits a version error,
 advise them to install Node via https://nodejs.org (LTS release).
 
-## Five Capabilities
+## Six Capabilities
 
 ### 1. First-time setup
 
@@ -93,6 +93,38 @@ When a GM manages more than one campaign site, track the site
 repo paths and their vault paths in the conversation. Offer to
 loop over all sites when doing routine updates. Confirm each site
 individually before pushing.
+
+### 6. Content filtering
+
+**Trigger:** "only publish player content", "hide GM notes",
+"filter my campaign for players", "set up player view",
+"what will players see", "publish without spoilers"
+
+Workflow:
+1. Read `_meta/vault-config.md` for existing publish settings.
+   If no `publish:` section exists, run first-time setup:
+   - Ask the GM about their campaign's genre/tone for theming.
+   - Ask if they have a campaign image or want one generated.
+   - Offer genre-appropriate 404 messages.
+   - Write initial config to `vault-config.md`.
+2. Scan the vault and categorize every file:
+   - **Always exclude:** prep files (`status: planned|prepped`,
+     `stage: outline|draft|ready`), `source: "prep"` files,
+     `_meta/`, `_Templates/`, `personal/` directories.
+   - **Always include:** played sessions, standard entity files,
+     `_Campaign/` overviews.
+   - **Ambiguous:** scenes with `status: skipped|cut|modified`,
+     files that don't match clear conventions.
+3. Write the publish manifest to `_meta/publish-manifest.md`.
+4. Present a summary and walk through ambiguous items.
+5. Save GM decisions to `vault-config.md` overrides.
+6. Confirm the manifest is ready for the build tool.
+
+For subsequent publishes, scan for changes since the last
+manifest and present only the delta.
+
+For full documentation of the filtering model, see
+`references/content-filtering.md`.
 
 ## Companion Skills
 
