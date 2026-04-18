@@ -653,4 +653,56 @@ describe('build integration', () => {
       assert.ok(css.includes('--theme-primary'));
     });
   });
+
+  describe('with-gm-only-markers fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-gmonly-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-gm-only-markers'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'GM Only Test',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: {
+          'Locations': 'locations',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('strips gm-only blocks from market page', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'market.html'), 'utf-8');
+      assert.ok(!html.includes('pickpocket'));
+      assert.ok(!html.includes('Fingers McGee'));
+      assert.ok(!html.includes('fence for stolen goods'));
+      assert.ok(html.includes('Fresh produce'));
+      assert.ok(html.includes('herbs and tonics'));
+    });
+
+    it('handles multiple gm-only blocks in one file', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'market.html'), 'utf-8');
+      assert.ok(html.includes('blacksmith offers'));
+      assert.ok(html.includes('apothecary'));
+    });
+
+    it('handles unclosed marker by stripping to end of file', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'dungeon.html'), 'utf-8');
+      assert.ok(html.includes('dark, winding passage'));
+      assert.ok(!html.includes('unclosed marker'));
+      assert.ok(!html.includes('Secret Chamber'));
+      assert.ok(!html.includes('treasure'));
+    });
+  });
 });
