@@ -4,6 +4,11 @@ function fourOhFourTemplate(config) {
   const message = escapeHtml(config.four_oh_four.message);
   const siteTitle = escapeHtml(config.siteTitle);
   const campaignImage = config.theme && config.theme.campaign_image;
+  let basePath = '/';
+  if (config.siteUrl) {
+    try { basePath = new URL(config.siteUrl).pathname.replace(/\/$/, '') + '/'; } catch (_) {}
+  }
+  const href = p => `${basePath}${p}`;
 
   const imageHtml = campaignImage
     ? `<img src="${escapeHtml(campaignImage)}" alt="${siteTitle}" class="four-oh-four-image">`
@@ -15,8 +20,8 @@ function fourOhFourTemplate(config) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Not Found — ${siteTitle}</title>
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/theme.css">
+  <link rel="stylesheet" href="${href('css/style.css')}">
+  <link rel="stylesheet" href="${href('css/theme.css')}">
   <style>
     .four-oh-four-hero {
       text-align: center;
@@ -61,14 +66,14 @@ function fourOhFourTemplate(config) {
 <body>
 
 <header class="site-header">
-  <h1><a href="index.html">${siteTitle}</a></h1>
+  <h1><a href="${href('index.html')}">${siteTitle}</a></h1>
 </header>
 
 <main class="content">
   <div class="four-oh-four-hero">
     ${imageHtml}
     <p class="four-oh-four-message">${message}</p>
-    <a href="index.html" class="four-oh-four-home">Return to Safety</a>
+    <a href="${href('index.html')}" class="four-oh-four-home">Return to Safety</a>
   </div>
 </main>
 

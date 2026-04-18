@@ -87,8 +87,8 @@ or provide a new directory name.
 
 Reads `vault.config.json` (or the file at `--config path`) and writes
 the generated site into the `outputDir` specified in that config.
-Cleans the output directory before each build except for any
-`superpowers/` subdirectory.
+Cleans the output directory before each build, preserving any
+directories listed in `preserveDirs`.
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -102,12 +102,13 @@ Cleans the output directory before each build except for any
 |-------|------|-------------|
 | `siteTitle` | string | Site name shown in the nav bar and page title |
 | `siteUrl` | string | Canonical base URL (used for absolute links) |
-| `vaultPath` | string | Path to the vault directory, relative to the config file |
-| `outputDir` | string | Directory to write generated HTML into (default `./docs`) |
+| `vaultPath` | string | Path to the vault directory (resolved relative to the config file) |
+| `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |
 | `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
 | `folderMap` | object | Maps vault folder paths to site output paths (see below) |
 | `excludeDirs` | array | Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`) |
 | `excludeSections` | array | Markdown H2 section headings to strip before rendering (e.g. `["GM Notes"]`) |
+| `preserveDirs` | array | Output subdirectories to keep across builds (e.g. `["superpowers"]`) |
 
 ### folderMap
 

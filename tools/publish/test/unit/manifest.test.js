@@ -59,6 +59,21 @@ describe('parseManifest', () => {
     assert.strictEqual(result.resolved[0], 'Clues/Letter.md');
   });
 
+  it('handles CRLF line endings', () => {
+    const md = '---\r\ngenerated: 2026-04-18\r\npublishing: 2\r\n---\r\n\r\n## Publishing (2 files)\r\n\r\n- [x] Characters/PCs/Hero.md\r\n- [x] Locations/Tavern.md\r\n';
+    const result = parseManifest(md);
+    assert.strictEqual(result.publishing.length, 2);
+    assert.strictEqual(result.publishing[0], 'Characters/PCs/Hero.md');
+    assert.strictEqual(result.publishing[1], 'Locations/Tavern.md');
+  });
+
+  it('accepts uppercase X in checkboxes', () => {
+    const md = '---\ngenerated: 2026-04-18\n---\n\n## Publishing (1 files)\n\n- [X] Characters/PCs/Hero.md\n';
+    const result = parseManifest(md);
+    assert.strictEqual(result.publishing.length, 1);
+    assert.strictEqual(result.publishing[0], 'Characters/PCs/Hero.md');
+  });
+
   it('returns empty arrays when no content', () => {
     const md = '---\ngenerated: 2026-04-18\n---\n';
     const result = parseManifest(md);

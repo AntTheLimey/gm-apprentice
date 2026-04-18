@@ -8,11 +8,11 @@ function parseManifest(markdown) {
   const needsDecision = [];
   const resolved = [];
 
-  const checkedPattern = /^- \[x\]\s+(.+)$/;
+  const checkedPattern = /^- \[[xX]\]\s+(.+)$/;
   const uncheckedPattern = /^- \[ \]\s+(.+)$/;
 
   let currentSection = null;
-  for (const line of content.split('\n')) {
+  for (const line of content.replace(/\r/g, '').split('\n')) {
     const sectionMatch = line.match(/^## (.+)/);
     if (sectionMatch) {
       const title = sectionMatch[1].trim();

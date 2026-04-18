@@ -25,11 +25,16 @@ const GENRE_PRESETS = {
   },
 };
 
-const SYSTEM_FONTS = ['system-ui', 'sans-serif', 'serif', 'monospace'];
+const GENERIC_FAMILIES = ['system-ui', 'sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded'];
+
+function cssFontValue(font, fallback) {
+  if (GENERIC_FAMILIES.includes(font)) return `${font}, ${fallback}`;
+  return `'${font}', ${fallback}`;
+}
 
 function googleFontsImport(fonts) {
   const toImport = [fonts.heading, fonts.body]
-    .filter(f => !SYSTEM_FONTS.includes(f))
+    .filter(f => !GENERIC_FAMILIES.includes(f))
     .filter((v, i, a) => a.indexOf(v) === i);
   if (toImport.length === 0) return '';
   const families = toImport.map(f => `family=${f.replace(/ /g, '+')}`).join('&');
@@ -65,8 +70,8 @@ function generateThemeCSS(config) {
   --theme-accent: ${palette.accent};
   --theme-bg: ${palette.background};
   --theme-text: ${palette.text};
-  --theme-heading-font: '${fonts.heading}', serif;
-  --theme-body-font: '${fonts.body}', sans-serif;
+  --theme-heading-font: ${cssFontValue(fonts.heading, 'serif')};
+  --theme-body-font: ${cssFontValue(fonts.body, 'sans-serif')};
 }
 `;
 }

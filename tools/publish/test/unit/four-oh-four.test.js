@@ -25,7 +25,25 @@ describe('fourOhFourTemplate', () => {
 
   it('includes a link back to home', () => {
     const html = fourOhFourTemplate(baseConfig);
-    assert.ok(html.includes('href="index.html"'));
+    assert.ok(html.includes('index.html'));
+    assert.ok(html.includes('Return to Safety'));
+  });
+
+  it('uses absolute paths when siteUrl is provided', () => {
+    const config = {
+      ...baseConfig,
+      siteUrl: 'https://example.github.io/my-campaign',
+    };
+    const html = fourOhFourTemplate(config);
+    assert.ok(html.includes('href="/my-campaign/css/style.css"'));
+    assert.ok(html.includes('href="/my-campaign/css/theme.css"'));
+    assert.ok(html.includes('href="/my-campaign/index.html"'));
+  });
+
+  it('uses root paths when no siteUrl', () => {
+    const html = fourOhFourTemplate(baseConfig);
+    assert.ok(html.includes('href="/css/style.css"'));
+    assert.ok(html.includes('href="/index.html"'));
   });
 
   it('is a valid HTML document', () => {

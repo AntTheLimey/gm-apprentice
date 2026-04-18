@@ -9,8 +9,11 @@ const { generateThemeCSS } = require('./theme');
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
-  const config = require(path.resolve(configPath));
-  const outputDir = path.resolve(path.dirname(path.resolve(configPath)), config.outputDir);
+  const resolvedConfigPath = path.resolve(configPath);
+  const configDir = path.dirname(resolvedConfigPath);
+  const config = require(resolvedConfigPath);
+  config.vaultPath = path.resolve(configDir, config.vaultPath);
+  const outputDir = path.resolve(configDir, config.outputDir);
 
   const publishConfig = loadPublishConfig(config.vaultPath, config);
   const manifest = loadManifest(config.vaultPath);
@@ -55,6 +58,7 @@ function build(options = {}) {
   function write404() {
     const html = fourOhFourTemplate({
       siteTitle: config.siteTitle,
+      siteUrl: config.siteUrl,
       four_oh_four: publishConfig.four_oh_four,
       theme: publishConfig.theme,
     });
@@ -83,9 +87,6 @@ function build(options = {}) {
     pages = pages.filter(page => {
       const vaultRelPath = path.relative(config.vaultPath, page.sourcePath);
       const posixPath = vaultRelPath.split(path.sep).join('/');
-      if (process.env.DEBUG_MANIFEST) {
-        console.log(`  manifest check: "${posixPath}" in set? ${allowSet.has(posixPath)} (set: ${JSON.stringify([...allowSet].slice(0, 5))})`);
-      }
       return allowSet.has(posixPath);
     });
     console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);

@@ -68,4 +68,26 @@ describe('generateThemeCSS', () => {
     const css = generateThemeCSS(config);
     assert.ok(css.includes('--theme-primary: #custom'));
   });
+
+  it('leaves generic font families unquoted in CSS', () => {
+    const config = {
+      palette: { primary: '#000', accent: '#000', background: '#fff', text: '#000' },
+      fonts: { heading: 'system-ui', body: 'sans-serif' },
+    };
+    const css = generateThemeCSS(config);
+    assert.ok(css.includes('--theme-heading-font: system-ui, serif'));
+    assert.ok(css.includes('--theme-body-font: sans-serif, sans-serif'));
+    assert.ok(!css.includes("'system-ui'"));
+    assert.ok(!css.includes("'sans-serif'"));
+  });
+
+  it('quotes custom font family names in CSS', () => {
+    const config = {
+      palette: { primary: '#000', accent: '#000', background: '#fff', text: '#000' },
+      fonts: { heading: 'Cinzel', body: 'Libre Baskerville' },
+    };
+    const css = generateThemeCSS(config);
+    assert.ok(css.includes("'Cinzel', serif"));
+    assert.ok(css.includes("'Libre Baskerville', sans-serif"));
+  });
 });

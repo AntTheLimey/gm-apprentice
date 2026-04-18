@@ -22,6 +22,7 @@ describe('build integration', () => {
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
         siteTitle: 'Test Site',
+        siteUrl: 'https://example.github.io/test-site',
         excludeDirs: ['_meta', '_Templates'],
         excludeSections: ['Player Notes'],
         folderMap: {
@@ -586,7 +587,6 @@ describe('build integration', () => {
     let configPath;
 
     before(() => {
-      process.env.DEBUG_MANIFEST = '1';
       outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-manifest-'));
       configPath = path.join(outputDir, 'config.json');
 
@@ -595,6 +595,7 @@ describe('build integration', () => {
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
         siteTitle: 'Manifest Test',
+        siteUrl: 'https://example.github.io/test-campaign',
         excludeDirs: ['_meta', '_Templates'],
         excludeSections: ['GM Notes'],
         folderMap: {
@@ -606,7 +607,6 @@ describe('build integration', () => {
 
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
       build({ configPath });
-      delete process.env.DEBUG_MANIFEST;
     });
 
     after(() => {
@@ -669,6 +669,7 @@ describe('build integration', () => {
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
         siteTitle: 'GM Only Test',
+        siteUrl: 'https://example.github.io/test-gmonly',
         excludeDirs: ['_meta'],
         excludeSections: [],
         folderMap: {
