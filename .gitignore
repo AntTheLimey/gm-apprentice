@@ -42,6 +42,7 @@ skills/ttrpg-expert/systems/dnd-5e-2024/personal/
 # Specs, plans, and design docs (local development artifacts)
 docs/superpowers/
 docs/plans/
+.superpowers/
 
 # Test results (run-specific artifacts)
 tests/compaction/
