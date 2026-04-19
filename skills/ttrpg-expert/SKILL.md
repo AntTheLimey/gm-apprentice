@@ -129,8 +129,10 @@ Requests often combine modes.
 
 - **campaign-organizer** — Vault structure and entity filing.
   Suggest after generating content or character creation.
-- **session-lifecycle** — Prep → Play → Wrap-up cycle.
-  Suggest after session planning or after a session ends.
+- **session-prep** / **session-play** / **session-wrapup** —
+  Session lifecycle split into three skills. Suggest
+  session-prep after session planning, session-wrapup after
+  a session ends.
 - **campaign-qa** — Validation. Suggest after session prep
   (especially Canon Grounding) or major content generation.
 

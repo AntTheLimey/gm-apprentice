@@ -72,7 +72,7 @@ appropriate:]
 - If vault structure needs work: suggest campaign-organizer
 - If threads need tracking: suggest ttrpg-expert (continuity-engine.md)
 - If session prep should incorporate fixes: suggest
-  session-lifecycle
+  session-prep
 
 ## Dismissed Findings Register
 

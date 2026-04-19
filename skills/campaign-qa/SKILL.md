@@ -41,9 +41,9 @@ live at `skills/shared/` (sibling directory to this skill folder).
   Validate mode handles the repair. This skill detects;
   campaign-organizer restructures.
 
-- **session-lifecycle** — Session prep and wrap-up. Suggest
-  a QA pass after wrap-up produces changes, or before prep
-  to catch stale data.
+- **session-prep** / **session-wrapup** — Session prep and
+  wrap-up. Suggest a QA pass after session-wrapup produces
+  changes, or before session-prep to catch stale data.
 
 ## Vault Integration
 
