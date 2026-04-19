@@ -5,12 +5,14 @@ Context for Claude sessions working in this repository.
 ## What this is
 
 A Claude Code plugin marketplace at `AntTheLimey/gm-apprentice` containing
-four TTRPG Game Master skills:
+six TTRPG Game Master skills:
 
 - `ttrpg-expert` — rules, content generation, session planning
 - `campaign-organizer` — vault structure, knowledge graph metadata
 - `campaign-qa` — canon auditing, graph health checks
-- `session-lifecycle` — prep, play, wrap-up
+- `session-prep` — between-session preparation and reconciliation
+- `session-play` — at-the-table GM support (speed-optimised)
+- `session-wrapup` — post-session processing, entity creation, recaps
 
 Supported systems: CoC 7e (+ Regency Cthulhu variant), GURPS 4e, FitD,
 D&D 5e 2024.
