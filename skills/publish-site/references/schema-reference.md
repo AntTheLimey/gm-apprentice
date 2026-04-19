@@ -140,6 +140,29 @@ pointing to this faction will be listed in a **Members** section.
 
 ---
 
+### Event
+
+`type: event`
+
+| Field | Status | Description |
+|-------|--------|-------------|
+| `event_type` | Optional | Type label (e.g. "battle", "discovery", "betrayal", "ritual") |
+| `date` | Optional | In-game date of the event |
+| `location` | Optional | `[[wiki-link]]` to where the event occurred |
+| `participants` | Optional | List of participants — each entry can be `[[Entity]] (role)`, `[[Entity\|Display]] (role)`, or plain text |
+| `outcome` | Optional | What resulted — rendered as a highlighted callout box |
+| `portrait` | Optional | Path relative to vault root (scene art) |
+
+The event template renders a header card with the title, date, and
+location (linked if resolvable), followed by an outcome callout and
+a participants list. Participants with `[[wiki-links]]` are resolved
+to clickable links. Role annotations in parentheses are preserved
+after the name.
+
+Body content renders below the participants section.
+
+---
+
 ## Smart Wiki Fallback
 
 Any entity whose `type` does not match a dedicated template
@@ -150,12 +173,6 @@ the body content. No fields are required beyond `name`.
 The types listed below are common smart-wiki entities.
 Dedicated templates for them will be added in later versions.
 Any other unrecognised `type` value also falls through here.
-
-### Event
-
-`type: event`
-
-Badges rendered: `event_type`, `date`, `location`
 
 ### Clue
 
