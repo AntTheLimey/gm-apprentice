@@ -77,7 +77,7 @@ Read it before adding any content derived from a published source.**
 ## Repository structure
 
 - `skills/` — one directory per skill (`SKILL.md` + `references/`)
-- `docs/` — user-facing documentation; `docs/plans/` for internal planning
+- `docs/` — user-facing documentation
 - `tests/` — schema validation, benchmark infrastructure, compaction tests
 - `scripts/` — utility scripts (not user-facing)
 - `tools/` — standalone tools (e.g., future `tools/publish/` npm package)
@@ -87,7 +87,7 @@ Read it before adding any content derived from a published source.**
 - `ROADMAP.md` — force-ranked backlog (see workflow below)
 
 Note: `.claude/` is gitignored (local Claude Code settings and worktrees).
-`docs/superpowers/` is gitignored (local specs and plans).
+`docs/superpowers/` and `docs/plans/` are gitignored (local specs and plans).
 `skills/ttrpg-expert/systems/*/personal/` are gitignored (user's private
 licensed reference files — see copyright rules above).
 
@@ -124,7 +124,7 @@ and move it to the "Completed" section with a PR number or commit SHA.
 
 ## Testing
 
-- Schema validation: `python tests/validate_schema.py`
+- Schema validation: `python3 scripts/validate_schema.py`
 - Benchmarks live in `tests/benchmark-campaign/` and `tests/benchmark-questions/`
   — do not delete these
 - One benchmark run is enough; fix issues before benchmarking; use A/B

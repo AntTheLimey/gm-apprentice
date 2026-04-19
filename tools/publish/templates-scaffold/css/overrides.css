@@ -1,0 +1,11 @@
+/*
+ * overrides.css — campaign-specific style customisations
+ *
+ * This file is loaded after the base gm-apprentice-publish stylesheet.
+ * Add rules here to override colours, fonts, layout, or any other styles
+ * without modifying the package's built-in CSS.
+ *
+ * Example:
+ *   :root { --accent: #8b0000; }
+ *   body  { font-family: 'Palatino Linotype', serif; }
+ */
