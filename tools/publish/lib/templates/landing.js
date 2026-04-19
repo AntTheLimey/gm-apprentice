@@ -20,7 +20,7 @@ function landingTemplate(pages, navFor, config) {
   const sectionLabels = Object.fromEntries(sectionOrder.map(k => [k, DIR_LABELS[k]]));
 
   const navCards = Object.entries(sectionLabels).map(([dir, label]) => {
-    const dirPages = pages.filter(p => p.outputDir === dir);
+    const dirPages = pages.filter(p => p.outputDir === dir || p.outputDir.startsWith(dir + '/'));
     const links = dirPages.map(p => `<li><a href="${p.outputPath}">${escapeHtml(p.title)}</a></li>`).join('\n');
     return `
 <div class="nav-card">

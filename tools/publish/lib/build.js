@@ -183,7 +183,12 @@ function build(options = {}) {
   }
 
   for (const [dir, label] of Object.entries(DIR_LABELS)) {
-    const dirPages = dirs[dir] || [];
+    let dirPages = [];
+    for (const [pageDir, pageDirPages] of Object.entries(dirs)) {
+      if (pageDir === dir || pageDir.startsWith(dir + '/')) {
+        dirPages = dirPages.concat(pageDirPages);
+      }
+    }
     const indexHtml = indexTemplate(dir, label, dirPages, navFor, config);
     const outPath = path.join(outputDir, dir, 'index.html');
     ensureDir(outPath);

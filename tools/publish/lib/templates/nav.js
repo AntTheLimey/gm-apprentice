@@ -14,8 +14,13 @@ function generateNav(pages) {
   return function navFor(currentOutputPath) {
     let html = '';
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
-      const dirPages = sections[dir];
-      if (!dirPages || dirPages.length === 0) continue;
+      const dirPages = [];
+      for (const [secDir, secPages] of Object.entries(sections)) {
+        if (secDir === dir || secDir.startsWith(dir + '/')) {
+          dirPages.push(...secPages);
+        }
+      }
+      if (dirPages.length === 0) continue;
       html += `<h2>${escapeHtml(label)}</h2>\n<ul>\n`;
       for (const p of [...dirPages].sort((a, b) => a.title.localeCompare(b.title))) {
         const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));

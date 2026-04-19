@@ -63,7 +63,17 @@ describe('fourOhFourTemplate', () => {
       theme: { campaign_image: 'images/publish/campaign-header.png' },
     };
     const html = fourOhFourTemplate(config);
-    assert.ok(html.includes('campaign-header.png'));
+    assert.ok(html.includes('src="/images/publish/campaign-header.png"'));
+  });
+
+  it('uses absolute path for campaign image with siteUrl', () => {
+    const config = {
+      ...baseConfig,
+      siteUrl: 'https://example.github.io/my-campaign',
+      theme: { campaign_image: 'images/campaign-image.svg' },
+    };
+    const html = fourOhFourTemplate(config);
+    assert.ok(html.includes('src="/my-campaign/images/campaign-image.svg"'));
   });
 
   it('includes generated SVG placeholder when no image', () => {

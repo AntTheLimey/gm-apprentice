@@ -11,7 +11,7 @@ function fourOhFourTemplate(config) {
   const href = p => `${basePath}${p}`;
 
   const imageHtml = campaignImage
-    ? `<img src="${escapeHtml(campaignImage)}" alt="${siteTitle}" class="four-oh-four-image">`
+    ? `<img src="${href(escapeHtml(campaignImage))}" alt="${siteTitle}" class="four-oh-four-image">`
     : '';
 
   return `<!DOCTYPE html>
