@@ -1,5 +1,7 @@
 # gm-apprentice
 
+[![npm: gm-apprentice-publish](https://img.shields.io/npm/v/gm-apprentice-publish)](https://www.npmjs.com/package/gm-apprentice-publish)
+
 TTRPG Game Master skills for Claude. An apprentice that helps GMs
 run tabletop role-playing games -- from rules validation and content
 generation to campaign management and session lifecycle support.

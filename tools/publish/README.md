@@ -1,5 +1,7 @@
 # gm-apprentice-publish
 
+[![npm version](https://img.shields.io/npm/v/gm-apprentice-publish)](https://www.npmjs.com/package/gm-apprentice-publish)
+
 Static site generator for [gm-apprentice](https://github.com/AntTheLimey/gm-apprentice)
 campaign vaults. Reads structured markdown files produced by the
 campaign-organizer skill and outputs a self-contained HTML site suitable
