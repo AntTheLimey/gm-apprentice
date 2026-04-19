@@ -37,7 +37,7 @@ function scanVault(config) {
       const relPath = toPosix(path.relative(vaultPath, fullPath));
 
       if (entry.isDirectory()) {
-        if (excludeDirs.some(ex => relPath.startsWith(ex)) || entry.name.startsWith('.')) continue;
+        if (excludeDirs.some(ex => relPath === ex || relPath.startsWith(ex + '/')) || entry.name.startsWith('.')) continue;
         walk(fullPath);
       } else if (entry.name.endsWith('.md')) {
         const raw = fs.readFileSync(fullPath, 'utf-8');
@@ -91,12 +91,12 @@ function buildLinkMap(pages) {
   // Pass 2: add superseded titles, redirecting to their superseded_by target if possible
   for (const page of pages) {
     if (page.frontmatter.canon_status === 'SUPERSEDED') {
+      if (page.title in map) continue;
       const supersededBy = page.frontmatter.superseded_by;
       if (supersededBy) {
         const targetName = String(supersededBy).replace(/\[\[|\]\]/g, '').trim();
-        // Redirect to target if we have it, otherwise point at own page
         map[page.title] = map[targetName] || page.outputPath;
-      } else if (!(page.title in map)) {
+      } else {
         map[page.title] = page.outputPath;
       }
     }
@@ -104,7 +104,7 @@ function buildLinkMap(pages) {
 
   // Pass 3: add aliases (only if not already claimed by a canonical title)
   for (const page of pages) {
-    if (page.frontmatter.aliases) {
+    if (Array.isArray(page.frontmatter.aliases)) {
       for (const alias of page.frontmatter.aliases) {
         if (!(alias in map)) {
           map[alias] = page.outputPath;
@@ -123,7 +123,7 @@ function scanAttachments(config) {
 
   if (!fs.existsSync(attachmentsPath)) return map;
 
-  const IMAGE_EXTS = /\.(jpe?g|png|webp|gif|svg)$/i;
+  const IMAGE_EXTS = /\.(jpe?g|png|webp|gif|svg|avif)$/i;
 
   function walk(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -133,9 +133,15 @@ function scanAttachments(config) {
         walk(full);
       } else if (IMAGE_EXTS.test(entry.name)) {
         const relPath = toPosix(path.relative(attachmentsPath, full));
+        if (entry.name in map) {
+          console.warn(
+            `scanner: attachment basename collision — "${entry.name}" found at both ` +
+            `"${map[entry.name].relPath}" and "${relPath}". The latter will be used.`
+          );
+        }
         map[entry.name] = {
           sourcePath: full,
-          relPath, // e.g., "characters/ronnie-vint.jpg"
+          relPath,
         };
       }
     }

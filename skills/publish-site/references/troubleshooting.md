@@ -279,6 +279,11 @@ capture the full output:
 npm run build 2>&1 | tee build-log.txt
 ```
 
+**On Windows (PowerShell):**
+```powershell
+npm run build 2>&1 | Tee-Object -FilePath build-log.txt
+```
+
 Share the contents of `build-log.txt`. The build log includes
 per-page processing notes, skipped files, and any per-page errors
 that did not abort the full build.
