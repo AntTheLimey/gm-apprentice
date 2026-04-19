@@ -123,7 +123,7 @@ function scanAttachments(config) {
 
   if (!fs.existsSync(attachmentsPath)) return map;
 
-  const IMAGE_EXTS = /\.(jpe?g|png|webp|gif)$/i;
+  const IMAGE_EXTS = /\.(jpe?g|png|webp|gif|svg)$/i;
 
   function walk(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });

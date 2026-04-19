@@ -151,7 +151,7 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
   return `<h2>Relationships</h2>\n<ul class="relationship-list">\n${items.join('\n')}\n</ul>`;
 }
 
-const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif)$/i;
+const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
 
 function resolveImageEmbeds(markdown, imageMap, currentOutputPath) {
   // Match ![[filename.ext]] or ![[filename.ext|alt text]]

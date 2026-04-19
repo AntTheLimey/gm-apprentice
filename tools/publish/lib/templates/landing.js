@@ -1,10 +1,11 @@
 const { escapeHtml } = require('../processor');
 const { baseShell, DIR_LABELS } = require('./base');
 
-function landingTemplate(pages, navFor, config) {
+function landingTemplate(pages, navFor, config, publishConfig) {
   const outputPath = 'index.html';
+  const theme = (publishConfig && publishConfig.theme) || {};
+  const campaignImage = theme.campaign_image || null;
 
-  // Order chosen to put high-traffic sections first on the landing page
   const sectionOrder = [
     'characters/pcs',
     'characters/npcs',
@@ -21,22 +22,25 @@ function landingTemplate(pages, navFor, config) {
 
   const navCards = Object.entries(sectionLabels).map(([dir, label]) => {
     const dirPages = pages.filter(p => p.outputDir === dir || p.outputDir.startsWith(dir + '/'));
+    if (dirPages.length === 0) return '';
     const links = dirPages.map(p => `<li><a href="${p.outputPath}">${escapeHtml(p.title)}</a></li>`).join('\n');
     return `
 <div class="nav-card">
-  <h3><a href="${dir}/index.html">${escapeHtml(label)}</a></h3>
-  <ul>${links || '<li>No entries yet</li>'}</ul>
+  <h3><a href="${dir}/index.html">${escapeHtml(label)}</a> <span class="count">(${dirPages.length})</span></h3>
+  <ul>${links}</ul>
 </div>`;
-  }).join('\n');
+  }).filter(Boolean).join('\n');
 
-  const tagline = config.landingTagline || 'Welcome to the campaign.';
-  const params = config.landingParams || '';
+  const tagline = config.landingTagline || '';
+  const heroImageHtml = campaignImage
+    ? `<img src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}" class="hero-image">`
+    : '';
 
   const content = `
 <div class="hero">
+  ${heroImageHtml}
   <h1>${escapeHtml(config.siteTitle)}</h1>
-  <p class="tagline">${escapeHtml(tagline)}</p>
-  ${params ? `<p class="params">${escapeHtml(params)}</p>` : ''}
+  ${tagline ? `<p class="tagline">${escapeHtml(tagline)}</p>` : ''}
 </div>
 
 <div class="nav-grid">

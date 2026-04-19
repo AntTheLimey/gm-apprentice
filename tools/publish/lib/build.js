@@ -122,6 +122,23 @@ function build(options = {}) {
   copyCSS();
   writeThemeCSS();
   copyImages(imageMap);
+
+  // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
+  if (publishConfig.theme.campaign_image) {
+    const imgVal = publishConfig.theme.campaign_image;
+    if (!imgVal.startsWith('http://') && !imgVal.startsWith('https://')) {
+      const vaultImgPath = path.join(config.vaultPath, imgVal);
+      if (fs.existsSync(vaultImgPath)) {
+        const basename = path.basename(imgVal);
+        const dest = path.join(outputDir, 'images', basename);
+        ensureDir(dest);
+        fs.copyFileSync(vaultImgPath, dest);
+        publishConfig.theme.campaign_image = 'images/' + basename;
+        console.log(`  copied campaign image → images/${basename}`);
+      }
+    }
+  }
+
   writeNoJekyll();
   write404();
 
@@ -197,7 +214,7 @@ function build(options = {}) {
   }
 
   // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config);
+  const landingHtml = landingTemplate(pages, navFor, config, publishConfig);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
 
