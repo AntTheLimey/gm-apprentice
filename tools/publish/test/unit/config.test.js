@@ -89,4 +89,28 @@ describe('loadPublishConfig', () => {
     assert.deepStrictEqual(result.exclude_sections, ['Spoilers']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  it('extracts setting_year from vault-config.md frontmatter', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    const yaml = [
+      '---',
+      'setting_year: 2019',
+      'publish:',
+      '  mode: player',
+      '---',
+    ].join('\n');
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    const result = loadPublishConfig(tmpDir);
+    assert.strictEqual(result.setting_year, 2019);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('setting_year defaults to null when absent', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const result = loadPublishConfig(tmpDir);
+    assert.strictEqual(result.setting_year, null);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
 });

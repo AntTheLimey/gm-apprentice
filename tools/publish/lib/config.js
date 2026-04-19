@@ -35,12 +35,16 @@ const PUBLISH_DEFAULTS = {
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
+  let settingYear = null;
 
   if (fs.existsSync(configFile)) {
     const raw = fs.readFileSync(configFile, 'utf-8');
     const { data } = matter(raw);
     if (data.publish) {
       publish = data.publish;
+    }
+    if (data.setting_year !== undefined) {
+      settingYear = data.setting_year;
     }
   }
 
@@ -75,6 +79,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ...PUBLISH_DEFAULTS.overrides,
       ...publish.overrides,
     },
+    setting_year: settingYear,
   };
 
   return merged;
