@@ -57,4 +57,64 @@ function getPCs(pages) {
     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 }
 
-module.exports = { getLatestSession, extractRecap, getInitials, getPCs };
+const PATRON_TAGS = new Set(['employer', 'patron']);
+const ANTAGONIST_TAGS = new Set(['villain', 'antagonist']);
+const COMPANION_TAGS = new Set(['companion', 'ally']);
+const THREAT_TAGS = new Set(['super', 'fragment-empowered']);
+const IMPORTANCE_TAGS = new Set([
+  'employer', 'patron', 'villain', 'antagonist', 'rival',
+  'companion', 'ally', 'recurring', 'boss',
+]);
+
+function inferNPCRole(npc) {
+  const tags = new Set(npc.frontmatter.tags || []);
+  const rels = npc.frontmatter.relationships || [];
+
+  if ([...PATRON_TAGS].some(t => tags.has(t)) || rels.some(r => r.type === 'employs')) return 'Patron';
+  if ([...ANTAGONIST_TAGS].some(t => tags.has(t))) return 'Antagonist';
+  if ([...COMPANION_TAGS].some(t => tags.has(t))) return 'Companion';
+  if ([...THREAT_TAGS].some(t => tags.has(t))) return 'Threat';
+  if (rels.some(r => r.type === 'leads' || r.type === 'commands')) return 'Leader';
+  return 'NPC';
+}
+
+function scoreNPCs(allPages) {
+  const npcs = allPages.filter(p => p.frontmatter.type === 'npc');
+  const sessions = allPages.filter(
+    p => p.frontmatter.type === 'session' && p.frontmatter.status === 'played'
+  );
+
+  const scored = npcs.map(npc => {
+    let score = 0;
+    const names = [npc.title, ...(npc.frontmatter.aliases || [])];
+
+    for (const session of sessions) {
+      const md = session.markdown || '';
+      const mentioned = names.some(name => md.includes(`[[${name}]]`));
+      if (mentioned) score += 2;
+    }
+
+    const rels = npc.frontmatter.relationships || [];
+    score += rels.length;
+
+    const tags = npc.frontmatter.tags || [];
+    for (const tag of tags) {
+      if (IMPORTANCE_TAGS.has(tag)) score += 3;
+    }
+
+    if (rels.some(r => r.type === 'leads' || r.type === 'commands')) score += 2;
+
+    if (tags.some(t => THREAT_TAGS.has(t))) score += 2;
+
+    const role = inferNPCRole(npc);
+
+    return { page: npc, score, role };
+  });
+
+  return scored
+    .filter(s => s.score >= 3)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
+module.exports = { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole };
