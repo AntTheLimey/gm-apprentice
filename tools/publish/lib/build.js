@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS } = require('./templates/index');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS } = require('./theme');
@@ -190,6 +190,9 @@ function build(options = {}) {
         case 'faction':
         case 'organization':
           html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages);
+          break;
+        case 'event':
+          html = eventTemplate(page, processed, navFor, config, imageMap, linkMap);
           break;
         default:
           html = wikiTemplate(page, processed, navFor, config, imageMap);
