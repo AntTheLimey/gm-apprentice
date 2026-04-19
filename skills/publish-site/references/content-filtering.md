@@ -70,13 +70,63 @@ publish/exclude/needs-decision.
 
 The build tool reads this file directly — no rescanning needed.
 
+## Campaign Image
+
+The campaign image appears on the landing page hero and 404 page.
+Set in `publish.theme.campaign_image` in `vault-config.md`.
+
+**Path handling:** The value is a vault-relative path (e.g.
+`_attachments/campaign-image.svg`). The build tool copies it to
+the output `images/` directory and resolves the path automatically.
+External URLs (`https://...`) are passed through unchanged.
+
+**Supported formats:** JPG, PNG, WebP, GIF, SVG. SVG is ideal
+for procedurally generated campaign art since it scales cleanly
+and keeps file size small.
+
+**Setup flow (sequential questioning):**
+
+1. Ask: "Do you have an existing campaign image you'd like to use?"
+2. If yes → ask for the path, validate it exists
+3. If no → offer to generate a procedural SVG with genre-appropriate
+   motifs using the campaign's theme palette
+4. Store the vault-relative path in `campaign_image`
+
+The generated SVG should use the theme's primary, accent, and
+background colours and include decorative elements appropriate
+to the genre (e.g. tactical HUD for military, arcane sigils
+for fantasy, tentacles for horror).
+
 ## Themed 404 Page
 
 Links to excluded entities resolve to a custom 404 page
 with an in-world message. The message is stored at
 `publish.four_oh_four.message` in `vault-config.md`.
 
+The campaign image is also displayed on the 404 page when
+configured. The 404 template uses absolute paths derived from
+`siteUrl` so it works correctly when served from any nested URL.
+
+**Setup flow:** Suggest 2-3 genre-appropriate messages as
+options (e.g. "CLASSIFIED — CLEARANCE LEVEL INSUFFICIENT" for
+military, "The stars are not yet right..." for horror). Accept
+custom input as an alternative.
+
 ## Publish Modes
 
 - `player` (default): Only player-known content is published
 - `full`: Everything is published (GM's private reference copy)
+
+## Setup Questioning Flow
+
+When running first-time setup, ask questions **one at a time**
+in sequence. Do not bundle multiple questions into a single
+message. This gives the GM space to think about each decision.
+
+Recommended order:
+
+1. Campaign image (provide or generate?)
+2. 404 message (suggest options, accept custom)
+3. Theme confirmation (auto-detect from genre tags, confirm
+   palette/fonts with the GM)
+4. Exclusion rules (review defaults, ask about overrides)
