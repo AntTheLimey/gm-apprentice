@@ -1,15 +1,17 @@
 # Campaign Lifecycle
 
-How the four gm-apprentice skills work together across the
+How the six gm-apprentice skills work together across the
 life of a TTRPG campaign.
 
-## The Four Skills
+## The Skills
 
 | Skill | Role |
 |-------|------|
 | **ttrpg-expert** | Content generation, rules reference, session planning, GM frameworks |
 | **campaign-organizer** | Vault structure, entity filing, graph relationships, Obsidian integration |
-| **session-lifecycle** | Prep → Play → Wrap-up cycle, entity creation from play notes |
+| **session-prep** | Between-session preparation, reconciliation, thread scanning |
+| **session-play** | At-the-table lookups, generation, note capture |
+| **session-wrapup** | Post-session recaps, entity creation, carry-forward |
 | **campaign-qa** | Validation, contradiction detection, integrity checking |
 
 ## Campaign Flow
@@ -40,10 +42,10 @@ life of a TTRPG campaign.
 5. **Active play** — Both skills available:
    - `/gm-apprentice:ttrpg-expert` for quick rules lookups,
      stat blocks, improv NPCs, fail-forward guidance
-   - `/gm-apprentice:session-lifecycle` (Play mode) for
-     table dynamics and note-taking
+   - `/gm-apprentice:session-play` for quick lookups,
+     generation, and note-taking
 
-6. **Post-session wrap-up** — `/gm-apprentice:session-lifecycle`
+6. **Post-session wrap-up** — `/gm-apprentice:session-wrapup`
    Process play notes, capture what actually happened,
    identify new entities (NPCs, locations, items) created
    during play.
@@ -70,10 +72,10 @@ life of a TTRPG campaign.
 
 **"Session prep is done"**
 → ttrpg-expert planned it → campaign-qa validates →
-  session-lifecycle enters Prep mode
+  session-prep handles preparation
 
 **"Session just ended"**
-→ session-lifecycle wraps up → campaign-organizer files
+→ session-wrapup wraps up → campaign-organizer files
   new entities → campaign-qa checks for contradictions
 
 **"I need to check continuity"**

@@ -6,14 +6,16 @@ This guide walks you through setting up a new TTRPG campaign with gm-apprentice,
 
 Claude Code uses "skills" — specialized instructions that activate automatically based on what you ask Claude to do. You don't need to select a skill manually. When you say "build me an NPC," Claude recognizes this as a ttrpg-expert task and uses that skill's knowledge to respond.
 
-gm-apprentice installs four skills:
+gm-apprentice installs six skills:
 
 | Skill | What it does |
 |-------|-------------|
 | **ttrpg-expert** | Rules, content generation, continuity |
 | **campaign-organizer** | Vault structure and knowledge graphs |
 | **campaign-qa** | Campaign quality auditing |
-| **session-lifecycle** | Session prep, play, and wrap-up |
+| **session-prep** | Between-session preparation and reconciliation |
+| **session-play** | At-the-table lookups and note capture |
+| **session-wrapup** | Post-session recaps and entity creation |
 
 You talk to Claude normally. The skills handle the rest.
 
@@ -148,8 +150,8 @@ Claude will look for contradictions, timeline issues, and missing connections in
 
 You now have a working campaign vault with structured content, linked entities, and a session under your belt. From here:
 
-- **Before each session:** Use session-lifecycle's prep mode to review threads and prepare.
-- **After each session:** Use wrap-up to process notes, then reconcile to handle what was skipped.
+- **Before each session:** Use session-prep to review threads and prepare.
+- **After each session:** Use session-wrapup to process notes. Next time you prep, session-prep will reconcile what was skipped.
 - **Periodically:** Run campaign-qa to keep your vault clean.
 - **Anytime:** Use ttrpg-expert to generate new content, look up rules, or check continuity.
 
@@ -158,4 +160,6 @@ For detailed guidance on each skill, see the individual skill guides:
 - [ttrpg-expert](ttrpg-expert.md)
 - [campaign-organizer](campaign-organizer.md)
 - [campaign-qa](campaign-qa.md)
-- [session-lifecycle](session-lifecycle.md)
+- [session-prep](session-prep.md)
+- [session-play](session-play.md)
+- [session-wrapup](session-wrapup.md)
