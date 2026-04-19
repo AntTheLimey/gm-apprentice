@@ -97,4 +97,4 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   });
 }
 
-module.exports = { eventTemplate };
+module.exports = { eventTemplate, parseParticipant };

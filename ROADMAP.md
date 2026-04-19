@@ -35,27 +35,27 @@ Items are force-ranked by score. Higher score = do first.
 |:----:|------|:------:|:-------:|:------:|:-----:|--------|
 | 1 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done |
 | 2 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea |
-| 3 | Publish tool: favicon generation from campaign image | 2 | 1 | S (1) | 5.0 | Idea |
-| 4 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea |
-| 5 | Publish tool: Event dedicated template | 3 | 2 | M (2) | 4.0 | Idea |
-| 6 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea |
+| 3 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea |
+| 4 | Publish tool: Event dedicated template | 3 | 2 | M (2) | 4.0 | Idea |
+| 5 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea |
+| 6 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea |
 | 7 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
-| 8 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea |
-| 9 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea |
-| 10 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea |
-| 11 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
-| 12 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea |
-| 13 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
-| 14 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
-| 15 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
-| 16 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
-| 17 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea |
-| 18 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
-| 19 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea |
-| 20 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea |
-| 21 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
-| 22 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
-| 23 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
+| 8 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea |
+| 9 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea |
+| 10 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
+| 11 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea |
+| 12 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
+| 13 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
+| 14 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
+| 15 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
+| 16 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea |
+| 17 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
+| 18 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea |
+| 19 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea |
+| 20 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
+| 21 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
+| 22 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
+| 23 | Publish tool: favicon generation from campaign image | 1 | 1 | M (2) | 1.5 | Idea |
 
 ## Completed
 

@@ -1,0 +1,59 @@
+<h2>Landing Page Approaches</h2>
+<p class="subtitle">Three layouts for the campaign dashboard — click to select your preference</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Top-Down Briefing</h3>
+      <p><strong>Recommended.</strong> Full-width hero with campaign image, then content flows vertically in clear sections:</p>
+      <ol style="margin:0.5rem 0; padding-left:1.2rem; font-size:0.9rem;">
+        <li><strong>Hero</strong> — campaign image, title, in-game date + last played</li>
+        <li><strong>Story So Far</strong> — auto-extracted first paragraph of latest session recap</li>
+        <li><strong>The Team</strong> — PC roster cards (portrait, name, status, traits)</li>
+        <li><strong>Key NPCs</strong> — compact cards for tagged NPCs (patron, villain, companion) with role badge</li>
+        <li><strong>Explore</strong> — collapsed nav grid (category + count + link, no individual listings)</li>
+      </ol>
+      <div class="pros-cons" style="margin-top:0.75rem;">
+        <div class="pros"><h4>Pros</h4><ul><li>Clean, scannable</li><li>Works on mobile</li><li>Mirrors a mission briefing</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Long vertical scroll</li><li>NPCs and PCs in separate sections</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Two-Column Intel Board</h3>
+      <p>Hero at top, then a two-column layout: left column for narrative (recap + timeline), right column for personnel (PCs + key NPCs). Nav grid below.</p>
+      <ol style="margin:0.5rem 0; padding-left:1.2rem; font-size:0.9rem;">
+        <li><strong>Hero</strong> — same as A</li>
+        <li><strong>Left: Situation Report</strong> — session recap + in-game date</li>
+        <li><strong>Right: Personnel</strong> — PC roster + key NPC cards interleaved</li>
+        <li><strong>Full-width: Explore</strong> — collapsed nav grid</li>
+      </ol>
+      <div class="pros-cons" style="margin-top:0.75rem;">
+        <div class="pros"><h4>Pros</h4><ul><li>Dense, info-rich</li><li>Everything above the fold on desktop</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Collapses to single column on mobile anyway</li><li>More complex template</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Hybrid — Hero + Tabs</h3>
+      <p>Hero at top, then a tabbed section: "Recap" | "The Team" | "Explore". Only one tab visible at a time.</p>
+      <ol style="margin:0.5rem 0; padding-left:1.2rem; font-size:0.9rem;">
+        <li><strong>Hero</strong> — same as A</li>
+        <li><strong>Tab: Recap</strong> — session extract + dates</li>
+        <li><strong>Tab: The Team</strong> — PCs + key NPCs together</li>
+        <li><strong>Tab: Explore</strong> — full nav grid</li>
+      </ol>
+      <div class="pros-cons" style="margin-top:0.75rem;">
+        <div class="pros"><h4>Pros</h4><ul><li>Compact, no scrolling</li><li>Player picks what they want</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>Hides content behind clicks</li><li>Requires JavaScript</li><li>Harder to scan quickly</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>
