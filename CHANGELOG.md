@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] — 2026-04-19
+
+### Added
+
+- **Event dedicated template** — site template, vault template, and session-lifecycle event decomposition
+  - `parseParticipant()` supports three formats: `[[Entity]] (role)`, `[[Entity|Display]] (role)`, plain text
+  - Location wiki-link alias parsing (`[[Target|Display]]`)
+  - Event threshold criteria for coarse-grained event decomposition in wrap-up
+  - CSS: outcome callout and participants list styling
+
+### Changed
+
+- Entity schema: `eventType` renamed to `event_type`, `significance` field removed
+- Session-lifecycle wrap-up: timeline entries now use linked vs inline format
+- Roadmap: favicon generation demoted, event template marked completed
+
+---
+
 ## [1.3.0] — 2026-04-19
 
 ### Added
@@ -62,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.3.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/AntTheLimey/gm-apprentice/releases/tag/v1.1.0
