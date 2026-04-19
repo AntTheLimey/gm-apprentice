@@ -153,6 +153,16 @@ describe('inferNPCRole', () => {
     const npc = { frontmatter: {} };
     assert.strictEqual(inferNPCRole(npc), 'NPC');
   });
+
+  it('returns Recurring when sessionCount >= 2 and no tag matches', () => {
+    const npc = { frontmatter: { tags: [], relationships: [] } };
+    assert.strictEqual(inferNPCRole(npc, 2), 'Recurring');
+  });
+
+  it('returns NPC when sessionCount < 2 and no tag matches', () => {
+    const npc = { frontmatter: { tags: [], relationships: [] } };
+    assert.strictEqual(inferNPCRole(npc, 1), 'NPC');
+  });
 });
 
 describe('scoreNPCs', () => {

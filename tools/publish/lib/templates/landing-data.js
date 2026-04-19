@@ -66,7 +66,7 @@ const IMPORTANCE_TAGS = new Set([
   'companion', 'ally', 'recurring', 'boss',
 ]);
 
-function inferNPCRole(npc) {
+function inferNPCRole(npc, sessionCount) {
   const tags = new Set(npc.frontmatter.tags || []);
   const rels = npc.frontmatter.relationships || [];
 
@@ -75,6 +75,7 @@ function inferNPCRole(npc) {
   if ([...COMPANION_TAGS].some(t => tags.has(t))) return 'Companion';
   if ([...THREAT_TAGS].some(t => tags.has(t))) return 'Threat';
   if (rels.some(r => r.type === 'leads' || r.type === 'commands')) return 'Leader';
+  if (sessionCount >= 2) return 'Recurring';
   return 'NPC';
 }
 
@@ -86,12 +87,16 @@ function scoreNPCs(allPages) {
 
   const scored = npcs.map(npc => {
     let score = 0;
+    let sessionCount = 0;
     const names = [npc.title, ...(npc.frontmatter.aliases || [])];
 
     for (const session of sessions) {
       const md = session.markdown || '';
       const mentioned = names.some(name => md.includes(`[[${name}]]`));
-      if (mentioned) score += 2;
+      if (mentioned) {
+        score += 2;
+        sessionCount++;
+      }
     }
 
     const rels = npc.frontmatter.relationships || [];
@@ -106,7 +111,7 @@ function scoreNPCs(allPages) {
 
     if (tags.some(t => THREAT_TAGS.has(t))) score += 2;
 
-    const role = inferNPCRole(npc);
+    const role = inferNPCRole(npc, sessionCount);
 
     return { page: npc, score, role };
   });
