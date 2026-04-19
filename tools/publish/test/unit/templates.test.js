@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { stubBadge, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
+const { parseParticipant } = require('../../lib/templates/event');
 
 describe('stubBadge', () => {
   it('returns badge for STUB status', () => {
@@ -57,5 +58,62 @@ describe('rootPath', () => {
 
   it('handles nested paths', () => {
     assert.strictEqual(rootPath('characters/pcs/john.html'), '../../');
+  });
+});
+
+describe('parseParticipant', () => {
+  it('parses [[Entity]] (annotation)', () => {
+    const result = parseParticipant('[[Anna_Lindqvist]] (rescued)');
+    assert.strictEqual(result.target, 'Anna_Lindqvist');
+    assert.strictEqual(result.display, 'Anna_Lindqvist');
+    assert.strictEqual(result.annotation, 'rescued');
+    assert.strictEqual(result.isLink, true);
+  });
+
+  it('parses [[Entity|Display Name]] (annotation)', () => {
+    const result = parseParticipant('[[Anna_Lindqvist|Anna Lindqvist]] (rescued from control)');
+    assert.strictEqual(result.target, 'Anna_Lindqvist');
+    assert.strictEqual(result.display, 'Anna Lindqvist');
+    assert.strictEqual(result.annotation, 'rescued from control');
+    assert.strictEqual(result.isLink, true);
+  });
+
+  it('parses [[Entity]] without annotation', () => {
+    const result = parseParticipant('[[Emma_Wentworth]]');
+    assert.strictEqual(result.target, 'Emma_Wentworth');
+    assert.strictEqual(result.display, 'Emma_Wentworth');
+    assert.strictEqual(result.annotation, '');
+    assert.strictEqual(result.isLink, true);
+  });
+
+  it('parses plain text with annotation', () => {
+    const result = parseParticipant('Every active PC (present)');
+    assert.strictEqual(result.target, '');
+    assert.strictEqual(result.display, 'Every active PC');
+    assert.strictEqual(result.annotation, 'present');
+    assert.strictEqual(result.isLink, false);
+  });
+
+  it('parses plain text without annotation', () => {
+    const result = parseParticipant('Allied soldiers');
+    assert.strictEqual(result.target, '');
+    assert.strictEqual(result.display, 'Allied soldiers');
+    assert.strictEqual(result.annotation, '');
+    assert.strictEqual(result.isLink, false);
+  });
+
+  it('handles annotation with special characters', () => {
+    const result = parseParticipant('[[Klaus_Bauer]] (attacker — escaped)');
+    assert.strictEqual(result.target, 'Klaus_Bauer');
+    assert.strictEqual(result.annotation, 'attacker — escaped');
+    assert.strictEqual(result.isLink, true);
+  });
+
+  it('trims surrounding whitespace before parsing', () => {
+    const result = parseParticipant('  [[Hero]] (led the assault)  ');
+    assert.strictEqual(result.target, 'Hero');
+    assert.strictEqual(result.display, 'Hero');
+    assert.strictEqual(result.annotation, 'led the assault');
+    assert.strictEqual(result.isLink, true);
   });
 });

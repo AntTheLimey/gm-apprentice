@@ -287,7 +287,23 @@ Everything else is noise.
      you update `Charlotte_Thorne.md` with her new status. Do not
      create separate "status change" or "update" files.
    - **Timeline**: Add this session's events to the campaign
-     timeline with in-game dates.
+     timeline. Linked events (those with their own entity file):
+     `- **{date}** — [[Event_Name]] — {one-sentence summary}`.
+     Inline events (minor, no file):
+     `- **{date}** — {brief description}`.
+     The timeline is the index, not the detail.
+   - **Event decomposition**: Scan play notes for moments that
+     meet the event threshold (at least two of: changes entity
+     state, multiple named participants, creates forward
+     consequences, will be referenced from multiple entities).
+     For each qualifying event, create an Event entity file
+     using the vault template in
+     `skills/campaign-organizer/references/event-template.md`. Add the
+     event to the `## New Entity Files` appendix with full
+     frontmatter and content. Update Timeline.md with a compact
+     linked entry: `- **{date}** — [[Event_Name]] — {one-sentence summary}`.
+     Minor events stay as inline timeline entries without their
+     own file.
    Every entity reference in every output must be a
    `[[wiki-link]]`.
 

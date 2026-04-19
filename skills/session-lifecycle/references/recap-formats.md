@@ -140,7 +140,7 @@ When scanning play notes for new entities, categorize:
 | NEW-NPC | Improvised character, needs vault entry |
 | NEW-LOC | New location described, needs vault entry |
 | NEW-ITEM | Item introduced, may need vault entry |
-| NEW-EVENT | Significant event, add to timeline |
+| NEW-EVENT | Significant event — create Event entity file and add linked entry to timeline. Must meet at least 2 of: changes entity state, multiple named participants, creates forward consequences, referenced from multiple entities. Minor events stay as inline timeline entries |
 | UPDATE | Existing entity needs information update |
 | CONFLICT | Contradicts existing vault content — flag |
 

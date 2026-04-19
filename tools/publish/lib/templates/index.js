@@ -6,6 +6,7 @@ const { creatureTemplate } = require('./creature');
 const { locationTemplate } = require('./location');
 const { itemTemplate } = require('./item');
 const { factionTemplate } = require('./faction');
+const { eventTemplate } = require('./event');
 const { wikiTemplate } = require('./wiki');
 const { indexTemplate } = require('./index-page');
 const { landingTemplate } = require('./landing');
@@ -27,6 +28,7 @@ module.exports = {
   locationTemplate,
   itemTemplate,
   factionTemplate,
+  eventTemplate,
   wikiTemplate,
   indexTemplate,
   landingTemplate,

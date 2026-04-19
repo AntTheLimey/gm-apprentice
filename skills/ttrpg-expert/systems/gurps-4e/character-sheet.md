@@ -226,7 +226,7 @@ common ranges, defensive options, and tactical notes.*
 
 ## Notes
 
-_(Campaign notes, background, personality, and other details.)_
+*(Campaign notes, background, personality, and other details.)*
 
 ## Point Total Summary
 

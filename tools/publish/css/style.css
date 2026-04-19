@@ -922,6 +922,33 @@ td .stat {
   margin: 0;
 }
 
+/* ===== EVENT OUTCOME & PARTICIPANTS ===== */
+.event-outcome {
+  background: var(--card-bg);
+  border-left: 3px solid var(--accent);
+  border-radius: 0.25rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.event-outcome strong {
+  color: var(--accent);
+}
+.event-participants {
+  margin-bottom: 1rem;
+}
+.event-participants h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+.event-participants ul {
+  margin: 0;
+}
+.event-participants li {
+  margin-bottom: 0.25rem;
+}
+
 /* ===== PRINT ===== */
 @media print {
   .site-header,
