@@ -251,12 +251,11 @@ Extraction defaults:
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| eventType | string | Battle, ritual, meeting, etc. |
-| date | string | When |
-| location | string | Where |
-| participants | array | Who |
+| event_type | string | Battle, ritual, meeting, etc. |
+| date | string | In-game date |
+| location | string | Where (wiki-link to Location entity) |
+| participants | array | Who — each entry: `[[Entity]] (role annotation)` |
 | outcome | string | Result |
-| significance | string | Why it matters |
 
 ### Document
 
