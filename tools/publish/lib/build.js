@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -127,7 +127,11 @@ function build(options = {}) {
   if (publishConfig.theme.campaign_image) {
     const imgVal = publishConfig.theme.campaign_image;
     if (!imgVal.startsWith('http://') && !imgVal.startsWith('https://')) {
-      const vaultImgPath = path.join(config.vaultPath, imgVal);
+      const vaultRoot = path.resolve(config.vaultPath);
+      const vaultImgPath = path.resolve(vaultRoot, imgVal);
+      if (!vaultImgPath.startsWith(vaultRoot + path.sep)) {
+        throw new Error(`Refusing to copy campaign_image outside vault: ${imgVal}`);
+      }
       if (fs.existsSync(vaultImgPath)) {
         const basename = path.basename(imgVal);
         const dest = path.join(outputDir, 'images', basename);
@@ -157,6 +161,8 @@ function build(options = {}) {
           const gmResult = stripGmOnly(filtered);
           filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
           filtered = filterSections(filtered, excludeSections);
+          filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
+          filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath);
           const sections = extractSections(filtered);
           html = pcTemplate(page, processed, sections, navFor, config, imageMap);
           break;

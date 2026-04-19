@@ -25,7 +25,7 @@ function generateNav(pages) {
       for (const p of [...dirPages].sort((a, b) => a.title.localeCompare(b.title))) {
         const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
         const href = relativePath(currentDir, p.outputPath);
-        html += `<li><a href="${href}">${escapeHtml(p.title)}</a></li>\n`;
+        html += `<li><a href="${escapeHtml(href)}">${escapeHtml(p.title)}</a></li>\n`;
       }
       html += `</ul>\n`;
     }

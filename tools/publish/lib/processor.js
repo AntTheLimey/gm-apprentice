@@ -1,5 +1,5 @@
 const MarkdownIt = require('markdown-it');
-const md = new MarkdownIt({ html: true, typographer: true });
+const md = new MarkdownIt({ html: false, typographer: true });
 
 function escapeHtml(str) {
   return String(str || '')
@@ -135,13 +135,13 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
 
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
   const items = valid.map(r => {
-    const targetName = r.target.replace(/\[\[|\]\]/g, '');
+    const targetName = String(r.target).replace(/\[\[|\]\]/g, '');
     const targetPath = linkMap[targetName];
     const escapedName = escapeHtml(targetName);
     const link = targetPath
       ? `<a href="${relativePath(currentDir, targetPath)}" class="entity-link">${escapedName}</a>`
       : escapedName;
-    const typeRaw = r.type.replace(/_/g, ' ');
+    const typeRaw = String(r.type).replace(/_/g, ' ');
     const typeCapitalized = typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1);
     const type = escapeHtml(typeCapitalized);
     const desc = r.description ? ` &mdash; ${escapeHtml(r.description)}` : '';
