@@ -13,7 +13,9 @@ generation to campaign management and session lifecycle support.
 | **ttrpg-expert** | Rules engine, content generation, canon management, continuity checking, session planning, encounter design, scenario writing | Optional |
 | **campaign-organizer** | Campaign architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata. Works with Obsidian or plain filesystem. | Recommended |
 | **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks. Works with Obsidian or plain filesystem. | Recommended |
-| **session-lifecycle** | Session lifecycle management -- prep, play, wrap-up, and reconciliation between planned and actual session content. Works with Obsidian or plain filesystem. | Recommended |
+| **session-prep** | Between-session preparation — reconciles last session's results, reviews PC arcs, scans threads, flags gaps, builds prep package. Works with Obsidian or plain filesystem. | Recommended |
+| **session-play** | At-the-table GM support — fast lookups, rules assist, on-the-fly NPC/location generation, note capture. Speed-optimised for live play. | Optional |
+| **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward identification. Works with Obsidian or plain filesystem. | Recommended |
 | **publish-site** | Publish your campaign vault as a static website on GitHub Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
 
 ## Supported Game Systems
@@ -79,8 +81,12 @@ Install via the CLI method instead:
   structure and knowledge graphs
 - [campaign-qa](docs/campaign-qa.md) -- campaign quality
   auditing
-- [session-lifecycle](docs/session-lifecycle.md) -- session
-  prep, play, and wrap-up
+- [session-prep](docs/session-prep.md) -- between-session
+  preparation and reconciliation
+- [session-play](docs/session-play.md) -- at-the-table GM
+  support
+- [session-wrapup](docs/session-wrapup.md) -- post-session
+  processing and recaps
 - [publish-tool](docs/publish-tool.md) -- publishing your vault
   as a static website
 - [gm-apprentice-publish](tools/publish/README.md) -- npm package
@@ -88,8 +94,8 @@ Install via the CLI method instead:
 
 ## Obsidian Setup
 
-Three of the four skills (campaign-organizer, campaign-qa,
-session-lifecycle) work with an Obsidian vault to manage campaign
+Five of the six skills (campaign-organizer, campaign-qa,
+session-prep, session-play, session-wrapup) work with an Obsidian vault to manage campaign
 content. The ttrpg-expert skill works standalone.
 
 ### Dependency Tiers
@@ -98,7 +104,9 @@ content. The ttrpg-expert skill works standalone.
 |-------|-------------|-------------------|----------------------------|
 | ttrpg-expert | Fully functional | Enhanced continuity checks | Best experience |
 | campaign-qa | Functional (filesystem mode) | Partial (file reads only) | Full QA auditing |
-| session-lifecycle | Functional (filesystem mode) | Read-only analysis | Full lifecycle management |
+| session-prep | Functional (filesystem mode) | Read-only analysis | Full prep workflow |
+| session-play | Functional (filesystem mode) | Read-only lookups | Full play support |
+| session-wrapup | Functional (filesystem mode) | Read-only analysis | Full wrap-up workflow |
 | campaign-organizer | Functional (filesystem mode) | Manual vault management | Full automation |
 
 ### Required Obsidian Community Plugins
@@ -164,9 +172,10 @@ frontmatter, and wiki-links, just without Obsidian's graph
 visualization and semantic search. Open the folder in Obsidian
 later for the full experience.
 
-**campaign-qa** and **session-lifecycle** also work in
-filesystem mode — same audit procedures and lifecycle
-workflows, using Glob/Grep/Read instead of MCP tools.
+**campaign-qa**, **session-prep**, **session-play**, and
+**session-wrapup** also work in filesystem mode — same
+audit procedures and lifecycle workflows, using
+Glob/Grep/Read instead of MCP tools.
 Obsidian adds faster search and graph visualization but
 is not required.
 
