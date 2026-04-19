@@ -33,30 +33,33 @@ Items are force-ranked by score. Higher score = do first.
 
 | Rank | Item | Impact | Urgency | Effort | Score | Status |
 |:----:|------|:------:|:-------:|:------:|:-----:|--------|
-| 1 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea |
-| 2 | Publish tool: favicon generation from campaign image | 2 | 1 | S (1) | 5.0 | Idea |
-| 3 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea |
-| 4 | Publish tool: Event dedicated template | 3 | 2 | M (2) | 4.0 | Idea |
-| 5 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea |
-| 6 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
-| 7 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea |
-| 8 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea |
-| 9 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
-| 10 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea |
-| 11 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
-| 12 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
-| 13 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
-| 14 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
-| 15 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea |
-| 16 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
-| 17 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea |
-| 18 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea |
-| 19 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
-| 20 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
-| 21 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
+| 1 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done |
+| 2 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea |
+| 3 | Publish tool: favicon generation from campaign image | 2 | 1 | S (1) | 5.0 | Idea |
+| 4 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea |
+| 5 | Publish tool: Event dedicated template | 3 | 2 | M (2) | 4.0 | Idea |
+| 6 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea |
+| 7 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
+| 8 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea |
+| 9 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea |
+| 10 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea |
+| 11 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
+| 12 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea |
+| 13 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
+| 14 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
+| 15 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
+| 16 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
+| 17 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea |
+| 18 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
+| 19 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea |
+| 20 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea |
+| 21 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
+| 22 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
+| 23 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
 
 ## Completed
 
+- ~~Publish tool: Landing page dashboard~~ — hero, session recap, PC roster, key NPCs, explore grid
 - ~~Publish tool v1.0~~ — npm package + skill for vault-to-static-site generation (PR #19)
 - ~~Regency Cthulhu system support~~ — 5 overlay files in variants/regency/, routing updates
 - ~~Codebase QA pass~~ — Score 11.0 (Impact 3, Urgency 5, Effort S)
