@@ -153,7 +153,7 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
 
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
 
-function resolveImageEmbeds(markdown, imageMap, currentOutputPath) {
+function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages) {
   // Match ![[filename.ext]] or ![[filename.ext|alt text]]
   return markdown.replace(/!\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/g, (match, target, alt) => {
     const basename = target.trim();
@@ -161,6 +161,8 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath) {
 
     const entry = imageMap[basename];
     if (!entry) return `<!-- image not found: ${basename} -->`;
+
+    if (usedImages) usedImages.add(basename);
 
     // Output goes to docs/images/{relPath}. Compute relative path from current page.
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
@@ -184,7 +186,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   markdown = stripLeadingH1(markdown);
   markdown = filterSections(markdown, excludeSections);
-  markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath);
+  markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages);
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   const html = md.render(markdown);
   const relationships = renderRelationships(page.frontmatter, linkMap, page.outputPath);

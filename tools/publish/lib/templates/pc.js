@@ -6,7 +6,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap) 
   const traits = fm.key_traits
     ? escapeHtml(Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits))
     : '';
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
   const headerCard = `
 <div class="char-header">
   ${portrait}

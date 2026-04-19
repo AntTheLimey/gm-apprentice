@@ -82,8 +82,11 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     const pcCards = pcs.map(pc => {
       const fm = pc.frontmatter;
       const initials = getInitials(pc.title);
+      const attachPrefix = (config.attachmentsDir || '_attachments') + '/';
+      const portraitStr = fm.portrait ? String(fm.portrait) : '';
+      const portraitRel = portraitStr.startsWith(attachPrefix) ? portraitStr.slice(attachPrefix.length) : portraitStr;
       const portrait = fm.portrait
-        ? `<div class="pc-portrait"><img src="images/${escapeHtml(String(fm.portrait).replace(/^_attachments\//, ''))}" alt="${escapeHtml(pc.title)}"></div>`
+        ? `<div class="pc-portrait"><img src="images/${escapeHtml(portraitRel)}" alt="${escapeHtml(pc.title)}"></div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
       const badge = `<span class="status-badge ${statusClass(fm.status)}">${statusLabel(fm.status)}</span>`;
       const traits = fm.key_traits

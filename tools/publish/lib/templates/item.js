@@ -3,7 +3,7 @@ const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base
 
 function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap) {
   const fm = page.frontmatter;
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
 
   // Build stat block
   const stats = [];

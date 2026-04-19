@@ -4,7 +4,7 @@ const { baseShell, cssPath, rootPath, stubBadge, metadataBadgesFor, portraitImg 
 function wikiTemplate(page, processedContent, navFor, config, imageMap) {
   const fm = page.frontmatter;
   const badges = metadataBadgesFor(fm);
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
 
   const content = `<h1 class="page-title">${escapeHtml(page.title)}${stubBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}`;
 

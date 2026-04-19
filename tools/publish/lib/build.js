@@ -31,6 +31,9 @@ function build(options = {}) {
     if (resolved === resolvedVault || resolvedVault.startsWith(resolved + path.sep)) {
       throw new Error(`Refusing to clean outputDir that contains the vault: ${resolved}`);
     }
+    if (resolved.startsWith(resolvedVault + path.sep)) {
+      throw new Error(`Refusing to write outputDir inside the vault: ${resolved}`);
+    }
   }
 
   function cleanOutput() {
@@ -89,6 +92,7 @@ function build(options = {}) {
   }
 
   // Main build logic
+  assertSafeOutputDir();
   console.log('Scanning vault:', config.vaultPath);
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
@@ -121,7 +125,6 @@ function build(options = {}) {
   cleanOutput();
   copyCSS();
   writeThemeCSS();
-  copyImages(imageMap);
 
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
   if (publishConfig.theme.campaign_image) {
@@ -149,10 +152,15 @@ function build(options = {}) {
   const navFor = generateNav(pages);
 
   // Render each page
+  const usedImages = new Set();
   let errorCount = 0;
   for (const page of pages) {
     try {
-      const processed = processContent(page, linkMap, excludeSections, imageMap);
+      if (page.frontmatter.portrait) {
+        const basename = String(page.frontmatter.portrait).split('/').pop();
+        if (basename && imageMap[basename]) usedImages.add(basename);
+      }
+      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages });
       let html;
 
       switch (page.frontmatter.type) {
@@ -162,7 +170,7 @@ function build(options = {}) {
           filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
           filtered = filterSections(filtered, excludeSections);
           filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
-          filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath);
+          filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages);
           const sections = extractSections(filtered);
           html = pcTemplate(page, processed, sections, navFor, config, imageMap);
           break;
@@ -195,6 +203,18 @@ function build(options = {}) {
       errorCount++;
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
     }
+  }
+
+  // Copy images — in player mode, only copy images referenced by published pages
+  if (manifest && publishConfig.mode === 'player') {
+    const filteredMap = {};
+    for (const [basename, entry] of Object.entries(imageMap)) {
+      if (usedImages.has(basename)) filteredMap[basename] = entry;
+    }
+    copyImages(filteredMap);
+    console.log(`Player mode: copied ${Object.keys(filteredMap).length} of ${Object.keys(imageMap).length} images`);
+  } else {
+    copyImages(imageMap);
   }
 
   // Generate index pages for each output directory

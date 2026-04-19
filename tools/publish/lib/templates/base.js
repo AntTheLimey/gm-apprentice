@@ -104,12 +104,13 @@ function metadataBadgesFor(frontmatter) {
   return `<div class="metadata-badges">${badges.join('\n')}</div>`;
 }
 
-function portraitImg(frontmatter, outputPath, imageMap) {
+function portraitImg(frontmatter, outputPath, imageMap, attachmentsDir) {
   const portrait = frontmatter.portrait;
   if (!portrait) return '';
 
-  // Strip "_attachments/" prefix if present
-  const relPath = String(portrait).replace(/^_attachments\//, '');
+  const prefix = (attachmentsDir || '_attachments') + '/';
+  const portraitStr = String(portrait);
+  const relPath = portraitStr.startsWith(prefix) ? portraitStr.slice(prefix.length) : portraitStr;
   const basename = relPath.split('/').pop();
 
   // Verify the image was actually discovered by the scanner

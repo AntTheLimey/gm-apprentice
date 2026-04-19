@@ -3,7 +3,7 @@ const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages) {
   const fm = page.frontmatter;
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
 
   // Metadata badges
   const badges = [];

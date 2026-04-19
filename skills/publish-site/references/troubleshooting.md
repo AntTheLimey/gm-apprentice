@@ -188,20 +188,19 @@ frontmatter exactly, the link will not resolve.
    `[[wiki-link]]`.
 3. Find the target file in the vault that the link is supposed
    to point to.
-4. Compare the link text to the target file's filename and its
-   `title` frontmatter field. They must match exactly (including
-   capitalisation).
+4. Compare the link text to the target file's filename (without
+   the `.md` extension) and its `aliases` frontmatter. They must
+   match exactly (including capitalisation).
 
 ### Fix
 
 **Link text is wrong:**
 Update the `[[wiki-link]]` in the source file to match the
-target file's title exactly.
+target file's filename exactly.
 
-**Target file has the wrong title:**
-Update the `title` field in the target file's frontmatter to
-match what the links use, or add the alternate spelling to the
-target file's `aliases` list:
+**Target file is known by another name:**
+Rename the target file to match what the links use, or add the
+alternate spelling to the target file's `aliases` list:
 ```yaml
 aliases:
   - The Crimson Duke

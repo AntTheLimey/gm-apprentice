@@ -18,7 +18,8 @@ function toPosix(p) {
 
 function mapFolder(vaultRelPath, folderMap) {
   const rel = toPosix(vaultRelPath);
-  for (const [vaultDir, outputDir] of Object.entries(folderMap)) {
+  const entries = Object.entries(folderMap).sort(([a], [b]) => b.length - a.length);
+  for (const [vaultDir, outputDir] of entries) {
     if (rel === vaultDir || rel.startsWith(vaultDir + '/')) {
       return outputDir + rel.substring(vaultDir.length);
     }

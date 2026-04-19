@@ -3,7 +3,7 @@ const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base
 
 function npcTemplate(page, processedContent, navFor, config, imageMap) {
   const fm = page.frontmatter;
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
 
   const headerCard = `
 <div class="char-header">
