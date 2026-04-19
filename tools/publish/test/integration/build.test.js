@@ -656,6 +656,123 @@ describe('build integration', () => {
     });
   });
 
+  describe('with-dashboard fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-dashboard-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-dashboard'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Dashboard Test',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: [],
+        folderMap: {
+          'Characters/PCs': 'characters/pcs',
+          'Characters/NPCs': 'characters/npcs',
+          'Sessions': 'sessions',
+          'Locations': 'locations',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('landing page contains hero with site title', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Dashboard Test'));
+      assert.ok(html.includes('class="hero"'));
+    });
+
+    it('landing page shows last played date', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Last Played'));
+      assert.ok(html.includes('hero-dates'));
+    });
+
+    it('landing page shows in-game date from setting_year', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('In-Game Date'));
+      assert.ok(html.includes('2019'));
+    });
+
+    it('landing page shows Story So Far section with recap', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Story So Far'));
+      assert.ok(html.includes('class="recap"'));
+      assert.ok(html.includes('infiltrated the cave complex'));
+    });
+
+    it('recap links to latest session page', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('recap-link'));
+      assert.ok(html.includes('sessions/session-2.html'));
+    });
+
+    it('landing page shows The Team section with PC cards', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('The Team'));
+      assert.ok(html.includes('pc-roster'));
+      assert.ok(html.includes('Guy LeFleur'));
+      assert.ok(html.includes('Ronnie Vint'));
+    });
+
+    it('PC cards show status badges', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('status-badge'));
+      assert.ok(html.includes('Active'));
+    });
+
+    it('PC cards show key traits', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Hot-tempered'));
+      assert.ok(html.includes('Resourceful'));
+    });
+
+    it('landing page shows Key NPCs section for important NPCs', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Key NPCs'));
+      assert.ok(html.includes('npc-grid'));
+      assert.ok(html.includes('Adrian Voss'));
+    });
+
+    it('important NPC shows inferred role', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Patron'));
+      assert.ok(html.includes('CEO, Voss Dynamics'));
+    });
+
+    it('unimportant NPC is excluded from Key NPCs', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      const npcGridMatch = html.match(/class="npc-grid">([\s\S]*?)<\/div>\s*<\/div>/);
+      const npcGridHtml = npcGridMatch ? npcGridMatch[1] : '';
+      assert.ok(!npcGridHtml.includes('Random Guard'));
+    });
+
+    it('landing page shows Explore section', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Explore'));
+      assert.ok(html.includes('explore-grid'));
+      assert.ok(html.includes('Locations'));
+    });
+
+    it('explore grid excludes PC and NPC categories', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      const exploreGridMatch = html.match(/class="explore-grid">([\s\S]*?)<\/div>\s*<\/div>/);
+      const exploreGridHtml = exploreGridMatch ? exploreGridMatch[1] : '';
+      assert.ok(!exploreGridHtml.includes('>Player Characters<'));
+    });
+  });
+
   describe('with-gm-only-markers fixture', () => {
     let outputDir;
     let configPath;
