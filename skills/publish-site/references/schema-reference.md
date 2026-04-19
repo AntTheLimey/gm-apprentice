@@ -21,11 +21,12 @@ These entity types have purpose-built page layouts.
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `name` | Required | Display name on the page header |
-| `occupation` | Optional | Role or character class |
+| `occupation` | Optional | Background or character class |
 | `status` | Optional | active, retired, dead, npc |
+| `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
+| `player_name` | Optional | Real-world player name |
+| `point_total` | Optional | Character point total (defaults to 200) |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
-| `stats` sections | Optional | Any H2 section in the body is rendered as an accordion panel |
 
 The PC template renders all body content as collapsible accordion
 sections using the H2 headings as panel titles. Use H2 headings
@@ -40,7 +41,6 @@ in the vault file to divide the character sheet into sections
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `name` | Required | Display name |
 | `occupation` | Optional | Role label (e.g. "Patron", "Antagonist", "Shopkeeper") |
 | `nationality` | Optional | Origin or nationality |
 | `status` | Optional | active, dead, missing, unknown |
@@ -60,11 +60,10 @@ section in the body is excluded from the public site by default
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `name` | Required | Display name |
 | `location_type` | Optional | Type label (e.g. "City", "Building", "Wilderness") |
 | `parent_location` | Optional | `[[wiki-link]]` to the containing location |
-| `security` | Optional | Brief security descriptor |
-| `atmosphere` | Optional | Tone or mood of the location |
+| `security_level` | Optional | Security descriptor (rendered as badge) |
+| `atmosphere` | Optional | Tone or mood of the location (rendered as badge) |
 | `portrait` | Optional | Path relative to vault root |
 
 The parent location renders as a breadcrumb above the page title
@@ -78,10 +77,16 @@ if the linked note can be resolved.
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `name` | Required | Display name |
 | `hp` | Optional | Hit points or equivalent |
 | `dr` | Optional | Damage resistance or armour value |
 | `speed` | Optional | Movement rate |
+| `sm` | Optional | Size Modifier |
+| `st` | Optional | Strength |
+| `dx` | Optional | Dexterity |
+| `iq` | Optional | Intelligence |
+| `ht` | Optional | Health |
+| `creature_type` | Optional | Type label (rendered as badge) |
+| `threat_level` | Optional | Threat rating (rendered as badge) |
 | `abilities` | Optional | List of special abilities (rendered as bullet list) |
 | `weaknesses` | Optional | List of vulnerabilities (rendered as bullet list) |
 | `portrait` | Optional | Path relative to vault root |
@@ -98,16 +103,18 @@ during encounters.
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `name` | Required | Display name |
 | `damage` | Optional | Damage value or dice |
 | `dr` | Optional | Damage resistance (for armour items) |
 | `weight` | Optional | Weight in relevant units |
 | `cost` | Optional | Cost in campaign currency |
+| `tl` | Optional | Tech Level |
+| `item_type` | Optional | Type label (rendered as badge) |
+| `rarity` | Optional | Rarity level (rendered as badge) |
 | `current_holder` | Optional | `[[wiki-link]]` to current owner |
+| `origin` | Optional | `[[wiki-link]]` to origin location or entity |
 | `portrait` | Optional | Path relative to vault root |
 
-Body content follows the stat block. The `## History` section
-in the body is rendered if present.
+Body content follows the stat block.
 
 ---
 
@@ -119,7 +126,8 @@ Both factions and organizations use the same template.
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `name` | Required | Display name |
+| `faction_type` | Optional | Type label (rendered as badge) |
+| `alignment` | Optional | Faction alignment (rendered as badge) |
 | `goals` | Optional | List of faction goals |
 | `leadership` | Optional | `[[wiki-link]]` to leader entity |
 | `territory` | Optional | `[[wiki-link]]` to home location |
@@ -189,11 +197,16 @@ These fields are read by all templates if present:
 
 | Field | Description |
 |-------|-------------|
-| `title` | Overrides the filename as the page title if present |
 | `aliases` | List of alternate names used for wiki-link resolution |
 | `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED — SUPERSEDED entities render a redirect banner |
 | `superseded_by` | `[[wiki-link]]` shown in the redirect banner if `canon_status` is SUPERSEDED |
-| `tags` | Stored but not rendered in v1.0 |
+| `relationships` | List of `{ target, type, description }` objects rendered as a Relationships section |
+| `tags` | Used for NPC importance scoring on the landing page; not rendered on entity pages |
+
+**Page title:** The page title is always derived from the vault
+filename (without the `.md` extension), not from frontmatter. To
+change a page's title, rename the file. To make a page findable
+under alternate names, use the `aliases` field.
 
 ---
 
@@ -208,7 +221,8 @@ Example vault frontmatter:
 portrait: "_attachments/characters/alice-morgan.jpg"
 ```
 
-Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`.
+Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`,
+`.svg`, `.avif`.
 
 If a portrait file cannot be found at the given path, the portrait
 area is hidden rather than showing a broken image.

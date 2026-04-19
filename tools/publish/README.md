@@ -169,6 +169,32 @@ The `type` frontmatter field determines which template renders each page.
 Pages with `canon_status: SUPERSEDED` render a redirect banner pointing
 to the superseding entity.
 
+### Landing page (dashboard)
+
+The root `index.html` is a campaign dashboard generated from vault data.
+It includes these sections (each omitted if no relevant data exists):
+
+- **Hero** — campaign image (from `publish.theme.campaign_image` in
+  `vault-config.md`), site title, last-played date, and in-game date
+  (from `setting_year` in vault-config.md)
+- **Story So Far** — first paragraph of the most recent played session's
+  `## Narrative Recap` section, with a link to the full session page
+- **The Team** — PC cards with portrait (or initials fallback), status
+  badge (Active / KIA / MIA), and `key_traits` or `occupation`
+- **Key NPCs** — up to 8 NPCs scored by session mentions, relationship
+  count, and tag signals, with inferred role labels (Patron, Antagonist,
+  Companion, etc.)
+- **Explore** — compact grid of category index pages with entry counts,
+  excluding PC and NPC categories (those have dedicated sections above)
+
+### Player-mode image filtering
+
+When building in `player` mode with a publish manifest, only images
+referenced by the published pages are copied to the output. This
+prevents GM-only images (maps, handouts, portraits of hidden NPCs)
+from leaking into the public site. In full mode, all vault images
+are copied.
+
 ---
 
 ## Library API
@@ -235,18 +261,22 @@ if unmapped.
 
 ### Processor
 
-**`processContent(page, linkMap, excludeSections?, imageMap?)`**
+**`processContent(page, linkMap, excludeSections?, imageMap?, options?)`**
 
-Returns rendered HTML for the page body. Resolves wiki-links, embeds
-images, strips excluded sections, and runs the markdown-it renderer.
+Returns `{ html, relationships, warnings }` for the page body. Resolves
+wiki-links, embeds images, strips excluded sections and GM-only markers,
+and runs the markdown-it renderer. Pass `options.usedImages` (a `Set`) to
+track which image basenames were referenced during rendering.
 
 **`extractSections(markdown)`**
 
-Returns an array of `{ heading, content }` objects split on H2 headings.
+Returns an array of `{ title, id, html }` objects split on H2 headings.
+Used by the PC template for accordion panels.
 
-**`resolveWikiLinks(markdown, linkMap)`**
+**`resolveWikiLinks(markdown, linkMap, currentOutputPath)`**
 
-Replaces `[[wiki-link]]` and `[[wiki-link|alias]]` with HTML anchors.
+Replaces `[[wiki-link]]` and `[[wiki-link|alias]]` with relative HTML
+anchors computed from `currentOutputPath`.
 
 **`filterSections(markdown, excludeHeadings)`**
 
@@ -256,14 +286,32 @@ Removes H2 sections whose headings appear in `excludeHeadings`.
 
 Removes Obsidian Dataview code blocks.
 
+**`stripGmOnly(markdown)`**
+
+Strips content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers.
+Returns the cleaned string, or `{ text, warnings }` if an unclosed
+marker is detected.
+
 **`stripLeadingH1(markdown)`**
 
 Removes the first H1 heading from body content (the page title is
 rendered separately by the template).
 
-**`resolveImageEmbeds(markdown, imageMap)`**
+**`renderRelationships(frontmatter, linkMap, currentOutputPath)`**
+
+Renders the `relationships` frontmatter array as an HTML list with
+linked entity names.
+
+**`resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages?)`**
 
 Replaces Obsidian `![[image.jpg]]` embeds with standard HTML `<img>` tags.
+If `usedImages` (a `Set`) is provided, each resolved image basename is
+added to it.
+
+**`filterFields(frontmatter, excludeFields, overrides?)`**
+
+Returns a shallow copy of `frontmatter` with `excludeFields` removed.
+Per-entity `overrides.include` can re-include specific fields.
 
 ### Templates
 
@@ -271,10 +319,12 @@ Replaces Obsidian `![[image.jpg]]` embeds with standard HTML `<img>` tags.
 
 An object exposing `pcTemplate`, `npcTemplate`, `creatureTemplate`,
 `locationTemplate`, `itemTemplate`, `factionTemplate`, `wikiTemplate`,
-`indexTemplate`, `landingTemplate`, and `generateNav`. Template signatures
-vary slightly — most accept `(page, processed, navFor, config, imageMap)`,
-but `pcTemplate` adds a `sections` param, and `itemTemplate`/`factionTemplate`
-add `linkMap` for relationship resolution. See `lib/build.js` for exact usage.
+`indexTemplate`, `landingTemplate`, `fourOhFourTemplate`, and `generateNav`.
+Template signatures vary slightly — most accept
+`(page, processed, navFor, config, imageMap)`, but `pcTemplate` adds a
+`sections` param, `itemTemplate`/`factionTemplate` add `linkMap` for
+relationship resolution, and `landingTemplate` accepts
+`(pages, navFor, config, publishConfig)`. See `lib/build.js` for exact usage.
 
 ---
 
