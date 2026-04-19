@@ -336,6 +336,63 @@ describe('build integration', () => {
       const itemPath = path.join(outputDir, 'docs', 'items', 'sword.html');
       assert.ok(fs.existsSync(itemPath));
     });
+
+    it('renders event with header card', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('char-header'));
+      assert.ok(html.includes('Battle'));
+    });
+
+    it('renders event type badge', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('metadata-badge'));
+      assert.ok(html.includes('battle'));
+    });
+
+    it('renders event date in meta row', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('June 15, 1943'));
+    });
+
+    it('renders event location as link', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('City'));
+      assert.ok(html.includes('href='));
+    });
+
+    it('renders outcome callout', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('event-outcome'));
+      assert.ok(html.includes('liberated'));
+    });
+
+    it('renders participants list with links and annotations', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('event-participants'));
+      assert.ok(html.includes('Hero'));
+      assert.ok(html.includes('led the assault'));
+      assert.ok(html.includes('Allied soldiers'));
+    });
+
+    it('renders linked participant as anchor tag', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      const heroLinkPattern = /href="[^"]*hero\.html"/;
+      assert.ok(heroLinkPattern.test(html), 'Hero participant should be a link');
+    });
+
+    it('renders plain-text participant without link', () => {
+      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
+      const html = fs.readFileSync(eventPath, 'utf-8');
+      assert.ok(html.includes('Allied soldiers'));
+      assert.ok(!html.includes('>Allied soldiers</a>'));
+    });
   });
 
   describe('unusual-schema fixture', () => {
