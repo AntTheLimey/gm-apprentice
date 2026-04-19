@@ -45,4 +45,16 @@ function extractRecap(page) {
   return paragraph;
 }
 
-module.exports = { getLatestSession, extractRecap };
+function getInitials(name) {
+  if (!name) return '';
+  const words = name.split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).map(w => w[0].toUpperCase()).join('');
+}
+
+function getPCs(pages) {
+  return pages
+    .filter(p => p.frontmatter.type === 'pc')
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+}
+
+module.exports = { getLatestSession, extractRecap, getInitials, getPCs };

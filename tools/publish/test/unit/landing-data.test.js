@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getLatestSession, extractRecap } = require('../../lib/templates/landing-data');
+const { getLatestSession, extractRecap, getInitials, getPCs } = require('../../lib/templates/landing-data');
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -68,5 +68,42 @@ describe('extractRecap', () => {
 
   it('returns null for null page', () => {
     assert.strictEqual(extractRecap(null), null);
+  });
+});
+
+describe('getInitials', () => {
+  it('returns first letter of each word, max 2', () => {
+    assert.strictEqual(getInitials('Ronnie Vint'), 'RV');
+  });
+
+  it('handles single-word names', () => {
+    assert.strictEqual(getInitials('Dragon'), 'D');
+  });
+
+  it('caps at 2 characters for long names', () => {
+    assert.strictEqual(getInitials('The Exploding Man'), 'TE');
+  });
+
+  it('returns empty string for empty input', () => {
+    assert.strictEqual(getInitials(''), '');
+  });
+});
+
+describe('getPCs', () => {
+  it('returns PCs sorted alphabetically by title', () => {
+    const pages = [
+      { title: 'Zara', frontmatter: { type: 'pc', status: 'alive' } },
+      { title: 'Abel', frontmatter: { type: 'pc', status: 'alive' } },
+      { title: 'Mike', frontmatter: { type: 'npc' } },
+    ];
+    const result = getPCs(pages);
+    assert.strictEqual(result.length, 2);
+    assert.strictEqual(result[0].title, 'Abel');
+    assert.strictEqual(result[1].title, 'Zara');
+  });
+
+  it('returns empty array when no PCs exist', () => {
+    const pages = [{ title: 'NPC', frontmatter: { type: 'npc' } }];
+    assert.deepStrictEqual(getPCs(pages), []);
   });
 });
