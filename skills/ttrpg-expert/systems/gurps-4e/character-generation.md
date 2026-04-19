@@ -366,6 +366,17 @@ Dodge [value] | Damage Thr [value] / Sw [value]
 Encumbrance: [level] ([carried wt] / BL [basic lift])
 Move: [adjusted] | Dodge: [adjusted]
 
+== Multi-Action Combat Skill Chains ==
+Chain [N]: [Name] ([N]-Turn)
+  Situation: [when to use]
+  | Turn | Maneuver | Action | Roll | Notes |
+  [worked example with specific numbers]
+...
+
+== Combat Summary ==
+[Quick-reference: best attacks, effective levels
+at common ranges, defensive options, tactical notes]
+
 == Point Summary ==
 Attributes:      [x] pts
 Secondary:       [x] pts

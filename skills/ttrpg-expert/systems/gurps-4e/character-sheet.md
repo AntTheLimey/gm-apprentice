@@ -190,6 +190,40 @@ Written levels: None / Broken / Semi-literate / Literate
 | Legs | | |
 | Feet | | |
 
+## Multi-Action Combat Skill Chains
+
+*Common tactical sequences this character would use in play.
+Each chain lists the maneuvers, rolls, and order for a
+multi-turn combat action.*
+
+### Chain 1: [Name] ([N]-Turn)
+
+**Situation:** *When to use this chain.*
+
+| Turn | Maneuver | Action | Roll | Notes |
+|------|----------|--------|------|-------|
+| 1 | | | | |
+| 2 | | | | |
+
+*Worked example with specific numbers.*
+
+### Chain 2: [Name] ([N]-Turn)
+
+**Situation:** *When to use this chain.*
+
+| Turn | Maneuver | Action | Roll | Notes |
+|------|----------|--------|------|-------|
+| 1 | | | | |
+| 2 | | | | |
+
+*Worked example with specific numbers.*
+
+## Combat Summary
+
+*Quick-reference summary of the character's combat
+capabilities: best attacks, effective skill levels at
+common ranges, defensive options, and tactical notes.*
+
 ## Notes
 
 _(Campaign notes, background, personality, and other details.)_
