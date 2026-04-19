@@ -108,4 +108,12 @@ describe('parseParticipant', () => {
     assert.strictEqual(result.annotation, 'attacker — escaped');
     assert.strictEqual(result.isLink, true);
   });
+
+  it('trims surrounding whitespace before parsing', () => {
+    const result = parseParticipant('  [[Hero]] (led the assault)  ');
+    assert.strictEqual(result.target, 'Hero');
+    assert.strictEqual(result.display, 'Hero');
+    assert.strictEqual(result.annotation, 'led the assault');
+    assert.strictEqual(result.isLink, true);
+  });
 });

@@ -254,7 +254,7 @@ Extraction defaults:
 | event_type | string | Battle, ritual, meeting, etc. |
 | date | string | In-game date |
 | location | string | Where (wiki-link to Location entity) |
-| participants | array | Who — each entry: `[[Entity]] (role annotation)` |
+| participants | array | Who — entries can be `[[Entity]] (role)`, `[[Entity\|Display]] (role)`, or plain text |
 | outcome | string | Result |
 
 ### Document

@@ -2,7 +2,7 @@ const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base');
 
 function parseParticipant(raw) {
-  const str = String(raw);
+  const str = String(raw).trim();
   const wikiMatch = str.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]\s*(?:\((.+)\))?$/);
   if (wikiMatch) {
     const target = wikiMatch[1].trim();
@@ -34,13 +34,16 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     metaItems.push(`<span><span class="label">Date</span> ${escapeHtml(fm.date)}</span>`);
   }
   if (fm.location) {
-    const locName = String(fm.location).replace(/\[\[|\]\]/g, '').trim();
-    const locPath = linkMap?.[locName];
+    const locRaw = String(fm.location).trim();
+    const locMatch = locRaw.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+    const locTarget = locMatch ? locMatch[1].trim() : locRaw.replace(/\[\[|\]\]/g, '').trim();
+    const locDisplay = locMatch ? (locMatch[2] || locMatch[1]).trim() : locTarget;
+    const locPath = linkMap?.[locTarget];
     if (locPath) {
       const href = relativePath(currentDir, locPath);
-      metaItems.push(`<span><span class="label">Location</span> <a href="${href}">${escapeHtml(locName)}</a></span>`);
+      metaItems.push(`<span><span class="label">Location</span> <a href="${href}">${escapeHtml(locDisplay)}</a></span>`);
     } else {
-      metaItems.push(`<span><span class="label">Location</span> ${escapeHtml(locName)}</span>`);
+      metaItems.push(`<span><span class="label">Location</span> ${escapeHtml(locDisplay)}</span>`);
     }
   }
 

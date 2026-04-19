@@ -298,7 +298,7 @@ Everything else is noise.
      consequences, will be referenced from multiple entities).
      For each qualifying event, create an Event entity file
      using the vault template in
-     `campaign-organizer/references/event-template.md`. Add the
+     `skills/campaign-organizer/references/event-template.md`. Add the
      event to the `## New Entity Files` appendix with full
      frontmatter and content. Update Timeline.md with a compact
      linked entry: `- **{date}** — [[Event_Name]] — {one-sentence summary}`.

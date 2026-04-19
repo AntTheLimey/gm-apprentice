@@ -36,7 +36,7 @@ Items are force-ranked by score. Higher score = do first.
 | 1 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done |
 | 2 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea |
 | 3 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea |
-| 4 | Publish tool: Event dedicated template | 3 | 2 | M (2) | 4.0 | Idea |
+| 4 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done |
 | 5 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea |
 | 6 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea |
 | 7 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
@@ -59,6 +59,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~Publish tool: Event dedicated template~~ — dedicated event template, vault template, session-lifecycle event decomposition (PR #20)
 - ~~Publish tool: Landing page dashboard~~ — hero, session recap, PC roster, key NPCs, explore grid
 - ~~Publish tool v1.0~~ — npm package + skill for vault-to-static-site generation (PR #19)
 - ~~Regency Cthulhu system support~~ — 5 overlay files in variants/regency/, routing updates
