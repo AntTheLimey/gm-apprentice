@@ -697,38 +697,6 @@ td .stat {
   }
 }
 
-.nav-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-@media (min-width: 600px) {
-  .nav-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-.nav-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 1.25rem;
-}
-.nav-card h3 {
-  margin: 0 0 0.5rem;
-}
-.nav-card .count {
-  font-weight: 400;
-  font-size: 0.85rem;
-  opacity: 0.6;
-}
-.nav-card ul {
-  margin: 0;
-  list-style: none;
-}
-.nav-card ul li {
-  margin-bottom: 0.3rem;
-}
 
 /* ===== TIMELINE ===== */
 .timeline-table td:first-child {
