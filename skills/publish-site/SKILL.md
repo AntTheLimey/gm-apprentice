@@ -50,13 +50,24 @@ Do not improvise the setup flow or skip steps.
 
 Workflow:
 1. Confirm the site repo path (ask if not known).
-2. Run `npm run build` from that directory.
-3. Review the output for errors. If any appear, treat them as
+2. **Check manifest freshness.** Compare the vault's publishable
+   files against `_meta/publish-manifest.md`. Look for:
+   - **New files:** vault files not in the manifest. Apply the
+     same categorization rules as capability 6 (always-exclude
+     directories, prep files, etc.). Present new publishable
+     files to the GM and add them to the manifest after
+     confirmation.
+   - **Removed files:** manifest entries whose source files no
+     longer exist. Remove them from the manifest and note which
+     pages will disappear from the site.
+   - If no changes, say so and proceed.
+3. Run `npm run build` from that directory.
+4. Review the output for errors. If any appear, treat them as
    troubleshooting triggers (see capability 3).
-4. Stage the `docs/` folder: `git add docs/`.
-5. Commit: `git commit -m "Rebuild site"`.
-6. Push: `git push`.
-7. Confirm: "Your site will update on GitHub Pages in a minute or two.
+5. Stage the `docs/` folder: `git add docs/`.
+6. Commit: `git commit -m "Rebuild site"`.
+7. Push: `git push`.
+8. Confirm: "Your site will update on GitHub Pages in a minute or two.
    Check the Actions tab if it takes longer than five minutes."
 
 ### 3. Troubleshooting
@@ -120,8 +131,9 @@ Workflow:
 5. Save GM decisions to `vault-config.md` overrides.
 6. Confirm the manifest is ready for the build tool.
 
-For subsequent publishes, scan for changes since the last
-manifest and present only the delta.
+For subsequent publishes, the manifest delta check in
+capability 2 (routine updates) handles new and removed files
+automatically.
 
 For full documentation of the filtering model, see
 `references/content-filtering.md`.
