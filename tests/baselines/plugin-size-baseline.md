@@ -16,7 +16,10 @@
 | Skill | Size (bytes) | Files | Tokens (est.) |
 |-------|-------------:|------:|--------------:|
 | ttrpg-expert | 1,096,291 | 114 | ~274K |
-| session-lifecycle | 31,597 | 3 | ~7.9K |
+| session-prep | ~5,200 | 2 | ~1.3K |
+| session-play | ~2,600 | 1 | ~0.7K |
+| session-wrapup | ~6,400 | 2 | ~1.6K |
+| shared (session-principles) | ~5,800 | 1 | ~1.5K |
 | campaign-qa | 28,253 | 3 | ~7.1K |
 | campaign-organizer | 23,576 | 6 | ~5.9K |
 

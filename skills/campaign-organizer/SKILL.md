@@ -28,8 +28,12 @@ live at `skills/shared/` (sibling directory to this skill folder).
   factions, equipment) for quick reference and system-
   specific routing via Quick Commands.
 
-- **session-lifecycle** — Prep → Play → Wrap-up cycle.
-  Suggest after organizing session-related content.
+- **session-prep** / **session-play** / **session-wrapup** —
+  Session lifecycle split into three skills: prep (between-
+  session preparation and reconciliation), play (at-the-table
+  support), wrap-up (post-session processing and entity
+  creation). Suggest session-wrapup after organizing
+  session-related content.
 
 - **campaign-qa** — Canon/timeline/graph validation. Suggest
   after major Organize or Weave passes. For thread and
