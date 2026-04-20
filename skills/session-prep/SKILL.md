@@ -30,8 +30,9 @@ keeper checklist.
 
 ## Phase 1: Reconcile (conditional)
 
-Runs when most recent session has status `played` and hasn't
-been reconciled. Skip for first sessions or when already done.
+Runs when most recent session has `status: played` (not yet
+`reviewed`). Skip for first sessions or when already
+`reviewed`.
 
 **1. Load context** — Read last played session note, PC
 roster, carry-forward. Scan unplayed prep only for critical
@@ -50,7 +51,8 @@ drop, recycle, or must-still-happen.
 a conversation, not a report. Each answer shapes the next.
 
 **5. Update files** — Do the bookkeeping or hand off to
-campaign-organizer. Don't leave a list for the GM.
+campaign-organizer. Don't leave a list for the GM. Promote
+the session's `status` from `played` to `reviewed`.
 
 ## Phase 2: Prep Forward
 
