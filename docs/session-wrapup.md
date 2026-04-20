@@ -16,7 +16,7 @@ Reach for session-wrapup when you need to:
 
 ## What You Need
 
-**Obsidian:** Recommended. session-wrapup creates and updates vault files. Works with Obsidian MCP tools or plain markdown folders. Entity creation hands off to campaign-organizer, which supports both modes.
+**Obsidian:** Recommended. session-wrapup creates and updates vault files directly during wrap-up. Works with Obsidian MCP tools or plain markdown folders. Use campaign-organizer afterward for additional filing or normalization when needed.
 
 ## Example Prompts
 

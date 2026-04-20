@@ -39,7 +39,7 @@ dawn. Martha pocketed a small idol."
 
 ## Agent Prompts
 
-### Control prompt (monolith — current main branch)
+### Control prompt (monolith — extracted from main via `git show`)
 
 ```text
 You are a TTRPG at-the-table assistant. Read the skill entry point:

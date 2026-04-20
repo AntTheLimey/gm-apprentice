@@ -43,7 +43,8 @@ live at `skills/shared/` (sibling directory to this skill folder).
 
 - **session-prep** / **session-wrapup** — Session prep and
   wrap-up. Suggest a QA pass after session-wrapup produces
-  changes, or before session-prep to catch stale data.
+  changes, or before session-prep when the GM wants an
+  additional integrity check.
 
 ## Vault Integration
 

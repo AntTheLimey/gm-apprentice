@@ -40,7 +40,7 @@ described, and missing entity stubs.
 
 ## Agent Prompts
 
-### Control prompt (monolith — current main branch)
+### Control prompt (monolith — extracted from main via `git show`)
 
 ```text
 You are a TTRPG session prep assistant. Read the skill entry point:

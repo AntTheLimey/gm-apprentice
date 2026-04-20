@@ -42,7 +42,7 @@ world state, keeper checklist.
 
 ## Agent Prompts
 
-### Control prompt (monolith — current main branch)
+### Control prompt (monolith — extracted from main via `git show`)
 
 ```text
 You are a TTRPG post-session processor. Read the skill entry point:

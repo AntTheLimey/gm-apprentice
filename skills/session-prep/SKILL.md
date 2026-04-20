@@ -76,7 +76,7 @@ happen. The vault stays frozen at pre-session state.
 
 **8. Scan for threads** — Review carry-forward + unresolved
 questions, impressive NPCs, unfollowed clues, pending
-consequences. Reference ttrpg-expert's `continuity-engine.md`
+consequences. Reference `skills/ttrpg-expert/continuity-engine.md`
 for stale thread detection.
 
 **9. Key NPCs** — NPCs likely to appear, with status,
