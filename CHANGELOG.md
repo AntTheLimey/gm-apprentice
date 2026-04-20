@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] — 2026-04-20
+
+### Added
+
+- **session-prep skill** — dedicated between-sessions preparation with two-phase reconcile/prep-forward workflow, status-gated reconciliation (`played` → `reviewed`), and sub-agent opportunity for parallel vault reads
+- **session-play skill** — speed-optimised at-the-table assistant for quick lookups, rules questions, on-the-fly content generation, and play note capture
+- **session-wrapup skill** — post-session processor turning raw play notes into canon: narrative recaps, entity creation, event decomposition, timeline updates, and carry-forward package
+- **Shared session-principles** (`skills/shared/session-principles.md`) — common rules, vault integration, and canon workflow shared across all three session skills
+- **Benchmark infrastructure** — per-skill benchmark questions and 3-run blind A/B evaluation results for the session split
+
+### Changed
+
+- **session-lifecycle replaced** — the monolithic 491-line skill is split into three focused skills (402 total lines, 18% reduction) with quality improvement confirmed across 3 benchmark runs
+- Plugin description updated to reflect the six-skill lineup
+- campaign-qa companion skill references updated for the three-way split
+- campaign-organizer, ttrpg-expert references updated
+- User-facing docs split into per-skill pages (`docs/session-prep.md`, `docs/session-play.md`, `docs/session-wrapup.md`)
+- `docs/campaign-lifecycle.md` and `docs/quickstart.md` updated for new skill names
+
+### Removed
+
+- `skills/session-lifecycle/` — replaced by session-prep, session-play, session-wrapup
+- `docs/session-lifecycle.md` — replaced by per-skill docs
+
+---
+
 ## [1.3.1] — 2026-04-19
 
 ### Added
@@ -80,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.1.0...v1.2.0
