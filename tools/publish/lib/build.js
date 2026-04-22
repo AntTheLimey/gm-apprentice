@@ -7,6 +7,10 @@ const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS } = require('./theme');
 
+const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
+const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
+const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
+
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
@@ -97,6 +101,45 @@ function build(options = {}) {
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
 
+  // Auto-exclude prep/draft files based on frontmatter (player mode only)
+  function isAutoExcluded(fm) {
+    const status = String(fm.status || '').toLowerCase();
+    const stage = String(fm.stage || '').toLowerCase();
+    const source = String(fm.source || '').toLowerCase();
+    return AUTO_EXCLUDE_STATUS.has(status)
+      || AUTO_EXCLUDE_STAGE.has(stage)
+      || AUTO_EXCLUDE_SOURCE.has(source);
+  }
+
+  const autoExcludedPages = [];
+  if (publishConfig.mode !== 'full') {
+    const keptPages = [];
+    for (const page of pages) {
+      if (isAutoExcluded(page.frontmatter)) {
+        autoExcludedPages.push(page);
+      } else {
+        keptPages.push(page);
+      }
+    }
+    pages = keptPages;
+    if (autoExcludedPages.length > 0) {
+      console.log(`Auto-excluded ${autoExcludedPages.length} prep/draft file(s)`);
+    }
+
+    // If manifest explicitly lists an auto-excluded file, re-add it
+    if (manifest) {
+      const allowSet = new Set(manifest.publishing);
+      const reincluded = autoExcludedPages.filter(page => {
+        const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
+        return allowSet.has(vaultRelPath);
+      });
+      if (reincluded.length > 0) {
+        pages = pages.concat(reincluded);
+        console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);
+      }
+    }
+  }
+
   // Filter pages by manifest if present
   if (manifest && publishConfig.mode === 'player') {
     const allowSet = new Set(manifest.publishing);
@@ -126,6 +169,7 @@ function build(options = {}) {
   copyCSS();
   writeThemeCSS();
 
+  let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
   if (publishConfig.theme.campaign_image) {
     const imgVal = publishConfig.theme.campaign_image;
@@ -142,6 +186,7 @@ function build(options = {}) {
         fs.copyFileSync(vaultImgPath, dest);
         publishConfig.theme.campaign_image = 'images/' + basename;
         console.log(`  copied campaign image → images/${basename}`);
+        campaignImageCopied = true;
       }
     }
   }
@@ -215,7 +260,8 @@ function build(options = {}) {
       if (usedImages.has(basename)) filteredMap[basename] = entry;
     }
     copyImages(filteredMap);
-    console.log(`Player mode: copied ${Object.keys(filteredMap).length} of ${Object.keys(imageMap).length} images`);
+    const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
+    console.log(`Player mode: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
   } else {
     copyImages(imageMap);
   }

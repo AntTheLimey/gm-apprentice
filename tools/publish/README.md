@@ -104,6 +104,7 @@ directories listed in `preserveDirs`.
 |-------|------|-------------|
 | `siteTitle` | string | Site name shown in the nav bar and page title |
 | `siteUrl` | string | Canonical base URL (used for absolute links) |
+| `landingTagline` | string | One-sentence campaign hook shown on the landing page hero |
 | `vaultPath` | string | Path to the vault directory (resolved relative to the config file) |
 | `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |
 | `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |

@@ -70,6 +70,80 @@ publish/exclude/needs-decision.
 
 The build tool reads this file directly — no rescanning needed.
 
+### Manifest Format
+
+The manifest is a markdown file with YAML frontmatter and three
+H2 sections. The build tool's parser (`lib/manifest.js`) reads
+the sections by heading prefix and checkbox state.
+
+**Frontmatter** (metadata, not used by the build tool):
+
+~~~yaml
+---
+generated: 2026-04-22T10:00:00Z
+vault: "My Campaign"
+mode: player
+total_files: 25
+publishing: 18
+excluded: 5
+needs_decision: 2
+---
+~~~
+
+**Sections:**
+
+- `## Publishing` — files to include in the build. Each entry
+  is a checked checkbox with a vault-relative path:
+  `- [x] Characters/NPCs/Friendly Merchant.md`
+
+- `## Excluded` — files to exclude. Also uses checked checkboxes.
+  Optionally annotated with a reason:
+  `- [x] Sessions/Session 7.md — prep`
+
+- `## Needs Decision` — files the GM hasn't categorized yet.
+  Uses **unchecked** checkboxes: `- [ ] Events/Ambiguous Event.md`
+  The build tool ignores these (they are not published).
+  When the GM decides, check the box and move the line to
+  Publishing or Excluded.
+
+**Path format:** All paths are vault-relative using forward
+slashes (e.g. `Characters/NPCs/Alice.md`). Never use absolute
+filesystem paths.
+
+**Example manifest:**
+
+~~~markdown
+---
+generated: 2026-04-22T10:00:00Z
+vault: "Canticle of the End"
+mode: player
+total_files: 42
+publishing: 30
+excluded: 10
+needs_decision: 2
+---
+
+## Publishing (30 files)
+
+- [x] _Campaign/Campaign Overview.md
+- [x] Characters/PCs/Helena Ashworth.md
+- [x] Characters/NPCs/Lord Pemberton.md
+- [x] Locations/Bath Assembly Rooms.md
+- [x] Sessions/Session 1.md
+- [x] Sessions/Session 2.md
+
+## Excluded (10 files)
+
+- [x] Sessions/Session 7.md — prep
+- [x] Sessions/Session 8.md — prep
+- [x] Characters/NPCs/Hidden Antagonist.md — GM override
+
+## Needs Decision (2 files)
+
+- [ ] Events/The Vanishing.md
+- [ ] Documents/Mysterious Letter.md
+~~~
+
 ## Campaign Image
 
 The campaign image appears on the landing page hero and 404 page.
@@ -119,14 +193,11 @@ custom input as an alternative.
 
 ## Setup Questioning Flow
 
-When running first-time setup, ask questions **one at a time**
-in sequence. Do not bundle multiple questions into a single
-message. This gives the GM space to think about each decision.
+First-time theme, image, and 404 setup is handled by the setup
+wizard (see `setup-wizard.md` steps 8-10). The filtering workflow
+in this document assumes those are already configured.
 
-Recommended order:
-
-1. Campaign image (provide or generate?)
-2. 404 message (suggest options, accept custom)
-3. Theme confirmation (auto-detect from genre tags, confirm
-   palette/fonts with the GM)
-4. Exclusion rules (review defaults, ask about overrides)
+When content filtering is triggered outside of first-time setup
+(capability 6 in SKILL.md), check `vault-config.md` for existing
+theme/image/404 settings. If missing, ask the questions described
+in the wizard steps before proceeding with the manifest workflow.

@@ -8,6 +8,15 @@ const DEFAULTS = {
   SITE_URL: 'https://example.github.io/my-campaign',
 };
 
+function slugify(text) {
+  const slug = text
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return slug || 'my-campaign';
+}
+
 /**
  * Replace {{PLACEHOLDER}} tokens in a string with values from a map.
  * @param {string} content
@@ -30,6 +39,12 @@ function applyPlaceholders(content, values) {
  */
 async function init(targetDir = '.', options = {}) {
   const verbose = options.verbose === true;
+  const siteTitle = options.siteTitle || DEFAULTS.SITE_TITLE;
+  const values = {
+    ...DEFAULTS,
+    SITE_TITLE: siteTitle,
+    PACKAGE_NAME: slugify(siteTitle),
+  };
   const dest = path.resolve(targetDir);
 
   function log(msg) {
@@ -47,7 +62,7 @@ async function init(targetDir = '.', options = {}) {
     { dest: 'vault.config.json',    tmpl: 'vault.config.json.tmpl',   isTemplate: true  },
     { dest: 'README.md',            tmpl: 'README.md.tmpl',           isTemplate: true  },
     { dest: 'css/overrides.css',    tmpl: 'css/overrides.css',        isTemplate: false },
-    { dest: '.gitignore',           tmpl: '.gitignore',               isTemplate: false },
+    { dest: '.gitignore',           tmpl: 'dot-gitignore',            isTemplate: false },
   ];
 
   // Check for pre-existing files before writing anything
@@ -77,7 +92,7 @@ async function init(targetDir = '.', options = {}) {
 
     if (entry.isTemplate) {
       const raw = await fs.readFile(srcPath, 'utf8');
-      const content = applyPlaceholders(raw, DEFAULTS);
+      const content = applyPlaceholders(raw, values);
       await fs.writeFile(destPath, content, 'utf8');
     } else {
       const raw = await fs.readFile(srcPath);

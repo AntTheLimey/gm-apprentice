@@ -138,6 +138,16 @@ automatically.
 For full documentation of the filtering model, see
 `references/content-filtering.md`.
 
+## Configuration
+
+Publish settings are split between `_meta/vault-config.md`
+(authoritative source for filtering and theming) and
+`vault.config.json` (site paths, URLs, display settings).
+When both define the same setting, vault-config.md wins.
+
+For the full settings reference, see
+`references/configuration.md`.
+
 ## Companion Skills
 
 - **campaign-organizer** — Vault structure and entity management.

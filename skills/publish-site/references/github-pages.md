@@ -1,11 +1,12 @@
 # GitHub Pages — Manual Enablement
 
-This guide walks through enabling GitHub Pages on a campaign
-site repository after the initial push. This is a one-time setup.
+This guide walks through enabling GitHub Pages manually in the
+browser. This is a one-time setup.
 
-GitHub does not allow automatic Pages enablement via the `gh` CLI
-without additional API permissions, so this step is always done
-manually in the browser.
+If you used the setup wizard with the `gh` CLI, Pages was
+enabled automatically — you can skip this guide. These steps
+are for cases where `gh` is not available or the API call
+failed.
 
 ---
 

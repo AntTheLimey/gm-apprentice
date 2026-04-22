@@ -167,4 +167,50 @@ describe('init', () => {
       assert.ok(!content.includes('{{SITE_URL}}'), 'raw placeholder left in vault.config.json');
     });
   });
+
+  describe('custom siteTitle', () => {
+    let tmpDir;
+    let result;
+
+    before(async () => {
+      tmpDir = await makeTmpDir();
+      result = await init(tmpDir, { siteTitle: 'Canticle of the End' });
+    });
+
+    after(async () => {
+      await removeTmpDir(tmpDir);
+    });
+
+    it('slugifies siteTitle into package.json name', async () => {
+      const content = await fs.readFile(path.join(tmpDir, 'package.json'), 'utf8');
+      const pkg = JSON.parse(content);
+      assert.strictEqual(pkg.name, 'canticle-of-the-end');
+    });
+
+    it('uses siteTitle for vault.config.json siteTitle', async () => {
+      const content = await fs.readFile(path.join(tmpDir, 'vault.config.json'), 'utf8');
+      const cfg = JSON.parse(content);
+      assert.strictEqual(cfg.siteTitle, 'Canticle of the End');
+    });
+  });
+
+  describe('slugify edge cases', () => {
+    let tmpDir;
+
+    before(async () => {
+      tmpDir = await makeTmpDir();
+    });
+
+    after(async () => {
+      await removeTmpDir(tmpDir);
+    });
+
+    it('falls back to my-campaign for non-alphanumeric titles', async () => {
+      const dir = path.join(tmpDir, 'edge');
+      await init(dir, { siteTitle: '!!!' });
+      const content = await fs.readFile(path.join(dir, 'package.json'), 'utf8');
+      const pkg = JSON.parse(content);
+      assert.strictEqual(pkg.name, 'my-campaign');
+    });
+  });
 });
