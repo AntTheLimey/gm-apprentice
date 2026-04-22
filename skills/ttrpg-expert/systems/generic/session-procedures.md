@@ -5,8 +5,9 @@
 Universal session-running guidance that works regardless of game
 system. These are the structural patterns that underlie every
 good RPG session. For detailed frameworks, see the system-agnostic
-files at the ttrpg-expert root: `session-planner.md`,
-`gm-session-patterns.md`, and `active-play-management.md`.
+files at the ttrpg-expert root: `arc-spotlight-reference.md`
+(arcs, spotlight, touchpoints), `gm-session-patterns.md`, and
+`active-play-management.md`.
 
 ## Session Structure
 
@@ -163,7 +164,7 @@ that the campaign remembers this character exists.
 For detailed frameworks that expand on the principles above,
 see these system-agnostic files in the ttrpg-expert root:
 
-- `session-planner.md` -- structured session prep workflow
+- `arc-spotlight-reference.md` -- character arcs, spotlight balance, touchpoint taxonomy
 - `gm-session-patterns.md` -- recurring session archetypes
 - `active-play-management.md` -- managing play at the table
 - `npc-generation.md` -- NPC creation frameworks
