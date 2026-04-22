@@ -161,5 +161,7 @@ Evil Hat (Fate Core: Advancement); John Harper (BitD:
 Vice/Trauma); Robin Laws (Robin's Laws); Ron Edwards (Story
 Now / GNS); Alphastream (PC Backstory integration).
 
+## External References
+
 - **GUMSHOE / Drive Mechanic:** https://site.pelgranepress.com/index.php/gumshoe/
 - **Lazy DM Session Prep:** https://slyflourish.com/lazydm/
