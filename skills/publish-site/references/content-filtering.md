@@ -70,6 +70,83 @@ publish/exclude/needs-decision.
 
 The build tool reads this file directly — no rescanning needed.
 
+### Manifest Format
+
+The manifest is a markdown file with YAML frontmatter and three
+H2 sections. The build tool's parser (`lib/manifest.js`) reads
+the sections by heading prefix and checkbox state.
+
+**Frontmatter** (metadata, not used by the build tool):
+
+```yaml
+---
+generated: 2026-04-22T10:00:00Z
+vault: "My Campaign"
+mode: player
+total_files: 25
+publishing: 18
+excluded: 5
+needs_decision: 2
+---
+```
+
+**Sections:**
+
+- `## Publishing` — files to include in the build. Each entry
+  is a checked checkbox with a vault-relative path:
+  `- [x] Characters/NPCs/Friendly Merchant.md`
+
+- `## Excluded` — files to exclude. Also uses checked checkboxes.
+  Optionally grouped by reason:
+  `- Reason: prep`
+  `  - Sessions/Session 7.md`
+
+- `## Needs Decision` — files the GM hasn't categorized yet.
+  Uses **unchecked** checkboxes: `- [ ] Events/Ambiguous Event.md`
+  The build tool ignores these (they are not published).
+  When the GM decides, check the box and move the line to
+  Publishing or Excluded.
+
+**Path format:** All paths are vault-relative using forward
+slashes (e.g. `Characters/NPCs/Alice.md`, not
+`/Users/me/vault/Characters/NPCs/Alice.md`).
+
+**Example manifest:**
+
+```markdown
+---
+generated: 2026-04-22T10:00:00Z
+vault: "Canticle of the End"
+mode: player
+total_files: 42
+publishing: 30
+excluded: 10
+needs_decision: 2
+---
+
+## Publishing (30 files)
+
+- [x] _Campaign/Campaign Overview.md
+- [x] Characters/PCs/Helena Ashworth.md
+- [x] Characters/NPCs/Lord Pemberton.md
+- [x] Locations/Bath Assembly Rooms.md
+- [x] Sessions/Session 1.md
+- [x] Sessions/Session 2.md
+
+## Excluded (10 files)
+
+- Reason: prep
+  - Sessions/Session 7.md
+  - Sessions/Session 8.md
+- Reason: GM override
+  - Characters/NPCs/Hidden Antagonist.md
+
+## Needs Decision (2 files)
+
+- [ ] Events/The Vanishing.md
+- [ ] Documents/Mysterious Letter.md
+```
+
 ## Campaign Image
 
 The campaign image appears on the landing page hero and 404 page.
