@@ -1,22 +1,14 @@
 # Character Arcs, Spotlight, and Touchpoints
 
-GM frameworks for managing character arcs, balancing spotlight
-across the party, and designing per-PC touchpoints. This is
-advisory reference material — theory, thresholds, and patterns
-rather than step-by-step procedures.
+Advisory reference — theory, thresholds, and patterns, not step-by-step procedures.
 
-For **session prep workflows** that apply these frameworks, see
-`session-prep` (the skill that owns the planning workflow).
-For **system-specific arc drivers** (how CoC SAN loss, GURPS
-disadvantages, FitD trauma, and D&D backgrounds fuel arcs),
-see the per-system `session-procedures.md` files.
+For **session prep workflows**, see `session-prep`.
+For **system-specific arc drivers** (CoC SAN loss, GURPS disadvantages, FitD
+trauma, D&D backgrounds), see the per-system `session-procedures.md` files.
 
 ## Five-Stage Arc Model
 
-Character arcs follow a TV-series structure: personal
-storylines weaving through the ensemble narrative. Each arc
-passes through five stages, though duration and pacing vary
-by campaign and character.
+TV-series structure: personal storylines weaving through the ensemble narrative, passing through five stages.
 
 | Stage | Duration | What Happens | GM Actions |
 |-------|----------|-------------|------------|
@@ -39,8 +31,7 @@ may need consecutive sessions of focus.
 
 ## A/B/C Plot Structure
 
-Sessions balance three layers of content, each serving a
-different narrative purpose.
+Sessions balance three layers of content.
 
 | Plot | Share | Description |
 |------|-------|------------|
@@ -56,9 +47,7 @@ for session N+1 or N+2.
 
 ## Spotlight Theory
 
-Spotlight balance is not about equal screen time in every
-session — it is about equitable engagement over a span of
-sessions. The key thresholds:
+Spotlight balance is equitable engagement over a span of sessions, not equal screen time per session. Key thresholds:
 
 - **15% floor:** In a four-player party, any PC falling below
   roughly 15% of a session's spotlight signals a problem
@@ -69,16 +58,9 @@ sessions. The key thresholds:
   — a B-plot feature, a high-impact touchpoint, or a scenario
   element built around that PC's strengths.
 
-Corrective approaches include designing the next session's
-B-plot around the neglected PC, creating an encounter that
-showcases their unique abilities, or introducing a backstory
-element that puts them at the centre of a scene.
-
 ## Weaving Personal Content into Group Scenes
 
-Splitting the party for dedicated personal scenes leaves other
-players idle. Stronger results come from embedding personal
-content into group encounters using four techniques:
+Avoid splitting the party for personal scenes — embed personal content in group encounters using four techniques:
 
 - **Embed in group encounters:** The party visits a military
   outpost and the former soldier PC's personal content emerges
@@ -96,10 +78,7 @@ content into group encounters using four techniques:
 
 ## Touchpoint Taxonomy
 
-Every session should include at least one touchpoint per PC.
-Not all touchpoints need to be major — some simply signal that
-the campaign remembers the character exists. The six types,
-ranked by narrative impact:
+Every session needs at least one touchpoint per PC; not all need to be major. Six types, ranked by narrative impact:
 
 | Type | Impact | Description | Design Notes |
 |------|--------|-------------|-------------|
