@@ -29,11 +29,10 @@ life of a TTRPG campaign.
 
 ### Each Session Cycle
 
-3. **Session prep** — `/gm-apprentice:ttrpg-expert`
-   Use session-planner.md for the full 7-step workflow:
-   PC Roster Review → Arc Check → Touchpoints → Scenes →
-   Connection Audit → Spotlight Forecast → Canon Grounding.
-   Generate NPCs, encounters, handouts as needed.
+3. **Session prep** — `/gm-apprentice:session-prep`
+   Full prep workflow: Reconcile → Gather → Plan → Verify →
+   Handoff. References `arc-spotlight-reference.md` for arc
+   and spotlight frameworks. Generate content via ttrpg-expert.
 
 4. **Pre-session validation** — `/gm-apprentice:campaign-qa`
    Run a continuity check to catch contradictions before
