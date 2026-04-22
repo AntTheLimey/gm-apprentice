@@ -34,10 +34,11 @@ Prep builds new potential on established reality.
 
 ## Companion Skills
 
-- **ttrpg-expert** — Content generation, rules reference.
-  Hand off when gaps need content. Key files:
-  `session-planner.md`, `npc-generation.md`,
-  `continuity-engine.md` (Chekhov Protocol, Canon Grounding).
+- **ttrpg-expert** — Content generation, rules reference,
+  GM frameworks. Hand off when gaps need content. Key files:
+  `arc-spotlight-reference.md` (arcs, spotlight, touchpoints),
+  `npc-generation.md`, `continuity-engine.md` (Chekhov
+  Protocol, Canon Grounding).
 
 - **campaign-organizer** — Vault structure, entity filing.
   Hand off when work produces new entities. Dissect mode
