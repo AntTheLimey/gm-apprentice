@@ -37,16 +37,42 @@ session *about* dramatically? Not "the PCs go to the opera" but
 "the investigators make first contact with Viennese high society
 and get their first glimpse of the Brotherhood's influence."
 
+## Reconciliation Context
+
+[Written by Phase 1 Reconcile. Absent for first sessions.]
+
+### Consequences
+[Forward-looking summary of what follows from last session]
+
+### Salvageable Prep
+[Unplayed prep: dropped / recycled / must-happen]
+
+### GM Decisions
+[Resolved decisions with outcomes, appended one at a time]
+
+## Prior Prep Review
+
+[If prior prep existed, summary of what was kept vs updated.]
+
 ## Previously On...
 
-[Generated during Prep mode — a summary of the last played
-session suitable for reading aloud.]
+[Narrative recap from session-wrapup, presented during prep.]
 
-## Threads to Pick Up
+## Active Threads
 
-- [Unresolved threads from previous sessions relevant to this one]
-- [Player-stated intentions to follow up]
-- [Consequences that should manifest]
+[Carry-forward, stale threads, unfollowed clues, pending
+consequences. Includes stale thread detection (3+ sessions).]
+
+## NPC Quick Reference
+
+| NPC | Role This Session | Key Detail | Location |
+|-----|-------------------|------------|----------|
+| [[Name]] | What they're doing | One memorable fact | Where |
+
+## World State
+
+[In-game date, location, active threats, faction postures,
+ticking clocks.]
 
 ## Planned Scenes
 
@@ -70,12 +96,6 @@ than being part of the default sequence.
 **Trigger:** What causes this scene to activate?
 [Same structure as planned scenes]
 
-## NPC Quick Reference
-
-| NPC | Role This Session | Key Detail | Location |
-|-----|-------------------|------------|----------|
-| [[Name]] | What they're doing | One memorable fact | Where |
-
 ## Session End Objectives
 
 What should the GM try to accomplish before ending the session?
@@ -84,6 +104,30 @@ Not a railroad — a set of possible good stopping points.
 - [Dramatic beat that makes a strong session-end cliffhanger]
 - [Alternate stopping point if pace is slower]
 - [Minimum viable progress for the session]
+
+## PC Roster & Arcs
+
+[Per-PC: arc stage, arc theme, next beat, A/B/C plot assignment.
+Written during creative planning step 11.]
+
+## Touchpoint Plan
+
+[Per-PC touchpoint assignments with type, description, timing.
+Coverage checklist. Written during step 12.]
+
+## Spotlight Forecast
+
+[Per-PC estimated spotlight share. Imbalance flags. Written
+during step 14.]
+
+## Audit Notes
+
+[Agency + canon audit findings. Written during step 15.]
+
+## Gaps & Actions
+
+[Missing entities, stale files, structural issues. Written
+during step 16.]
 ```
 
 ## Played Session Note (Post Wrap-up)
