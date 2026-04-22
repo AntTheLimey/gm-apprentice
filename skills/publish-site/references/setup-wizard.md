@@ -382,14 +382,41 @@ Provide numbered manual steps:
 
 ## Step 18: Enable GitHub Pages
 
-After the push is complete, direct the GM to `references/github-pages.md`
-for the manual Pages enablement steps.
+**If `gh` was used in Step 17 (repo creation):**
+
+Offer to enable Pages programmatically:
+
+> "I can enable GitHub Pages for you right now. Shall I go
+> ahead?"
+
+After confirmation, run:
+
+```bash
+gh api repos/<githubUsername>/<repoName>/pages \
+  -X POST \
+  -f "build_type=legacy" \
+  -f "source[branch]=main" \
+  -f "source[path]=/docs"
+```
+
+If the command succeeds, confirm:
+
+> "GitHub Pages is enabled. Your site will be live in a minute
+> or two at https://<githubUsername>.github.io/<repoName>/"
+
+If the command fails (e.g. permissions error, Pages already
+enabled), fall back to the manual instructions below.
+
+**If `gh` is not available, or the API call failed:**
+
+Direct the GM to `references/github-pages.md` for manual
+Pages enablement steps.
 
 Summarise:
 
-> "Your code is on GitHub. The last step is to turn on GitHub Pages
-> in the repository settings. See the github-pages guide for
-> step-by-step instructions — it takes about two minutes."
+> "Your code is on GitHub. The last step is to turn on GitHub
+> Pages in the repository settings. See the github-pages guide
+> for step-by-step instructions — it takes about two minutes."
 
 ---
 
