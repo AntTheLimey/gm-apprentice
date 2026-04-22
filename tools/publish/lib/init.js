@@ -9,11 +9,12 @@ const DEFAULTS = {
 };
 
 function slugify(text) {
-  return text
+  const slug = text
     .toLowerCase()
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
+  return slug || 'my-campaign';
 }
 
 /**

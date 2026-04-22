@@ -52,10 +52,15 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     heroDatesHtml += '</div>';
   }
 
+  const taglineHtml = config.landingTagline
+    ? `<p class="hero-tagline">${escapeHtml(config.landingTagline)}</p>`
+    : '';
+
   const heroHtml = `
 <div class="hero">
   ${heroImageHtml}
   <h1>${escapeHtml(config.siteTitle)}</h1>
+  ${taglineHtml}
   ${heroDatesHtml}
 </div>`;
 

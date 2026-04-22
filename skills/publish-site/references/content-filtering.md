@@ -78,7 +78,7 @@ the sections by heading prefix and checkbox state.
 
 **Frontmatter** (metadata, not used by the build tool):
 
-```yaml
+~~~yaml
 ---
 generated: 2026-04-22T10:00:00Z
 vault: "My Campaign"
@@ -88,7 +88,7 @@ publishing: 18
 excluded: 5
 needs_decision: 2
 ---
-```
+~~~
 
 **Sections:**
 
@@ -97,9 +97,8 @@ needs_decision: 2
   `- [x] Characters/NPCs/Friendly Merchant.md`
 
 - `## Excluded` — files to exclude. Also uses checked checkboxes.
-  Optionally grouped by reason:
-  `- Reason: prep`
-  `  - Sessions/Session 7.md`
+  Optionally annotated with a reason:
+  `- [x] Sessions/Session 7.md — prep`
 
 - `## Needs Decision` — files the GM hasn't categorized yet.
   Uses **unchecked** checkboxes: `- [ ] Events/Ambiguous Event.md`
@@ -108,12 +107,12 @@ needs_decision: 2
   Publishing or Excluded.
 
 **Path format:** All paths are vault-relative using forward
-slashes (e.g. `Characters/NPCs/Alice.md`, not
-`/Users/me/vault/Characters/NPCs/Alice.md`).
+slashes (e.g. `Characters/NPCs/Alice.md`). Never use absolute
+filesystem paths.
 
 **Example manifest:**
 
-```markdown
+~~~markdown
 ---
 generated: 2026-04-22T10:00:00Z
 vault: "Canticle of the End"
@@ -135,17 +134,15 @@ needs_decision: 2
 
 ## Excluded (10 files)
 
-- Reason: prep
-  - Sessions/Session 7.md
-  - Sessions/Session 8.md
-- Reason: GM override
-  - Characters/NPCs/Hidden Antagonist.md
+- [x] Sessions/Session 7.md — prep
+- [x] Sessions/Session 8.md — prep
+- [x] Characters/NPCs/Hidden Antagonist.md — GM override
 
 ## Needs Decision (2 files)
 
 - [ ] Events/The Vanishing.md
 - [ ] Documents/Mysterious Letter.md
-```
+~~~
 
 ## Campaign Image
 

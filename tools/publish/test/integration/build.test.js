@@ -886,6 +886,60 @@ describe('build integration', () => {
     });
   });
 
+  describe('auto-exclude in full mode', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-autoexclude-full-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const vaultDir = path.join(fixturesDir, 'auto-exclude');
+      const metaDir = path.join(vaultDir, '_meta');
+      fs.mkdirSync(metaDir, { recursive: true });
+      fs.writeFileSync(path.join(metaDir, 'vault-config.md'), '---\npublish:\n  mode: full\n---\n');
+
+      const config = {
+        vaultPath: vaultDir,
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Auto-Exclude Full Mode Test',
+        siteUrl: 'https://example.github.io/auto-exclude-full-test',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: [],
+        folderMap: {
+          'Sessions': 'sessions',
+          'Characters/NPCs': 'characters/npcs',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      const vaultDir = path.join(fixturesDir, 'auto-exclude');
+      const metaDir = path.join(vaultDir, '_meta');
+      fs.rmSync(metaDir, { recursive: true, force: true });
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('includes planned files in full mode', () => {
+      const planned = path.join(outputDir, 'docs', 'sessions', 'planned-session.html');
+      assert.ok(fs.existsSync(planned));
+    });
+
+    it('includes draft files in full mode', () => {
+      const draft = path.join(outputDir, 'docs', 'characters', 'npcs', 'draft-npc.html');
+      assert.ok(fs.existsSync(draft));
+    });
+
+    it('includes prep source files in full mode', () => {
+      const prep = path.join(outputDir, 'docs', 'characters', 'npcs', 'prep-source.html');
+      assert.ok(fs.existsSync(prep));
+    });
+  });
+
   describe('with-gm-only-markers fixture', () => {
     let outputDir;
     let configPath;

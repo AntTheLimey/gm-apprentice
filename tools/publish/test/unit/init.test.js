@@ -193,4 +193,24 @@ describe('init', () => {
       assert.strictEqual(cfg.siteTitle, 'Canticle of the End');
     });
   });
+
+  describe('slugify edge cases', () => {
+    let tmpDir;
+
+    before(async () => {
+      tmpDir = await makeTmpDir();
+    });
+
+    after(async () => {
+      await removeTmpDir(tmpDir);
+    });
+
+    it('falls back to my-campaign for non-alphanumeric titles', async () => {
+      const dir = path.join(tmpDir, 'edge');
+      await init(dir, { siteTitle: '!!!' });
+      const content = await fs.readFile(path.join(dir, 'package.json'), 'utf8');
+      const pkg = JSON.parse(content);
+      assert.strictEqual(pkg.name, 'my-campaign');
+    });
+  });
 });

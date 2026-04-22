@@ -101,7 +101,7 @@ function build(options = {}) {
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
 
-  // Auto-exclude prep/draft files based on frontmatter
+  // Auto-exclude prep/draft files based on frontmatter (player mode only)
   function isAutoExcluded(fm) {
     const status = String(fm.status || '').toLowerCase();
     const stage = String(fm.stage || '').toLowerCase();
@@ -112,29 +112,31 @@ function build(options = {}) {
   }
 
   const autoExcludedPages = [];
-  const keptPages = [];
-  for (const page of pages) {
-    if (isAutoExcluded(page.frontmatter)) {
-      autoExcludedPages.push(page);
-    } else {
-      keptPages.push(page);
+  if (publishConfig.mode !== 'full') {
+    const keptPages = [];
+    for (const page of pages) {
+      if (isAutoExcluded(page.frontmatter)) {
+        autoExcludedPages.push(page);
+      } else {
+        keptPages.push(page);
+      }
     }
-  }
-  pages = keptPages;
-  if (autoExcludedPages.length > 0) {
-    console.log(`Auto-excluded ${autoExcludedPages.length} prep/draft file(s)`);
-  }
+    pages = keptPages;
+    if (autoExcludedPages.length > 0) {
+      console.log(`Auto-excluded ${autoExcludedPages.length} prep/draft file(s)`);
+    }
 
-  // If manifest explicitly lists an auto-excluded file, re-add it
-  if (manifest) {
-    const allowSet = new Set(manifest.publishing);
-    const reincluded = autoExcludedPages.filter(page => {
-      const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
-      return allowSet.has(vaultRelPath);
-    });
-    if (reincluded.length > 0) {
-      pages = pages.concat(reincluded);
-      console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);
+    // If manifest explicitly lists an auto-excluded file, re-add it
+    if (manifest) {
+      const allowSet = new Set(manifest.publishing);
+      const reincluded = autoExcludedPages.filter(page => {
+        const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
+        return allowSet.has(vaultRelPath);
+      });
+      if (reincluded.length > 0) {
+        pages = pages.concat(reincluded);
+        console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);
+      }
     }
   }
 
