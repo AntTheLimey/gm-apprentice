@@ -59,3 +59,19 @@ Hook -> Research -> Fieldwork -> Confrontation -> Resolution.
 **Social/Political:**
 Situation briefing -> Networking -> The event -> Complications ->
 Aftermath.
+
+## Arc Drivers
+
+Arc fuel: disadvantages are built-in story hooks — Duty/Sense
+of Duty (obligation conflicts), Dependents (threatened NPCs
+per frequency roll), Enemy (recurring antagonist), Obsession/
+Compulsive/Addiction (escalating internal conflict), Secret
+(ticking time bomb), Vow/Code of Honour (moral constraints).
+Rotate which disadvantage drives B-plot each session. Point-buy
+evolution: buying off disadvantages = arc beat. Skill-based
+showcases for unique investments.
+
+Per-session touchpoints: disadvantage activation forcing choice,
+encounter requiring specific skill/advantage, consequence from
+prior disadvantage decision, opportunity to earn points or buy
+off disadvantage.

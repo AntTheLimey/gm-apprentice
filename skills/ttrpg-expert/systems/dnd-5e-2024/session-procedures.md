@@ -120,6 +120,18 @@ Default DC: 15 or the monster's INT score, whichever is higher. On failure, wait
 5. **Revelation** (10-15 min): Secret found, story advances
 6. **Cliffhanger** (5 min): End at maximum tension
 
+## Arc Drivers
+
+Arc fuel: background provides ideal (belief), bond (what PC
+cares about), flaw (vulnerability) — arc tests ideal,
+threatens bond, exploits flaw. Personal quests tied to
+backstory, patron obligations, subclass identity moments,
+tier transitions (5/11/17) as arc milestones.
+
+Per-session touchpoints: encounter for one PC's
+class/background, backstory NPC, personal-quest magic
+item/reward, moral choice testing ideal or exploiting flaw.
+
 ## Sources
 
 - Wizards of the Coast, Systems Reference Document 5.2 (CC-BY-4.0)

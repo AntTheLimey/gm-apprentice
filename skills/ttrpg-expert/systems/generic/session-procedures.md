@@ -128,6 +128,36 @@ than a tidy conclusion.
   played (Blades in the Dark downtime, Torchbearer). Follow the
   system's rhythm.
 
+## Arc Drivers
+
+Every RPG system embeds story hooks in character mechanics.
+Identify them during character creation and use them as arc
+fuel:
+
+**Built-in hooks by mechanic type:**
+- **Flaws/disadvantages** (GURPS disads, D&D flaws, FitD
+  trauma): situations that force the character to confront
+  their weakness or pay its cost
+- **Bonds/relationships** (backgrounds, contacts, dependents):
+  NPCs the character cares about, placed under threat or
+  given conflicting loyalties
+- **Drives/beliefs** (FitD drives, Burning Wheel beliefs,
+  D&D ideals): moral dilemmas that test stated values with
+  no clean answer
+- **Progression mechanics** (XP triggers, milestone goals,
+  point-buy advancement): what the system rewards reveals
+  what stories it wants told
+
+**Per-session touchpoints (system-agnostic):**
+- One scene activating a character's built-in hook
+- One encounter showcasing a unique ability or skill
+- One consequence from a prior decision (2-5 sessions delayed)
+- One quiet moment for character expression (campfire,
+  downtime, reflection)
+
+Not every touchpoint needs to be dramatic. Some just signal
+that the campaign remembers this character exists.
+
 ## Cross-References
 
 For detailed frameworks that expand on the principles above,
