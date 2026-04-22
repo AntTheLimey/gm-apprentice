@@ -17,6 +17,12 @@ first invocation.
 **Session note templates:** Read `references/session-templates.md`
 when creating or updating session notes.
 
+**Creative planning references:** Read
+`skills/ttrpg-expert/arc-spotlight-reference.md` before
+starting creative planning (steps 11-14). For system-specific
+arc drivers, also read the active campaign's system
+`session-procedures.md`.
+
 **Progressive file writes:** Every step writes its output to
 the prep note before proceeding. The prep note is the
 persistent artifact — conversation is ephemeral.
@@ -169,15 +175,20 @@ for the planned session. Check:
 
 ## Phase 2: Verify
 
-**15. Agency + Canon Audit** — Review all planned content for:
-- **Agency violations:** PC actions scripted, emotions
-  described, reactions assumed. Plans should create situations,
-  never predetermine outcomes.
-- **Canon violations:** NPC details, locations, or events not
-  traceable to vault files. Every factual claim must have a
-  source.
+**15. Agency + Canon Audit** — Review all planned content.
 
-→ Write `## Audit Notes` to prep note (only if issues found).
+Agency violations (ref: `skills/ttrpg-expert/scenario-writing.md`):
+- PC name as subject of declarative action verb
+- PC emotions/thoughts/internal state described
+- PC actions assumed without conditional language
+- Read-aloud using 2nd-person emotion/perception verbs
+- Confrontation scene without ≥2 contingencies
+
+Canon violations (ref: `skills/ttrpg-expert/continuity-engine.md`):
+- NPC details, locations, or events not traceable to vault
+- Unverified claims flagged as such, not stated as canon
+
+→ Write `## Audit Notes` to prep note.
 
 **16. Gap Check** — Flag:
 - PCs without touchpoints (should not happen after step 12)
