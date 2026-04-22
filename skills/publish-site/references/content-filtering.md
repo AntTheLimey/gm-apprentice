@@ -196,14 +196,11 @@ custom input as an alternative.
 
 ## Setup Questioning Flow
 
-When running first-time setup, ask questions **one at a time**
-in sequence. Do not bundle multiple questions into a single
-message. This gives the GM space to think about each decision.
+First-time theme, image, and 404 setup is handled by the setup
+wizard (see `setup-wizard.md` steps 8-10). The filtering workflow
+in this document assumes those are already configured.
 
-Recommended order:
-
-1. Campaign image (provide or generate?)
-2. 404 message (suggest options, accept custom)
-3. Theme confirmation (auto-detect from genre tags, confirm
-   palette/fonts with the GM)
-4. Exclusion rules (review defaults, ask about overrides)
+When content filtering is triggered outside of first-time setup
+(capability 6 in SKILL.md), check `vault-config.md` for existing
+theme/image/404 settings. If missing, ask the questions described
+in the wizard steps before proceeding with the manifest workflow.

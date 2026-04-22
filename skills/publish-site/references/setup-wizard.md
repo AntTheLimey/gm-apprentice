@@ -165,7 +165,76 @@ edit the JSON manually unless they prefer to.
 
 ---
 
-## Step 8: Install dependencies
+## Step 8: Campaign image
+
+Ask:
+
+> "Do you have an existing campaign image you'd like to use on
+> the site? This appears on the homepage and the 404 page. It
+> could be a logo, a piece of art, or anything that represents
+> your campaign."
+
+**If the GM has an image:**
+
+Ask for the vault-relative path (e.g. `_attachments/campaign-image.svg`).
+Validate the file exists. Store it in `vault-config.md` under
+`publish.theme.campaign_image`.
+
+**If the GM does not have an image:**
+
+Offer to generate a procedural SVG:
+
+> "I can generate a simple campaign image using your theme
+> colours and genre-appropriate motifs. Want me to create one?"
+
+If yes, generate the SVG, save it to `_attachments/campaign-image.svg`
+in the vault, and store the path in `vault-config.md`.
+
+If no, skip — the site will work without a campaign image.
+
+---
+
+## Step 9: 404 message
+
+Ask:
+
+> "When players follow a link to content that's been filtered
+> out (GM-only pages), they'll see a themed 404 page. What
+> message should it show? Here are some ideas:"
+
+Suggest 2-3 genre-appropriate options based on the campaign's
+system or tags. Examples:
+
+- Horror: "The stars are not yet right for this knowledge..."
+- Military: "CLASSIFIED — CLEARANCE LEVEL INSUFFICIENT"
+- Fantasy: "This page has been lost to the mists..."
+- Generic: "This content is not available."
+
+Accept a custom message if the GM prefers. Store it in
+`vault-config.md` under `publish.four_oh_four.message`.
+
+---
+
+## Step 10: Theme confirmation
+
+Read genre tags from the vault's `_Campaign/Campaign Overview.md`
+or `vault-config.md` if available. Propose a colour palette and
+font pairing based on the genre:
+
+> "Based on your campaign's genre, I'd suggest this theme:
+> - Primary: [colour] / Accent: [colour] / Background: [colour]
+> - Heading font: [font] / Body font: [font]
+> Does that look right, or would you like to adjust?"
+
+Store confirmed values in `vault-config.md` under
+`publish.theme.palette` and `publish.theme.fonts`.
+
+If the GM wants to skip theming, use the defaults (system-ui
+fonts, neutral blue-grey palette).
+
+---
+
+## Step 11: Install dependencies
 
 In the terminal, navigate to `<targetDir>` and run:
 
@@ -178,7 +247,7 @@ dependencies. It will take a moment on first run.
 
 ---
 
-## Step 9: Initial build
+## Step 12: Initial build
 
 Run:
 
@@ -205,7 +274,7 @@ shown here reflects only publishable content.
 
 ---
 
-## Step 10: Review initial build
+## Step 13: Review initial build
 
 Tell the GM:
 
@@ -219,7 +288,7 @@ content, broken layout), troubleshoot before continuing.
 
 ---
 
-## Step 11: Create publish manifest
+## Step 14: Create publish manifest
 
 Run the content-filtering workflow from `references/content-filtering.md`:
 
@@ -240,7 +309,7 @@ Tell the GM:
 
 ---
 
-## Step 12: Filtered rebuild
+## Step 15: Filtered rebuild
 
 Rebuild with the manifest in place:
 
@@ -257,7 +326,7 @@ If the GM wants to adjust, edit the manifest and rebuild again.
 
 ---
 
-## Step 13: Initialise git
+## Step 16: Initialise git
 
 In the terminal, inside `<targetDir>`, run:
 
@@ -270,7 +339,7 @@ git commit -m "Initial site scaffold"
 
 ---
 
-## Step 14: Create the GitHub repository
+## Step 17: Create the GitHub repository
 
 Check whether the `gh` CLI is available:
 
@@ -311,7 +380,7 @@ Provide numbered manual steps:
 
 ---
 
-## Step 15: Enable GitHub Pages
+## Step 18: Enable GitHub Pages
 
 After the push is complete, direct the GM to `references/github-pages.md`
 for the manual Pages enablement steps.
@@ -324,7 +393,7 @@ Summarise:
 
 ---
 
-## Step 16: Confirm
+## Step 19: Confirm
 
 Once GitHub Pages is enabled and the first deployment finishes,
 the site will be live at:
