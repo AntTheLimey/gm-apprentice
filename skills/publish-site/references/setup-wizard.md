@@ -198,9 +198,66 @@ the config, unreadable YAML in a vault file, or a path that
 contains backslashes (Windows users should use forward slashes
 or double backslashes in the config).
 
+Note: The build tool automatically excludes prep files
+(`status: planned|prepped`, `stage: outline|draft|ready`,
+`source: "prep"`) even without a manifest. The page count
+shown here reflects only publishable content.
+
 ---
 
-## Step 10: Initialise git
+## Step 10: Review initial build
+
+Tell the GM:
+
+> "The build produced N pages. Before we publish, let's review
+> what will be visible to your players and make sure no GM-only
+> content slips through."
+
+Open `<targetDir>/docs/index.html` in a browser for a quick
+visual check. If anything looks wrong (wrong pages, missing
+content, broken layout), troubleshoot before continuing.
+
+---
+
+## Step 11: Create publish manifest
+
+Run the content-filtering workflow from `references/content-filtering.md`:
+
+1. Scan the vault and categorize every file using the rules in
+   `content-filtering.md` (always exclude, always include,
+   ambiguous).
+2. Present a summary to the GM: how many files are publishing,
+   how many are excluded, how many need a decision.
+3. Walk through ambiguous files one at a time. For each one,
+   ask the GM: publish or exclude?
+4. Write the manifest to `_meta/publish-manifest.md`.
+
+Tell the GM:
+
+> "I've created a publish manifest — it controls exactly which
+> files appear on your site. You can edit it any time to add or
+> remove pages."
+
+---
+
+## Step 12: Filtered rebuild
+
+Rebuild with the manifest in place:
+
+```bash
+npm run build
+```
+
+Confirm the page count dropped to player-safe content:
+
+> "Rebuilt with filtering: N pages (down from M). Only
+> player-visible content will be published."
+
+If the GM wants to adjust, edit the manifest and rebuild again.
+
+---
+
+## Step 13: Initialise git
 
 In the terminal, inside `<targetDir>`, run:
 
@@ -213,7 +270,7 @@ git commit -m "Initial site scaffold"
 
 ---
 
-## Step 11: Create the GitHub repository
+## Step 14: Create the GitHub repository
 
 Check whether the `gh` CLI is available:
 
@@ -254,7 +311,7 @@ Provide numbered manual steps:
 
 ---
 
-## Step 12: Enable GitHub Pages
+## Step 15: Enable GitHub Pages
 
 After the push is complete, direct the GM to `references/github-pages.md`
 for the manual Pages enablement steps.
@@ -267,7 +324,7 @@ Summarise:
 
 ---
 
-## Step 13: Confirm
+## Step 16: Confirm
 
 Once GitHub Pages is enabled and the first deployment finishes,
 the site will be live at:
