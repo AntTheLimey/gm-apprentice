@@ -57,9 +57,9 @@ Read only the file(s) relevant to the current request.
 | Random / procedural | `random-generation.md` | — |
 | Post-session update | `world-evolution.md` | `{system}/session-procedures.md` |
 | Campaign timeline / recap | `campaign-timeline.md` | — |
-| Session prep | `session-planner.md` | `gm-session-patterns.md` |
-| PC arc / spotlight | `session-planner.md` | — |
-| Player agency review | `session-planner.md` Step 7 | `scenario-writing.md` |
+| Session prep | session-prep skill | `arc-spotlight-reference.md`, `gm-session-patterns.md` |
+| PC arc / spotlight | `arc-spotlight-reference.md` | — |
+| Player agency review | `scenario-writing.md` | `continuity-engine.md` |
 | Canon / continuity | `continuity-engine.md` | — |
 | Canon conflict | `canon-management.md` | — |
 | Active play / mid-session | `active-play-management.md` | `{system}/rules-reference.md` |
@@ -78,7 +78,7 @@ Read only the file(s) relevant to the current request.
 - `npc-generation.md` — 3-Line, AIMS, Five-Component NPC frameworks
 - `content-generation.md` — Scene, location, faction, item, creature templates
 - `continuity-engine.md` — Plot holes, threads, Chekhov protocol, callbacks
-- `session-planner.md` — 7-step workflow, Arc Model, Spotlight Forecast
+- `arc-spotlight-reference.md` — Arc Model, Spotlight Theory, Touchpoint Taxonomy
 - `world-evolution.md` — Post-session: faction turns, consequences, foreshadowing
 - `active-play-management.md` — Improv, fail forward, spotlight, notes
 - `scene-encounter-patterns.md` — Scene types, Open Interaction Windows
