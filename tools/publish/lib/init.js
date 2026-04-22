@@ -47,7 +47,7 @@ async function init(targetDir = '.', options = {}) {
     { dest: 'vault.config.json',    tmpl: 'vault.config.json.tmpl',   isTemplate: true  },
     { dest: 'README.md',            tmpl: 'README.md.tmpl',           isTemplate: true  },
     { dest: 'css/overrides.css',    tmpl: 'css/overrides.css',        isTemplate: false },
-    { dest: '.gitignore',           tmpl: '.gitignore',               isTemplate: false },
+    { dest: '.gitignore',           tmpl: 'dot-gitignore',            isTemplate: false },
   ];
 
   // Check for pre-existing files before writing anything
