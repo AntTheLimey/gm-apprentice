@@ -89,7 +89,7 @@ methodology doc in `docs/` is the persistent reference.
 ## Key lessons learned
 
 1. **Routing prose compresses aggressively. Priming must
-   be preserved.** "Read session-planner.md Step 6" is
+   be preserved.** "Read arc-spotlight-reference.md" is
    routing. "Flag below 15% floor. Assign B/C plots." is
    priming. Cutting priming degrades output quality.
 

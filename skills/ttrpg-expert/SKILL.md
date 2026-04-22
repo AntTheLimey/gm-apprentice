@@ -65,8 +65,8 @@ Match user intent → go directly to the file. Skip clarification.
   NPC motivations, complications, multiple outcomes.
 
 **"Plan my session"**
-→ `session-planner.md`. Full 7-step workflow. Step 7 (Canon
-  Grounding) is non-negotiable.
+→ session-prep skill. Complete prep workflow with arc check,
+  touchpoint assignment, scene design, spotlight forecast.
 
 **"Write a handout"** / **"create a letter/newspaper/diary"**
 → `handouts-and-props.md`. Full workflow: type → voice → embed
@@ -86,7 +86,7 @@ Match user intent → go directly to the file. Skip clarification.
 → `random-generation.md`.
 
 **"Check my facts"** / **"verify canon"**
-→ `session-planner.md` Step 7 (Canon Grounding). Trace all
+→ `continuity-engine.md` (Canon Grounding Check). Trace all
   facts to source files. Flag ungrounded content.
 
 **"Stale threads?"** / **"loose ends?"**
@@ -94,13 +94,13 @@ Match user intent → go directly to the file. Skip clarification.
   sessions: resolve, advance, or retire.
 
 **"Spotlight check"** / **"PC balance"**
-→ `session-planner.md` Step 6 (Spotlight Forecast). Review
+→ `arc-spotlight-reference.md` (Spotlight Theory). Review
   last 2-3 sessions per-PC. Flag below 15% floor. Assign
   B/C plots to underserved PCs.
 
 **"Character arc stage"** / **"what's next for this PC?"**
-→ `session-planner.md` (Five-Stage Arc Model). Map PC to
-  stage (Establishment → Testing → Crisis → Transformation
+→ `arc-spotlight-reference.md` (Five-Stage Arc Model). Map PC
+  to stage (Establishment → Testing → Crisis → Transformation
   → New Equilibrium). Suggest scenes for next stage.
 
 **"Fail forward"** / **"failed roll, now what?"**
@@ -130,9 +130,12 @@ Requests often combine modes.
 - **campaign-organizer** — Vault structure and entity filing.
   Suggest after generating content or character creation.
 - **session-prep** / **session-play** / **session-wrapup** —
-  Session lifecycle split into three skills. Suggest
-  session-prep after session planning, session-wrapup after
-  a session ends.
+  Session lifecycle. ttrpg-expert is the advisor (frameworks,
+  reference); session-prep is the doer (prep workflow).
+  session-prep references `arc-spotlight-reference.md` and
+  system `session-procedures.md` during creative planning.
+  Suggest session-prep for "plan/prep my session",
+  session-wrapup after a session ends.
 - **campaign-qa** — Validation. Suggest after session prep
   (especially Canon Grounding) or major content generation.
 

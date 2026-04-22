@@ -31,34 +31,37 @@ Items are force-ranked by score. Higher score = do first.
 
 ## The List
 
-| Rank | Item | Impact | Urgency | Effort | Score | Status |
-|:----:|------|:------:|:-------:|:------:|:-----:|--------|
-| 1 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done |
-| 2 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea |
-| 3 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea |
-| 4 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done |
-| 5 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea |
-| 6 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea |
-| 7 | CoC/BRP SRD enrichment (Phase 5a) | 4 | 3 | L (3) | 3.7 | Planned |
-| 8 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea |
-| 9 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea |
-| 10 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned |
-| 11 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea |
-| 12 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea |
-| 13 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea |
-| 14 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
-| 15 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea |
-| 16 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea |
-| 17 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea |
-| 18 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea |
-| 19 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea |
-| 20 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned |
-| 21 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea |
-| 22 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea |
-| 23 | Publish tool: favicon generation from campaign image | 1 | 1 | M (2) | 1.5 | Idea |
+| Rank | Item | Impact | Urgency | Effort | Score | Status | Notes |
+|:----:|------|:------:|:-------:|:------:|:-----:|--------|-------|
+| 1 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done | |
+| 2 | Skill roles audit: clarify inter-skill relationships | 4 | 4 | M (2) | 6.0 | Idea | Review all 6 skill descriptions, routing, companion skill refs to ensure clear advisor/doer boundaries |
+| 3 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
+| 4 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea | Custom banner image per page via frontmatter |
+| 5 | Decompose arc-spotlight reference into focused files | 2 | 1 | S (1) | 5.0 | Experiment | Split arc-spotlight-reference.md into arc-model.md, spotlight-planning.md, touchpoint-framework.md for token efficiency |
+| 6 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done | |
+| 7 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea | Site-wide config for nav style and index page layout |
+| 8 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea | Visual timeline of recent events on the landing page |
+| 9 | ~~CoC/BRP SRD enrichment (Phase 5a)~~ | 4 | 3 | L (3) | 3.7 | Done | |
+| 10 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea | Generate timeline page from event/session dates in frontmatter |
+| 11 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea | Client-side search index so players can find content in published site |
+| 12 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
+| 13 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
+| 14 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea | Printable/viewable character sheet templates per system in published site |
+| 15 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
+| 16 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for clue entities with status, linked scenes, discovery conditions |
+| 17 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for in-world documents (letters, newspapers, journals) |
+| 18 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea | Auto-generated index pages per tag from frontmatter |
+| 19 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea | Extend benchmark methodology to all 7 skills, not just ttrpg-expert |
+| 20 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea | Interactive graph of entity relationships (d3/force-directed) |
+| 21 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea | Logo generation, og:image, social card previews for shared links |
+| 22 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned | Expand D&D files: more monster stat blocks, subclass features, encounter building |
+| 23 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea | Tool to convert published adventure PDFs into vault-compatible markdown |
+| 24 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea | First-run script to fetch CC-BY SRDs (D&D 5.2, FitD) into systems/ |
+| 25 | Publish tool: favicon generation from campaign image | 1 | 1 | M (2) | 1.5 | Idea | Auto-generate favicon from campaign hero image during publish |
 
 ## Completed
 
+- ~~CoC/BRP SRD enrichment (Phase 5a)~~ — already covered by v3 terminology fixes, 18 content files, Regency variant overlay
 - ~~Publish tool: Event dedicated template~~ — dedicated event template, vault template, session-lifecycle event decomposition (PR #20)
 - ~~Publish tool: Landing page dashboard~~ — hero, session recap, PC roster, key NPCs, explore grid
 - ~~Publish tool v1.0~~ — npm package + skill for vault-to-static-site generation (PR #19)

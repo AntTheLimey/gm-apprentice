@@ -234,6 +234,20 @@ you turn attention to a neglected faction, catch them up.
 Share the world through contacts and vice purveyors — rumours
 and gossip lead to future scores. Don't undermine payoff.
 
+## Arc Drivers
+
+Arc fuel: Vice scenes during downtime (design vice purveyors
+as recurring NPCs), trauma escalation (behaviour shifts per
+trauma type), crew advancement as shared arc, entanglements
+targeting specific PCs, long-term project clocks as
+self-directed arc progression. Four traumas = natural arc
+endpoint/retirement.
+
+Per-session touchpoints: downtime vice/project scene,
+entanglement targeting PC relationships, score element testing
+specific action ratings, faction move threatening something PC
+cares about.
+
 ## Faction Turn (FitD-Specific)
 
 Called by the skill-root `world-evolution.md` Step 2. Overrides Universal

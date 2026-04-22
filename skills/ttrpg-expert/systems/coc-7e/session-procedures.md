@@ -276,6 +276,20 @@ investigators feel the weight of time passing. The most
 terrifying sessions are the ones where nothing overtly
 happens — but everything feels slightly wrong.
 
+## Arc Drivers
+
+Arc fuel: SAN loss as progression (what they sacrifice for
+truth), personal connections under threat, forbidden knowledge
+dilemmas (how far will you go?), backup investigator
+foreshadowed as NPC in current story.
+
+Per-session touchpoints: occupation-connected clue, personal
+NPC drawn into scenario, Drive-compelled moment despite
+danger, sanity test reflecting specific fears.
+
+Ref: GUMSHOE Drive mechanic (Robin Laws / Pelgrane Press)
+for motivation-anchored session planning.
+
 ## External References
 
 - [Chaosium Inc. (publisher)](https://www.chaosium.com/)
