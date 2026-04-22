@@ -167,6 +167,7 @@ function build(options = {}) {
   copyCSS();
   writeThemeCSS();
 
+  let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
   if (publishConfig.theme.campaign_image) {
     const imgVal = publishConfig.theme.campaign_image;
@@ -183,6 +184,7 @@ function build(options = {}) {
         fs.copyFileSync(vaultImgPath, dest);
         publishConfig.theme.campaign_image = 'images/' + basename;
         console.log(`  copied campaign image → images/${basename}`);
+        campaignImageCopied = true;
       }
     }
   }
@@ -256,7 +258,8 @@ function build(options = {}) {
       if (usedImages.has(basename)) filteredMap[basename] = entry;
     }
     copyImages(filteredMap);
-    console.log(`Player mode: copied ${Object.keys(filteredMap).length} of ${Object.keys(imageMap).length} images`);
+    const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
+    console.log(`Player mode: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
   } else {
     copyImages(imageMap);
   }
