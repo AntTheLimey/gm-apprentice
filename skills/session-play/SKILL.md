@@ -9,6 +9,14 @@ waiting. Every response must be immediately usable.
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
 
+**Document chain:** Read `shared/session-document-chain.md`.
+Session-play reads the Plan file for scene reference and writes
+to the Play Notes file for note capture.
+
+**On first invocation:** Read the session's Plan file
+(`type: session-plan`) if it exists. This gives you the GM's
+intended scenes, NPCs, and hooks for quick reference during play.
+
 **Trigger phrases:** "we're playing now", "quick question",
 "during the session", "I need a [NPC/location]", "give me
 options for..."
@@ -36,11 +44,20 @@ GM may defer (e.g., 3 options where players haven't chosen).
 Unsaved content flagged for wrap-up. If GM confirms, create
 vault file with `source_confidence: DRAFT`.
 
+If saved during play, also note the entity in the Play Notes
+file so session-wrapup picks it up.
+
 ### Capture Notes
 
-Accept raw shorthand play notes. Acknowledge and hold. No
-editing or analysis — processed during wrap-up. Note new
-entities for wrap-up attention.
+Accept raw shorthand play notes. Write to the session's Play
+Notes file (`type: session-play-notes`). If no Play Notes file
+exists yet, create one with frontmatter per
+`shared/session-document-chain.md` and `created_by: session-play`.
+Update the session index: set `documents.play_notes` to the new
+file reference and advance `status` to `played`.
+
+Acknowledge and hold. No editing or analysis — processed during
+wrap-up. Note new entities for wrap-up attention.
 
 ## Behavior Rules
 

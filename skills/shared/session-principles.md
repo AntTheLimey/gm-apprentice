@@ -70,18 +70,33 @@ campaign folder path.
   temporal fields, relationships.
 - `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/
   SUPERSEDED states and promotion rules.
+- `shared/session-document-chain.md` — Document chain
+  standard: Plan, Play Notes, Wrap-Up as separate files.
+- `shared/reconcile.md` — Shared review procedure for
+  promoting Wrap-Up confidence.
 
-**Session note frontmatter:**
+**Session document chain:** Read `shared/session-document-chain.md`
+for the full standard. Sessions use separate files for Plan,
+Play Notes, and Wrap-Up, linked by a session index hub.
+
+**Session index frontmatter:**
 
 ```yaml
 ---
 type: session
 session_number: N
 chapter: "[[Chapter N - Title]]"
-status: planned | prepped | played | reviewed
-stage: outline | draft | ready | in_play | wrap_up
+status: planned | prepped | played | wrap-up | reviewed
+documents:
+  plan: "[[Session NN - Title - Plan]]"
+  play_notes: "[[Session NN - Title - Play Notes]]"
+  wrap_up: "[[Session NN - Title - Wrap-Up]]"
 ---
 ```
+
+Status reflects the furthest document that exists. The `wrap-up`
+status is new — it means a Wrap-Up file exists but the GM has
+not yet reviewed it via reconcile.
 
 No "half-played" status. If the session ended early, status
 is **played** and unplayed content carries forward.

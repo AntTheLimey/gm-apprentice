@@ -1,12 +1,11 @@
 ---
-type: session
-session_number: 3
-title: "The Inner Sanctum"
-status: planned
-date_planned: "2024-02-17"
-chapter: "Chapter 1"
+type: session-plan
+session: "[[Session 03 - The Inner Sanctum]]"
+chapter: "[[Chapter 1 - The Ashford Case]]"
+campaign: "The Ashford Case"
 source_confidence: DRAFT
-asOfSession: "Session 2"
+created_by: session-prep
+tags: []
 ---
 
 # Session 3: The Inner Sanctum (Prep Notes)

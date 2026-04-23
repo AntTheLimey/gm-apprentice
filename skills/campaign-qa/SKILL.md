@@ -71,6 +71,9 @@ to your environment's tools per `shared/filesystem-mode.md`.
 - `_Campaign/Player Characters.md` — PC roster.
 - `player_characters.md` — Alternative PC roster location.
 - `Chapters/` — Session notes, scene notes, prep plans.
+- `_inbox/` — Staging area for vault-ingest. **Ignore during
+  all audit modes.** Do not flag files here as orphans or
+  structural issues.
 
 **Shared references** (read as needed for schema definitions):
 - `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
@@ -218,6 +221,11 @@ for the full procedure.
 - Stale STUB entities that need fleshing out
 - Frontmatter schema violations (missing required fields,
   wrong types)
+- Session document chain validation: sessions with Play Notes
+  but no Wrap-Up (suggests wrap-up was skipped), sessions stuck
+  at `wrap-up` status for multiple prep cycles (review was
+  deferred too long), session index `documents:` links pointing
+  to files that don't exist
 
 ### Full Audit
 

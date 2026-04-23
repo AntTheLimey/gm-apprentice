@@ -18,6 +18,8 @@ Written to `_meta/vault-config.md` on first setup.
 │   ├── Player Characters.md
 │   └── Timeline.md
 ├── _Templates/      (one per type)
+├── _inbox/          (staging area for vault-ingest)
+│   └── _processed/  (completed imports, date-stamped)
 ├── Chapters/
 │   └── Chapter N - {Title}/
 │       ├── Chapter N Overview.md
@@ -74,3 +76,27 @@ portrait: "_attachments/characters/ronnie-vint.jpg"
 ![[ronnie-vint-selection.jpg]]
 ```
 Obsidian resolves these by searching configured attachment paths.
+
+## Session Document Chain
+
+Sessions use the document chain standard. Each session has an
+index hub and up to three document files. See
+`shared/session-document-chain.md` for the full standard.
+
+```text
+Sessions/
+  Session {NN} - {Title}.md              (index hub)
+  Session {NN} - {Title} - Plan.md       (prep output)
+  Session {NN} - {Title} - Play Notes.md (play record)
+  Session {NN} - {Title} - Wrap-Up.md    (canonical wrap-up)
+```
+
+## Inbox
+
+The `_inbox/` folder is a staging area for source material
+being ingested by the `vault-ingest` skill. After successful
+ingestion, files move to `_inbox/_processed/` with a date stamp.
+
+`campaign-qa` ignores `_inbox/` during audits.
+`campaign-organizer` creates it during vault setup but does
+not process its contents.

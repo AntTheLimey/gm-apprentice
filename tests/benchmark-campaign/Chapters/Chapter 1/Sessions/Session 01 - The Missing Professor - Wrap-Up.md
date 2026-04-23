@@ -1,12 +1,11 @@
 ---
-type: session
-session_number: 1
-title: "The Missing Professor"
-status: played
-date_played: "2024-01-20"
-chapter: "Chapter 1"
+type: session-wrap-up
+session: "[[Session 01 - The Missing Professor]]"
+chapter: "[[Chapter 1 - The Ashford Case]]"
+campaign: "The Ashford Case"
 source_confidence: AUTHORITATIVE
-asOfSession: "Session 1"
+created_by: session-wrapup
+tags: []
 ---
 
 # Session 1: The Missing Professor

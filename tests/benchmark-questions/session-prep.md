@@ -119,6 +119,7 @@ floor. Propose corrective B/C plot assignments for Session 3.
 ```text
 You are a TTRPG session prep assistant. Read the skill entry point:
 skills/session-prep/SKILL.md
+Also read: skills/shared/session-document-chain.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
