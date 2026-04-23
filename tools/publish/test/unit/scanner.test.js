@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { slugify, mapFolder, buildLinkMap } = require('../../lib/scanner');
+const path = require('path');
+const { slugify, mapFolder, buildLinkMap, scanVault } = require('../../lib/scanner');
 
 describe('slugify', () => {
   it('converts to lowercase', () => {
@@ -81,5 +82,32 @@ describe('buildLinkMap', () => {
     ];
     const map = buildLinkMap(pages);
     assert.strictEqual(map['Old Name'], 'new.html');
+  });
+});
+
+describe('scanVault displayTitle', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures', 'minimal');
+  const config = {
+    vaultPath: fixturesDir,
+    excludeDirs: ['_meta', '_Templates'],
+    folderMap: {
+      '_Campaign': 'campaign',
+      'Characters/PCs': 'characters/pcs',
+      'Characters/NPCs': 'characters/npcs',
+      'Locations': 'locations',
+    },
+  };
+
+  it('sets displayTitle with underscores replaced by spaces', () => {
+    const pages = scanVault(config);
+    const pc = pages.find(p => p.title === 'Test PC');
+    assert.ok(pc, 'Test PC page should exist');
+    assert.strictEqual(pc.displayTitle, 'Test PC');
+  });
+
+  it('preserves title as raw filename for link resolution', () => {
+    const pages = scanVault(config);
+    const pc = pages.find(p => p.title === 'Test PC');
+    assert.strictEqual(pc.title, 'Test PC');
   });
 });
