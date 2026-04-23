@@ -1,33 +1,51 @@
 # Session Note Templates
 
-Templates for session notes at each lifecycle stage. These are
-defaults — the vault's `_meta/` files are authoritative once
-initialized.
+Templates for session documents at each lifecycle stage. Each
+session produces up to four documents in a chain (see
+`shared/session-document-chain.md`). These are defaults — the
+vault's `_meta/` files are authoritative once initialized.
 
-## Prep Session Note
+## Session Index
 
-Created when the GM begins preparing for an upcoming session.
-This is the "potential" document — it describes what *could*
-happen, with branching possibilities.
+The hub document. Metadata and links only — no body content.
+Created when the GM first plans a session. Status is updated
+as each downstream document is created.
 
 ```markdown
 ---
 type: session
-session_number: 7
-chapter: "[[Chapter 3 - Vienna]]"
-campaign: "Canticle of the End"
+session_number: N
+chapter: "[[Chapter N - Title]]"
+campaign: ""
 planned_date: null
 actual_date: null
-status: prepped
-stage: draft
-prep_notes: ""
-actual_notes: ""
-play_notes: ""
+status: planned
+documents:
+  plan: "[[Session NN - Title - Plan]]"
+  play_notes: "[[Session NN - Title - Play Notes]]"
+  wrap_up: "[[Session NN - Title - Wrap-Up]]"
 scenes:
-  - "[[Scene - The Opera Approach]]"
-  - "[[Scene - The Invitation]]"
-  - "[[Scene - The Garden Encounter]]"
-tags: [prep]
+  - "[[Scene Title]]"
+tags: []
+---
+```
+
+## Session Plan
+
+Created by session-prep. Contains all the preparatory material
+for an upcoming session — scenes, NPCs, threads, hooks,
+decision points. Archived after play (not deleted, not updated
+except to append Planned vs Played).
+
+```markdown
+---
+type: session-plan
+session: "[[Session NN - Title]]"
+chapter: "[[Chapter N - Title]]"
+campaign: ""
+source_confidence: DRAFT
+created_by: session-prep
+tags: []
 ---
 
 ## Session Overview
@@ -128,32 +146,64 @@ during step 14.]
 
 [Missing entities, stale files, structural issues. Written
 during step 16.]
+
+## Planned vs Played
+
+[Appended after session by session-wrapup for archival
+comparison. Left blank during prep.]
+
+| Planned Scene | Status | Notes |
+|---------------|--------|-------|
+| [Scene Title] | Played / Modified / Skipped | Brief note |
+| [Unplanned] [Title] | Played | Origin and note |
 ```
 
-## Played Session Note (Post Wrap-up)
+## Play Notes
 
-After wrap-up, the session note is updated with reality. The prep
-plan remains visible for reference, but the actual events are what
-matters going forward.
+Raw record of what happened during the session. Written by the
+GM during play (via session-play), reconstructed by vault-ingest,
+or entered manually. Preserved as-is — no editing or polishing.
 
 ```markdown
 ---
-type: session
-session_number: 7
-chapter: "[[Chapter 3 - Vienna]]"
-campaign: "Canticle of the End"
-planned_date: 2025-03-15
-actual_date: 2025-03-15
-status: played
-stage: wrap_up
-prep_notes: "See Planned Scenes below"
-actual_notes: "See What Actually Happened below"
-play_notes: "Raw notes in Play Notes section"
-scenes:
-  - "[[Scene - The Opera Approach]]"
-  - "[[Scene - The Invitation]]"
-  - "[[Scene - The Garden Encounter]]"
-tags: [played, recap-done]
+type: session-play-notes
+session: "[[Session NN - Title]]"
+chapter: "[[Chapter N - Title]]"
+campaign: ""
+source_confidence: AUTHORITATIVE
+created_by: session-play
+tags: []
+---
+
+## Raw Play Notes
+
+[Unedited GM notes from during the session. Preserved as-is.
+Shorthand, fragments, and abbreviations are expected.]
+
+## Entity Flags
+
+[New entities spotted during play, flagged for wrap-up:]
+- NEW-NPC: [[Name]] — brief note
+- NEW-LOC: [[Name]] — brief note
+- NEW-ITEM: [[Name]] — brief note
+- UPDATE: [[Existing Entity]] — what changed
+```
+
+## Session Wrap-Up
+
+Canonical record of what happened and what carries forward.
+Written by session-wrapup from Play Notes. Starts DRAFT,
+promoted to AUTHORITATIVE via reconcile.
+
+```markdown
+---
+type: session-wrap-up
+session: "[[Session NN - Title]]"
+chapter: "[[Chapter N - Title]]"
+campaign: ""
+source_confidence: DRAFT
+created_by: session-wrapup
+tags: []
 ---
 
 ## Narrative Recap
@@ -161,66 +211,50 @@ tags: [played, recap-done]
 [3-5 paragraphs of dramatic prose capturing the session's events.
 Written for players to read or for campaign journaling.]
 
-## Keeper Notes
+## Quick Bullets
 
-### Scene-by-Scene Breakdown
+- [One-line summary of each major event]
+- [Key decisions made]
+- [Important discoveries]
+- [Significant mechanical outcomes]
 
-**Scene: The Opera Approach** — Status: played
-- What happened: [Factual account]
-- Player decisions: [Key choices made]
-- NPCs encountered: [[Name]], [[Name]]
-- Clues found: [What was discovered]
-- Clues missed: [What was available but not found]
-- Mechanical events: [Skill rolls, SAN loss, combat, etc.]
+## PC Carry-Forward
 
-**Scene: The Garden Encounter** — Status: skipped
-- Reason skipped: Players chose to follow the diplomat instead
-- Reusable? Yes — can trigger in Session 8 if players return
-  to the gardens
+| PC | Arc Update | Open Threads | Next Beat |
+|----|-----------|--------------|-----------|
+| [[Name]] | What changed for this PC | Unresolved threads | What comes next |
 
-**Scene: [Unplanned] The Alleyway Confrontation** — Status: played
-- What happened: [Improvised scene details]
-- Origin: Player initiative — Thomas followed the suspicious
-  servant
-- New entities: [[Hans the Footman]] (DRAFT)
+## What Carries Forward
 
-### Player Decisions & Consequences
+### Active Threads
+[Threads still in play, updated with this session's events]
 
-| Decision | Consequence (immediate) | Consequence (pending) |
-|----------|------------------------|----------------------|
-| Spared the cultist | Gained information about the ritual | Cultist may warn the Brotherhood |
-| Accepted the Countess's invitation | Access to the diplomatic ball | Social obligation, reputation risk |
+### New Clues & Hooks
+[Information or hooks introduced this session]
 
-### Entity Changes
+### Pending Consequences
+[Decisions made this session that will have future effects]
 
-| Entity | Change | Status |
-|--------|--------|--------|
-| [[Hans the Footman]] | Created (improvised NPC) | DRAFT |
-| [[Countess von Hagen]] | Updated relationship with PCs | AUTHORITATIVE |
+### Next Session Seeds
+[Concrete starting points for the next session's prep]
 
-## Planned vs Played
+## World State
 
-| Planned Scene | Status | Notes |
-|---------------|--------|-------|
-| The Opera Approach | Played | As planned |
-| The Invitation | Modified | Players approached the host directly instead of waiting |
-| The Garden Encounter | Skipped | Can reuse in Session 8 |
-| [Unplanned] Alleyway | Played | Improvised from player initiative |
+[Updated in-game date, location, active threats, faction
+postures, ticking clocks. Reflects post-session reality.]
 
-## Next Session Seeds
+## Keeper Checklist
 
-- The diplomatic ball (from the Countess's invitation) — needs
-  full scene prep
-- Hans the Footman — players want to find and question him again
-- The Brotherhood now knows investigators are in Vienna (if the
-  cultist warned them)
-- Thomas's letter to Emma — player said they'd write it "tonight"
-  in game time
+- [ ] Entity files created/updated for all new and changed entities
+- [ ] Scene notes updated with played/skipped status
+- [ ] Session index status updated to wrap-up
+- [ ] Carry-forward threads verified against play notes
+- [ ] Source confidence set correctly on all new files
 
-## Raw Play Notes
+## Quality Notes
 
-[Unedited GM notes from during the session. Preserved as-is for
-reference. Shorthand, fragments, and abbreviations are expected.]
+[Self-assessment of the session: pacing, spotlight balance,
+player engagement, what worked, what to improve.]
 ```
 
 ## Scene Note Template
