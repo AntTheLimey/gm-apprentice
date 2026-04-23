@@ -62,6 +62,15 @@ describe('build integration', () => {
       assert.ok(html.includes('Test Player'));
     });
 
+    it('PC page renders display_meta fields', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'meta-pc.html');
+      assert.ok(fs.existsSync(pcPath));
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(html.includes('Point Total'), 'Should render point_total label');
+      assert.ok(html.includes('150'), 'Should render point_total value');
+      assert.ok(html.includes('Meta PC'), 'Should render displayTitle without underscores');
+    });
+
     it('creates NPC page', () => {
       const npcPath = path.join(outputDir, 'docs', 'characters', 'npcs', 'test-npc.html');
       assert.ok(fs.existsSync(npcPath));
