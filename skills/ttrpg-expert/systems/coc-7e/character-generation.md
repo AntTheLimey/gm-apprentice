@@ -7,6 +7,16 @@
 Step-by-step guide for building a Call of Cthulhu 7th Edition
 investigator from scratch.
 
+## Published Site Defaults
+
+When creating a PC entity file, set `display_meta` to control
+which fields appear in the character's header on a published
+campaign site. CoC default:
+
+```yaml
+display_meta: [occupation, age, nationality]
+```
+
 ## Investigator Creation Workflow
 
 1. **Roll Characteristics** -- generate eight stats.

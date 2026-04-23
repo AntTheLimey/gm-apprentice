@@ -2,6 +2,16 @@
 
 Step-by-step creation from the SRD 5.2 (2024 revision).
 
+## Published Site Defaults
+
+When creating a PC entity file, set `display_meta` to control
+which fields appear in the character's header on a published
+campaign site. D&D 5e default:
+
+```yaml
+display_meta: [class, level, race]
+```
+
 ## Creation Workflow
 
 1. **Choose a Class** -- pick from 12 core classes
