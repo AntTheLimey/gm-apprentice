@@ -334,7 +334,9 @@ during Dissect mode.
 (alive/dead/missing/unknown), `portrait` (optional)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
-`status` (alive/dead/missing/unknown), `key_traits`, `portrait` (optional)
+`status` (alive/dead/missing/unknown), `key_traits`, `portrait` (optional),
+`display_meta` (optional array: ordered field names for published site meta row;
+defaults to `[occupation, age, nationality]` when omitted)
 
 **Location:** `location_type`, `parent_location` (wiki-link),
 `atmosphere`, `portrait` (optional)
