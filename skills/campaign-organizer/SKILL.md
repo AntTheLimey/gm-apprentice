@@ -210,7 +210,7 @@ tools used to read, write, and search differ.
 2. **Survey** — Inventory input files: chapters, entity types,
    time periods. Flag schema misfits.
    **Ignore `_inbox/`** — this folder is a staging area for
-   `vault-ingest`. Do not process, reorganize, or index its
+   `vault-ingest`. Do not process, reorganise, or index its
    contents. It is not part of the campaign vault structure.
 3. **Propose structure** — Present vault layout. Read
    `shared/vault-structure.md` for the default layout.

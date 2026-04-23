@@ -12,8 +12,10 @@ first invocation.
 
 **Document chain:** Read `shared/session-document-chain.md`.
 Session-prep writes Plan files and updates the session index.
-It reads previous Wrap-Up files for context — never Play Notes
-or Plan files from other sessions.
+It reads previous Wrap-Up files for context — normally never
+Play Notes or Plan files from other sessions (exception: raw
+Play Notes may be read as a fallback when no Wrap-Up exists,
+to generate a recap only — see step 7).
 
 **Trigger phrases:** "prep my session", "plan my session",
 "getting ready for next week", "what should I prepare",

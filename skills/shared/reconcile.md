@@ -93,9 +93,11 @@ Write a `## Reconciliation Context` section capturing:
 This section provides cross-conversation continuity.
 Session-prep reads it to avoid re-gathering context.
 
-**Where to write it:** In the session's prep note if one
-exists (session-prep reconcile flow). Otherwise append to
-the Wrap-Up file itself.
+**Where to write it:** Always in the Wrap-Up file under
+`## Reconciliation Context` — session-prep reads this exact
+header. If a Plan file exists, you may append a short pointer
+(`See Wrap-Up for reconciliation context`) but the Wrap-Up
+file is the canonical location.
 
 ## Rules
 

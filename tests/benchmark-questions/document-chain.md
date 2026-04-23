@@ -19,8 +19,8 @@ correctly applies the chain conventions, not on whether the files exist.
 
 session-prep has finished preparing Session 3. What frontmatter fields
 must appear in the Plan file
-`Session 03 - The Inner Sanctum - Plan.md`, and what is the correct
-status value at the point session-prep writes it?
+`Session 03 - The Inner Sanctum - Plan.md`, and what status value
+does session-prep set on the Session Index at this point?
 
 ### Q2 — Play Notes capture
 

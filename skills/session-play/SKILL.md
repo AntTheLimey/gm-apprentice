@@ -53,6 +53,8 @@ Accept raw shorthand play notes. Write to the session's Play
 Notes file (`type: session-play-notes`). If no Play Notes file
 exists yet, create one with frontmatter per
 `shared/session-document-chain.md` and `created_by: session-play`.
+Update the session index: set `documents.play_notes` to the new
+file reference and advance `status` to `played`.
 
 Acknowledge and hold. No editing or analysis — processed during
 wrap-up. Note new entities for wrap-up attention.

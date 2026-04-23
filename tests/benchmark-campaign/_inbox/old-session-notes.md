@@ -19,7 +19,7 @@ finds pew carvings that echo the [[Strange Symbol]], not the original church mar
 
 **Dockworker Rourke** — already established last session apparently (need to check my notes from S3)
 Actually re: Rourke: I'm not sure if Rourke gave the investigators the St Anselm's address or if they found it another way. Need to check. For now treating it as Rourke-led.
-- Rourke knows Rourke heard from someone about the church but won't say who
+- Rourke heard from someone about the church but won't say who
 - He's scared of what happened to his mate after he talked too much (unnamed dock worker, disappeared ca. Oct 19)
 
 ---

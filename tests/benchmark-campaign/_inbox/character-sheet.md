@@ -80,7 +80,7 @@
 
 ## Backstory
 
-Helena Voss trained as a physician in Leipzig before emigrating to the United States in 1910, initially settling in New York before establishing a practice in Boston. She served as a volunteer field medic during 1918, attached to a Red Cross unit operating near the Argonne, and the experience left her with a hardened pragmatism and a tendency to compartmentalize distress. She came to Kingsport at the request of an old colleague, Dr. Wilmarth, who believed that Ashford's case required someone who could assess the medical dimension of his decline. She has no prior exposure to the occult and is finding the current investigation deeply unsettling.
+Helena Voss trained as a physician in Leipzig before emigrating to the United States in 1910, initially settling in New York before establishing a practice in Boston. During the summer of 1918, she served as a volunteer field medic attached to a Red Cross unit operating near the Argonne, and the experience left her with a hardened pragmatism and a tendency to compartmentalize distress. An old colleague, Dr. Wilmarth, brought her to Kingsport, believing that Ashford's case required someone who could assess the medical dimension of his decline. She has no prior exposure to the occult and is finding the current investigation deeply unsettling.
 
 *Note: Helena's father was a Lutheran pastor in Leipzig — she has a complicated relationship with organized religion that informs her friction with Rev. Marsh.*
 

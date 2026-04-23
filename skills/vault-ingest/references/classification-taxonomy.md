@@ -63,7 +63,7 @@ each section independently. Common patterns:
 
 Source material frequently uses inconsistent names for the
 same character. During classification, flag all name variants
-for deduplication in Phase 2:
+in the manifest for resolution during extraction (Phase 3):
 
 - Full name vs surname only
 - Title variations (Dr. / Professor / Mr.)
