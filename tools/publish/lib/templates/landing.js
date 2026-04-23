@@ -86,12 +86,12 @@ function landingTemplate(pages, navFor, config, publishConfig) {
   if (pcs.length > 0) {
     const pcCards = pcs.map(pc => {
       const fm = pc.frontmatter;
-      const initials = getInitials(pc.title);
+      const initials = getInitials(pc.displayTitle);
       const attachPrefix = (config.attachmentsDir || '_attachments') + '/';
       const portraitStr = fm.portrait ? String(fm.portrait) : '';
       const portraitRel = portraitStr.startsWith(attachPrefix) ? portraitStr.slice(attachPrefix.length) : portraitStr;
       const portrait = fm.portrait
-        ? `<div class="pc-portrait"><img src="images/${escapeHtml(portraitRel)}" alt="${escapeHtml(pc.title)}"></div>`
+        ? `<div class="pc-portrait"><img src="images/${escapeHtml(portraitRel)}" alt="${escapeHtml(pc.displayTitle)}"></div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
       const badge = `<span class="status-badge ${statusClass(fm.status)}">${statusLabel(fm.status)}</span>`;
       const traits = fm.key_traits
@@ -101,7 +101,7 @@ function landingTemplate(pages, navFor, config, publishConfig) {
       return `
 <div class="pc-card">
   ${portrait}
-  <h3><a href="${escapeHtml(link)}">${escapeHtml(pc.title)}</a></h3>
+  <h3><a href="${escapeHtml(link)}">${escapeHtml(pc.displayTitle)}</a></h3>
   ${badge}
   <div class="pc-traits">${escapeHtml(traits)}</div>
 </div>`;
@@ -122,14 +122,14 @@ function landingTemplate(pages, navFor, config, publishConfig) {
   if (scoredNPCs.length > 0) {
     const npcCards = scoredNPCs.map(({ page, role }) => {
       const fm = page.frontmatter;
-      const initials = getInitials(page.title);
+      const initials = getInitials(page.displayTitle);
       const roleText = fm.occupation ? `${role} \u00b7 ${fm.occupation}` : role;
       const link = page.outputPath || '#';
       return `
 <div class="npc-card">
   <div class="npc-icon">${escapeHtml(initials)}</div>
   <div class="npc-info">
-    <h4><a href="${escapeHtml(link)}">${escapeHtml(page.title)}</a></h4>
+    <h4><a href="${escapeHtml(link)}">${escapeHtml(page.displayTitle)}</a></h4>
     <span class="npc-role">${escapeHtml(roleText)}</span>
   </div>
 </div>`;

@@ -43,13 +43,13 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap) {
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.title)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
 </div>`;
 
   const content = `${headerCard}\n${badgeHtml}\n${statBlock}\n${abilities}\n${weaknesses}\n${processedContent.html}\n${processedContent.relationships}`;
 
   return baseShell({
-    title: page.title,
+    title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath),

@@ -6,10 +6,10 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap) {
   const badges = metadataBadgesFor(fm);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
 
-  const content = `<h1 class="page-title">${escapeHtml(page.title)}${stubBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}`;
+  const content = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}`;
 
   return baseShell({
-    title: page.title,
+    title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath),

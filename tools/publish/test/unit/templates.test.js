@@ -117,3 +117,37 @@ describe('parseParticipant', () => {
     assert.strictEqual(result.isLink, true);
   });
 });
+
+describe('displayTitle usage', () => {
+  const { npcTemplate } = require('../../lib/templates/npc');
+  const { wikiTemplate } = require('../../lib/templates/wiki');
+
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('npc template uses displayTitle in heading', () => {
+    const page = {
+      title: 'Captain_James',
+      displayTitle: 'Captain James',
+      outputPath: 'characters/npcs/captain-james.html',
+      frontmatter: { type: 'npc' },
+    };
+    const processed = { html: '<p>Content</p>', relationships: '' };
+    const html = npcTemplate(page, processed, mockNavFor, mockConfig, {});
+    assert.ok(html.includes('<h1>Captain James'), 'Should use displayTitle in h1');
+    assert.ok(!html.includes('<h1>Captain_James'), 'Should not use raw title in h1');
+  });
+
+  it('wiki template uses displayTitle in heading', () => {
+    const page = {
+      title: 'Old_Fortress',
+      displayTitle: 'Old Fortress',
+      outputPath: 'locations/old-fortress.html',
+      frontmatter: { type: 'document' },
+    };
+    const processed = { html: '<p>Content</p>', relationships: '' };
+    const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {});
+    assert.ok(html.includes('Old Fortress'), 'Should use displayTitle');
+    assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
+  });
+});
