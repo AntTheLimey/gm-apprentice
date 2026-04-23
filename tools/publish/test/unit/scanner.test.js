@@ -100,14 +100,14 @@ describe('scanVault displayTitle', () => {
 
   it('sets displayTitle with underscores replaced by spaces', () => {
     const pages = scanVault(config);
-    const pc = pages.find(p => p.title === 'Test PC');
-    assert.ok(pc, 'Test PC page should exist');
-    assert.strictEqual(pc.displayTitle, 'Test PC');
+    const pc = pages.find(p => p.title === 'Underscored_Name');
+    assert.ok(pc, 'Underscored_Name page should exist');
+    assert.strictEqual(pc.displayTitle, 'Underscored Name');
   });
 
   it('preserves title as raw filename for link resolution', () => {
     const pages = scanVault(config);
-    const pc = pages.find(p => p.title === 'Test PC');
-    assert.strictEqual(pc.title, 'Test PC');
+    const pc = pages.find(p => p.title === 'Underscored_Name');
+    assert.strictEqual(pc.title, 'Underscored_Name');
   });
 });
