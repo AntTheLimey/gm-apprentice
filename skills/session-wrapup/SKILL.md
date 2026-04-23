@@ -4,10 +4,15 @@ description: "Use when a TTRPG session has just ended and the GM needs to proces
 ---
 
 Post-session processor. Turns raw play notes into organized
-canon, updates the world, sets the stage for session-prep.
+canon, updates the world, sets the stage for session-prep
+via the Wrap-Up file.
 
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
+
+**Document chain:** Read `shared/session-document-chain.md`.
+Session-wrapup reads the Play Notes file and writes the Wrap-Up
+file. It also creates/updates entity files and timeline entries.
 
 **Trigger phrases:** "session's over", "wrap up", "post-session",
 "process my notes", "what happened today"
@@ -16,8 +21,10 @@ first invocation.
 
 ### 1. Gather Sources
 
-Collect play notes, transcripts, GM notes. Read PC roster.
-Read this session's prep note for planned-vs-actual comparison.
+Read the session's Play Notes file (`type: session-play-notes`).
+If no Play Notes file exists, ask the GM to provide play notes
+(paste, file path, or dictation). Read PC roster. Read the
+session's Plan file for planned-vs-actual comparison.
 
 ### 2. Narrative Recap
 
@@ -28,7 +35,7 @@ Read this session's prep note for planned-vs-actual comparison.
 
 This recap is the **single source of truth**. Session-prep
 reads it later — never regenerates. Write both formats into
-the session note.
+the Wrap-Up file.
 
 ### 3. PC Carry-Forward
 
@@ -36,7 +43,7 @@ Per active PC, note what carries forward. Focus on **player
 intent** — stated plans, unfinished actions, shifted NPC
 relationships, exclusive information. Ground in observable
 behaviour, not generated emotional analysis. Write into
-session note.
+Wrap-Up file.
 
 ### 4. Update the World
 
@@ -61,15 +68,15 @@ session note.
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and
 `## Updated Entities`. This is the review artifact. Do **NOT**
-write these appendices into the session note file. Entity
-files are the permanent record. Session note references
+write these appendices into the Wrap-Up file. Entity
+files are the permanent record. The Wrap-Up file references
 entities via wiki-links only.
 
 Every entity reference: `[[wiki-link]]`.
 
 ### 5. What Carries Forward
 
-Write into session note:
+Write into Wrap-Up file:
 - Unresolved cliffhangers
 - Player-stated intentions
 - Unrealised consequences
@@ -79,35 +86,46 @@ Write into session note:
 ### 6. World State
 
 In-game date, location, active threats, faction postures,
-ticking clocks. Brief. Write into session note.
+ticking clocks. Brief. Write into Wrap-Up file.
 
 ### 7. Keeper Checklist
 
-Concrete tasks for next prep. Write into session note:
+Concrete tasks for next prep. Write into Wrap-Up file:
 scenes to write, GM decisions needed, rules to review,
 handouts to prepare.
 
 ### 8. Quality Notes
 
 Brief, honest: what worked in prep, what was missing,
-what to adjust. Write into session note.
+what to adjust. Write into Wrap-Up file.
+
+### 9. Review (Reconcile)
+
+Invoke `shared/reconcile.md` to walk the GM through reviewing
+the Wrap-Up. On approval, reconcile promotes session status to
+`reviewed` and Wrap-Up confidence to AUTHORITATIVE.
+
+If the GM defers review ("I'll look at it later"), leave status
+at `wrap-up`. Session-prep will invoke reconcile as a fallback
+when the GM next preps.
 
 ## Handoff Contract
 
-The played session note hands off to session-prep. Wrap-up
-**must** produce all sections so prep reads one file:
+The Wrap-Up file hands off to session-prep (via reconcile).
+Wrap-up **must** produce all sections so prep reads one file:
 
-| Section | Required |
-|---------|----------|
-| Narrative Recap | Yes |
-| Quick Bullets | Yes |
-| PC Carry-Forward | Yes |
-| What Carries Forward | Yes |
-| World State | Yes |
-| Keeper Checklist | Yes |
+| Section | Required | Written to |
+|---------|----------|------------|
+| Narrative Recap | Yes | Wrap-Up file |
+| Quick Bullets | Yes | Wrap-Up file |
+| PC Carry-Forward | Yes | Wrap-Up file |
+| What Carries Forward | Yes | Wrap-Up file |
+| World State | Yes | Wrap-Up file |
+| Keeper Checklist | Yes | Wrap-Up file |
 
-**Quality test:** Would a GM who hasn't looked at this
-campaign in two weeks be able to prep from this note alone?
+Entity files and timeline are updated separately (Step 4).
+The session index is updated to `wrap-up` status (or `reviewed`
+if reconcile completes).
 
 ## Sub-agent Opportunity (Claude Code only)
 
