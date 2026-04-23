@@ -19,7 +19,7 @@ from pathlib import Path
 
 # Valid enum values
 SOURCE_CONFIDENCE = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
-SESSION_STATUS = {"planned", "prepped", "played", "reviewed"}
+SESSION_STATUS = {"planned", "prepped", "played", "wrap-up", "reviewed"}
 SCENE_STATUS = {"planned", "ready", "played", "cut"}
 SCENE_TYPES = {
     "investigation", "social", "combat", "chase",
@@ -40,7 +40,10 @@ REQUIRED_FIELDS = {
     "clue": ["type", "source_confidence"],
     "event": ["type", "source_confidence"],
     "document": ["type", "source_confidence"],
-    "session": ["type", "source_confidence", "session_number", "status"],
+    "session": ["type", "session_number", "status"],
+    "session-plan": ["type", "source_confidence"],
+    "session-play-notes": ["type", "source_confidence"],
+    "session-wrap-up": ["type", "source_confidence"],
     "scene": ["type", "source_confidence", "scene_type", "status"],
     "chapter": ["type"],
     "meta": ["type"],
