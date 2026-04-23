@@ -11,11 +11,14 @@ investigator from scratch.
 
 When creating a PC entity file, set `display_meta` to control
 which fields appear in the character's header on a published
-campaign site. CoC default:
+campaign site. Recommended for CoC:
 
 ```yaml
 display_meta: [occupation, age, nationality]
 ```
+
+If `display_meta` is omitted, the publish tool falls back to
+`[occupation, age, nationality]` (which matches this recommendation).
 
 ## Investigator Creation Workflow
 

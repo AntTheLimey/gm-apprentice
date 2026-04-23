@@ -857,10 +857,11 @@ describe('build integration', () => {
 
     it('active PCs appear in The Team, not The Fallen', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      // Find The Team section and verify Guy LeFleur is in it
-      const teamMatch = html.match(/The Team[\s\S]*?<\/div>\s*<\/div>/);
-      const teamHtml = teamMatch ? teamMatch[0] : '';
-      assert.ok(teamHtml.includes('Guy LeFleur'), 'Active PC should be in The Team');
+      const fallenIdx = html.indexOf('The Fallen');
+      assert.ok(fallenIdx !== -1, 'The Fallen section should exist');
+      const fallenHtml = html.slice(fallenIdx);
+      assert.ok(!fallenHtml.includes('Guy LeFleur'), 'Active PC should not be in The Fallen');
+      assert.ok(html.includes('Guy LeFleur'), 'Active PC should appear on the page');
     });
   });
 

@@ -14,6 +14,7 @@ function statusClass(status) {
   const s = String(status).toLowerCase();
   if (s === 'dead' || s === 'deceased') return 'status-kia';
   if (s === 'missing' || s === 'unknown') return 'status-mia';
+  if (s === 'retired') return 'status-retired';
   return 'status-alive';
 }
 
@@ -22,8 +23,23 @@ function statusLabel(status) {
   const s = String(status).toLowerCase();
   if (s === 'dead' || s === 'deceased') return 'KIA';
   if (s === 'missing' || s === 'unknown') return 'MIA';
+  if (s === 'retired') return 'Retired';
   return 'Active';
 }
+
+const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
+
+const SVG_SKULL = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>';
+const SVG_SUNSET = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 16 Q8 8 12 10 Q16 8 20 16" fill="currentColor" opacity="0.6"/><line x1="12" y1="4" x2="12" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="5" x2="10" y2="9" stroke="currentColor" stroke-width="1"/><line x1="16" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1"/></svg>';
+const SVG_QUESTION = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>';
+
+const FALLEN_ICONS = {
+  dead: SVG_SKULL,
+  deceased: SVG_SKULL,
+  retired: SVG_SUNSET,
+  unknown: SVG_QUESTION,
+  missing: SVG_QUESTION,
+};
 
 function landingTemplate(pages, navFor, config, publishConfig) {
   const outputPath = 'index.html';
@@ -81,19 +97,9 @@ function landingTemplate(pages, navFor, config, publishConfig) {
   }
 
   // --- The Team / The Fallen ---
-  const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
-
   const allPCs = getPCs(pages);
   const activePCs = allPCs.filter(pc => !FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
   const fallenPCs = allPCs.filter(pc => FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
-
-  const FALLEN_ICONS = {
-    dead: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>',
-    deceased: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>',
-    retired: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 16 Q8 8 12 10 Q16 8 20 16" fill="currentColor" opacity="0.6"/><line x1="12" y1="4" x2="12" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="5" x2="10" y2="9" stroke="currentColor" stroke-width="1"/><line x1="16" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1"/></svg>',
-    unknown: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>',
-    missing: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>',
-  };
 
   function renderPCCards(pcs, showFallenIcon) {
     return pcs.map(pc => {

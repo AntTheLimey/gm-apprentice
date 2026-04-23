@@ -108,6 +108,7 @@ describe('scanVault displayTitle', () => {
   it('preserves title as raw filename for link resolution', () => {
     const pages = scanVault(config);
     const pc = pages.find(p => p.title === 'Underscored_Name');
+    assert.ok(pc, 'Underscored_Name page should exist');
     assert.strictEqual(pc.title, 'Underscored_Name');
   });
 });

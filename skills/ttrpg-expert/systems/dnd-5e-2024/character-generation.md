@@ -6,11 +6,14 @@ Step-by-step creation from the SRD 5.2 (2024 revision).
 
 When creating a PC entity file, set `display_meta` to control
 which fields appear in the character's header on a published
-campaign site. D&D 5e default:
+campaign site. Recommended for D&D 5e:
 
 ```yaml
 display_meta: [class, level, race]
 ```
+
+If `display_meta` is omitted, the publish tool falls back to
+`[occupation, age, nationality]`.
 
 ## Creation Workflow
 
