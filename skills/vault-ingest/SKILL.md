@@ -18,17 +18,12 @@ can process. Adapter + Orchestrator pattern.
 - `references/synthesis-templates.md` — Phase 5
 
 **Downstream skills:**
-- `campaign-organizer` — vault skeleton (bootstrap), entity
-  file placement
-- `session-wrapup` — wrap-up generation from synthesized
-  play notes
-- `reconcile` (shared procedure) — GM review and canon
-  confirmation
-- `campaign-qa` — optional post-ingestion graph health check
+- `campaign-organizer` — vault skeleton, entity filing
+- `session-wrapup` — wrap-up generation from synthesized notes
+- `reconcile` (shared) — GM review, canon confirmation
+- `campaign-qa` — optional post-ingestion health check
 
-**Interaction model:** Vault-ingest orchestrates by following
-other skills' processes in sequence — process handoffs within
-the conversation, not programmatic calls.
+Orchestrates via conversational handoffs, not programmatic calls.
 
 ## Input Channels
 
@@ -42,9 +37,8 @@ All three can be used in the same invocation:
 3. **Pasted content** — GM pastes text directly. Treat as an
    implicit source document.
 
-**Supported formats:** Markdown, plain text, Word docs, PDFs,
-images (maps, handouts, character sheet scans), spreadsheets
-(CSV, Excel), chat/VTT exports.
+**Supported formats:** Markdown, plain text, Word, PDF, images,
+spreadsheets (CSV/Excel), chat/VTT exports.
 
 ## Bootstrap Detection
 
@@ -199,18 +193,12 @@ check. Don't force.
 
 ## Sub-agent Opportunity
 
-Entity creation and updates in Phase 5 parallelize well.
-Keeper interview (Phase 4) must be sequential.
+Phase 5 entity work parallelizes well. Phase 4 interview
+must be sequential.
 
 ## Compaction
 
-After all phases complete, compact to preserve:
-- Confirmed play events and sources
-- GM answers (verbatim decisions)
-- Classified manifest and bucket assignments
-- Unresolved items
-- Entity files created/updated (paths and key changes)
-
-Discard: intermediate reasoning, raw source material already
-processed, failed extraction attempts, superseded interview
-chains (flatten to final confirmed facts).
+After all phases, preserve: confirmed events + sources, GM
+answers (verbatim), manifest, unresolved items, entity paths.
+Discard: intermediate reasoning, processed source material,
+failed extractions, superseded interview chains.
