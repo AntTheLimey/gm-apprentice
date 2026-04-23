@@ -137,6 +137,7 @@ You are a TTRPG session workflow assistant. Read the skill entry points:
 skills/session-prep/SKILL.md
 skills/session-play/SKILL.md
 skills/session-wrapup/SKILL.md
+Also read: skills/shared/session-document-chain.md
 Follow routing to find the right files for each question.
 Answer each question concisely (under 150 words each).
 
