@@ -22,9 +22,13 @@ Professor Henry Ashford, a respected antiquarian at Miskatonic University, has g
 ## Campaign Structure
 
 - **[[Chapter 1]]** — The Ashford Case (3 sessions)
-  - [[Session 1 - The Missing Professor]] — Status: played
-  - [[Session 2 - The Docks at Night]] — Status: played
-  - [[Session 3 - The Inner Sanctum]] — Status: planned
+  - [[Session 01 - The Missing Professor]] — Status: reviewed
+    - [[Session 01 - The Missing Professor - Wrap-Up]]
+  - [[Session 02 - The Docks at Night]] — Status: reviewed
+    - [[Session 02 - The Docks at Night - Play Notes]]
+    - [[Session 02 - The Docks at Night - Wrap-Up]]
+  - [[Session 03 - The Inner Sanctum]] — Status: prepped
+    - [[Session 03 - The Inner Sanctum - Plan]]
 
 ## Entity Index
 

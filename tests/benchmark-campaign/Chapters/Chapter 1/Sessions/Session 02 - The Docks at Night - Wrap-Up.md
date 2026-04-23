@@ -1,12 +1,11 @@
 ---
-type: session
-session_number: 2
-title: "The Docks at Night"
-status: played
-date_played: "2024-02-03"
-chapter: "Chapter 1"
+type: session-wrap-up
+session: "[[Session 02 - The Docks at Night]]"
+chapter: "[[Chapter 1 - The Ashford Case]]"
+campaign: "The Ashford Case"
 source_confidence: AUTHORITATIVE
-asOfSession: "Session 2"
+created_by: session-wrapup
+tags: []
 ---
 
 # Session 2: The Docks at Night
@@ -52,19 +51,6 @@ Prof Crain witnessed something at dock 7 last Tuesday and may have more informat
 
 ### Reporting to Inspector Crane
 The investigators reported the incident to [[Inspector Crane]] the following morning. Crane took notes but was skeptical. "You're telling me a thin man outran three able-bodied people in the fog? Perhaps you'd been drinking." He agreed to send a constable to check the warehouse but seemed to treat it as a low priority.
-
-## Raw Play Notes (unprocessed)
-- went to docks, met Brother Ezra near warehouse
-- chase scene, he got away
-- found crates with symbol
-- new contact: Dockmaster Hayes — knows about night deliveries
-- [[Dr. Marsh]] — need to follow up (WHO IS THIS?)
-- Prof Crain witnessed something at dock 7 last Tuesday
-- Mal took a knock on the arm during chase, minor wound
-- Voss lost 3 SAN seeing Ezra's eyes
-- decoded letter mentions "the old church" — which one?
-- Rev. Marsh thinks it might be the abandoned one in the old quarter
-- Crane is useless, possibly compromised?
 
 ## Session End State
 - Two stone tablets in the investigators' possession.
