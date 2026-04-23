@@ -117,3 +117,125 @@ describe('parseParticipant', () => {
     assert.strictEqual(result.isLink, true);
   });
 });
+
+describe('PC template display_meta', () => {
+  const { pcTemplate } = require('../../lib/templates/pc');
+
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('renders display_meta fields when set', () => {
+    const page = {
+      title: 'Test_Hero',
+      displayTitle: 'Test Hero',
+      outputPath: 'characters/pcs/test-hero.html',
+      frontmatter: {
+        type: 'pc',
+        player_name: 'Alice',
+        status: 'active',
+        point_total: 200,
+        age: 34,
+        TL: 8,
+        display_meta: ['point_total', 'age', 'TL'],
+      },
+    };
+    const processed = { html: '', relationships: '' };
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
+    assert.ok(html.includes('Point Total'), 'Should render point_total label as title case');
+    assert.ok(html.includes('200'), 'Should render point_total value');
+    assert.ok(html.includes('Age'), 'Should render age label');
+    assert.ok(html.includes('34'), 'Should render age value');
+    assert.ok(html.includes('TL'), 'Should render TL label');
+    assert.ok(html.includes('8'), 'Should render TL value');
+  });
+
+  it('falls back to occupation/age/nationality when display_meta not set', () => {
+    const page = {
+      title: 'Fallback Hero',
+      displayTitle: 'Fallback Hero',
+      outputPath: 'characters/pcs/fallback-hero.html',
+      frontmatter: {
+        type: 'pc',
+        player_name: 'Bob',
+        status: 'active',
+        occupation: 'Detective',
+        age: 42,
+        nationality: 'British',
+      },
+    };
+    const processed = { html: '', relationships: '' };
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
+    assert.ok(html.includes('Occupation'), 'Should show occupation label');
+    assert.ok(html.includes('Detective'), 'Should show occupation value');
+    assert.ok(html.includes('Age'), 'Should show age label');
+    assert.ok(html.includes('42'), 'Should show age value');
+    assert.ok(html.includes('Nationality'), 'Should show nationality label');
+    assert.ok(html.includes('British'), 'Should show nationality value');
+  });
+
+  it('skips missing fields silently', () => {
+    const page = {
+      title: 'Sparse Hero',
+      displayTitle: 'Sparse Hero',
+      outputPath: 'characters/pcs/sparse-hero.html',
+      frontmatter: {
+        type: 'pc',
+        player_name: 'Carol',
+        status: 'active',
+        display_meta: ['occupation', 'age', 'missing_field'],
+        occupation: 'Spy',
+      },
+    };
+    const processed = { html: '', relationships: '' };
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
+    assert.ok(html.includes('Occupation'), 'Should show occupation');
+    assert.ok(html.includes('Spy'), 'Should show occupation value');
+    assert.ok(!html.includes('Missing Field'), 'Should not show missing_field label');
+  });
+
+  it('uses displayTitle in h1 and page title', () => {
+    const page = {
+      title: 'Captain_Hero',
+      displayTitle: 'Captain Hero',
+      outputPath: 'characters/pcs/captain-hero.html',
+      frontmatter: { type: 'pc', player_name: 'Dan', status: 'active' },
+    };
+    const processed = { html: '', relationships: '' };
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
+    assert.ok(html.includes('<h1>Captain Hero</h1>'), 'Should use displayTitle in h1');
+  });
+});
+
+describe('displayTitle usage', () => {
+  const { npcTemplate } = require('../../lib/templates/npc');
+  const { wikiTemplate } = require('../../lib/templates/wiki');
+
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('npc template uses displayTitle in heading', () => {
+    const page = {
+      title: 'Captain_James',
+      displayTitle: 'Captain James',
+      outputPath: 'characters/npcs/captain-james.html',
+      frontmatter: { type: 'npc' },
+    };
+    const processed = { html: '<p>Content</p>', relationships: '' };
+    const html = npcTemplate(page, processed, mockNavFor, mockConfig, {});
+    assert.ok(html.includes('<h1>Captain James'), 'Should use displayTitle in h1');
+    assert.ok(!html.includes('<h1>Captain_James'), 'Should not use raw title in h1');
+  });
+
+  it('wiki template uses displayTitle in heading', () => {
+    const page = {
+      title: 'Old_Fortress',
+      displayTitle: 'Old Fortress',
+      outputPath: 'locations/old-fortress.html',
+      frontmatter: { type: 'document' },
+    };
+    const processed = { html: '<p>Content</p>', relationships: '' };
+    const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {});
+    assert.ok(html.includes('Old Fortress'), 'Should use displayTitle');
+    assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
+  });
+});

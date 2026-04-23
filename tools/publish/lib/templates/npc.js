@@ -8,7 +8,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap) {
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.title)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
   <div class="meta">
     ${fm.occupation ? `<span><span class="label">Role</span> ${escapeHtml(fm.occupation)}</span>` : ''}
     ${fm.nationality ? `<span><span class="label">Nationality</span> ${escapeHtml(fm.nationality)}</span>` : ''}
@@ -21,7 +21,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap) {
   const content = `${headerCard}\n${processedContent.html}\n${processedContent.relationships}`;
 
   return baseShell({
-    title: page.title,
+    title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath),

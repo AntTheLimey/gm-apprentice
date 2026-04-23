@@ -54,7 +54,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.title)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
   ${metaHtml}
 </div>`;
 
@@ -90,7 +90,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const content = `${headerCard}\n${badgeHtml}\n${outcomeHtml}\n${participantsHtml}\n${processedContent.html}\n${processedContent.relationships}`;
 
   return baseShell({
-    title: page.title,
+    title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath),

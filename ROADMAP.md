@@ -33,7 +33,7 @@ Items are force-ranked by score. Higher score = do first.
 
 | Rank | Item | Impact | Urgency | Effort | Score | Status | Notes |
 |:----:|------|:------:|:-------:|:------:|:-----:|--------|-------|
-| 1 | Publish tool: displayTitle + template overhaul | 5 | 5 | S (1) | 15.0 | Patched | Upstream the node_modules patches: (1) scanner.js `displayTitle` replacing underscores with spaces, (2) all templates use `displayTitle` for rendering while keeping `title` for link resolution, (3) PC template replaces GURPS `point_total` with `age`/`nationality` fields, (4) landing page splits roster into active ("The Team") and dead/retired ("The Fallen"). Currently patched in canticle-of-the-end site repo — `npm install` will overwrite. |
+| 1 | ~~Publish tool: displayTitle + template overhaul~~ | 5 | 5 | S (1) | 15.0 | Done | |
 | 2 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done | |
 | 3 | Skill roles audit: clarify inter-skill relationships | 4 | 4 | M (2) | 6.0 | Idea | Review all 6 skill descriptions, routing, companion skill refs to ensure clear advisor/doer boundaries |
 | 4 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
@@ -63,6 +63,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~Publish tool: displayTitle + template overhaul~~ — displayTitle on all page objects, data-driven `display_meta` PC meta row, Team/Fallen landing split with SVG status icons (PR #25)
 - ~~CoC/BRP SRD enrichment (Phase 5a)~~ — already covered by v3 terminology fixes, 18 content files, Regency variant overlay
 - ~~Publish tool: Event dedicated template~~ — dedicated event template, vault template, session-lifecycle event decomposition (PR #20)
 - ~~Publish tool: Landing page dashboard~~ — hero, session recap, PC roster, key NPCs, explore grid

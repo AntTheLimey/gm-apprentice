@@ -62,6 +62,15 @@ describe('build integration', () => {
       assert.ok(html.includes('Test Player'));
     });
 
+    it('PC page renders display_meta fields', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'meta-pc.html');
+      assert.ok(fs.existsSync(pcPath));
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(html.includes('Point Total'), 'Should render point_total label');
+      assert.ok(html.includes('150'), 'Should render point_total value');
+      assert.ok(html.includes('Meta PC'), 'Should render displayTitle without underscores');
+    });
+
     it('creates NPC page', () => {
       const npcPath = path.join(outputDir, 'docs', 'characters', 'npcs', 'test-npc.html');
       assert.ok(fs.existsSync(npcPath));
@@ -827,6 +836,32 @@ describe('build integration', () => {
       const exploreGridMatch = html.match(/class="explore-grid">([\s\S]*?)<\/div>\s*<\/div>/);
       const exploreGridHtml = exploreGridMatch ? exploreGridMatch[1] : '';
       assert.ok(!exploreGridHtml.includes('>Player Characters<'));
+    });
+
+    it('landing page shows The Fallen section for dead PCs', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('The Fallen'));
+    });
+
+    it('fallen section contains dead PC with displayTitle (no underscores)', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Dead PC'), 'Should show displayTitle without underscores');
+      assert.ok(!html.includes('>Dead_PC<'), 'Should not show raw filename with underscores');
+    });
+
+    it('fallen cards include SVG status icons', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('fallen-icon'), 'Should include fallen icon element');
+      assert.ok(html.includes('<svg'), 'Should include inline SVG');
+    });
+
+    it('active PCs appear in The Team, not The Fallen', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      const fallenIdx = html.indexOf('The Fallen');
+      assert.ok(fallenIdx !== -1, 'The Fallen section should exist');
+      const fallenHtml = html.slice(fallenIdx);
+      assert.ok(!fallenHtml.includes('Guy LeFleur'), 'Active PC should not be in The Fallen');
+      assert.ok(html.includes('Guy LeFleur'), 'Active PC should appear on the page');
     });
   });
 

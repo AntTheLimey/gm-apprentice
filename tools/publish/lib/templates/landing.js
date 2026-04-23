@@ -14,6 +14,7 @@ function statusClass(status) {
   const s = String(status).toLowerCase();
   if (s === 'dead' || s === 'deceased') return 'status-kia';
   if (s === 'missing' || s === 'unknown') return 'status-mia';
+  if (s === 'retired') return 'status-retired';
   return 'status-alive';
 }
 
@@ -22,8 +23,23 @@ function statusLabel(status) {
   const s = String(status).toLowerCase();
   if (s === 'dead' || s === 'deceased') return 'KIA';
   if (s === 'missing' || s === 'unknown') return 'MIA';
+  if (s === 'retired') return 'Retired';
   return 'Active';
 }
+
+const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
+
+const SVG_SKULL = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>';
+const SVG_SUNSET = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 16 Q8 8 12 10 Q16 8 20 16" fill="currentColor" opacity="0.6"/><line x1="12" y1="4" x2="12" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="5" x2="10" y2="9" stroke="currentColor" stroke-width="1"/><line x1="16" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1"/></svg>';
+const SVG_QUESTION = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>';
+
+const FALLEN_ICONS = {
+  dead: SVG_SKULL,
+  deceased: SVG_SKULL,
+  retired: SVG_SUNSET,
+  unknown: SVG_QUESTION,
+  missing: SVG_QUESTION,
+};
 
 function landingTemplate(pages, navFor, config, publishConfig) {
   const outputPath = 'index.html';
@@ -80,38 +96,54 @@ function landingTemplate(pages, navFor, config, publishConfig) {
 </div>`;
   }
 
-  // --- The Team ---
-  const pcs = getPCs(pages);
-  let rosterHtml = '';
-  if (pcs.length > 0) {
-    const pcCards = pcs.map(pc => {
+  // --- The Team / The Fallen ---
+  const allPCs = getPCs(pages);
+  const activePCs = allPCs.filter(pc => !FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
+  const fallenPCs = allPCs.filter(pc => FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
+
+  function renderPCCards(pcs, showFallenIcon) {
+    return pcs.map(pc => {
       const fm = pc.frontmatter;
-      const initials = getInitials(pc.title);
+      const initials = getInitials(pc.displayTitle);
       const attachPrefix = (config.attachmentsDir || '_attachments') + '/';
       const portraitStr = fm.portrait ? String(fm.portrait) : '';
       const portraitRel = portraitStr.startsWith(attachPrefix) ? portraitStr.slice(attachPrefix.length) : portraitStr;
       const portrait = fm.portrait
-        ? `<div class="pc-portrait"><img src="images/${escapeHtml(portraitRel)}" alt="${escapeHtml(pc.title)}"></div>`
+        ? `<div class="pc-portrait"><img src="images/${escapeHtml(portraitRel)}" alt="${escapeHtml(pc.displayTitle)}"></div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
       const badge = `<span class="status-badge ${statusClass(fm.status)}">${statusLabel(fm.status)}</span>`;
       const traits = fm.key_traits
         ? fm.key_traits.join(' \u00b7 ')
         : (fm.occupation || '');
       const link = pc.outputPath || '#';
+      const fallenIcon = showFallenIcon ? (FALLEN_ICONS[String(fm.status || '').toLowerCase()] || '') : '';
       return `
 <div class="pc-card">
   ${portrait}
-  <h3><a href="${escapeHtml(link)}">${escapeHtml(pc.title)}</a></h3>
+  <h3>${fallenIcon}<a href="${escapeHtml(link)}">${escapeHtml(pc.displayTitle)}</a></h3>
   ${badge}
   <div class="pc-traits">${escapeHtml(traits)}</div>
 </div>`;
     }).join('\n');
+  }
 
-    rosterHtml = `
+  let rosterHtml = '';
+  if (activePCs.length > 0) {
+    rosterHtml += `
 <div class="dashboard-section">
   <h2>The Team</h2>
   <div class="pc-roster">
-    ${pcCards}
+    ${renderPCCards(activePCs, false)}
+  </div>
+</div>`;
+  }
+
+  if (fallenPCs.length > 0) {
+    rosterHtml += `
+<div class="dashboard-section">
+  <h2>The Fallen</h2>
+  <div class="pc-roster">
+    ${renderPCCards(fallenPCs, true)}
   </div>
 </div>`;
   }
@@ -122,14 +154,14 @@ function landingTemplate(pages, navFor, config, publishConfig) {
   if (scoredNPCs.length > 0) {
     const npcCards = scoredNPCs.map(({ page, role }) => {
       const fm = page.frontmatter;
-      const initials = getInitials(page.title);
+      const initials = getInitials(page.displayTitle);
       const roleText = fm.occupation ? `${role} \u00b7 ${fm.occupation}` : role;
       const link = page.outputPath || '#';
       return `
 <div class="npc-card">
   <div class="npc-icon">${escapeHtml(initials)}</div>
   <div class="npc-info">
-    <h4><a href="${escapeHtml(link)}">${escapeHtml(page.title)}</a></h4>
+    <h4><a href="${escapeHtml(link)}">${escapeHtml(page.displayTitle)}</a></h4>
     <span class="npc-role">${escapeHtml(roleText)}</span>
   </div>
 </div>`;

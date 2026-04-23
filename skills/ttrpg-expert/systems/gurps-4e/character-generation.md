@@ -12,6 +12,19 @@ Comprehensive character creation assistant for GURPS 4th Edition.
 Supports any genre, power level, and campaign style. Works for
 both players building PCs and GMs drafting NPCs.
 
+## Published Site Defaults
+
+When creating a PC entity file, set `display_meta` to control
+which fields appear in the character's header on a published
+campaign site. Recommended for GURPS:
+
+```yaml
+display_meta: [point_total, age, TL]
+```
+
+If `display_meta` is omitted, the publish tool falls back to
+`[occupation, age, nationality]`.
+
 ## Campaign Context Awareness
 
 The character generation workflow is context-sensitive. If the

@@ -15,19 +15,19 @@ function locationTemplate(page, processedContent, navFor, config, imageMap) {
     : '';
 
   const breadcrumb = fm.parent_location
-    ? `<div class="breadcrumb">${escapeHtml(fm.parent_location.replace(/\[\[|\]\]/g, ''))} <span class="sep">&rsaquo;</span> ${escapeHtml(page.title)}</div>`
+    ? `<div class="breadcrumb">${escapeHtml(fm.parent_location.replace(/\[\[|\]\]/g, '').replace(/_/g, ' '))} <span class="sep">&rsaquo;</span> ${escapeHtml(page.displayTitle)}</div>`
     : '';
 
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.title)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
 </div>`;
 
   const content = `${headerCard}\n${breadcrumb}\n${badgeHtml}\n${processedContent.html}\n${processedContent.relationships}`;
 
   return baseShell({
-    title: page.title,
+    title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath),

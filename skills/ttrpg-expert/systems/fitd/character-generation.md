@@ -1,5 +1,18 @@
 # Forged in the Dark -- Character & Crew Generation
 
+## Published Site Defaults
+
+When creating a PC entity file, set `display_meta` to control
+which fields appear in the character's header on a published
+campaign site. Recommended for FitD:
+
+```yaml
+display_meta: [playbook, crew]
+```
+
+If `display_meta` is omitted, the publish tool falls back to
+`[occupation, age, nationality]`.
+
 ## Character Creation (8 Steps)
 
 ### Step 1: Choose a Playbook

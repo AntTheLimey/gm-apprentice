@@ -63,7 +63,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     const memberLinks = members.map(m => {
       const href = relativePath(currentDir, m.outputPath);
-      return `<li><a href="${href}">${escapeHtml(m.title)}</a></li>`;
+      return `<li><a href="${href}">${escapeHtml(m.displayTitle)}</a></li>`;
     }).join('\n');
     membersHtml = `<div class="members"><h3>Members</h3><ul>${memberLinks}</ul></div>`;
   }
@@ -71,13 +71,13 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.title)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
 </div>`;
 
   const content = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${processedContent.relationships}`;
 
   return baseShell({
-    title: page.title,
+    title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath),

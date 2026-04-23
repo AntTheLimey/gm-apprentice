@@ -25,8 +25,8 @@ These entity types have purpose-built page layouts.
 | `status` | Optional | active, retired, dead, npc |
 | `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
 | `player_name` | Optional | Real-world player name |
-| `point_total` | Optional | Character point total (defaults to 200) |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
+| `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
 
 The PC template renders all body content as collapsible accordion
 sections using the H2 headings as panel titles. Use H2 headings
