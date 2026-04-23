@@ -86,6 +86,11 @@ not this skill.** This skill provides default seed values only.
 | `_meta/vault-config.md` | Folder structure, naming conventions, campaign settings |
 | `_meta/index.md` | Master registry of every entity and narrative element |
 
+**Optional directories:** The vault may include an `_inbox/`
+staging area for source material being ingested by `vault-ingest`.
+Create it during vault setup if requested. See
+`shared/vault-structure.md`.
+
 ### Initialization
 
 On first contact with a vault:
@@ -204,6 +209,9 @@ tools used to read, write, and search differ.
 1. **Initialize schema** — Check `_meta/`. Seed if missing.
 2. **Survey** — Inventory input files: chapters, entity types,
    time periods. Flag schema misfits.
+   **Ignore `_inbox/`** — this folder is a staging area for
+   `vault-ingest`. Do not process, reorganize, or index its
+   contents. It is not part of the campaign vault structure.
 3. **Propose structure** — Present vault layout. Read
    `shared/vault-structure.md` for the default layout.
    Adapt to content.
