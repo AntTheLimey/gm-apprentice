@@ -36,28 +36,29 @@ Items are force-ranked by score. Higher score = do first.
 | 1 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done | |
 | 2 | Skill roles audit: clarify inter-skill relationships | 4 | 4 | M (2) | 6.0 | Idea | Review all 6 skill descriptions, routing, companion skill refs to ensure clear advisor/doer boundaries |
 | 3 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
-| 4 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea | Custom banner image per page via frontmatter |
-| 5 | Decompose arc-spotlight reference into focused files | 2 | 1 | S (1) | 5.0 | Experiment | Split arc-spotlight-reference.md into arc-model.md, spotlight-planning.md, touchpoint-framework.md for token efficiency |
-| 6 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done | |
-| 7 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea | Site-wide config for nav style and index page layout |
-| 8 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea | Visual timeline of recent events on the landing page |
-| 9 | ~~CoC/BRP SRD enrichment (Phase 5a)~~ | 4 | 3 | L (3) | 3.7 | Done | |
-| 10 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea | Generate timeline page from event/session dates in frontmatter |
-| 11 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea | Client-side search index so players can find content in published site |
-| 12 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
-| 13 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
-| 14 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea | Printable/viewable character sheet templates per system in published site |
-| 15 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
-| 16 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for clue entities with status, linked scenes, discovery conditions |
-| 17 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for in-world documents (letters, newspapers, journals) |
-| 18 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea | Auto-generated index pages per tag from frontmatter |
-| 19 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea | Extend benchmark methodology to all 7 skills, not just ttrpg-expert |
-| 20 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea | Interactive graph of entity relationships (d3/force-directed) |
-| 21 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea | Logo generation, og:image, social card previews for shared links |
-| 22 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned | Expand D&D files: more monster stat blocks, subclass features, encounter building |
-| 23 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea | Tool to convert published adventure PDFs into vault-compatible markdown |
-| 24 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea | First-run script to fetch CC-BY SRDs (D&D 5.2, FitD) into systems/ |
-| 25 | Publish tool: favicon generation from campaign image | 1 | 1 | M (2) | 1.5 | Idea | Auto-generate favicon from campaign hero image during publish |
+| 4 | Handout document type with image creation prompts | 4 | 2 | M (2) | 5.0 | Idea | Session-prep scene artifact: handout markdown + frontmatter linking to scene/session + auto-generated image prompt for DALL-E/Midjourney |
+| 5 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea | Custom banner image per page via frontmatter |
+| 6 | Decompose arc-spotlight reference into focused files | 2 | 1 | S (1) | 5.0 | Experiment | Split arc-spotlight-reference.md into arc-model.md, spotlight-planning.md, touchpoint-framework.md for token efficiency |
+| 7 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done | |
+| 8 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea | Site-wide config for nav style and index page layout |
+| 9 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea | Visual timeline of recent events on the landing page |
+| 10 | ~~CoC/BRP SRD enrichment (Phase 5a)~~ | 4 | 3 | L (3) | 3.7 | Done | |
+| 11 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea | Generate timeline page from event/session dates in frontmatter |
+| 12 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea | Client-side search index so players can find content in published site |
+| 13 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
+| 14 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
+| 15 | Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea | Printable/viewable character sheet templates per system in published site |
+| 16 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
+| 17 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for clue entities with status, linked scenes, discovery conditions |
+| 18 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for in-world documents (letters, newspapers, journals) |
+| 19 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea | Auto-generated index pages per tag from frontmatter |
+| 20 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea | Extend benchmark methodology to all 7 skills, not just ttrpg-expert |
+| 21 | Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea | Interactive graph of entity relationships (d3/force-directed) |
+| 22 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea | Logo generation, og:image, social card previews for shared links |
+| 23 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned | Expand D&D files: more monster stat blocks, subclass features, encounter building |
+| 24 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea | Tool to convert published adventure PDFs into vault-compatible markdown |
+| 25 | Auto-download SRDs on setup | 1 | 1 | M (2) | 1.5 | Idea | First-run script to fetch CC-BY SRDs (D&D 5.2, FitD) into systems/ |
+| 26 | Publish tool: favicon generation from campaign image | 1 | 1 | M (2) | 1.5 | Idea | Auto-generate favicon from campaign hero image during publish |
 
 ## Completed
 
