@@ -81,7 +81,7 @@ function landingTemplate(pages, navFor, config, publishConfig) {
   }
 
   // --- The Team / The Fallen ---
-  const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown']);
+  const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
 
   const allPCs = getPCs(pages);
   const activePCs = allPCs.filter(pc => !FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
