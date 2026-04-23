@@ -97,10 +97,9 @@ For reconstructed content (from vault-ingest), include a
 Reconstruction Note callout at the top of the document:
 
 ```markdown
-> [!warning] Reconstruction Note
-> This document was reconstructed from [source description].
-> Some details may be approximate. Review and promote to
-> AUTHORITATIVE when confirmed.
+> [!info] Reconstruction Note
+> Reconstructed from [source descriptions] on [date].
+> [limitations/gaps noted].
 ```
 
 ## Skill Ownership
