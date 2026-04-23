@@ -137,7 +137,7 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
   const items = valid.map(r => {
     const targetName = String(r.target).replace(/\[\[|\]\]/g, '');
     const targetPath = linkMap[targetName];
-    const escapedName = escapeHtml(targetName);
+    const escapedName = escapeHtml(targetName.replace(/_/g, ' '));
     const link = targetPath
       ? `<a href="${relativePath(currentDir, targetPath)}" class="entity-link">${escapedName}</a>`
       : escapedName;
