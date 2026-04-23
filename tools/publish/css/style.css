@@ -601,6 +601,12 @@ td .stat {
 .status-alive { background: #d4edda; color: #155724; }
 .status-kia { background: #f8d7da; color: #721c24; }
 .status-mia { background: #fff3cd; color: #856404; }
+.fallen-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.3em;
+  opacity: 0.7;
+}
 .pc-traits {
   font-size: 0.8rem;
   color: var(--text-muted);

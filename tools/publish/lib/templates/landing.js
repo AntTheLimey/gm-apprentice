@@ -80,11 +80,23 @@ function landingTemplate(pages, navFor, config, publishConfig) {
 </div>`;
   }
 
-  // --- The Team ---
-  const pcs = getPCs(pages);
-  let rosterHtml = '';
-  if (pcs.length > 0) {
-    const pcCards = pcs.map(pc => {
+  // --- The Team / The Fallen ---
+  const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown']);
+
+  const allPCs = getPCs(pages);
+  const activePCs = allPCs.filter(pc => !FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
+  const fallenPCs = allPCs.filter(pc => FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
+
+  const FALLEN_ICONS = {
+    dead: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>',
+    deceased: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>',
+    retired: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 16 Q8 8 12 10 Q16 8 20 16" fill="currentColor" opacity="0.6"/><line x1="12" y1="4" x2="12" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="5" x2="10" y2="9" stroke="currentColor" stroke-width="1"/><line x1="16" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1"/></svg>',
+    unknown: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>',
+    missing: '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>',
+  };
+
+  function renderPCCards(pcs, showFallenIcon) {
+    return pcs.map(pc => {
       const fm = pc.frontmatter;
       const initials = getInitials(pc.displayTitle);
       const attachPrefix = (config.attachmentsDir || '_attachments') + '/';
@@ -98,20 +110,34 @@ function landingTemplate(pages, navFor, config, publishConfig) {
         ? fm.key_traits.join(' \u00b7 ')
         : (fm.occupation || '');
       const link = pc.outputPath || '#';
+      const fallenIcon = showFallenIcon ? (FALLEN_ICONS[String(fm.status || '').toLowerCase()] || '') : '';
       return `
 <div class="pc-card">
   ${portrait}
-  <h3><a href="${escapeHtml(link)}">${escapeHtml(pc.displayTitle)}</a></h3>
+  <h3>${fallenIcon}<a href="${escapeHtml(link)}">${escapeHtml(pc.displayTitle)}</a></h3>
   ${badge}
   <div class="pc-traits">${escapeHtml(traits)}</div>
 </div>`;
     }).join('\n');
+  }
 
-    rosterHtml = `
+  let rosterHtml = '';
+  if (activePCs.length > 0) {
+    rosterHtml += `
 <div class="dashboard-section">
   <h2>The Team</h2>
   <div class="pc-roster">
-    ${pcCards}
+    ${renderPCCards(activePCs, false)}
+  </div>
+</div>`;
+  }
+
+  if (fallenPCs.length > 0) {
+    rosterHtml += `
+<div class="dashboard-section">
+  <h2>The Fallen</h2>
+  <div class="pc-roster">
+    ${renderPCCards(fallenPCs, true)}
   </div>
 </div>`;
   }

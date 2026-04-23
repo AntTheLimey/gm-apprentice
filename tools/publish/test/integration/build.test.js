@@ -828,6 +828,31 @@ describe('build integration', () => {
       const exploreGridHtml = exploreGridMatch ? exploreGridMatch[1] : '';
       assert.ok(!exploreGridHtml.includes('>Player Characters<'));
     });
+
+    it('landing page shows The Fallen section for dead PCs', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('The Fallen'));
+    });
+
+    it('fallen section contains dead PC with displayTitle (no underscores)', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('Dead PC'), 'Should show displayTitle without underscores');
+      assert.ok(!html.includes('>Dead_PC<'), 'Should not show raw filename with underscores');
+    });
+
+    it('fallen cards include SVG status icons', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('fallen-icon'), 'Should include fallen icon element');
+      assert.ok(html.includes('<svg'), 'Should include inline SVG');
+    });
+
+    it('active PCs appear in The Team, not The Fallen', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      // Find The Team section and verify Guy LeFleur is in it
+      const teamMatch = html.match(/The Team[\s\S]*?<\/div>\s*<\/div>/);
+      const teamHtml = teamMatch ? teamMatch[0] : '';
+      assert.ok(teamHtml.includes('Guy LeFleur'), 'Active PC should be in The Team');
+    });
   });
 
   describe('auto-exclude fixture', () => {
