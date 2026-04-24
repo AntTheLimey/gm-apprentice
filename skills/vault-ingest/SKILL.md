@@ -14,6 +14,7 @@ can process. Adapter + Orchestrator pattern.
 
 **Skill references:** Read before each phase:
 - `references/classification-taxonomy.md` — Phase 1
+- `references/image-handling.md` — Phase 1 (when images present)
 - `references/keeper-interview.md` — Phase 4
 - `references/synthesis-templates.md` — Phase 5
 
@@ -205,7 +206,7 @@ check. Don't force.
 | 1-2 | Sonnet | Classification, grouping |
 | 3-6 | Opus (inherit) | Judgment, synthesis, GM interaction |
 | Entity subagents | Sonnet | Structured file creation |
-| Image extraction | Sonnet | Vision tasks |
+| Image filing | Sonnet | Format conversion, filename matching |
 
 ## Sub-agent Opportunity
 
