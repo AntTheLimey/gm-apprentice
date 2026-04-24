@@ -70,11 +70,12 @@ taxonomy and heuristics.
 check results, or specific PC actions, those lines are play
 records regardless of what surrounds them.
 
-**Image handling:** File every image in `_attachments/` with
-correct subfolder and link to its entity. Attempt extraction
-on data-bearing images (character sheets, legible handwriting,
-labelled maps). Flag extracted content for GM confirmation in
-Phase 4. Artistic images: file and link only.
+**Image handling:** Read `references/image-handling.md` for
+full procedures. Summary: classify every image file, convert
+non-web-safe formats (best-effort via `sips` or `magick`),
+match to entities by slugified filename, file in the correct
+`_attachments/` subfolder, and link to matched entities.
+Unmatched images go on the Phase 4 keeper interview list.
 
 **Output:** Classified manifest — summary table of every source
 item with classification, brief content summary, and time-period
