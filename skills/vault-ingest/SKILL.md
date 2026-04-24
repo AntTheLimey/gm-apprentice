@@ -119,6 +119,13 @@ confirmed play events.
 - Confirmed events (with source citations)
 - Gaps (things prep says could have happened but unconfirmed)
 
+**Image linking:** For each entity created or updated in this
+bucket, check filed images (from Phase 1) for matches. Single
+match → set `portrait`. Multiple matches with clear default
+(unsuffixed filename) → set `portrait`, embed rest via
+`![[filename]]`. Multiple matches with no default → defer
+portrait selection to Phase 4. See `references/image-handling.md`.
+
 ### Phase 4: Keeper Interview
 
 The skill's exclusive value. Read
@@ -134,6 +141,14 @@ The skill's exclusive value. Read
 
 First resolve any unsorted items from Phase 2 before starting
 the play-event interview.
+
+**Image questions:** After resolving unsorted items and before
+starting the play-event interview, resolve image assignments:
+1. Show each unmatched image — ask the GM which entity it
+   belongs to (or "atmosphere art" → `_attachments/documents/`)
+2. For entities with multiple images and no clear default —
+   ask the GM to pick the portrait
+See `references/image-handling.md` for question templates.
 
 ### Phase 5: Synthesize & Hand Off
 
