@@ -71,6 +71,31 @@ Rename the filed image to match the slug convention:
 lowercase, hyphens, preserving any variant suffix. Example:
 `Ronnie Vint Young.png` → `_attachments/characters/ronnie-vint-young.png`
 
+## Duplicate Detection
+
+Before copying an image to `_attachments/`, check whether a
+file with the same name already exists at the destination.
+
+**Identical file:** If the existing and new files are the same
+(same size and content), skip the copy silently. The image is
+already filed — no action needed.
+
+**Different file, same name:** Flag for the GM in Phase 4:
+
+> "`ronnie-vint.jpg` already exists in `_attachments/characters/`
+> but the new image looks different. Replace the existing one,
+> keep both (I'll rename the new one), or skip the new one?"
+
+If the GM chooses "keep both," rename the new image with a
+numeric suffix: `ronnie-vint-2.jpg`.
+
+**Same-batch duplicates:** If the same filename appears more
+than once in a single ingestion batch, keep the first
+occurrence and skip the rest with a note:
+
+> "Found duplicate `ronnie-vint.jpg` in the batch — using
+> the first copy."
+
 ## Entity Linking
 
 ### Single image for an entity
