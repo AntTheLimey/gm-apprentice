@@ -201,12 +201,16 @@ check. Don't force.
 
 ## Model Selection
 
-| Phase | Model | Why |
+Match model capability to task complexity. These are
+guidelines, not requirements — use whatever models are
+available and appropriate for your setup.
+
+| Phase | Complexity | Why |
 |---|---|---|
-| 1-2 | Sonnet | Classification, grouping |
-| 3-6 | Opus (inherit) | Judgment, synthesis, GM interaction |
-| Entity subagents | Sonnet | Structured file creation |
-| Image filing | Sonnet | Format conversion, filename matching |
+| 1-2 | Light | Classification, grouping — pattern matching |
+| 3-6 | Heavy | Judgment, synthesis, GM interaction |
+| Entity subagents | Light | Structured file creation from templates |
+| Image filing | Light | Format conversion, filename matching |
 
 ## Sub-agent Opportunity
 
