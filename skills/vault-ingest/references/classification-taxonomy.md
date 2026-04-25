@@ -13,7 +13,7 @@ distinct section within a document gets one classification.
 | Research/brainstorm | Worldbuilding Q&A, "what if" explorations | NOT CANON unless confirmed | Questions and answers about possibilities; no play indicators |
 | Keeper recollection | GM's memory of what happened | AUTHORITATIVE | First person ("I remember", "the group did"), past tense, specific details |
 | Character sheet | PC or NPC stats, inventory, backstory | DRAFT until placed in timeline | Structured data: attributes, skills, equipment lists |
-| Image/map | Visual reference material | Attachment — no canon status | Binary file or embedded image |
+| Image/map | Visual reference material — portraits, scene art, location shots, maps | Attachment — no canon status | Binary file (jpg, png, webp, gif, svg, heic, raw, tiff, bmp); classify then process per `image-handling.md` |
 | Spreadsheet/data | Tracking sheets, encounter tables | DRAFT — classify by content | Tabular data, formulas, tracking columns |
 
 ## Key Heuristics

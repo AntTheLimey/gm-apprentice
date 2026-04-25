@@ -14,6 +14,7 @@ can process. Adapter + Orchestrator pattern.
 
 **Skill references:** Read before each phase:
 - `references/classification-taxonomy.md` — Phase 1
+- `references/image-handling.md` — Phase 1 (when images present)
 - `references/keeper-interview.md` — Phase 4
 - `references/synthesis-templates.md` — Phase 5
 
@@ -70,11 +71,12 @@ taxonomy and heuristics.
 check results, or specific PC actions, those lines are play
 records regardless of what surrounds them.
 
-**Image handling:** File every image in `_attachments/` with
-correct subfolder and link to its entity. Attempt extraction
-on data-bearing images (character sheets, legible handwriting,
-labelled maps). Flag extracted content for GM confirmation in
-Phase 4. Artistic images: file and link only.
+**Image handling:** Read `references/image-handling.md` for
+full procedures. Summary: classify every image file, convert
+non-web-safe formats (best-effort via `sips` or `magick`),
+match to entities by slugified filename, file in the correct
+`_attachments/` subfolder, and link to matched entities.
+Unmatched images go on the Phase 4 keeper interview list.
 
 **Output:** Classified manifest — summary table of every source
 item with classification, brief content summary, and time-period
@@ -118,6 +120,13 @@ confirmed play events.
 - Confirmed events (with source citations)
 - Gaps (things prep says could have happened but unconfirmed)
 
+**Image linking:** For each entity created or updated in this
+bucket, check filed images (from Phase 1) for matches. Single
+match → set `portrait`. Multiple matches with clear default
+(unsuffixed filename) → set `portrait`, embed rest via
+`![[filename]]`. Multiple matches with no default → defer
+portrait selection to Phase 4. See `references/image-handling.md`.
+
 ### Phase 4: Keeper Interview
 
 The skill's exclusive value. Read
@@ -133,6 +142,14 @@ The skill's exclusive value. Read
 
 First resolve any unsorted items from Phase 2 before starting
 the play-event interview.
+
+**Image questions:** After resolving unsorted items and before
+starting the play-event interview, resolve image assignments:
+1. Show each unmatched image — ask the GM which entity it
+   belongs to (or "atmosphere art" → `_attachments/documents/`)
+2. For entities with multiple images and no clear default —
+   ask the GM to pick the portrait
+See `references/image-handling.md` for question templates.
 
 ### Phase 5: Synthesize & Hand Off
 
@@ -184,12 +201,16 @@ check. Don't force.
 
 ## Model Selection
 
-| Phase | Model | Why |
+Match model capability to task complexity. These are
+guidelines, not requirements — use whatever models are
+available and appropriate for your setup.
+
+| Phase | Complexity | Why |
 |---|---|---|
-| 1-2 | Sonnet | Classification, grouping |
-| 3-6 | Opus (inherit) | Judgment, synthesis, GM interaction |
-| Entity subagents | Sonnet | Structured file creation |
-| Image extraction | Sonnet | Vision tasks |
+| 1-2 | Light | Classification, grouping — pattern matching |
+| 3-6 | Heavy | Judgment, synthesis, GM interaction |
+| Entity subagents | Light | Structured file creation from templates |
+| Image filing | Light | Format conversion, filename matching |
 
 ## Sub-agent Opportunity
 
