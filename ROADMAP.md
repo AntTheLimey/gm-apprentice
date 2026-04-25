@@ -67,8 +67,8 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
-- ~~Remove model-specific prescriptions from all skills~~ — Replaced hardcoded model names with complexity guidance across vault-ingest (PR #26), session-wrapup, and removed inline model lines
-- ~~Skill roles audit~~ — Added skill taxonomy table to README, rewrote ttrpg-expert description to clarify advisor-only boundary, documented all skill roles and boundaries
+- ~~Remove model-specific prescriptions from all skills~~ — Replaced hardcoded model names with complexity guidance across vault-ingest (PR #26), session-wrapup, and removed inline model lines (PR #27)
+- ~~Skill roles audit~~ — Added skill taxonomy table to README, rewrote ttrpg-expert description to clarify advisor-only boundary, documented all skill roles and boundaries (PR #27)
 - ~~Publish tool: displayTitle + template overhaul~~ — displayTitle on all page objects, data-driven `display_meta` PC meta row, Team/Fallen landing split with SVG status icons (PR #25)
 - ~~CoC/BRP SRD enrichment (Phase 5a)~~ — already covered by v3 terminology fixes, 18 content files, Regency variant overlay
 - ~~Publish tool: Event dedicated template~~ — dedicated event template, vault template, session-lifecycle event decomposition (PR #20)

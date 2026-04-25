@@ -28,7 +28,7 @@ generation to campaign management and session lifecycle support.
 | **Advisor** | ttrpg-expert | Rules, GM craft, RPG techniques | Pure reference — no vault writes, no dependencies on other skills. Other skills read its references but it never calls them. |
 | **Campaign organization** | campaign-organizer | Vault structure, entity filing, knowledge graph | Owns the vault schema and file layout. Creates and restructures — doesn't generate narrative content. |
 | **Quality assurance** | campaign-qa | Canon auditing, timeline validation, graph health | Detects problems — doesn't fix them. Hands off to campaign-organizer (structure) or ttrpg-expert (content) for repairs. |
-| **Session lifecycle** | session-prep | Between-session preparation and reconciliation | Bridges wrapup to next session. Reads ttrpg-expert references for creative planning. |
+| **Session lifecycle** | session-prep | Between-session preparation and reconciliation | Bridges wrap-up to next session. Reads ttrpg-expert references for creative planning. |
 | | session-play | At-the-table GM support | Speed-optimised. Short responses, no unsolicited analysis. Captures play notes for session-wrapup. |
 | | session-wrapup | Post-session processing | Turns raw play notes into canon. Creates/updates entities, events, timeline. Feeds session-prep. |
 | **Content ingestion** | vault-ingest | Old materials to structured vault | Adapter — classifies, interviews GM, synthesizes. Hands off to campaign-organizer and session-wrapup. |
