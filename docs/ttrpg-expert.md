@@ -70,6 +70,29 @@ Reach for ttrpg-expert when you need to:
 - "Are there any Chekhov's guns I've forgotten about?"
 - "Review the timeline of events in Chapter 2 for contradictions"
 
+## Capabilities
+
+| Function | Reference file | What it does |
+|----------|---------------|-------------|
+| Rules lookup | `systems/*/rules-reference.md` | System-specific rules, mechanics, stat lookups |
+| Character building | `systems/*/character-generation.md`, chargen kits | Full PC/NPC creation with point budgets, validation |
+| Character validation | `systems/*/character-generation.md` | Budget checks, prerequisite validation, combo legality |
+| NPC generation | `npc-generation.md` | 3-Line (quick), AIMS (recurring), Five-Component (critical) with stat blocks |
+| Content generation | `content-generation.md` | Scenes, locations, factions, items — templated creation with continuity checks |
+| Scenario writing | `scenario-writing.md` | Node-based adventure outlines, NPC rosters, timelines, clue paths |
+| Handout writing | `handouts-and-props.md` | In-character documents (letters, newspapers, diaries) with voice and prop notes |
+| Continuity checking | `continuity-engine.md` | 11-category sweep, canon grounding, Chekhov protocol for stale threads |
+| Arc and spotlight | `arc-spotlight-reference.md` | Five-stage PC arc model, spotlight balance tracking, B/C plot assignment |
+| Active play techniques | `active-play-management.md` | Fail forward patterns, improvisation guidance |
+| Scene patterns | `scene-encounter-patterns.md` | Open interaction windows, encounter design frameworks |
+| World evolution | `world-evolution.md` | Post-session world update checklist |
+| Campaign structure | `campaign-structure.md` | Campaign/chapter/session hierarchy guidance |
+| Canon management | `canon-management.md` | DRAFT to AUTHORITATIVE to SUPERSEDED lifecycle |
+| Relationship patterns | `relationship-patterns.md` | Entity relationship types and graph patterns |
+| Random generation | `random-generation.md` | Inspiration tables, random content |
+| GM session patterns | `gm-session-patterns.md` | Session pacing, table management techniques |
+| RPG terminology | `rpg-terminology.md` | Shared vocabulary definitions |
+
 ## What to Expect
 
 When you ask a rules question, Claude will cite the specific source (e.g., "Basic Set — Characters, p.14" for GURPS).

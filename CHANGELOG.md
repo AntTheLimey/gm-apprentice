@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.5] — 2026-04-25
+
+### Added
+
+- **Skill taxonomy table** in README — documents all skill categories, roles, and boundaries with the advisor/doer distinction
+- **ttrpg-expert capabilities table** in `docs/ttrpg-expert.md` — maps all 18 functions to their reference files
+- **the-midwife** added to roadmap — planned adventure creation skill with guided creative persona
+- vault-ingest added to README Skills table (was missing)
+
+### Changed
+
+- ttrpg-expert description rewritten to clarify advisor-only role with zero dependencies on other skills
+- Removed all remaining hardcoded model names: inline `**Model:** Sonnet` from vault-ingest Phases 1-2, `Sonnet/Haiku` from session-wrapup sub-agent guidance
+
+---
+
 ## [1.4.4] — 2026-04-25
 
 ### Added
@@ -181,6 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.5]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.4...v1.4.5
 [1.4.4]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.3...v1.4.4
 [1.4.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.1...v1.4.2

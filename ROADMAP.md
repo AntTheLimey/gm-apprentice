@@ -35,9 +35,10 @@ Items are force-ranked by score. Higher score = do first.
 |------|:------:|:-------:|:------:|:-----:|--------|-------|
 | ~~Publish tool: displayTitle + template overhaul~~ | 5 | 5 | S (1) | 15.0 | Done | |
 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done | |
-| Remove model-specific prescriptions from all skills | 3 | 3 | S (1) | 9.0 | Idea | Replace hardcoded model names (Sonnet/Opus) in model selection tables with complexity guidance (Light/Heavy). Skills should be model-agnostic — users may not be on Claude. Vault-ingest done in PR #26. |
-| Skill roles audit: clarify inter-skill relationships | 4 | 4 | M (2) | 6.0 | Idea | Review all 6 skill descriptions, routing, companion skill refs to ensure clear advisor/doer boundaries |
+| ~~Remove model-specific prescriptions from all skills~~ | 3 | 3 | S (1) | 9.0 | Done | |
+| ~~Skill roles audit: clarify inter-skill relationships~~ | 4 | 4 | M (2) | 6.0 | Done | |
 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
+| the-midwife: guided adventure creation skill | 4 | 2 | M (2) | 5.0 | Idea | Creative midwife persona — draws ideas out of the GM through guided conversation, shapes them into a playable starting point with a vault/folder. Supports campaigns, one-shots, few-shots. |
 | Handout document type with image creation prompts | 4 | 2 | M (2) | 5.0 | Idea | Session-prep scene artifact: handout markdown + frontmatter linking to scene/session + auto-generated image prompt for DALL-E/Midjourney |
 | Publish tool: thematic cause-of-death icons for The Fallen | 2 | 1 | S (1) | 5.0 | Idea | New optional PC frontmatter field `cause_of_death` (combat, madness, eldritch, disease, etc.) with thematic SVG icons on Fallen cards. Builds on status-category icons shipping in rank 1. |
 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea | Custom banner image per page via frontmatter |
@@ -66,6 +67,8 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~Remove model-specific prescriptions from all skills~~ — Replaced hardcoded model names with complexity guidance across vault-ingest (PR #26), session-wrapup, and removed inline model lines (PR #27)
+- ~~Skill roles audit~~ — Added skill taxonomy table to README, rewrote ttrpg-expert description to clarify advisor-only boundary, documented all skill roles and boundaries (PR #27)
 - ~~Publish tool: displayTitle + template overhaul~~ — displayTitle on all page objects, data-driven `display_meta` PC meta row, Team/Fallen landing split with SVG status icons (PR #25)
 - ~~CoC/BRP SRD enrichment (Phase 5a)~~ — already covered by v3 terminology fixes, 18 content files, Regency variant overlay
 - ~~Publish tool: Event dedicated template~~ — dedicated event template, vault template, session-lifecycle event decomposition (PR #20)

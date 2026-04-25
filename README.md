@@ -16,7 +16,24 @@ generation to campaign management and session lifecycle support.
 | **session-prep** | Between-session preparation — reconciles last session's results, reviews PC arcs, scans threads, flags gaps, builds prep package. Works with Obsidian or plain filesystem. | Recommended |
 | **session-play** | At-the-table GM support — fast lookups, rules assist, on-the-fly NPC/location generation, note capture. Speed-optimised for live play. | Optional |
 | **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward identification. Works with Obsidian or plain filesystem. | Recommended |
+| **vault-ingest** | Ingest old campaign materials (notes, character sheets, images, transcripts) into a structured vault. Interviews the GM to recover what actually happened. | Recommended |
 | **publish-site** | Publish your campaign vault as a static website on GitHub Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
+
+### Skill Taxonomy
+
+**ttrpg-expert is the advisor** with zero dependencies on other skills. Everything else is a doer with a specific function.
+
+| Category | Skill | Role | Boundary |
+|----------|-------|------|----------|
+| **Advisor** | ttrpg-expert | Rules, GM craft, RPG techniques | Pure reference — no vault writes, no dependencies on other skills. Other skills read its references but it never calls them. |
+| **Campaign organization** | campaign-organizer | Vault structure, entity filing, knowledge graph | Owns the vault schema and file layout. Creates and restructures — doesn't generate narrative content. |
+| **Quality assurance** | campaign-qa | Canon auditing, timeline validation, graph health | Detects problems — doesn't fix them. Hands off to campaign-organizer (structure) or ttrpg-expert (content) for repairs. |
+| **Session lifecycle** | session-prep | Between-session preparation and reconciliation | Bridges wrap-up to next session. Reads ttrpg-expert references for creative planning. |
+| | session-play | At-the-table GM support | Speed-optimised. Short responses, no unsolicited analysis. Captures play notes for session-wrapup. |
+| | session-wrapup | Post-session processing | Turns raw play notes into canon. Creates/updates entities, events, timeline. Feeds session-prep. |
+| **Content ingestion** | vault-ingest | Old materials to structured vault | Adapter — classifies, interviews GM, synthesizes. Hands off to campaign-organizer and session-wrapup. |
+| **Content publication** | publish-site | Vault to static website | Reads vault, generates HTML. No vault writes. |
+| **Adventure creation** | the-midwife *(planned)* | Idea to starting adventure + vault | Creative midwife — draws ideas out of the GM, shapes them into a playable starting point. |
 
 ## Supported Game Systems
 
