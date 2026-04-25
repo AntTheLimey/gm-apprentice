@@ -61,8 +61,6 @@ exist, process each through Phases 3-6 before the next
 
 ### Phase 1: Survey & Classify
 
-**Model:** Sonnet (classification is pattern matching)
-
 Read all source material. Classify every document or section.
 Read `references/classification-taxonomy.md` for the full
 taxonomy and heuristics.
@@ -84,8 +82,6 @@ guess. Present to GM: "Does this look right? Any
 misclassifications?"
 
 ### Phase 2: Sort into Buckets
-
-**Model:** Sonnet (grouping by signals)
 
 Group classified items by chapter/session/time period.
 

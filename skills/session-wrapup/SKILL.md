@@ -131,7 +131,7 @@ if reconcile completes).
 
 Step 4 parallelizes well — entity creation, updates, and
 timeline are independent writes. If Agent tool available,
-spawn sub-agents (Sonnet/Haiku) for concurrent entity work.
+spawn sub-agents (light model) for concurrent entity work.
 If unavailable (e.g., Desktop), run sequentially.
 
 ## Recap Style Guide
