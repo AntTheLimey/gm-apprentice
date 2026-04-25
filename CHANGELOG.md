@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.4] — 2026-04-25
+
+### Added
+
+- **vault-ingest image handling** — images arriving via folder, one-at-a-time, or mixed batch are classified, filed to the correct `_attachments/` subfolder, and linked to entities via `portrait` frontmatter or `![[embed]]` body syntax
+  - Format conversion (best-effort via `sips`/`magick`, skip with message if unavailable)
+  - Filename-based entity matching (exact slug → batch → suffix strip)
+  - Duplicate detection (identical files skipped, different-content conflicts flagged for GM)
+  - Keeper interview questions for unmatched images and portrait selection
+  - New reference: `skills/vault-ingest/references/image-handling.md`
+- Roadmap item: remove model-specific prescriptions from all skills
+
+### Changed
+
+- vault-ingest model selection table uses complexity guidance (Light/Heavy) instead of hardcoded model names
+- Classification taxonomy Image/map row expanded with supported formats and reference pointer
+
+---
+
+## [1.4.3] — 2026-04-23
+
+### Added
+
+- **displayTitle + template overhaul** — `displayTitle` on all page objects, data-driven `display_meta` PC meta row, Team/Fallen landing split with SVG status icons
+- `display_meta` field added to PC entity schema and publish-site schema reference
+- Character generation references updated with `display_meta` defaults
+
+### Changed
+
+- All publish templates switched to `displayTitle` for rendering
+- Landing page roster split into The Team and The Fallen sections
+- Relationship link display text replaces underscores with spaces
+
+---
+
+## [1.4.2] — 2026-04-22
+
+### Added
+
+- **vault-ingest skill** — ingests old campaign materials (notes, character sheets, images, transcripts, spreadsheets) into a structured vault via a six-phase pipeline: survey, sort, extract, keeper interview, synthesize, review
+  - Classification taxonomy, keeper interview technique, and synthesis templates as references
+  - Benchmark questions and campaign fixtures
+- **Session document chain** — standardised naming and type conventions for session files (Plan, Play Notes, Wrap-Up)
+  - Shared reconcile procedure for GM review workflow
+  - All three session skills updated for document chain
+  - Benchmark campaign converted to document chain format
+
+### Changed
+
+- Plugin description updated for seven-skill lineup
+- vault-structure.md updated with `_inbox/` and document chain naming
+
+---
+
+## [1.4.1] — 2026-04-21
+
+### Added
+
+- **Arc-spotlight reference** — pure GM framework reference for dramatic arc planning, spotlight rotation, and session pacing
+- Creative planning benchmark questions for session-prep
+
+### Changed
+
+- **session-prep refactored** — unified gather-plan-verify workflow replacing the older session-planner approach
+  - Prep note template rewritten with progressive write sections
+  - System-specific arc drivers folded into session-procedures files
+- ttrpg-expert routing updated for advisor/doer split
+- Compaction pass on arc-spotlight-reference and session-prep workflow
+
+### Removed
+
+- `skills/session-prep/references/session-planner.md` — replaced by arc-spotlight-reference + unified workflow
+
+---
+
 ## [1.4.0] — 2026-04-20
 
 ### Added
@@ -106,6 +181,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.4]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.3...v1.4.4
+[1.4.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.2...v1.4.3
+[1.4.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.1...v1.4.2
+[1.4.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.2.0...v1.3.0
