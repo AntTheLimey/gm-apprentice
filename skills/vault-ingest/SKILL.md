@@ -147,6 +147,11 @@ starting the play-event interview, resolve image assignments:
    ask the GM to pick the portrait
 See `references/image-handling.md` for question templates.
 
+**PC arc questions:** After image resolution and before starting
+the play-event interview, ask one question per active PC about
+their personal arc across the ingested period. See
+`references/keeper-interview.md` § PC Narrative Arcs.
+
 ### Phase 5: Synthesize & Hand Off
 
 Read `references/synthesis-templates.md` for the output format.
@@ -157,6 +162,10 @@ Read `references/synthesis-templates.md` for the output format.
    `shared/session-document-chain.md`
 3. Follow `session-wrapup` workflow to produce the Wrap-Up
    file and create/update entities
+4. For each PC active during the ingested period, write a
+   consolidated character story entry per
+   `references/synthesis-templates.md` § Character Story
+   Backstory Entries
 
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.

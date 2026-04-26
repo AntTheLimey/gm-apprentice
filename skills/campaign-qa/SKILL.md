@@ -226,6 +226,10 @@ for the full procedure.
   at `wrap-up` status for multiple prep cycles (review was
   deferred too long), session index `documents:` links pointing
   to files that don't exist
+- Character story file validation: active PCs missing a
+  companion `{Name}_Story.md` file, story files where
+  `asOfSession` is more than 1 session behind the latest
+  wrap-up
 
 ### Full Audit
 

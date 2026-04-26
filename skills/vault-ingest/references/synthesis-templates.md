@@ -106,3 +106,72 @@ content, not live capture.
 6. **Scene-by-scene when possible.** If the source material or
    keeper interview reveals a scene structure, use it. If not,
    organize by topic or entity cluster.
+
+## Character Story Backstory Entries
+
+In addition to Play Notes, Phase 5 produces a consolidated
+story entry for each PC active during the ingested period.
+These are written directly to the PC's story file, not to the
+Play Notes output.
+
+### Format
+
+Frontmatter:
+
+```yaml
+---
+type: character-story
+character: "[[{Name}]]"
+campaign: "Campaign Name"
+source_confidence: DRAFT
+lastUpdated: "{last ingested session}"
+asOfSession: "{last ingested session}"
+createdSession: "{first ingested session}"
+---
+```
+
+Body:
+
+```markdown
+## Sessions {first}–{last} — {Summary Title}
+
+{Narrative prose covering this character's arc across the
+ingested period. Length proportional to available detail —
+no padding, no fabrication. If sources are sparse, write less
+rather than inventing specifics.}
+
+<!-- sparse source material -->
+{Include this comment only when the entry is thin due to
+limited source data, not a gap in the skill's work.}
+```
+
+### Synthesis Rules (Story Entries)
+
+1. **Compile from all sources.** Draw on extracted play events,
+   keeper interview answers (especially § PC Narrative Arcs),
+   and any per-character source material.
+
+2. **One consolidated entry per PC.** Headed
+   `## Sessions {first}–{last} — {Summary Title}`. Not
+   per-session entries — historical notes rarely have that
+   granularity.
+
+3. **Genre voice from campaign overview.** Same voice matching
+   as session-wrapup uses. See
+   `shared/character-story-format.md` for the genre-voice
+   table.
+
+4. **Scale prose to available data.** Rich sources get longer
+   entries. Sparse sources get shorter entries with a
+   `<!-- sparse source material -->` marker. Never fabricate
+   detail to fill space.
+
+5. **Create file from template if needed.** Use
+   `shared/templates/character-story.md`. If a story file
+   already exists (e.g., from a prior ingestion run or live
+   sessions), append the new consolidated entry below existing
+   content.
+
+6. **Follow character-story-format.md.** Character names not
+   player names, past tense for events, wiki-links for entity
+   references, character's perspective.

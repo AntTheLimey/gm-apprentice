@@ -354,7 +354,28 @@ required fields. For each entity:
 - Flag entities still marked as STUB that have been
   referenced in played sessions (they need fleshing out)
 
-### Step 4: Relationship Quality
+### Step 4: Character Story Validation
+
+**Story file existence:** For every PC entity where `status`
+is not `dead` or `retired`, verify that a companion story file
+exists at `Characters/PCs/{Name}_Story.md`.
+
+- Severity: **Warning**
+- Proposed fix: "Create story file from template for
+  [[{Name}]]" — use `shared/templates/character-story.md`
+
+**Story file recency:** For every story file that exists,
+read its `asOfSession` frontmatter field. Compare to the
+latest wrap-up's session number (from the session index or
+most recent `type: session-wrap-up` file).
+
+- If the story file is more than 1 session behind, flag it
+- Severity: **Warning**
+- Proposed fix: "Story file for [[{Name}]] is current to
+  session {X} but latest wrap-up is session {Y} — run
+  vault-ingest on the intervening wrap-ups to catch up"
+
+### Step 5: Relationship Quality
 
 **Generic types:** Flag uses of `associated_with` or similar
 vague relationship types where a more specific type exists
@@ -369,7 +390,7 @@ traversal. Two NPCs who share a location don't need a direct
 `associated_with` edge — the shared location is the
 relationship.
 
-### Step 5: Compile Findings
+### Step 6: Compile Findings
 
 For each issue:
 1. Note the entity/entities and files involved
