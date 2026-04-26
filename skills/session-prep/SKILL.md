@@ -10,6 +10,16 @@ Workflow: Reconcile → Gather → Plan → Verify → Handoff.
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
 
+**Version check:** On first invocation, read
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md`. If the vault
+version is lower or absent, announce the mismatch and hand off
+to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+proceeding with prep. Resume after migration completes. Skip
+this check if `_meta/` doesn't exist (that's first-time setup,
+not migration).
+
 **Document chain:** Read `shared/session-document-chain.md`.
 Session-prep writes Plan files and updates the session index.
 It reads previous Wrap-Up files for context — normally never
