@@ -124,7 +124,7 @@ type: character-story
 character: "[[{Name}]]"
 campaign: "Campaign Name"
 source_confidence: DRAFT
-lastUpdated: ""
+lastUpdated: "{last ingested session}"
 asOfSession: "{last ingested session}"
 createdSession: "{first ingested session}"
 ---
