@@ -1,10 +1,10 @@
 {
   "name": "gm-apprentice-publish",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Static site generator for gm-apprentice campaign vaults",
   "main": "lib/index.js",
   "bin": {
-    "gm-apprentice-publish": "./bin/gm-publish.js"
+    "gm-apprentice-publish": "bin/gm-publish.js"
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
@@ -13,7 +13,13 @@
   "engines": {
     "node": ">=22"
   },
-  "keywords": ["ttrpg", "campaign", "static-site", "obsidian", "markdown"],
+  "keywords": [
+    "ttrpg",
+    "campaign",
+    "static-site",
+    "obsidian",
+    "markdown"
+  ],
   "author": "AntTheLimey",
   "license": "MIT",
   "dependencies": {
