@@ -15,6 +15,7 @@ distinct section within a document gets one classification.
 | Character sheet | PC or NPC stats, inventory, backstory | DRAFT until placed in timeline | Structured data: attributes, skills, equipment lists |
 | Image/map | Visual reference material — portraits, scene art, location shots, maps | Attachment — no canon status | Binary file (jpg, png, webp, gif, svg, heic, raw, tiff, bmp); classify then process per `image-handling.md` |
 | Spreadsheet/data | Tracking sheets, encounter tables | DRAFT — classify by content | Tabular data, formulas, tracking columns |
+| Session wrap-up | Existing Wrap-Up file from a prior session | AUTHORITATIVE | Contains Narrative Recap, PC Carry-Forward, World State sections; `type: session-wrap-up` frontmatter |
 
 ## Key Heuristics
 
