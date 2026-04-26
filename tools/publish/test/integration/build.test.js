@@ -1027,4 +1027,75 @@ describe('build integration', () => {
       assert.ok(!html.includes('treasure'));
     });
   });
+
+  describe('with-story fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-story-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-story'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Story Test',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: {
+          'Characters/PCs': 'characters/pcs',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('creates PC page with tab bar when story exists', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'lord-blackwood.html');
+      assert.ok(fs.existsSync(pcPath));
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(html.includes('tab-bar'), 'Should have tab bar');
+      assert.ok(html.includes('Character Sheet'), 'Should have Sheet tab');
+      assert.ok(html.includes('Story'), 'Should have Story tab');
+    });
+
+    it('renders story content in story tab', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'lord-blackwood.html');
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(html.includes('The Whitby Letter'), 'Should contain session 1 title');
+      assert.ok(html.includes('The Hastings Séance'), 'Should contain session 2 title');
+      assert.ok(html.includes('story-prose'), 'Should have prose container');
+    });
+
+    it('strips GM Notes from story content', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'lord-blackwood.html');
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(!html.includes('cult connection'), 'Story GM Notes should be stripped');
+    });
+
+    it('strips GM Notes from sheet content', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'lord-blackwood.html');
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(!html.includes('knows about the cult'), 'Sheet GM Notes should be stripped');
+    });
+
+    it('does not create standalone page for story file', () => {
+      const storyPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'lord-blackwood-story.html');
+      assert.ok(!fs.existsSync(storyPath), 'Story should not have its own page');
+    });
+
+    it('creates PC page without tabs when no story exists', () => {
+      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'no-story-pc.html');
+      assert.ok(fs.existsSync(pcPath));
+      const html = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(!html.includes('tab-bar'), 'Should not have tab bar');
+      assert.ok(!html.includes('tab-story'), 'Should not have story panel');
+    });
+  });
 });
