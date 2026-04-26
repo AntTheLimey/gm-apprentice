@@ -227,7 +227,7 @@ function build(options = {}) {
               outputPath: page.outputPath,
             };
             const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages });
-            storyHtml = storyProcessed.html;
+            storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           }
 
           const system = publishConfig.system;

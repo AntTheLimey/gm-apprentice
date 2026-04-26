@@ -163,14 +163,19 @@ function pairStoryFiles(pages, vaultPath) {
     const pcBase = path.basename(pc.sourcePath, '.md');
     const storyPath = path.join(pcDir, pcBase + '_Story.md');
 
+    const idx = pages.findIndex(p => p.sourcePath === storyPath);
+    if (idx !== -1) storyIndices.add(idx);
+
     if (fs.existsSync(storyPath)) {
-      const raw = fs.readFileSync(storyPath, 'utf-8');
-      const { data, content } = matter(raw);
+      let data, content;
+      try {
+        ({ data, content } = matter(fs.readFileSync(storyPath, 'utf-8')));
+      } catch (e) {
+        console.warn(`scanner: skipping story file ${storyPath} — malformed frontmatter: ${e.message}`);
+        continue;
+      }
       if (data.type !== 'character-story') continue;
       pc.storyMarkdown = content;
-
-      const idx = pages.findIndex(p => p.sourcePath === storyPath);
-      if (idx !== -1) storyIndices.add(idx);
     }
   }
 

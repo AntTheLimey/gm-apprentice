@@ -140,7 +140,7 @@ describe('pairStoryFiles', () => {
     pairStoryFiles(pages, fixturesDir);
     const storyPage = pages.find(p => p.title === 'Lord_Blackwood_Story');
     assert.strictEqual(storyPage, undefined, 'Story file should be removed from pages');
-    assert.strictEqual(pages.length, beforeCount - 1);
+    assert.strictEqual(pages.length, beforeCount - 2, 'Both story files should be removed');
   });
 
   it('leaves PCs without story files unchanged', () => {
@@ -164,5 +164,12 @@ describe('pairStoryFiles', () => {
     const pc = pages.find(p => p.title === 'Wrong_Type_PC');
     assert.ok(pc, 'Wrong_Type_PC should exist');
     assert.strictEqual(pc.storyMarkdown, undefined, 'Should not pair with wrong-type story file');
+  });
+
+  it('removes wrong-type story files from pages to prevent standalone publishing', () => {
+    const pages = scanVault(config);
+    pairStoryFiles(pages, fixturesDir);
+    const storyPage = pages.find(p => p.title === 'Wrong_Type_PC_Story');
+    assert.strictEqual(storyPage, undefined, 'Wrong-type story file should still be removed from pages');
   });
 });
