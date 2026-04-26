@@ -28,10 +28,26 @@ These entity types have purpose-built page layouts.
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
 
-The PC template renders all body content as collapsible accordion
-sections using the H2 headings as panel titles. Use H2 headings
-in the vault file to divide the character sheet into sections
-(e.g. `## Attributes`, `## Skills`, `## Equipment`).
+**Layout — single panel vs. tabbed:** When no story companion file
+exists, the PC template renders body content as collapsible accordion
+sections (H2 headings become panel titles). When a story companion
+file is present, the page switches to a two-tab layout:
+
+- **Character Sheet** tab — the accordion layout as above
+- **Story** tab — prose flow of the story file (see below)
+
+Direct-link to a tab via URL hash: `#sheet` (default) or `#story`.
+
+**Story companion files:** Discovered by naming convention —
+`{Name}_Story.md` in the same directory as the PC file. The file
+must have `type: character-story` frontmatter. Story files do not
+get their own published page; they are consumed by the parent PC
+template. `GM Notes` sections in story files are stripped by the
+standard filtering pipeline before rendering. Wiki-links in story
+prose resolve to published pages.
+
+**Story rendering:** Session headings with narrative paragraphs
+beneath them. No accordion — the content flows as continuous prose.
 
 ---
 
@@ -243,3 +259,15 @@ Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`,
 
 If a portrait file cannot be found at the given path, the portrait
 area is hidden rather than showing a broken image.
+
+---
+
+## Site-level configuration fields
+
+These fields live in `_meta/vault-config.md` under the `publish:` key
+and affect the whole site rather than individual entity pages. See
+`configuration.md` for the full vault-config reference.
+
+| Field | Key path | Description |
+|-------|----------|-------------|
+| `system` | `publish.system` | Game system identifier. Expected values: `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `fitd`. Currently informational — system-specific rendering is a future roadmap item. |

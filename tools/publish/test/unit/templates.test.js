@@ -239,3 +239,87 @@ describe('displayTitle usage', () => {
     assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
   });
 });
+
+describe('PC template tabbed layout', () => {
+  const { pcTemplate } = require('../../lib/templates/pc');
+
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('renders tab bar when storyHtml is provided', () => {
+    const page = {
+      title: 'Hero',
+      displayTitle: 'Hero',
+      outputPath: 'characters/pcs/hero.html',
+      frontmatter: { type: 'pc', player_name: 'Alice', status: 'active' },
+    };
+    const processed = { html: '', relationships: '' };
+    const sections = [{ id: 'stat-sheet', title: 'Stat Sheet', html: '<p>Stats</p>' }];
+    const storyHtml = '<h3>Session 1 — The Start</h3><p>Adventure begins.</p>';
+    const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {}, storyHtml);
+    assert.ok(html.includes('tab-bar'), 'Should have tab bar');
+    assert.ok(html.includes('Character Sheet'), 'Should have Sheet tab');
+    assert.ok(html.includes('Story'), 'Should have Story tab');
+    assert.ok(html.includes('tab-sheet'), 'Should have sheet tab panel');
+    assert.ok(html.includes('tab-story'), 'Should have story tab panel');
+    assert.ok(html.includes('Adventure begins'), 'Should contain story content');
+  });
+
+  it('omits tab bar when no storyHtml is provided', () => {
+    const page = {
+      title: 'Solo',
+      displayTitle: 'Solo',
+      outputPath: 'characters/pcs/solo.html',
+      frontmatter: { type: 'pc', player_name: 'Bob', status: 'active' },
+    };
+    const processed = { html: '', relationships: '' };
+    const sections = [{ id: 'stat-sheet', title: 'Stat Sheet', html: '<p>Stats</p>' }];
+    const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {});
+    assert.ok(!html.includes('tab-bar'), 'Should not have tab bar');
+    assert.ok(!html.includes('tab-story'), 'Should not have story panel');
+    assert.ok(html.includes('accordion'), 'Should still have accordion sections');
+  });
+
+  it('includes hash-based tab routing script', () => {
+    const page = {
+      title: 'Hero',
+      displayTitle: 'Hero',
+      outputPath: 'characters/pcs/hero.html',
+      frontmatter: { type: 'pc', player_name: 'Alice', status: 'active' },
+    };
+    const processed = { html: '', relationships: '' };
+    const storyHtml = '<p>Story content</p>';
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, storyHtml);
+    assert.ok(html.includes('location.hash'), 'Should have hash routing');
+    assert.ok(html.includes('#story'), 'Should reference #story hash');
+  });
+
+  it('renders story as prose flow', () => {
+    const page = {
+      title: 'Hero',
+      displayTitle: 'Hero',
+      outputPath: 'characters/pcs/hero.html',
+      frontmatter: { type: 'pc', player_name: 'Alice', status: 'active' },
+    };
+    const processed = { html: '', relationships: '' };
+    const storyHtml = '<h3>Session 1 — The Start</h3><p>Adventure begins.</p>';
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, storyHtml);
+    assert.ok(html.includes('story-prose'), 'Should have prose flow container');
+  });
+});
+
+describe('PC renderer registry', () => {
+  const { getRenderer } = require('../../lib/templates/pc-registry');
+
+  it('returns null for unknown system', () => {
+    assert.strictEqual(getRenderer('unknown-system'), null);
+  });
+
+  it('returns null for null system', () => {
+    assert.strictEqual(getRenderer(null), null);
+  });
+
+  it('returns null for undefined system', () => {
+    assert.strictEqual(getRenderer(undefined), null);
+  });
+});
