@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [publish 1.1.0] — 2026-04-26
+
+### Added (publish tool)
+
+- **Tabbed PC page layout** — Character Sheet and Story tabs with hash-based routing for direct-linking
+- **Story companion rendering** — story file auto-discovered alongside PC files and rendered in the Story tab
+- **System renderer registry** — dispatch architecture decouples layout from system-specific rendering; ships with default renderer, C-ready for per-system overrides
+- **Enhanced CSS** — stat table and prose section styles added for structured character sheet display
+
+---
+
 ## [1.4.7] — 2026-04-26
 
 ### Added
