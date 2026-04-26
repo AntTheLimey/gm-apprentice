@@ -147,6 +147,11 @@ starting the play-event interview, resolve image assignments:
    ask the GM to pick the portrait
 See `references/image-handling.md` for question templates.
 
+**PC arc questions:** After image resolution and before starting
+the play-event interview, ask one question per active PC about
+their personal arc across the ingested period. See
+`references/keeper-interview.md` § PC Narrative Arcs.
+
 ### Phase 5: Synthesize & Hand Off
 
 Read `references/synthesis-templates.md` for the output format.

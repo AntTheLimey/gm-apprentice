@@ -109,6 +109,24 @@ Which of the scenario's branching points did the players
 take? These are the moments where prep diverges most from
 play.
 
+### 7. PC Narrative Arcs
+
+One question per active PC covering their personal arc across
+the ingested period. This feeds character story file
+construction in Phase 5.
+
+Frame with character context — what the sources already show
+about this PC — and ask what drove them and what changed them.
+
+**Example:** "From the notes, Georgiana spent most of the Lyon
+chapter investigating the university murders and befriending
+Professor Lang. What was her personal arc across these
+sessions — what drove her, and how was she changed by it?"
+
+If the GM has little to add beyond what's in the sources,
+that's fine — the existing play events will still produce a
+story entry. Don't push for invented detail.
+
 ## Output
 
 After the interview, the confirmed events list from Phase 3
