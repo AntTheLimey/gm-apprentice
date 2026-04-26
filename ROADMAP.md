@@ -37,6 +37,7 @@ Items are force-ranked by score. Higher score = do first.
 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done | |
 | ~~Remove model-specific prescriptions from all skills~~ | 3 | 3 | S (1) | 9.0 | Done | |
 | ~~Skill roles audit: clarify inter-skill relationships~~ | 4 | 4 | M (2) | 6.0 | Done | |
+| Entity creation must read template before writing | 5 | 4 | S (1) | 14.0 | Bug | campaign-organizer has no explicit step requiring agents to read `_Templates/_Template_{Type}.md` before creating entity files. Agents pattern-match off existing files instead, producing inconsistent structure. Add a hard gate to Dissect, Organize, and any entity-creation workflow: "Read the matching template before writing." Applies to vault-ingest Phase 5 handoff too. |
 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
 | the-midwife: guided adventure creation skill | 4 | 2 | M (2) | 5.0 | Idea | Creative midwife persona — draws ideas out of the GM through guided conversation, shapes them into a playable starting point with a vault/folder. Supports campaigns, one-shots, few-shots. |
 | Handout document type with image creation prompts | 4 | 2 | M (2) | 5.0 | Idea | Session-prep scene artifact: handout markdown + frontmatter linking to scene/session + auto-generated image prompt for DALL-E/Midjourney |
@@ -44,6 +45,7 @@ Items are force-ranked by score. Higher score = do first.
 | Publish tool: per-page header banner | 2 | 1 | S (1) | 5.0 | Idea | Custom banner image per page via frontmatter |
 | Decompose arc-spotlight reference into focused files | 2 | 1 | S (1) | 5.0 | Experiment | Split arc-spotlight-reference.md into arc-model.md, spotlight-planning.md, touchpoint-framework.md for token efficiency |
 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done | |
+| Portrait rendering in Obsidian vaults | 3 | 3 | M (2) | 4.5 | Idea | Obsidian doesn't render `portrait` frontmatter as images — needs Dataview inline, CSS snippet, or Templater approach. See [spec](docs/portrait-rendering-obsidian.md) |
 | Obsidian vault-picker | 3 | 2 | M (2) | 4.0 | Idea | Campaign config drives vault switching: on session start, disable Obsidian REST plugin + MCP server for other vaults, ensure this campaign's REST API / MCP server is running and configured. Triggered when LLM reads context memory. |
 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea | Site-wide config for nav style and index page layout |
 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea | Visual timeline of recent events on the landing page |
