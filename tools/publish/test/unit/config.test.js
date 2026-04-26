@@ -114,3 +114,41 @@ describe('loadPublishConfig', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe('system field', () => {
+  it('passes through system from publish config', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const { loadPublishConfig } = require('../../lib/config');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-system-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  system: coc-7e-regency\n---\n');
+
+    const result = loadPublishConfig(tmpDir, {});
+    assert.strictEqual(result.system, 'coc-7e-regency');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('defaults system to null when not set', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const { loadPublishConfig } = require('../../lib/config');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-nosystem-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  mode: player\n---\n');
+
+    const result = loadPublishConfig(tmpDir, {});
+    assert.strictEqual(result.system, null);
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});

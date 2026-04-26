@@ -50,6 +50,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
 
   const merged = {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
+    system: publish.system || null,
     exclude_sections: publish.exclude_sections
       || (jsonConfigFallback.excludeSections
         ? [...jsonConfigFallback.excludeSections]
