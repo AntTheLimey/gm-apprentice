@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
-const { scanVault, buildLinkMap, scanAttachments } = require('./scanner');
+const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS } = require('./templates/index');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS } = require('./theme');
@@ -100,6 +100,7 @@ function build(options = {}) {
   console.log('Scanning vault:', config.vaultPath);
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
+  pairStoryFiles(pages, config.vaultPath);
 
   // Auto-exclude prep/draft files based on frontmatter (player mode only)
   function isAutoExcluded(fm) {
@@ -217,7 +218,23 @@ function build(options = {}) {
           filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages);
           const sections = extractSections(filtered);
-          html = pcTemplate(page, processed, sections, navFor, config, imageMap);
+
+          let storyHtml;
+          if (page.storyMarkdown) {
+            const storyPage = {
+              markdown: page.storyMarkdown,
+              frontmatter: {},
+              outputPath: page.outputPath,
+            };
+            const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages });
+            storyHtml = storyProcessed.html;
+          }
+
+          const system = publishConfig.system;
+          const systemRenderer = getRenderer(system);
+          html = systemRenderer
+            ? systemRenderer(page, processed, sections, navFor, config, imageMap, storyHtml)
+            : pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml);
           break;
         }
         case 'npc':
