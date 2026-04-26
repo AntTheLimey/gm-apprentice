@@ -323,6 +323,105 @@ li {
   display: block;
 }
 
+/* ===== TAB BAR (PC sheet/story) ===== */
+.char-header-tabbed {
+  border-radius: 0.5rem 0.5rem 0 0;
+  margin-bottom: 0;
+}
+.tab-bar {
+  display: flex;
+  background: var(--dark);
+  border-radius: 0 0 0.5rem 0.5rem;
+  padding: 0 1.25rem;
+  margin-bottom: 1.5rem;
+  gap: 0;
+}
+.pc-tab {
+  padding: 0.75rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--white);
+  opacity: 0.65;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+.pc-tab:hover {
+  opacity: 0.85;
+}
+.pc-tab.active {
+  opacity: 1;
+  border-bottom-color: var(--accent);
+}
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+}
+
+/* ===== STORY PROSE ===== */
+.story-prose {
+  max-width: 42rem;
+}
+.story-prose h3 {
+  font-size: 1.15rem;
+  color: var(--dark);
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+.story-prose h3:first-child {
+  margin-top: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .story-prose h3 { color: var(--white); }
+}
+.story-prose p {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.85;
+  margin-bottom: 1rem;
+}
+.story-prose a {
+  border-bottom: 1px dotted var(--accent);
+}
+.story-prose a:hover {
+  border-bottom-style: solid;
+}
+
+/* ===== ENHANCED STAT TABLES (inside accordions) ===== */
+.accordion-body table {
+  min-width: auto;
+}
+.accordion-body td {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+.accordion-body td:first-child {
+  font-family: var(--sans);
+  font-weight: 500;
+}
+
+/* Prose sections inside accordions */
+.accordion-body > p {
+  line-height: 1.7;
+}
+
+/* Responsive: collapse wide tables on small screens */
+@media (max-width: 480px) {
+  .accordion-body table {
+    font-size: 0.8rem;
+  }
+  .accordion-body th,
+  .accordion-body td {
+    padding: 0.35rem 0.4rem;
+  }
+}
+
 /* ===== TABLES ===== */
 .table-wrap {
   overflow-x: auto;
@@ -973,5 +1072,14 @@ td .stat {
     font-size: 10pt;
     color: #000;
     background: #fff;
+  }
+  .tab-bar {
+    display: none;
+  }
+  .tab-panel {
+    display: block !important;
+  }
+  .story-prose {
+    page-break-before: always;
   }
 }
