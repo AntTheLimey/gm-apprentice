@@ -45,6 +45,33 @@ relationships, exclusive information. Ground in observable
 behaviour, not generated emotional analysis. Write into
 Wrap-Up file.
 
+### 3b. Character Story Entries
+
+For each active PC in the session, append a story entry to
+their companion file. Read `shared/character-story-format.md`
+for the full format, voice, and append protocol.
+
+1. Look for `Characters/PCs/{Name}_Story.md` — if it doesn't
+   exist, create from `shared/templates/character-story.md`
+2. Determine the campaign's genre voice from the campaign
+   overview or world file
+3. Write 2–4 paragraphs of narrative prose: what this PC did,
+   decided, learned, and how they changed — from this
+   character's perspective, not a session recap
+4. Append as `## Session {N} — {Session Title}` at the bottom
+5. Update frontmatter: `lastUpdated` and `asOfSession` to
+   current session; `source_confidence` mirrors the Wrap-Up
+   file's confidence
+
+**Input:** Narrative Recap (Step 2) and PC Carry-Forward
+(Step 3). No new source gathering.
+
+**Output:** One appended entry per active PC's story file.
+
+Writes for the current session only — no backfilling. If prior
+sessions are missing from a story file, that's vault-ingest
+territory. Never edit prior session entries (append-only).
+
 ### 4. Update the World
 
 - **New entities** (improvised NPCs, locations, items):
@@ -124,6 +151,7 @@ Wrap-up **must** produce all sections so prep reads one file:
 | Keeper Checklist | Yes | Wrap-Up file |
 
 Entity files and timeline are updated separately (Step 4).
+Character story files are updated separately (Step 3b).
 The session index is updated to `wrap-up` status (or `reviewed`
 if reconcile completes).
 
