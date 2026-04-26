@@ -456,6 +456,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | creature (all subtypes) | Creatures/ |
 | event (all subtypes) | Events/ |
 | document (all subtypes) | Documents/ |
+| clue | Clues/ |
 
 ## Vault Configuration Fields
 
@@ -483,4 +484,3 @@ skills.
 | `theme` | object | Theme configuration: `genre`, `palette`, `fonts`, `campaign_image` |
 | `four_oh_four` | object | Custom 404 page: `style`, `message` |
 | `overrides` | object | Per-file include/exclude/field overrides |
-| clue | Clues/ |

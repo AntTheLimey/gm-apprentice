@@ -59,6 +59,8 @@ version is lower or absent, announce the mismatch and hand off
 to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
 proceeding with ingestion. Resume after migration completes.
+Skip this check if `_meta/` doesn't exist (that's first-time
+setup, not migration).
 
 ## The Pipeline
 
