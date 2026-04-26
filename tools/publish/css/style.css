@@ -405,6 +405,9 @@ li {
   font-family: var(--sans);
   font-weight: 500;
 }
+.accordion-body tr:nth-child(even) {
+  background: rgba(128, 128, 128, 0.06);
+}
 
 /* Prose sections inside accordions */
 .accordion-body > p {

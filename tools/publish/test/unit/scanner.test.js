@@ -155,6 +155,14 @@ describe('pairStoryFiles', () => {
     const pages = scanVault(config);
     pairStoryFiles(pages, fixturesDir);
     const remaining = pages.filter(p => p.frontmatter.type === 'pc');
-    assert.strictEqual(remaining.length, 2, 'Should have 2 PCs remaining');
+    assert.strictEqual(remaining.length, 3, 'Should have 3 PCs remaining');
+  });
+
+  it('skips story files without type: character-story frontmatter', () => {
+    const pages = scanVault(config);
+    pairStoryFiles(pages, fixturesDir);
+    const pc = pages.find(p => p.title === 'Wrong_Type_PC');
+    assert.ok(pc, 'Wrong_Type_PC should exist');
+    assert.strictEqual(pc.storyMarkdown, undefined, 'Should not pair with wrong-type story file');
   });
 });

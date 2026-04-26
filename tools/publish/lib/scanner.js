@@ -165,7 +165,8 @@ function pairStoryFiles(pages, vaultPath) {
 
     if (fs.existsSync(storyPath)) {
       const raw = fs.readFileSync(storyPath, 'utf-8');
-      const { content } = matter(raw);
+      const { data, content } = matter(raw);
+      if (data.type !== 'character-story') continue;
       pc.storyMarkdown = content;
 
       const idx = pages.findIndex(p => p.sourcePath === storyPath);
