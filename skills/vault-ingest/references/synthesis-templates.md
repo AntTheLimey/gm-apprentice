@@ -98,7 +98,9 @@ content, not live capture.
 4. **Entity flags are for session-wrapup.** Use the extraction
    shorthand from `session-wrapup/references/recap-formats.md`
    (NEW-NPC, NEW-LOC, UPDATE, etc.) so wrapup knows what to
-   create and update.
+   create and update. When session-wrapup creates entities from
+   these flags, it reads `_Templates/_Template_{Type}.md` first —
+   see session-wrapup Step 4.
 
 5. **Chronological order.** Events within a scene are ordered
    as they happened. Scenes are ordered as they played.

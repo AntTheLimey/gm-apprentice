@@ -85,9 +85,12 @@ territory. Never edit prior session entries (append-only).
 ### 4. Update the World
 
 - **New entities** (improvised NPCs, locations, items):
-  Create vault files immediately. Don't ask — do it.
-  `source_confidence: DRAFT`. If session-play already saved
-  provisional content, incorporate rather than recreate.
+  Read `_Templates/_Template_{Type}.md` first, then create
+  the vault file using that template as the structure.
+  Don't ask — do it. `source_confidence: DRAFT`. If
+  session-play already saved provisional content, incorporate
+  rather than recreate. Never pattern-match off existing
+  entity files — the template is canonical.
 
 - **Updated entities**: Update the entity's own vault file.
   ONE file per entity. No separate "update" files.

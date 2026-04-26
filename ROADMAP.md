@@ -37,7 +37,7 @@ Items are force-ranked by score. Higher score = do first.
 | ~~Publish tool: Landing page dashboard (recap, PC roster, key NPCs)~~ | 5 | 4 | M (2) | 7.0 | Done | |
 | ~~Remove model-specific prescriptions from all skills~~ | 3 | 3 | S (1) | 9.0 | Done | |
 | ~~Skill roles audit: clarify inter-skill relationships~~ | 4 | 4 | M (2) | 6.0 | Done | |
-| Entity creation must read template before writing | 5 | 4 | S (1) | 14.0 | Bug | campaign-organizer has no explicit step requiring agents to read `_Templates/_Template_{Type}.md` before creating entity files. Agents pattern-match off existing files instead, producing inconsistent structure. Add a hard gate to Dissect, Organize, and any entity-creation workflow: "Read the matching template before writing." Applies to vault-ingest Phase 5 handoff too. |
+| ~~Entity creation must read template before writing~~ | 5 | 4 | S (1) | 14.0 | Done | campaign-organizer has no explicit step requiring agents to read `_Templates/_Template_{Type}.md` before creating entity files. Agents pattern-match off existing files instead, producing inconsistent structure. Add a hard gate to Dissect, Organize, and any entity-creation workflow: "Read the matching template before writing." Applies to vault-ingest Phase 5 handoff too. |
 | Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
 | the-midwife: guided adventure creation skill | 4 | 2 | M (2) | 5.0 | Idea | Creative midwife persona — draws ideas out of the GM through guided conversation, shapes them into a playable starting point with a vault/folder. Supports campaigns, one-shots, few-shots. |
 | Handout document type with image creation prompts | 4 | 2 | M (2) | 5.0 | Idea | Session-prep scene artifact: handout markdown + frontmatter linking to scene/session + auto-generated image prompt for DALL-E/Midjourney |
@@ -71,6 +71,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~Entity creation must read template before writing~~ — Added template-reading gate to campaign-organizer (Organize, Dissect, Stub), session-wrapup (Step 4), and vault-ingest synthesis handoff
 - ~~Remove model-specific prescriptions from all skills~~ — Replaced hardcoded model names with complexity guidance across vault-ingest (PR #26), session-wrapup, and removed inline model lines (PR #27)
 - ~~Skill roles audit~~ — Added skill taxonomy table to README, rewrote ttrpg-expert description to clarify advisor-only boundary, documented all skill roles and boundaries (PR #27)
 - ~~Publish tool: displayTitle + template overhaul~~ — displayTitle on all page objects, data-driven `display_meta` PC meta row, Team/Fallen landing split with SVG status icons (PR #25)

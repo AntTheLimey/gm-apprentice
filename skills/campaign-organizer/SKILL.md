@@ -237,8 +237,11 @@ tools used to read, write, and search differ.
 3. **Propose structure** — Present vault layout. Read
    `shared/vault-structure.md` for the default layout.
    Adapt to content.
-4. **Extract and file** — Create notes with frontmatter per
-   schema. Embed `[[wiki-links]]`.
+4. **Extract and file** — For each entity, read
+   `_Templates/_Template_{Type}.md` first, then create the note
+   using that template as the structure. Fill in frontmatter per
+   schema and embed `[[wiki-links]]`. Never pattern-match off
+   existing entity files — the template is canonical.
 5. **Link pass** — Find missed cross-references.
 6. **Graph audit** — Read `references/graph-hygiene.md` and
    run hygiene checks.
@@ -256,9 +259,13 @@ tools used to read, write, and search differ.
    canonical names with aliases.
 4. **Extract** — One note per entity AND per narrative element:
    chapter overviews, scene notes, session notes, entity notes.
-   Include frontmatter, body summary, `[[wiki-links]]`.
-5. **Stub** — `source_confidence: STUB` for mentioned-but-undescribed
-   entities. Include `## Needs` section.
+   For each entity, read `_Templates/_Template_{Type}.md` first
+   and use that template as the structure. Include frontmatter,
+   body summary, `[[wiki-links]]`. Never pattern-match off
+   existing entity files — the template is canonical.
+5. **Stub** — Read `_Templates/_Template_{Type}.md`, create with
+   that structure, set `source_confidence: STUB`. Leave template
+   sections empty. Include `## Needs` section.
 6. **Update index** — Add new entries to `_meta/index.md`.
 7. **Report** — Extracted, stubbed, needs attention.
 
