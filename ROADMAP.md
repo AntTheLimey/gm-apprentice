@@ -47,14 +47,16 @@ Items are force-ranked by score. Higher score = do first.
 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done | |
 | Portrait rendering in Obsidian vaults | 3 | 3 | M (2) | 4.5 | Idea | Obsidian doesn't render `portrait` frontmatter as images — needs Dataview inline, CSS snippet, or Templater approach. See [spec](docs/portrait-rendering-obsidian.md) |
 | Obsidian vault-picker | 3 | 2 | M (2) | 4.0 | Idea | Campaign config drives vault switching: on session start, disable Obsidian REST plugin + MCP server for other vaults, ensure this campaign's REST API / MCP server is running and configured. Triggered when LLM reads context memory. |
+| Publish tool: overhaul site navigation | 3 | 2 | M (2) | 4.0 | Idea | Rethink site navigation structure — breadcrumbs, entity-type grouping, cross-linking, mobile responsiveness |
 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea | Site-wide config for nav style and index page layout |
+| Find better free hosting solution | 3 | 2 | M (2) | 4.0 | Idea | Research alternatives to GitHub Pages — evaluate Cloudflare Pages, Netlify, Vercel free tiers for static site hosting. Consider deploy simplicity for non-technical GMs |
 | Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea | Visual timeline of recent events on the landing page |
 | ~~CoC/BRP SRD enrichment (Phase 5a)~~ | 4 | 3 | L (3) | 3.7 | Done | |
 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea | Generate timeline page from event/session dates in frontmatter |
 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea | Client-side search index so players can find content in published site |
 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
-| Character sheet templates | 2 | 1 | M (2) | 2.5 | Idea | Printable/viewable character sheet templates per system in published site |
+| Publish tool: system-specific PC sheet rendering | 4 | 3 | L (3) | 3.7 | Planned | Per-system HTML/CSS treatments for published PC pages (CoC parchment feel, GURPS stat blocks, D&D ability cards, etc.). Builds on SP3's C-ready template dispatch architecture — add one system at a time. |
 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for clue entities with status, linked scenes, discovery conditions |
 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for in-world documents (letters, newspapers, journals) |
