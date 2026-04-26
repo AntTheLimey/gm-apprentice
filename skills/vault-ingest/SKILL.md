@@ -162,6 +162,10 @@ Read `references/synthesis-templates.md` for the output format.
    `shared/session-document-chain.md`
 3. Follow `session-wrapup` workflow to produce the Wrap-Up
    file and create/update entities
+4. For each PC active during the ingested period, write a
+   consolidated character story entry per
+   `references/synthesis-templates.md` § Character Story
+   Backstory Entries
 
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.
