@@ -11,6 +11,7 @@ const { wikiTemplate } = require('./wiki');
 const { indexTemplate } = require('./index-page');
 const { landingTemplate } = require('./landing');
 const { fourOhFourTemplate } = require('./four-oh-four');
+const { getRenderer } = require('./pc-registry');
 
 module.exports = {
   DIR_LABELS,
@@ -33,4 +34,5 @@ module.exports = {
   indexTemplate,
   landingTemplate,
   fourOhFourTemplate,
+  getRenderer,
 };

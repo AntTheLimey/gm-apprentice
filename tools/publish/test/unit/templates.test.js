@@ -239,3 +239,19 @@ describe('displayTitle usage', () => {
     assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
   });
 });
+
+describe('PC renderer registry', () => {
+  const { getRenderer } = require('../../lib/templates/pc-registry');
+
+  it('returns null for unknown system', () => {
+    assert.strictEqual(getRenderer('unknown-system'), null);
+  });
+
+  it('returns null for null system', () => {
+    assert.strictEqual(getRenderer(null), null);
+  });
+
+  it('returns null for undefined system', () => {
+    assert.strictEqual(getRenderer(undefined), null);
+  });
+});
