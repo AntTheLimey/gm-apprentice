@@ -338,6 +338,43 @@ during Dissect mode.
 `display_meta` (optional array: ordered field names for published site meta row;
 defaults to `[occupation, age, nationality]` when omitted)
 
+### PC Body Structure
+
+All PC entity files follow this canonical heading hierarchy.
+Templates in `shared/templates/` implement the full structure
+per system; skills that create or update PC files follow the
+same skeleton.
+
+```text
+## Stat Sheet          — system-specific stats (always first body section)
+## Background          — backstory, personality, description
+## [System Sections]   — varies by system (see per-system template)
+## Equipment           — gear, possessions, wealth/encumbrance
+## Notes               — player-facing (protected: skills never modify)
+## GM Notes            — keeper-only (protected: skills never modify)
+```
+
+Templates may omit inapplicable sections (e.g., FitD crews
+have no `## Equipment` — gear is handled through Quality).
+
+`## Notes` and `## GM Notes` are **protected sections** — only
+the GM edits them directly. Automated skills must preserve
+their content unchanged.
+
+### Story Companion Convention
+
+Every PC entity `Characters/PCs/{Name}.md` may have a
+companion story file at `Characters/PCs/{Name}_Story.md`.
+
+- Frontmatter: `type: character-story`,
+  `character: "[[{Name}]]"`, plus universal fields
+- Discovered by naming convention (`{Name}_Story.md`),
+  not frontmatter pointer
+- Append-only — new sessions add a `## Session {N} — {Session Title}` heading
+- `campaign-qa` validates every active PC has a story file
+- See `shared/character-story-format.md` for narrative voice,
+  genre matching, and append protocol
+
 **Location:** `location_type`, `parent_location` (wiki-link),
 `atmosphere`, `portrait` (optional)
 
