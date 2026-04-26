@@ -154,4 +154,28 @@ function scanAttachments(config) {
   return map;
 }
 
-module.exports = { slugify, scanVault, buildLinkMap, mapFolder, scanAttachments };
+function pairStoryFiles(pages, vaultPath) {
+  const pcPages = pages.filter(p => p.frontmatter.type === 'pc');
+  const storyIndices = new Set();
+
+  for (const pc of pcPages) {
+    const pcDir = path.dirname(pc.sourcePath);
+    const pcBase = path.basename(pc.sourcePath, '.md');
+    const storyPath = path.join(pcDir, pcBase + '_Story.md');
+
+    if (fs.existsSync(storyPath)) {
+      const raw = fs.readFileSync(storyPath, 'utf-8');
+      const { content } = matter(raw);
+      pc.storyMarkdown = content;
+
+      const idx = pages.findIndex(p => p.sourcePath === storyPath);
+      if (idx !== -1) storyIndices.add(idx);
+    }
+  }
+
+  for (const idx of [...storyIndices].sort((a, b) => b - a)) {
+    pages.splice(idx, 1);
+  }
+}
+
+module.exports = { slugify, scanVault, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles };

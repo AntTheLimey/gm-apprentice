@@ -1,7 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { slugify, mapFolder, buildLinkMap, scanVault } = require('../../lib/scanner');
+const fs = require('fs');
+const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles } = require('../../lib/scanner');
 
 describe('slugify', () => {
   it('converts to lowercase', () => {
@@ -110,5 +111,50 @@ describe('scanVault displayTitle', () => {
     const pc = pages.find(p => p.title === 'Underscored_Name');
     assert.ok(pc, 'Underscored_Name page should exist');
     assert.strictEqual(pc.title, 'Underscored_Name');
+  });
+});
+
+describe('pairStoryFiles', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures', 'with-story');
+  const config = {
+    vaultPath: fixturesDir,
+    excludeDirs: ['_meta', '_Templates'],
+    folderMap: {
+      'Characters/PCs': 'characters/pcs',
+    },
+  };
+
+  it('attaches storyMarkdown to PC with matching story file', () => {
+    const pages = scanVault(config);
+    pairStoryFiles(pages, fixturesDir);
+    const pc = pages.find(p => p.title === 'Lord_Blackwood');
+    assert.ok(pc, 'Lord_Blackwood page should exist');
+    assert.ok(pc.storyMarkdown, 'Should have storyMarkdown attached');
+    assert.ok(pc.storyMarkdown.includes('The Whitby Letter'));
+    assert.ok(pc.storyMarkdown.includes('The Hastings Séance'));
+  });
+
+  it('removes story files from the page list', () => {
+    const pages = scanVault(config);
+    const beforeCount = pages.length;
+    pairStoryFiles(pages, fixturesDir);
+    const storyPage = pages.find(p => p.title === 'Lord_Blackwood_Story');
+    assert.strictEqual(storyPage, undefined, 'Story file should be removed from pages');
+    assert.strictEqual(pages.length, beforeCount - 1);
+  });
+
+  it('leaves PCs without story files unchanged', () => {
+    const pages = scanVault(config);
+    pairStoryFiles(pages, fixturesDir);
+    const pc = pages.find(p => p.title === 'No_Story_PC');
+    assert.ok(pc, 'No_Story_PC should exist');
+    assert.strictEqual(pc.storyMarkdown, undefined);
+  });
+
+  it('only pairs with type: pc pages', () => {
+    const pages = scanVault(config);
+    pairStoryFiles(pages, fixturesDir);
+    const remaining = pages.filter(p => p.frontmatter.type === 'pc');
+    assert.strictEqual(remaining.length, 2, 'Should have 2 PCs remaining');
   });
 });
