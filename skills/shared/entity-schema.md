@@ -370,7 +370,7 @@ companion story file at `Characters/PCs/{Name}_Story.md`.
   `character: "[[{Name}]]"`, plus universal fields
 - Discovered by naming convention (`{Name}_Story.md`),
   not frontmatter pointer
-- Append-only — new sessions add a `## Session {N}` heading
+- Append-only — new sessions add a `## Session {N} — {Session Title}` heading
 - `campaign-qa` validates every active PC has a story file
 - See `shared/character-story-format.md` for narrative voice,
   genre matching, and append protocol

@@ -17,7 +17,7 @@ portrait: ""
 display_meta: [occupation]
 relationships:
   - target: "[[]]"
-    type: headquartered_at
+    type: located_at
     tone: neutral
     strength: 5
     bidirectional: false
@@ -79,6 +79,7 @@ createdSession: ""
 {Lair-specific upgrades.}
 
 **Quality by Category:**
+
 | Category | Quality |
 |----------|---------|
 | Documents | 0 |

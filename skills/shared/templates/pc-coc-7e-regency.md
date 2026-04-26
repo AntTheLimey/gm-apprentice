@@ -184,6 +184,7 @@ createdSession: ""
 {Item list}
 
 **Wealth:**
+
 | Attribute | Value |
 |-----------|-------|
 | Spending Level | |

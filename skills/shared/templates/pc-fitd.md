@@ -34,6 +34,7 @@ createdSession: ""
 ### Action Ratings
 
 **Insight**
+
 | Action | Rating |
 |--------|--------|
 | Hunt | 0 |
@@ -42,6 +43,7 @@ createdSession: ""
 | Tinker | 0 |
 
 **Prowess**
+
 | Action | Rating |
 |--------|--------|
 | Finesse | 0 |
@@ -50,6 +52,7 @@ createdSession: ""
 | Wreck | 0 |
 
 **Resolve**
+
 | Action | Rating |
 |--------|--------|
 | Attune | 0 |
