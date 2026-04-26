@@ -57,6 +57,16 @@ Obsidian MCP tools (`search_vault`, `list_vault_files`,
 `get_vault_file`). See `shared/filesystem-mode.md` for the
 full tool mapping and environment detection procedure.
 
+**Version check:** After environment detection, read
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md`. If the vault
+version is lower or absent, announce the mismatch and hand off
+to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+running any audits. Resume after migration completes. Skip this
+check if `_meta/` doesn't exist (that's first-time setup, not
+migration).
+
 Both Obsidian mode and filesystem mode run the same audit
 procedures — only the tools differ. The procedures in
 `references/check-procedures.md` use generic operation names

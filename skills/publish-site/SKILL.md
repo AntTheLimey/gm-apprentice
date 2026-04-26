@@ -14,6 +14,16 @@ troubleshooting — clearly and without jargon. Most GMs using
 this skill are not technical. Never assume they know what npm,
 git, or a terminal command does without explaining it.
 
+**Version check:** On first invocation, read
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md`. If the vault
+version is lower or absent, announce the mismatch and hand off
+to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+proceeding. Resume after migration completes. Skip this check
+if `_meta/` doesn't exist (that's first-time setup, not
+migration).
+
 ## npm Package
 
 All build logic is handled by the `gm-apprentice-publish` package.
@@ -49,7 +59,9 @@ Do not improvise the setup flow or skip steps.
 "I've updated the vault, refresh the site"
 
 Workflow:
-1. Confirm the site repo path (ask if not known).
+1. Read `publish.site_dir` from `_meta/vault-config.md`. If not
+   set, ask for the absolute path to the site repo directory and
+   offer to save it to vault-config for future sessions.
 2. **Check manifest freshness.** Compare the vault's publishable
    files against `_meta/publish-manifest.md`. Look for:
    - **New files:** vault files not in the manifest. Apply the
@@ -86,7 +98,9 @@ the fix directly after explaining it.
 "new folder in the vault", "pages missing after an update"
 
 Workflow:
-1. Read the site's `vault.config.json` (ask for path if needed).
+1. Read `publish.site_dir` from `_meta/vault-config.md` to
+   locate the site repo. If not set, ask for the path and offer
+   to save it. Then read `vault.config.json` from that directory.
 2. Compare its `folderMap` to the vault's actual folder structure.
 3. Propose any additions needed to `folderMap` or `excludeDirs`.
 4. Apply changes after confirmation.

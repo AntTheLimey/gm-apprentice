@@ -102,6 +102,28 @@ On first contact with a vault:
    `references/index-template.md` for the index structure. The
    index starts empty.
 
+### Version Check
+
+After initialization confirms `_meta/` exists, check the vault
+version before proceeding with any user request:
+
+1. Read `gm_apprentice_version` from `_meta/vault-config.md`
+   frontmatter
+2. Read `current_version` from `shared/migrations.md` frontmatter
+3. If versions match or vault is higher — proceed normally
+4. If vault version is lower or absent — run the migration
+   workflow from `references/migration-procedure.md` before
+   proceeding
+
+This check runs once per session on first vault contact. It
+does not apply during first-time vault setup (when `_meta/` is
+missing and initialization creates it — stamp the current
+version as part of setup).
+
+When initialization creates a new vault, set
+`gm_apprentice_version` in vault-config to the
+`current_version` from `shared/migrations.md`.
+
 ### Schema Evolution
 
 When content doesn't fit existing types:

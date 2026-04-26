@@ -52,6 +52,16 @@ If no vault detected:
 
 Do not proceed without a vault.
 
+**Version check:** After confirming the vault exists, read
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md`. If the vault
+version is lower or absent, announce the mismatch and hand off
+to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+proceeding with ingestion. Resume after migration completes.
+Skip this check if `_meta/` doesn't exist (that's first-time
+setup, not migration).
+
 ## The Pipeline
 
 Six phases, sequential. Phases 1-4 owned by vault-ingest.
