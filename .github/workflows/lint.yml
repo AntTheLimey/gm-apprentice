@@ -96,8 +96,8 @@ jobs:
           PR_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
           MAIN_VERSION=$(git show origin/main:.claude-plugin/plugin.json | jq -r '.version')
           if [ "$PR_VERSION" != "$MAIN_VERSION" ]; then
-            if ! git diff origin/main -- CHANGELOG.md | grep -q '^+[^+]'; then
-              echo "::warning::Version bumped but CHANGELOG.md not updated"
+            if ! git diff origin/main -- CHANGELOG.md | grep -Eq "^\+## \[$PR_VERSION\]"; then
+              echo "::warning::Version bumped to $PR_VERSION but no CHANGELOG entry for this version"
               exit 1
             fi
           fi
