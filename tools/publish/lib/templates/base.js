@@ -64,7 +64,7 @@ document.querySelectorAll('.site-nav a').forEach(a => {
   var btn = document.querySelector('.back-to-top');
   if (btn) window.addEventListener('scroll', function() {
     btn.classList.toggle('visible', window.scrollY > 400);
-  });
+  }, { passive: true });
 })();
 </script>
 
