@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.10] — 2026-05-01
+
+### Fixed
+
+- **GURPS PC template** — Skills and Spells sections now enforce single alphabetized tables with no category sub-headings
+- **Mobile: accordion table scroll** — Wide tables inside accordion sections scroll horizontally on mobile instead of overflowing
+- **Mobile: back-to-top button** — Fixed-position button appears after 400px scroll on all published pages
+
+---
+
 ## [1.4.9] — 2026-04-26
 
 ### Added

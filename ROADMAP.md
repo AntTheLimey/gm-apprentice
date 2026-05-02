@@ -38,7 +38,9 @@ Items are force-ranked by score. Higher score = do first.
 | ~~Remove model-specific prescriptions from all skills~~ | 3 | 3 | S (1) | 9.0 | Done | |
 | ~~Skill roles audit: clarify inter-skill relationships~~ | 4 | 4 | M (2) | 6.0 | Done | |
 | ~~Entity creation must read template before writing~~ | 5 | 4 | S (1) | 14.0 | Done | campaign-organizer has no explicit step requiring agents to read `_Templates/_Template_{Type}.md` before creating entity files. Agents pattern-match off existing files instead, producing inconsistent structure. Add a hard gate to Dissect, Organize, and any entity-creation workflow: "Read the matching template before writing." Applies to vault-ingest Phase 5 handoff too. |
-| Pulp Cthulhu variant support | 4 | 4 | M (2) | 6.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality |
+| Session-prep: GM approval gate for new scenes | 5 | 4 | S (1) | 14.0 | Bug | When session-prep creates new scenes, it must present each to the GM first with framing questions (tone, objective, key entities, scene type) before writing. GM controls what goes into their session, not the skill. |
+| ~~Publish tool: GURPS PC sheet — single alphabetized skills list~~ | 5 | 4 | S (1) | 14.0 | Done | GURPS PC skills render as multiple lists instead of one alphabetized list |
+| ~~Publish tool: mobile HTML fixes~~ | 5 | 4 | S (1) | 14.0 | Done | Back-to-top button, horizontal scroll on tables, general mobile responsiveness fixes |
 | the-midwife: guided adventure creation skill | 4 | 2 | M (2) | 5.0 | Idea | Creative midwife persona — draws ideas out of the GM through guided conversation, shapes them into a playable starting point with a vault/folder. Supports campaigns, one-shots, few-shots. |
 | Handout document type with image creation prompts | 4 | 2 | M (2) | 5.0 | Idea | Session-prep scene artifact: handout markdown + frontmatter linking to scene/session + auto-generated image prompt for DALL-E/Midjourney |
 | Publish tool: thematic cause-of-death icons for The Fallen | 2 | 1 | S (1) | 5.0 | Idea | New optional PC frontmatter field `cause_of_death` (combat, madness, eldritch, disease, etc.) with thematic SVG icons on Fallen cards. Builds on status-category icons shipping in rank 1. |
@@ -55,6 +57,7 @@ Items are force-ranked by score. Higher score = do first.
 | Publish tool: system-specific PC sheet rendering | 4 | 3 | L (3) | 3.7 | Planned | Per-system HTML/CSS treatments for published PC pages (CoC parchment feel, GURPS stat blocks, D&D ability cards, etc.). Builds on SP3's C-ready template dispatch architecture — add one system at a time. |
 | Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea | Generate timeline page from event/session dates in frontmatter |
 | Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea | Client-side search index so players can find content in published site |
+| Pulp Cthulhu variant support | 4 | 4 | XL (4) | 3.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality. Blocked on finding a legit distributable source — Chaosium BRP ORC license may not cover Pulp-specific content. |
 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
@@ -71,6 +74,8 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~GURPS PC sheet: single alphabetized skills list~~ — Added inline comments to pc-gurps-4e.md template enforcing single alphabetized tables for Skills and Spells (PR #32)
+- ~~Mobile HTML fixes~~ — Accordion table horizontal scroll, back-to-top button with scroll-triggered fade (PR #32)
 - ~~Entity creation must read template before writing~~ — Added template-reading gate to campaign-organizer (Organize, Dissect, Stub), session-wrapup (Step 4), and vault-ingest synthesis handoff
 - ~~Remove model-specific prescriptions from all skills~~ — Replaced hardcoded model names with complexity guidance across vault-ingest (PR #26), session-wrapup, and removed inline model lines (PR #27)
 - ~~Skill roles audit~~ — Added skill taxonomy table to README, rewrote ttrpg-expert description to clarify advisor-only boundary, documented all skill roles and boundaries (PR #27)
