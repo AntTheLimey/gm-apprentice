@@ -140,12 +140,27 @@ sessions without a high-impact touchpoint.
 → Write `## Touchpoint Plan` to Plan file.
 
 **13. Scene Design** — Design scenes that deliver the assigned
-touchpoints. Prefer embedding personal content in group scenes
-over splitting the party. For each scene: dramatic objective,
-which touchpoints it delivers, entities involved, branching
-paths. Include open interaction windows where PC initiative
-can emerge naturally.
-→ Write `## Planned Scenes` to Plan file.
+touchpoints. **Propose each scene to the GM before writing it.**
+
+For each scene, pitch it first:
+- 1-2 sentence summary (what happens, why it matters)
+- Scene type (investigation, social, combat, chase, horror, other)
+- Dramatic objective
+- Key entities involved (NPCs, locations, items)
+- Which PC touchpoints it delivers
+
+Wait for the GM to **approve**, **tweak**, or **reject**:
+- **Approve** — write the scene to the Plan file
+- **Tweak** — incorporate the GM's changes, then write
+- **Reject** — drop the scene, move to the next proposal
+
+Prefer embedding personal content in group scenes over
+splitting the party. Include open interaction windows where
+PC initiative can emerge naturally. The GM may also propose
+their own scenes at any point — confirm understanding, then
+write.
+
+→ Write each approved scene to `## Planned Scenes` in Plan file.
 
 **14. Spotlight Forecast** — Estimate per-PC spotlight share
 for the planned session. Check:

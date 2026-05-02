@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.13] — 2026-05-02
+
+### Fixed
+
+- **Session-prep: GM approval gate** — Step 13 (Scene Design) now
+  proposes each scene to the GM before writing it to the Plan file.
+  The GM approves, tweaks, or rejects each scene individually.
+
+---
+
 ## [1.4.12] — 2026-05-01
 
 ### Added
@@ -286,6 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.13]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.12...v1.4.13
 [1.4.12]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.11...v1.4.12
 [1.4.11]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.10...v1.4.11
 [1.4.10]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.9...v1.4.10
