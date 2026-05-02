@@ -92,6 +92,9 @@ jobs:
       - name: Validate campaign entity schemas
         run: python scripts/validate_schema.py tests/benchmark-campaign
 
+      - name: Validate content filtering rules
+        run: python scripts/validate_schema.py filtering tests/benchmark-campaign
+
   pr-discipline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

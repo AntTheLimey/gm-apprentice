@@ -18,15 +18,23 @@ All campaign content falls into three categories:
 ### Always included
 
 - Played/reviewed sessions (`status: played | reviewed`)
+- Scenes with `status: modified` (they happened, just
+  differently than planned — publish the reality)
 - Entity files in standard vault folders
 - `_Campaign/` overview files
 - `_attachments/` images referenced by included entities
 
+### Always excluded (scene-level)
+
+- Scenes with `status: cut` (removed from the session)
+- Scenes with `status: skipped` (didn't happen)
+
 ### Ambiguous (ask the GM)
 
-- Scenes with `status: skipped | cut | modified`
-- Entities not matching any clear convention
-- Files the skill cannot confidently categorize
+- Files with no `type` field
+- Files in non-standard directories
+- Entities with `source_confidence: SUPERSEDED` that have
+  no `superseded_by` reference
 
 ## Configuration
 

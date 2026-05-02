@@ -20,7 +20,7 @@ from pathlib import Path
 # Valid enum values
 SOURCE_CONFIDENCE = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = {"planned", "prepped", "played", "wrap-up", "reviewed"}
-SCENE_STATUS = {"planned", "ready", "played", "cut"}
+SCENE_STATUS = {"planned", "ready", "played", "cut", "skipped", "modified"}
 SCENE_TYPES = {
     "investigation", "social", "combat", "chase",
     "transition", "horror", "downtime", "other"
@@ -200,25 +200,53 @@ def validate_file(filepath: Path) -> list[str]:
     return errors
 
 
-def main():
-    # Determine campaign directory
-    if len(sys.argv) > 1:
-        campaign_dir = Path(sys.argv[1])
-    else:
-        campaign_dir = Path("tests/benchmark-campaign")
+# Content filtering rules — scenes that should be auto-excluded or auto-included
+FILTERING_EXCLUDE_STATUSES = {"cut", "skipped"}
+FILTERING_INCLUDE_STATUSES = {"played", "modified"}
 
-    if not campaign_dir.exists():
-        print(f"Error: Directory not found: {campaign_dir}")
-        sys.exit(1)
 
-    # Find all markdown files
+def validate_filtering(campaign_dir: Path) -> int:
+    """Validate that scene statuses map to correct filtering decisions."""
+    errors = 0
+
+    for filepath in sorted(campaign_dir.rglob("*.md")):
+        try:
+            content = filepath.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+
+        frontmatter = extract_frontmatter(content)
+        if frontmatter is None:
+            continue
+
+        entity_type = frontmatter.get("type", "")
+        if entity_type != "scene":
+            continue
+
+        status = frontmatter.get("status", "")
+        rel_path = filepath.relative_to(campaign_dir)
+
+        if status in FILTERING_EXCLUDE_STATUSES:
+            print(f"  EXCLUDE {rel_path} (status: {status})")
+        elif status in FILTERING_INCLUDE_STATUSES:
+            print(f"  INCLUDE {rel_path} (status: {status})")
+        elif status == "planned" or status == "ready":
+            print(f"  EXCLUDE {rel_path} (prep status: {status})")
+        else:
+            print(f"  AMBIGUOUS {rel_path} (status: {status})")
+            errors += 1
+
+    return errors
+
+
+def validate_campaign(campaign_dir: Path) -> int:
+    """Validate campaign entity schemas. Returns exit code."""
     md_files = list(campaign_dir.rglob("*.md"))
 
     if not md_files:
         print(f"Warning: No markdown files found in {campaign_dir}")
-        sys.exit(0)
+        return 0
 
-    # Validate each file
     total_errors = 0
     files_with_errors = 0
 
@@ -232,16 +260,43 @@ def main():
                 print(f"  - {error}")
                 total_errors += 1
 
-    # Summary
     print(f"\n{'='*50}")
     print(f"Validated {len(md_files)} files")
 
     if total_errors == 0:
         print("All schema checks passed!")
-        sys.exit(0)
+        return 0
     else:
         print(f"Found {total_errors} error(s) in {files_with_errors} file(s)")
+        return 1
+
+
+def main():
+    mode = "campaign"
+    campaign_dir = Path("tests/benchmark-campaign")
+
+    args = sys.argv[1:]
+    if args and args[0] == "filtering":
+        mode = "filtering"
+        campaign_dir = Path(args[1]) if len(args) > 1 else campaign_dir
+    elif args:
+        campaign_dir = Path(args[0])
+
+    if not campaign_dir.exists():
+        print(f"Error: Directory not found: {campaign_dir}")
         sys.exit(1)
+
+    if mode == "filtering":
+        print(f"Filtering validation: {campaign_dir}")
+        errors = validate_filtering(campaign_dir)
+        if errors:
+            print(f"\n{errors} ambiguous scene(s) found")
+            sys.exit(1)
+        else:
+            print("\nAll scenes have deterministic filtering rules")
+            sys.exit(0)
+    else:
+        sys.exit(validate_campaign(campaign_dir))
 
 
 if __name__ == "__main__":
