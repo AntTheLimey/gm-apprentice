@@ -5,7 +5,7 @@ Context for Claude sessions working in this repository.
 ## What this is
 
 A Claude Code plugin marketplace at `AntTheLimey/gm-apprentice` containing
-seven TTRPG Game Master skills:
+eight TTRPG Game Master skills:
 
 - `ttrpg-expert` — rules, content generation, session planning
 - `campaign-organizer` — vault structure, knowledge graph metadata
@@ -14,6 +14,7 @@ seven TTRPG Game Master skills:
 - `session-play` — at-the-table GM support (speed-optimised)
 - `session-wrapup` — post-session processing, entity creation, recaps
 - `vault-ingest` — ingestion of old campaign materials into the vault
+- `publish-site` — publish campaign vault as a static website
 
 Supported systems: CoC 7e (+ Regency Cthulhu variant), GURPS 4e, FitD,
 D&D 5e 2024.
@@ -117,6 +118,36 @@ and move it to the "Completed" section with a PR number or commit SHA.
 - Match existing commit style — terse, sentence-case, no conventional-commits
   prefixes
 - Prefer small, focused commits over batched changes
+
+## Development workflow
+
+Every non-trivial change follows this sequence:
+
+1. **Branch** — create a feature branch from main
+2. **Implement** — write code and tests for any scripts or tooling
+3. **Version bump** — bump `version` in `.claude-plugin/plugin.json`
+   (patch by default unless the user specifies otherwise)
+4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
+   under the new version in `CHANGELOG.md`, following the existing format
+5. **Local review** — dispatch the code-reviewer agent against the branch
+   before pushing; fix all findings
+6. **Ask before pushing** — present a summary of what will be pushed and
+   wait for explicit user confirmation before running `git push` or
+   `gh pr create`. Never push or open a PR autonomously.
+7. **Push + PR** — push the branch and open a PR to main
+8. **CI** — wait for all checks to pass
+9. **CodeRabbit** — check for unresolved CodeRabbit comments on the PR;
+   address all findings before merging
+10. **Merge** — the release workflow creates the tag and GitHub Release
+    with skill zips automatically
+
+**What counts as trivial:** single file, 1-2 lines, user explicitly says
+"push to main." Everything else gets a branch and PR.
+
+**Test requirements:** at minimum, run `python3 scripts/validate_schema.py`
+and verify markdown lint passes. For script or tooling changes, verify the
+scripts work locally (e.g., `./scripts/build-skill-zips.sh` produces 8
+valid zips). For publish tool changes, run the publish tool test suite.
 
 ## Skill edits
 

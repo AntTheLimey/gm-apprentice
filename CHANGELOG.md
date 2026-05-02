@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.12] — 2026-05-01
+
+### Added
+
+- **Development workflow** — CLAUDE.md now documents the required
+  branch → implement → version bump → changelog → review → PR → merge
+  sequence for all non-trivial changes
+- **PR discipline checks** — CI warns on missing version bumps and
+  changelog updates; blocks on broken build script output
+
+---
+
+## [1.4.11] — 2026-05-01
+
+### Added
+
+- **Automated releases** — GitHub Action creates tagged releases with
+  skill zips on version bump; skill zips attached as release assets
+  for users who can't install plugins
+- **Build script** — `scripts/build-skill-zips.sh` packages each skill
+  as a self-contained zip with shared references bundled
+- **Individual skill upload docs** — README and quickstart updated with
+  instructions for uploading skill zips to Claude Desktop
+
+### Fixed
+
+- **ttrpg-expert description** — trimmed to 983 chars to fit the
+  1024-character limit for skill descriptions
+- **Claude Desktop install instructions** — updated for the new
+  Cowork > Customize > Personal plugins UI flow
+- **Stale skill counts** — README Obsidian section and quickstart now
+  reference all 8 skills
+
+---
+
 ## [1.4.10] — 2026-05-01
 
 ### Fixed
@@ -251,6 +286,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.12]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.11...v1.4.12
+[1.4.11]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.10...v1.4.11
+[1.4.10]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.9...v1.4.10
 [1.4.9]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.8...v1.4.9
 [1.4.8]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.7...v1.4.8
 [1.4.7]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.6...v1.4.7
