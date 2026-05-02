@@ -318,6 +318,8 @@ li {
   display: none;
   padding: 1rem;
   background: var(--card-bg);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .accordion.open .accordion-body {
   display: block;
