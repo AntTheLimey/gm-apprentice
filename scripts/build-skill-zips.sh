@@ -5,6 +5,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SKILLS_DIR="$REPO_ROOT/skills"
 OUT_DIR="${1:-$REPO_ROOT/dist}"
 
+# Stamp shared/migrations.md with the canonical version from plugin.json
+VERSION=$(jq -r '.version' "$REPO_ROOT/.claude-plugin/plugin.json")
+sed -i '' "s/current_version: \".*\"/current_version: \"$VERSION\"/" \
+  "$SKILLS_DIR/shared/migrations.md"
+
 mkdir -p "$OUT_DIR"
 
 for skill_dir in "$SKILLS_DIR"/*/; do
