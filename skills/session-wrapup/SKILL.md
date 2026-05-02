@@ -11,14 +11,8 @@ via the Wrap-Up file.
 first invocation.
 
 **Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md`. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`) before
-proceeding with wrap-up. Resume after migration completes. Skip
-this check if `_meta/` doesn't exist (that's first-time setup,
-not migration).
+`shared/version-check.md` and follow the version-check
+procedure before proceeding with wrap-up.
 
 **Document chain:** Read `shared/session-document-chain.md`.
 Session-wrapup reads the Play Notes file and writes the Wrap-Up

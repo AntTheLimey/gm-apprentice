@@ -18,14 +18,8 @@ to the Play Notes file for note capture.
 intended scenes, NPCs, and hooks for quick reference during play.
 
 **Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md`. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`) before
-proceeding with play support. Resume after migration completes.
-Skip this check if `_meta/` doesn't exist (that's first-time
-setup, not migration).
+`shared/version-check.md` and follow the version-check
+procedure before proceeding with play support.
 
 **Trigger phrases:** "we're playing now", "quick question",
 "during the session", "I need a [NPC/location]", "give me
