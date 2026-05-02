@@ -70,3 +70,51 @@ jobs:
 
       - name: Validate campaign entity schemas
         run: python scripts/validate_schema.py tests/benchmark-campaign
+
+  pr-discipline:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check version bump
+        continue-on-error: true
+        run: |
+          PR_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          git fetch origin main --quiet
+          MAIN_VERSION=$(git show origin/main:.claude-plugin/plugin.json | jq -r '.version')
+          if [ "$PR_VERSION" = "$MAIN_VERSION" ]; then
+            echo "::warning::No version bump detected — no release will be created on merge"
+            exit 1
+          fi
+
+      - name: Check changelog updated
+        continue-on-error: true
+        run: |
+          PR_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          git fetch origin main --quiet
+          MAIN_VERSION=$(git show origin/main:.claude-plugin/plugin.json | jq -r '.version')
+          if [ "$PR_VERSION" != "$MAIN_VERSION" ]; then
+            if ! git diff origin/main -- CHANGELOG.md | grep -q '^+'; then
+              echo "::warning::Version bumped but CHANGELOG.md not updated"
+              exit 1
+            fi
+          fi
+
+      - name: Test build script
+        run: |
+          ./scripts/build-skill-zips.sh
+          ZIP_COUNT=$(ls dist/*.zip 2>/dev/null | wc -l | xargs)
+          if [ "$ZIP_COUNT" -ne 8 ]; then
+            echo "::error::Expected 8 skill zips, got $ZIP_COUNT"
+            exit 1
+          fi
+          for z in dist/*.zip; do
+            if ! unzip -l "$z" | grep -q 'SKILL.md'; then
+              echo "::error::$(basename "$z") missing SKILL.md"
+              exit 1
+            fi
+          done
+          echo "All 8 skill zips valid"
