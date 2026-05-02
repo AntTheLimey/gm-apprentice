@@ -6,7 +6,7 @@ This guide walks you through setting up a new TTRPG campaign with gm-apprentice,
 
 Claude Code uses "skills" — specialized instructions that activate automatically based on what you ask Claude to do. You don't need to select a skill manually. When you say "build me an NPC," Claude recognizes this as a ttrpg-expert task and uses that skill's knowledge to respond.
 
-gm-apprentice installs six skills:
+gm-apprentice installs eight skills:
 
 | Skill | What it does |
 |-------|-------------|
@@ -16,6 +16,8 @@ gm-apprentice installs six skills:
 | **session-prep** | Between-session preparation and reconciliation |
 | **session-play** | At-the-table lookups and note capture |
 | **session-wrapup** | Post-session recaps and entity creation |
+| **vault-ingest** | Ingest old campaign materials into a structured vault |
+| **publish-site** | Publish your campaign vault as a static website |
 
 You talk to Claude normally. The skills handle the rest.
 
@@ -30,9 +32,14 @@ Choose your platform:
 /reload-plugins
 ```
 
-**Claude Desktop:** Go to Settings > Plugins > Browse plugins >
-Personal tab > click **+** > enter
+**Claude Desktop:** Switch to the **Cowork** tab > **Customize** >
+under **Personal plugins** click **+** > **Create plugin** >
+**Add marketplace** > enter
 `https://github.com/AntTheLimey/gm-apprentice` > Install.
+
+**No plugin support?** Download individual skill zips from the
+[latest release](https://github.com/AntTheLimey/gm-apprentice/releases/latest),
+then go to **Chat > Skills**, click **+**, and upload each zip.
 
 **VS Code / Cursor:** Install the Claude Code extension, type
 `/plugins` in the prompt, add the `AntTheLimey/gm-apprentice`
@@ -163,3 +170,5 @@ For detailed guidance on each skill, see the individual skill guides:
 - [session-prep](session-prep.md)
 - [session-play](session-play.md)
 - [session-wrapup](session-wrapup.md)
+- [vault-ingest](vault-ingest.md)
+- [publish-site](publish-tool.md)
