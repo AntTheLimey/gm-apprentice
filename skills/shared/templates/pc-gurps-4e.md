@@ -86,6 +86,8 @@ motivations, and description.}
 
 ## Skills
 
+<!-- Always a single alphabetized table. No category sub-headings. -->
+
 | Name | Difficulty | Relative Level | Points | Effective |
 |------|-----------|----------------|--------|-----------|
 | | | | | |
@@ -97,6 +99,8 @@ motivations, and description.}
 | | | | |
 
 ## Spells
+
+<!-- Always a single alphabetized table. No category sub-headings. -->
 
 | Name | College | Skill Level | Energy | Maintain | Notes |
 |------|---------|-------------|--------|----------|-------|
