@@ -55,10 +55,10 @@ generation to campaign management and session lifecycle support.
 
 ### Claude Desktop (Mac / Windows)
 
-1. Open Claude Desktop
-2. Go to **Settings > Plugins > Browse plugins**
-3. Switch to the **Personal** tab
-4. Click **+** to add a marketplace
+1. Open Claude Desktop and switch to the **Cowork** tab
+2. Click **Customize**
+3. Under **Personal plugins**, click **+** (Add plugin)
+4. Select **Create plugin > Add marketplace**
 5. Enter: `https://github.com/AntTheLimey/gm-apprentice`
 6. Once synced, click **Install** on the gm-apprentice plugin
 
