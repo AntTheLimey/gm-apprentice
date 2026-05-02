@@ -131,9 +131,12 @@ Every non-trivial change follows this sequence:
    under the new version in `CHANGELOG.md`, following the existing format
 5. **Local review** — dispatch the code-reviewer agent against the branch
    before pushing; fix all findings
-6. **Push + PR** — push the branch and open a PR to main
-7. **CI** — wait for all checks to pass
-8. **Merge** — the release workflow creates the tag and GitHub Release
+6. **Ask before pushing** — present a summary of what will be pushed and
+   wait for explicit user confirmation before running `git push` or
+   `gh pr create`. Never push or open a PR autonomously.
+7. **Push + PR** — push the branch and open a PR to main
+8. **CI** — wait for all checks to pass
+9. **Merge** — the release workflow creates the tag and GitHub Release
    with skill zips automatically
 
 **What counts as trivial:** single file, 1-2 lines, user explicitly says
