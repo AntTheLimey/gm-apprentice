@@ -31,6 +31,9 @@ _backup/
 # Claude Code local settings
 .claude/
 
+# Skill zip distribution files (built by scripts/build-skill-zips.sh)
+dist/
+
 # Personal GURPS reference files (not for distribution)
 skills/ttrpg-expert/systems/gurps-4e/personal/
 
