@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.11] — 2026-05-01
+
+### Added
+
+- **Automated releases** — GitHub Action creates tagged releases with
+  skill zips on version bump; skill zips attached as release assets
+  for users who can't install plugins
+- **Build script** — `scripts/build-skill-zips.sh` packages each skill
+  as a self-contained zip with shared references bundled
+- **Individual skill upload docs** — README and quickstart updated with
+  instructions for uploading skill zips to Claude Desktop
+
+### Fixed
+
+- **ttrpg-expert description** — trimmed to 983 chars to fit the
+  1024-character limit for skill descriptions
+- **Claude Desktop install instructions** — updated for the new
+  Cowork > Customize > Personal plugins UI flow
+- **Stale skill counts** — README Obsidian section and quickstart now
+  reference all 8 skills
+
+---
+
 ## [1.4.10] — 2026-05-01
 
 ### Fixed
