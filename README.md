@@ -123,9 +123,10 @@ Install via the CLI method instead:
 
 ## Obsidian Setup
 
-Five of the six skills (campaign-organizer, campaign-qa,
-session-prep, session-play, session-wrapup) work with an Obsidian vault to manage campaign
-content. The ttrpg-expert skill works standalone.
+Six of the eight skills (campaign-organizer, campaign-qa,
+session-prep, session-play, session-wrapup, vault-ingest) work
+with an Obsidian vault to manage campaign content. The
+ttrpg-expert and publish-site skills work standalone.
 
 ### Dependency Tiers
 

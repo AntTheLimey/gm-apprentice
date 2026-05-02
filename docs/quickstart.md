@@ -170,5 +170,5 @@ For detailed guidance on each skill, see the individual skill guides:
 - [session-prep](session-prep.md)
 - [session-play](session-play.md)
 - [session-wrapup](session-wrapup.md)
-- [vault-ingest](vault-ingest.md)
+- [vault-ingest](../README.md#skills)
 - [publish-site](publish-tool.md)

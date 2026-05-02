@@ -17,6 +17,10 @@ jobs:
         id: version
         run: |
           VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          if [[ "$VERSION" == "null" || -z "$VERSION" ]]; then
+            echo "::error::No version field in plugin.json"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
