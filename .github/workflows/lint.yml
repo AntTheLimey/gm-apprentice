@@ -94,10 +94,9 @@ jobs:
         continue-on-error: true
         run: |
           PR_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
-          git fetch origin main --quiet
           MAIN_VERSION=$(git show origin/main:.claude-plugin/plugin.json | jq -r '.version')
           if [ "$PR_VERSION" != "$MAIN_VERSION" ]; then
-            if ! git diff origin/main -- CHANGELOG.md | grep -q '^+'; then
+            if ! git diff origin/main -- CHANGELOG.md | grep -q '^+[^+]'; then
               echo "::warning::Version bumped but CHANGELOG.md not updated"
               exit 1
             fi
