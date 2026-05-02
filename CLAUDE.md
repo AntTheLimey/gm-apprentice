@@ -136,8 +136,10 @@ Every non-trivial change follows this sequence:
    `gh pr create`. Never push or open a PR autonomously.
 7. **Push + PR** — push the branch and open a PR to main
 8. **CI** — wait for all checks to pass
-9. **Merge** — the release workflow creates the tag and GitHub Release
-   with skill zips automatically
+9. **CodeRabbit** — check for unresolved CodeRabbit comments on the PR;
+   address all findings before merging
+10. **Merge** — the release workflow creates the tag and GitHub Release
+    with skill zips automatically
 
 **What counts as trivial:** single file, 1-2 lines, user explicitly says
 "push to main." Everything else gets a branch and PR.
