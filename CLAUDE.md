@@ -119,6 +119,31 @@ and move it to the "Completed" section with a PR number or commit SHA.
   prefixes
 - Prefer small, focused commits over batched changes
 
+## Development workflow
+
+Every non-trivial change follows this sequence:
+
+1. **Branch** — create a feature branch from main
+2. **Implement** — write code and tests for any scripts or tooling
+3. **Version bump** — bump `version` in `.claude-plugin/plugin.json`
+   (patch by default unless the user specifies otherwise)
+4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
+   under the new version in `CHANGELOG.md`, following the existing format
+5. **Local review** — dispatch the code-reviewer agent against the branch
+   before pushing; fix all findings
+6. **Push + PR** — push the branch and open a PR to main
+7. **CI** — wait for all checks to pass
+8. **Merge** — the release workflow creates the tag and GitHub Release
+   with skill zips automatically
+
+**What counts as trivial:** single file, 1-2 lines, user explicitly says
+"push to main." Everything else gets a branch and PR.
+
+**Test requirements:** at minimum, run `python3 scripts/validate_schema.py`
+and verify markdown lint passes. For script or tooling changes, verify the
+scripts work locally (e.g., `./scripts/build-skill-zips.sh` produces 8
+valid zips). For publish tool changes, run the publish tool test suite.
+
 ## Skill edits
 
 - **Use Opus** (not Sonnet/Haiku) for any skill file modifications
