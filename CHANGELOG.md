@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.12] — 2026-05-01
+
+### Added
+
+- **Development workflow** — CLAUDE.md now documents the required
+  branch → implement → version bump → changelog → review → PR → merge
+  sequence for all non-trivial changes
+- **PR discipline checks** — CI warns on missing version bumps and
+  changelog updates; blocks on broken build script output
+
+---
+
 ## [1.4.11] — 2026-05-01
 
 ### Added
