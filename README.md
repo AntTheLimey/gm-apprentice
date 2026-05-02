@@ -62,6 +62,18 @@ generation to campaign management and session lifecycle support.
 5. Enter: `https://github.com/AntTheLimey/gm-apprentice`
 6. Once synced, click **Install** on the gm-apprentice plugin
 
+#### Individual skill upload (free / starter accounts)
+
+If your plan doesn't include plugin support, you can upload
+skills individually:
+
+1. Download the `.zip` files you want from the
+   [latest release](https://github.com/AntTheLimey/gm-apprentice/releases/latest)
+2. In Claude Desktop, go to **Chat > Skills**
+3. Click **+** and upload each zip file
+
+See the skill table above for what each skill does.
+
 ### VS Code
 
 1. Install the [Claude Code extension](vscode:extension/anthropic.claude-code)
