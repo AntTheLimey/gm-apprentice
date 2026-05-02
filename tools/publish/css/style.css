@@ -838,6 +838,33 @@ td .stat {
   margin-top: 3rem;
 }
 
+/* ===== BACK TO TOP ===== */
+.back-to-top {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--medium);
+  color: var(--white);
+  font-size: 1.25rem;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 50;
+}
+.back-to-top.visible {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+.back-to-top:hover {
+  background: var(--accent);
+  opacity: 1;
+}
+
 /* ===== NPC QUICK STATS ===== */
 .quick-stats {
   display: grid;
@@ -1066,7 +1093,8 @@ td .stat {
   .site-nav,
   .menu-toggle,
   .section-nav,
-  .site-footer {
+  .site-footer,
+  .back-to-top {
     display: none;
   }
   .accordion-body,

@@ -54,10 +54,18 @@ ${content}
 
 ${footerHtml}
 
+<button class="back-to-top" onclick="window.scrollTo({top:0})" aria-label="Back to top">&#8593;</button>
+
 <script>
 document.querySelectorAll('.site-nav a').forEach(a => {
   a.addEventListener('click', () => document.getElementById('nav').classList.remove('open'));
 });
+(function() {
+  var btn = document.querySelector('.back-to-top');
+  if (btn) window.addEventListener('scroll', function() {
+    btn.classList.toggle('visible', window.scrollY > 400);
+  });
+})();
 </script>
 
 </body>
