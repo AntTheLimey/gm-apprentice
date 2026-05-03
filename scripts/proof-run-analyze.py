@@ -205,14 +205,23 @@ def generate_summary(
 
         if not token_vals:
             print(
-                f"  WARNING: Query {qid} has no valid metrics "
-                f"across {len(runs)} run(s) — check response files"
+                f"  WARNING: query-{qid:02d} ({sys_name}): "
+                f"no valid metrics found across {n_runs} run(s)",
+                file=sys.stderr,
             )
-            lines.append(
-                f"| {qid} | {sys_name} | {q['type']} | "
-                + ("⚠️ NO DATA | | | |" if n_runs > 1 else "⚠️ NO DATA | |")
-            )
-        elif n_runs > 1:
+            if n_runs > 1:
+                lines.append(
+                    f"| {qid} | {sys_name} | {q['type']} | "
+                    f"⚠️ NO DATA | — | — | — |"
+                )
+            else:
+                lines.append(
+                    f"| {qid} | {sys_name} | {q['type']} | "
+                    f"⚠️ NO DATA | — |"
+                )
+            continue
+
+        if n_runs > 1:
             tq1, tmed, tq3 = compute_iqr(token_vals)
             wq1, wmed, wq3 = (
                 compute_iqr(time_vals) if time_vals else (0, 0, 0)
