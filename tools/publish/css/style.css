@@ -523,11 +523,11 @@ td .stat {
   margin-bottom: 0;
 }
 
-/* ===== STUB BADGE ===== */
-.stub-badge {
+/* ===== CONFIDENCE BADGES ===== */
+.badge-stub,
+.badge-draft,
+.badge-superseded {
   display: inline-block;
-  background: var(--warning);
-  color: var(--dark);
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -536,6 +536,21 @@ td .stat {
   border-radius: 0.2rem;
   vertical-align: middle;
   margin-left: 0.5rem;
+}
+
+.badge-stub {
+  background: var(--warning);
+  color: var(--dark);
+}
+
+.badge-draft {
+  background: #e8b84d;
+  color: var(--dark);
+}
+
+.badge-superseded {
+  background: var(--border);
+  color: var(--text-muted);
 }
 
 /* needs development box */

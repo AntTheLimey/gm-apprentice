@@ -231,10 +231,27 @@ These fields are read by all templates if present:
 | Field | Description |
 |-------|-------------|
 | `aliases` | List of alternate names used for wiki-link resolution |
-| `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED — SUPERSEDED entities render a redirect banner |
-| `superseded_by` | `[[wiki-link]]` shown in the redirect banner if `canon_status` is SUPERSEDED |
+| `source_confidence` | DRAFT / AUTHORITATIVE / SUPERSEDED / STUB — renders a confidence badge (see below) |
+| `canon_status` | Legacy name for `source_confidence` — still works as fallback |
+| `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
 | `relationships` | List of `{ target, type, description }` objects rendered as a Relationships section |
 | `tags` | Used for NPC importance scoring on the landing page; not rendered on entity pages |
+
+### Confidence Badges
+
+The publish tool reads `source_confidence` from entity frontmatter
+(falls back to `canon_status` for backwards compatibility) and
+renders a badge next to the page title:
+
+| Value | Badge | Appearance |
+|-------|-------|-----------|
+| AUTHORITATIVE | None | Normal page (no badge) |
+| DRAFT | "Draft" | Amber badge — content not yet confirmed |
+| STUB | "Stub" | Warning-coloured badge — placeholder only |
+| SUPERSEDED | "Superseded" | Grey badge — replaced by newer content |
+
+SUPERSEDED entities also redirect wiki-links to their
+`superseded_by` target when that target exists in the site.
 
 **Page title:** The page title is always derived from the vault
 filename (without the `.md` extension), not from frontmatter. To

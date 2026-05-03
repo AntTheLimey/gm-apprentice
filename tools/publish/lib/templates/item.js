@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
 
 function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap) {
   const fm = page.frontmatter;
@@ -59,7 +59,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap)
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
 </div>`;
 
   const content = `${headerCard}\n${badgeHtml}\n${statBlock}\n${holderHtml}\n${originHtml}\n${processedContent.html}\n${processedContent.relationships}`;

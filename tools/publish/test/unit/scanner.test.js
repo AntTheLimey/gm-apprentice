@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
 const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles } = require('../../lib/scanner');
+const { getConfidence } = require('../../lib/templates/base');
 
 describe('slugify', () => {
   it('converts to lowercase', () => {
@@ -76,13 +77,35 @@ describe('buildLinkMap', () => {
     assert.strictEqual(map['John'], 'a.html');
   });
 
-  it('redirects superseded entities', () => {
+  it('redirects superseded entities via source_confidence', () => {
+    const pages = [
+      { title: 'New Name', outputPath: 'new.html', frontmatter: {} },
+      { title: 'Old Name', outputPath: 'old.html', frontmatter: { source_confidence: 'SUPERSEDED', superseded_by: '[[New Name]]' } },
+    ];
+    const map = buildLinkMap(pages);
+    assert.strictEqual(map['Old Name'], 'new.html');
+  });
+
+  it('redirects superseded entities via canon_status fallback', () => {
     const pages = [
       { title: 'New Name', outputPath: 'new.html', frontmatter: {} },
       { title: 'Old Name', outputPath: 'old.html', frontmatter: { canon_status: 'SUPERSEDED', superseded_by: '[[New Name]]' } },
     ];
     const map = buildLinkMap(pages);
     assert.strictEqual(map['Old Name'], 'new.html');
+  });
+
+  it('excludes DRAFT pages using getConfidence filter (same predicate as build.js)', () => {
+    const pages = [
+      { title: 'Active NPC', outputPath: 'npc.html', frontmatter: { source_confidence: 'AUTHORITATIVE' } },
+      { title: 'Draft NPC', outputPath: 'draft.html', frontmatter: { source_confidence: 'DRAFT' } },
+      { title: 'Legacy Draft', outputPath: 'legacy.html', frontmatter: { canon_status: 'DRAFT' } },
+    ];
+    const filtered = pages.filter(p => getConfidence(p.frontmatter) !== 'DRAFT');
+    const map = buildLinkMap(filtered);
+    assert.ok('Active NPC' in map);
+    assert.ok(!('Draft NPC' in map));
+    assert.ok(!('Legacy Draft' in map));
   });
 });
 

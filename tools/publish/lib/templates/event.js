@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
 
 function parseParticipant(raw) {
   const str = String(raw).trim();
@@ -54,7 +54,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
   ${metaHtml}
 </div>`;
 

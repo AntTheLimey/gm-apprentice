@@ -1,18 +1,52 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { stubBadge, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
+const { confidenceBadge, getConfidence, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
 const { parseParticipant } = require('../../lib/templates/event');
 
-describe('stubBadge', () => {
-  it('returns badge for STUB status', () => {
-    const result = stubBadge({ canon_status: 'STUB' });
-    assert.ok(result.includes('stub-badge'));
+describe('getConfidence', () => {
+  it('prefers source_confidence over canon_status', () => {
+    assert.strictEqual(getConfidence({ source_confidence: 'DRAFT', canon_status: 'STUB' }), 'DRAFT');
+  });
+
+  it('falls back to canon_status', () => {
+    assert.strictEqual(getConfidence({ canon_status: 'STUB' }), 'STUB');
+  });
+
+  it('returns null when neither present', () => {
+    assert.strictEqual(getConfidence({}), null);
+  });
+});
+
+describe('confidenceBadge', () => {
+  it('returns badge for STUB via source_confidence', () => {
+    const result = confidenceBadge({ source_confidence: 'STUB' });
+    assert.ok(result.includes('badge-stub'));
     assert.ok(result.includes('Stub'));
   });
 
-  it('returns empty string for non-stub', () => {
-    assert.strictEqual(stubBadge({ canon_status: 'ACTIVE' }), '');
-    assert.strictEqual(stubBadge({}), '');
+  it('returns badge for STUB via canon_status fallback', () => {
+    const result = confidenceBadge({ canon_status: 'STUB' });
+    assert.ok(result.includes('badge-stub'));
+  });
+
+  it('returns badge for DRAFT', () => {
+    const result = confidenceBadge({ source_confidence: 'DRAFT' });
+    assert.ok(result.includes('badge-draft'));
+    assert.ok(result.includes('Draft'));
+  });
+
+  it('returns badge for SUPERSEDED', () => {
+    const result = confidenceBadge({ source_confidence: 'SUPERSEDED' });
+    assert.ok(result.includes('badge-superseded'));
+    assert.ok(result.includes('Superseded'));
+  });
+
+  it('returns empty string for AUTHORITATIVE', () => {
+    assert.strictEqual(confidenceBadge({ source_confidence: 'AUTHORITATIVE' }), '');
+  });
+
+  it('returns empty string when no confidence field', () => {
+    assert.strictEqual(confidenceBadge({}), '');
   });
 });
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.19] — 2026-05-03
+
+### Added
+
+- Confidence badges in published sites (Draft, Stub, Superseded)
+- `exclude_drafts` publish config option to filter DRAFT entities from sites
+- Stale DRAFT detection in campaign-qa (WARNING after 3+ sessions)
+- SUPERSEDED entities must declare `superseded_by` (enforced in CI)
+- Session 4 + confidence test entities in benchmark campaign
+
+### Fixed
+
+- Publish tool now reads `source_confidence` field (was checking nonexistent `canon_status`)
+- SUPERSEDED link-map redirect now works against real vault entities
+
 ## [1.4.18] — 2026-05-03
 
 ### Changed
@@ -364,6 +379,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.19]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.18...v1.4.19
 [1.4.18]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.17...v1.4.18
 [1.4.17]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.16...v1.4.17
 [1.4.16]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.15...v1.4.16

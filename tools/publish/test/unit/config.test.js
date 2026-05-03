@@ -24,6 +24,13 @@ describe('PUBLISH_DEFAULTS', () => {
   });
 });
 
+describe('exclude_drafts', () => {
+  it('defaults to false', () => {
+    const config = loadPublishConfig('/nonexistent/path');
+    assert.strictEqual(config.exclude_drafts, false);
+  });
+});
+
 describe('loadPublishConfig', () => {
   it('returns defaults when vault-config.md has no publish section', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));

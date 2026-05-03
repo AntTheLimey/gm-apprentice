@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
 
 function creatureTemplate(page, processedContent, navFor, config, imageMap) {
   const fm = page.frontmatter;
@@ -43,7 +43,7 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap) {
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
 </div>`;
 
   const content = `${headerCard}\n${badgeHtml}\n${statBlock}\n${abilities}\n${weaknesses}\n${processedContent.html}\n${processedContent.relationships}`;
