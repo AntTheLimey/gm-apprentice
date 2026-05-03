@@ -1098,4 +1098,54 @@ describe('build integration', () => {
       assert.ok(!html.includes('tab-story'), 'Should not have story panel');
     });
   });
+
+  describe('with-genre fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-genre-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-genre'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Genre Test',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: { 'Locations': 'locations' },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('copies genre preset CSS file', () => {
+      const horrorCss = path.join(outputDir, 'docs', 'css', 'themes', 'horror.css');
+      assert.ok(fs.existsSync(horrorCss));
+      const css = fs.readFileSync(horrorCss, 'utf-8');
+      assert.ok(css.includes('#1a1410'));
+    });
+
+    it('links genre CSS in HTML pages', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('themes/horror.css'));
+    });
+
+    it('generates theme.css with palette overrides', () => {
+      const themeCss = fs.readFileSync(path.join(outputDir, 'docs', 'css', 'theme.css'), 'utf-8');
+      assert.ok(themeCss.includes('#ff6600'));
+    });
+
+    it('genre alias resolves correctly', () => {
+      const { resolveGenrePreset } = require('../../lib/theme');
+      assert.strictEqual(resolveGenrePreset('cthulhu'), 'horror');
+      assert.strictEqual(resolveGenrePreset('gothic'), 'horror');
+    });
+  });
 });
