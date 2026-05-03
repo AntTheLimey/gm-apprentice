@@ -137,6 +137,12 @@ def validate_file(filepath: Path) -> list[str]:
                 f"Invalid source_confidence '{value}' — "
                 f"must be one of: {', '.join(sorted(SOURCE_CONFIDENCE))}"
             )
+        elif value == "SUPERSEDED":
+            superseded_by = frontmatter.get("superseded_by", "")
+            if not superseded_by:
+                errors.append(
+                    "SUPERSEDED entity missing 'superseded_by' reference"
+                )
 
     # Validate session status
     if entity_type == "session" and "status" in frontmatter:
