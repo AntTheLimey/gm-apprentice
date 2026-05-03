@@ -325,7 +325,7 @@ function build(options = {}) {
           const systemRenderer = getRenderer(system);
           html = systemRenderer
             ? systemRenderer(page, processed, sections, navFor, config, imageMap, storyHtml)
-            : pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml);
+            : pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, { publishConfig, pages });
           break;
         }
         case 'npc':

@@ -1063,12 +1063,14 @@ describe('build integration', () => {
       assert.ok(!fs.existsSync(storyPath), 'Story should not have its own page');
     });
 
-    it('creates PC page without tabs when no story exists', () => {
+    it('creates PC page with 4-tab layout even when no story exists', () => {
       const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'no-story-pc.html');
       assert.ok(fs.existsSync(pcPath));
       const html = fs.readFileSync(pcPath, 'utf-8');
-      assert.ok(!html.includes('tab-bar'), 'Should not have tab bar');
-      assert.ok(!html.includes('tab-story'), 'Should not have story panel');
+      assert.ok(html.includes('tab-bar'), 'Should have tab bar');
+      assert.ok(html.includes('tab-story'), 'Should have story panel');
+      assert.ok(html.includes('tab-equipment'), 'Should have equipment panel');
+      assert.ok(html.includes('tab-journey'), 'Should have journey panel');
     });
   });
 
