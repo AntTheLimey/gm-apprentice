@@ -43,10 +43,13 @@ Match user intent → go directly to the file. Skip clarification.
 **FitD entanglement/heat** → `systems/fitd/entanglements.md`
 **FitD magnitude** → `systems/fitd/magnitude.md`
 
-**D&D monster** → `systems/dnd-5e-2024/monsters.md`
+**D&D monster** → `systems/dnd-5e-2024/monsters.md` (index)
+  → detail: `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-plus.md`
 **D&D animal/beast** → `systems/dnd-5e-2024/animals.md`
-**D&D spell** → `systems/dnd-5e-2024/spells.md`
-**D&D magic item** → `systems/dnd-5e-2024/magic-items.md`
+**D&D spell** → `systems/dnd-5e-2024/spells.md` (index)
+  → detail: `spells-cantrips.md`, `spells-1.md` through `spells-9.md`
+**D&D magic item** → `systems/dnd-5e-2024/magic-items.md` (index)
+  → detail by category: `magic-items-armor.md`, `magic-items-weapons.md`, etc.
 **D&D equipment/weapon/armor** → `systems/dnd-5e-2024/equipment.md`
 **D&D class** → `systems/dnd-5e-2024/classes.md`
 **D&D feat** → `systems/dnd-5e-2024/feats.md`
@@ -228,10 +231,10 @@ No variant keyword or tag → use base CoC files only.
 
 | Request | File |
 |---------|------|
-| Monsters (by CR) | monsters.md |
+| Monsters (by CR) | monsters.md (index) → `monsters-cr{tier}.md` |
 | Animals / beasts | animals.md |
-| Spells (by level) | spells.md |
-| Magic items | magic-items.md |
+| Spells (by level) | spells.md (index) → `spells-{level}.md` |
+| Magic items | magic-items.md (index) → `magic-items-{category}.md` |
 | Equipment | equipment.md |
 | Classes | classes.md |
 | Feats | feats.md |
