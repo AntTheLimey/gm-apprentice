@@ -329,7 +329,9 @@ function build(options = {}) {
           break;
         }
         case 'npc':
-          html = npcTemplate(page, processed, navFor, config, imageMap);
+          html = npcTemplate(page, processed, navFor, config, imageMap, {
+            pages, linkMap, publishConfig,
+          });
           break;
         case 'creature':
           html = creatureTemplate(page, processed, navFor, config, imageMap);
