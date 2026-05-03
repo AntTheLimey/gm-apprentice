@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
 const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles } = require('../../lib/scanner');
+const { getConfidence } = require('../../lib/templates/base');
 
 describe('slugify', () => {
   it('converts to lowercase', () => {
@@ -94,15 +95,17 @@ describe('buildLinkMap', () => {
     assert.strictEqual(map['Old Name'], 'new.html');
   });
 
-  it('excludes DRAFT pages when excludeDrafts is set', () => {
+  it('excludes DRAFT pages using getConfidence filter (same predicate as build.js)', () => {
     const pages = [
       { title: 'Active NPC', outputPath: 'npc.html', frontmatter: { source_confidence: 'AUTHORITATIVE' } },
       { title: 'Draft NPC', outputPath: 'draft.html', frontmatter: { source_confidence: 'DRAFT' } },
+      { title: 'Legacy Draft', outputPath: 'legacy.html', frontmatter: { canon_status: 'DRAFT' } },
     ];
-    const filtered = pages.filter(p => (p.frontmatter.source_confidence || p.frontmatter.canon_status) !== 'DRAFT');
+    const filtered = pages.filter(p => getConfidence(p.frontmatter) !== 'DRAFT');
     const map = buildLinkMap(filtered);
     assert.ok('Active NPC' in map);
     assert.ok(!('Draft NPC' in map));
+    assert.ok(!('Legacy Draft' in map));
   });
 });
 

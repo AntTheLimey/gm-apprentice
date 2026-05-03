@@ -98,10 +98,18 @@ function build(options = {}) {
   // Main build logic
   assertSafeOutputDir();
   console.log('Scanning vault:', config.vaultPath);
-  config.excludeDrafts = publishConfig.exclude_drafts;
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
   pairStoryFiles(pages, config.vaultPath);
+
+  // Exclude DRAFT entities when configured (after pairing so story files resolve)
+  if (publishConfig.exclude_drafts) {
+    const { getConfidence } = require('./templates/base');
+    const before = pages.length;
+    pages = pages.filter(p => getConfidence(p.frontmatter) !== 'DRAFT');
+    const excluded = before - pages.length;
+    if (excluded > 0) console.log(`Excluded ${excluded} DRAFT entity/entities`);
+  }
 
   // Auto-exclude prep/draft files based on frontmatter (player mode only)
   function isAutoExcluded(fm) {

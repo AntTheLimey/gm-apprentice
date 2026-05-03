@@ -79,11 +79,6 @@ function scanVault(config) {
   }
 
   walk(vaultPath);
-
-  if (config.excludeDrafts) {
-    return pages.filter(p => getConfidence(p.frontmatter) !== 'DRAFT');
-  }
-
   return pages;
 }
 
