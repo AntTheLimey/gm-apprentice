@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.18] — 2026-05-03
+
+### Changed
+
+- **session-play enrichment** — expanded from 80 to 129 lines with direct routing for common mid-game needs (rules disputes, improv NPCs, spotlight management, combat pacing, scene recovery)
+- Added Common Mid-Game Lookups routing table pointing to exact files and sections in ttrpg-expert
+- Added Capture Shorthand section documenting entity extraction markers (`NEW-NPC:`, `NEW-LOC:`, `UPDATE:`, etc.) that session-wrapup expects
+- Explicit companion reference to `active-play-management.md` for GM-craft advice during play
+
+### Removed
+
+- Fix 9 (Filesystem Mode Honest Labeling) dropped from Fix and Fortify design spec
+
+---
+
 ## [1.4.17] — 2026-05-03
 
 ### Changed
@@ -349,6 +364,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.18]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.17...v1.4.18
 [1.4.17]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.16...v1.4.17
 [1.4.16]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.15...v1.4.16
 [1.4.15]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.14...v1.4.15
