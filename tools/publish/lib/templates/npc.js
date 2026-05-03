@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, stubBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
 
 function npcTemplate(page, processedContent, navFor, config, imageMap) {
   const fm = page.frontmatter;
@@ -8,7 +8,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap) {
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.displayTitle)}${stubBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
   <div class="meta">
     ${fm.occupation ? `<span><span class="label">Role</span> ${escapeHtml(fm.occupation)}</span>` : ''}
     ${fm.nationality ? `<span><span class="label">Nationality</span> ${escapeHtml(fm.nationality)}</span>` : ''}

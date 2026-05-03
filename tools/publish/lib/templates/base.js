@@ -72,11 +72,22 @@ document.querySelectorAll('.site-nav a').forEach(a => {
 </html>`;
 }
 
-function stubBadge(frontmatter) {
-  if (frontmatter.canon_status === 'STUB') {
-    return ' <span class="stub-badge">Stub</span>';
+function getConfidence(frontmatter) {
+  return frontmatter.source_confidence || frontmatter.canon_status || null;
+}
+
+function confidenceBadge(frontmatter) {
+  const confidence = getConfidence(frontmatter);
+  switch (confidence) {
+    case 'STUB':
+      return ' <span class="badge badge-stub">Stub</span>';
+    case 'DRAFT':
+      return ' <span class="badge badge-draft">Draft</span>';
+    case 'SUPERSEDED':
+      return ' <span class="badge badge-superseded">Superseded</span>';
+    default:
+      return '';
   }
-  return '';
 }
 
 // Maps entity types to frontmatter fields that should render as metadata badges.
@@ -136,7 +147,8 @@ module.exports = {
   cssPath,
   rootPath,
   baseShell,
-  stubBadge,
+  getConfidence,
+  confidenceBadge,
   TYPE_BADGE_FIELDS,
   metadataBadgesFor,
   portraitImg,

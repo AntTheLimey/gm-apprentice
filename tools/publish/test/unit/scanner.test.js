@@ -76,7 +76,16 @@ describe('buildLinkMap', () => {
     assert.strictEqual(map['John'], 'a.html');
   });
 
-  it('redirects superseded entities', () => {
+  it('redirects superseded entities via source_confidence', () => {
+    const pages = [
+      { title: 'New Name', outputPath: 'new.html', frontmatter: {} },
+      { title: 'Old Name', outputPath: 'old.html', frontmatter: { source_confidence: 'SUPERSEDED', superseded_by: '[[New Name]]' } },
+    ];
+    const map = buildLinkMap(pages);
+    assert.strictEqual(map['Old Name'], 'new.html');
+  });
+
+  it('redirects superseded entities via canon_status fallback', () => {
     const pages = [
       { title: 'New Name', outputPath: 'new.html', frontmatter: {} },
       { title: 'Old Name', outputPath: 'old.html', frontmatter: { canon_status: 'SUPERSEDED', superseded_by: '[[New Name]]' } },

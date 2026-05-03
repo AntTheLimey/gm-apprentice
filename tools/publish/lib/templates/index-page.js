@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, stubBadge } = require('./base');
+const { baseShell, cssPath, rootPath, confidenceBadge } = require('./base');
 
 function indexTemplate(outputDir, title, pages, navFor, config) {
   const outputPath = outputDir ? `${outputDir}/index.html` : 'index.html';
@@ -14,7 +14,7 @@ function indexTemplate(outputDir, title, pages, navFor, config) {
           : relativePath(currentDir, p.outputPath);
         return `
 <div class="roster-card">
-  <h3><a href="${href}">${escapeHtml(p.displayTitle)}</a>${stubBadge(fm)}</h3>
+  <h3><a href="${href}">${escapeHtml(p.displayTitle)}</a>${confidenceBadge(fm)}</h3>
   ${subtitle ? `<div class="role">${escapeHtml(subtitle)}</div>` : ''}
 </div>`;
       }).join('\n')}</div>`
