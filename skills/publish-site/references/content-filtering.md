@@ -18,8 +18,8 @@ All campaign content falls into three categories:
 ### Always included
 
 - Played/reviewed sessions (`status: played | reviewed`)
-- Scenes with `status: modified` (they happened, just
-  differently than planned — publish the reality)
+- Scenes with `status: played` or `status: modified` (they
+  happened — publish the reality, even if modified from plan)
 - Entity files in standard vault folders
 - `_Campaign/` overview files
 - `_attachments/` images referenced by included entities

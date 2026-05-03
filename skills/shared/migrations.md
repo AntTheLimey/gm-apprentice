@@ -93,3 +93,7 @@ No vault schema changes. Version stamp only.
 ## Migration: 1.4.13
 
 No vault schema changes. Version stamp only.
+
+## Migration: 1.4.14
+
+No vault schema changes. Version stamp only.

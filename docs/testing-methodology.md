@@ -114,8 +114,8 @@ methodology doc in `docs/` is the persistent reference.
 6. **Evaluator variance is real.** Same control answers
    scored 128 by one evaluator and 108 by another. Within-
    run deltas are meaningful; cross-run absolute comparisons
-   are not. Future improvement: run evaluations 3x and
-   average.
+   are not. See "Statistical Validity" below for minimum
+   run counts and significance thresholds.
 
 ## Statistical Validity
 

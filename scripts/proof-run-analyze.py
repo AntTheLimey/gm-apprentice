@@ -203,7 +203,16 @@ def generate_summary(
 
         sys_name = SYSTEMS.get(q["system"], q["system"])
 
-        if n_runs > 1 and token_vals:
+        if not token_vals:
+            print(
+                f"  WARNING: Query {qid} has no valid metrics "
+                f"across {len(runs)} run(s) — check response files"
+            )
+            lines.append(
+                f"| {qid} | {sys_name} | {q['type']} | "
+                + ("⚠️ NO DATA | | | |" if n_runs > 1 else "⚠️ NO DATA | |")
+            )
+        elif n_runs > 1:
             tq1, tmed, tq3 = compute_iqr(token_vals)
             wq1, wmed, wq3 = (
                 compute_iqr(time_vals) if time_vals else (0, 0, 0)
@@ -213,7 +222,7 @@ def generate_summary(
                 f"{tmed:,.0f} | {tq1:,.0f}–{tq3:,.0f} | "
                 f"{wmed / 1000:.1f} | {wq1 / 1000:.1f}–{wq3 / 1000:.1f} |"
             )
-        elif token_vals:
+        else:
             t = token_vals[0]
             w = time_vals[0] if time_vals else 0
             lines.append(
@@ -513,6 +522,9 @@ def generate_quality_prompt(
     phase = Path(phase_dir)
     baseline = Path(baseline_dir)
     baseline_runs = discover_runs(baseline)
+    if not baseline_runs:
+        print(f"  ERROR: No runs found in baseline dir {baseline}")
+        return
 
     median_run = pick_median_run(runs, queries)
     median_run_name = (
@@ -534,6 +546,9 @@ def generate_quality_prompt(
         "You are a quality checker for the gm-apprentice TTRPG plugin. "
         "Compare baseline and test responses using the plugin's own "
         "reference files as ground truth.\n",
+        "**Note:** Ground truth paths point to the current working tree. "
+        "If skill files changed between baseline and test runs, verify "
+        "against the correct version.\n",
         "For each query, read BOTH response files and the ground truth "
         "reference. Report:\n",
         "1. **Accuracy** — facts wrong vs the reference? Cite specifics.",
