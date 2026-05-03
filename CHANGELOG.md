@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.17] — 2026-05-03
+
+### Changed
+
+- **D&D monster data enrichment** — 235 monster stat blocks expanded with full SRD 5.2 combat data: ability scores, attack bonuses, damage dice, save DCs, traits, and legendary actions
+- Monster CR 11+ split into `cr11-16` and `cr17-plus` sub-files for headroom
+- ATTRIBUTION.md updated with expanded SRD 5.2 content note
+
+### Fixed
+
+- Enricher script: combat traits (Heated Body, Trampling Charge) no longer stripped in normal mode
+- Enricher script: two-stage save abilities (Paralyzing Breath, Petrifying Breath) now fully parsed
+- Enricher script: spellcasting-style actions (Ice Wall, Hellfire Spellcasting) now rendered correctly
+- Enricher script: SRD path configurable via CLI argument; size limit aligned to 25 KiB
+- Corrupted spell rows fixed: Forcecage, Fly, Knock, Moonbeam, Freedom of Movement, Greater Invisibility
+- Missing magic item effects restored: Ring of Telekinesis, Wand of Fear, Belt of Dwarvenkind
+- CI lint: `find` command no longer fails when `references/` directory is absent
+- Missing migration registry entries for 1.4.16 and 1.4.17 added
+
+---
+
+## [1.4.16] — 2026-05-03
+
+### Added
+
+- **D&D response templates** — spell lookup/browse, magic item lookup/browse, and monster standard/boss templates added to index file headers
+
+---
+
+## [1.4.15] — 2026-05-02
+
+### Changed
+
+- **D&D reference decomposition** — spells.md (79KB), magic-items.md (40KB), and monsters.md (23KB) split into compact indexes + sub-files; no sub-file exceeds 25KB
+- CI enforces 25KB reference file size limit
+
+---
+
 ## [1.4.14] — 2026-05-02
 
 ### Fixed
@@ -311,6 +349,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.17]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.16...v1.4.17
+[1.4.16]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.15...v1.4.16
+[1.4.15]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.14...v1.4.15
 [1.4.14]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.13...v1.4.14
 [1.4.13]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.12...v1.4.13
 [1.4.12]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.11...v1.4.12

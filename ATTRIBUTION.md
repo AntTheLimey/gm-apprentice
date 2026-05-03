@@ -11,6 +11,11 @@ the Creative Commons Attribution 4.0 International License,
 available at
 https://creativecommons.org/licenses/by/4.0/legalcode.
 
+Content derived from the SRD 5.2 includes: spell indexes and
+descriptions, magic item indexes and descriptions, and full
+monster stat blocks (ability scores, attacks, damage dice, save
+DCs, traits, legendary actions) for 235 creatures.
+
 ### Blades in the Dark / Forged in the Dark
 
 This work is based on Blades in the Dark (found at

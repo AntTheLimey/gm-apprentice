@@ -7,12 +7,13 @@ across multiple runs, and generates comparison reports with
 Cheaper/Faster/Better scorecards.
 
 Usage:
-    python3 scripts/proof-run-analyze.py <phase-dir> [--baseline <baseline-dir>]
+    python3 scripts/proof-run-analyze.py <phase-dir> [--baseline <baseline-dir>] [--queries <queries.json>]
 
 Examples:
     python3 scripts/proof-run-analyze.py tests/proof-runs/phase-1
-    python3 scripts/proof-run-analyze.py tests/proof-runs/phase-1 \\
-        --baseline tests/proof-runs/phase-0-baseline
+    python3 scripts/proof-run-analyze.py tests/proof-runs/fix-6/test \\
+        --baseline tests/proof-runs/fix-6/baseline \\
+        --queries scripts/proof-run-fix6-queries.json
 
 Directory structures supported:
     Multi-run (5-run protocol):
@@ -54,11 +55,12 @@ def parse_frontmatter(filepath: Path) -> dict:
 
     fm = {}
     for line in match.group(1).splitlines():
-        for key in ("query", "system", "type", "total_tokens", "wall_clock_ms"):
+        for key in ("query", "query_id", "system", "type",
+                    "total_tokens", "tool_uses", "wall_clock_ms"):
             m = re.match(rf'^{key}:\s*"?([^"]*)"?\s*$', line)
             if m:
                 val = m.group(1).strip()
-                if key in ("total_tokens", "wall_clock_ms"):
+                if key in ("total_tokens", "tool_uses", "wall_clock_ms"):
                     val = val.replace(",", "")
                     try:
                         val = int(val)
@@ -70,6 +72,8 @@ def parse_frontmatter(filepath: Path) -> dict:
                         )
                         val = 0
                 fm[key] = val
+    if "query_id" in fm and "query" not in fm:
+        fm["query"] = fm["query_id"]
     return fm
 
 
@@ -93,15 +97,18 @@ def get_query_metrics(run_dir: Path, query_id: int) -> dict:
     if key in metrics_data:
         return metrics_data[key]
 
-    response_file = run_dir / f"{key}-response.md"
-    if response_file.exists():
-        fm = parse_frontmatter(response_file)
-        return {
-            "total_tokens": fm.get("total_tokens", 0),
-            "wall_clock_ms": fm.get("wall_clock_ms", 0),
-        }
+    for candidate in [f"query-{query_id:02d}-response.md",
+                      f"query-{query_id}-response.md"]:
+        response_file = run_dir / candidate
+        if response_file.exists():
+            fm = parse_frontmatter(response_file)
+            return {
+                "total_tokens": fm.get("total_tokens", 0),
+                "tool_uses": fm.get("tool_uses", 0),
+                "wall_clock_ms": fm.get("wall_clock_ms", 0),
+            }
 
-    return {"total_tokens": 0, "wall_clock_ms": 0}
+    return {"total_tokens": 0, "tool_uses": 0, "wall_clock_ms": 0}
 
 
 def discover_runs(phase_dir: str | Path) -> list[Path]:
@@ -117,9 +124,12 @@ def discover_runs(phase_dir: str | Path) -> list[Path]:
     return []
 
 
-def load_queries() -> list[dict]:
-    """Load query definitions from proof-run-queries.json."""
-    p = Path(__file__).parent / "proof-run-queries.json"
+def load_queries(queries_path: str | None = None) -> list[dict]:
+    """Load query definitions from a queries JSON file."""
+    if queries_path:
+        p = Path(queries_path)
+    else:
+        p = Path(__file__).parent / "proof-run-queries.json"
     queries = json.loads(p.read_text(encoding="utf-8"))
     return queries
 
@@ -178,26 +188,29 @@ def generate_summary(
     if n_runs > 1:
         lines.append(
             "| # | System | Type | Median Tokens | IQR Tokens | "
-            "Median Time (s) | IQR Time (s) |"
+            "Median Tools | Median Time (s) | IQR Time (s) |"
         )
         lines.append(
             "|---|--------|------|--------------|------------|"
-            "----------------|-------------|"
+            "-------------|----------------|-------------|"
         )
     else:
         lines.append(
-            "| # | System | Type | Total Tokens | Wall-clock (s) |"
+            "| # | System | Type | Total Tokens | Tool Uses | Wall-clock (s) |"
         )
-        lines.append("|---|--------|------|-------------|----------------|")
+        lines.append("|---|--------|------|-------------|-----------|----------------|")
 
     for q in queries:
         qid = q["id"]
         token_vals = []
+        tool_vals = []
         time_vals = []
         for run_dir in runs:
             m = get_query_metrics(run_dir, qid)
             if m["total_tokens"] > 0:
                 token_vals.append(m["total_tokens"])
+            if m.get("tool_uses", 0) > 0:
+                tool_vals.append(m["tool_uses"])
             if m["wall_clock_ms"] > 0:
                 time_vals.append(m["wall_clock_ms"])
 
@@ -212,31 +225,34 @@ def generate_summary(
             if n_runs > 1:
                 lines.append(
                     f"| {qid} | {sys_name} | {q['type']} | "
-                    f"⚠️ NO DATA | — | — | — |"
+                    f"⚠️ NO DATA | — | — | — | — |"
                 )
             else:
                 lines.append(
                     f"| {qid} | {sys_name} | {q['type']} | "
-                    f"⚠️ NO DATA | — |"
+                    f"⚠️ NO DATA | — | — |"
                 )
             continue
 
         if n_runs > 1:
             tq1, tmed, tq3 = compute_iqr(token_vals)
+            umed = median(tool_vals) if tool_vals else 0
             wq1, wmed, wq3 = (
                 compute_iqr(time_vals) if time_vals else (0, 0, 0)
             )
             lines.append(
                 f"| {qid} | {sys_name} | {q['type']} | "
-                f"{tmed:,.0f} | {tq1:,.0f}–{tq3:,.0f} | "
-                f"{wmed / 1000:.1f} | {wq1 / 1000:.1f}–{wq3 / 1000:.1f} |"
+                f"{tmed:,.0f} | {tq1:,.0f}-{tq3:,.0f} | "
+                f"{umed:.0f} | "
+                f"{wmed / 1000:.1f} | {wq1 / 1000:.1f}-{wq3 / 1000:.1f} |"
             )
         else:
             t = token_vals[0]
+            u = tool_vals[0] if tool_vals else 0
             w = time_vals[0] if time_vals else 0
             lines.append(
                 f"| {qid} | {sys_name} | {q['type']} | "
-                f"{t:,} | {w / 1000:.1f} |"
+                f"{t:,} | {u} | {w / 1000:.1f} |"
             )
 
     lines.append("\n## Per-System Averages\n")
@@ -277,7 +293,7 @@ def generate_summary(
             avg_q3 = sum(query_q3s) / len(query_q3s)
             lines.append(
                 f"| {label} | {avg_med:,.0f} | "
-                f"{avg_q1:,.0f}–{avg_q3:,.0f} |"
+                f"{avg_q1:,.0f}-{avg_q3:,.0f} |"
             )
         else:
             lines.append(f"| {label} | {avg_med:,.0f} |")
@@ -606,9 +622,13 @@ Expected directory structure:
     parser.add_argument(
         "--baseline", help="Path to baseline directory for comparison"
     )
+    parser.add_argument(
+        "--queries", help="Path to custom queries JSON file "
+        "(default: scripts/proof-run-queries.json)"
+    )
     args = parser.parse_args()
 
-    queries = load_queries()
+    queries = load_queries(args.queries)
     runs = discover_runs(args.phase_dir)
 
     if not runs:

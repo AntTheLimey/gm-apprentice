@@ -41,6 +41,25 @@ jobs:
             exit 1
           fi
 
+      - name: Reference file size limit
+        run: |
+          SEARCH_DIRS=""
+          for d in skills/ttrpg-*/systems skills/ttrpg-*/references; do
+            [ -d "$d" ] && SEARCH_DIRS="$SEARCH_DIRS $d"
+          done
+          if [ -z "$SEARCH_DIRS" ]; then
+            echo "No reference directories found, skipping"
+            exit 0
+          fi
+          OVERSIZED=$(find $SEARCH_DIRS \
+            -name '*.md' -not -name 'SKILL.md' \
+            -not -path '*/personal/*' -size +25k 2>/dev/null)
+          if [ -n "$OVERSIZED" ]; then
+            echo "::error::Files exceed 25KB limit (split into sub-files):"
+            echo "$OVERSIZED"
+            exit 1
+          fi
+
       - name: Relative path validation
         run: |
           errors=0
