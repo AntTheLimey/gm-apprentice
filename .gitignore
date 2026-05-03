@@ -49,6 +49,8 @@ docs/plans/
 
 # Test results (run-specific artifacts)
 tests/compaction/
+tests/proof-runs/
+tests/benchmark-results/
 
 # Keep benchmark infrastructure tracked
 !tests/benchmark-campaign/
