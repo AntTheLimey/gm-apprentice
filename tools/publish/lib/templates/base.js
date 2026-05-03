@@ -24,29 +24,27 @@ function rootPath(outputPath) {
   return '../'.repeat(depth) || './';
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
+  const genreCssHref = genrePreset
+    ? cssHref.replace('style.css', `themes/${genrePreset}.css`)
+    : '';
+  const genreLinkTag = genreCssHref
+    ? `\n  <link rel="stylesheet" href="${genreCssHref}">`
+    : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} — ${escapeHtml(siteTitle)}</title>
-  <link rel="stylesheet" href="${cssHref}">
+  <link rel="stylesheet" href="${cssHref}">${genreLinkTag}
   <link rel="stylesheet" href="${themeCssHref}">
 </head>
 <body>
 
-<header class="site-header">
-  <button class="menu-toggle" onclick="document.getElementById('nav').classList.add('open')" aria-label="Menu">&#9776;</button>
-  <h1><a href="${rootHref}index.html">${escapeHtml(siteTitle)}</a></h1>
-</header>
-
-<nav id="nav" class="site-nav">
-  <button class="nav-close" onclick="document.getElementById('nav').classList.remove('open')" aria-label="Close">&times;</button>
-  ${navHtml}
-</nav>
+${navHtml}
 
 <main class="content">
 ${content}
@@ -57,9 +55,6 @@ ${footerHtml}
 <button class="back-to-top" onclick="window.scrollTo({top:0})" aria-label="Back to top">&#8593;</button>
 
 <script>
-document.querySelectorAll('.site-nav a').forEach(a => {
-  a.addEventListener('click', () => document.getElementById('nav').classList.remove('open'));
-});
 (function() {
   var btn = document.querySelector('.back-to-top');
   if (btn) window.addEventListener('scroll', function() {

@@ -221,6 +221,7 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     rootHref: './',
     content,
     footer: config.footer,
+    genrePreset: publishConfig._genrePreset,
   });
 }
 

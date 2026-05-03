@@ -5,7 +5,7 @@ const { processContent, extractSections, filterSections, stripDataview, stripGmO
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
-const { generateThemeCSS } = require('./theme');
+const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -20,6 +20,8 @@ function build(options = {}) {
   const outputDir = path.resolve(configDir, config.outputDir);
 
   const publishConfig = loadPublishConfig(config.vaultPath, config);
+  const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
+  publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
   const excludeFields = publishConfig.exclude_fields;
@@ -61,6 +63,15 @@ function build(options = {}) {
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
     fs.copyFileSync(src, dest);
+  }
+
+  function copyGenreCSS() {
+    if (!genrePreset) return;
+    const src = path.join(__dirname, `../css/themes/${genrePreset}.css`);
+    const dest = path.join(outputDir, `css/themes/${genrePreset}.css`);
+    ensureDir(dest);
+    fs.copyFileSync(src, dest);
+    console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
   function writeThemeCSS() {
@@ -177,6 +188,7 @@ function build(options = {}) {
 
   cleanOutput();
   copyCSS();
+  copyGenreCSS();
   writeThemeCSS();
 
   let campaignImageCopied = false;
