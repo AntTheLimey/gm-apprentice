@@ -16,6 +16,7 @@ perform each check systematically.
 3. [Name Similarity](#name-similarity)
 4. [Clue Redundancy](#clue-redundancy)
 5. [Graph Health](#graph-health)
+6. [Stale DRAFT Detection](#stale-draft-detection)
 
 ---
 
@@ -407,8 +408,6 @@ For each issue:
 ---
 
 ## Stale DRAFT Detection
-
-### Stale DRAFT Detection
 
 **Severity:** WARNING
 **Trigger:** Entity has `source_confidence: DRAFT` and has been

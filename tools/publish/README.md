@@ -169,8 +169,8 @@ The `type` frontmatter field determines which template renders each page.
 | `event`, `clue`, `document`, `chapter`, `session`, `scene` | Smart wiki | Frontmatter badges + body |
 | anything else | Smart wiki | All frontmatter shown as badges |
 
-Pages with `canon_status: SUPERSEDED` render a redirect banner pointing
-to the superseding entity.
+Pages with `source_confidence: SUPERSEDED` render a redirect banner pointing
+to the superseding entity (also supports legacy `canon_status` as fallback).
 
 ### Landing page (dashboard)
 
