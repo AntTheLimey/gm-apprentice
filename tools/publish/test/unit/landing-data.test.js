@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole } = require('../../lib/templates/landing-data');
+const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -252,5 +252,61 @@ describe('scoreNPCs', () => {
     const dragon = result.find(r => r.page.title === 'The Dragon');
     assert.ok(dragon, 'Dragon should appear in scored NPCs');
     assert.ok(dragon.score >= 3);
+  });
+});
+
+describe('getRecentEvents', () => {
+  it('returns events sorted by date, most recent first', () => {
+    const pages = [
+      { frontmatter: { type: 'event', date: '1936-01-01' }, displayTitle: 'Old' },
+      { frontmatter: { type: 'event', date: '1936-12-01' }, displayTitle: 'New' },
+      { frontmatter: { type: 'npc' }, displayTitle: 'Not event' },
+    ];
+    const result = getRecentEvents(pages, 10);
+    assert.strictEqual(result.length, 2);
+    assert.strictEqual(result[0].displayTitle, 'New');
+  });
+
+  it('respects max limit', () => {
+    const pages = [
+      { frontmatter: { type: 'event', date: '1936-01-01' } },
+      { frontmatter: { type: 'event', date: '1936-02-01' } },
+      { frontmatter: { type: 'event', date: '1936-03-01' } },
+    ];
+    const result = getRecentEvents(pages, 2);
+    assert.strictEqual(result.length, 2);
+  });
+
+  it('skips events without date', () => {
+    const pages = [
+      { frontmatter: { type: 'event' }, displayTitle: 'No date' },
+      { frontmatter: { type: 'event', date: '1936-01-01' }, displayTitle: 'Has date' },
+    ];
+    const result = getRecentEvents(pages, 10);
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0].displayTitle, 'Has date');
+  });
+});
+
+describe('getExploreDescriptions', () => {
+  it('returns genre-specific descriptions', () => {
+    const result = getExploreDescriptions('horror', {});
+    assert.ok(result.characters.includes('investigators'));
+  });
+
+  it('returns defaults for unknown genre', () => {
+    const result = getExploreDescriptions('steampunk', {});
+    assert.ok(result.characters.includes('people'));
+  });
+
+  it('allows overrides', () => {
+    const result = getExploreDescriptions('horror', { characters: 'Custom text' });
+    assert.strictEqual(result.characters, 'Custom text');
+    assert.ok(result.locations.includes('candlelit'));
+  });
+
+  it('returns defaults for null genre', () => {
+    const result = getExploreDescriptions(null, {});
+    assert.ok(result.characters);
   });
 });

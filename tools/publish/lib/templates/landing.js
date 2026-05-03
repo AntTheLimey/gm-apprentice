@@ -1,6 +1,9 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, DIR_LABELS, clientScripts } = require('./base');
-const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs } = require('./landing-data');
+const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, confidenceBadge, clientScripts } = require('./base');
+const {
+  getLatestSession, extractRecap, getInitials, getPCs,
+  getRecentEvents, getExploreDescriptions,
+} = require('./landing-data');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -14,14 +17,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function statusClass(status) {
-  if (!status) return 'status-alive';
-  const s = String(status).toLowerCase();
-  if (s === 'dead' || s === 'deceased') return 'status-kia';
-  if (s === 'missing' || s === 'unknown') return 'status-mia';
-  if (s === 'retired') return 'status-retired';
-  return 'status-alive';
-}
+const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
 
 function statusLabel(status) {
   if (!status) return 'Active';
@@ -32,193 +28,211 @@ function statusLabel(status) {
   return 'Active';
 }
 
-const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
-
-const SVG_SKULL = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="9" r="7"/><rect x="9" y="16" width="6" height="4" rx="1"/><circle cx="9.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><circle cx="14.5" cy="8" r="1.5" fill="var(--bg, #fff)"/><path d="M9 12 h1.5 L12 11 l1.5 1 H15" stroke="var(--bg, #fff)" stroke-width="0.8" fill="none"/></svg>';
-const SVG_SUNSET = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 16 Q8 8 12 10 Q16 8 20 16" fill="currentColor" opacity="0.6"/><line x1="12" y1="4" x2="12" y2="10" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="5" x2="10" y2="9" stroke="currentColor" stroke-width="1"/><line x1="16" y1="5" x2="14" y2="9" stroke="currentColor" stroke-width="1"/></svg>';
-const SVG_QUESTION = '<svg class="fallen-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text></svg>';
-
-const FALLEN_ICONS = {
-  dead: SVG_SKULL,
-  deceased: SVG_SKULL,
-  retired: SVG_SUNSET,
-  unknown: SVG_QUESTION,
-  missing: SVG_QUESTION,
-};
-
 function landingTemplate(pages, navFor, config, publishConfig) {
   const outputPath = 'index.html';
   const theme = (publishConfig && publishConfig.theme) || {};
   const campaignImage = theme.campaign_image || null;
   const settingYear = publishConfig ? publishConfig.setting_year : null;
+  const landingConfig = (publishConfig && publishConfig.landing) || {};
+  const genre = publishConfig._genrePreset || null;
 
-  // --- Hero ---
-  const heroImageHtml = campaignImage
-    ? `<img src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}" class="hero-image">`
+  // --- Zone 1: Hero ---
+  const heroImgHtml = campaignImage
+    ? `<img class="landing-hero-img" src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}">`
     : '';
+  const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
+  const sessionCount = pages.filter(p => p.frontmatter.type === 'session' && p.frontmatter.status === 'played').length;
+  const heroDateParts = [];
+  if (settingYear) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(settingYear))}</span>`);
+  heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);
+  const heroDates = heroDateParts.length > 0 ? `<div class="hero-dates">${heroDateParts.join('')}</div>` : '';
 
-  const latestSession = getLatestSession(pages);
-  const lastPlayed = latestSession ? formatDate(latestSession.frontmatter.actual_date) : null;
-  const inGameDate = settingYear ? `Spring ${settingYear}` : null;
-
-  let heroDatesHtml = '';
-  if (lastPlayed || inGameDate) {
-    heroDatesHtml = '<div class="hero-dates">';
-    if (lastPlayed) {
-      heroDatesHtml += `<div><span class="date-label">Last Played</span>${escapeHtml(lastPlayed)}</div>`;
-    }
-    if (inGameDate) {
-      heroDatesHtml += `<div><span class="date-label">In-Game Date</span>${escapeHtml(inGameDate)}</div>`;
-    }
-    heroDatesHtml += '</div>';
-  }
-
-  const taglineHtml = config.landingTagline
-    ? `<p class="hero-tagline">${escapeHtml(config.landingTagline)}</p>`
-    : '';
-
-  const heroHtml = `
-<div class="hero">
-  ${heroImageHtml}
+  const heroZone = `<div class="landing-hero">
+  ${heroImgHtml}
   <h1>${escapeHtml(config.siteTitle)}</h1>
-  ${taglineHtml}
-  ${heroDatesHtml}
+  ${tagline}
+  ${heroDates}
 </div>`;
 
-  // --- Story So Far ---
-  const recapText = extractRecap(latestSession);
-  let recapHtml = '';
-  if (recapText && latestSession) {
-    const sessionLink = latestSession.outputPath || '#';
-    recapHtml = `
-<div class="dashboard-section">
-  <h2>Story So Far</h2>
-  <div class="recap">
-    ${escapeHtml(recapText)}
-    <br>
-    <a href="${escapeHtml(sessionLink)}" class="recap-link">Read full session recap &rarr;</a>
+  // --- Zone 2: Latest Session Recap ---
+  const latestSession = getLatestSession(pages);
+  let recapZone = '';
+  if (latestSession) {
+    const recap = extractRecap(latestSession);
+    const dateStr = formatDate(latestSession.frontmatter.actual_date);
+    const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
+    const recapLink = `<a class="recap-link" href="${escapeHtml(latestSession.outputPath)}">Read full session &rarr;</a>`;
+    recapZone = `<div class="dashboard-section">
+  <h2>Latest Session${dateBadge}</h2>
+  <div class="recap">${recap ? escapeHtml(recap) : '<em>No recap available.</em>'}
+    <br>${recapLink}
   </div>
 </div>`;
   }
 
-  // --- The Team / The Fallen ---
+  // --- Zone 3: The Team (active PCs) ---
   const allPCs = getPCs(pages);
-  const activePCs = allPCs.filter(pc => !FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
-  const fallenPCs = allPCs.filter(pc => FALLEN_STATUSES.has(String(pc.frontmatter.status || '').toLowerCase()));
+  const activePCs = allPCs.filter(p => !FALLEN_STATUSES.has(String(p.frontmatter.status || '').toLowerCase()));
+  const fallenPCs = allPCs.filter(p => FALLEN_STATUSES.has(String(p.frontmatter.status || '').toLowerCase()));
 
-  function renderPCCards(pcs, showFallenIcon) {
-    return pcs.map(pc => {
+  let teamZone = '';
+  if (activePCs.length > 0) {
+    const pcCards = activePCs.map(pc => {
       const fm = pc.frontmatter;
       const initials = getInitials(pc.displayTitle);
-      const attachPrefix = (config.attachmentsDir || '_attachments') + '/';
-      const portraitStr = fm.portrait ? String(fm.portrait) : '';
-      const portraitRel = portraitStr.startsWith(attachPrefix) ? portraitStr.slice(attachPrefix.length) : portraitStr;
-      const portrait = fm.portrait
-        ? `<div class="pc-portrait"><img src="images/${escapeHtml(portraitRel)}" alt="${escapeHtml(pc.displayTitle)}"></div>`
+      const portraitSrc = fm.portrait ? portraitImg(fm, pc.outputPath, {}, config.attachmentsDir) : '';
+      const portraitHtml = portraitSrc
+        ? `<div class="pc-portrait"><img src="${escapeHtml(fm.portrait)}" alt="${escapeHtml(pc.displayTitle)}"></div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
-      const badge = `<span class="status-badge ${statusClass(fm.status)}">${statusLabel(fm.status)}</span>`;
-      const traits = fm.key_traits
-        ? fm.key_traits.join(' \u00b7 ')
-        : (fm.occupation || '');
-      const link = pc.outputPath || '#';
-      const fallenIcon = showFallenIcon ? (FALLEN_ICONS[String(fm.status || '').toLowerCase()] || '') : '';
-      return `
-<div class="pc-card">
-  ${portrait}
-  <h3>${fallenIcon}<a href="${escapeHtml(link)}">${escapeHtml(pc.displayTitle)}</a></h3>
-  ${badge}
-  <div class="pc-traits">${escapeHtml(traits)}</div>
-</div>`;
+      const occupation = fm.occupation ? `<div class="pc-traits">${escapeHtml(fm.occupation)}</div>` : '';
+      const traits = fm.key_traits ? `<div class="pc-traits">${escapeHtml(String(fm.key_traits))}</div>` : '';
+      return `<a class="pc-card" href="${escapeHtml(pc.outputPath)}">
+  ${portraitHtml}
+  <h3>${escapeHtml(pc.displayTitle)}</h3>
+  ${occupation}${traits}
+</a>`;
     }).join('\n');
-  }
-
-  let rosterHtml = '';
-  if (activePCs.length > 0) {
-    rosterHtml += `
-<div class="dashboard-section">
+    teamZone = `<div class="dashboard-section">
   <h2>The Team</h2>
-  <div class="pc-roster">
-    ${renderPCCards(activePCs, false)}
-  </div>
+  <div class="pc-roster">${pcCards}</div>
 </div>`;
   }
 
+  // --- Zone 4: In Memoriam ---
+  let memoriamZone = '';
   if (fallenPCs.length > 0) {
-    rosterHtml += `
-<div class="dashboard-section">
-  <h2>The Fallen</h2>
-  <div class="pc-roster">
-    ${renderPCCards(fallenPCs, true)}
-  </div>
+    const entries = fallenPCs.map(pc => {
+      const status = statusLabel(pc.frontmatter.status);
+      const context = pc.frontmatter.death_context || pc.frontmatter.retirement_context || '';
+      const contextHtml = context ? ` <span class="memorial-context">${escapeHtml(context)}</span>` : '';
+      return `<a href="${escapeHtml(pc.outputPath)}">${escapeHtml(pc.displayTitle)} (${escapeHtml(status)})</a>${contextHtml}`;
+    }).join('\n');
+    memoriamZone = `<div class="dashboard-section">
+  <h2>In Memoriam</h2>
+  <div class="in-memoriam">${entries}</div>
 </div>`;
   }
 
-  // --- Key NPCs ---
-  const scoredNPCs = scoreNPCs(pages);
-  let npcHtml = '';
-  if (scoredNPCs.length > 0) {
-    const npcCards = scoredNPCs.map(({ page, role }) => {
+  // --- Zone 5: NPCs in Play (recency-weighted) ---
+  const recentNPCs = (publishConfig && publishConfig._recentNPCs) || [];
+  let npcZone = '';
+  if (recentNPCs.length > 0) {
+    const npcTotal = pages.filter(p => p.frontmatter.type === 'npc').length;
+    const npcCards = recentNPCs.map(({ page }) => {
       const fm = page.frontmatter;
       const initials = getInitials(page.displayTitle);
-      const roleText = fm.occupation ? `${role} \u00b7 ${fm.occupation}` : role;
-      const link = page.outputPath || '#';
-      return `
-<div class="npc-card">
-  <div class="npc-icon">${escapeHtml(initials)}</div>
-  <div class="npc-info">
-    <h4><a href="${escapeHtml(link)}">${escapeHtml(page.displayTitle)}</a></h4>
-    <span class="npc-role">${escapeHtml(roleText)}</span>
-  </div>
-</div>`;
+      const iconHtml = fm.portrait
+        ? `<div class="npc-icon"><img src="${escapeHtml(fm.portrait)}" alt="${escapeHtml(page.displayTitle)}"></div>`
+        : `<div class="npc-icon">${escapeHtml(initials)}</div>`;
+      const role = fm.occupation ? `<div class="npc-role">${escapeHtml(fm.occupation)}</div>` : '';
+      return `<a class="npc-card" href="${escapeHtml(page.outputPath)}">
+  ${iconHtml}
+  <div><h4>${escapeHtml(page.displayTitle)}</h4>${role}</div>
+</a>`;
     }).join('\n');
-
-    npcHtml = `
-<div class="dashboard-section">
-  <h2>Key NPCs</h2>
-  <div class="npc-grid">
-    ${npcCards}
-  </div>
+    npcZone = `<div class="dashboard-section">
+  <h2>NPCs in Play</h2>
+  <div class="npc-grid">${npcCards}</div>
+  <a class="recap-link" href="characters/npcs/index.html">View all ${npcTotal} NPCs &rarr;</a>
 </div>`;
   }
 
-  // --- Explore ---
-  const sectionOrder = [
-    'campaign',
-    'factions',
-    'events',
-    'locations',
-    'items',
-    'documents',
-    'clues',
-    'chapters',
-    'creatures',
+  // --- Zone 6: Latest Locations (recency-weighted) ---
+  const recentLocations = (publishConfig && publishConfig._recentLocations) || [];
+  let locationZone = '';
+  if (recentLocations.length > 0) {
+    const locCards = recentLocations.map(({ page }) => {
+      const fm = page.frontmatter;
+      const subtitle = fm.location_type || '';
+      return `<a class="entity-card" href="${escapeHtml(page.outputPath)}">
+  <h4>${escapeHtml(page.displayTitle)}</h4>
+  ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+</a>`;
+    }).join('\n');
+    locationZone = `<div class="dashboard-section">
+  <h2>Latest Locations</h2>
+  <div class="location-grid">${locCards}</div>
+</div>`;
+  }
+
+  // --- Zone 7: Latest Events ---
+  const recentEvents = getRecentEvents(pages, landingConfig.max_events || 4);
+  let eventZone = '';
+  if (recentEvents.length > 0) {
+    const eventCards = recentEvents.map(page => {
+      const fm = page.frontmatter;
+      const date = formatDate(fm.date) || '';
+      const location = fm.location ? String(fm.location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' ') : '';
+      const outcome = fm.outcome || '';
+      return `<a class="entity-card" href="${escapeHtml(page.outputPath)}">
+  <h4>${escapeHtml(page.displayTitle)}</h4>
+  ${date ? `<div class="card-subtitle">${escapeHtml(date)}${location ? ' — ' + escapeHtml(location) : ''}</div>` : ''}
+  ${outcome ? `<div class="card-excerpt">${escapeHtml(outcome)}</div>` : ''}
+</a>`;
+    }).join('\n');
+    eventZone = `<div class="dashboard-section">
+  <h2>Latest Events</h2>
+  <div class="card-grid">${eventCards}</div>
+</div>`;
+  }
+
+  // --- Timeline Strip (between zone 7 and 8) ---
+  const timelineStrip = (publishConfig && publishConfig._timelineStrip) || '';
+  const timelineZone = timelineStrip
+    ? `<div class="dashboard-section">
+  <div class="timeline-strip">${timelineStrip}</div>
+  <a class="recap-link" href="timeline.html">Full timeline &rarr;</a>
+</div>`
+    : '';
+
+  // --- Zone 8: Explore the World ---
+  const exploreDescs = getExploreDescriptions(genre, landingConfig.explore_descriptions);
+  const exploreDirs = [
+    { key: 'characters', label: 'Characters', dir: 'characters' },
+    { key: 'locations', label: 'Locations', dir: 'locations' },
+    { key: 'story', label: 'The Story', dir: 'chapters' },
+    { key: 'factions', label: 'Factions', dir: 'factions' },
+    { key: 'items', label: 'Items', dir: 'items' },
+    { key: 'events', label: 'Events', dir: 'events' },
+    { key: 'creatures', label: 'Creatures', dir: 'creatures' },
   ];
+  const dirCounts = {};
+  for (const page of pages) {
+    const d = page.outputDir;
+    for (const ed of exploreDirs) {
+      if (d === ed.dir || d.startsWith(ed.dir + '/')) {
+        dirCounts[ed.key] = (dirCounts[ed.key] || 0) + 1;
+      }
+    }
+  }
+  const exploreCards = exploreDirs
+    .filter(ed => dirCounts[ed.key] > 0)
+    .map(ed => {
+      const desc = exploreDescs[ed.key] || '';
+      const count = dirCounts[ed.key];
+      return `<a class="explore-card" href="${escapeHtml(ed.dir)}/index.html">
+  <h4>${escapeHtml(ed.label)}</h4>
+  <div class="card-flavour">${escapeHtml(desc)}</div>
+  <div class="count">${count} ${count === 1 ? 'entry' : 'entries'}</div>
+</a>`;
+    }).join('\n');
+  const exploreZone = exploreCards
+    ? `<div class="dashboard-section">
+  <h2>Explore the World</h2>
+  <div class="explore-grid">${exploreCards}</div>
+</div>`
+    : '';
 
-  const exploreCards = sectionOrder.map(dir => {
-    const label = DIR_LABELS[dir];
-    if (!label) return '';
-    const dirPages = pages.filter(p => p.outputDir === dir || p.outputDir.startsWith(dir + '/'));
-    if (dirPages.length === 0) return '';
-    const countText = dirPages.length === 1 ? '1 entry' : `${dirPages.length} entries`;
-    return `<a href="${dir}/index.html" class="explore-card"><h4>${escapeHtml(label)}</h4><span class="count">${countText}</span></a>`;
-  }).filter(Boolean).join('\n');
-
-  const exploreHtml = exploreCards ? `
-<div class="dashboard-section">
-  <h2>Explore</h2>
-  <div class="explore-grid">
-    ${exploreCards}
-  </div>
-</div>` : '';
-
-  const content = `${heroHtml}${recapHtml}${rosterHtml}${npcHtml}${exploreHtml}`;
+  const content = [heroZone, recapZone, teamZone, memoriamZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
+    .filter(Boolean)
+    .join('\n');
 
   return baseShell({
-    title: 'Home',
+    title: config.siteTitle,
     siteTitle: config.siteTitle,
-    cssHref: 'css/style.css',
+    cssHref: cssPath(outputPath),
     navHtml: navFor(outputPath, config),
-    rootHref: './',
+    rootHref: rootPath(outputPath),
     content,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,

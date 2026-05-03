@@ -122,4 +122,69 @@ function scoreNPCs(allPages) {
     .slice(0, 8);
 }
 
-module.exports = { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole };
+const EXPLORE_DESCRIPTIONS = {
+  horror: {
+    characters: 'The investigators and their allies — and the things that hunt them.',
+    locations: 'From candlelit parlours to fog-shrouded ruins.',
+    story: 'The unfolding mystery, session by session.',
+    factions: 'Secret societies, cults, and hidden powers.',
+    items: 'Artefacts, tomes, and things best left undiscovered.',
+    creatures: 'Horrors lurking in the dark.',
+    events: 'Key moments in the investigation.',
+  },
+  fantasy: {
+    characters: 'Heroes, villains, and the folk who inhabit this world.',
+    locations: 'Kingdoms, dungeons, and the wild places between.',
+    story: 'The saga of adventure, chapter by chapter.',
+    factions: 'Guilds, orders, and powers vying for influence.',
+    items: 'Legendary weapons, enchanted relics, and mundane gear.',
+    creatures: 'Beasts, monsters, and mythical beings.',
+    events: 'Battles, discoveries, and turning points.',
+  },
+  noir: {
+    characters: 'Scoundrels, fixers, and the desperate.',
+    locations: 'Rain-slicked streets and smoke-filled back rooms.',
+    story: 'The score, the job, the aftermath.',
+    factions: 'Gangs, crews, and institutions.',
+    items: 'Tools of the trade — from lockpicks to ledgers.',
+    creatures: 'Strange entities and supernatural threats.',
+    events: 'Heists, betrayals, and consequences.',
+  },
+  military: {
+    characters: 'Operatives, contacts, and targets.',
+    locations: 'Theatres of operation and safe houses.',
+    story: 'Mission logs and after-action reports.',
+    factions: 'Units, agencies, and hostile forces.',
+    items: 'Equipment, ordnance, and intelligence assets.',
+    creatures: 'Unknown threats and anomalies.',
+    events: 'Operations, engagements, and incidents.',
+  },
+};
+
+const DEFAULT_DESCRIPTIONS = {
+  characters: 'The people who drive this story.',
+  locations: 'The places where events unfold.',
+  story: 'The narrative arc of the campaign.',
+  factions: 'Groups and organisations at play.',
+  items: 'Notable objects and equipment.',
+  creatures: 'Monsters and non-human entities.',
+  events: 'Key moments and turning points.',
+};
+
+function getExploreDescriptions(genre, overrides) {
+  const base = (genre && EXPLORE_DESCRIPTIONS[genre]) || DEFAULT_DESCRIPTIONS;
+  return { ...base, ...(overrides || {}) };
+}
+
+function getRecentEvents(pages, max) {
+  return pages
+    .filter(p => p.frontmatter.type === 'event' && p.frontmatter.date)
+    .sort((a, b) => {
+      const da = new Date(a.frontmatter.date);
+      const db = new Date(b.frontmatter.date);
+      return db - da;
+    })
+    .slice(0, max || 4);
+}
+
+module.exports = { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };

@@ -756,24 +756,24 @@ describe('build integration', () => {
     it('landing page contains hero with site title', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
       assert.ok(html.includes('Dashboard Test'));
-      assert.ok(html.includes('class="hero"'));
+      assert.ok(html.includes('landing-hero'));
     });
 
-    it('landing page shows last played date', () => {
+    it('landing page shows session count in hero', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Last Played'));
+      assert.ok(html.includes('Sessions'));
       assert.ok(html.includes('hero-dates'));
     });
 
-    it('landing page shows in-game date from setting_year', () => {
+    it('landing page shows in-game year from setting_year', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('In-Game Date'));
+      assert.ok(html.includes('In-Game'));
       assert.ok(html.includes('2019'));
     });
 
-    it('landing page shows Story So Far section with recap', () => {
+    it('landing page shows Latest Session section with recap', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Story So Far'));
+      assert.ok(html.includes('Latest Session'));
       assert.ok(html.includes('class="recap"'));
       assert.ok(html.includes('infiltrated the cave complex'));
     });
@@ -792,41 +792,15 @@ describe('build integration', () => {
       assert.ok(html.includes('Ronnie Vint'));
     });
 
-    it('PC cards show status badges', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('status-badge'));
-      assert.ok(html.includes('Active'));
-    });
-
     it('PC cards show key traits', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
       assert.ok(html.includes('Hot-tempered'));
       assert.ok(html.includes('Resourceful'));
     });
 
-    it('landing page shows Key NPCs section for important NPCs', () => {
+    it('landing page shows Explore the World section', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Key NPCs'));
-      assert.ok(html.includes('npc-grid'));
-      assert.ok(html.includes('Adrian Voss'));
-    });
-
-    it('important NPC shows inferred role', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Patron'));
-      assert.ok(html.includes('CEO, Voss Dynamics'));
-    });
-
-    it('unimportant NPC is excluded from Key NPCs', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      const npcGridMatch = html.match(/class="npc-grid">([\s\S]*?)<\/div>\s*<\/div>/);
-      const npcGridHtml = npcGridMatch ? npcGridMatch[1] : '';
-      assert.ok(!npcGridHtml.includes('Random Guard'));
-    });
-
-    it('landing page shows Explore section', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Explore'));
+      assert.ok(html.includes('Explore the World'));
       assert.ok(html.includes('explore-grid'));
       assert.ok(html.includes('Locations'));
     });
@@ -838,29 +812,28 @@ describe('build integration', () => {
       assert.ok(!exploreGridHtml.includes('>Player Characters<'));
     });
 
-    it('landing page shows The Fallen section for dead PCs', () => {
+    it('landing page shows In Memoriam section for dead PCs', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('The Fallen'));
+      assert.ok(html.includes('In Memoriam'));
     });
 
-    it('fallen section contains dead PC with displayTitle (no underscores)', () => {
+    it('in memoriam section contains dead PC with displayTitle (no underscores)', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
       assert.ok(html.includes('Dead PC'), 'Should show displayTitle without underscores');
       assert.ok(!html.includes('>Dead_PC<'), 'Should not show raw filename with underscores');
     });
 
-    it('fallen cards include SVG status icons', () => {
+    it('in memoriam shows status label for dead PC', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('fallen-icon'), 'Should include fallen icon element');
-      assert.ok(html.includes('<svg'), 'Should include inline SVG');
+      assert.ok(html.includes('KIA') || html.includes('MIA') || html.includes('Retired'), 'Should include a status label');
     });
 
-    it('active PCs appear in The Team, not The Fallen', () => {
+    it('active PCs appear in The Team, not In Memoriam', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      const fallenIdx = html.indexOf('The Fallen');
-      assert.ok(fallenIdx !== -1, 'The Fallen section should exist');
-      const fallenHtml = html.slice(fallenIdx);
-      assert.ok(!fallenHtml.includes('Guy LeFleur'), 'Active PC should not be in The Fallen');
+      const memoriamIdx = html.indexOf('In Memoriam');
+      assert.ok(memoriamIdx !== -1, 'In Memoriam section should exist');
+      const memoriamHtml = html.slice(memoriamIdx);
+      assert.ok(!memoriamHtml.includes('Guy LeFleur'), 'Active PC should not be in In Memoriam');
       assert.ok(html.includes('Guy LeFleur'), 'Active PC should appear on the page');
     });
   });
