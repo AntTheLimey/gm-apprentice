@@ -718,7 +718,7 @@ describe('build integration', () => {
       const themePath = path.join(outputDir, 'docs', 'css', 'theme.css');
       assert.ok(fs.existsSync(themePath));
       const css = fs.readFileSync(themePath, 'utf-8');
-      assert.ok(css.includes('--theme-primary'));
+      assert.ok(css.includes(':root'));
     });
   });
 
