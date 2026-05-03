@@ -1,0 +1,50 @@
+[
+  {
+    "id": 1,
+    "system": "dnd-5e-2024",
+    "type": "spell-lookup",
+    "query": "What does Shield do in D&D 5e 2024? Reply using: **Name** (Level School) — Source / Cast: time (components) | Range | Duration / Prereqs / Effect in 1-2 sentences / Note: 2 sentences max if advice requested, omit otherwise.",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/spells.md", "skills/ttrpg-expert/systems/dnd-5e-2024/spells-1.md"]
+  },
+  {
+    "id": 2,
+    "system": "dnd-5e-2024",
+    "type": "spell-browse",
+    "query": "What 3rd-level Wizard spells are available in D&D 5e 2024? Reply as a compact list: Name (School) — one-line effect summary per spell.",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/spells.md"]
+  },
+  {
+    "id": 3,
+    "system": "dnd-5e-2024",
+    "type": "spell-lookup",
+    "query": "What does Wish do in D&D 5e 2024? Reply using: **Name** (Level School) — Source / Cast: time (components) | Range | Duration / Prereqs / Effect in 1-2 sentences / Note: 2 sentences max if advice requested, omit otherwise.",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/spells.md", "skills/ttrpg-expert/systems/dnd-5e-2024/spells-9.md"]
+  },
+  {
+    "id": 4,
+    "system": "dnd-5e-2024",
+    "type": "item-browse",
+    "query": "What uncommon wondrous items could I give as a level 5 reward in D&D 5e 2024? Reply using: **Name** (Rarity, attunement) — Source / Category. Prereqs / Effect in 1-2 sentences / Value range / Note: 2 sentences max if advice requested, omit otherwise.",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/magic-items.md", "skills/ttrpg-expert/systems/dnd-5e-2024/magic-items-wondrous-uncommon.md"]
+  },
+  {
+    "id": 5,
+    "system": "dnd-5e-2024",
+    "type": "monster-lookup",
+    "query": "What's the stat block for a Young Red Dragon in D&D 5e 2024? Reply using: **Name** (CR Type, Size) — Source / AC | HP (dice) | Speed / Saves | Senses | Immunities / Attacks with to-hit and damage dice / Lair Actions if any / Tactics: 1-2 sentences.",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/monsters.md", "skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr5-10.md"]
+  },
+  {
+    "id": 6,
+    "system": "dnd-5e-2024",
+    "type": "monster-browse",
+    "query": "I need CR 1-2 undead for a graveyard encounter in D&D 5e 2024. Reply using: **Name** (CR Type, Size) — Source / AC | HP (dice) | Speed / Saves | Senses | Immunities / Attacks with to-hit and damage dice / Lair Actions if any / Tactics: 1-2 sentences.",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/monsters.md", "skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr0-1.md", "skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr2-4.md"]
+  }
+]
