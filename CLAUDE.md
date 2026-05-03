@@ -151,7 +151,10 @@ valid zips). For publish tool changes, run the publish tool test suite.
 
 ## Skill edits
 
-- **Use Opus** (not Sonnet/Haiku) for any skill file modifications
+- **Use Opus** for writing new skill content, priming prose, or
+  routing design. **Sonnet is fine** for mechanical edits
+  (replacements, references, structural changes) when the exact
+  content is specified in a plan or instructions.
 - **Run `skill-creator` validation** before committing skill changes
 - `SKILL.md` is the routing layer — keep it concise
 - Detailed content belongs in `skills/*/references/`
@@ -163,6 +166,26 @@ valid zips). For publish tool changes, run the publish tool test suite.
   — do not delete these
 - One benchmark run is enough; fix issues before benchmarking; use A/B
   comparisons rather than absolute scores
+
+### Benchmark and proof-run discipline
+
+When running benchmark queries, proof-of-improvement runs, or any
+multi-query test suite via subagents:
+
+1. **Subagents write their own results to disk.** Each benchmark or
+   proof-run subagent must write its complete response file (frontmatter
+   metrics + full response text) to the correct path as its final
+   action. This ensures the result exists on disk even if the parent
+   session never reads the agent's return value. The parent then stamps
+   `total_tokens` and `wall_clock_ms` from the agent metadata (the
+   agent leaves these as 0 since it can't see its own usage).
+2. **Every run produces a `summary.md`** at the top of its results
+   directory with a per-query metrics table for fast comparison.
+3. **Token counts alone do not prove quality.** Proof runs must
+   preserve full response text so that output quality can be compared
+   against the baseline, not just cost.
+4. **Present results to the user for review** before drawing
+   conclusions or proceeding to the next step.
 
 ## Key documentation
 

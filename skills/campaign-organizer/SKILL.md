@@ -104,17 +104,25 @@ On first contact with a vault:
 
 ### Version Check
 
-Read `shared/version-check.md` and follow the version-check
-procedure after initialization confirms `_meta/` exists.
+After initialization confirms `_meta/` exists, check the vault
+version before proceeding with any user request:
 
-Campaign-organizer owns migration execution — when the version
-check detects a mismatch, run the migration workflow from
-`references/migration-procedure.md` before proceeding.
+1. Read `gm_apprentice_version` from `_meta/vault-config.md`
+   frontmatter
+2. Read `current_version` from `shared/migrations.md` frontmatter
+3. If versions match or vault is higher — proceed normally
+4. If vault version is lower or absent — run the migration
+   workflow from `references/migration-procedure.md` before
+   proceeding
 
 This check runs once per session on first vault contact. It
 does not apply during first-time vault setup (when `_meta/` is
 missing and initialization creates it — stamp the current
 version as part of setup).
+
+When initialization creates a new vault, set
+`gm_apprentice_version` in vault-config to the
+`current_version` from `shared/migrations.md`.
 
 ### Schema Evolution
 

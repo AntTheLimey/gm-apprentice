@@ -15,8 +15,14 @@ this skill are not technical. Never assume they know what npm,
 git, or a terminal command does without explaining it.
 
 **Version check:** On first invocation, read
-`shared/version-check.md` and follow the version-check
-procedure before proceeding.
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md`. If the vault
+version is lower or absent, announce the mismatch and hand off
+to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+proceeding. Resume after migration completes. Skip this check
+if `_meta/` doesn't exist (that's first-time setup, not
+migration).
 
 ## npm Package
 

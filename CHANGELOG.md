@@ -11,15 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Migration version auto-synced from plugin.json at build time (Fix 1)
-- Version check procedure extracted to shared reference (Fix 2)
-- Content filtering now makes deterministic decisions for cut/skipped/modified scenes (Fix 3)
+- Migration version auto-synced from plugin.json at build time
+- Content filtering now makes deterministic decisions for cut/skipped/modified scenes
 
 ### Added
 
-- Reconcile fast-path for straightforward sessions (Fix 4)
-- Statistical validity rules and benchmark template (Fix 5)
-- CI checks: migration version sync, inline version check guard, filtering validation
+- Reconcile fast-path for straightforward sessions
+- Proof-run infrastructure: 5-run statistical benchmark with median/IQR analysis
+- CI checks: migration version sync, content filtering validation
 
 ---
 

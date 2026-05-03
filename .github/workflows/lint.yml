@@ -69,16 +69,6 @@ jobs:
             echo "Build will auto-stamp, but source files are out of sync"
           fi
 
-      - name: No inline version checks
-        run: |
-          VIOLATIONS=$(grep -rl 'gm_apprentice_version' skills/*/SKILL.md \
-            | grep -v 'campaign-organizer/SKILL.md' || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::error::Inline version check found in: $VIOLATIONS"
-            echo "Use shared/version-check.md instead"
-            exit 1
-          fi
-
   schema-validation:
     runs-on: ubuntu-latest
     steps:
