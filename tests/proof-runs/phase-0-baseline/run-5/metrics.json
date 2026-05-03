@@ -1,0 +1,50 @@
+{
+  "query-01": {
+    "total_tokens": 30460,
+    "wall_clock_ms": 48266
+  },
+  "query-02": {
+    "total_tokens": 30482,
+    "wall_clock_ms": 89389
+  },
+  "query-03": {
+    "total_tokens": 25218,
+    "wall_clock_ms": 41813
+  },
+  "query-04": {
+    "total_tokens": 30320,
+    "wall_clock_ms": 74531
+  },
+  "query-05": {
+    "total_tokens": 44308,
+    "wall_clock_ms": 155005
+  },
+  "query-06": {
+    "total_tokens": 27157,
+    "wall_clock_ms": 62658
+  },
+  "query-07": {
+    "total_tokens": 27541,
+    "wall_clock_ms": 116491
+  },
+  "query-08": {
+    "total_tokens": 28166,
+    "wall_clock_ms": 57744
+  },
+  "query-09": {
+    "total_tokens": 32096,
+    "wall_clock_ms": 103827
+  },
+  "query-10": {
+    "total_tokens": 22499,
+    "wall_clock_ms": 56309
+  },
+  "query-11": {
+    "total_tokens": 32956,
+    "wall_clock_ms": 81134
+  },
+  "query-12": {
+    "total_tokens": 59908,
+    "wall_clock_ms": 323803
+  }
+}

@@ -1,55 +1,39 @@
-# Phase 1 Summary
+# Proof Run Summary — phase-1
 
-**Date:** 2026-05-02
-**Model:** Sonnet
-**Plugin version:** 1.4.14
-**Branch:** fix-and-fortify-phase-1
+**Runs:** 5
+**Queries per run:** 12
 
-## Per-Query Metrics
+## Per-Query Statistics
 
-| # | System | Type | Total Tokens | Δ vs Baseline |
-|---|--------|------|-------------|---------------|
-| 1 | CoC 7e | Lookup | 24,913 | -20.3% |
-| 2 | CoC 7e | Generate | 29,343 | -23.7% |
-| 3 | CoC Regency | Lookup | 22,673 | +0.2% |
-| 4 | GURPS 4e | Lookup | 29,172 | +9.0% |
-| 5 | GURPS 4e | Generate | 36,776 | +0.0% |
-| 6 | D&D 5e 2024 | Lookup | 24,390 | +0.0% |
-| 7 | D&D 5e 2024 | Generate | 25,466 | -6.3% |
-| 8 | FitD | Lookup | 22,611 | -0.2% |
-| 9 | FitD | Generate | 32,397 | -2.9% |
-| 10 | Generic | Generate | 23,217 | -10.8% |
-| 11 | Cross-system | Framework | 25,696 | -5.5% |
-| 12 | Workflow | Session prep | 39,050 | -14.5% |
+| # | System | Type | Median Tokens | IQR Tokens | Median Time (s) | IQR Time (s) |
+|---|--------|------|--------------|------------|----------------|-------------|
+| 1 | CoC 7e | lookup | 29,070 | 28,194–31,804 | 53.7 | 40.8–60.9 |
+| 2 | CoC 7e | generate | 30,844 | 30,294–36,690 | 93.0 | 71.8–95.3 |
+| 3 | CoC Regency | lookup | 25,296 | 25,062–25,556 | 41.8 | 31.0–48.9 |
+| 4 | GURPS 4e | lookup | 30,696 | 28,000–32,114 | 75.0 | 62.3–88.7 |
+| 5 | GURPS 4e | generate | 42,155 | 41,450–50,310 | 120.0 | 92.2–263.3 |
+| 6 | D&D 5e 2024 | lookup | 27,281 | 26,826–27,332 | 59.2 | 48.4–62.5 |
+| 7 | D&D 5e 2024 | generate | 32,488 | 29,268–32,628 | 133.3 | 122.1–140.0 |
+| 8 | FitD | lookup | 28,270 | 27,938–28,782 | 59.7 | 57.1–63.5 |
+| 9 | FitD | generate | 36,128 | 33,715–39,475 | 118.8 | 101.8–126.1 |
+| 10 | Generic | generate | 22,555 | 22,298–23,228 | 59.7 | 49.8–65.0 |
+| 11 | Cross-system | framework | 33,882 | 29,492–40,388 | 85.1 | 71.2–95.1 |
+| 12 | Workflow | session-prep | 59,111 | 50,076–62,901 | 276.3 | 183.3–294.0 |
 
 ## Per-System Averages
 
-| System | Baseline Avg | Phase 1 Avg | Δ% |
-|--------|-------------|-------------|-----|
-| CoC 7e (2 queries) | 34,849 | 27,128 | -22.1% |
-| CoC Regency (1 query) | 22,633 | 22,673 | +0.2% |
-| GURPS 4e (2 queries) | 31,762 | 32,974 | +3.8% |
-| D&D 5e 2024 (2 queries) | 25,790 | 24,928 | -3.3% |
-| FitD (2 queries) | 28,003 | 27,504 | -1.8% |
-| Generic (1 query) | 26,026 | 23,217 | -10.8% |
-| Cross-system (1 query) | 27,189 | 25,696 | -5.5% |
-| Workflow (1 query) | 45,672 | 39,050 | -14.5% |
+| System | Median Tokens (avg) | Token IQR (Q1–Q3) |
+|--------|--------------------|--------------------|
+| CoC 7e (2 queries) | 29,957 | 29,244–34,247 |
+| CoC Regency (1 query) | 25,296 | 25,062–25,556 |
+| GURPS 4e (2 queries) | 36,426 | 34,725–41,212 |
+| D&D 5e 2024 (2 queries) | 29,884 | 28,047–29,980 |
+| FitD (2 queries) | 32,199 | 30,827–34,128 |
+| Generic (1 query) | 22,555 | 22,298–23,228 |
+| Cross-system (1 query) | 33,882 | 29,492–40,388 |
+| Workflow (1 query) | 59,111 | 50,076–62,901 |
 
 ## Totals
 
-- **Total tokens:** 335,704
-- **Baseline total:** 362,326
-- **Overall delta:** -7.3% (-26,622 tokens)
-
-## Notes
-
-- Token counts are total_tokens (input + output combined) as reported
-  by the Agent tool.
-- Wall-clock times and per-query file lists were not preserved through
-  session context compaction for queries 1-11. Query 12 ran in 175.7s
-  reading 14 files.
-- Individual query response files are not included for Phase 1 — full
-  response text was lost to context compaction. The token metrics above
-  are the authoritative record.
-- All queries used the same Sonnet model and benchmark campaign as
-  Phase 0 baseline.
+- **Total tokens (sum of medians):** 397,776
+- **Runs:** 5
