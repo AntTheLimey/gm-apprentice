@@ -127,7 +127,10 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     currentOutputPath: page.outputPath,
   });
 
-  const mainContent = [heroBanner, pullQuote, bodyContent, processedContent.relationships, locationCardHtml, relCardsHtml, arcTimelineHtml]
+  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
+  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections Graph</h2>${graphSvg}</div>` : '';
+
+  const mainContent = [heroBanner, pullQuote, bodyContent, processedContent.relationships, locationCardHtml, relCardsHtml, arcTimelineHtml, graphHtml]
     .filter(Boolean).join('\n');
 
   const contentHtml = sidebar

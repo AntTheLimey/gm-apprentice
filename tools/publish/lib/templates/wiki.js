@@ -77,7 +77,10 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     storyNav = `<div class="story-nav">${prevLink}${nextLink}</div>`;
   }
 
-  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}`;
+  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
+  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+
+  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;
 
   const contentHtml = sidebar

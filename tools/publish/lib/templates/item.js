@@ -79,7 +79,10 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
     currentOutputPath: page.outputPath,
   });
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${statBlock}\n${holderHtml}\n${originHtml}\n${processedContent.html}\n${processedContent.relationships}`;
+  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
+  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+
+  const mainContent = `${headerCard}\n${badgeHtml}\n${statBlock}\n${holderHtml}\n${originHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const contentHtml = sidebar
     ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
     : mainContent;
