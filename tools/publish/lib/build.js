@@ -334,7 +334,7 @@ function build(options = {}) {
           });
           break;
         case 'creature':
-          html = creatureTemplate(page, processed, navFor, config, imageMap);
+          html = creatureTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
           break;
         case 'location':
           html = locationTemplate(page, processed, navFor, config, imageMap, {
@@ -342,17 +342,17 @@ function build(options = {}) {
           });
           break;
         case 'item':
-          html = itemTemplate(page, processed, navFor, config, imageMap, linkMap);
+          html = itemTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
           break;
         case 'faction':
         case 'organization':
-          html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages);
+          html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages, { publishConfig });
           break;
         case 'event':
-          html = eventTemplate(page, processed, navFor, config, imageMap, linkMap);
+          html = eventTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
           break;
         default:
-          html = wikiTemplate(page, processed, navFor, config, imageMap);
+          html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig });
       }
 
       const outPath = path.join(outputDir, page.outputPath);

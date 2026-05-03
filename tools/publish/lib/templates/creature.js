@@ -1,8 +1,13 @@
-const { escapeHtml } = require('../processor');
+const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
+const { renderContextSidebar } = require('./context-sidebar');
+const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
-function creatureTemplate(page, processedContent, navFor, config, imageMap) {
+function creatureTemplate(page, processedContent, navFor, config, imageMap, context) {
   const fm = page.frontmatter;
+  const publishConfig = (context || {}).publishConfig || {};
+  const linkMap = (context || {}).linkMap || {};
+  const backlinks = (publishConfig._backlinks || {})[page.title] || [];
   const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
 
   // Build stat block from frontmatter fields
@@ -46,7 +51,23 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap) {
   <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
 </div>`;
 
-  const content = `${headerCard}\n${badgeHtml}\n${statBlock}\n${abilities}\n${weaknesses}\n${processedContent.html}\n${processedContent.relationships}`;
+  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const breadcrumbsHtml = renderBreadcrumbs(crumbs);
+
+  const sidebar = renderContextSidebar({
+    backlinks,
+    relationships: (fm.relationships || []).map(r => ({
+      type: r.type,
+      target: String(r.target).replace(/\[\[|\]\]/g, ''),
+      targetPath: linkMap[String(r.target).replace(/\[\[|\]\]/g, '')] || null,
+    })),
+    currentOutputPath: page.outputPath,
+  });
+
+  const mainContent = `${headerCard}\n${badgeHtml}\n${statBlock}\n${abilities}\n${weaknesses}\n${processedContent.html}\n${processedContent.relationships}`;
+  const contentHtml = sidebar
+    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
+    : mainContent;
 
   return baseShell({
     title: page.displayTitle,
@@ -54,8 +75,10 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap) {
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content,
+    content: contentHtml,
     footer: config.footer,
+    genrePreset: publishConfig._genrePreset,
+    breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });
 }
