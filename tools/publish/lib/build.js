@@ -351,8 +351,32 @@ function build(options = {}) {
         case 'event':
           html = eventTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
           break;
-        default:
-          html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig });
+        default: {
+          let extraSidebar = {};
+          if (page.frontmatter.type === 'session') {
+            const sessionMentionedNPCs = (pages || []).filter(p =>
+              p.frontmatter.type === 'npc' &&
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
+
+            const sessionEvents = (pages || []).filter(p =>
+              p.frontmatter.type === 'event' &&
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
+
+            extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
+          }
+          if (page.frontmatter.type === 'chapter') {
+            const chapterSessions = (pages || []).filter(p =>
+              p.frontmatter.type === 'session' &&
+              String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim() === page.title
+            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
+
+            extraSidebar = { constituentSessions: chapterSessions };
+          }
+          html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, extraSidebar, pages });
+          break;
+        }
       }
 
       const outPath = path.join(outputDir, page.outputPath);
