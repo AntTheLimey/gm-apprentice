@@ -403,3 +403,45 @@ For each issue:
      for creation
    - For schema violations: suggest the missing fields
    - For quality issues: suggest specific improvements
+
+---
+
+## Stale DRAFT Detection
+
+### Stale DRAFT Detection
+
+**Severity:** WARNING
+**Trigger:** Entity has `source_confidence: DRAFT` and has been
+DRAFT for 3 or more sessions.
+
+**Procedure:**
+
+1. Determine the current session number — the highest
+   `session_number` value across all session-index entities in
+   the vault
+2. For each entity with `source_confidence: DRAFT`:
+   - Extract the session number from `createdSession` (e.g.
+     "Session 1" → 1)
+   - Calculate age: `current_session - created_session`
+   - If age >= 3: flag as WARNING
+3. Entities without `createdSession` that are DRAFT: flag as
+   WARNING with different message
+
+**Messages:**
+
+- With age: "Stale DRAFT (created session N, now session M) —
+  promote to AUTHORITATIVE or delete. Entity has been
+  unconfirmed for 3+ sessions."
+- Without createdSession: "DRAFT entity missing createdSession —
+  cannot determine staleness. Add createdSession or promote."
+
+**Rationale:** DRAFT entities are meant to be temporary — they
+represent unconfirmed content awaiting GM review. After 3
+sessions, the GM has had ample opportunity to confirm or reject.
+Lingering DRAFTs indicate either forgotten content or content
+that should have been deleted.
+
+**Not flagged:** DRAFT entities less than 3 sessions old are
+normal and expected (Info level at most). Prep content
+(session-plan type) is always DRAFT and is exempt from this
+check.
