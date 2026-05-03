@@ -98,6 +98,7 @@ function build(options = {}) {
   // Main build logic
   assertSafeOutputDir();
   console.log('Scanning vault:', config.vaultPath);
+  config.excludeDrafts = publishConfig.exclude_drafts;
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
   pairStoryFiles(pages, config.vaultPath);

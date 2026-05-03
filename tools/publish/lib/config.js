@@ -4,6 +4,7 @@ const matter = require('gray-matter');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
+  exclude_drafts: false,
   exclude_sections: ['GM Notes'],
   exclude_fields: ['secrets', 'current_plan', 'plan_progress'],
   exclude_dirs: ['_meta', '_Templates'],
@@ -51,6 +52,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const merged = {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
     system: publish.system || null,
+    exclude_drafts: publish.exclude_drafts ?? PUBLISH_DEFAULTS.exclude_drafts,
     exclude_sections: publish.exclude_sections
       || (jsonConfigFallback.excludeSections
         ? [...jsonConfigFallback.excludeSections]

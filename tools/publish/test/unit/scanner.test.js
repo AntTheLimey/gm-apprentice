@@ -93,6 +93,17 @@ describe('buildLinkMap', () => {
     const map = buildLinkMap(pages);
     assert.strictEqual(map['Old Name'], 'new.html');
   });
+
+  it('excludes DRAFT pages when excludeDrafts is set', () => {
+    const pages = [
+      { title: 'Active NPC', outputPath: 'npc.html', frontmatter: { source_confidence: 'AUTHORITATIVE' } },
+      { title: 'Draft NPC', outputPath: 'draft.html', frontmatter: { source_confidence: 'DRAFT' } },
+    ];
+    const filtered = pages.filter(p => (p.frontmatter.source_confidence || p.frontmatter.canon_status) !== 'DRAFT');
+    const map = buildLinkMap(filtered);
+    assert.ok('Active NPC' in map);
+    assert.ok(!('Draft NPC' in map));
+  });
 });
 
 describe('scanVault displayTitle', () => {
