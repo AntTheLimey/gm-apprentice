@@ -7,6 +7,26 @@
 
 **Classes:** Brd=Bard, Clr=Cleric, Drd=Druid, Pal=Paladin, Rgr=Ranger, Sor=Sorcerer, Wlk=Warlock, Wiz=Wizard
 
+## Response Templates
+
+**Spell Lookup** — use for single-spell questions:
+
+> **Shield** (Level 1 Abjuration) — SRD 5.2
+> Cast: Reaction (V, S) | Range: Self | Duration: 1 round
+> Prereqs: Sorcerer or Wizard, Level 1+ spell slot
+> +5 AC until start of next turn, including against triggering attack. Blocks Magic Missile.
+> Note: One of the strongest defensive reactions at any level. Priority pick for any Wizard.
+
+**Spell Browse** — use for "what spells at level X" or class filtering:
+
+> 3rd-Level Wizard Spells (SRD 5.2):
+> - Counterspell (Abjuration) — reaction to interrupt a spell
+> - Fireball (Evocation) — 8d6 fire, 20ft radius, DEX save
+> - Fly (Transmutation) — 60ft flight, concentration 10min
+> - …
+
+Omit the Note line on pure lookups. Include it (2 sentences max) only when the user asks for advice.
+
 ## Cantrips (27) → `spells-cantrips.md`
 
 - **Acid Splash** | Evocation | Sor,Wiz

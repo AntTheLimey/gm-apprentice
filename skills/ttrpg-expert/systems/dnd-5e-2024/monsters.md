@@ -5,6 +5,34 @@
 **Detail files:** `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-plus.md`
 **Sub-file format:** Name | Type | Size | AC | HP | Speed | Notable | XP
 
+## Response Templates
+
+**Standard Monster** — use for most stat block requests:
+
+> **Ghoul** (CR 1 Undead, Medium) — SRD 5.2
+> AC 12 | HP 22 (5d8) | Speed 30 ft.
+> Saves: — | Senses: Darkvision 60 ft.
+> Immunities: Charmed, Exhaustion, Poisoned
+> Multiattack: Bite + Claws
+> - Bite: +2 to hit, 2d6+2 piercing
+> - Claws: +4 to hit, 2d4+2 slashing, DC 10 Con or Paralyzed (1 min, repeat save end of turn)
+> Tactics: Swarm isolated PCs. Pack of 3–4 for level 2–3 party.
+
+**Boss Monster** — use for CR 10+ with lair/legendary actions:
+
+> **Adult Red Dragon** (CR 17 Dragon, Huge) — SRD 5.2
+> AC 19 | HP 256 (19d12+133) | Speed 40 ft., Climb 40 ft., Fly 80 ft.
+> Saves: DEX +6, CON +13, WIS +7, CHA +11
+> Senses: Blindsight 60 ft., Darkvision 120 ft. | Immunities: Fire
+> Multiattack: Bite + 2× Claw (Frightful Presence 1/turn)
+> - Bite: +14 to hit, 2d10+8 piercing + 2d6 fire
+> - Claw: +14 to hit, 2d6+8 slashing
+> - Fire Breath (Recharge 5–6): 60-ft cone, DC 21 DEX, 18d6 fire
+> Lair Actions (Init 20): magma eruption, volcanic gas, tremor
+> Tactics: Open with Frightful Presence + breath. Focus flyers. Use lair actions to split the party.
+
+Always include Tactics (1–2 sentences). For browse queries, use the standard template per monster.
+
 ## CR 0–1 → `monsters-cr0-1.md`
 
 - **Awakened Shrub** | Plant | S | CR 0

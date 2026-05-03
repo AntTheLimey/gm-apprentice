@@ -12,6 +12,26 @@
 | Very Rare | 5,000-50,000 GP | 20,000 GP |
 | Legendary | 50,000+ GP | 100,000 GP |
 
+## Response Templates
+
+**Item Lookup** — use for single-item questions:
+
+> **Flame Tongue** (Rare, requires attunement) — SRD 5.2
+> Weapon. Prereqs: attunement by any.
+> Bonus Action to ignite: +2d6 fire per hit, bright light 40ft.
+> Value: 500–5,000 GP
+> Note: Strong but competes with attunement slots. Best on a martial with no other attunement needs.
+
+**Item Browse** — use for "what items at rarity X" or category filtering:
+
+> Uncommon Wondrous Items (SRD 5.2):
+> - **Bag of Holding** (No attunement) — extradimensional storage, 500 lb capacity
+> - **Boots of Elvenkind** (No attunement) — advantage on Stealth (silent movement)
+> - **Cloak of Protection** (Attunement) — +1 AC and saving throws
+> - …
+
+Omit the Note line on pure lookups. Include it (2 sentences max) only when the user asks for advice.
+
 ## Armor (17) → `magic-items-armor.md`
 
 - **Adamantine Armor** | Uncommon | No
