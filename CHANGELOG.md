@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.14] — 2026-05-02
+
+### Fixed
+
+- Migration version auto-synced from plugin.json at build time
+- Content filtering now makes deterministic decisions for cut/skipped/modified scenes
+
+### Added
+
+- Reconcile fast-path for straightforward sessions
+- Proof-run infrastructure: 5-run statistical benchmark with median/IQR analysis
+- CI checks: migration version sync, content filtering validation
+
+---
+
 ## [1.4.13] — 2026-05-02
 
 ### Fixed
@@ -296,6 +311,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.14]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.13...v1.4.14
 [1.4.13]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.12...v1.4.13
 [1.4.12]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.11...v1.4.12
 [1.4.11]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.10...v1.4.11

@@ -58,6 +58,17 @@ jobs:
             exit 1
           fi
 
+      - name: Migration version matches plugin version
+        continue-on-error: true
+        run: |
+          PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          MIGRATION_VERSION=$(grep -m1 'current_version:' \
+            skills/shared/migrations.md | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$PLUGIN_VERSION" != "$MIGRATION_VERSION" ]; then
+            echo "::warning::plugin.json ($PLUGIN_VERSION) != migrations.md ($MIGRATION_VERSION)"
+            echo "Build will auto-stamp, but source files are out of sync"
+          fi
+
   schema-validation:
     runs-on: ubuntu-latest
     steps:
@@ -70,6 +81,9 @@ jobs:
 
       - name: Validate campaign entity schemas
         run: python scripts/validate_schema.py tests/benchmark-campaign
+
+      - name: Validate content filtering rules
+        run: python scripts/validate_schema.py filtering tests/benchmark-campaign
 
   pr-discipline:
     if: github.event_name == 'pull_request'

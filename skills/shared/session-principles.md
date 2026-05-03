@@ -130,3 +130,15 @@ Wrap-up: entity found → campaign-organizer
 
 GM promotes DRAFT → AUTHORITATIVE at their own pace.
 See `shared/canon-confidence.md`.
+
+## Reconcile Fast Path
+
+The reconcile procedure (`shared/reconcile.md`) has a quick-scan
+preamble. When a session has no UNVERIFIED markers, no DRAFT
+conflicts, and no unplayed prep, the GM can approve bulk
+promotion in one step instead of walking through all 6 steps.
+
+Session-wrapup and session-prep should be aware of this — when
+handing off to reconcile, note whether the session is likely to
+qualify for the fast path based on what the skill already knows
+about the session's complexity.

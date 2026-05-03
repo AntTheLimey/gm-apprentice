@@ -114,8 +114,26 @@ methodology doc in `docs/` is the persistent reference.
 6. **Evaluator variance is real.** Same control answers
    scored 128 by one evaluator and 108 by another. Within-
    run deltas are meaningful; cross-run absolute comparisons
-   are not. Future improvement: run evaluations 3x and
-   average.
+   are not. See "Statistical Validity" below for minimum
+   run counts and significance thresholds.
+
+## Statistical Validity
+
+Evaluator variance is real — same answers scored 20 points apart
+across evaluator runs (see lesson 6 above). These rules prevent
+false confidence:
+
+- **Minimum 5 runs** for any quality claim. Three runs is
+  insufficient given observed evaluator variance.
+- **Report median and interquartile range (IQR)**, not mean.
+  Median is robust to the outlier runs that plague LLM evaluation.
+- **8-point significance threshold.** A quality delta must exceed
+  8 points on a 75-point scale (one full rubric dimension) to be
+  considered significant. Deltas below this threshold must include:
+  "Within evaluator variance — not statistically significant."
+- **Cross-run absolute scores are informational only.** Never use
+  them for decisions. Within-run deltas (control vs test scored by
+  the same evaluator in the same run) are reliable.
 
 ## Benchmark history
 

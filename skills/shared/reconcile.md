@@ -22,6 +22,31 @@ Before starting, have:
 - Access to related entity files and timeline entries
 - The session index file for status updates
 
+## Quick Scan — Fast Path
+
+Before starting the full procedure, check three conditions:
+
+1. **No unverified markers:** Zero `<!-- UNVERIFIED -->` markers
+   in the Wrap-Up file
+2. **No DRAFT conflicts:** Zero DRAFT entities that contradict
+   existing AUTHORITATIVE entities on the same facts
+3. **No unplayed prep:** No Plan file exists for this session
+   (nothing to triage)
+
+If all three pass, offer the fast path:
+
+> "Straightforward session — no conflicts found, no unplayed
+> prep. Promote all new entities to AUTHORITATIVE? (y/n)"
+
+On GM confirmation:
+- Set Wrap-Up `source_confidence` to `AUTHORITATIVE`
+- Promote all DRAFT entities from this session to AUTHORITATIVE
+- Update session index `status` to `reviewed`
+- Skip to step 6 (record decisions)
+
+If any condition fails → proceed with the full 6-step procedure
+below.
+
 ## Procedure
 
 ### 1. Load the target

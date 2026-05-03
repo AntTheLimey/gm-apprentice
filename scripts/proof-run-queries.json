@@ -1,0 +1,101 @@
+[
+  {
+    "id": 1,
+    "system": "coc-7e",
+    "type": "lookup",
+    "query": "What are the CoC 7e Chase rules?",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/coc-7e/combat-reference.md"]
+  },
+  {
+    "id": 2,
+    "system": "coc-7e",
+    "type": "generate",
+    "query": "Create a CoC 7e NPC — a paranoid antiquarian who's seen too much",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/npc-generation.md"]
+  },
+  {
+    "id": 3,
+    "system": "coc-regency",
+    "type": "lookup",
+    "query": "What occupations are available in Regency Cthulhu?",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/coc-7e/variants/regency/occupations.md"]
+  },
+  {
+    "id": 4,
+    "system": "gurps-4e",
+    "type": "lookup",
+    "query": "How does the GURPS 4e grappling system work?",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/gurps-4e/combat.md"]
+  },
+  {
+    "id": 5,
+    "system": "gurps-4e",
+    "type": "generate",
+    "query": "Build me a GURPS 4e cat burglar, 150 points",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": [
+      "skills/ttrpg-expert/systems/gurps-4e/chargen-kit-thief.md",
+      "skills/ttrpg-expert/systems/gurps-4e/character-generation.md"
+    ]
+  },
+  {
+    "id": 6,
+    "system": "dnd-5e-2024",
+    "type": "lookup",
+    "query": "What are the Paladin's 2024 class features?",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/classes.md"]
+  },
+  {
+    "id": 7,
+    "system": "dnd-5e-2024",
+    "type": "generate",
+    "query": "Design a Three Clue Rule investigation for my D&D 5e murder mystery",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/scenario-writing.md"]
+  },
+  {
+    "id": 8,
+    "system": "fitd",
+    "type": "lookup",
+    "query": "How do Fortune Rolls work in Blades in the Dark?",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/fitd/mechanics.md"]
+  },
+  {
+    "id": 9,
+    "system": "fitd",
+    "type": "generate",
+    "query": "Create a FitD score opportunity against the Billhooks faction",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/systems/fitd/factions.md"]
+  },
+  {
+    "id": 10,
+    "system": "generic",
+    "type": "generate",
+    "query": "I need to improvise a suspicious NPC for an investigation scene right now",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/npc-generation.md"]
+  },
+  {
+    "id": 11,
+    "system": "cross-system",
+    "type": "framework",
+    "query": "Explain the Universal Faction Turn procedure",
+    "skill_entry": "skills/ttrpg-expert/SKILL.md",
+    "ground_truth": ["skills/ttrpg-expert/world-evolution.md"]
+  },
+  {
+    "id": 12,
+    "system": "workflow",
+    "type": "session-prep",
+    "query": "Run session prep for Session 4 of my campaign",
+    "skill_entry": "skills/session-prep/SKILL.md",
+    "ground_truth": ["skills/session-prep/SKILL.md"]
+  }
+]

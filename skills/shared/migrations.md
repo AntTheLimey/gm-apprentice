@@ -1,5 +1,6 @@
 ---
-current_version: "1.4.9"
+# Stamped from plugin.json by build-skill-zips.sh — do not edit manually
+current_version: "1.4.14"
 ---
 
 # Vault Migration Registry
@@ -76,3 +77,23 @@ vaults created before the versioning system existed.
   `{site_dir}/node_modules/gm-apprentice-publish/package.json`.
   If lower than 1.1.1, offer to run
   `npm update gm-apprentice-publish` in the site directory.
+
+## Migration: 1.4.10
+
+No vault schema changes. Version stamp only.
+
+## Migration: 1.4.11
+
+No vault schema changes. Version stamp only.
+
+## Migration: 1.4.12
+
+No vault schema changes. Version stamp only.
+
+## Migration: 1.4.13
+
+No vault schema changes. Version stamp only.
+
+## Migration: 1.4.14
+
+No vault schema changes. Version stamp only.
