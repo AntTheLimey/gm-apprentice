@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -96,7 +96,7 @@ ${tabScript()}`;
     rootHref: rootPath(page.outputPath),
     content: body,
     footer: config.footer,
-    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
+    scripts: clientScripts(page.outputPath),
   });
 }
 

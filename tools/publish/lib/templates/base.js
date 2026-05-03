@@ -24,6 +24,11 @@ function rootPath(outputPath) {
   return '../'.repeat(depth) || './';
 }
 
+function clientScripts(outputPath) {
+  const root = rootPath(outputPath);
+  return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
+}
+
 function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, breadcrumbsHtml, scripts }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
@@ -160,6 +165,7 @@ module.exports = {
   DIR_LABELS,
   cssPath,
   rootPath,
+  clientScripts,
   baseShell,
   getConfidence,
   confidenceBadge,

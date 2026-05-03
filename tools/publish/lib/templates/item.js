@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 
 function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap) {
   const fm = page.frontmatter;
@@ -72,7 +72,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap)
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,
-    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
+    scripts: clientScripts(page.outputPath),
   });
 }
 

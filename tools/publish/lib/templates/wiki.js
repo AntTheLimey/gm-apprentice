@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge, metadataBadgesFor, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, metadataBadgesFor, portraitImg } = require('./base');
 
 function wikiTemplate(page, processedContent, navFor, config, imageMap) {
   const fm = page.frontmatter;
@@ -16,7 +16,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap) {
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,
-    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
+    scripts: clientScripts(page.outputPath),
   });
 }
 

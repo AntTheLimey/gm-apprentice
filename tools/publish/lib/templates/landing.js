@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, DIR_LABELS } = require('./base');
+const { baseShell, DIR_LABELS, clientScripts } = require('./base');
 const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs } = require('./landing-data');
 
 function formatDate(dateStr) {
@@ -222,7 +222,7 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     content,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
-    scripts: ['js/nav.js'],
+    scripts: clientScripts(outputPath),
   });
 }
 

@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge } = require('./base');
 
 function indexTemplate(outputDir, title, pages, navFor, config) {
   const outputPath = outputDir ? `${outputDir}/index.html` : 'index.html';
@@ -30,7 +30,7 @@ function indexTemplate(outputDir, title, pages, navFor, config) {
     rootHref: rootPath(outputPath),
     content,
     footer: config.footer,
-    scripts: [rootPath(outputPath) + 'js/nav.js'],
+    scripts: clientScripts(outputPath),
   });
 }
 

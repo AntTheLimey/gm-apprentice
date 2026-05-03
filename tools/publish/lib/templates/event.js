@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 
 function parseParticipant(raw) {
   const str = String(raw).trim();
@@ -97,7 +97,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,
-    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
+    scripts: clientScripts(page.outputPath),
   });
 }
 

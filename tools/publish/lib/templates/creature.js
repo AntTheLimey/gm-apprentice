@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 
 function creatureTemplate(page, processedContent, navFor, config, imageMap) {
   const fm = page.frontmatter;
@@ -56,7 +56,7 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap) {
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,
-    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
+    scripts: clientScripts(page.outputPath),
   });
 }
 
