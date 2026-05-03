@@ -228,6 +228,18 @@ function build(options = {}) {
   publishConfig._recentNPCs = recentNPCs;
   publishConfig._recentLocations = recentLocations;
 
+  const { buildRelationshipGraph, renderRelationshipSVG } = require('./relationship-graph');
+
+  const entityGraphs = {};
+  for (const page of pages) {
+    const graph = buildRelationshipGraph(page.title, pages, backlinks);
+    if (graph.nodes.length > 1) {
+      entityGraphs[page.title] = renderRelationshipSVG(graph);
+    }
+  }
+  console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
+  publishConfig._entityGraphs = entityGraphs;
+
   // Apply field filtering after link map is built (aliases/canon_status needed for resolution)
   for (const page of pages) {
     const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
@@ -422,6 +434,22 @@ function build(options = {}) {
     ensureDir(outPath);
     fs.writeFileSync(outPath, indexHtml);
     console.log(`  wrote ${dir}/index.html`);
+  }
+
+  // Timeline page
+  const { buildTimelineData, renderTimelineSVG, renderTimelineStrip } = require('./timeline');
+  const { timelineTemplate } = require('./templates/timeline-page');
+
+  const timelineData = buildTimelineData(pages);
+  if (timelineData.events.length > 0) {
+    const fullSvg = renderTimelineSVG(timelineData);
+    const timelineHtml = timelineTemplate(fullSvg, navFor, config, publishConfig);
+    const timelinePath = path.join(outputDir, 'timeline.html');
+    ensureDir(timelinePath);
+    fs.writeFileSync(timelinePath, timelineHtml);
+    console.log('  wrote timeline.html');
+
+    publishConfig._timelineStrip = renderTimelineStrip(timelineData, { maxEvents: 15 });
   }
 
   // Landing page
