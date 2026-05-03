@@ -69,6 +69,55 @@ file reference and advance `status` to `played`.
 Acknowledge and hold. No editing or analysis — processed during
 wrap-up. Note new entities for wrap-up attention.
 
+## Common Mid-Game Lookups
+
+Route these requests directly — don't search, load the file.
+
+| Need | Go to |
+|------|-------|
+| Rules dispute | `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, FitD, Generic) or `mechanics.md` (GURPS) |
+| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS) or `conditions-rules.md` (D&D) or `mechanics.md` (FitD) |
+| Improvise NPC | `ttrpg-expert/npc-generation.md` §The 3-Line NPC (Quick Generation) |
+| Random encounter | `ttrpg-expert/random-generation.md` §Random Encounter Generation |
+| Random NPC | `ttrpg-expert/random-generation.md` §Random NPC Generator |
+| Spotlight imbalance | `ttrpg-expert/active-play-management.md` §Spotlight Management |
+| Combat dragging | `ttrpg-expert/active-play-management.md` §Combat Length |
+| Scene fell flat | `ttrpg-expert/active-play-management.md` §Mid-Session Adjustments |
+| Pacing / tension | `ttrpg-expert/active-play-management.md` §Pacing and Flow |
+| Improvisation help | `ttrpg-expert/active-play-management.md` §Improvisation |
+
+Read `ttrpg-expert/active-play-management.md` when the GM needs
+GM-craft advice (spotlight, pacing, improv, difficulty tuning)
+during play. Use it as a companion reference — don't summarize
+it, route to the relevant section and deliver the answer.
+
+## Capture Shorthand
+
+When taking play notes, use these markers so session-wrapup
+can extract entities automatically:
+
+| Marker | Use when |
+|--------|----------|
+| `NEW-NPC` | Improvised character appeared |
+| `NEW-LOC` | New location described |
+| `NEW-ITEM` | Item introduced |
+| `NEW-EVENT` | Significant event occurred |
+| `UPDATE` | Existing entity changed |
+| `CONFLICT` | Contradicts existing vault content |
+
+Example play note entry:
+```
+NEW-NPC: Madame Voss — fortune teller at the pier, nervous,
+  knows about the missing ship but won't say why
+Scene 3: PCs investigated the harbour. Found bloodstains
+  on the Merry Widow's deck. UPDATE: The Merry Widow —
+  confirmed abandoned, signs of struggle below decks
+```
+
+These markers match what session-wrapup expects in its entity
+extraction step — notes taken during play arrive pre-formatted
+for wrap-up processing.
+
 ## Behavior Rules
 
 - **1-5 sentences** unless GM asks for more

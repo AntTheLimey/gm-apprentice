@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.4.17"
+current_version: "1.4.18"
 ---
 
 # Vault Migration Registry
@@ -107,5 +107,9 @@ No vault schema changes. Version stamp only.
 No vault schema changes. Version stamp only.
 
 ## Migration: 1.4.17
+
+No vault schema changes. Version stamp only.
+
+## Migration: 1.4.18
 
 No vault schema changes. Version stamp only.
