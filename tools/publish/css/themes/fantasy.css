@@ -1,0 +1,33 @@
+/* Fantasy / Adventure preset
+   For: D&D, Pathfinder, classic fantasy */
+
+:root {
+  --bg: #1a1a2e;
+  --bg-card: #222240;
+  --bg-header: #0f0f1f;
+  --bg-hero: #0f0f1f;
+  --text: #c8d6e5;
+  --text-muted: #7a8a9e;
+  --accent: #fbbf24;
+  --accent-dim: rgba(251, 191, 36, 0.1);
+  --border: #2a2a4a;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --success: #22c55e;
+  --font-heading: Palatino, "Palatino Linotype", "Book Antiqua", serif;
+  --font-body: system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f0e6;
+    --bg-card: #fffdf5;
+    --bg-header: #1a1a2e;
+    --bg-hero: #1a1a2e;
+    --text: #1a1a2e;
+    --text-muted: #5a5a7e;
+    --accent: #b8860b;
+    --accent-dim: rgba(184, 134, 11, 0.08);
+    --border: #c8c0a8;
+  }
+}

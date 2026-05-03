@@ -1,0 +1,33 @@
+/* Noir / Industrial / Heist preset
+   For: Blades in the Dark, cyberpunk, crime */
+
+:root {
+  --bg: #0d0d0d;
+  --bg-card: #1a1a1a;
+  --bg-header: #050505;
+  --bg-hero: #050505;
+  --text: #b0b0b0;
+  --text-muted: #666666;
+  --accent: #c084fc;
+  --accent-dim: rgba(192, 132, 252, 0.1);
+  --border: #2a2a2a;
+  --danger: #ef4444;
+  --warning: #eab308;
+  --success: #22c55e;
+  --font-heading: "Fira Code", ui-monospace, monospace;
+  --font-body: system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f0f0;
+    --bg-card: #ffffff;
+    --bg-header: #1a1a1a;
+    --bg-hero: #1a1a1a;
+    --text: #1a1a1a;
+    --text-muted: #666666;
+    --accent: #7c3aed;
+    --accent-dim: rgba(124, 58, 237, 0.08);
+    --border: #d0d0d0;
+  }
+}

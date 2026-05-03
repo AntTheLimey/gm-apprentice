@@ -1,0 +1,34 @@
+/* Military / Tactical / Modern preset
+   For: GURPS tactical, modern ops, sci-fi military */
+
+:root {
+  --bg: #1a1f16;
+  --bg-card: #232820;
+  --bg-header: #0d1108;
+  --bg-hero: #0d1108;
+  --text: #bfc9b8;
+  --text-muted: #7a8570;
+  --accent: #4ade80;
+  --accent-dim: rgba(74, 222, 128, 0.1);
+  --border: #2e3828;
+  --danger: #ef4444;
+  --warning: #eab308;
+  --success: #4ade80;
+  --font-heading: system-ui, -apple-system, sans-serif;
+  --font-body: system-ui, -apple-system, sans-serif;
+  --font-heading-weight: 800;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f0f4ec;
+    --bg-card: #fafcf8;
+    --bg-header: #1a1f16;
+    --bg-hero: #1a1f16;
+    --text: #1a1f16;
+    --text-muted: #5a6550;
+    --accent: #16a34a;
+    --accent-dim: rgba(22, 163, 74, 0.08);
+    --border: #bfc9b8;
+  }
+}
