@@ -335,7 +335,9 @@ function build(options = {}) {
           html = creatureTemplate(page, processed, navFor, config, imageMap);
           break;
         case 'location':
-          html = locationTemplate(page, processed, navFor, config, imageMap);
+          html = locationTemplate(page, processed, navFor, config, imageMap, {
+            pages, linkMap, publishConfig,
+          });
           break;
         case 'item':
           html = itemTemplate(page, processed, navFor, config, imageMap, linkMap);
