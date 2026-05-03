@@ -21,6 +21,7 @@ any equivalent in `vault.config.json`.
 | Theme genre | `publish.theme.genre` | Genre tag for theming hints |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
 | Overrides | `publish.overrides` | Per-file include/exclude/field overrides |
+| Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Setting year | `setting_year` | In-game date shown on the landing page |
 
 ## `vault.config.json` (in the site repo)
@@ -47,3 +48,21 @@ When both files define the same setting (e.g. `excludeSections`
 in `vault.config.json` and `publish.exclude_sections` in
 `vault-config.md`), the vault-config.md value wins. The JSON
 file values are used only as fallbacks.
+
+---
+
+## Content Filtering: DRAFT Entities
+
+```yaml
+publish:
+  exclude_drafts: false
+```
+
+When `true`, entities with `source_confidence: DRAFT` are
+excluded entirely from the published site — they won't appear
+in navigation, index pages, or as individual pages. Wiki-links
+to excluded DRAFT entities will not resolve.
+
+Default `false` — DRAFT entities publish normally with a visible
+"Draft" badge, letting players see work-in-progress content
+while knowing it's unconfirmed.
