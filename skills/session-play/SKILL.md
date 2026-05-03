@@ -106,7 +106,7 @@ can extract entities automatically:
 | `CONFLICT` | Contradicts existing vault content |
 
 Example play note entry:
-```
+```text
 NEW-NPC: Madame Voss — fortune teller at the pier, nervous,
   knows about the missing ship but won't say why
 Scene 3: PCs investigated the harbour. Found bloodstains
