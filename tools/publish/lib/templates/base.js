@@ -24,7 +24,7 @@ function rootPath(outputPath) {
   return '../'.repeat(depth) || './';
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, breadcrumbsHtml, scripts }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -32,6 +32,10 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
     : '';
   const genreLinkTag = genreCssHref
     ? `\n  <link rel="stylesheet" href="${genreCssHref}">`
+    : '';
+  const breadcrumbs = breadcrumbsHtml || '';
+  const scriptTags = scripts
+    ? scripts.map(s => `<script src="${s}"></script>`).join('\n')
     : '';
   return `<!DOCTYPE html>
 <html lang="en">
@@ -47,6 +51,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
 ${navHtml}
 
 <main class="content">
+${breadcrumbs}
 ${content}
 </main>
 
@@ -54,6 +59,7 @@ ${footerHtml}
 
 <button class="back-to-top" onclick="window.scrollTo({top:0})" aria-label="Back to top">&#8593;</button>
 
+${scriptTags}
 <script>
 (function() {
   var btn = document.querySelector('.back-to-top');
@@ -61,6 +67,19 @@ ${footerHtml}
     btn.classList.toggle('visible', window.scrollY > 400);
   }, { passive: true });
 })();
+document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var group = btn.parentElement;
+    var isOpen = group.classList.contains('open');
+    document.querySelectorAll('.nav-group').forEach(function(g) { g.classList.remove('open'); });
+    if (!isOpen) group.classList.add('open');
+  });
+});
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.nav-group')) {
+    document.querySelectorAll('.nav-group').forEach(function(g) { g.classList.remove('open'); });
+  }
+});
 </script>
 
 </body>

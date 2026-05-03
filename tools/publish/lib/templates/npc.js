@@ -24,7 +24,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap) {
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
-    navHtml: navFor(page.outputPath),
+    navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,

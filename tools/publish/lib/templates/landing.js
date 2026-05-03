@@ -217,7 +217,7 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     title: 'Home',
     siteTitle: config.siteTitle,
     cssHref: 'css/style.css',
-    navHtml: navFor(outputPath),
+    navHtml: navFor(outputPath, config),
     rootHref: './',
     content,
     footer: config.footer,

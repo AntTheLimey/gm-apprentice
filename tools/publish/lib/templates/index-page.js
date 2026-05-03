@@ -26,7 +26,7 @@ function indexTemplate(outputDir, title, pages, navFor, config) {
     title,
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),
-    navHtml: navFor(outputPath),
+    navHtml: navFor(outputPath, config),
     rootHref: rootPath(outputPath),
     content,
     footer: config.footer,
