@@ -1,6 +1,6 @@
 function getLatestSession(pages) {
   const played = pages.filter(
-    p => p.frontmatter.type === 'session' && p.frontmatter.status === 'played'
+    p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
   );
   if (played.length === 0) return null;
   played.sort((a, b) => (b.frontmatter.session_number || 0) - (a.frontmatter.session_number || 0));
@@ -82,7 +82,7 @@ function inferNPCRole(npc, sessionCount) {
 function scoreNPCs(allPages) {
   const npcs = allPages.filter(p => p.frontmatter.type === 'npc');
   const sessions = allPages.filter(
-    p => p.frontmatter.type === 'session' && p.frontmatter.status === 'played'
+    p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
   );
 
   const scored = npcs.map(npc => {

@@ -4,6 +4,11 @@ const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs } = requi
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
+  const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  }
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return String(dateStr);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -219,4 +224,4 @@ function landingTemplate(pages, navFor, config, publishConfig) {
   });
 }
 
-module.exports = { landingTemplate };
+module.exports = { landingTemplate, formatDate };

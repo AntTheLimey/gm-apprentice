@@ -29,6 +29,15 @@ describe('getLatestSession', () => {
     ];
     assert.strictEqual(getLatestSession(pages), null);
   });
+
+  it('returns a session with status reviewed', () => {
+    const pages = [
+      { frontmatter: { type: 'session', status: 'reviewed', session_number: 5, actual_date: '2026-04-26' }, title: 'Session 5' },
+      { frontmatter: { type: 'session', status: 'played', session_number: 4, actual_date: '2026-04-19' }, title: 'Session 4' },
+    ];
+    const result = getLatestSession(pages);
+    assert.strictEqual(result.title, 'Session 5');
+  });
 });
 
 describe('extractRecap', () => {

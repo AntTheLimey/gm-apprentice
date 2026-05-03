@@ -2,6 +2,24 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { confidenceBadge, getConfidence, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
 const { parseParticipant } = require('../../lib/templates/event');
+const { formatDate } = require('../../lib/templates/landing');
+
+describe('formatDate', () => {
+  it('does not shift date for bare date string', () => {
+    const result = formatDate('2026-04-26');
+    assert.ok(result.includes('26'), `Expected day 26 in "${result}"`);
+    assert.ok(result.includes('April'), `Expected April in "${result}"`);
+  });
+
+  it('returns null for falsy input', () => {
+    assert.strictEqual(formatDate(null), null);
+    assert.strictEqual(formatDate(undefined), null);
+  });
+
+  it('returns string for invalid date', () => {
+    assert.strictEqual(formatDate('not-a-date'), 'not-a-date');
+  });
+});
 
 describe('getConfidence', () => {
   it('prefers source_confidence over canon_status', () => {
