@@ -41,6 +41,17 @@ jobs:
             exit 1
           fi
 
+      - name: Reference file size limit
+        run: |
+          OVERSIZED=$(find skills/ttrpg-*/systems skills/ttrpg-*/references \
+            -name '*.md' -not -name 'SKILL.md' \
+            -not -path '*/personal/*' -size +25k 2>/dev/null)
+          if [ -n "$OVERSIZED" ]; then
+            echo "::error::Files exceed 25KB limit (split into sub-files):"
+            echo "$OVERSIZED"
+            exit 1
+          fi
+
       - name: Relative path validation
         run: |
           errors=0
