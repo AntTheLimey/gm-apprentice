@@ -242,9 +242,9 @@ def generate_summary(
             )
             lines.append(
                 f"| {qid} | {sys_name} | {q['type']} | "
-                f"{tmed:,.0f} | {tq1:,.0f}–{tq3:,.0f} | "
+                f"{tmed:,.0f} | {tq1:,.0f}-{tq3:,.0f} | "
                 f"{umed:.0f} | "
-                f"{wmed / 1000:.1f} | {wq1 / 1000:.1f}–{wq3 / 1000:.1f} |"
+                f"{wmed / 1000:.1f} | {wq1 / 1000:.1f}-{wq3 / 1000:.1f} |"
             )
         else:
             t = token_vals[0]
@@ -293,7 +293,7 @@ def generate_summary(
             avg_q3 = sum(query_q3s) / len(query_q3s)
             lines.append(
                 f"| {label} | {avg_med:,.0f} | "
-                f"{avg_q1:,.0f}–{avg_q3:,.0f} |"
+                f"{avg_q1:,.0f}-{avg_q3:,.0f} |"
             )
         else:
             lines.append(f"| {label} | {avg_med:,.0f} |")

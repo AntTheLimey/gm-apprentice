@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """Transform SRD 5.2 monster stat blocks into compact enriched reference format."""
 
+import argparse
 import re
 import sys
 from pathlib import Path
 
-SRD_PATH = Path("/Users/antonypegg/PROJECTS/reference-srds/dnd-5e-2024-srd/src/12_MonstersA-Z.md")
 OUT_DIR = Path("skills/ttrpg-expert/systems/dnd-5e-2024")
+MAX_REF_BYTES = 25 * 1024
 
 SIZE_MAP = {"Tiny": "T", "Small": "S", "Medium": "M", "Large": "L", "Huge": "H", "Gargantuan": "G"}
 
 TIERS = {
-    "cr0-1":    {"label": "CR 0–1", "min": 0, "max": 1},
-    "cr2-4":    {"label": "CR 2–4", "min": 2, "max": 4},
-    "cr5-10":   {"label": "CR 5–10", "min": 5, "max": 10},
-    "cr11-plus": {"label": "CR 11+", "min": 11, "max": 999},
+    "cr0-1":     {"label": "CR 0–1", "min": 0, "max": 1},
+    "cr2-4":     {"label": "CR 2–4", "min": 2, "max": 4},
+    "cr5-10":    {"label": "CR 5–10", "min": 5, "max": 10},
+    "cr11-16":   {"label": "CR 11–16", "min": 11, "max": 16},
+    "cr17-plus": {"label": "CR 17+", "min": 17, "max": 999},
 }
 
 CR_XP = {
@@ -199,23 +201,21 @@ def parse_legendary(text):
     return actions
 
 
-def format_attack(name, desc):
+def format_attack(name, desc, budget_tight=False):
     """Format an attack or ability into compact form."""
-    # Melee/Ranged attack
+    # Melee/Ranged attack — allow parenthetical after +N (e.g. "+5 (with Advantage ...)")
     atk_match = re.search(
-        r'\*(Melee|Ranged) Attack Roll:\*\s*\+(\d+),\s*reach\s*(\d+)\s*ft\.\s*(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage',
+        r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
+        r'(?:\s*\([^)]*\))?'
+        r',?\s*(?:reach\s*(\d+)\s*ft\.?)?'
+        r'(?:,?\s*(?:or\s+)?range\s*[\d/]+\s*ft\.?)?'
+        r'\s*(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage',
         desc
     )
-    if not atk_match:
-        atk_match = re.search(
-            r'\*(Melee|Ranged) Attack Roll:\*\s*\+(\d+),?\s*(?:reach\s*(\d+)\s*ft\.)?\s*(?:range\s*[\d/]+\s*ft\.)?\s*(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage',
-            desc
-        )
 
     if atk_match:
         hit = atk_match.group(2)
         reach = atk_match.group(3)
-        avg = atk_match.group(4)
         dice = atk_match.group(5).replace(' ', '')
         dmg_type = atk_match.group(6).lower()
 
@@ -224,7 +224,6 @@ def format_attack(name, desc):
             parts[0] += f", reach {reach} ft."
         parts[0] += f", {dice} {dmg_type}"
 
-        # Check for additional damage
         extra = desc[atk_match.end():]
         plus_match = re.search(r'plus\s+(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage', extra)
         if plus_match:
@@ -235,19 +234,44 @@ def format_attack(name, desc):
         if save_match:
             save_type = save_match.group(1)[:3].upper()
             dc = save_match.group(2)
-            # Try to find the effect
             fail_match = re.search(r'\*Failure:\*\s*(.+?)(?:\*Success|\Z)', extra, re.DOTALL)
             if fail_match:
                 effect = fail_match.group(1).strip()
                 effect = re.sub(r'\s+', ' ', effect)
-                effect = effect[:80]  # Truncate long effects
-                parts[0] += f"; DC {dc} {save_type} or {summarize_effect(effect)}"
+                parts[0] += f"; DC {dc} {save_type} or {summarize_effect(effect, budget_tight)}"
             else:
                 parts[0] += f"; DC {dc} {save_type}"
 
+        # Check for grapple condition (no save, just condition text)
+        if 'Grappled condition' in extra and 'escape DC' in extra:
+            esc_match = re.search(r'escape DC (\d+)', extra)
+            if esc_match:
+                parts[0] += f"; grapple (escape DC {esc_match.group(1)})"
+
         return parts[0]
 
-    # Save-based ability (breath weapon, etc.)
+    # Attack roll with no damage (Roper Tentacle style — grapple on hit)
+    atk_nodmg = re.search(
+        r'\*(Melee|Ranged)(?: or (?:Melee|Ranged))? Attack Roll:\*\s*\+(\d+)'
+        r'(?:\s*\([^)]*\))?'
+        r',?\s*(?:reach\s*(\d+)\s*ft\.?)?',
+        desc
+    )
+    if atk_nodmg and 'damage' not in desc.split('Attack Roll')[0]:
+        hit = atk_nodmg.group(2)
+        reach = atk_nodmg.group(3)
+        result = f"- {name}: +{hit}"
+        if reach and int(reach) > 5:
+            result += f", reach {reach} ft."
+        if 'Grappled condition' in desc:
+            esc_match = re.search(r'escape DC (\d+)', desc)
+            esc = f" (escape DC {esc_match.group(1)})" if esc_match else ""
+            result += f", grapple{esc}"
+            if 'Poisoned condition' in desc:
+                result += " + poisoned"
+        return result
+
+    # Save-based ability with damage (breath weapon, etc.)
     save_match = re.search(
         r'\*([\w]+)\s*Saving Throw\*:\s*DC\s*(\d+),\s*(.+?)\.\s*\*Failure:\*\s*(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage',
         desc
@@ -256,7 +280,7 @@ def format_attack(name, desc):
         save_type = save_match.group(1)[:3].upper()
         dc = save_match.group(2)
         area = save_match.group(3).strip()
-        area = re.sub(r'each creature in (?:a |an )?', '', area)
+        area = re.sub(r'each creature (?:that [^.]+? )?in (?:a |an )?', '', area)
         area = area.replace('-foot', '-ft').replace(' Cone', ' cone').replace(' Line', ' line')
         area = area.replace(', 5-ft-wide', '')
         dice = save_match.group(5).replace(' ', '')
@@ -264,17 +288,86 @@ def format_attack(name, desc):
         half = " (half)" if "Half damage" in desc else ""
         return f"- {name}: {area}, DC {dc} {save_type}, {dice} {dmg_type}{half}"
 
+    # Save-based ability with *First Failure*/*Second Failure* (petrification, paralysis)
+    first_fail = re.search(
+        r'\*([\w]+)\s*Saving Throw\*:\s*DC\s*(\d+),\s*(.+?)\.\s*\*First Failure',
+        desc
+    )
+    if first_fail:
+        save_type = first_fail.group(1)[:3].upper()
+        dc = first_fail.group(2)
+        area = first_fail.group(3).strip()
+        area = re.sub(r'each creature (?:that [^.]+? )?in (?:a |an )?', '', area)
+        area = area.replace('-foot', '-ft').replace(' Cone', ' cone').replace(' Line', ' line')
+        first_eff = re.search(r'\*First Failure\*?\s*(.+?)\s*\*Second Failure', desc, re.DOTALL)
+        second_eff = re.search(r'\*Second Failure\*?\s*(.+?)(?:\n\n|\Z)', desc, re.DOTALL)
+        effects = []
+        if first_eff:
+            eff = re.sub(r'\s+', ' ', first_eff.group(1).strip()).rstrip('.')
+            eff = re.sub(r'The target has the ', '', eff)
+            eff = re.sub(r' condition.*', '', eff)
+            effects.append(f"1st: {eff}")
+        if second_eff:
+            eff = re.sub(r'\s+', ' ', second_eff.group(1).strip()).rstrip('.')
+            eff = re.sub(r'The target has the ', '', eff)
+            eff = re.sub(r' condition.*', '', eff)
+            effects.append(f"2nd: {eff}")
+        eff_str = '; '.join(effects) if effects else ''
+        if budget_tight:
+            eff_str = '; '.join(e.split(',')[0] for e in effects) if effects else ''
+        if area:
+            return f"- {name}: {area}, DC {dc} {save_type}, {eff_str}"
+        return f"- {name}: DC {dc} {save_type}, {eff_str}"
+
+    # Save-based ability with condition effect but no damage
+    save_cond = re.search(
+        r'\*([\w]+)\s*Saving Throw\*:\s*DC\s*(\d+),?\s*(.+?)\.\s*\*Failure:\*\s*(.+?)(?:\*Success:\*\s*(.+?))?(?:\n\n|\Z)',
+        desc, re.DOTALL
+    )
+    if save_cond:
+        save_type = save_cond.group(1)[:3].upper()
+        dc = save_cond.group(2)
+        area = save_cond.group(3).strip()
+        area = re.sub(r'each creature (?:that [^.]+? )?in (?:a |an )?', '', area)
+        area = area.replace('-foot', '-ft').replace(' Cone', ' cone').replace(' Line', ' line')
+        fail_text = re.sub(r'\s+', ' ', save_cond.group(4).strip())
+        eff = summarize_effect(fail_text, budget_tight)
+        if area and not area.startswith('one'):
+            return f"- {name}: {area}, DC {dc} {save_type}, {eff}"
+        return f"- {name}: DC {dc} {save_type}, {eff}"
+
+    # Spellcasting-style special ability ("casts *Spell*")
+    spell_match = re.search(r'casts? \*([^*]+)\*.*?(?:spell save DC|save DC|DC)\s*(\d+)', desc)
+    if spell_match:
+        spell_name = spell_match.group(1)
+        dc = spell_match.group(2)
+        level_match = re.search(r'level (\d+) version', desc)
+        level_str = f" (level {level_match.group(1)})" if level_match else ""
+        replace_match = re.search(r'replace one .+ with \*([^*]+)\*(?:\s*or \*([^*]+)\*)?', desc)
+        extras = ""
+        if replace_match:
+            alts = [replace_match.group(1)]
+            if replace_match.group(2):
+                alts.append(replace_match.group(2))
+            extras = f" or {'/'.join(alts)}"
+        return f"- {name}: casts {spell_name}{level_str} (DC {dc}){extras}"
+
     return None
 
 
-def summarize_effect(text):
+def summarize_effect(text, tight=False):
     text = re.sub(r'The target has the\s+', '', text)
-    text = re.sub(r'\s*condition.*', '', text)
     text = re.sub(r'until the end of its next turn', '1 turn', text)
     text = re.sub(r'for \d+ minutes?', lambda m: m.group(0), text)
+    text = re.sub(r' condition(?=\s+(?:until|for|and|,))', '', text)
     text = text.strip().rstrip('.')
-    if len(text) > 60:
-        text = text[:57] + '...'
+    limit = 60 if tight else 120
+    if len(text) > limit:
+        sent_end = text.rfind('.', 0, limit)
+        if sent_end > 30:
+            text = text[:sent_end + 1]
+        else:
+            text = text[:limit - 3] + '...'
     return text
 
 
@@ -288,7 +381,7 @@ def format_multiattack(desc):
     combo_match = re.match(r'(two|three|four|\d+),\s*using (.+?)(?:\s+in any combination)?$', desc)
     if combo_match:
         count = {'two': '2', 'three': '3', 'four': '4'}.get(combo_match.group(1), combo_match.group(1))
-        options = combo_match.group(2).replace(' or ', '/')
+        options = combo_match.group(2).replace(', or ', '/').replace(' or ', '/')
         return f"{count}× ({options})"
     desc = re.sub(r'(?:two|2)\s+(\w+)', r'2× \1', desc)
     desc = re.sub(r'(?:three|3)\s+(\w+)', r'3× \1', desc)
@@ -305,12 +398,14 @@ def format_trait(name, desc, budget_tight=False):
                    'Mimicry', 'Keen Smell', 'Keen Hearing',
                    'Keen Hearing and Sight', 'Hold Breath',
                    'Eldritch Restoration', 'Probing Telepathy',
-                   'Ethereal Sight', 'Water Breathing', 'Angelic Weapons',
-                   'Elemental Demise', 'Devil\'s Sight', 'Illumination',
-                   'Labyrinthine Recall', 'Diabolical Restoration',
-                   'Elemental Restoration', 'Wishes', 'Sure-Footed',
-                   'Brave', 'Transparent', 'Heated Body',
-                   'Trampling Charge'}
+                   'Ethereal Sight', 'Water Breathing',
+                   'Illumination', 'Labyrinthine Recall',
+                   'Diabolical Restoration', 'Elemental Restoration',
+                   'Sure-Footed', 'Brave', 'Transparent'}
+
+    skip_tight_only = {'Angelic Weapons', 'Elemental Demise',
+                       'Devil\'s Sight', 'Wishes', 'Heated Body',
+                       'Trampling Charge', 'Tunneler'}
 
     keep_tight = {'Legendary Resistance', 'Magic Resistance', 'Regeneration',
                   'Frightful Presence', 'Pack Tactics', 'Spider Climb',
@@ -319,8 +414,11 @@ def format_trait(name, desc, budget_tight=False):
 
     if name in skip_always:
         return None
-    if budget_tight and not any(name.startswith(k) for k in keep_tight):
-        return None
+    if budget_tight:
+        if name in skip_tight_only:
+            return None
+        if not any(name.startswith(k) for k in keep_tight):
+            return None
 
     # Legendary Resistance
     if name.startswith('Legendary Resistance'):
@@ -404,13 +502,31 @@ def format_spellcasting_action(name, desc, budget_tight=False):
     dc = dc_match.group(1) if dc_match else '?'
     ability = ability_match.group(1)[:3].upper() if ability_match else ''
 
+    # Named spellcasting abilities (Hellfire Spellcasting, etc.)
+    if name != 'Spellcasting':
+        recharge = re.search(r'\(Recharge [\d-]+\)', name)
+        recharge_str = f" {recharge.group(0)}" if recharge else ""
+        base_name = re.sub(r'\s*\(Recharge [\d-]+\)', '', name)
+        # Find spells cast
+        spells = re.findall(r'\*([A-Z][^*]+)\*', desc)
+        level_match = re.search(r'level (\d+) version', desc)
+        level_str = f" (lv {level_match.group(1)})" if level_match else ""
+        if spells:
+            replace_match = re.search(r'replace one .+ with \*([^*]+)\*(?:\s*(?:or|,)\s*\*([^*]+)\*)?', desc)
+            spell_parts = [f"{spells[0]}{level_str}"]
+            if replace_match:
+                alts = [replace_match.group(1)]
+                if replace_match.group(2):
+                    alts.append(replace_match.group(2))
+                spell_parts.append(f"or {'/'.join(alts)}")
+            return f"{base_name}{recharge_str} (DC {dc}): {' '.join(spell_parts)}"
+        return f"{base_name}{recharge_str} (DC {dc})"
+
     if budget_tight:
         return f"Spellcasting ({ability}, DC {dc})"
 
-    # Split on bullet markers to find spell lists
     at_will = []
     daily = []
-    # Pattern: "- **At Will:** *Spell1*, *Spell2*" or "**At Will:** *Spell1*"
     at_will_match = re.search(r'At Will:?\*?\*?\s*(.+?)(?=\s*-\s*\*\*\d|$)', desc)
     if at_will_match:
         at_will = re.findall(r'\*([A-Z][^*]+)\*', at_will_match.group(1))
@@ -530,27 +646,11 @@ def format_monster(m, budget_tight=False):
         elif aname == 'Spellcasting':
             spellcasting = format_spellcasting_action(aname, adesc, budget_tight)
         else:
-            formatted = format_attack(aname, adesc)
+            formatted = format_attack(aname, adesc, budget_tight)
             if formatted:
                 attacks.append(formatted)
-            else:
-                # Save-only ability or special
-                dc_match = re.search(r'DC\s*(\d+)', adesc)
-                dmg_match = re.search(r'(\d+)\s*\(([^)]+)\)\s*(\w+)\s*damage', adesc)
-                if dc_match and dmg_match:
-                    save_match = re.search(r'\*([\w]+)\s*Saving Throw', adesc)
-                    save_type = save_match.group(1)[:3].upper() if save_match else '??'
-                    area_match = re.search(r'each creature in (?:a |an )?(.+?)\.', adesc)
-                    area = area_match.group(1) if area_match else ''
-                    half = " (half)" if "Half damage" in adesc else ""
-                    attacks.append(f"- {aname}: {area}, DC {dc_match.group(1)} {save_type}, {dmg_match.group(2).replace(' ','')} {dmg_match.group(3).lower()}{half}")
-                elif dc_match:
-                    save_match = re.search(r'\*([\w]+)\s*Saving Throw', adesc)
-                    save_type = save_match.group(1)[:3].upper() if save_match else '??'
-                    effect = re.search(r'\*Failure:\*\s*(.+?)(?:\.\s*\*|\Z)', adesc)
-                    eff_text = summarize_effect(effect.group(1)) if effect else ''
-                    if not budget_tight or len(eff_text) < 40:
-                        attacks.append(f"- {aname}: DC {dc_match.group(1)} {save_type}, {eff_text}")
+            elif 'Spellcasting' in aname and 'casts' in adesc:
+                attacks.append(format_spellcasting_action(aname, adesc, budget_tight))
 
     if multiattack:
         out.append(f"Multiattack: {multiattack}")
@@ -583,7 +683,7 @@ def cr_sort_key(cr):
     return cr
 
 
-def write_tier(tier_key, tier_info, monsters, max_bytes=25000):
+def write_tier(tier_key, tier_info, monsters, max_bytes=MAX_REF_BYTES):
     cr_groups = {}
     for m in monsters:
         cr = m['cr']
@@ -634,12 +734,33 @@ def build_file(tier_key, tier_info, cr_groups, budget_tight=False):
     return '\n'.join(lines)
 
 
+def fixup_speed(m):
+    """Fix known SRD data issues."""
+    speed = m.get('speed', '')
+    # Werebear SRD has "Alternate ? ft." — should be 40 ft. (bear form)
+    if 'Alternate ? ft.' in speed and 'werebear' in m['name'].lower():
+        m['speed'] = speed.replace('Alternate ? ft.', '40 ft. (bear form)')
+    elif 'Alternate ? ft.' in speed:
+        m['speed'] = speed.replace('Alternate ? ft., ', '')
+
+
 def main():
-    text = SRD_PATH.read_text()
+    parser = argparse.ArgumentParser(description='Enrich D&D 5e monster stat blocks from SRD 5.2')
+    parser.add_argument('srd_path', type=Path, help='Path to SRD 12_MonstersA-Z.md')
+    parser.add_argument('--out-dir', type=Path, default=OUT_DIR, help='Output directory')
+    args = parser.parse_args()
+
+    if not args.srd_path.exists():
+        print(f"Error: SRD file not found: {args.srd_path}", file=sys.stderr)
+        sys.exit(1)
+
+    text = args.srd_path.read_text(encoding='utf-8')
     monsters = parse_monsters(text)
     print(f"Parsed {len(monsters)} monsters", file=sys.stderr)
 
-    # Assign to tiers
+    for m in monsters:
+        fixup_speed(m)
+
     tier_monsters = {k: [] for k in TIERS}
     for m in monsters:
         cr = m['cr']
@@ -651,13 +772,12 @@ def main():
     for tk in TIERS:
         print(f"  {tk}: {len(tier_monsters[tk])} monsters", file=sys.stderr)
 
-    # Write files
     for tk, tv in TIERS.items():
         content = write_tier(tk, tv, tier_monsters[tk])
-        out_path = OUT_DIR / f"monsters-{tk}.md"
-        out_path.write_text(content)
+        out_path = args.out_dir / f"monsters-{tk}.md"
+        out_path.write_text(content, encoding='utf-8')
         size = len(content.encode('utf-8'))
-        status = "✓" if size <= 25000 else "✗ OVER LIMIT"
+        status = "✓" if size <= MAX_REF_BYTES else "✗ OVER LIMIT"
         print(f"  {out_path.name}: {size:,} bytes ({len(tier_monsters[tk])} monsters) {status}", file=sys.stderr)
 
 

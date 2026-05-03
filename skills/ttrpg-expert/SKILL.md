@@ -44,7 +44,7 @@ Match user intent → go directly to the file. Skip clarification.
 **FitD magnitude** → `systems/fitd/magnitude.md`
 
 **D&D monster** → `systems/dnd-5e-2024/monsters.md` (index)
-  → detail: `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-plus.md`
+  → detail: `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
 **D&D animal/beast** → `systems/dnd-5e-2024/animals.md`
 **D&D spell** → `systems/dnd-5e-2024/spells.md` (index)
   → detail: `spells-cantrips.md`, `spells-1.md` through `spells-9.md`

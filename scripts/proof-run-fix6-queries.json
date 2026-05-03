@@ -13,7 +13,7 @@
     "type": "spell-browse",
     "query": "What 3rd-level Wizard spells are available in D&D 5e 2024? Reply as a compact list: Name (School) — one-line effect summary per spell.",
     "skill_entry": "skills/ttrpg-expert/SKILL.md",
-    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/spells.md"]
+    "ground_truth": ["skills/ttrpg-expert/systems/dnd-5e-2024/spells.md", "skills/ttrpg-expert/systems/dnd-5e-2024/spells-3.md"]
   },
   {
     "id": 3,

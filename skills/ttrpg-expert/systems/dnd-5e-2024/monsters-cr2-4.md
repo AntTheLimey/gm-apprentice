@@ -13,14 +13,14 @@ AC 12 | HP 27 (5d10) | Speed 10 ft.
 STR 17 DEX 14 CON 10 INT 1 WIS 3 CHA 1
 Senses: blindsight 60 ft.
 Immunities: Poison, Psychic; Charmed, Deafened, Exhaustion, Frightened, Paralyzed, Petrified, Poisoned
-- Smother: +5, 2d6+3 bludgeoning
+- Smother: +5, 2d6+3 bludgeoning; grapple (escape DC 13)
 
 **Ankheg** | Monstrosity | L | CR 2 (450 XP)
 AC 14 | HP 45 (6d10+12) | Speed 30 ft., Burrow 10 ft.
 STR 17 DEX 11 CON 14 INT 1 WIS 13 CHA 6
 Senses: darkvision 60 ft., tremorsense 60 ft.
 Tunneler
-- Bite: , DC 13 ??, 2d6+3 slashing
+- Bite: +5, 2d6+3 slashing + 1d6 acid; grapple (escape DC 13)
 - Acid Spray (Recharge 6): 30-ft-long line, DC 12 DEX, 4d6 acid (half)
 
 **Awakened Tree** | Plant | H | CR 2 (450 XP)
@@ -70,7 +70,7 @@ Immunities: Lightning
 Multiattack: 2× Rend
 - Rend: +5, 1d10+3 slashing
 - Lightning Breath (Recharge 5-6): 40-ft-long line, DC 12 DEX, 3d10 lightning (half)
-- Repulsion Breath: DC 12 STR, The target is pushed up to 30 feet straight away from the...
+- Repulsion Breath: 30-ft cone, DC 12 STR, The target is pushed up to 30 feet straight away from the dragon and has the Prone condition
 
 **Centaur Trooper** | Fey | L | CR 2 (450 XP)
 AC 16 | HP 45 (6d10+12) | Speed 50 ft.
@@ -79,6 +79,7 @@ Senses: Passive Perception 13
 Multiattack: 2× (Pike/Longbow)
 - Pike: +6, reach 10 ft., 1d10+4 piercing
 - Longbow: +4, 1d8+2 piercing
+- [B] Trampling Charge (Recharge 5-6): 4, DC 1 STR, 7 (1d6 + 4) Bludgeoning damage, and the target has the Prone condition
 
 **Cultist Fanatic** | Humanoid | S | CR 2 (450 XP)
 AC 13 | HP 44 (8d8+8) | Speed 30 ft.
@@ -105,7 +106,7 @@ Web Walker
 Multiattack: one Bite + one Claw
 - Bite: +4, 1d6+2 piercing + 1d4 poison
 - Claw: +4, 2d4+2 slashing
-- Web Strand (Recharge 5-6): DC 12 DEX, Restrained
+- Web Strand (Recharge 5-6): DC 12 DEX, Restrained until the web is destroyed (AC 10; HP 5; Vulnerability to Fire damage; Immunity to Bludgeoning, Poison, an...
 
 **Gargoyle** | Elemental | M | CR 2 (450 XP)
 AC 15 | HP 67 (9d8+27) | Speed 30 ft., Fly 60 ft.
@@ -132,7 +133,7 @@ Saves: WIS +2 | Senses: darkvision 60 ft.
 Resistances: Necrotic | Immunities: Poison; Charmed, Exhaustion, Poisoned
 Stench: DC 10
 - Bite: +5, 1d8+3 piercing + 2d8 necrotic
-- Claw: +5, 2d6+3 slashing; DC 10 CON or Paralyzed
+- Claw: +5, 2d6+3 slashing; DC 10 CON or Paralyzed condition 1 turn
 
 **Gibbering Mouther** | Aberration | M | CR 2 (450 XP)
 AC 9 | HP 52 (7d8+21) | Speed 20 ft., Swim 20 ft.
@@ -159,22 +160,23 @@ STR 14 DEX 14 CON 11 INT 3 WIS 14 CHA 5
 Senses: darkvision 60 ft.
 Multiattack: one Beak + one Tentacles
 - Beak: +4, 2d6+2 piercing
-- Tentacles: +4, 1d10+2 slashing
+- Tentacles: +4, 1d10+2 slashing; grapple (escape DC 12)
 
 **Griffon** | Monstrosity | L | CR 2 (450 XP)
 AC 12 | HP 59 (7d10+21) | Speed 30 ft., Fly 80 ft.
 STR 18 DEX 15 CON 16 INT 2 WIS 13 CHA 8
 Senses: darkvision 60 ft.
 Multiattack: 2× Rend
-- Rend: +6, 1d8+4 piercing
+- Rend: +6, 1d8+4 piercing; grapple (escape DC 14)
 
 **Merrow** | Monstrosity | L | CR 2 (450 XP)
 AC 13 | HP 45 (6d10+12) | Speed 10 ft., Swim 40 ft.
 STR 18 DEX 15 CON 15 INT 8 WIS 10 CHA 9
 Senses: darkvision 60 ft.
-Multiattack: 2× (Bite, Claw,/Harpoon)
+Multiattack: 2× (Bite, Claw/Harpoon)
 - Bite: +6, 1d4+4 piercing
 - Claw: +6, 2d4+4 slashing
+- Harpoon: +6, 2d6+4 piercing
 
 **Mimic** | Monstrosity | M | CR 2 (450 XP)
 AC 12 | HP 58 (9d8+18) | Speed 20 ft.
@@ -182,7 +184,8 @@ STR 17 DEX 12 CON 15 INT 5 WIS 13 CHA 8
 Senses: darkvision 60 ft.
 Immunities: Acid; Prone
 Adhesive (Object Form Only): DC 13
-- Pseudopod: +5, 1d8+3 bludgeoning + 1d8 acid
+- Bite: +5, 1d8+3 piercing + 1d8 acid
+- Pseudopod: +5, 1d8+3 bludgeoning + 1d8 acid; grapple (escape DC 13)
 
 **Minotaur Skeleton** | Undead | L | CR 2 (450 XP)
 AC 12 | HP 45 (6d10+12) | Speed 40 ft.
@@ -206,6 +209,7 @@ AC 11 | HP 68 (8d10+24) | Speed 40 ft.
 STR 19 DEX 8 CON 16 INT 5 WIS 7 CHA 7
 Senses: darkvision 60 ft.
 - Greatclub: +6, 2d8+4 bludgeoning
+- Javelin: +6, 2d6+4 piercing
 
 **Ogre Zombie** | Undead | L | CR 2 (450 XP)
 AC 8 | HP 85 (9d10+36) | Speed 30 ft.
@@ -236,8 +240,8 @@ STR 16 DEX 13 CON 16 INT 12 WIS 12 CHA 13
 Senses: darkvision 60 ft.
 Vile Appearance: DC 11
 - Claw: +5, 2d6+3 slashing
-- Death Glare (Recharge 5-6): , DC 11 WIS, 3d8 psychic
-- Illusory Appearance: DC 13 ??, 
+- Death Glare (Recharge 5-6): DC 11 WIS, If the target has 20 Hit Points or fewer, it drops to 0 Hit Points. Otherwise, the target takes 13 (3d8) Psychic damage
+- Illusory Appearance: casts Disguise Self (DC 13)
 
 **Silver Dragon Wyrmling** | Dragon | M | CR 2 (450 XP)
 AC 17 | HP 45 (6d8+18) | Speed 30 ft., Fly 60 ft.
@@ -247,14 +251,14 @@ Immunities: Cold
 Multiattack: 2× Rend
 - Rend: +6, 1d10+4 piercing
 - Cold Breath (Recharge 5-6): 15-ft cone, DC 13 CON, 4d8 cold (half)
-- Paralyzing Breath: DC 13 CON, 
+- Paralyzing Breath: 15-ft cone, DC 13 CON, 1st: Incapacitated; 2nd: Paralyzed
 
 **Wererat** | Monstrosity | S | CR 2 (450 XP)
 AC 13 | HP 60 (11d8+11) | Speed 30 ft., Climb 30 ft.
 STR 10 DEX 16 CON 12 INT 11 WIS 10 CHA 8
 Senses: darkvision 60 ft.
 Multiattack: 2× (Scratch/Hand Crossbow)
-- Bite (Rat or Hybrid Form Only): +5, 2d4+3 piercing; DC 11 CON or The target is cursed. If the cursed target drops to 0 Hit...
+- Bite (Rat or Hybrid Form Only): +5, 2d4+3 piercing; DC 11 CON or The target is cursed. If the cursed target drops to 0 Hit Points, it instead becomes a Wererat under the DM's control...
 - Scratch: +5, 1d6+3 slashing
 - Hand Crossbow (Humanoid or Hybrid Form Only): +5, 1d6+3 piercing
 
@@ -276,6 +280,7 @@ Resistances: Acid, Bludgeoning, Cold, Fire, Necrotic, Piercing, Slashing | Immun
 Ephemeral
 Incorporeal Movement
 - Shock: +4, 2d8+2 lightning
+- [B] Consume Life: DC 10 CON, The target dies, and the wisp regains 10 (3d6) Hit Points
 
 
 ## CR 3 (700 XP)
@@ -285,6 +290,7 @@ AC 15 | HP 52 (8d8+16) | Speed 20 ft.
 STR 16 DEX 8 CON 15 INT 2 WIS 8 CHA 7
 Senses: darkvision 60 ft.
 - Bite: +5, 2d6+3 piercing + 2d6 poison
+- [B] Petrifying Gaze (Recharge 4-6): 30-ft cone. If the basilisk sees its reflection within the cone, the basilisk must make this save, DC 12 CON, 1st: Restrained; 2nd: Petrified
 
 **Bearded Devil** | Fiend | M | CR 3 (700 XP)
 AC 13 | HP 58 (9d8+18) | Speed 30 ft.
@@ -294,7 +300,7 @@ Resistances: Cold | Immunities: Fire, Poison; Frightened, Poisoned
 Magic Resistance (advantage on saves vs spells)
 Multiattack: one Beard + one Infernal Glaive
 - Beard: +5, 1d8+3 piercing
-- Infernal Glaive: +5, reach 10 ft., 1d10+3 slashing; DC 12 CON or The target receives an infernal wound. While wounded, the...
+- Infernal Glaive: +5, reach 10 ft., 1d10+3 slashing; DC 12 CON or The target receives an infernal wound.
 
 **Blue Dragon Wyrmling** | Dragon | M | CR 3 (700 XP)
 AC 17 | HP 65 (10d8+20) | Speed 30 ft., Burrow 15 ft., Fly 60 ft.
@@ -311,6 +317,9 @@ STR 17 DEX 14 CON 14 INT 11 WIS 12 CHA 11
 Saves: CON +4, WIS +3 | Senses: darkvision 60 ft.
 Abduct
 Multiattack: 2× Javelin or Morningstar
+- Javelin: +5, reach 10 ft., 3d6+3 piercing
+- Morningstar: +5, reach 10 ft., 2d8+3 piercing
+- [B] Quick Grapple: DC 13 DEX, Grappled condition (escape DC 13)
 
 **Doppelganger** | Monstrosity | M | CR 3 (700 XP)
 AC 14 | HP 52 (8d8+16) | Speed 30 ft.
@@ -318,8 +327,9 @@ STR 11 DEX 18 CON 14 INT 11 WIS 12 CHA 14
 Senses: darkvision 60 ft.
 Immunities: Charmed
 Multiattack: 2× Slam + Unsettling Visage if available
-- Unsettling Visage (Recharge 6): DC 12 WIS, Frightened
-- Read Thoughts: DC 12 ??, 
+- Slam: +6, 2d6+4 bludgeoning
+- Unsettling Visage (Recharge 6): 15-ft Emanation originating from the doppelganger that can see the doppelganger, DC 12 WIS, Frightened and repeats the save at the end of each of its turns, ending the effect on itself on a success.
+- Read Thoughts: casts Detect Thoughts (DC 12)
 
 **Gold Dragon Wyrmling** | Dragon | M | CR 3 (700 XP)
 AC 17 | HP 60 (8d8+24) | Speed 30 ft., Fly 60 ft., Swim 30 ft.
@@ -329,7 +339,7 @@ Immunities: Fire
 Multiattack: 2× Rend
 - Rend: +6, 1d10+4 slashing
 - Fire Breath (Recharge 5-6): 15-ft cone, DC 13 DEX, 4d10 fire (half)
-- Weakening Breath: DC 13 STR, The target has Disadvantage on Strength-based D20 Test an...
+- Weakening Breath: 15-ft cone, DC 13 STR, The target has Disadvantage on Strength-based D20 Test and subtracts 2 (1d4) from its damage rolls.
 
 **Green Hag** | Fey | M | CR 3 (700 XP)
 AC 17 | HP 82 (11d8+33) | Speed 30 ft., Swim 30 ft.
@@ -389,7 +399,7 @@ Saves: WIS +3 | Senses: darkvision 60 ft.
 Immunities: Necrotic, Poison; Charmed, Exhaustion, Frightened, Paralyzed, Poisoned | Vulnerabilities: Fire
 Multiattack: 2× Rotting Fist + Dreadful Glare
 - Rotting Fist: +5, 1d10+3 bludgeoning + 3d6 necrotic
-- Dreadful Glare: DC 11 WIS, Frightened
+- Dreadful Glare: DC 11 WIS, Frightened until the end of the mummy's next turn
 
 **Nightmare** | Fiend | L | CR 3 (700 XP)
 AC 13 | HP 68 (8d10+24) | Speed 60 ft., Fly 90 ft. (hover)
@@ -422,6 +432,7 @@ Saves: DEX +5, WIS +2 | Senses: darkvision 60 ft.
 Resistances: Necrotic | Immunities: Charmed ((except from its vampire master))
 Vampiric Connection
 Multiattack: 2× Umbral Dagger
+- Umbral Dagger: +5, 1d4+3 piercing + 3d4 necrotic
 
 **Warrior Veteran** | Humanoid | S | CR 3 (700 XP)
 AC 17 | HP 65 (10d8+20) | Speed 30 ft.
@@ -437,7 +448,7 @@ STR 16 DEX 14 CON 14 INT 10 WIS 11 CHA 10
 Senses: darkvision 60 ft.
 Pack Tactics
 Multiattack: 2× (Scratch/Longbow)
-- Bite (Wolf or Hybrid Form Only): +5, 2d8+3 piercing; DC 12 CON or The target is cursed. If the cursed target drops to 0 Hit...
+- Bite (Wolf or Hybrid Form Only): +5, 2d8+3 piercing; DC 12 CON or The target is cursed. If the cursed target drops to 0 Hit Points, it instead becomes a Werewolf under the DM's contro...
 - Scratch: +5, 2d6+3 slashing
 - Longbow (Humanoid or Hybrid Form Only): +4, 2d8+2 piercing
 
@@ -489,8 +500,8 @@ Senses: darkvision 60 ft.
 Immunities: Poison; Poisoned
 Sense Magic
 Multiattack: 2× Pincer + Paralyzing Tentacles
-- Pincer: +6, reach 10 ft., 1d10+4 bludgeoning
-- Paralyzing Tentacles: DC 13 CON, Poisoned
+- Pincer: +6, reach 10 ft., 1d10+4 bludgeoning; grapple (escape DC 14)
+- Paralyzing Tentacles: DC 13 CON, Poisoned and repeats the save at the end of each of its turns, ending the effect on itself on a success.
 
 **Couatl** | Celestial | M | CR 4 (1,100 XP)
 AC 19 | HP 60 (8d8+24) | Speed 30 ft., Fly 90 ft.
@@ -520,13 +531,14 @@ Incorporeal Movement
 Multiattack: 2× Withering Touch
 - Withering Touch: +5, 3d10+3 necrotic
 - Horrific Visage: 60-ft cone that can see the ghost and isn't an Undead, DC 13 WIS, 2d6+3 psychic
-- Possession (Recharge 6): DC 13 CHA, The target is possessed by the ghost; the ghost disappear...
+- Possession (Recharge 6): DC 13 CHA, The target is possessed by the ghost; the ghost disappears, and the target has the Incapacitated and loses control of...
 
 **Guard Captain** | Humanoid | S | CR 4 (1,100 XP)
 AC 18 | HP 75 (10d8+30) | Speed 30 ft.
 STR 18 DEX 14 CON 16 INT 12 WIS 14 CHA 13
 Senses: Passive Perception 14
 Multiattack: 2× (Javelin/Longsword)
+- Javelin: +6, 3d6+4 piercing
 - Longsword: +6, 2d10+4 slashing
 
 **Incubus** | Fiend | M | CR 4 (1,100 XP)
@@ -538,6 +550,7 @@ Succubus Form
 Multiattack: 2× Restless Touch
 - Restless Touch: +7, 3d6+5 psychic
 Spellcasting (CHA, DC 15): At Will — Disguise Self, Etherealness
+- [B] Nightmare (Recharge 6): DC 15 WIS, If the target has 20 Hit Points or fewer, it has the Unconscious for 1 hour, until it takes damage, or until a creatu...
 
 **Lamia** | Fiend | L | CR 4 (1,100 XP)
 AC 13 | HP 97 (13d10+26) | Speed 40 ft.
@@ -565,7 +578,7 @@ Resistances: Cold, Fire, Poison, Psychic
 Incubus Form
 Multiattack: one Fiendish Touch + Charm or Draining Kiss
 - Fiendish Touch: +7, 2d10+5 psychic
-- Charm: DC 15 ??, 
+- Charm: casts Dominate Person (level 8) (DC 15)
 - Draining Kiss: one creature Charmed by the succubus within 5 feet, DC 15 CON, 3d8 psychic (half)
 
 **Tough Boss** | Humanoid | S | CR 4 (1,100 XP)
@@ -582,7 +595,8 @@ AC 15 | HP 97 (15d8+30) | Speed 30 ft., Alternate ? ft.
 STR 17 DEX 10 CON 15 INT 10 WIS 11 CHA 8
 Senses: Passive Perception 12
 Multiattack: 2× (Javelin/Tusk)
-- Gore (Boar or Hybrid Form Only): +5, 2d8+3 piercing; DC 12 CON or The target is cursed. If the cursed target drops to 0 Hit...
+- Gore (Boar or Hybrid Form Only): +5, 2d8+3 piercing; DC 12 CON or The target is cursed. If the cursed target drops to 0 Hit Points, it instead becomes a Wereboar under the DM's contro...
+- Javelin (Humanoid or Hybrid Form Only): +5, 3d6+3 piercing
 - Tusk (Boar or Hybrid Form Only): +5, 2d6+3 piercing
 
 **Weretiger** | Monstrosity | S | CR 4 (1,100 XP)
@@ -590,7 +604,7 @@ AC 12 | HP 120 (16d8+48) | Speed 30 ft., Alternate ? ft.
 STR 17 DEX 15 CON 16 INT 10 WIS 13 CHA 11
 Senses: darkvision 60 ft.
 Multiattack: 2× (Scratch/Longbow)
-- Bite (Tiger or Hybrid Form Only): +5, 2d8+3 piercing; DC 13 CON or The target is cursed. If the cursed target drops to 0 Hit...
+- Bite (Tiger or Hybrid Form Only): +5, 2d8+3 piercing; DC 13 CON or The target is cursed. If the cursed target drops to 0 Hit Points, it instead becomes a Weretiger under the DM's contr...
 - Scratch: +5, 2d6+3 slashing
 - Longbow (Humanoid or Hybrid Form Only): +4, 2d8+2 piercing
 

@@ -101,3 +101,11 @@ No vault schema changes. Version stamp only.
 ## Migration: 1.4.15
 
 No vault schema changes. Version stamp only.
+
+## Migration: 1.4.16
+
+No vault schema changes. Version stamp only.
+
+## Migration: 1.4.17
+
+No vault schema changes. Version stamp only.

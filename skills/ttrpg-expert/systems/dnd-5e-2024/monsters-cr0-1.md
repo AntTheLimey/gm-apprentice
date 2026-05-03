@@ -13,6 +13,7 @@ AC 9 | HP 10 (3d6) | Speed 20 ft.
 STR 3 DEX 8 CON 11 INT 10 WIS 10 CHA 6
 Senses: Passive Perception 10
 Resistances: Piercing | Vulnerabilities: Fire
+- Rake: +1
 
 **Commoner** | Humanoid | S | CR 0 (0 XP)
 AC 10 | HP 4 (1d8) | Speed 30 ft.
@@ -27,7 +28,7 @@ STR 4 DEX 15 CON 14 INT 10 WIS 10 CHA 7
 Saves: WIS +2, CHA +0 | Senses: darkvision 60 ft.
 Immunities: Poison; Charmed, Poisoned
 Telepathic Bond
-- Bite: DC 12 CON, Poisoned
+- Bite: +4
 
 **Lemure** | Fiend | M | CR 0 (0 XP)
 AC 9 | HP 9 (2d8) | Speed 20 ft.
@@ -63,11 +64,13 @@ Saves: WIS +2 | Senses: Passive Perception 10
 AC 12 | HP 7 (2d6) | Speed 30 ft.
 STR 8 DEX 15 CON 10 INT 10 WIS 8 CHA 8
 Senses: darkvision 60 ft.
+- Dagger: +4, 1d4+2 piercing
 
 **Guard** | Humanoid | S | CR 1/8 (25 XP)
 AC 16 | HP 11 (2d8+2) | Speed 30 ft.
 STR 13 DEX 12 CON 12 INT 10 WIS 11 CHA 10
 Senses: Passive Perception 12
+- Spear: +3, 1d6+1 piercing
 
 **Kobold Warrior** | Dragon | S | CR 1/8 (25 XP)
 AC 14 | HP 7 (3d6-3) | Speed 30 ft.
@@ -75,11 +78,13 @@ STR 7 DEX 15 CON 9 INT 8 WIS 7 CHA 8
 Senses: darkvision 60 ft.
 Pack Tactics
 Sunlight Sensitivity
+- Dagger: +4, 1d4+2 piercing
 
 **Merfolk Skirmisher** | Elemental | M | CR 1/8 (25 XP)
 AC 11 | HP 11 (2d8+2) | Speed 10 ft., Swim 40 ft.
 STR 10 DEX 13 CON 12 INT 11 WIS 14 CHA 12
 Senses: Passive Perception 12
+- Ocean Spear: +2, 1d6 piercing + 1d4 cold
 
 **Noble** | Humanoid | S | CR 1/8 (25 XP)
 AC 15 | HP 9 (2d8) | Speed 30 ft.
@@ -98,6 +103,7 @@ AC 13 | HP 9 (2d8) | Speed 30 ft.
 STR 13 DEX 11 CON 11 INT 8 WIS 11 CHA 8
 Senses: Passive Perception 10
 Pack Tactics
+- Spear: +3, 1d6+1 piercing
 
 
 ## CR 1/4 (50 XP)
@@ -127,7 +133,7 @@ STR 12 DEX 11 CON 12 INT 5 WIS 8 CHA 3
 Senses: darkvision 60 ft.
 Resistances: Cold, Fire, Lightning | Immunities: Poison; Poisoned
 - Rend: +3, 1d6+1 slashing
-- Fetid Cloud (1/Day): DC 11 CON, Poisoned
+- Fetid Cloud (1/Day): 10-ft Emanation originating from the dretch, DC 11 CON, Poisoned condition 1 turn. While Poisoned, the creature can take either an action or a Bonus Action on its turn, not ...
 
 **Goblin Warrior** | Fey | S | CR 1/4 (50 XP)
 AC 15 | HP 10 (3d6) | Speed 30 ft.
@@ -172,6 +178,7 @@ AC 15 | HP 10 (4d4) | Speed 10 ft., Fly 40 ft.
 STR 3 DEX 18 CON 10 INT 14 WIS 13 CHA 11
 Senses: Passive Perception 13
 - Needle Sword: +6, 1d4+4 piercing
+- Enchanting Bow: +6
 - Heart Sight: DC 10 CHA, The sprite knows the target's emotions and alignment
 
 **Steam Mephit** | Elemental | S | CR 1/4 (50 XP)
@@ -223,8 +230,7 @@ Senses: darkvision 60 ft.
 Immunities: Poison; Exhaustion, Poisoned | Vulnerabilities: Fire
 Death Burst: DC 10, 2d4 bludgeoning
 - Claw: +4, 1d4+2 slashing
-- Blinding Breath (Recharge 6): DC 10 DEX, Blinded
-- Sleep (1/Day): DC 10 ??, 
+- Blinding Breath (Recharge 6): 15-ft cone, DC 10 DEX, Blinded until the end of the mephit's next turn
 
 **Gnoll Warrior** | Fiend | M | CR 1/2 (100 XP)
 AC 15 | HP 27 (6d8) | Speed 30 ft.
@@ -283,7 +289,7 @@ Senses: darkvision 60 ft.
 Iron Scent
 Multiattack: The rust monster makes one Bite + Antennae twice
 - Bite: +3, 1d8+1 piercing
-- Antennae: DC 11 DEX, The object takes a -1 penalty to the AC it offers (armor)...
+- Antennae: the creature with the object, DC 11 DEX, The object takes a -1 penalty to the AC it offers (armor) or to its attack rolls (weapon).
 
 **Sahuagin Warrior** | Fiend | M | CR 1/2 (100 XP)
 AC 12 | HP 22 (4d8+4) | Speed 30 ft., Swim 40 ft.
@@ -368,14 +374,15 @@ Saves: DEX +2, WIS +2 | Senses: blindsight 10 ft., darkvision 60 ft.
 Immunities: Fire
 - Rend: +4, 1d10+2 slashing
 - Fire Breath (Recharge 5-6): 20-ft-long line, DC 11 DEX, 4d6 fire (half)
-- Sleep Breath: DC 11 CON, Incapacitated
+- Sleep Breath: 15-ft cone, DC 11 CON, Incapacitated condition 1 turn, at which point it repeats the save. *Second Failure* Unconscious for 1 minute.
 
 **Bugbear Warrior** | Fey | M | CR 1 (200 XP)
 AC 14 | HP 33 (6d8+6) | Speed 30 ft.
 STR 15 DEX 14 CON 13 INT 8 WIS 11 CHA 9
 Senses: darkvision 60 ft.
 Abduct
-- Grab: +4, reach 10 ft., 2d6+2 bludgeoning
+- Grab: +4, reach 10 ft., 2d6+2 bludgeoning; grapple (escape DC 12)
+- Light Hammer: +4, reach 10 ft., 3d4+2 bludgeoning
 
 **Copper Dragon Wyrmling** | Dragon | M | CR 1 (200 XP)
 AC 16 | HP 22 (4d8+4) | Speed 30 ft., Climb 30 ft., Fly 60 ft.
@@ -384,7 +391,7 @@ Saves: DEX +3, WIS +2 | Senses: blindsight 10 ft., darkvision 60 ft.
 Immunities: Acid
 - Rend: +4, 1d10+2 slashing
 - Acid Breath (Recharge 5-6): 20-ft-long line, DC 11 DEX, 4d8 acid (half)
-- Slowing Breath: DC 11 CON, The target can't take Reactions; its Speed is halved; and...
+- Slowing Breath: 15-ft cone, DC 11 CON, The target can't take Reactions; its Speed is halved; and it can take either an action or a Bonus Action on its turn,...
 
 **Death Dog** | Monstrosity | M | CR 1 (200 XP)
 AC 12 | HP 39 (6d8+12) | Speed 40 ft.
@@ -412,7 +419,7 @@ Senses: darkvision 60 ft.
 Immunities: Poison; Charmed, Exhaustion, Poisoned
 Multiattack: 2× Bite
 - Bite: +4, 1d6+2 piercing + 1d6 necrotic
-- Claw: +4, 1d4+2 slashing; DC 10 CON or Paralyzed
+- Claw: +4, 1d4+2 slashing; DC 10 CON or Paralyzed condition 1 turn
 
 **Goblin Boss** | Fey | S | CR 1 (200 XP)
 AC 17 | HP 21 (6d6) | Speed 30 ft.
@@ -427,7 +434,7 @@ AC 11 | HP 38 (7d8+7) | Speed 20 ft., Fly 40 ft.
 STR 12 DEX 13 CON 12 INT 7 WIS 10 CHA 13
 Senses: Passive Perception 10
 - Claw: +3, 2d4+1 slashing
-- Luring Song: DC 11 WIS, Charmed
+- Luring Song: each Humanoid and Giant in a 300-ft Emanation originating from the harpy when the song starts, DC 11 WIS, Charmed until the song ends and repeats the save at the end of each of its turns.
 
 **Hippogriff** | Monstrosity | L | CR 1 (200 XP)
 AC 11 | HP 26 (4d10+4) | Speed 40 ft., Fly 60 ft.
@@ -450,7 +457,8 @@ AC 14 | HP 33 (6d8+6) | Speed 30 ft.
 STR 10 DEX 16 CON 12 INT 8 WIS 12 CHA 14
 Saves: DEX +5, CHA +4 | Senses: Passive Perception 11
 Multiattack: 2× Dagger
-- Enthralling Panache: DC 12 WIS, Charmed
+- Dagger: +5, 1d4+3 piercing
+- Enthralling Panache: DC 12 WIS, Charmed until the start of the pirate's next turn
 
 **Quasit** | Fiend | S | CR 1 (200 XP)
 AC 13 | HP 25 (10d4) | Speed 40 ft.
@@ -459,7 +467,7 @@ Senses: darkvision 120 ft.
 Resistances: Cold, Fire, Lightning | Immunities: Poison; Poisoned
 Magic Resistance (advantage on saves vs spells)
 - Rend: +5, 1d4+3 slashing
-- Scare (1/Day): DC 10 WIS, Frightened
+- Scare (1/Day): DC 10 WIS, Frightened condition. At the end of each of its turns, the target repeats the save, ending the effect on itself on a ...
 
 **Specter** | Undead | M | CR 1 (200 XP)
 AC 12 | HP 22 (5d8) | Speed 30 ft., Fly 50 ft. (hover)

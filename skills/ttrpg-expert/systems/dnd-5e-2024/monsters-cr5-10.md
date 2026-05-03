@@ -25,7 +25,7 @@ Saves: STR +6, CON +7, WIS +5, CHA +5 | Senses: darkvision 120 ft. (unimpeded by
 Resistances: Cold | Immunities: Fire, Poison; Poisoned
 Magic Resistance (advantage on saves vs spells)
 Multiattack: one Claws + one Tail, or it makes 2× Hurl Flame
-- Claws: +6, 2d6+3 piercing
+- Claws: +6, 2d6+3 piercing; grapple (escape DC 13)
 - Tail: +6, reach 10 ft., 2d10+3 slashing
 - Hurl Flame: +5, 5d6 fire
 
@@ -69,6 +69,7 @@ AC 16 | HP 112 (15d8+45) | Speed 30 ft.
 18/15/16/10/12/15
 Saves: STR +7, DEX +5, CON +6, WIS +4 | Senses: Passive Perception 11
 Multiattack: 3× Spear
+- Spear: +7, 2d6+4 piercing
 - Shield Bash: one creature within 5 feet that the gladiator can see, DC 15 STR, 2d4+4 bludgeoning
 
 **Gorgon** | Construct | L | CR 5 (1,800 XP)
@@ -77,7 +78,7 @@ AC 19 | HP 114 (12d10+48) | Speed 40 ft.
 Senses: darkvision 60 ft.
 Immunities: Exhaustion, Petrified
 - Gore: +8, 2d12+5 piercing
-- Petrifying Breath (Recharge 5-6): DC 15 CON, 
+- Petrifying Breath (Recharge 5-6): 30-ft cone, DC 15 CON, 1st: Restrained; 2nd: Petrified
 
 **Half-Dragon** | Dragon | M | CR 5 (1,800 XP)
 AC 18 | HP 105 (14d8+42) | Speed 40 ft.
@@ -86,6 +87,7 @@ Saves: DEX +5, WIS +5 | Senses: blindsight 10 ft., darkvision 60 ft.
 Resistances: Damage type chosen for the Draconic Origin trait below
 Multiattack: The half-dragon makes 2× Claw
 - Claw: +7, reach 10 ft., 1d4+4 slashing
+- Dragon's Breath (Recharge 5-6): 30-ft cone, DC 14 DEX, 28 (8d6) damage of the type chosen for the Draconic Origi...
 
 **Hill Giant** | Giant | H | CR 5 (1,800 XP)
 AC 13 | HP 105 (10d12+40) | Speed 40 ft.
@@ -111,7 +113,7 @@ AC 14 | HP 104 (11d10+44) | Speed 30 ft.
 Saves: CON +7 | Senses: darkvision 120 ft.
 Multiattack: one Bite + 2× Tentacle
 - Bite: +6, 2d8+3 piercing; DC 15 CON or The target's Hit Point maximum decreases by 5 (1d10) and ...
-- Tentacle: +6, reach 10 ft., 2d8+3 piercing
+- Tentacle: +6, reach 10 ft., 2d8+3 piercing; grapple (escape DC 13)
 - Tentacle Slam: each creature Grappled by the otyugh, DC 14 CON, 3d8+3 bludgeoning (half)
 
 **Roper** | Aberration | L | CR 5 (1,800 XP)
@@ -121,7 +123,7 @@ Senses: darkvision 60 ft.
 Spider Climb
 Multiattack: 2× Tentacle, uses Reel, + makes 2× Bite
 - Bite: +7, 3d8+4 piercing
-- Tentacle: DC 14 ??, 
+- Tentacle: +7, reach 60 ft., grapple (escape DC 14) + poisoned
 
 **Salamander** | Elemental | L | CR 5 (1,800 XP)
 AC 15 | HP 90 (12d10+24) | Speed 30 ft., Climb 30 ft.
@@ -129,6 +131,7 @@ AC 15 | HP 90 (12d10+24) | Speed 30 ft., Climb 30 ft.
 Senses: darkvision 60 ft.
 Immunities: Fire | Vulnerabilities: Cold
 Multiattack: 2× Flame Spear
+- Flame Spear: +7, 2d8+4 piercing + 2d6 fire
 - Constrict: one Large or smaller creature the salamander can see within 10 feet, DC 15 STR, 2d6+4 bludgeoning
 
 **Shambling Mound** | Plant | L | CR 5 (1,800 XP)
@@ -138,7 +141,7 @@ Senses: blindsight 60 ft.
 Resistances: Cold, Fire | Immunities: Lightning; Deafened, Exhaustion
 Multiattack: The shambling mound makes 3× Charged Tendril
 - Charged Tendril: +7, reach 10 ft., 1d6+4 bludgeoning + 2d4 lightning
-- Engulf: , DC 15 STR, 3d6 lightning
+- Engulf: DC 15 STR, The target is pulled into the shambling mound's space and...
 
 **Troll** | Giant | L | CR 5 (1,800 XP)
 AC 15 | HP 94 (9d10+45) | Speed 30 ft.
@@ -168,7 +171,7 @@ Saves: DEX +6, WIS +3 | Senses: darkvision 60 ft.
 Resistances: Necrotic
 Spider Climb
 Multiattack: 2× Claw + Bite
-- Claw: +6, 2d4+3 slashing
+- Claw: +6, 2d4+3 slashing; grapple (escape DC 13)
 - Bite: one creature within 5 feet that is willing or that has the Grappled, Incapacitated, or Restrained condition, DC 14 CON, 1d4+3 piercing
 
 **Water Elemental** | Elemental | L | CR 5 (1,800 XP)
@@ -181,11 +184,12 @@ Multiattack: 2× Slam
 - Whelm (Recharge 4-6): the elemental's space, DC 15 STR, 4d8+4 bludgeoning (half)
 
 **Werebear** | Monstrosity | S | CR 5 (1,800 XP)
-AC 15 | HP 135 (18d8+54) | Speed 30 ft., Alternate ? ft., Climb 30 ft. (bear form only)
+AC 15 | HP 135 (18d8+54) | Speed 30 ft., 40 ft. (bear form), Climb 30 ft. (bear form only)
 19/10/17/11/12/12
 Senses: darkvision 60 ft.
 Multiattack: 2× (Handaxe/Rend)
 - Bite (Bear or Hybrid Form Only): +7, 2d12+4 piercing; DC 14 CON or The target is cursed. If the cursed target drops to 0 Hit...
+- Handaxe (Humanoid or Hybrid Form Only): +7, 3d6+4 slashing
 - Rend (Bear or Hybrid Form Only): +7, 2d8+4 slashing
 
 **Wraith** | Undead | S | CR 5 (1,800 XP)
@@ -241,6 +245,7 @@ AC 15 | HP 81 (18d8) | Speed 30 ft.
 9/14/11/17/12/11
 Saves: INT +6, WIS +4 | Senses: Passive Perception 14
 Multiattack: 3× Arcane Burst
+- Arcane Burst: +6, 3d8+3 force
 Spellcasting (INT, DC 14)
 
 **Medusa** | Monstrosity | M | CR 6 (2,300 XP)
@@ -268,7 +273,7 @@ Resistances: Cold, Fire, Lightning | Immunities: Poison; Poisoned
 Magic Resistance (advantage on saves vs spells)
 Multiattack: 2× Shred
 - Shred: +6, 2d6+3 piercing + 3d6 poison
-- Spores (Recharge 6): 20-foot Emanation originating from the vrock, DC 15 CON, 1d10 poison
+- Spores (Recharge 6): 20-ft Emanation originating from the vrock, DC 15 CON, Poisoned and repeats the save at the end of each of its t...
 - Stunning Screech (1/Day): 20-ft Emanation originating from the vrock (demons succeed automatically), DC 15 CON, 3d6 thunder
 
 **Wyvern** | Dragon | L | CR 6 (2,300 XP)
@@ -287,7 +292,7 @@ Immunities: Fire
 Multiattack: 3× Rend
 - Rend: +7, reach 10 ft., 2d10+4 slashing
 - Fire Breath (Recharge 5-6): 40-ft-long line, DC 14 DEX, 11d6 fire (half)
-- Sleep Breath: DC 14 CON, Incapacitated
+- Sleep Breath: 30-ft cone, DC 14 CON, Incapacitated condition 1 turn, at which point it repeats...
 
 **Young White Dragon** | Dragon | L | CR 6 (2,300 XP)
 AC 17 | HP 123 (13d10+52) | Speed 40 ft., Burrow 20 ft., Fly 80 ft., Swim 40 ft.
@@ -346,6 +351,7 @@ Immunities: Acid
 Multiattack: 3× Rend
 - Rend: +7, reach 10 ft., 2d10+4 slashing
 - Acid Breath (Recharge 5-6): 40-ft-long line, DC 14 DEX, 9d8 acid (half)
+- Slowing Breath: 30-ft cone, DC 14 CON, The target can't take Reactions; its Speed is halved; and...
 
 
 ## CR 8 (3,900 XP)
@@ -366,7 +372,7 @@ Saves: CON +7, WIS +4 | Senses: darkvision 120 ft. (unimpeded by magical darknes
 Resistances: Bludgeoning, Cold, Piercing, Slashing | Immunities: Fire, Poison; Poisoned
 Magic Resistance (advantage on saves vs spells)
 Multiattack: 2× Chain + Conjure Infernal Chain
-- Chain: +7, reach 10 ft., 2d6+4 slashing
+- Chain: +7, reach 10 ft., 2d6+4 slashing; grapple (escape DC 14)
 - Conjure Infernal Chain: one creature the devil can see within 60 feet, DC 15 DEX, 2d4+4 fire
 
 **Cloaker** | Aberration | L | CR 8 (3,900 XP)
@@ -422,6 +428,7 @@ Immunities: Lightning
 Multiattack: 3× Rend
 - Rend: +8, reach 10 ft., 2d10+5 slashing
 - Lightning Breath (Recharge 5-6): 60-ft-long line, DC 15 DEX, 9d10 lightning (half)
+- Repulsion Breath: 30-ft cone, DC 15 STR, The target is pushed up to 40 feet straight away from the...
 
 **Young Green Dragon** | Dragon | L | CR 8 (3,900 XP)
 AC 18 | HP 136 (16d10+48) | Speed 40 ft., Fly 80 ft., Swim 40 ft.
@@ -479,7 +486,7 @@ Saves: STR +9, CON +9, WIS +7, CHA +7 | Senses: truesight 120 ft.
 Resistances: Cold, Fire, Lightning | Immunities: Poison; Poisoned
 Magic Resistance (advantage on saves vs spells)
 Multiattack: 2× Pincer + Pummel or Spellcasting
-- Pincer: +9, reach 10 ft., 2d10+5 slashing
+- Pincer: +9, reach 10 ft., 2d10+5 slashing; grapple (escape DC 15)
 - Pummel: one creature Grappled by the glabrezu, DC 17 DEX, 3d6+5 bludgeoning (half)
 Spellcasting (INT, DC 16)
 
@@ -510,7 +517,7 @@ Immunities: Cold
 Multiattack: 3× Rend
 - Rend: +10, reach 10 ft., 2d8+6 slashing
 - Cold Breath (Recharge 5-6): 30-ft cone, DC 17 CON, 11d8 cold (half)
-- Paralyzing Breath: DC 17 CON, 
+- Paralyzing Breath: 30-ft cone, DC 17 CON, 1st: Incapacitated; 2nd: Paralyzed
 
 
 ## CR 10 (5,900 XP)
@@ -522,9 +529,9 @@ Saves: DEX +3, CON +6, INT +8, WIS +6 | Senses: darkvision 120 ft.
 Legendary Resistance (3/Day)
 Legendary (3/round): Lash, Psychic Drain
 Multiattack: 2× Tentacle + either Consume Memories or Dominate Mind if available
-- Tentacle: +9, reach 15 ft., 2d6+5 bludgeoning
+- Tentacle: +9, reach 15 ft., 2d6+5 bludgeoning; grapple (escape DC 14)
 - Consume Memories: one creature within 30 feet that is Charmed or Grappled by the aboleth, DC 16 INT, 3d6 psychic (half)
-- Dominate Mind (2/Day): DC 16 WIS, Charmed
+- Dominate Mind (2/Day): DC 16 WIS, Charmed until the aboleth dies or is on a different plane...
 
 **Deva** | Celestial | M | CR 10 (5,900 XP)
 AC 17 | HP 229 (27d8+108) | Speed 30 ft., Fly 90 ft. (hover)
@@ -564,6 +571,7 @@ Immunities: Fire
 Multiattack: 3× Rend
 - Rend: +10, reach 10 ft., 2d10+6 slashing
 - Fire Breath (Recharge 5-6): 30-ft cone, DC 17 DEX, 10d10 fire (half)
+- Weakening Breath: 30-ft cone, DC 17 STR, The target has Disadvantage on Strength-based D20 Test an...
 
 **Young Red Dragon** | Dragon | L | CR 10 (5,900 XP)
 AC 18 | HP 178 (17d10+85) | Speed 40 ft., Climb 40 ft., Fly 80 ft.

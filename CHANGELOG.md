@@ -12,7 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **D&D monster data enrichment** — 235 monster stat blocks expanded with full SRD 5.2 combat data: ability scores, attack bonuses, damage dice, save DCs, traits, and legendary actions
+- Monster CR 11+ split into `cr11-16` and `cr17-plus` sub-files for headroom
 - ATTRIBUTION.md updated with expanded SRD 5.2 content note
+
+### Fixed
+
+- Enricher script: combat traits (Heated Body, Trampling Charge) no longer stripped in normal mode
+- Enricher script: two-stage save abilities (Paralyzing Breath, Petrifying Breath) now fully parsed
+- Enricher script: spellcasting-style actions (Ice Wall, Hellfire Spellcasting) now rendered correctly
+- Enricher script: SRD path configurable via CLI argument; size limit aligned to 25 KiB
+- Corrupted spell rows fixed: Forcecage, Fly, Knock, Moonbeam, Freedom of Movement, Greater Invisibility
+- Missing magic item effects restored: Ring of Telekinesis, Wand of Fear, Belt of Dwarvenkind
+- CI lint: `find` command no longer fails when `references/` directory is absent
+- Missing migration registry entries for 1.4.16 and 1.4.17 added
 
 ---
 

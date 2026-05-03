@@ -158,6 +158,13 @@ valid zips). For publish tool changes, run the publish tool test suite.
 - **Run `skill-creator` validation** before committing skill changes
 - `SKILL.md` is the routing layer — keep it concise
 - Detailed content belongs in `skills/*/references/`
+- **Inline vs extract threshold:** Every file read costs ~90 tokens of
+  fixed overhead (tool call + wrapper + line numbers). Don't extract
+  content to a shared file if it's always needed and short (<500 bytes).
+  Do extract if the content is large (>2KB) or conditional (<50% of
+  invocations). Extracting small always-needed content (like version
+  checks) makes things slower and more expensive — proven by Phase 1
+  proof runs.
 
 ## Testing
 

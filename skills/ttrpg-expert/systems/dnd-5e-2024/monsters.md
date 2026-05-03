@@ -2,7 +2,7 @@
 
 235 monsters from SRD 5.2. CR-grouped index for encounter building.
 
-**Detail files:** `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-plus.md`
+**Detail files:** `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
 **Sub-file format:** Name | Type | Size | AC | HP | Speed | Notable | XP
 
 ## Response Templates
@@ -230,7 +230,7 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Young Gold Dragon** | Dragon | L | CR 10
 - **Young Red Dragon** | Dragon | L | CR 10
 
-## CR 11–30 → `monsters-cr11-plus.md`
+## CR 11–16 → `monsters-cr11-16.md`
 
 - **Behir** | Monstrosity | H | CR 11
 - **Djinni** | Elemental | L | CR 11
@@ -259,6 +259,9 @@ Always include Tactics (1–2 sentences). For browse queries, use the standard t
 - **Iron Golem** | Construct | L | CR 16
 - **Marilith** | Fiend | L | CR 16
 - **Planetar** | Celestial | L | CR 16
+
+## CR 17+ → `monsters-cr17-plus.md`
+
 - **Adult Gold Dragon** | Dragon | H | CR 17
 - **Adult Red Dragon** | Dragon | H | CR 17
 - **Dragon Turtle** | Dragon | G | CR 17
