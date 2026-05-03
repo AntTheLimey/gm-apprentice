@@ -74,6 +74,20 @@ function build(options = {}) {
     console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
+  function copyJS() {
+    const jsDir = path.join(__dirname, '../js');
+    if (!fs.existsSync(jsDir)) return;
+    const destDir = path.join(outputDir, 'js');
+    for (const file of fs.readdirSync(jsDir)) {
+      if (!file.endsWith('.js')) continue;
+      const src = path.join(jsDir, file);
+      const dest = path.join(destDir, file);
+      ensureDir(dest);
+      fs.copyFileSync(src, dest);
+      console.log(`  wrote js/${file}`);
+    }
+  }
+
   function writeThemeCSS() {
     const css = generateThemeCSS(publishConfig.theme);
     const dest = path.join(outputDir, 'css/theme.css');
@@ -188,6 +202,7 @@ function build(options = {}) {
 
   cleanOutput();
   copyCSS();
+  copyJS();
   copyGenreCSS();
   writeThemeCSS();
 

@@ -72,6 +72,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap)
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,
+    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
   });
 }
 

@@ -222,6 +222,7 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     content,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    scripts: ['js/nav.js'],
   });
 }
 

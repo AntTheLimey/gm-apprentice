@@ -30,6 +30,7 @@ function indexTemplate(outputDir, title, pages, navFor, config) {
     rootHref: rootPath(outputPath),
     content,
     footer: config.footer,
+    scripts: [rootPath(outputPath) + 'js/nav.js'],
   });
 }
 

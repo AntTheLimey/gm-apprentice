@@ -28,6 +28,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap) {
     rootHref: rootPath(page.outputPath),
     content,
     footer: config.footer,
+    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
   });
 }
 

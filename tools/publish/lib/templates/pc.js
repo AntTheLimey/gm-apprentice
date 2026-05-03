@@ -96,6 +96,7 @@ ${tabScript()}`;
     rootHref: rootPath(page.outputPath),
     content: body,
     footer: config.footer,
+    scripts: [rootPath(page.outputPath) + 'js/nav.js'],
   });
 }
 
