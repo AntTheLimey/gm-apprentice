@@ -190,6 +190,44 @@ function build(options = {}) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  const { buildBacklinks } = require('./backlinks');
+  const { buildSearchIndex } = require('./search-index');
+  const { scoreByRecency } = require('./recency');
+
+  // Build-time data pipeline
+  const backlinks = buildBacklinks(pages);
+  console.log(`Built backlinks for ${Object.keys(backlinks).length} entities`);
+
+  const sessions = pages.filter(p => p.frontmatter.type === 'session');
+  const chapters = pages.filter(p => p.frontmatter.type === 'chapter');
+  const npcs = pages.filter(p => p.frontmatter.type === 'npc');
+  const locations = pages.filter(p => p.frontmatter.type === 'location');
+
+  const landingConfig = (publishConfig.landing || {});
+  const recencyWindow = landingConfig.recency_window || 3;
+
+  const recentNPCs = scoreByRecency(npcs, sessions, chapters, {
+    window: recencyWindow,
+    max: landingConfig.max_npcs || 6,
+    type: 'npc',
+  });
+
+  const recentLocations = scoreByRecency(locations, sessions, chapters, {
+    window: recencyWindow,
+    max: landingConfig.max_locations || 4,
+    type: 'location',
+  });
+
+  console.log(`Recency: ${recentNPCs.length} NPCs, ${recentLocations.length} locations`);
+
+  // Search index (skip if searchEnabled explicitly set to false in config)
+  const searchEnabled = config.searchEnabled !== false;
+  const searchData = searchEnabled ? buildSearchIndex(pages) : null;
+
+  publishConfig._backlinks = backlinks;
+  publishConfig._recentNPCs = recentNPCs;
+  publishConfig._recentLocations = recentLocations;
+
   // Apply field filtering after link map is built (aliases/canon_status needed for resolution)
   for (const page of pages) {
     const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
@@ -229,6 +267,23 @@ function build(options = {}) {
   }
 
   writeNoJekyll();
+
+  // Write search index (only if search is enabled)
+  if (searchData) {
+    const searchDest = path.join(outputDir, 'search-index.json');
+    fs.writeFileSync(searchDest, JSON.stringify(searchData));
+    console.log('  wrote search-index.json');
+
+    // Copy lunr.js client library
+    const lunrSrc = require.resolve('lunr');
+    const lunrDest = path.join(outputDir, 'js', 'lunr.min.js');
+    ensureDir(lunrDest);
+    fs.copyFileSync(lunrSrc, lunrDest);
+    console.log('  wrote js/lunr.min.js');
+  } else {
+    console.log('  search disabled — skipping search-index.json');
+  }
+
   write404();
 
   const navFor = generateNav(pages);
