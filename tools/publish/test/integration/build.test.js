@@ -1123,4 +1123,101 @@ describe('build integration', () => {
       assert.strictEqual(resolveGenrePreset('gothic'), 'horror');
     });
   });
+
+  describe('redesign-full fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-redesign-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'redesign-full'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Redesign Test',
+        siteUrl: 'https://example.github.io/redesign-test',
+        searchEnabled: true,
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: [],
+        folderMap: {
+          'Characters/PCs': 'characters/pcs',
+          'Characters/NPCs': 'characters/npcs',
+          'Locations': 'locations',
+          'Events': 'events',
+          'Sessions': 'sessions',
+          'Factions': 'factions',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('generates landing page with hero and recap zones', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('landing-hero'));
+      assert.ok(html.includes('Redesign Test'));
+      assert.ok(html.includes('Into the dark we go'));
+      assert.ok(html.includes('Latest Session'));
+    });
+
+    it('applies genre CSS preset', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('horror.css'));
+    });
+
+    it('generates search index', () => {
+      assert.ok(fs.existsSync(path.join(outputDir, 'docs', 'search-index.json')));
+    });
+
+    it('generates top nav with semantic groups', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('nav-group'));
+    });
+
+    it('generates breadcrumbs on entity pages', () => {
+      const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
+      assert.ok(npcHtml.includes('breadcrumbs'));
+    });
+
+    it('generates context sidebar with backlinks on NPC page', () => {
+      const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
+      assert.ok(npcHtml.includes('context-sidebar'));
+    });
+
+    it('generates relationship graph SVG on entity pages', () => {
+      const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
+      assert.ok(npcHtml.includes('<svg'));
+    });
+
+    it('generates index pages with pill filters', () => {
+      const indexHtml = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'index.html'), 'utf-8');
+      assert.ok(indexHtml.includes('pill-filters') || indexHtml.includes('entity-card'));
+    });
+
+    it('generates PC page with 4-tab layout', () => {
+      const pcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'pcs', 'john-marsh.html'), 'utf-8');
+      assert.ok(pcHtml.includes('tab-sheet'));
+      assert.ok(pcHtml.includes('tab-equipment'));
+      assert.ok(pcHtml.includes('tab-story'));
+      assert.ok(pcHtml.includes('tab-journey'));
+    });
+
+    it('generates location page with hero banner', () => {
+      const locHtml = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'miskatonic-library.html'), 'utf-8');
+      assert.ok(locHtml.includes('hero-banner'));
+    });
+
+    it('loads client-side scripts', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('js/lightbox.js'));
+      assert.ok(html.includes('js/search.js'));
+    });
+  });
 });
