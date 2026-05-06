@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.20] — 2026-05-04
+
+### Added
+
+- **Dark-first responsive CSS** with CSS custom properties and mobile-first breakpoints
+- **4 genre preset themes** (horror, fantasy, noir, military) with dark + light mode variants
+- **Semantic top navigation** with 4 groups: Story, Characters, World, Reference
+- **Breadcrumbs** on all entity pages with path-based crumb generation
+- **Backlink resolution engine** — scans wiki-links to build reverse index
+- **Recency scoring engine** — weights entities by recent session mentions
+- **Full-text search** with lunr.js (Cmd+K overlay, lazy-loaded index)
+- **Image lightbox** — pure JS lightbox for all content images
+- **8-zone landing page** — hero, recap, team, in memoriam, NPCs, locations, events, explore
+- **Index pages** with pill filters, name search, sort controls, and type-specific layouts
+- **Context sidebar** on all entity pages showing backlinks, relationships, and parent entity
+- **Location pages** with 6-zone layout: hero banner, pull-quote, sub-locations, NPCs, events
+- **NPC pages** with 6-zone layout: portrait banner, location card, relationship web, story arc
+- **PC pages** with cinematic hero banner and 4-tab layout (Sheet, Equipment, Story, Journey)
+- **4 system-specific character sheet renderers** — CoC 7e, GURPS 4e, D&D 5e, FitD
+- **SVG relationship graphs** with 2-hop radial layout on all entity pages
+- **Campaign timeline** — full-page SVG with zoom controls and landing strip
+- **Story/chapter nav** with prev/next links and enriched sidebar (NPCs, events, sessions)
+- **Client-side index filters** — pill toggle, name input, sort-select for index pages
+
+### Fixed
+
+- `getLatestSession` now includes `reviewed` sessions (not just `played`)
+- `formatDate` no longer shifts dates by timezone offset (UTC parsing fix)
+
+### Changed
+
+- Publish tool npm package bumped to 1.2.0 (minor: new features, no breaking changes)
+- Location, NPC, PC, and wiki templates fully rewritten with modern layouts
+
 ## [1.4.19] — 2026-05-03
 
 ### Added
