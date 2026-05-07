@@ -49,14 +49,15 @@ Items are force-ranked by score. Higher score = do first.
 | ~~Publish tool: Event dedicated template~~ | 3 | 2 | M (2) | 4.0 | Done | |
 | Portrait rendering in Obsidian vaults | 3 | 3 | M (2) | 4.5 | Idea | Obsidian doesn't render `portrait` frontmatter as images — needs Dataview inline, CSS snippet, or Templater approach. See [spec](docs/portrait-rendering-obsidian.md) |
 | Obsidian vault-picker | 3 | 2 | M (2) | 4.0 | Idea | Campaign config drives vault switching: on session start, disable Obsidian REST plugin + MCP server for other vaults, ensure this campaign's REST API / MCP server is running and configured. Triggered when LLM reads context memory. |
-| Publish tool: overhaul site navigation | 3 | 2 | M (2) | 4.0 | Idea | Rethink site navigation structure — breadcrumbs, entity-type grouping, cross-linking, mobile responsiveness |
+| ~~Publish tool: overhaul site navigation~~ | 3 | 2 | M (2) | 4.0 | Done | Rethink site navigation structure — breadcrumbs, entity-type grouping, cross-linking, mobile responsiveness |
 | Publish tool: layout options (sidebar vs top nav, card grid vs list) | 3 | 2 | M (2) | 4.0 | Idea | Site-wide config for nav style and index page layout |
 | Find better free hosting solution | 3 | 2 | M (2) | 4.0 | Idea | Research alternatives to GitHub Pages — evaluate Cloudflare Pages, Netlify, Vercel free tiers for static site hosting. Consider deploy simplicity for non-technical GMs |
-| Publish tool: Landing page timeline snippet (recent campaign events) | 3 | 2 | M (2) | 4.0 | Idea | Visual timeline of recent events on the landing page |
+| ~~Publish tool: Landing page timeline snippet (recent campaign events)~~ | 3 | 2 | M (2) | 4.0 | Done | Visual timeline of recent events on the landing page |
 | ~~CoC/BRP SRD enrichment (Phase 5a)~~ | 4 | 3 | L (3) | 3.7 | Done | |
-| Publish tool: system-specific PC sheet rendering | 4 | 3 | L (3) | 3.7 | Planned | Per-system HTML/CSS treatments for published PC pages (CoC parchment feel, GURPS stat blocks, D&D ability cards, etc.). Builds on SP3's C-ready template dispatch architecture — add one system at a time. |
-| Publish tool: Timeline auto-generation from events/sessions | 3 | 1 | M (2) | 3.5 | Idea | Generate timeline page from event/session dates in frontmatter |
-| Publish tool: Full-text client-side search (lunr) | 3 | 1 | M (2) | 3.5 | Idea | Client-side search index so players can find content in published site |
+| ~~Publish tool: system-specific PC sheet rendering~~ | 4 | 3 | L (3) | 3.7 | Done | Per-system HTML/CSS treatments for published PC pages (CoC parchment feel, GURPS stat blocks, D&D ability cards, etc.). Builds on SP3's C-ready template dispatch architecture — add one system at a time. |
+| ~~Publish tool: Timeline auto-generation from events/sessions~~ | 3 | 1 | M (2) | 3.5 | Done | Generate timeline page from event/session dates in frontmatter |
+| ~~Publish tool: Full-text client-side search (lunr)~~ | 3 | 1 | M (2) | 3.5 | Done | Client-side search index so players can find content in published site |
+| LoM-style 8-bit scene illustration | 4 | 1 | L (3) | 3.0 | Experiment | Programmatic 8-bit landscape vistas (Lords of Midnight style) from vault metadata using Pillow. No AI models, no API cost. [Prototype findings](docs/image-gen-lom-prototype-findings.md) |
 | Pulp Cthulhu variant support | 4 | 4 | XL (4) | 3.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality. Blocked on finding a legit distributable source — Chaosium BRP ORC license may not cover Pulp-specific content. |
 | FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
@@ -65,7 +66,7 @@ Items are force-ranked by score. Higher score = do first.
 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for in-world documents (letters, newspapers, journals) |
 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea | Auto-generated index pages per tag from frontmatter |
 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea | Extend benchmark methodology to all 7 skills, not just ttrpg-expert |
-| Publish tool: Relationship graph visualisation | 3 | 1 | L (3) | 2.3 | Idea | Interactive graph of entity relationships (d3/force-directed) |
+| ~~Publish tool: Relationship graph visualisation~~ | 3 | 1 | L (3) | 2.3 | Done | Static SVG relationship graphs with force-directed layout |
 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea | Logo generation, og:image, social card previews for shared links |
 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned | Expand D&D files: more monster stat blocks, subclass features, encounter building |
 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea | Tool to convert published adventure PDFs into vault-compatible markdown |
@@ -83,6 +84,7 @@ Items are force-ranked by score. Higher score = do first.
 - ~~CoC/BRP SRD enrichment (Phase 5a)~~ — already covered by v3 terminology fixes, 18 content files, Regency variant overlay
 - ~~Publish tool: Event dedicated template~~ — dedicated event template, vault template, session-lifecycle event decomposition (PR #20)
 - ~~Publish tool: Landing page dashboard~~ — hero, session recap, PC roster, key NPCs, explore grid
+- ~~Publish tool: site redesign v1.2~~ — Navigation overhaul, breadcrumbs, genre presets, system-specific PC sheets (CoC/GURPS/D&D/FitD), lunr search, relationship graphs, timeline pages, context sidebars, index page redesigns, landing page rewrite (PR #40)
 - ~~Publish tool v1.0~~ — npm package + skill for vault-to-static-site generation (PR #19)
 - ~~Regency Cthulhu system support~~ — 5 overlay files in variants/regency/, routing updates
 - ~~Codebase QA pass~~ — Score 11.0 (Impact 3, Urgency 5, Effort S)
