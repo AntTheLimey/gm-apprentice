@@ -145,7 +145,7 @@ function renderRelationshipSVG(graph, options = {}) {
     const stroke = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--border, #30363d)';
 
     const href = (node.outputPath && options.currentOutputPath) ? relPath(options.currentOutputPath, node.outputPath) : node.outputPath;
-    const linkOpen = href ? `<a href="${href}">` : '';
+    const linkOpen = href ? `<a href="${escapeHtml(href)}">` : '';
     const linkClose = href ? '</a>' : '';
 
     svg += `  ${linkOpen}<g opacity="${opacity}">\n`;

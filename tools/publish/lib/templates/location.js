@@ -12,8 +12,9 @@ function extractFirstSentence(html) {
 
 function matchesRef(refValue, title) {
   if (!refValue) return false;
-  const cleaned = String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].trim();
-  return cleaned === title;
+  const cleaned = String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].replace(/_/g, ' ').trim();
+  const normalTitle = String(title || '').replace(/_/g, ' ').trim();
+  return cleaned === normalTitle;
 }
 
 function locationTemplate(page, processedContent, navFor, config, imageMap, context) {
@@ -55,7 +56,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   // --- Zone 2: Atmosphere pull-quote ---
   const pullQuote = processedContent.html
-    ? `<div class="pull-quote">${extractFirstSentence(processedContent.html)}</div>`
+    ? `<div class="pull-quote">${escapeHtml(extractFirstSentence(processedContent.html))}</div>`
     : '';
 
   // --- Zone 3: Body content ---
