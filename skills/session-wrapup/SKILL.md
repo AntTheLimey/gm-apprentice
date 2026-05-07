@@ -53,10 +53,12 @@ Tone-calibrate per `references/recap-formats.md`. Also generate
 Wrap-Up file.
 
 **gmassistant.app path:** Adopt the content of the Play Notes'
-`## Summary` section verbatim into the Wrap-Up file under the
+`## Summary` section into the Wrap-Up file under the
 `## Narrative Recap` heading. No rewriting, no condensing, no
-tone adjustment. Skip Quick Bullets — the `## Scenes` section
-in the Play Notes already serves that purpose.
+tone adjustment — but do add `[[wiki-links]]` to every entity
+reference (matching the standard path's linking requirement).
+Skip Quick Bullets — the `## Scenes` section in the Play Notes
+already serves that purpose.
 
 This recap is the **single source of truth** regardless of
 path. Session-prep reads it later — never regenerates.
