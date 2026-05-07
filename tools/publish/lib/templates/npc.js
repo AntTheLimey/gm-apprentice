@@ -101,7 +101,11 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   // --- Zone 6: Story arc timeline (session appearances) ---
   const sessionBacklinks = backlinks
     .filter(b => b.type === 'session')
-    .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
+    .sort((a, b) => {
+      const na = (String(a.displayTitle).match(/(\d+)/) || [])[1];
+      const nb = (String(b.displayTitle).match(/(\d+)/) || [])[1];
+      return (na ? +na : 0) - (nb ? +nb : 0);
+    });
   let arcTimelineHtml = '';
   if (sessionBacklinks.length > 0) {
     const nodes = sessionBacklinks.map(b => {

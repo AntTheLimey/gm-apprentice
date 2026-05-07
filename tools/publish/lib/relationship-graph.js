@@ -1,3 +1,5 @@
+const { escapeHtml } = require('./processor');
+
 const SHAPE_MAP = {
   pc: 'circle',
   npc: 'circle',
@@ -165,7 +167,7 @@ function renderRelationshipSVG(graph, options = {}) {
 
     const fontSize = node.hop === 2 ? 9 : 11;
     const label = node.displayTitle.length > 15 ? node.displayTitle.slice(0, 13) + '…' : node.displayTitle;
-    svg += `    <text x="${pos.x}" y="${pos.y + size + fontSize + 4}" text-anchor="middle" font-size="${fontSize}" fill="var(--text, #c9d1d9)">${label}</text>\n`;
+    svg += `    <text x="${pos.x}" y="${pos.y + size + fontSize + 4}" text-anchor="middle" font-size="${fontSize}" fill="var(--text, #c9d1d9)">${escapeHtml(label)}</text>\n`;
     svg += `  </g>${linkClose}\n`;
   }
 

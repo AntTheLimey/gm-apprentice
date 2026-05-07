@@ -40,11 +40,14 @@ function googleFontsImport(fonts) {
 }
 
 function parseHex(hex) {
-  const h = hex.replace('#', '');
+  const raw = String(hex || '').trim().replace('#', '');
+  const h = raw.length === 3
+    ? raw.split('').map(ch => ch + ch).join('')
+    : raw;
   return {
-    r: parseInt(h.slice(0, 2), 16),
-    g: parseInt(h.slice(2, 4), 16),
-    b: parseInt(h.slice(4, 6), 16),
+    r: parseInt(h.slice(0, 2), 16) || 0,
+    g: parseInt(h.slice(2, 4), 16) || 0,
+    b: parseInt(h.slice(4, 6), 16) || 0,
   };
 }
 

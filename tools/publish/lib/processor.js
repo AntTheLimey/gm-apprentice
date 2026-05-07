@@ -177,9 +177,12 @@ function separateBoldLabelLines(markdown) {
   const lines = markdown.split('\n');
   const result = [];
   const boldStart = /^\*\*[^*]+\*\*/;
+  let inFence = false;
   for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().startsWith('```')) inFence = !inFence;
     result.push(lines[i]);
-    if (boldStart.test(lines[i].trim()) &&
+    if (!inFence &&
+        boldStart.test(lines[i].trim()) &&
         i + 1 < lines.length &&
         boldStart.test(lines[i + 1].trim())) {
       result.push('');

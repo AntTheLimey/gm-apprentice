@@ -123,8 +123,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
     const npcCards = recentNPCs.map(({ page }) => {
       const fm = page.frontmatter;
       const initials = getInitials(page.displayTitle);
-      const iconHtml = fm.portrait
-        ? `<div class="npc-icon"><img src="${escapeHtml(fm.portrait)}" alt="${escapeHtml(page.displayTitle)}"></div>`
+      const portraitTag = fm.portrait ? portraitImg(fm, outputPath, imageMap || {}, config.attachmentsDir) : '';
+      const iconHtml = portraitTag
+        ? `<div class="npc-icon">${portraitTag}</div>`
         : `<div class="npc-icon">${escapeHtml(initials)}</div>`;
       const role = fm.occupation ? `<div class="npc-role">${escapeHtml(fm.occupation)}</div>` : '';
       return `<a class="npc-card" href="${escapeHtml(page.outputPath)}">

@@ -291,10 +291,10 @@ function build(options = {}) {
 
     // Copy lunr.js client library
     const lunrSrc = require.resolve('lunr');
-    const lunrDest = path.join(outputDir, 'js', 'lunr.min.js');
+    const lunrDest = path.join(outputDir, 'js', 'lunr.js');
     ensureDir(lunrDest);
     fs.copyFileSync(lunrSrc, lunrDest);
-    console.log('  wrote js/lunr.min.js');
+    console.log('  wrote js/lunr.js');
   } else {
     console.log('  search disabled — skipping search-index.json');
   }

@@ -18,7 +18,7 @@ function buildBacklinks(pages) {
         title: page.title,
         displayTitle: page.displayTitle,
         outputPath: page.outputPath,
-        type: page.frontmatter.type,
+        type: (page.frontmatter || {}).type,
       });
     }
   }

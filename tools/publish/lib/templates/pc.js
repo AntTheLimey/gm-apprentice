@@ -79,7 +79,7 @@ function buildRouteMap(page, pages) {
     const display = loc.replace(/_/g, ' ');
     const label = display.length > 12 ? display.slice(0, 10) + '…' : display;
     svg += `<circle cx="${x}" cy="${y}" r="6" fill="var(--accent,#58a6ff)" stroke="var(--bg,#1a1f25)" stroke-width="2"/>`;
-    svg += `<text x="${x}" y="${y + 22}" text-anchor="middle" font-size="10" fill="var(--text,#c9d1d9)">${label}</text>`;
+    svg += `<text x="${x}" y="${y + 22}" text-anchor="middle" font-size="10" fill="var(--text,#c9d1d9)">${escapeHtml(label)}</text>`;
   });
   svg += '</svg>';
   return `<div class="relationship-graph" style="margin-bottom:2rem"><h3>Campaign Route</h3>${svg}</div>`;

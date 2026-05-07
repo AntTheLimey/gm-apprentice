@@ -107,9 +107,9 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   const locEvents = (pages || []).filter(p =>
     p.frontmatter.type === 'event' && matchesRef(p.frontmatter.location, page.title)
   ).sort((a, b) => {
-    const da = new Date(a.frontmatter.date || 0);
-    const db = new Date(b.frontmatter.date || 0);
-    return da - db;
+    const da = new Date(a.frontmatter.date || 0).getTime();
+    const db = new Date(b.frontmatter.date || 0).getTime();
+    return (isNaN(da) ? 0 : da) - (isNaN(db) ? 0 : db);
   });
   let timelineHtml = '';
   if (locEvents.length > 0) {

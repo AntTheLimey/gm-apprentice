@@ -1,11 +1,18 @@
 const { escapeHtml } = require('./processor');
 
+function parseDate(value) {
+  const s = String(value);
+  const parts = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (parts) return new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3]));
+  return new Date(s);
+}
+
 function buildTimelineData(pages) {
   const events = pages
     .filter(p => p.frontmatter.type === 'event' && p.frontmatter.date)
     .map(p => ({
       title: p.displayTitle,
-      date: new Date(p.frontmatter.date),
+      date: parseDate(p.frontmatter.date),
       type: 'event',
       outputPath: p.outputPath,
       outcome: p.frontmatter.outcome || '',
@@ -22,7 +29,7 @@ function buildTimelineData(pages) {
         : [p.frontmatter.in_game_date];
       return dates.map(d => ({
         title: p.displayTitle,
-        date: new Date(d),
+        date: parseDate(d),
         type: 'session',
         outputPath: p.outputPath,
         number: p.frontmatter.session_number,
@@ -50,9 +57,9 @@ function buildTimelineData(pages) {
 }
 
 function formatDateParts(d) {
-  const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-  const day = d.getDate();
-  const year = d.getFullYear();
+  const month = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
+  const day = d.getUTCDate();
+  const year = d.getUTCFullYear();
   return { month, day, year };
 }
 

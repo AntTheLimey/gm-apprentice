@@ -19,11 +19,11 @@ function buildSearchIndex(pages) {
   const documents = {};
 
   for (const page of pages) {
-    const fm = page.frontmatter;
+    const fm = page.frontmatter || {};
 
     documents[page.outputPath] = {
-      title: page.displayTitle,
-      type: fm.type,
+      title: page.displayTitle || '',
+      type: fm.type || '',
       subtitle: getSubtitle(fm),
       href: page.outputPath,
     };

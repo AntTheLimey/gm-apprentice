@@ -17,7 +17,7 @@ function renderCoCSheet(frontmatter, sections) {
   const sanity = frontmatter.sanity;
   if (sanity) {
     const onset = sanity.onset ? ` <span style="font-size:0.8rem;color:var(--text-muted)">Onset: ${escapeHtml(sanity.onset)}</span>` : '';
-    parts.push(`<div class="coc-sanity-tracker"><strong>Sanity</strong> <span class="char-value">${escapeHtml(String(sanity.current || '?'))} / ${escapeHtml(String(sanity.max || '?'))}</span>${onset}</div>`);
+    parts.push(`<div class="coc-sanity-tracker"><strong>Sanity</strong> <span class="char-value">${escapeHtml(String(sanity.current != null ? sanity.current : '?'))} / ${escapeHtml(String(sanity.max != null ? sanity.max : '?'))}</span>${onset}</div>`);
   }
 
   const skills = frontmatter.skills;

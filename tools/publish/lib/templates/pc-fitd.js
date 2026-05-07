@@ -40,7 +40,7 @@ function renderFitDSheet(frontmatter, sections) {
   const abilities = frontmatter.special_abilities || [];
   if (abilities.length > 0) {
     const cards = abilities.map(a => {
-      const name = typeof a === 'string' ? a : a.name;
+      const name = typeof a === 'string' ? a : (a.name || '');
       const desc = typeof a === 'string' ? '' : (a.description || '');
       return `<div class="fitd-special-ability"><h4>${escapeHtml(name)}</h4>${desc ? `<p>${escapeHtml(desc)}</p>` : ''}</div>`;
     }).join('\n');

@@ -594,7 +594,7 @@ function renderNPCTable(pages, dir) {
     return `<tr data-entity-type="npc" data-entity-name="${escapeHtml(p.displayTitle)}" data-entity-status="${escapeHtml(status)}" data-session="${escapeHtml(lastSession)}">
   <td><a href="${escapeHtml(relHref(p, dir))}">${escapeHtml(p.displayTitle)}</a></td>
   <td>${escapeHtml(occupation)}</td>
-  <td><span class="status-badge status-${escapeHtml(status)}">${escapeHtml(status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}</span></td>
+  <td><span class="status-badge status-${escapeHtml(status.replace(/\s+/g, '-').toLowerCase())}">${escapeHtml(status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}</span></td>
   <td>${escapeHtml(firstApp)}</td>
   <td data-sort="${sessionSortKey(lastSession)}">${escapeHtml(lastSession)}</td>
   <td><span class="sidebar-badge">${escapeHtml(confidence)}</span></td>

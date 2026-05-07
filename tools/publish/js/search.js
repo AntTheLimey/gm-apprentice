@@ -1,4 +1,8 @@
 (function() {
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
   var searchOverlay = document.createElement('div');
   searchOverlay.className = 'search-overlay';
   searchOverlay.innerHTML =
@@ -21,7 +25,7 @@
     var rootHref = document.querySelector('.nav-brand');
     var base = rootHref ? rootHref.getAttribute('href').replace('index.html', '') : './';
     var script = document.createElement('script');
-    script.src = base + 'js/lunr.min.js';
+    script.src = base + 'js/lunr.js';
     script.onload = function() {
       fetch(base + 'search-index.json')
         .then(function(r) { return r.json(); })
@@ -69,11 +73,11 @@
 
     var html = '';
     for (var type in grouped) {
-      html += '<div class="search-result-group"><h4>' + type + '</h4>';
+      html += '<div class="search-result-group"><h4>' + esc(type) + '</h4>';
       grouped[type].forEach(function(doc) {
-        html += '<a class="search-result-item" href="' + base + doc.href + '">' +
-          '<strong>' + doc.title + '</strong>' +
-          (doc.subtitle ? ' <span style="opacity:0.6">' + doc.subtitle + '</span>' : '') +
+        html += '<a class="search-result-item" href="' + esc(base + doc.href) + '">' +
+          '<strong>' + esc(doc.title) + '</strong>' +
+          (doc.subtitle ? ' <span style="opacity:0.6">' + esc(doc.subtitle) + '</span>' : '') +
           '</a>';
       });
       html += '</div>';
