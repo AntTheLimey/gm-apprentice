@@ -183,7 +183,7 @@ Wrap-up **must** produce all sections so prep reads one file:
 | Section | Required | Written to |
 |---------|----------|------------|
 | Narrative Recap | Yes | Wrap-Up file |
-| Quick Bullets | Yes | Wrap-Up file |
+| Quick Bullets | Standard path only | Wrap-Up file |
 | PC Carry-Forward | Yes | Wrap-Up file |
 | What Carries Forward | Yes | Wrap-Up file |
 | World State | Yes | Wrap-Up file |
