@@ -46,14 +46,20 @@ gmassistant-specific instructions in Steps 2 and 4 below.
 
 ### 2. Narrative Recap
 
-3-5 paragraphs of campaign prose. Dramatic, character names,
-`[[wiki-links]]` for every entity. Tone-calibrate per
-`references/recap-formats.md`. Also generate **Quick Bullets**
-(5-8 points).
+**Standard path:** 3-5 paragraphs of campaign prose. Dramatic,
+character names, `[[wiki-links]]` for every entity.
+Tone-calibrate per `references/recap-formats.md`. Also generate
+**Quick Bullets** (5-8 points). Write both formats into the
+Wrap-Up file.
 
-This recap is the **single source of truth**. Session-prep
-reads it later — never regenerates. Write both formats into
-the Wrap-Up file.
+**gmassistant.app path:** Adopt the content of the Play Notes'
+`## Summary` section verbatim into the Wrap-Up file under the
+`## Narrative Recap` heading. No rewriting, no condensing, no
+tone adjustment. Skip Quick Bullets — the `## Scenes` section
+in the Play Notes already serves that purpose.
+
+This recap is the **single source of truth** regardless of
+path. Session-prep reads it later — never regenerates.
 
 ### 3. PC Carry-Forward
 
