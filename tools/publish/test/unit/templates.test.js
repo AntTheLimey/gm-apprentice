@@ -2,6 +2,24 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { confidenceBadge, getConfidence, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
 const { parseParticipant } = require('../../lib/templates/event');
+const { formatDate } = require('../../lib/templates/landing');
+
+describe('formatDate', () => {
+  it('does not shift date for bare date string', () => {
+    const result = formatDate('2026-04-26');
+    assert.ok(result.includes('26'), `Expected day 26 in "${result}"`);
+    assert.ok(result.includes('April'), `Expected April in "${result}"`);
+  });
+
+  it('returns null for falsy input', () => {
+    assert.strictEqual(formatDate(null), null);
+    assert.strictEqual(formatDate(undefined), null);
+  });
+
+  it('returns string for invalid date', () => {
+    assert.strictEqual(formatDate('not-a-date'), 'not-a-date');
+  });
+});
 
 describe('getConfidence', () => {
   it('prefers source_confidence over canon_status', () => {
@@ -280,7 +298,7 @@ describe('PC template tabbed layout', () => {
   const mockNavFor = () => '';
   const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
 
-  it('renders tab bar when storyHtml is provided', () => {
+  it('renders tab bar with 4 tabs', () => {
     const page = {
       title: 'Hero',
       displayTitle: 'Hero',
@@ -293,13 +311,17 @@ describe('PC template tabbed layout', () => {
     const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {}, storyHtml);
     assert.ok(html.includes('tab-bar'), 'Should have tab bar');
     assert.ok(html.includes('Character Sheet'), 'Should have Sheet tab');
+    assert.ok(html.includes('Equipment'), 'Should have Equipment tab');
     assert.ok(html.includes('Story'), 'Should have Story tab');
+    assert.ok(html.includes('Journey'), 'Should have Journey tab');
     assert.ok(html.includes('tab-sheet'), 'Should have sheet tab panel');
     assert.ok(html.includes('tab-story'), 'Should have story tab panel');
+    assert.ok(html.includes('tab-equipment'), 'Should have equipment tab panel');
+    assert.ok(html.includes('tab-journey'), 'Should have journey tab panel');
     assert.ok(html.includes('Adventure begins'), 'Should contain story content');
   });
 
-  it('omits tab bar when no storyHtml is provided', () => {
+  it('always renders tab bar even without storyHtml', () => {
     const page = {
       title: 'Solo',
       displayTitle: 'Solo',
@@ -309,12 +331,13 @@ describe('PC template tabbed layout', () => {
     const processed = { html: '', relationships: '' };
     const sections = [{ id: 'stat-sheet', title: 'Stat Sheet', html: '<p>Stats</p>' }];
     const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {});
-    assert.ok(!html.includes('tab-bar'), 'Should not have tab bar');
-    assert.ok(!html.includes('tab-story'), 'Should not have story panel');
+    assert.ok(html.includes('tab-bar'), 'Should have tab bar');
+    assert.ok(html.includes('tab-story'), 'Should have story panel');
+    assert.ok(html.includes('No story content available'), 'Should show placeholder story text');
     assert.ok(html.includes('accordion'), 'Should still have accordion sections');
   });
 
-  it('includes hash-based tab routing script', () => {
+  it('includes hash-based tab routing script for all 4 tabs', () => {
     const page = {
       title: 'Hero',
       displayTitle: 'Hero',
@@ -325,7 +348,10 @@ describe('PC template tabbed layout', () => {
     const storyHtml = '<p>Story content</p>';
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, storyHtml);
     assert.ok(html.includes('location.hash'), 'Should have hash routing');
-    assert.ok(html.includes('#story'), 'Should reference #story hash');
+    assert.ok(html.includes('sheet'), 'Should reference sheet hash');
+    assert.ok(html.includes('equipment'), 'Should reference equipment hash');
+    assert.ok(html.includes('story'), 'Should reference story hash');
+    assert.ok(html.includes('journey'), 'Should reference journey hash');
   });
 
   it('renders story as prose flow', () => {

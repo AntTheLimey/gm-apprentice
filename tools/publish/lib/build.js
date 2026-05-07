@@ -5,7 +5,7 @@ const { processContent, extractSections, filterSections, stripDataview, stripGmO
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
-const { generateThemeCSS } = require('./theme');
+const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -20,6 +20,8 @@ function build(options = {}) {
   const outputDir = path.resolve(configDir, config.outputDir);
 
   const publishConfig = loadPublishConfig(config.vaultPath, config);
+  const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
+  publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
   const excludeFields = publishConfig.exclude_fields;
@@ -61,6 +63,29 @@ function build(options = {}) {
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
     fs.copyFileSync(src, dest);
+  }
+
+  function copyGenreCSS() {
+    if (!genrePreset) return;
+    const src = path.join(__dirname, `../css/themes/${genrePreset}.css`);
+    const dest = path.join(outputDir, `css/themes/${genrePreset}.css`);
+    ensureDir(dest);
+    fs.copyFileSync(src, dest);
+    console.log(`  wrote css/themes/${genrePreset}.css`);
+  }
+
+  function copyJS() {
+    const jsDir = path.join(__dirname, '../js');
+    if (!fs.existsSync(jsDir)) return;
+    const destDir = path.join(outputDir, 'js');
+    for (const file of fs.readdirSync(jsDir)) {
+      if (!file.endsWith('.js')) continue;
+      const src = path.join(jsDir, file);
+      const dest = path.join(destDir, file);
+      ensureDir(dest);
+      fs.copyFileSync(src, dest);
+      console.log(`  wrote js/${file}`);
+    }
   }
 
   function writeThemeCSS() {
@@ -165,6 +190,59 @@ function build(options = {}) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  const { buildBacklinks } = require('./backlinks');
+  const { buildSearchIndex } = require('./search-index');
+  const { scoreByRecency } = require('./recency');
+
+  // Build-time data pipeline
+  const backlinks = buildBacklinks(pages);
+  console.log(`Built backlinks for ${Object.keys(backlinks).length} entities`);
+
+  const sessions = pages.filter(p => p.frontmatter.type === 'session');
+  const chapters = pages.filter(p => p.frontmatter.type === 'chapter');
+  const npcs = pages.filter(p => p.frontmatter.type === 'npc');
+  const locations = pages.filter(p => p.frontmatter.type === 'location');
+
+  const landingConfig = (publishConfig.landing || {});
+  const recencyWindow = landingConfig.recency_window || 3;
+
+  const recentNPCs = scoreByRecency(npcs, sessions, chapters, {
+    window: recencyWindow,
+    max: landingConfig.max_npcs || 6,
+    type: 'npc',
+  });
+
+  const recentLocations = scoreByRecency(locations, sessions, chapters, {
+    window: recencyWindow,
+    max: landingConfig.max_locations || 4,
+    type: 'location',
+  });
+
+  console.log(`Recency: ${recentNPCs.length} NPCs, ${recentLocations.length} locations`);
+
+  // Search index (skip if searchEnabled explicitly set to false in config)
+  const searchEnabled = config.searchEnabled !== false;
+  const searchData = searchEnabled ? buildSearchIndex(pages) : null;
+
+  publishConfig._linkMap = linkMap;
+  publishConfig._backlinks = backlinks;
+  publishConfig._recentNPCs = recentNPCs;
+  publishConfig._recentLocations = recentLocations;
+
+  const { buildRelationshipGraph, renderRelationshipSVG } = require('./relationship-graph');
+
+  const entityGraphData = {};
+  const entityGraphs = {};
+  for (const page of pages) {
+    const graph = buildRelationshipGraph(page.title, pages, backlinks);
+    if (graph.nodes.length > 1) {
+      entityGraphData[page.title] = graph;
+      entityGraphs[page.title] = renderRelationshipSVG(graph, { currentOutputPath: page.outputPath });
+    }
+  }
+  console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
+  publishConfig._entityGraphs = entityGraphs;
+
   // Apply field filtering after link map is built (aliases/canon_status needed for resolution)
   for (const page of pages) {
     const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
@@ -177,6 +255,8 @@ function build(options = {}) {
 
   cleanOutput();
   copyCSS();
+  copyJS();
+  copyGenreCSS();
   writeThemeCSS();
 
   let campaignImageCopied = false;
@@ -202,6 +282,23 @@ function build(options = {}) {
   }
 
   writeNoJekyll();
+
+  // Write search index (only if search is enabled)
+  if (searchData) {
+    const searchDest = path.join(outputDir, 'search-index.json');
+    fs.writeFileSync(searchDest, JSON.stringify(searchData));
+    console.log('  wrote search-index.json');
+
+    // Copy lunr.js client library
+    const lunrSrc = require.resolve('lunr');
+    const lunrDest = path.join(outputDir, 'js', 'lunr.js');
+    ensureDir(lunrDest);
+    fs.copyFileSync(lunrSrc, lunrDest);
+    console.log('  wrote js/lunr.js');
+  } else {
+    console.log('  search disabled — skipping search-index.json');
+  }
+
   write404();
 
   const navFor = generateNav(pages);
@@ -241,32 +338,59 @@ function build(options = {}) {
 
           const system = publishConfig.system;
           const systemRenderer = getRenderer(system);
-          html = systemRenderer
-            ? systemRenderer(page, processed, sections, navFor, config, imageMap, storyHtml)
-            : pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml);
+          const systemHtml = systemRenderer ? systemRenderer(page.frontmatter, sections) : null;
+          html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, { publishConfig, pages, systemSheetHtml: systemHtml });
           break;
         }
         case 'npc':
-          html = npcTemplate(page, processed, navFor, config, imageMap);
+          html = npcTemplate(page, processed, navFor, config, imageMap, {
+            pages, linkMap, publishConfig,
+          });
           break;
         case 'creature':
-          html = creatureTemplate(page, processed, navFor, config, imageMap);
+          html = creatureTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
           break;
         case 'location':
-          html = locationTemplate(page, processed, navFor, config, imageMap);
+          html = locationTemplate(page, processed, navFor, config, imageMap, {
+            pages, linkMap, publishConfig,
+          });
           break;
         case 'item':
-          html = itemTemplate(page, processed, navFor, config, imageMap, linkMap);
+          html = itemTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
           break;
         case 'faction':
         case 'organization':
-          html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages);
+          html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages, { publishConfig });
           break;
         case 'event':
-          html = eventTemplate(page, processed, navFor, config, imageMap, linkMap);
+          html = eventTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
           break;
-        default:
-          html = wikiTemplate(page, processed, navFor, config, imageMap);
+        default: {
+          let extraSidebar = {};
+          if (page.frontmatter.type === 'session') {
+            const sessionMentionedNPCs = (pages || []).filter(p =>
+              p.frontmatter.type === 'npc' &&
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
+
+            const sessionEvents = (pages || []).filter(p =>
+              p.frontmatter.type === 'event' &&
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
+
+            extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
+          }
+          if (page.frontmatter.type === 'chapter') {
+            const chapterSessions = (pages || []).filter(p =>
+              p.frontmatter.type === 'session' &&
+              String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim() === page.title
+            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
+
+            extraSidebar = { constituentSessions: chapterSessions };
+          }
+          html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, extraSidebar, pages });
+          break;
+        }
       }
 
       const outPath = path.join(outputDir, page.outputPath);
@@ -300,22 +424,61 @@ function build(options = {}) {
     dirs[dir].push(page);
   }
 
+  const pcRoster = pages.find(p => p.frontmatter.type === 'pc_roster');
+  const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
+
   for (const [dir, label] of Object.entries(DIR_LABELS)) {
+    if (dir === 'characters/pcs' && pcRedirectTarget) {
+      const depth = dir.split('/').length;
+      const rel = '../'.repeat(depth) + pcRedirectTarget;
+      const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
+      const outPath = path.join(outputDir, dir, 'index.html');
+      ensureDir(outPath);
+      fs.writeFileSync(outPath, redirectHtml);
+      console.log(`  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
+      continue;
+    }
+    if (dir === 'events') {
+      const depth = dir.split('/').length;
+      const rel = '../'.repeat(depth) + 'timeline.html';
+      const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
+      const outPath = path.join(outputDir, dir, 'index.html');
+      ensureDir(outPath);
+      fs.writeFileSync(outPath, redirectHtml);
+      console.log(`  wrote ${dir}/index.html (redirect → timeline.html)`);
+      continue;
+    }
     let dirPages = [];
     for (const [pageDir, pageDirPages] of Object.entries(dirs)) {
       if (pageDir === dir || pageDir.startsWith(dir + '/')) {
         dirPages = dirPages.concat(pageDirPages);
       }
     }
-    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config);
+    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config, publishConfig);
     const outPath = path.join(outputDir, dir, 'index.html');
     ensureDir(outPath);
     fs.writeFileSync(outPath, indexHtml);
     console.log(`  wrote ${dir}/index.html`);
   }
 
+  // Timeline page
+  const { buildTimelineData, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
+  const { timelineTemplate } = require('./templates/timeline-page');
+
+  const timelineData = buildTimelineData(pages);
+  if (timelineData.events.length > 0) {
+    const fullTimelineContent = renderTimelineHTML(timelineData);
+    const timelineHtml = timelineTemplate(fullTimelineContent, navFor, config, publishConfig);
+    const timelinePath = path.join(outputDir, 'timeline.html');
+    ensureDir(timelinePath);
+    fs.writeFileSync(timelinePath, timelineHtml);
+    console.log('  wrote timeline.html');
+
+    publishConfig._timelineStrip = renderTimelineStrip(timelineData, { maxEvents: 15 });
+  }
+
   // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config, publishConfig);
+  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
 

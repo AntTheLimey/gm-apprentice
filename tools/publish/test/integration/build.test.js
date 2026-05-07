@@ -718,7 +718,7 @@ describe('build integration', () => {
       const themePath = path.join(outputDir, 'docs', 'css', 'theme.css');
       assert.ok(fs.existsSync(themePath));
       const css = fs.readFileSync(themePath, 'utf-8');
-      assert.ok(css.includes('--theme-primary'));
+      assert.ok(css.includes(':root'));
     });
   });
 
@@ -756,24 +756,24 @@ describe('build integration', () => {
     it('landing page contains hero with site title', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
       assert.ok(html.includes('Dashboard Test'));
-      assert.ok(html.includes('class="hero"'));
+      assert.ok(html.includes('landing-hero'));
     });
 
-    it('landing page shows last played date', () => {
+    it('landing page shows session count in hero', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Last Played'));
+      assert.ok(html.includes('Sessions'));
       assert.ok(html.includes('hero-dates'));
     });
 
-    it('landing page shows in-game date from setting_year', () => {
+    it('landing page shows in-game year from setting_year', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('In-Game Date'));
+      assert.ok(html.includes('In-Game'));
       assert.ok(html.includes('2019'));
     });
 
-    it('landing page shows Story So Far section with recap', () => {
+    it('landing page shows Latest Session section with recap', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Story So Far'));
+      assert.ok(html.includes('Latest Session'));
       assert.ok(html.includes('class="recap"'));
       assert.ok(html.includes('infiltrated the cave complex'));
     });
@@ -792,41 +792,15 @@ describe('build integration', () => {
       assert.ok(html.includes('Ronnie Vint'));
     });
 
-    it('PC cards show status badges', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('status-badge'));
-      assert.ok(html.includes('Active'));
-    });
-
     it('PC cards show key traits', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
       assert.ok(html.includes('Hot-tempered'));
       assert.ok(html.includes('Resourceful'));
     });
 
-    it('landing page shows Key NPCs section for important NPCs', () => {
+    it('landing page shows Explore the World section', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Key NPCs'));
-      assert.ok(html.includes('npc-grid'));
-      assert.ok(html.includes('Adrian Voss'));
-    });
-
-    it('important NPC shows inferred role', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Patron'));
-      assert.ok(html.includes('CEO, Voss Dynamics'));
-    });
-
-    it('unimportant NPC is excluded from Key NPCs', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      const npcGridMatch = html.match(/class="npc-grid">([\s\S]*?)<\/div>\s*<\/div>/);
-      const npcGridHtml = npcGridMatch ? npcGridMatch[1] : '';
-      assert.ok(!npcGridHtml.includes('Random Guard'));
-    });
-
-    it('landing page shows Explore section', () => {
-      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('Explore'));
+      assert.ok(html.includes('Explore the World'));
       assert.ok(html.includes('explore-grid'));
       assert.ok(html.includes('Locations'));
     });
@@ -838,29 +812,28 @@ describe('build integration', () => {
       assert.ok(!exploreGridHtml.includes('>Player Characters<'));
     });
 
-    it('landing page shows The Fallen section for dead PCs', () => {
+    it('landing page shows In Memoriam section for dead PCs', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('The Fallen'));
+      assert.ok(html.includes('In Memoriam'));
     });
 
-    it('fallen section contains dead PC with displayTitle (no underscores)', () => {
+    it('in memoriam section contains dead PC with displayTitle (no underscores)', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
       assert.ok(html.includes('Dead PC'), 'Should show displayTitle without underscores');
       assert.ok(!html.includes('>Dead_PC<'), 'Should not show raw filename with underscores');
     });
 
-    it('fallen cards include SVG status icons', () => {
+    it('in memoriam shows status label for dead PC', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      assert.ok(html.includes('fallen-icon'), 'Should include fallen icon element');
-      assert.ok(html.includes('<svg'), 'Should include inline SVG');
+      assert.ok(html.includes('KIA') || html.includes('MIA') || html.includes('Retired'), 'Should include a status label');
     });
 
-    it('active PCs appear in The Team, not The Fallen', () => {
+    it('active PCs appear in The Team, not In Memoriam', () => {
       const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
-      const fallenIdx = html.indexOf('The Fallen');
-      assert.ok(fallenIdx !== -1, 'The Fallen section should exist');
-      const fallenHtml = html.slice(fallenIdx);
-      assert.ok(!fallenHtml.includes('Guy LeFleur'), 'Active PC should not be in The Fallen');
+      const memoriamIdx = html.indexOf('In Memoriam');
+      assert.ok(memoriamIdx !== -1, 'In Memoriam section should exist');
+      const memoriamHtml = html.slice(memoriamIdx);
+      assert.ok(!memoriamHtml.includes('Guy LeFleur'), 'Active PC should not be in In Memoriam');
       assert.ok(html.includes('Guy LeFleur'), 'Active PC should appear on the page');
     });
   });
@@ -1090,12 +1063,161 @@ describe('build integration', () => {
       assert.ok(!fs.existsSync(storyPath), 'Story should not have its own page');
     });
 
-    it('creates PC page without tabs when no story exists', () => {
+    it('creates PC page with 4-tab layout even when no story exists', () => {
       const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'no-story-pc.html');
       assert.ok(fs.existsSync(pcPath));
       const html = fs.readFileSync(pcPath, 'utf-8');
-      assert.ok(!html.includes('tab-bar'), 'Should not have tab bar');
-      assert.ok(!html.includes('tab-story'), 'Should not have story panel');
+      assert.ok(html.includes('tab-bar'), 'Should have tab bar');
+      assert.ok(html.includes('tab-story'), 'Should have story panel');
+      assert.ok(html.includes('tab-equipment'), 'Should have equipment panel');
+      assert.ok(html.includes('tab-journey'), 'Should have journey panel');
+    });
+  });
+
+  describe('with-genre fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-genre-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-genre'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Genre Test',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: { 'Locations': 'locations' },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('copies genre preset CSS file', () => {
+      const horrorCss = path.join(outputDir, 'docs', 'css', 'themes', 'horror.css');
+      assert.ok(fs.existsSync(horrorCss));
+      const css = fs.readFileSync(horrorCss, 'utf-8');
+      assert.ok(css.includes('#1a1410'));
+    });
+
+    it('links genre CSS in HTML pages', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('themes/horror.css'));
+    });
+
+    it('generates theme.css with palette overrides', () => {
+      const themeCss = fs.readFileSync(path.join(outputDir, 'docs', 'css', 'theme.css'), 'utf-8');
+      assert.ok(themeCss.includes('#ff6600'));
+    });
+
+    it('genre alias resolves correctly', () => {
+      const { resolveGenrePreset } = require('../../lib/theme');
+      assert.strictEqual(resolveGenrePreset('cthulhu'), 'horror');
+      assert.strictEqual(resolveGenrePreset('gothic'), 'horror');
+    });
+  });
+
+  describe('redesign-full fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-redesign-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'redesign-full'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Redesign Test',
+        siteUrl: 'https://example.github.io/redesign-test',
+        searchEnabled: true,
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: [],
+        folderMap: {
+          'Characters/PCs': 'characters/pcs',
+          'Characters/NPCs': 'characters/npcs',
+          'Locations': 'locations',
+          'Events': 'events',
+          'Sessions': 'sessions',
+          'Factions': 'factions',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('generates landing page with hero and recap zones', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('landing-hero'));
+      assert.ok(html.includes('Redesign Test'));
+      assert.ok(html.includes('Into the dark we go'));
+      assert.ok(html.includes('Latest Session'));
+    });
+
+    it('applies genre CSS preset', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('horror.css'));
+    });
+
+    it('generates search index', () => {
+      assert.ok(fs.existsSync(path.join(outputDir, 'docs', 'search-index.json')));
+    });
+
+    it('generates top nav with semantic groups', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('nav-group'));
+    });
+
+    it('generates breadcrumbs on entity pages', () => {
+      const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
+      assert.ok(npcHtml.includes('breadcrumbs'));
+    });
+
+    it('generates context sidebar with backlinks on NPC page', () => {
+      const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
+      assert.ok(npcHtml.includes('context-sidebar'));
+    });
+
+    it('generates relationship graph SVG on entity pages', () => {
+      const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
+      assert.ok(npcHtml.includes('<svg'));
+    });
+
+    it('generates locations index with region layout', () => {
+      const indexHtml = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'index.html'), 'utf-8');
+      assert.ok(indexHtml.includes('locations-page') || indexHtml.includes('loc-region'));
+    });
+
+    it('generates PC page with 4-tab layout', () => {
+      const pcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'pcs', 'john-marsh.html'), 'utf-8');
+      assert.ok(pcHtml.includes('tab-sheet'));
+      assert.ok(pcHtml.includes('tab-equipment'));
+      assert.ok(pcHtml.includes('tab-story'));
+      assert.ok(pcHtml.includes('tab-journey'));
+    });
+
+    it('generates location page with hero banner', () => {
+      const locHtml = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'miskatonic-library.html'), 'utf-8');
+      assert.ok(locHtml.includes('hero-banner'));
+    });
+
+    it('loads client-side scripts', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      assert.ok(html.includes('js/lightbox.js'));
+      assert.ok(html.includes('js/search.js'));
     });
   });
 });

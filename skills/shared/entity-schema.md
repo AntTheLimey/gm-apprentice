@@ -290,6 +290,7 @@ chapter: "[[Chapter 1 - Title]]"
 campaign: ""
 planned_date: null        # Real-world date
 actual_date: null
+in_game_date: null        # In-game date(s) — string or array
 status: planned           # planned | prepped | played | reviewed
 stage: outline            # outline | draft | ready | in_play | wrap_up
 prep_notes: ""

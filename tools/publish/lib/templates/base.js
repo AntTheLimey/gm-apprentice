@@ -24,31 +24,39 @@ function rootPath(outputPath) {
   return '../'.repeat(depth) || './';
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer }) {
+function clientScripts(outputPath) {
+  const root = rootPath(outputPath);
+  return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
+}
+
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, breadcrumbsHtml, scripts }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
+  const genreCssHref = genrePreset
+    ? cssHref.replace('style.css', `themes/${genrePreset}.css`)
+    : '';
+  const genreLinkTag = genreCssHref
+    ? `\n  <link rel="stylesheet" href="${genreCssHref}">`
+    : '';
+  const breadcrumbs = breadcrumbsHtml || '';
+  const scriptTags = scripts
+    ? scripts.map(s => `<script src="${s}"></script>`).join('\n')
+    : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} — ${escapeHtml(siteTitle)}</title>
-  <link rel="stylesheet" href="${cssHref}">
+  <link rel="stylesheet" href="${cssHref}">${genreLinkTag}
   <link rel="stylesheet" href="${themeCssHref}">
 </head>
 <body>
 
-<header class="site-header">
-  <button class="menu-toggle" onclick="document.getElementById('nav').classList.add('open')" aria-label="Menu">&#9776;</button>
-  <h1><a href="${rootHref}index.html">${escapeHtml(siteTitle)}</a></h1>
-</header>
-
-<nav id="nav" class="site-nav">
-  <button class="nav-close" onclick="document.getElementById('nav').classList.remove('open')" aria-label="Close">&times;</button>
-  ${navHtml}
-</nav>
+${navHtml}
 
 <main class="content">
+${breadcrumbs}
 ${content}
 </main>
 
@@ -56,16 +64,27 @@ ${footerHtml}
 
 <button class="back-to-top" onclick="window.scrollTo({top:0})" aria-label="Back to top">&#8593;</button>
 
+${scriptTags}
 <script>
-document.querySelectorAll('.site-nav a').forEach(a => {
-  a.addEventListener('click', () => document.getElementById('nav').classList.remove('open'));
-});
 (function() {
   var btn = document.querySelector('.back-to-top');
   if (btn) window.addEventListener('scroll', function() {
     btn.classList.toggle('visible', window.scrollY > 400);
   }, { passive: true });
 })();
+document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var group = btn.parentElement;
+    var isOpen = group.classList.contains('open');
+    document.querySelectorAll('.nav-group').forEach(function(g) { g.classList.remove('open'); });
+    if (!isOpen) group.classList.add('open');
+  });
+});
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.nav-group')) {
+    document.querySelectorAll('.nav-group').forEach(function(g) { g.classList.remove('open'); });
+  }
+});
 </script>
 
 </body>
@@ -146,6 +165,7 @@ module.exports = {
   DIR_LABELS,
   cssPath,
   rootPath,
+  clientScripts,
   baseShell,
   getConfidence,
   confidenceBadge,

@@ -1,0 +1,36 @@
+/* Horror / Gothic / Cthulhu preset
+   For: CoC, Regency Cthulhu, gothic horror, dark mystery */
+
+:root {
+  --bg: #1a1410;
+  --bg-card: #241e16;
+  --bg-header: #0f0c08;
+  --bg-hero: #0f0c08;
+  --text: #d4c5a9;
+  --text-muted: #8a7e6a;
+  --accent: #c9a55a;
+  --accent-dim: rgba(201, 165, 90, 0.12);
+  --border: #3a3020;
+  --danger: #c0392b;
+  --warning: #d4a017;
+  --success: #6b8f3c;
+  --font-heading: "Georgia", "Times New Roman", serif;
+  --font-body: system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f0e8;
+    --bg-card: #fffcf5;
+    --bg-header: #2a2018;
+    --bg-hero: #2a2018;
+    --text: #2a2018;
+    --text-muted: #6b5e4a;
+    --accent: #8b6914;
+    --accent-dim: rgba(139, 105, 20, 0.08);
+    --border: #d4c5a9;
+    --danger: #c0392b;
+    --warning: #b8860b;
+    --success: #4a7c2e;
+  }
+}

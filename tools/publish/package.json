@@ -1,6 +1,6 @@
 {
   "name": "gm-apprentice-publish",
-  "version": "1.1.1",
+  "version": "1.2.1",
   "description": "Static site generator for gm-apprentice campaign vaults",
   "main": "lib/index.js",
   "bin": {
@@ -24,6 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "gray-matter": "^4.0.3",
+    "lunr": "^2.3.9",
     "markdown-it": "^14.1.0"
   }
 }

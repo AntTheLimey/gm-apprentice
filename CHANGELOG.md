@@ -7,11 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.4.20] — 2026-05-06
+## [1.4.21] — 2026-05-06
 
 ### Added
 
+- **Story progression page** (chapters index) — chapter cards with session lists, status badges
+- **Bestiary page** (creatures index) — dossier cards with threat/status badges, abilities/weaknesses pills
+- **Theater of Operations** (locations index) — region-grouped layout with parent/child nesting
+- **Intelligence Briefing** (factions index) — cards grouped by type with goals, leadership, connections
+- **Armory & Acquisitions** (items index) — manifest rows grouped by item type with holder/origin/TL
+- **Campaign deep dive** — extracted sections from campaign overview with resolved wikilinks
+- **GURPS combat stats bar** on PC sheets — HP, FP, Speed, Move, Dodge, Parries, skills
+- **Events index redirect** to timeline page
+- **Schema change procedure** checklist (`docs/schema-change-procedure.md`)
+- **`in_game_date` array support** for multi-day sessions in timeline
+
+### Fixed
+
+- PC portrait now constrained card layout instead of full-width crop
+- Tab-tag clicks now open corresponding accordion section on PC pages
+- Empty Relationships/Appearances boxes hidden on PC pages
+- Weapons/encumbrance sections moved to Equipment tab (not Sheet)
+- Bestiary badges now labeled "Threat:" / "Status:" for clarity
+- Nav label "Chapters" renamed to "Story"
+- Integration test updated for new locations/creatures page structure
+
+### Changed
+
+- Publish tool npm package bumped to 1.2.1 (patch: QA fixes + index page overhauls)
+
+## [1.4.20] — 2026-05-04
+
+### Added
+
+- **Dark-first responsive CSS** with CSS custom properties and mobile-first breakpoints
+- **4 genre preset themes** (horror, fantasy, noir, military) with dark + light mode variants
+- **Semantic top navigation** with 4 groups: Story, Characters, World, Reference
+- **Breadcrumbs** on all entity pages with path-based crumb generation
+- **Backlink resolution engine** — scans wiki-links to build reverse index
+- **Recency scoring engine** — weights entities by recent session mentions
+- **Full-text search** with lunr.js (Cmd+K overlay, lazy-loaded index)
+- **Image lightbox** — pure JS lightbox for all content images
+- **8-zone landing page** — hero, recap, team, in memoriam, NPCs, locations, events, explore
+- **Index pages** with pill filters, name search, sort controls, and type-specific layouts
+- **Context sidebar** on all entity pages showing backlinks, relationships, and parent entity
+- **Location pages** with 6-zone layout: hero banner, pull-quote, sub-locations, NPCs, events
+- **NPC pages** with 6-zone layout: portrait banner, location card, relationship web, story arc
+- **PC pages** with cinematic hero banner and 4-tab layout (Sheet, Equipment, Story, Journey)
+- **4 system-specific character sheet renderers** — CoC 7e, GURPS 4e, D&D 5e, FitD
+- **SVG relationship graphs** with 2-hop radial layout on all entity pages
+- **Campaign timeline** — full-page SVG with zoom controls and landing strip
+- **Story/chapter nav** with prev/next links and enriched sidebar (NPCs, events, sessions)
+- **Client-side index filters** — pill toggle, name input, sort-select for index pages
 - **session-wrapup** gmassistant.app passthrough — when Play Notes are a gmassistant.app export (detected by `## Memorable Moments` heading), adopts the app's narrative summary verbatim and uses its structured NPC/Location/Item sections as entity input instead of regenerating from scratch
+
+### Fixed
+
+- `getLatestSession` now includes `reviewed` sessions (not just `played`)
+- `formatDate` no longer shifts dates by timezone offset (UTC parsing fix)
+
+### Changed
+
+- Publish tool npm package bumped to 1.2.0 (minor: new features, no breaking changes)
+- Location, NPC, PC, and wiki templates fully rewritten with modern layouts
 
 ## [1.4.19] — 2026-05-03
 
