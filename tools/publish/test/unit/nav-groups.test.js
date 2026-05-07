@@ -25,7 +25,7 @@ describe('generateNavGroups', () => {
     const groups = generateNavGroups(pages);
     const story = groups.find(g => g.name === 'Story');
     const labels = story.links.map(l => l.label);
-    assert.ok(labels.includes('Chapters'));
+    assert.ok(labels.includes('Story'));
     assert.ok(labels.includes('Events'));
   });
 

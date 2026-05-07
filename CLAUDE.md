@@ -90,6 +90,13 @@ Read it before adding any content derived from a published source.**
 - `README.md` — installation and overview
 - `ROADMAP.md` — force-ranked backlog (see workflow below)
 
+## Schema changes
+
+**Before adding, renaming, or removing any frontmatter field**, follow the
+checklist in `docs/schema-change-procedure.md`. This covers templates,
+shared templates, skill references, consuming code, validation, migration
+entries, and versioning. Skipping steps causes migration failures.
+
 Note: `.claude/` is gitignored (local Claude Code settings and worktrees).
 `docs/superpowers/` and `docs/plans/` are gitignored (local specs and plans).
 `skills/ttrpg-expert/systems/*/personal/` are gitignored (user's private

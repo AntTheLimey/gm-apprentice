@@ -28,7 +28,7 @@ function statusLabel(status) {
   return 'Active';
 }
 
-function landingTemplate(pages, navFor, config, publishConfig) {
+function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
   const outputPath = 'index.html';
   const theme = (publishConfig && publishConfig.theme) || {};
   const campaignImage = theme.campaign_image || null;
@@ -80,12 +80,14 @@ function landingTemplate(pages, navFor, config, publishConfig) {
     const pcCards = activePCs.map(pc => {
       const fm = pc.frontmatter;
       const initials = getInitials(pc.displayTitle);
-      const portraitSrc = fm.portrait ? portraitImg(fm, pc.outputPath, {}, config.attachmentsDir) : '';
-      const portraitHtml = portraitSrc
-        ? `<div class="pc-portrait"><img src="${escapeHtml(fm.portrait)}" alt="${escapeHtml(pc.displayTitle)}"></div>`
+      const portraitTag = fm.portrait ? portraitImg(fm, outputPath, imageMap || {}, config.attachmentsDir) : '';
+      const portraitHtml = portraitTag
+        ? `<div class="pc-portrait">${portraitTag}</div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
       const occupation = fm.occupation ? `<div class="pc-traits">${escapeHtml(fm.occupation)}</div>` : '';
-      const traits = fm.key_traits ? `<div class="pc-traits">${escapeHtml(String(fm.key_traits))}</div>` : '';
+      const traits = fm.key_traits
+        ? `<div class="pc-traits">${escapeHtml(Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits))}</div>`
+        : '';
       return `<a class="pc-card" href="${escapeHtml(pc.outputPath)}">
   ${portraitHtml}
   <h3>${escapeHtml(pc.displayTitle)}</h3>

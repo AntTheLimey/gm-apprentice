@@ -1,7 +1,6 @@
 const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
-const { getRenderer } = require('./pc-registry');
 const { getInitials } = require('./landing-data');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
@@ -26,6 +25,8 @@ function extractFirstSentence(html) {
   return match ? match[1] : stripped.slice(0, 200);
 }
 
+const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
+
 function extractEquipment(frontmatter, sections) {
   if (Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0) {
     const items = frontmatter.equipment.map(item => {
@@ -38,8 +39,7 @@ function extractEquipment(frontmatter, sections) {
     return `<div class="card-grid">${items.join('\n')}</div>`;
   }
 
-  const equipmentTitles = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions']);
-  const equipmentSections = sections.filter(s => equipmentTitles.has(s.title.toLowerCase()));
+  const equipmentSections = sections.filter(s => EQUIPMENT_SECTION_TITLES.has(s.title.toLowerCase()));
   if (equipmentSections.length > 0) {
     return equipmentSections.map(s => `<h3>${escapeHtml(s.title)}</h3>\n${s.html}`).join('\n');
   }
@@ -95,9 +95,27 @@ function switchTab(tab) {
   document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
   history.replaceState(null, '', '#' + tab);
 }
+function openAccordion(id) {
+  var el = document.getElementById(id);
+  if (el && el.classList.contains('accordion')) {
+    el.classList.add('open');
+    var btn = el.querySelector('.accordion-header');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+document.addEventListener('click', function(e) {
+  var link = e.target.closest('.section-nav a');
+  if (link) {
+    e.preventDefault();
+    var id = link.getAttribute('href').slice(1);
+    openAccordion(id);
+  }
+});
 (function() {
   var hash = location.hash.slice(1);
   if (['sheet', 'equipment', 'story', 'journey'].includes(hash)) switchTab(hash);
+  else if (hash) openAccordion(hash);
 })();
 </script>`;
 }
@@ -153,11 +171,22 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // --- Sheet Tab ---
-  const sectionNav = sections.length > 0
-    ? `<nav class="section-nav" aria-label="Sheet sections">${sections.map(s => `<a href="#${s.id}">${escapeHtml(s.title)}</a>`).join('\n')}</nav>`
+  const emptyRelPattern = /^\s*(<p><strong>Outgoing:<\/strong><\/p>\s*<p><strong>Incoming:<\/strong><\/p>)?\s*$/;
+  const emptyAppearPattern = /^\s*(<p><em>Scenes and sessions where .+ appears\.<\/em><\/p>)?\s*$/;
+
+  const sheetSections = sections.filter(s => {
+    const lower = s.title.toLowerCase();
+    if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
+    if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
+    if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
+    return true;
+  });
+
+  const sectionNav = sheetSections.length > 0
+    ? `<nav class="section-nav" aria-label="Sheet sections">${sheetSections.map(s => `<a href="#${s.id}">${escapeHtml(s.title)}</a>`).join('\n')}</nav>`
     : '';
 
-  const accordions = sections.map(s => `
+  const accordions = sheetSections.map(s => `
 <div class="accordion" id="${s.id}">
   <button class="accordion-header" aria-expanded="false" onclick="const o=this.parentElement.classList.toggle('open');this.setAttribute('aria-expanded',o)">${escapeHtml(s.title)}</button>
   <div class="accordion-body">
@@ -165,11 +194,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   </div>
 </div>`).join('\n');
 
-  const systemRenderer = getRenderer(publishConfig.system);
+  const systemHtml = (context || {}).systemSheetHtml || null;
   let sheetContent;
-  if (systemRenderer) {
-    const systemHtml = systemRenderer(page.frontmatter, sections);
-    sheetContent = systemHtml || `${sectionNav}\n${accordions}\n${processedContent.relationships}`;
+  if (systemHtml) {
+    sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
   } else {
     sheetContent = `${sectionNav}\n${accordions}\n${processedContent.relationships}`;
   }
@@ -183,7 +211,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // --- Journey Tab ---
   const routeMap = buildRouteMap(page, pages);
   const graphSvg = (publishConfig._entityGraphs || {})[page.title] || '';
-  const journeyContent = [routeMap, graphSvg].filter(Boolean).join('\n') || '<p class="text-muted">Journey data builds as the campaign progresses.</p>';
+  const timelineStrip = publishConfig._timelineStrip || '';
+  const timelineSection = timelineStrip ? `<h2>Timeline</h2>\n<div class="timeline-strip">${timelineStrip}</div>` : '';
+  const graphSection = graphSvg ? `<h2>Connections</h2>\n<div class="relationship-graph">${graphSvg}</div>` : '';
+  const journeyContent = [routeMap, timelineSection, graphSection].filter(Boolean).join('\n') || '<p class="text-muted">Journey data builds as the campaign progresses.</p>';
 
   // --- Assemble ---
   const body = `${heroBanner}

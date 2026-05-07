@@ -1,7 +1,7 @@
 const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
-const { renderContextSidebar } = require('./context-sidebar');
+const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
 
 function extractFirstSentence(html) {
@@ -136,11 +136,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
       name: String(fm.parent_location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' '),
       path: linkMap ? linkMap[String(fm.parent_location).replace(/\[\[|\]\]/g, '').trim()] : null,
     } : null,
-    relationships: (fm.relationships || []).map(r => ({
-      type: r.type,
-      target: String(r.target).replace(/\[\[|\]\]/g, ''),
-      targetPath: linkMap ? linkMap[String(r.target).replace(/\[\[|\]\]/g, '')] : null,
-    })),
+    relationships: normalizeRelationships(fm.relationships, linkMap),
     currentOutputPath: page.outputPath,
   });
 

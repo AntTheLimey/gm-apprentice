@@ -19,6 +19,7 @@ chapter: "[[Chapter N - Title]]"
 campaign: ""
 planned_date: null
 actual_date: null
+in_game_date: null          # In-game date(s): string "YYYY-MM-DD" or array ["YYYY-MM-DD", ...]
 status: planned
 documents:
   plan: "[[Session NN - Title - Plan]]"

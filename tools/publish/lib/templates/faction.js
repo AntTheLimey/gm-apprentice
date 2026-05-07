@@ -1,6 +1,6 @@
 const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
-const { renderContextSidebar } = require('./context-sidebar');
+const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
@@ -83,11 +83,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
 
   const sidebar = renderContextSidebar({
     backlinks,
-    relationships: (fm.relationships || []).map(r => ({
-      type: r.type,
-      target: String(r.target).replace(/\[\[|\]\]/g, ''),
-      targetPath: linkMap ? linkMap[String(r.target).replace(/\[\[|\]\]/g, '')] : null,
-    })),
+    relationships: normalizeRelationships(fm.relationships, linkMap),
     currentOutputPath: page.outputPath,
   });
 

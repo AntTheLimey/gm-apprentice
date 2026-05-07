@@ -5,7 +5,7 @@ const NAV_GROUPS = [
   {
     name: 'Story',
     dirs: ['chapters', 'sessions', 'events'],
-    labels: { chapters: 'Chapters', sessions: 'Sessions', events: 'Events' },
+    labels: { chapters: 'Story', sessions: 'Sessions', events: 'Events' },
   },
   {
     name: 'Characters',
@@ -30,6 +30,10 @@ function generateNavGroups(pages) {
     populated.add(page.outputDir);
   }
 
+  const pcRoster = pages.find(p => p.frontmatter && p.frontmatter.type === 'pc_roster');
+  const overrides = { events: 'timeline.html' };
+  if (pcRoster) overrides['characters/pcs'] = pcRoster.outputPath;
+
   return NAV_GROUPS
     .map(group => {
       const links = group.dirs
@@ -41,7 +45,7 @@ function generateNavGroups(pages) {
         })
         .map(dir => ({
           label: group.labels[dir] || DIR_LABELS[dir] || dir,
-          href: dir + '/index.html',
+          href: overrides[dir] || (dir + '/index.html'),
         }));
       if (links.length === 0) return null;
       return { name: group.name, links };

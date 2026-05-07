@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.21] — 2026-05-06
+
+### Added
+
+- **Story progression page** (chapters index) — chapter cards with session lists, status badges
+- **Bestiary page** (creatures index) — dossier cards with threat/status badges, abilities/weaknesses pills
+- **Theater of Operations** (locations index) — region-grouped layout with parent/child nesting
+- **Intelligence Briefing** (factions index) — cards grouped by type with goals, leadership, connections
+- **Armory & Acquisitions** (items index) — manifest rows grouped by item type with holder/origin/TL
+- **Campaign deep dive** — extracted sections from campaign overview with resolved wikilinks
+- **GURPS combat stats bar** on PC sheets — HP, FP, Speed, Move, Dodge, Parries, skills
+- **Events index redirect** to timeline page
+- **Schema change procedure** checklist (`docs/schema-change-procedure.md`)
+- **`in_game_date` array support** for multi-day sessions in timeline
+
+### Fixed
+
+- PC portrait now constrained card layout instead of full-width crop
+- Tab-tag clicks now open corresponding accordion section on PC pages
+- Empty Relationships/Appearances boxes hidden on PC pages
+- Weapons/encumbrance sections moved to Equipment tab (not Sheet)
+- Bestiary badges now labeled "Threat:" / "Status:" for clarity
+- Nav label "Chapters" renamed to "Story"
+- Integration test updated for new locations/creatures page structure
+
+### Changed
+
+- Publish tool npm package bumped to 1.2.1 (patch: QA fixes + index page overhauls)
+
 ## [1.4.20] — 2026-05-04
 
 ### Added

@@ -1196,9 +1196,9 @@ describe('build integration', () => {
       assert.ok(npcHtml.includes('<svg'));
     });
 
-    it('generates index pages with pill filters', () => {
+    it('generates locations index with region layout', () => {
       const indexHtml = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'index.html'), 'utf-8');
-      assert.ok(indexHtml.includes('pill-filters') || indexHtml.includes('entity-card'));
+      assert.ok(indexHtml.includes('locations-page') || indexHtml.includes('loc-region'));
     });
 
     it('generates PC page with 4-tab layout', () => {

@@ -37,10 +37,19 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
     const page = pageMap[title];
     if (!page) return [];
     const rels = [];
-    if (page.frontmatter.relationships) {
-      for (const r of page.frontmatter.relationships) {
+    const raw = page.frontmatter.relationships;
+    if (Array.isArray(raw)) {
+      for (const r of raw) {
         const target = String(r.target).replace(/\[\[|\]\]/g, '').trim();
         rels.push({ target, type: r.type });
+      }
+    } else if (raw && typeof raw === 'object') {
+      for (const [type, targets] of Object.entries(raw)) {
+        const list = Array.isArray(targets) ? targets : [targets];
+        for (const t of list) {
+          const target = String(t).replace(/\[\[|\]\]/g, '').trim();
+          rels.push({ target, type });
+        }
       }
     }
     const bl = backlinks[title] || [];
@@ -60,10 +69,13 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
     edges.push({ from: centerTitle, to: rel.target, type: rel.type });
   }
 
+  const maxNodes = 20;
   for (const [title, node] of nodes) {
     if (node.hop !== 1) continue;
+    if (nodes.size >= maxNodes) break;
     const hop2Rels = getRelationships(title);
     for (const rel of hop2Rels) {
+      if (nodes.size >= maxNodes) break;
       if (nodes.has(rel.target)) continue;
       addNode(rel.target, 2);
       edges.push({ from: title, to: rel.target, type: rel.type });
@@ -71,6 +83,15 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
   }
 
   return { nodes: Array.from(nodes.values()), edges };
+}
+
+function relPath(from, to) {
+  const fromParts = from.split('/').slice(0, -1);
+  const toParts = to.split('/');
+  let common = 0;
+  while (common < fromParts.length && common < toParts.length && fromParts[common] === toParts[common]) common++;
+  const ups = fromParts.length - common;
+  return '../'.repeat(ups) + toParts.slice(common).join('/');
 }
 
 function renderRelationshipSVG(graph, options = {}) {
@@ -121,8 +142,9 @@ function renderRelationshipSVG(graph, options = {}) {
     const fill = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--bg-card, #232830)';
     const stroke = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--border, #30363d)';
 
-    const linkOpen = node.outputPath ? `<a href="${node.outputPath}">` : '';
-    const linkClose = node.outputPath ? '</a>' : '';
+    const href = (node.outputPath && options.currentOutputPath) ? relPath(options.currentOutputPath, node.outputPath) : node.outputPath;
+    const linkOpen = href ? `<a href="${href}">` : '';
+    const linkClose = href ? '</a>' : '';
 
     svg += `  ${linkOpen}<g opacity="${opacity}">\n`;
 

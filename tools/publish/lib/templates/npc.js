@@ -1,7 +1,7 @@
 const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
-const { renderContextSidebar } = require('./context-sidebar');
+const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
 
 function extractFirstSentence(html) {
@@ -76,7 +76,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   }
 
   // --- Zone 5: Relationship web ("Connections") as visual cards ---
-  const rels = fm.relationships || [];
+  const rels = normalizeRelationships(fm.relationships, linkMap);
   let relCardsHtml = '';
   if (rels.length > 0) {
     const cards = rels.map(r => {
@@ -119,11 +119,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   // --- Context Sidebar ---
   const sidebar = renderContextSidebar({
     backlinks,
-    relationships: rels.map(r => ({
-      type: r.type,
-      target: String(r.target).replace(/\[\[|\]\]/g, ''),
-      targetPath: linkMap ? linkMap[String(r.target).replace(/\[\[|\]\]/g, '')] : null,
-    })),
+    relationships: rels,
     currentOutputPath: page.outputPath,
   });
 

@@ -65,4 +65,79 @@
       items.forEach(function(item) { container.appendChild(item); });
     });
   }
+  // --- NPC sortable table ---
+  var table = document.querySelector('.sortable-table');
+  if (table) {
+    var thead = table.querySelector('thead');
+    var tbody = table.querySelector('tbody');
+    var headers = thead ? thead.querySelectorAll('th[data-sort-col]') : [];
+    var npcNameInput = document.querySelector('.name-filter');
+    var npcFilters = document.querySelectorAll('.npc-filter');
+    var npcRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+    var npcCount = countEl;
+    var npcTotal = npcRows.length;
+
+    function getCellText(row, colIdx) {
+      var td = row.children[colIdx];
+      if (!td) return '';
+      var sortAttr = td.getAttribute('data-sort');
+      if (sortAttr !== null) return sortAttr;
+      return (td.textContent || '').trim().toLowerCase();
+    }
+
+    function sortTable(colIdx, dir) {
+      npcRows.sort(function(a, b) {
+        var aVal = getCellText(a, colIdx);
+        var bVal = getCellText(b, colIdx);
+        var aNum = Number(aVal), bNum = Number(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) return dir * (aNum - bNum);
+        return dir * aVal.localeCompare(bVal);
+      });
+      npcRows.forEach(function(row) { tbody.appendChild(row); });
+    }
+
+    headers.forEach(function(th, idx) {
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', function() {
+        var isAsc = th.classList.contains('sort-asc');
+        headers.forEach(function(h) { h.classList.remove('sort-active', 'sort-asc', 'sort-desc'); });
+        th.classList.add('sort-active');
+        if (isAsc) {
+          th.classList.add('sort-desc');
+          sortTable(idx, -1);
+        } else {
+          th.classList.add('sort-asc');
+          sortTable(idx, 1);
+        }
+      });
+    });
+
+    function applyNpcFilters() {
+      var nameQ = npcNameInput ? npcNameInput.value.toLowerCase().trim() : '';
+      var filterValues = {};
+      npcFilters.forEach(function(sel) {
+        var col = sel.getAttribute('data-col');
+        filterValues[col] = sel.value;
+      });
+      var visible = 0;
+      npcRows.forEach(function(row) {
+        var name = (row.getAttribute('data-entity-name') || '').toLowerCase();
+        var status = row.getAttribute('data-entity-status') || '';
+        var session = row.getAttribute('data-session') || '';
+        var nameMatch = !nameQ || name.includes(nameQ);
+        var statusMatch = !filterValues.status || status === filterValues.status;
+        var sessionMatch = !filterValues.session || session === filterValues.session;
+        if (nameMatch && statusMatch && sessionMatch) {
+          row.style.display = '';
+          visible++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      if (npcCount) npcCount.textContent = 'Showing ' + visible + ' of ' + npcTotal;
+    }
+
+    npcFilters.forEach(function(sel) { sel.addEventListener('change', applyNpcFilters); });
+    if (npcNameInput) npcNameInput.addEventListener('input', applyNpcFilters);
+  }
 })();

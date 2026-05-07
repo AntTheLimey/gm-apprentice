@@ -224,17 +224,20 @@ function build(options = {}) {
   const searchEnabled = config.searchEnabled !== false;
   const searchData = searchEnabled ? buildSearchIndex(pages) : null;
 
+  publishConfig._linkMap = linkMap;
   publishConfig._backlinks = backlinks;
   publishConfig._recentNPCs = recentNPCs;
   publishConfig._recentLocations = recentLocations;
 
   const { buildRelationshipGraph, renderRelationshipSVG } = require('./relationship-graph');
 
+  const entityGraphData = {};
   const entityGraphs = {};
   for (const page of pages) {
     const graph = buildRelationshipGraph(page.title, pages, backlinks);
     if (graph.nodes.length > 1) {
-      entityGraphs[page.title] = renderRelationshipSVG(graph);
+      entityGraphData[page.title] = graph;
+      entityGraphs[page.title] = renderRelationshipSVG(graph, { currentOutputPath: page.outputPath });
     }
   }
   console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
@@ -335,9 +338,8 @@ function build(options = {}) {
 
           const system = publishConfig.system;
           const systemRenderer = getRenderer(system);
-          html = systemRenderer
-            ? systemRenderer(page, processed, sections, navFor, config, imageMap, storyHtml)
-            : pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, { publishConfig, pages });
+          const systemHtml = systemRenderer ? systemRenderer(page.frontmatter, sections) : null;
+          html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, { publishConfig, pages, systemSheetHtml: systemHtml });
           break;
         }
         case 'npc':
@@ -422,7 +424,30 @@ function build(options = {}) {
     dirs[dir].push(page);
   }
 
+  const pcRoster = pages.find(p => p.frontmatter.type === 'pc_roster');
+  const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
+
   for (const [dir, label] of Object.entries(DIR_LABELS)) {
+    if (dir === 'characters/pcs' && pcRedirectTarget) {
+      const depth = dir.split('/').length;
+      const rel = '../'.repeat(depth) + pcRedirectTarget;
+      const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
+      const outPath = path.join(outputDir, dir, 'index.html');
+      ensureDir(outPath);
+      fs.writeFileSync(outPath, redirectHtml);
+      console.log(`  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
+      continue;
+    }
+    if (dir === 'events') {
+      const depth = dir.split('/').length;
+      const rel = '../'.repeat(depth) + 'timeline.html';
+      const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
+      const outPath = path.join(outputDir, dir, 'index.html');
+      ensureDir(outPath);
+      fs.writeFileSync(outPath, redirectHtml);
+      console.log(`  wrote ${dir}/index.html (redirect → timeline.html)`);
+      continue;
+    }
     let dirPages = [];
     for (const [pageDir, pageDirPages] of Object.entries(dirs)) {
       if (pageDir === dir || pageDir.startsWith(dir + '/')) {
@@ -437,13 +462,13 @@ function build(options = {}) {
   }
 
   // Timeline page
-  const { buildTimelineData, renderTimelineSVG, renderTimelineStrip } = require('./timeline');
+  const { buildTimelineData, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
   const { timelineTemplate } = require('./templates/timeline-page');
 
   const timelineData = buildTimelineData(pages);
   if (timelineData.events.length > 0) {
-    const fullSvg = renderTimelineSVG(timelineData);
-    const timelineHtml = timelineTemplate(fullSvg, navFor, config, publishConfig);
+    const fullTimelineContent = renderTimelineHTML(timelineData);
+    const timelineHtml = timelineTemplate(fullTimelineContent, navFor, config, publishConfig);
     const timelinePath = path.join(outputDir, 'timeline.html');
     ensureDir(timelinePath);
     fs.writeFileSync(timelinePath, timelineHtml);
@@ -453,7 +478,7 @@ function build(options = {}) {
   }
 
   // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config, publishConfig);
+  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
 

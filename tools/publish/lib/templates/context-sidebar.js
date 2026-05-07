@@ -1,5 +1,29 @@
 const { escapeHtml, relativePath } = require('../processor');
 
+function normalizeRelationships(raw, linkMap) {
+  if (!raw) return [];
+  let list;
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (typeof raw === 'object') {
+    list = [];
+    for (const [type, targets] of Object.entries(raw)) {
+      const arr = Array.isArray(targets) ? targets : [targets];
+      for (const t of arr) list.push({ target: t, type });
+    }
+  } else {
+    return [];
+  }
+  return list.map(r => {
+    const target = String(r.target).replace(/\[\[|\]\]/g, '');
+    return {
+      type: r.type,
+      target,
+      targetPath: linkMap ? linkMap[target] : null,
+    };
+  });
+}
+
 function renderContextSidebar({ backlinks, relationships, parentEntity, events, currentOutputPath }) {
   const sections = [];
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
@@ -43,4 +67,4 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
   return `<aside class="context-sidebar">\n${sections.join('\n')}\n</aside>`;
 }
 
-module.exports = { renderContextSidebar };
+module.exports = { renderContextSidebar, normalizeRelationships };

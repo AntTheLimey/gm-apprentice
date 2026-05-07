@@ -39,24 +39,76 @@ function googleFontsImport(fonts) {
   return `@import url('https://fonts.googleapis.com/css2?${families}&display=swap');\n\n`;
 }
 
+function parseHex(hex) {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function luminance(hex) {
+  const { r, g, b } = parseHex(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+function mixColors(hex1, hex2, weight) {
+  const c1 = parseHex(hex1);
+  const c2 = parseHex(hex2);
+  const w = weight;
+  const r = Math.round(c1.r * (1 - w) + c2.r * w);
+  const g = Math.round(c1.g * (1 - w) + c2.g * w);
+  const b = Math.round(c1.b * (1 - w) + c2.b * w);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+function hexToRgba(hex, alpha) {
+  const { r, g, b } = parseHex(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function generateThemeCSS(config) {
   const palette = config.palette || {};
   const fonts = config.fonts || {};
 
   const vars = [];
 
-  if (palette.primary) vars.push(`  --bg-header: ${palette.primary};`);
-  if (palette.accent) vars.push(`  --accent: ${palette.accent};`);
-  if (palette.background) vars.push(`  --bg: ${palette.background};`);
-  if (palette.text) vars.push(`  --text: ${palette.text};`);
+  const bg = palette.background || '#1a1f25';
+  const text = palette.text || '#c9d1d9';
+  const accent = palette.accent || '#58a6ff';
+  const primary = palette.primary || '#0d1117';
+
+  vars.push(`  --bg: ${bg};`);
+  vars.push(`  --text: ${text};`);
+  vars.push(`  --accent: ${accent};`);
+  vars.push(`  --bg-header: ${primary};`);
+  vars.push(`  --bg-hero: ${primary};`);
+
+  const isLight = luminance(bg) > 0.5;
+
+  if (isLight) {
+    vars.push(`  --bg-card: ${mixColors(bg, '#ffffff', 0.6)};`);
+    vars.push(`  --text-muted: ${mixColors(text, bg, 0.45)};`);
+    vars.push(`  --border: ${mixColors(bg, text, 0.2)};`);
+  } else {
+    vars.push(`  --bg-card: ${mixColors(bg, '#ffffff', 0.05)};`);
+    vars.push(`  --text-muted: ${mixColors(text, bg, 0.4)};`);
+    vars.push(`  --border: ${mixColors(bg, '#ffffff', 0.12)};`);
+  }
+
+  vars.push(`  --accent-dim: ${hexToRgba(accent, isLight ? 0.08 : 0.15)};`);
+
+  const headerIsLight = luminance(primary) > 0.5;
+  vars.push(`  --text-on-header: ${headerIsLight ? '#1a1a1a' : '#e0e4e8'};`);
+  vars.push(`  --text-muted-on-header: ${headerIsLight ? '#555' : '#9da5ae'};`);
 
   if (fonts.heading) vars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
   if (fonts.body) vars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
 
   const fontsImport = googleFontsImport(fonts);
-  const varsBlock = vars.length > 0 ? vars.join('\n') : '  /* no overrides */';
 
-  return `${fontsImport}:root {\n${varsBlock}\n}\n`;
+  return `${fontsImport}:root {\n${vars.join('\n')}\n}\n`;
 }
 
 module.exports = { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS };

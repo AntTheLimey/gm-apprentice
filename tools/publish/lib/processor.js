@@ -173,6 +173,21 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages) {
   });
 }
 
+function separateBoldLabelLines(markdown) {
+  const lines = markdown.split('\n');
+  const result = [];
+  const boldStart = /^\*\*[^*]+\*\*/;
+  for (let i = 0; i < lines.length; i++) {
+    result.push(lines[i]);
+    if (boldStart.test(lines[i].trim()) &&
+        i + 1 < lines.length &&
+        boldStart.test(lines[i + 1].trim())) {
+      result.push('');
+    }
+  }
+  return result.join('\n');
+}
+
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
   let markdown = page.markdown.replace(/\r/g, '');
   const warnings = [];
@@ -186,6 +201,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   markdown = stripLeadingH1(markdown);
   markdown = filterSections(markdown, excludeSections);
+  markdown = separateBoldLabelLines(markdown);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages);
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   const html = md.render(markdown);

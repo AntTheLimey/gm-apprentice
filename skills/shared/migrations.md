@@ -113,3 +113,19 @@ No vault schema changes. Version stamp only.
 ## Migration: 1.4.18
 
 No vault schema changes. Version stamp only.
+
+## Migration: 1.4.19 → 1.4.20
+
+### Content
+
+- **Session template:** Add optional `in_game_date` field after
+  `actual_date`. Accepts a single ISO date string or an array of
+  ISO date strings for multi-day/time-jump sessions. Existing
+  sessions without the field continue to work — consuming code
+  treats absent as "no in-game date recorded."
+
+### Tooling
+
+- **Publish tool:** Timeline now reads `in_game_date` from sessions
+  to place them on the in-game chronological timeline. Sessions
+  without `in_game_date` are excluded from the timeline.

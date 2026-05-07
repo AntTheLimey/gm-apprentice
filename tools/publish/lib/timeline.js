@@ -1,15 +1,46 @@
+const { escapeHtml } = require('./processor');
+
 function buildTimelineData(pages) {
   const events = pages
     .filter(p => p.frontmatter.type === 'event' && p.frontmatter.date)
-    .map(p => ({ title: p.displayTitle, date: new Date(p.frontmatter.date), type: 'event', outputPath: p.outputPath }));
+    .map(p => ({
+      title: p.displayTitle,
+      date: new Date(p.frontmatter.date),
+      type: 'event',
+      outputPath: p.outputPath,
+      outcome: p.frontmatter.outcome || '',
+      location: p.frontmatter.location
+        ? String(p.frontmatter.location).replace(/\[\[|\]\]/g, '').trim()
+        : '',
+    }));
 
   const sessions = pages
-    .filter(p => p.frontmatter.type === 'session' && p.frontmatter.actual_date)
-    .map(p => ({ title: p.displayTitle, date: new Date(p.frontmatter.actual_date), type: 'session', outputPath: p.outputPath, number: p.frontmatter.session_number }));
+    .filter(p => p.frontmatter.type === 'session' && p.frontmatter.in_game_date)
+    .flatMap(p => {
+      const dates = Array.isArray(p.frontmatter.in_game_date)
+        ? p.frontmatter.in_game_date
+        : [p.frontmatter.in_game_date];
+      return dates.map(d => ({
+        title: p.displayTitle,
+        date: new Date(d),
+        type: 'session',
+        outputPath: p.outputPath,
+        number: p.frontmatter.session_number,
+        outcome: '',
+        location: p.frontmatter.location
+          ? String(p.frontmatter.location).replace(/\[\[|\]\]/g, '').trim()
+          : '',
+      }));
+    });
 
   const chapters = pages
     .filter(p => p.frontmatter.type === 'chapter')
-    .map(p => ({ title: p.displayTitle, sortOrder: p.frontmatter.sort_order || 0, type: 'chapter', outputPath: p.outputPath }));
+    .map(p => ({
+      title: p.displayTitle,
+      sortOrder: p.frontmatter.sort_order || 0,
+      type: 'chapter',
+      outputPath: p.outputPath,
+    }));
 
   const allDated = [...events, ...sessions]
     .filter(e => !isNaN(e.date.getTime()))
@@ -18,53 +49,67 @@ function buildTimelineData(pages) {
   return { events: allDated, chapters };
 }
 
-function escapeXml(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function formatDateParts(d) {
+  const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  const day = d.getDate();
+  const year = d.getFullYear();
+  return { month, day, year };
 }
 
-function truncLabel(str, max) {
-  return str.length > max ? str.slice(0, max - 1) + '…' : str;
-}
-
-function renderTimelineNodes(events, startX, spacing, y, height) {
-  if (events.length === 0) return '';
-
-  const width = startX * 2 + (events.length - 1) * spacing;
-  let svg = `<svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="font-family:var(--font-body,system-ui)">\n`;
-
-  svg += `  <line x1="${startX}" y1="${y}" x2="${startX + (events.length - 1) * spacing}" y2="${y}" stroke="var(--border,#30363d)" stroke-width="2"/>\n`;
-
-  events.forEach((evt, i) => {
-    const x = startX + i * spacing;
-    const label = truncLabel(evt.title, 16);
-    const dateStr = evt.date.toISOString().slice(0, 10);
-
-    svg += `  <a href="${escapeXml(evt.outputPath)}">\n`;
-    if (evt.type === 'session') {
-      svg += `    <rect x="${x - 6}" y="${y - 6}" width="12" height="12" rx="2" fill="var(--accent,#58a6ff)" stroke="var(--bg,#1a1f25)" stroke-width="2"/>\n`;
-    } else {
-      svg += `    <circle cx="${x}" cy="${y}" r="6" fill="var(--accent,#58a6ff)" stroke="var(--bg,#1a1f25)" stroke-width="2"/>\n`;
-    }
-    svg += `    <text x="${x}" y="${y - 14}" text-anchor="middle" font-size="10" fill="var(--text,#c9d1d9)">${escapeXml(label)}</text>\n`;
-    svg += `    <text x="${x}" y="${y + 20}" text-anchor="middle" font-size="8" fill="var(--text-muted,#8b949e)">${escapeXml(dateStr)}</text>\n`;
-    svg += `  </a>\n`;
-  });
-
-  svg += '</svg>';
-  return svg;
-}
-
-function renderTimelineSVG(data, options) {
+function renderTimelineHTML(data) {
   if (data.events.length === 0) return '';
-  const spacing = (options && options.spacing) || 100;
-  return renderTimelineNodes(data.events, 60, spacing, 50, 90);
+
+  const nodes = data.events.map(evt => {
+    const dp = formatDateParts(evt.date);
+    const typeClass = evt.type === 'session' ? 'tl-session' : 'tl-event';
+    const badge = evt.type === 'session' ? 'Session' : 'Event';
+    const details = [];
+    if (evt.outcome) details.push(evt.outcome);
+    if (evt.location) details.push(evt.location);
+
+    return `<div class="tl-entry ${typeClass}">
+  <div class="tl-date-col">
+    <div class="tl-year">${dp.year}</div>
+    <div class="tl-monthday">${escapeHtml(dp.month)} ${dp.day}</div>
+  </div>
+  <div class="tl-line-col">
+    <div class="tl-dot"></div>
+  </div>
+  <div class="tl-detail-col">
+    <span class="tl-type">${escapeHtml(badge)}</span>
+    <h3><a href="${escapeHtml(evt.outputPath)}">${escapeHtml(evt.title)}</a></h3>
+    ${details.length ? `<p>${escapeHtml(details.join(' — '))}</p>` : ''}
+  </div>
+</div>`;
+  }).join('\n');
+
+  return `<div class="tl-timeline">\n${nodes}\n</div>`;
 }
 
 function renderTimelineStrip(data, options) {
   const maxEvents = (options && options.maxEvents) || 10;
   const recent = data.events.slice(-maxEvents);
   if (recent.length === 0) return '';
-  return renderTimelineNodes(recent, 40, 80, 35, 70);
+
+  const nodes = recent.map(evt => {
+    const dp = formatDateParts(evt.date);
+    const typeClass = evt.type === 'session' ? 'tl-session' : 'tl-event';
+
+    return `<div class="tl-entry ${typeClass}">
+  <div class="tl-date-col">
+    <div class="tl-year">${dp.year}</div>
+    <div class="tl-monthday">${escapeHtml(dp.month)} ${dp.day}</div>
+  </div>
+  <div class="tl-line-col">
+    <div class="tl-dot"></div>
+  </div>
+  <div class="tl-detail-col">
+    <h3><a href="${escapeHtml(evt.outputPath)}">${escapeHtml(evt.title)}</a></h3>
+  </div>
+</div>`;
+  }).join('\n');
+
+  return `<div class="tl-timeline tl-compact">\n${nodes}\n</div>`;
 }
 
-module.exports = { buildTimelineData, renderTimelineSVG, renderTimelineStrip };
+module.exports = { buildTimelineData, renderTimelineHTML, renderTimelineStrip };
