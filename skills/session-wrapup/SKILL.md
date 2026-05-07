@@ -36,16 +36,32 @@ If no Play Notes file exists, ask the GM to provide play notes
 (paste, file path, or dictation). Read PC roster. Read the
 session's Plan file for planned-vs-actual comparison.
 
+**gmassistant.app detection:** After reading the Play Notes,
+check whether the content contains a `## Memorable Moments`
+heading. If present, the notes are a gmassistant.app export
+containing pre-written narrative (`## Summary`), structured
+entity sections (`## NPCs`, `## Locations`, `## Items`), and
+a scene-by-scene breakdown (`## Scenes`). Follow the
+gmassistant-specific instructions in Steps 2 and 4 below.
+
 ### 2. Narrative Recap
 
-3-5 paragraphs of campaign prose. Dramatic, character names,
-`[[wiki-links]]` for every entity. Tone-calibrate per
-`references/recap-formats.md`. Also generate **Quick Bullets**
-(5-8 points).
+**Standard path:** 3-5 paragraphs of campaign prose. Dramatic,
+character names, `[[wiki-links]]` for every entity.
+Tone-calibrate per `references/recap-formats.md`. Also generate
+**Quick Bullets** (5-8 points). Write both formats into the
+Wrap-Up file.
 
-This recap is the **single source of truth**. Session-prep
-reads it later — never regenerates. Write both formats into
-the Wrap-Up file.
+**gmassistant.app path:** Adopt the content of the Play Notes'
+`## Summary` section into the Wrap-Up file under the
+`## Narrative Recap` heading. No rewriting, no condensing, no
+tone adjustment — but do add `[[wiki-links]]` to every entity
+reference (matching the standard path's linking requirement).
+Skip Quick Bullets — the `## Scenes` section in the Play Notes
+already serves that purpose.
+
+This recap is the **single source of truth** regardless of
+path. Session-prep reads it later — never regenerates.
 
 ### 3. PC Carry-Forward
 
@@ -83,6 +99,23 @@ sessions are missing from a story file, that's vault-ingest
 territory. Never edit prior session entries (append-only).
 
 ### 4. Update the World
+
+**gmassistant.app path:** When the Play Notes are a
+gmassistant.app export, use the structured `## NPCs`,
+`## Locations`, and `## Items` sections as input for entity
+creation and updates. Each entry already has a name and
+description — use these as the basis for vault files instead
+of extracting entities from raw notes. Entity extraction
+markers (`NEW-NPC:`, `UPDATE:`, etc.) won't be present;
+instead, compare each listed NPC/Location/Item against the
+existing vault to determine new vs. update. If the
+gmassistant description conflicts with existing vault
+content, flag the entity as CONFLICT for GM review. Use the
+`## Scenes` section as the primary source for identifying
+events that meet the decomposition threshold. All standard
+rules below still apply: read templates before creating,
+`source_confidence: DRAFT` for new entities, receipt
+lifecycle, wiki-links.
 
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
@@ -157,7 +190,7 @@ Wrap-up **must** produce all sections so prep reads one file:
 | Section | Required | Written to |
 |---------|----------|------------|
 | Narrative Recap | Yes | Wrap-Up file |
-| Quick Bullets | Yes | Wrap-Up file |
+| Quick Bullets | Standard path only | Wrap-Up file |
 | PC Carry-Forward | Yes | Wrap-Up file |
 | What Carries Forward | Yes | Wrap-Up file |
 | World State | Yes | Wrap-Up file |
