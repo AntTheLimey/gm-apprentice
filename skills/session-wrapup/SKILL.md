@@ -106,9 +106,14 @@ description — use these as the basis for vault files instead
 of extracting entities from raw notes. Entity extraction
 markers (`NEW-NPC:`, `UPDATE:`, etc.) won't be present;
 instead, compare each listed NPC/Location/Item against the
-existing vault to determine new vs. update. Use the
+existing vault to determine new vs. update. If the
+gmassistant description conflicts with existing vault
+content, flag the entity as CONFLICT for GM review. Use the
 `## Scenes` section as the primary source for identifying
-events that meet the decomposition threshold.
+events that meet the decomposition threshold. All standard
+rules below still apply: read templates before creating,
+`source_confidence: DRAFT` for new entities, receipt
+lifecycle, wiki-links.
 
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
