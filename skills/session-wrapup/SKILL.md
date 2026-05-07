@@ -36,6 +36,14 @@ If no Play Notes file exists, ask the GM to provide play notes
 (paste, file path, or dictation). Read PC roster. Read the
 session's Plan file for planned-vs-actual comparison.
 
+**gmassistant.app detection:** After reading the Play Notes,
+check whether the content contains a `## Memorable Moments`
+heading. If present, the notes are a gmassistant.app export
+containing pre-written narrative (`## Summary`), structured
+entity sections (`## NPCs`, `## Locations`, `## Items`), and
+a scene-by-scene breakdown (`## Scenes`). Follow the
+gmassistant-specific instructions in Steps 2 and 4 below.
+
 ### 2. Narrative Recap
 
 3-5 paragraphs of campaign prose. Dramatic, character names,
