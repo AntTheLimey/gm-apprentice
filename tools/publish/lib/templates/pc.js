@@ -57,7 +57,7 @@ function buildRouteMap(page, pages) {
   for (const session of storyPages) {
     const loc = session.frontmatter.location;
     if (loc) {
-      const locTitle = String(loc).replace(/\[\[|\]\]/g, '').trim();
+      const locTitle = String(loc).replace(/\[\[|\]\]/g, '').split('|')[0].trim();
       if (!seen.has(locTitle) || locations[locations.length - 1] !== locTitle) {
         locations.push(locTitle);
         seen.add(locTitle);

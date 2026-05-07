@@ -51,7 +51,7 @@ describe('buildBacklinks', () => {
     const backlinks = buildBacklinks([
       { title: 'Alone', displayTitle: 'Alone', outputPath: 'alone.html', frontmatter: { type: 'npc' }, markdown: 'No links here.' },
     ]);
-    assert.deepStrictEqual(backlinks, {});
+    assert.strictEqual(Object.keys(backlinks).length, 0);
   });
 
   it('handles aliased wiki-links [[Target|Display]]', () => {

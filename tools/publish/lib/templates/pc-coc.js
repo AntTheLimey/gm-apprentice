@@ -3,6 +3,7 @@ const { escapeHtml } = require('../processor');
 const COC_CHARACTERISTICS = ['STR', 'CON', 'SIZ', 'DEX', 'APP', 'INT', 'POW', 'EDU'];
 
 function renderCoCSheet(frontmatter, sections) {
+  frontmatter = frontmatter || {};
   const parts = [];
 
   const chars = frontmatter.characteristics || {};
@@ -31,7 +32,7 @@ function renderCoCSheet(frontmatter, sections) {
     parts.push('<h3>Skills</h3>');
     for (const [cat, catSkills] of Object.entries(byCategory)) {
       const rows = catSkills
-        .sort((a, b) => a.name.localeCompare(b.name))
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
         .map(s => `<div class="coc-skill-row"><span>${escapeHtml(s.name)}</span><span class="coc-skill-value">${escapeHtml(String(s.value))}%</span></div>`)
         .join('\n');
       parts.push(`<div class="coc-skills-category"><h4>${escapeHtml(cat)}</h4>${rows}</div>`);

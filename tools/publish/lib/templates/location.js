@@ -12,7 +12,7 @@ function extractFirstSentence(html) {
 
 function matchesRef(refValue, title) {
   if (!refValue) return false;
-  const cleaned = String(refValue).replace(/\[\[|\]\]/g, '').trim();
+  const cleaned = String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].trim();
   return cleaned === title;
 }
 

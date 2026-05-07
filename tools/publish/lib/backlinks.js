@@ -1,7 +1,7 @@
 const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 
 function buildBacklinks(pages) {
-  const backlinks = {};
+  const backlinks = Object.create(null);
 
   for (const page of pages) {
     const md = page.markdown || '';
@@ -10,6 +10,7 @@ function buildBacklinks(pages) {
     WIKI_LINK_RE.lastIndex = 0;
     while ((match = WIKI_LINK_RE.exec(md)) !== null) {
       const target = match[1].trim();
+      if (!target) continue;
       if (seen.has(target)) continue;
       seen.add(target);
 
