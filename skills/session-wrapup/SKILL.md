@@ -98,6 +98,18 @@ territory. Never edit prior session entries (append-only).
 
 ### 4. Update the World
 
+**gmassistant.app path:** When the Play Notes are a
+gmassistant.app export, use the structured `## NPCs`,
+`## Locations`, and `## Items` sections as input for entity
+creation and updates. Each entry already has a name and
+description — use these as the basis for vault files instead
+of extracting entities from raw notes. Entity extraction
+markers (`NEW-NPC:`, `UPDATE:`, etc.) won't be present;
+instead, compare each listed NPC/Location/Item against the
+existing vault to determine new vs. update. Use the
+`## Scenes` section as the primary source for identifying
+events that meet the decomposition threshold.
+
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
   the vault file using that template as the structure.
