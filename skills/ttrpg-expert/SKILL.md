@@ -223,6 +223,9 @@ No variant keyword or tag → use base CoC files only.
 | Factions | factions.md |
 | Playbooks | playbooks.md |
 | Crew types | crew-types.md |
+| Cohorts / gangs | cohorts.md |
+| Gathering information | gathering-information.md |
+| GM techniques / consequences | gm-techniques.md |
 | Rituals / crafting | rituals-crafting.md |
 | Entanglements / heat | entanglements.md |
 | Magnitude | magnitude.md |

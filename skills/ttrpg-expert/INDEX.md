@@ -39,6 +39,9 @@ Read only the file(s) relevant to the current request.
 | Factions | FitD: `factions.md`. Others: `content-generation.md` | `relationship-patterns.md` |
 | Classes / occupations | CoC: `occupations.md`. FitD: `playbooks.md`. D&D: `classes.md` | — |
 | Crew / party type | FitD: `crew-types.md` | — |
+| Cohorts / gangs | FitD: `cohorts.md` | `crew-types.md` |
+| Gathering information | FitD: `gathering-information.md` | `mechanics.md` |
+| GM techniques | FitD: `gm-techniques.md` | `mechanics.md`, `session-procedures.md` |
 | Entanglements / heat | FitD: `entanglements.md` | — |
 | Magnitude | FitD: `magnitude.md` | — |
 
