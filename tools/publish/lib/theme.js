@@ -72,15 +72,27 @@ function hexToRgba(hex, alpha) {
 }
 
 function generateThemeCSS(config) {
-  const palette = config.palette || {};
+  const palette = config.palette;
   const fonts = config.fonts || {};
 
+  // When a genre preset is active and no custom palette was provided,
+  // emit only font overrides — the preset CSS handles colors.
+  if (!palette && config.genre && resolveGenrePreset(config.genre)) {
+    const fontVars = [];
+    if (fonts.heading) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
+    if (fonts.body) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
+    if (fontVars.length === 0) return '/* Genre preset active — no overrides */\n';
+    const fontsImport = googleFontsImport(fonts);
+    return `${fontsImport}:root {\n${fontVars.join('\n')}\n}\n`;
+  }
+
+  const pal = palette || {};
   const vars = [];
 
-  const bg = palette.background || '#1a1f25';
-  const text = palette.text || '#c9d1d9';
-  const accent = palette.accent || '#58a6ff';
-  const primary = palette.primary || '#0d1117';
+  const bg = pal.background || '#1a1f25';
+  const text = pal.text || '#c9d1d9';
+  const accent = pal.accent || '#58a6ff';
+  const primary = pal.primary || '#0d1117';
 
   vars.push(`  --bg: ${bg};`);
   vars.push(`  --text: ${text};`);

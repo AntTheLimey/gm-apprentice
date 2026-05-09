@@ -3,8 +3,7 @@ type: session
 session_number: 3
 chapter: "[[Chapter 1 - The Ashford Case]]"
 campaign: "The Ashford Case"
-planned_date: "2024-02-17"
-actual_date: null
+play_date: "2024-02-17"
 status: prepped
 documents:
   plan: "[[Session 03 - The Inner Sanctum - Plan]]"

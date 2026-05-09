@@ -269,6 +269,59 @@ The `docs/` folder was built, but either:
 
 ---
 
+## Failure 7: Build uses old templates or missing features
+
+### Symptom
+
+The build completes without errors, but the output does not
+reflect recent plugin updates. Pages may use old templates,
+missing layout improvements, or lack new features that should
+be available.
+
+### Cause
+
+The site repo's `package.json` still points at an old version
+of the `gm-apprentice-publish` package in the plugin cache. When
+the plugin updates (new version installed), the cache path changes
+but existing site repos keep their old `file:` dependency, so
+builds continue using the stale code.
+
+This can also happen if the dependency was set to `"latest"` —
+npm resolves that to whatever version is already installed locally,
+which may be outdated.
+
+### Diagnosis steps
+
+1. Open the site repo's `package.json`. Find the
+   `gm-apprentice-publish` dependency. It should be a `file:` path
+   like:
+   ```json
+   "gm-apprentice-publish": "file:~/.claude/plugins/cache/gm-apprentice/gm-apprentice/1.4.21/tools/publish"
+   ```
+2. Check the version number in that path against the current plugin
+   version (readable from `.claude-plugin/plugin.json` in the
+   gm-apprentice plugin directory). If they differ, the dependency
+   is stale.
+3. Also check `node_modules/gm-apprentice-publish/package.json` in
+   the site repo — its `version` field shows what is actually
+   installed.
+
+### Fix
+
+Run the routine update workflow ("update my site"). Step 2 of
+that workflow automatically detects version mismatches and updates
+the dependency.
+
+To fix manually:
+
+1. Update the `file:` path in the site repo's `package.json` to
+   point at the current plugin cache version.
+2. Run `npm install` in the site repo directory to pull in the
+   updated package.
+3. Rebuild with `npm run build`.
+
+---
+
 ## Getting more information from the build
 
 If none of the above explains the problem, run the build and

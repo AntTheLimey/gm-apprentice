@@ -2,7 +2,7 @@
 type: session
 status: played
 session_number: 2
-actual_date: "2024-02-01"
+play_date: "2024-02-01"
 ---
 
 # Session 2: Following the Trail

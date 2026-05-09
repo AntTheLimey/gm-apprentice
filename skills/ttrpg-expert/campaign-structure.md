@@ -42,8 +42,8 @@ PLANNED → COMPLETED
 | Field | Type | Description |
 |-------|------|-------------|
 | session_number | integer | Sequential number |
-| planned_date | date | Scheduled date |
-| actual_date | date | When it happened |
+| play_date | date | Real-world date session was played |
+| in_game_date | date | In-game fictional date |
 | status | enum | PLANNED/COMPLETED/SKIPPED |
 | prep_notes | text | GM preparation (GM-only) |
 | planned_scenes | JSONB | Anticipated scenes |

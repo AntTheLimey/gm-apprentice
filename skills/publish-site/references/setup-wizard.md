@@ -141,7 +141,34 @@ If the command fails with "command not found", explain:
 
 ---
 
-## Step 7: Fill in vault.config.json
+## Step 7: Pin the build tool dependency
+
+Open `package.json` in `<targetDir>`. Find the `gm-apprentice-publish`
+dependency — the scaffold sets it to `"latest"` by default, which can
+resolve to a stale cached version.
+
+Replace it with a `file:` path pointing at the current plugin cache:
+
+```json
+{
+  "dependencies": {
+    "gm-apprentice-publish": "file:~/.claude/plugins/cache/gm-apprentice/gm-apprentice/<plugin-version>/tools/publish"
+  }
+}
+```
+
+Where `<plugin-version>` is the current gm-apprentice plugin version
+(read it from `.claude-plugin/plugin.json` in the plugin directory, or
+infer it from the skill's own cache path).
+
+This ensures the site always builds with the exact version of the
+publish tool that matches the installed plugin. The version check in
+routine updates (capability 2) will keep this path current when the
+plugin updates.
+
+---
+
+## Step 8: Fill in vault.config.json
 
 Open `vault.config.json` in `<targetDir>` and update these fields
 with the values gathered above:
@@ -165,7 +192,7 @@ edit the JSON manually unless they prefer to.
 
 ---
 
-## Step 8: Campaign image
+## Step 9: Campaign image
 
 Ask:
 
@@ -194,7 +221,7 @@ If no, skip — the site will work without a campaign image.
 
 ---
 
-## Step 9: 404 message
+## Step 10: 404 message
 
 Ask:
 
@@ -215,7 +242,7 @@ Accept a custom message if the GM prefers. Store it in
 
 ---
 
-## Step 10: Theme confirmation
+## Step 11: Theme confirmation
 
 Read genre tags from the vault's `_Campaign/Campaign Overview.md`
 or `vault-config.md` if available. Propose a colour palette and
@@ -234,7 +261,7 @@ fonts, neutral blue-grey palette).
 
 ---
 
-## Step 11: Install dependencies
+## Step 12: Install dependencies
 
 In the terminal, navigate to `<targetDir>` and run:
 
@@ -247,7 +274,7 @@ dependencies. It will take a moment on first run.
 
 ---
 
-## Step 12: Initial build
+## Step 13: Initial build
 
 Run:
 
@@ -274,7 +301,7 @@ shown here reflects only publishable content.
 
 ---
 
-## Step 13: Review initial build
+## Step 14: Review initial build
 
 Tell the GM:
 
@@ -288,7 +315,7 @@ content, broken layout), troubleshoot before continuing.
 
 ---
 
-## Step 14: Create publish manifest
+## Step 15: Create publish manifest
 
 Run the content-filtering workflow from `references/content-filtering.md`:
 
@@ -309,7 +336,7 @@ Tell the GM:
 
 ---
 
-## Step 15: Filtered rebuild
+## Step 16: Filtered rebuild
 
 Rebuild with the manifest in place:
 
@@ -326,7 +353,7 @@ If the GM wants to adjust, edit the manifest and rebuild again.
 
 ---
 
-## Step 16: Initialise git
+## Step 17: Initialise git
 
 In the terminal, inside `<targetDir>`, run:
 
@@ -339,7 +366,7 @@ git commit -m "Initial site scaffold"
 
 ---
 
-## Step 17: Create the GitHub repository
+## Step 18: Create the GitHub repository
 
 Check whether the `gh` CLI is available:
 
@@ -380,9 +407,9 @@ Provide numbered manual steps:
 
 ---
 
-## Step 18: Enable GitHub Pages
+## Step 19: Enable GitHub Pages
 
-**If `gh` was used in Step 17 (repo creation):**
+**If `gh` was used in Step 18 (repo creation):**
 
 Offer to enable Pages programmatically:
 
@@ -420,7 +447,7 @@ Summarise:
 
 ---
 
-## Step 19: Confirm
+## Step 20: Confirm
 
 Once GitHub Pages is enabled and the first deployment finishes,
 the site will be live at:

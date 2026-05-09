@@ -65,10 +65,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     theme: {
       ...PUBLISH_DEFAULTS.theme,
       ...publish.theme,
-      palette: {
-        ...PUBLISH_DEFAULTS.theme.palette,
-        ...(publish.theme && publish.theme.palette),
-      },
+      palette: (publish.theme && publish.theme.palette)
+        ? { ...PUBLISH_DEFAULTS.theme.palette, ...publish.theme.palette }
+        : null,
       fonts: {
         ...PUBLISH_DEFAULTS.theme.fonts,
         ...(publish.theme && publish.theme.fonts),

@@ -4,15 +4,35 @@ function parseDate(value) {
   const s = String(value);
   const parts = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (parts) return new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3]));
+
+  // Handle vague/seasonal dates like "Autumn 1813", "Late Spring 1813", "Summer 1813"
+  const yearMatch = s.match(/\b(\d{4})\b/);
+  if (yearMatch) {
+    const year = +yearMatch[1];
+    const lower = s.toLowerCase();
+    const seasonMap = { spring: 3, summer: 6, autumn: 9, fall: 9, winter: 0 };
+    let month = null;
+    for (const [season, baseMonth] of Object.entries(seasonMap)) {
+      if (lower.includes(season)) {
+        month = baseMonth;
+        if (lower.includes('early')) month = Math.max(0, month - 1);
+        if (lower.includes('late')) month = Math.min(11, month + 1);
+        break;
+      }
+    }
+    if (month === null) month = 5; // no season keyword — default to June
+    return new Date(Date.UTC(year, month, 1));
+  }
+
   return new Date(s);
 }
 
 function buildTimelineData(pages) {
   const events = pages
-    .filter(p => p.frontmatter.type === 'event' && p.frontmatter.date)
+    .filter(p => p.frontmatter.type === 'event' && (p.frontmatter.in_game_date || p.frontmatter.date))
     .map(p => ({
       title: p.displayTitle,
-      date: parseDate(p.frontmatter.date),
+      date: parseDate(p.frontmatter.in_game_date || p.frontmatter.date),
       type: 'event',
       outputPath: p.outputPath,
       outcome: p.frontmatter.outcome || '',

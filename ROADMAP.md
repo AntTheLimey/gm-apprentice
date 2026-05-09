@@ -67,6 +67,7 @@ Items are force-ranked by score. Higher score = do first.
 | Publish tool: Tag-based browsing (tag index pages) | 2 | 1 | M (2) | 2.5 | Idea | Auto-generated index pages per tag from frontmatter |
 | Eval suite for all skills | 3 | 1 | L (3) | 2.3 | Idea | Extend benchmark methodology to all 7 skills, not just ttrpg-expert |
 | ~~Publish tool: Relationship graph visualisation~~ | 3 | 1 | L (3) | 2.3 | Done | Static SVG relationship graphs with force-directed layout |
+| Build-time section extraction for routing | 3 | 1 | M (2) | 3.5 | Experiment | Pre-process multi-section reference files into per-section extracts or line-range indexes at build time, so section routing loads only the needed section instead of the whole file. [Findings](docs/experiment-section-extraction.md) |
 | Publish tool: full site identity (logo variants, social preview) | 3 | 1 | L (3) | 2.3 | Idea | Logo generation, og:image, social card previews for shared links |
 | D&D SRD enrichment (Phase 5c) | 2 | 2 | L (3) | 2.0 | Planned | Expand D&D files: more monster stat blocks, subclass features, encounter building |
 | PDF-to-markdown converter | 3 | 1 | XL (4) | 1.8 | Idea | Tool to convert published adventure PDFs into vault-compatible markdown |

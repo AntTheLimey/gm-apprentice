@@ -62,7 +62,26 @@ Workflow:
 1. Read `publish.site_dir` from `_meta/vault-config.md`. If not
    set, ask for the absolute path to the site repo directory and
    offer to save it to vault-config for future sessions.
-2. **Check manifest freshness.** Compare the vault's publishable
+2. **Check publish tool version.** Make sure the site repo is
+   using the current version of the build tool:
+   a. Read the plugin version from `.claude-plugin/plugin.json`
+      in the gm-apprentice plugin directory (or infer it from the
+      skill's own cache path). This is the **expected version**.
+   b. Read the site repo's `package.json` and find the
+      `gm-apprentice-publish` dependency value. Also read
+      `node_modules/gm-apprentice-publish/package.json` in the
+      site repo to find the **installed version**.
+   c. The dependency should be a `file:` path pointing at:
+      `~/.claude/plugins/cache/gm-apprentice/gm-apprentice/{plugin-version}/tools/publish`
+      If the path contains an old version, or if the installed
+      version differs from the expected version:
+      - Update the `file:` dependency in the site repo's
+        `package.json` to point at the current cache path.
+      - Run `npm install` in the site repo directory.
+      - Tell the GM: "Updated gm-apprentice-publish from
+        {old version} to {new version}."
+   d. If everything matches, continue silently.
+3. **Check manifest freshness.** Compare the vault's publishable
    files against `_meta/publish-manifest.md`. Look for:
    - **New files:** vault files not in the manifest. Apply the
      same categorization rules as capability 6 (always-exclude
@@ -73,13 +92,13 @@ Workflow:
      longer exist. Remove them from the manifest and note which
      pages will disappear from the site.
    - If no changes, say so and proceed.
-3. Run `npm run build` from that directory.
-4. Review the output for errors. If any appear, treat them as
+4. Run `npm run build` from that directory.
+5. Review the output for errors. If any appear, treat them as
    troubleshooting triggers (see capability 3).
-5. Stage the `docs/` folder: `git add docs/`.
-6. Commit: `git commit -m "Rebuild site"`.
-7. Push: `git push`.
-8. Confirm: "Your site will update on GitHub Pages in a minute or two.
+6. Stage the `docs/` folder: `git add docs/`.
+7. Commit: `git commit -m "Rebuild site"`.
+8. Push: `git push`.
+9. Confirm: "Your site will update on GitHub Pages in a minute or two.
    Check the Actions tab if it takes longer than five minutes."
 
 ### 3. Troubleshooting

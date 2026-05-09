@@ -213,7 +213,7 @@ Badges rendered: `sort_order`
 
 `type: session`
 
-Badges rendered: `session_number`, `actual_date`, `status`,
+Badges rendered: `session_number`, `play_date`, `status`,
 `stage`
 
 ### Scene

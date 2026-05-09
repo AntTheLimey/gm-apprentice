@@ -119,7 +119,7 @@ const TYPE_BADGE_FIELDS = {
   creature: ['creature_type', 'location'],
   clue: ['clue_type', 'reliability', 'found_by'],
   document: ['document_type', 'author', 'classification', 'date_written'],
-  session: ['session_number', 'actual_date', 'status', 'stage'],
+  session: ['session_number', 'play_date', 'status', 'stage'],
   scene: ['scene_type', 'status'],
   chapter: ['sort_order'],
 };
