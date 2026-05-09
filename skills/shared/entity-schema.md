@@ -84,7 +84,8 @@ narrative (abstract)
 │   ├── discovery
 │   ├── betrayal_event
 │   └── celebration
-└── clue
+├── clue
+└── adventure-brief
 ```
 
 Abstract types cannot be assigned directly to entities but are
@@ -266,6 +267,16 @@ Extraction defaults:
 | date | string | When written |
 | content | string | The text |
 | condition | string | Physical state |
+
+### Adventure Brief
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| scope | string | campaign / one-shot / few-shot |
+| sessions_estimated | string | Number or range (e.g. "3-5") |
+| continuation_type | string | new / new-chapter / new-arc / time-jump / prequel / parallel / new-pcs |
+| adventure_shape | string | linear / branching / hub-and-spoke / open-node / sandbox |
+| system | string | Game system identifier or "undecided" |
 
 ## Narrative Element Schemas
 
@@ -457,6 +468,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | event (all subtypes) | Events/ |
 | document (all subtypes) | Documents/ |
 | clue | Clues/ |
+| adventure-brief | Adventures/ |
 
 ## Vault Configuration Fields
 
