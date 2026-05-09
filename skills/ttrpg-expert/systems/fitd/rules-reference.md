@@ -172,7 +172,10 @@ These mechanics are covered in detail elsewhere:
 - **Downtime phase** (payoff, heat, entanglements, activities): `systems/fitd/session-procedures.md`
 - **XP and advancement** (PC + crew): `systems/fitd/session-procedures.md`
 - **Faction turns** (clock advancement, maneuvers): `systems/fitd/session-procedures.md`
-- **Faction details** (Doskvol factions, tiers, NPCs): `systems/fitd/factions.md`
+- **Faction mechanics** (status, Tier, development, faction turn): `systems/fitd/factions.md`
+- **Gathering information** (actions, effect levels, investigation): `systems/fitd/gathering-information.md`
+- **Cohorts** (gangs, experts, cohort harm): `systems/fitd/cohorts.md`
+- **GM techniques** (consequences, bargains, position/effect practice): `systems/fitd/gm-techniques.md`
 
 ---
 *Based on Blades in the Dark by John Harper, CC BY 3.0.*
