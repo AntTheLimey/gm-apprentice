@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] — 2026-05-09
+
+### Added
+
+- **FitD: gathering-information.md** — SRD gathering info mechanics:
+  effect levels, action-specific questions, long-term projects, GM
+  guidance for calibrating disclosure
+- **FitD: cohorts.md** — consolidated cohort rules: gang types, experts,
+  edges/flaws, cohort harm, supervised vs unsupervised use, elite
+  upgrades
+- **FitD: gm-techniques.md** — practical GM reference: consequence
+  fiction with original examples, devil's bargain design, position/effect
+  3×3 matrix, clock patterns and anti-patterns
+- **FitD: rituals-crafting.md depth pass** — 4 original example rituals
+  (ward, compulsion, divination, transformation) and 4 sample
+  alchemicals/gadgets with drawbacks
+- **Personal reference file routing** — ttrpg-expert, session-play,
+  session-prep, and session-wrapup skills now discover and use
+  `systems/*/personal/` directories for setting-specific content
+
+### Changed
+
+- **FitD copyright compliance** — stripped Doskvol setting IP from all
+  public FitD files. Named factions, NPCs, heritage regions, and
+  setting descriptions removed or genericized. Faction mechanics, crew
+  frameworks, and playbook role descriptions preserved as SRD content.
+- **FitD: factions.md** — retitled "Faction Mechanics", reduced from
+  171 to 77 lines. Named factions removed; faction status table, tier
+  rules, claims, and faction turn procedure retained.
+- **FitD: setting-doskvol.md deleted** — pure setting IP, replaced by
+  personal reference files
+
+### Removed
+
+- **FitD: setting-doskvol.md** — Doskvol setting content (not covered by
+  CC-BY 3.0 SRD license)
+
+---
+
 ## [1.4.22] — 2026-05-08
 
 ### Fixed
