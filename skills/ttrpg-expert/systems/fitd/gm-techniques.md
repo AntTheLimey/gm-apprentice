@@ -3,11 +3,11 @@
 *GM activities: Run, Prep*
 
 **Related FitD files:**
-- Core mechanics (dice, actions): `systems/fitd/mechanics.md`
-- Harm, armor, consequences: `systems/fitd/rules-reference.md`
-- Score execution, downtime: `systems/fitd/session-procedures.md`
-- Gathering information: `systems/fitd/gathering-information.md`
-- Faction mechanics: `systems/fitd/factions.md`
+- Core mechanics (dice, actions): `mechanics.md`
+- Harm, armor, consequences: `rules-reference.md`
+- Score execution, downtime: `session-procedures.md`
+- Gathering information: `gathering-information.md`
+- Faction mechanics: `factions.md`
 
 Practical guidance for running Forged in the Dark at the table.
 

@@ -3,9 +3,9 @@
 *GM activities: Run, Track, Prep*
 
 **Related FitD files:**
-- Crew types and upgrades: `systems/fitd/crew-types.md`
-- Session procedures (downtime, group actions): `systems/fitd/session-procedures.md`
-- Faction mechanics (Tier, scale): `systems/fitd/factions.md`
+- Crew types and upgrades: `crew-types.md`
+- Session procedures (downtime, group actions): `session-procedures.md`
+- Faction mechanics (Tier, scale): `factions.md`
 
 A cohort is a gang or expert NPC who works for your crew.
 Recruiting a new cohort costs two crew upgrade boxes.

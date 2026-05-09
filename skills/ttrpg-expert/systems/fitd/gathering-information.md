@@ -3,9 +3,9 @@
 *GM activities: Run, Prep*
 
 **Related FitD files:**
-- Core mechanics (actions, dice): `systems/fitd/mechanics.md`
-- Session procedures (free play phase): `systems/fitd/session-procedures.md`
-- Position and effect: `systems/fitd/rules-reference.md`
+- Core mechanics (actions, dice): `mechanics.md`
+- Session procedures (free play phase): `session-procedures.md`
+- Position and effect: `rules-reference.md`
 
 Information flow from the GM to the players is central to
 play. By default, the GM describes what characters perceive,
