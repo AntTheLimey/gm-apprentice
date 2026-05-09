@@ -71,7 +71,8 @@ project's skill files with attribution to their creators:
 - **Return of the Lazy Dungeon Master** and the Lazy DM
   prep method by Mike Shea (Sly Flourish,
   https://slyflourish.com/)
-- **Five Room Dungeon** by Johnn Four (Roleplaying Tips,
+- **Five Room Dungeon** and **Campaign Seed Recipe** by
+  Johnn Four (Roleplaying Tips,
   https://roleplayingtips.com/)
 - **Action-Oriented Monsters** by Matthew Colville (MCDM,
   https://mcdm.gg/)
@@ -81,6 +82,14 @@ project's skill files with attribution to their creators:
 - **Fronts** from Apocalypse World by D. Vincent Baker
 - **Progress Clocks** from Blades in the Dark by John Harper
   (CC-BY 3.0, see above)
+- **Adventure Shapes** and **Momentous & Inertial Adventure
+  Design** by Scott Rehm (The Angry GM,
+  https://theangrygm.com/)
+- **CATS Method** (Concept/Aim/Tone/Subject) by Patrick
+  O'Leary
+- **Petersen's Onion Layer** by Sandy Petersen
+- **Story-to-Campaign Adaptation** by Mythcreants
+  (https://mythcreants.com/)
 
 ## Lovecraft Mythos
 
