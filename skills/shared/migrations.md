@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.4.21"
+current_version: "1.4.22"
 ---
 
 # Vault Migration Registry
@@ -129,3 +129,24 @@ No vault schema changes. Version stamp only.
 - **Publish tool:** Timeline now reads `in_game_date` from sessions
   to place them on the in-game chronological timeline. Sessions
   without `in_game_date` are excluded from the timeline.
+
+## Migration: 1.4.21 → 1.4.22
+
+Standardizes date field names across session and event entities.
+
+### Structural
+
+- **Event entity files** (files with `type: event`): rename
+  frontmatter field `date:` → `in_game_date:`. Value is unchanged —
+  this is a key rename only.
+- **Session entity files** (files with `type: session`): rename
+  `planned_date:` → `play_date:`. If both `planned_date` and
+  `actual_date` exist, use the value of `actual_date` as `play_date`
+  (the actual played date takes precedence); otherwise use whichever
+  exists. Remove `actual_date:` after migration.
+
+### Content
+
+- **Session wrap-up files**: standardize `type:` to `session_wrap`
+  (from any of: `session-wrap-up`, `session_wrap_up`, `session_note`).
+  Opt-in per file — review before applying.

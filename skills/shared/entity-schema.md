@@ -252,7 +252,7 @@ Extraction defaults:
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | event_type | string | Battle, ritual, meeting, etc. |
-| date | string | In-game date |
+| in_game_date | string | In-game date |
 | location | string | Where (wiki-link to Location entity) |
 | participants | array | Who — entries can be `[[Entity]] (role)`, `[[Entity\|Display]] (role)`, or plain text |
 | outcome | string | Result |
@@ -288,8 +288,7 @@ type: session
 session_number: 1
 chapter: "[[Chapter 1 - Title]]"
 campaign: ""
-planned_date: null        # Real-world date
-actual_date: null
+play_date: null           # Real-world date session was played, YYYY-MM-DD
 in_game_date: null        # In-game date(s) — string or array
 status: planned           # planned | prepped | played | reviewed
 stage: outline            # outline | draft | ready | in_play | wrap_up
@@ -386,7 +385,7 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 **Item:** `item_type` (weapon, armor, relic, etc.),
 `current_holder` (wiki-link), `origin`, `portrait` (optional)
 
-**Event:** `event_type` (battle, ritual, etc.), `date` (in-game),
+**Event:** `event_type` (battle, ritual, etc.), `in_game_date` (in-game),
 `location` (wiki-link), `participants` (wiki-links), `outcome`
 
 **Clue:** `clue_type` (physical, testimonial, documentary),

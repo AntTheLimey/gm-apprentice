@@ -114,15 +114,17 @@ function confidenceBadge(frontmatter) {
 const TYPE_BADGE_FIELDS = {
   organization: ['faction_type'],
   faction: ['faction_type'],
-  event: ['event_type', 'date', 'location'],
+  event: ['event_type', 'in_game_date', 'location'],
   item: ['item_type', 'tl', 'origin'],
   creature: ['creature_type', 'location'],
   clue: ['clue_type', 'reliability', 'found_by'],
   document: ['document_type', 'author', 'classification', 'date_written'],
-  session: ['session_number', 'actual_date', 'status', 'stage'],
+  session: ['session_number', 'play_date', 'status', 'stage'],
   scene: ['scene_type', 'status'],
   chapter: ['sort_order'],
 };
+
+const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date' };
 
 function metadataBadgesFor(frontmatter) {
   const fields = TYPE_BADGE_FIELDS[frontmatter.type];
@@ -130,7 +132,10 @@ function metadataBadgesFor(frontmatter) {
 
   const badges = [];
   for (const field of fields) {
-    const raw = frontmatter[field];
+    let raw = frontmatter[field];
+    if ((raw === undefined || raw === null || raw === '') && FIELD_FALLBACKS[field]) {
+      raw = frontmatter[FIELD_FALLBACKS[field]];
+    }
     if (raw === undefined || raw === null || raw === '') continue;
     // Strip wiki-link brackets if present
     const value = String(raw).replace(/\[\[|\]\]/g, '').trim();

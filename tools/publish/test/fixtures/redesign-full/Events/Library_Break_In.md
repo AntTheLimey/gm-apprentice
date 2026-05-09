@@ -1,6 +1,6 @@
 ---
 type: event
-date: "1936-03-15"
+in_game_date: "1936-03-15"
 location: "[[Miskatonic_Library]]"
 outcome: "Several rare tomes stolen"
 participants:

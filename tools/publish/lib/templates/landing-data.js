@@ -178,10 +178,10 @@ function getExploreDescriptions(genre, overrides) {
 
 function getRecentEvents(pages, max) {
   return pages
-    .filter(p => p.frontmatter.type === 'event' && p.frontmatter.date)
+    .filter(p => p.frontmatter.type === 'event' && (p.frontmatter.in_game_date || p.frontmatter.date))
     .sort((a, b) => {
-      const da = new Date(a.frontmatter.date);
-      const db = new Date(b.frontmatter.date);
+      const da = new Date(a.frontmatter.in_game_date || a.frontmatter.date);
+      const db = new Date(b.frontmatter.in_game_date || b.frontmatter.date);
       return db - da;
     })
     .slice(0, max || 4);

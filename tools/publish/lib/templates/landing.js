@@ -59,7 +59,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
   let recapZone = '';
   if (latestSession) {
     const recap = extractRecap(latestSession);
-    const dateStr = formatDate(latestSession.frontmatter.actual_date);
+    const dateStr = formatDate(latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const recapLink = `<a class="recap-link" href="${escapeHtml(latestSession.outputPath)}">Read full session &rarr;</a>`;
     recapZone = `<div class="dashboard-section">

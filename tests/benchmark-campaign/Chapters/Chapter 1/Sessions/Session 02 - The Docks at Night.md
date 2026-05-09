@@ -3,8 +3,7 @@ type: session
 session_number: 2
 chapter: "[[Chapter 1 - The Ashford Case]]"
 campaign: "The Ashford Case"
-planned_date: null
-actual_date: "2024-02-03"
+play_date: "2024-02-03"
 status: reviewed
 documents:
   plan: null

@@ -16,18 +16,26 @@ type: session
 session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-planned_date: null
-actual_date: null
+play_date: null
+in_game_date: null
 status: planned
 documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
-  wrap_up: "[[Session NN - Title - Wrap-Up]]"
+  wrap_up: "[[Session_NN_Wrap_Up]]"
 scenes:
   - "[[Scene Title]]"
 tags: []
 ---
 ```
+
+**Date fields:** `play_date` is the real-world date the session
+was played. `in_game_date` is the fictional in-world date. Both
+must be parseable by JS `new Date()` — use formats like
+`"August 11, 1814"`, `"June 12, 1814"`, or `"July 1814"`.
+Do not include narrative time-of-day prefixes (e.g.,
+"Evening, 11 August 1814") — those belong in prose, not
+metadata.
 
 **Status** reflects the furthest document that exists:
 
@@ -75,15 +83,20 @@ tags: []
 ---
 ```
 
-### 4. Session Wrap-Up (`Session {NN} - {Title} - Wrap-Up.md`)
+### 4. Session Wrap-Up (`Session_NN_Wrap_Up.md`)
 
 Canonical record: narrative recap, quick bullets, PC
 carry-forward, world state changes, keeper checklist.
 Starts DRAFT, promoted to AUTHORITATIVE via reconcile.
 
+Filename uses zero-padded session number with underscores:
+`Session_07_Wrap_Up.md`, `Session_12_Wrap_Up.md`. No session
+title in the filename. The file lives in the session's own
+directory (e.g., `Sessions/Session 07/Session_07_Wrap_Up.md`).
+
 ```yaml
 ---
-type: session-wrap-up
+type: session_wrap
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
@@ -125,14 +138,16 @@ Reconstruction Note callout at the top of the document:
 
 ## File Layout
 
-All session documents live in the chapter's Sessions/ folder:
+Each session has its own directory inside the chapter's
+Sessions/ folder:
 
 ```text
 Chapters/Chapter N - Title/Sessions/
-├── Session 01 - The Arrival.md           (index)
-├── Session 01 - The Arrival - Plan.md
-├── Session 01 - The Arrival - Play Notes.md
-└── Session 01 - The Arrival - Wrap-Up.md
+└── Session 01/
+    ├── Session 01 - The Arrival.md           (index)
+    ├── Session 01 - The Arrival - Plan.md
+    ├── Session 01 - The Arrival - Play Notes.md
+    └── Session_01_Wrap_Up.md
 ```
 
 ## Companion References

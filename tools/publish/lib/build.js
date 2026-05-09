@@ -381,10 +381,22 @@ function build(options = {}) {
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
           }
           if (page.frontmatter.type === 'chapter') {
-            const chapterSessions = (pages || []).filter(p =>
-              p.frontmatter.type === 'session' &&
-              String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim() === page.title
-            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
+            const chapterTitle = String(page.frontmatter.title || page.displayTitle || '');
+            const chapterTitleNorm = chapterTitle.toLowerCase();
+            const chapterFilename = page.title.replace(/_/g, ' ');
+            const chapterSessions = (pages || []).filter(p => {
+              if (p.frontmatter.type !== 'session') return false;
+              const chapterRef = String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim();
+              if (!chapterRef) return false;
+              // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
+              if (chapterRef === page.title) return true;
+              // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
+              if (chapterRef === chapterFilename) return true;
+              // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
+              //    (e.g. "London" in "Chapter 1 — London: The Orphean Society")
+              if (chapterTitleNorm && chapterRef.toLowerCase().includes(chapterTitleNorm)) return true;
+              return false;
+            }).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
 
             extraSidebar = { constituentSessions: chapterSessions };
           }

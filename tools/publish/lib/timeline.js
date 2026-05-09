@@ -1,18 +1,50 @@
 const { escapeHtml } = require('./processor');
 
+const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
+  july:6, august:7, september:8, october:9, november:10, december:11 };
+
 function parseDate(value) {
   const s = String(value);
-  const parts = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (parts) return new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3]));
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+
+  // "August 11, 1814" or "11 August 1814" or "July 1814"
+  const monthName = s.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i);
+  const yearMatch = s.match(/\b(\d{4})\b/);
+  if (monthName && yearMatch) {
+    const m = MONTHS[monthName[1].toLowerCase()];
+    const dayMatch = s.match(/\b(\d{1,2})\b/);
+    const day = dayMatch && +dayMatch[1] <= 31 ? +dayMatch[1] : 1;
+    return new Date(Date.UTC(+yearMatch[1], m, day));
+  }
+
+  // Vague/seasonal: "Autumn 1813", "Late Spring 1813"
+  if (yearMatch) {
+    const year = +yearMatch[1];
+    const lower = s.toLowerCase();
+    const seasonMap = { spring: 3, summer: 6, autumn: 9, fall: 9, winter: 0 };
+    let month = null;
+    for (const [season, baseMonth] of Object.entries(seasonMap)) {
+      if (lower.includes(season)) {
+        month = baseMonth;
+        if (lower.includes('early')) month = Math.max(0, month - 1);
+        if (lower.includes('late')) month = Math.min(11, month + 1);
+        break;
+      }
+    }
+    if (month === null) month = 5;
+    return new Date(Date.UTC(year, month, 1));
+  }
+
   return new Date(s);
 }
 
 function buildTimelineData(pages) {
   const events = pages
-    .filter(p => p.frontmatter.type === 'event' && p.frontmatter.date)
+    .filter(p => p.frontmatter.type === 'event' && (p.frontmatter.in_game_date || p.frontmatter.date))
     .map(p => ({
       title: p.displayTitle,
-      date: parseDate(p.frontmatter.date),
+      date: parseDate(p.frontmatter.in_game_date || p.frontmatter.date),
       type: 'event',
       outputPath: p.outputPath,
       outcome: p.frontmatter.outcome || '',

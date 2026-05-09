@@ -28,7 +28,7 @@ tags: []
 source_document: ""
 campaign: ""
 event_type: ""        # battle, discovery, betrayal, ritual, meeting, disaster
-date: ""              # in-game date
+in_game_date: ""      # in-game date
 location: ""          # [[wiki-link]]
 participants:
   - ""                # "[[Entity]] (role annotation)"

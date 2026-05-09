@@ -1,7 +1,7 @@
 ---
 type: event
 event_type: battle
-date: "June 15, 1943"
+in_game_date: "June 15, 1943"
 location: "[[City]]"
 participants:
   - "[[Hero]] (led the assault)"

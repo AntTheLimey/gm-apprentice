@@ -5,9 +5,9 @@ const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPC
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
     const pages = [
-      { frontmatter: { type: 'session', status: 'played', session_number: 1, actual_date: '2026-01-01' }, markdown: '# S1' },
-      { frontmatter: { type: 'session', status: 'played', session_number: 3, actual_date: '2026-03-01' }, markdown: '# S3' },
-      { frontmatter: { type: 'session', status: 'played', session_number: 2, actual_date: '2026-02-01' }, markdown: '# S2' },
+      { frontmatter: { type: 'session', status: 'played', session_number: 1, play_date: '2026-01-01' }, markdown: '# S1' },
+      { frontmatter: { type: 'session', status: 'played', session_number: 3, play_date: '2026-03-01' }, markdown: '# S3' },
+      { frontmatter: { type: 'session', status: 'played', session_number: 2, play_date: '2026-02-01' }, markdown: '# S2' },
       { frontmatter: { type: 'pc', status: 'alive' }, markdown: '# PC' },
     ];
     const result = getLatestSession(pages);
@@ -32,8 +32,8 @@ describe('getLatestSession', () => {
 
   it('returns a session with status reviewed', () => {
     const pages = [
-      { frontmatter: { type: 'session', status: 'reviewed', session_number: 5, actual_date: '2026-04-26' }, title: 'Session 5' },
-      { frontmatter: { type: 'session', status: 'played', session_number: 4, actual_date: '2026-04-19' }, title: 'Session 4' },
+      { frontmatter: { type: 'session', status: 'reviewed', session_number: 5, play_date: '2026-04-26' }, title: 'Session 5' },
+      { frontmatter: { type: 'session', status: 'played', session_number: 4, play_date: '2026-04-19' }, title: 'Session 4' },
     ];
     const result = getLatestSession(pages);
     assert.strictEqual(result.title, 'Session 5');
@@ -256,10 +256,10 @@ describe('scoreNPCs', () => {
 });
 
 describe('getRecentEvents', () => {
-  it('returns events sorted by date, most recent first', () => {
+  it('returns events sorted by in_game_date, most recent first', () => {
     const pages = [
-      { frontmatter: { type: 'event', date: '1936-01-01' }, displayTitle: 'Old' },
-      { frontmatter: { type: 'event', date: '1936-12-01' }, displayTitle: 'New' },
+      { frontmatter: { type: 'event', in_game_date: '1936-01-01' }, displayTitle: 'Old' },
+      { frontmatter: { type: 'event', in_game_date: '1936-12-01' }, displayTitle: 'New' },
       { frontmatter: { type: 'npc' }, displayTitle: 'Not event' },
     ];
     const result = getRecentEvents(pages, 10);
@@ -267,20 +267,30 @@ describe('getRecentEvents', () => {
     assert.strictEqual(result[0].displayTitle, 'New');
   });
 
+  it('falls back to date field for backward compat', () => {
+    const pages = [
+      { frontmatter: { type: 'event', date: '1936-01-01' }, displayTitle: 'Old (legacy)' },
+      { frontmatter: { type: 'event', date: '1936-12-01' }, displayTitle: 'New (legacy)' },
+    ];
+    const result = getRecentEvents(pages, 10);
+    assert.strictEqual(result.length, 2);
+    assert.strictEqual(result[0].displayTitle, 'New (legacy)');
+  });
+
   it('respects max limit', () => {
     const pages = [
-      { frontmatter: { type: 'event', date: '1936-01-01' } },
-      { frontmatter: { type: 'event', date: '1936-02-01' } },
-      { frontmatter: { type: 'event', date: '1936-03-01' } },
+      { frontmatter: { type: 'event', in_game_date: '1936-01-01' } },
+      { frontmatter: { type: 'event', in_game_date: '1936-02-01' } },
+      { frontmatter: { type: 'event', in_game_date: '1936-03-01' } },
     ];
     const result = getRecentEvents(pages, 2);
     assert.strictEqual(result.length, 2);
   });
 
-  it('skips events without date', () => {
+  it('skips events without in_game_date or date', () => {
     const pages = [
       { frontmatter: { type: 'event' }, displayTitle: 'No date' },
-      { frontmatter: { type: 'event', date: '1936-01-01' }, displayTitle: 'Has date' },
+      { frontmatter: { type: 'event', in_game_date: '1936-01-01' }, displayTitle: 'Has date' },
     ];
     const result = getRecentEvents(pages, 10);
     assert.strictEqual(result.length, 1);

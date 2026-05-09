@@ -17,14 +17,13 @@ type: session
 session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-planned_date: null
-actual_date: null
+play_date: null             # real-world date session was played, YYYY-MM-DD
 in_game_date: null          # In-game date(s): string "YYYY-MM-DD" or array ["YYYY-MM-DD", ...]
 status: planned
 documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
-  wrap_up: "[[Session NN - Title - Wrap-Up]]"
+  wrap_up: "[[Session_NN_Wrap_Up]]"
 scenes:
   - "[[Scene Title]]"
 tags: []
@@ -198,7 +197,7 @@ promoted to AUTHORITATIVE via reconcile.
 
 ```markdown
 ---
-type: session-wrap-up
+type: session_wrap
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""

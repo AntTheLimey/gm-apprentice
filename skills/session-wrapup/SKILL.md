@@ -24,6 +24,20 @@ not migration).
 Session-wrapup reads the Play Notes file and writes the Wrap-Up
 file. It also creates/updates entity files and timeline entries.
 
+**Wrap-Up file conventions:**
+- Filename: `Session_NN_Wrap_Up.md` (zero-padded, underscores,
+  no session title). Example: `Session_07_Wrap_Up.md`.
+- Location: the session's own directory, e.g.,
+  `Chapters/Chapter 3 - Vienna/Sessions/Session 07/Session_07_Wrap_Up.md`
+- Frontmatter type: `type: session_wrap`
+- Session index `documents.wrap_up` link:
+  `"[[Session_NN_Wrap_Up]]"`
+
+**Session index fields:** The session index uses `play_date:`
+(real-world date played) and `in_game_date:` (fictional date).
+When updating the session index during wrap-up, use these field
+names — not `planned_date` or `actual_date`.
+
 **Trigger phrases:** "session's over", "wrap up", "post-session",
 "process my notes", "what happened today"
 
@@ -129,14 +143,21 @@ lifecycle, wiki-links.
   ONE file per entity. No separate "update" files.
 
 - **Timeline**: Linked events:
-  `- **{date}** — [[Event_Name]] — {summary}`.
-  Inline events: `- **{date}** — {description}`.
+  `- **{in_game_date}** — [[Event_Name]] — {summary}`.
+  Inline events: `- **{in_game_date}** — {description}`.
 
 - **Event decomposition**: Create Event entity files for
   moments meeting the threshold (≥2 of: changes entity state,
   multiple named participants, forward consequences, will be
   referenced from multiple entities). Use
-  `campaign-organizer/references/event-template.md`.
+  `campaign-organizer/references/event-template.md`. Event
+  frontmatter uses `in_game_date:` (not `date:`).
+
+  **Date format:** All date values (`in_game_date`, `play_date`)
+  must be parseable by JS `new Date()`. Good: `"August 11, 1814"`,
+  `"June 12, 1814"`, `"July 1814"`. Bad: `"Evening, 11 August 1814"`,
+  `"Midnight–dawn, August 7–8, 1814"`. Time-of-day or narrative
+  context belongs in the event body text, not the date field.
 
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and
@@ -199,7 +220,8 @@ Wrap-up **must** produce all sections so prep reads one file:
 Entity files and timeline are updated separately (Step 4).
 Character story files are updated separately (Step 3b).
 The session index is updated to `wrap-up` status (or `reviewed`
-if reconcile completes).
+if reconcile completes). Update `play_date` and `in_game_date`
+on the session index if not already set.
 
 ## Sub-agent Opportunity (Claude Code only)
 

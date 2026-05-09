@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.22] — 2026-05-08
+
+### Fixed
+
+- **Timeline date parsing** — timeline now reads `in_game_date` (falling
+  back to `date` for pre-migration vaults). Vague dates like "Autumn 1813"
+  now parse to approximate months instead of defaulting to January 1.
+- **Chapter-session matching** — chapter pages now find their sessions via
+  three-stage matching (exact filename, filename with spaces, display title
+  substring). Previously failed when session `chapter:` values didn't
+  exactly match the chapter page title.
+- **Genre preset override** — custom theme.css no longer stomps genre
+  preset colors when no custom palette is provided. Config sets palette to
+  null instead of spreading defaults.
+- **Stale npm detection** — publish-site routine updates now check the
+  build tool version against the plugin cache and auto-update the `file:`
+  dependency path if stale.
+
+### Changed
+
+- **Schema: event `date` → `in_game_date`** — event entity frontmatter
+  field renamed for consistency. Migration 1.4.22 auto-applies the rename.
+- **Schema: session `planned_date`/`actual_date` → `play_date`** — two
+  legacy fields consolidated into one. Migration 1.4.22 picks the
+  `actual_date` value (or `planned_date` if that's all that exists) and
+  removes both old fields.
+- **Session wrap-up conventions** — standardized filename
+  (`Session_NN_Wrap_Up.md`), frontmatter type (`session_wrap`), and date
+  format guidance (JS-parseable values only).
+- **Publish tool field references** — landing page, location pages, badges,
+  and event sorting all use new field names with backward-compatible
+  fallbacks.
+
+### Added
+
+- **Migration 1.4.22** in `shared/migrations.md` — structural renames for
+  event and session date fields; opt-in wrap-up `type` standardization
+- **Deprecation warnings** in `validate_schema.py` — flags `date` on events
+  and `planned_date`/`actual_date` on sessions
+- **`session_wrap` type** recognized in schema validation alongside legacy
+  `session-wrap-up`
+
 ## [1.4.21] — 2026-05-06
 
 ### Added
@@ -443,6 +485,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.4.22]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.21...v1.4.22
 [1.4.19]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.18...v1.4.19
 [1.4.18]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.17...v1.4.18
 [1.4.17]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.16...v1.4.17

@@ -1,7 +1,7 @@
 ---
 type: session
 session_number: 1
-actual_date: "2026-01-15"
+play_date: "2026-01-15"
 status: played
 ---
 

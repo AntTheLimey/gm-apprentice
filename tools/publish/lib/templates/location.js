@@ -108,15 +108,15 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   const locEvents = (pages || []).filter(p =>
     p.frontmatter.type === 'event' && matchesRef(p.frontmatter.location, page.title)
   ).sort((a, b) => {
-    const da = new Date(a.frontmatter.date || 0).getTime();
-    const db = new Date(b.frontmatter.date || 0).getTime();
+    const da = new Date(a.frontmatter.in_game_date || a.frontmatter.date || 0).getTime();
+    const db = new Date(b.frontmatter.in_game_date || b.frontmatter.date || 0).getTime();
     return (isNaN(da) ? 0 : da) - (isNaN(db) ? 0 : db);
   });
   let timelineHtml = '';
   if (locEvents.length > 0) {
     const nodes = locEvents.map(ev => {
       const href = relativePath(page.outputPath, ev.outputPath);
-      const date = ev.frontmatter.date || '';
+      const date = ev.frontmatter.in_game_date || ev.frontmatter.date || '';
       const outcome = ev.frontmatter.outcome || '';
       return `<div class="timeline-node">
   <span class="timeline-date">${escapeHtml(date)}</span>

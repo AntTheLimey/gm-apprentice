@@ -44,6 +44,7 @@ REQUIRED_FIELDS = {
     "session-plan": ["type", "source_confidence", "session"],
     "session-play-notes": ["type", "source_confidence", "session"],
     "session-wrap-up": ["type", "source_confidence", "session"],
+    "session_wrap": ["type", "source_confidence", "session"],
     "scene": ["type", "source_confidence", "scene_type", "status"],
     "chapter": ["type"],
     "meta": ["type"],
@@ -53,6 +54,13 @@ REQUIRED_FIELDS = {
 
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature"}
+
+# Valid optional fields per entity type (used for deprecation warnings)
+DEPRECATED_FIELDS: dict[str, list[tuple[str, str]]] = {
+    # (old_field, replacement_field)
+    "event": [("date", "in_game_date")],
+    "session": [("planned_date", "play_date"), ("actual_date", "play_date")],
+}
 
 
 def extract_frontmatter(content: str) -> dict | None:
@@ -202,6 +210,15 @@ def validate_file(filepath: Path) -> list[str]:
                 f"Invalid portrait path '{portrait}' — "
                 f"must start with '_attachments/'"
             )
+
+    # Deprecation warnings for renamed date fields
+    if entity_type in DEPRECATED_FIELDS:
+        for old_field, new_field in DEPRECATED_FIELDS[entity_type]:
+            if old_field in frontmatter:
+                errors.append(
+                    f"Deprecated field '{old_field}' — "
+                    f"rename to '{new_field}' (run migration 1.4.22)"
+                )
 
     return errors
 
