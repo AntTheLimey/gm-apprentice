@@ -15,7 +15,7 @@ details are in playbooks.md and crew-types.md.
 | **Name** | From sample list or custom |
 | **Alias** | Underworld nickname |
 | **Look** | A few evocative words |
-| **Heritage** | Akoros, Dagger Isles, Iruvia, Severos, Skovlan, Tycheros |
+| **Heritage** | Heritage region (setting-dependent) |
 | **Heritage Detail** | Family life note |
 | **Background** | Academic, Labor, Law, Trade, Military, Noble, Underworld |
 | **Background Detail** | Specific history |

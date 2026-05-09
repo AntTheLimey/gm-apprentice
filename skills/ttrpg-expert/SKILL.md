@@ -38,7 +38,9 @@ Match user intent → go directly to the file. Skip clarification.
 **FitD faction** → `systems/fitd/factions.md`
 **FitD playbook** → `systems/fitd/playbooks.md`
 **FitD crew type** → `systems/fitd/crew-types.md`
-**FitD Doskvol/setting** → `systems/fitd/setting-doskvol.md`
+**FitD gathering info** → `systems/fitd/gathering-information.md`
+**FitD cohorts** → `systems/fitd/cohorts.md`
+**FitD GM techniques** → `systems/fitd/gm-techniques.md`
 **FitD ritual/crafting** → `systems/fitd/rituals-crafting.md`
 **FitD entanglement/heat** → `systems/fitd/entanglements.md`
 **FitD magnitude** → `systems/fitd/magnitude.md`
@@ -217,7 +219,7 @@ No variant keyword or tag → use base CoC files only.
 
 | Request | File |
 |---------|------|
-| Doskvol districts | setting-doskvol.md |
+| Doskvol setting/districts | `personal/` (requires personal files) |
 | Factions | factions.md |
 | Playbooks | playbooks.md |
 | Crew types | crew-types.md |
@@ -240,6 +242,15 @@ No variant keyword or tag → use base CoC files only.
 | Feats | feats.md |
 | Conditions / rules | conditions-rules.md |
 | Combat / actions | rules-reference.md |
+
+### Personal Reference Files
+
+`systems/{system}/personal/` may contain the user's own
+setting reference (factions, NPCs, districts, world lore,
+random tables). Gitignored — never distributed. Check here
+when a question needs setting-specific content the public
+SRD/ORC files don't cover. Subdirectories like
+`personal/districts/` may exist.
 
 ## Canon and Validation
 

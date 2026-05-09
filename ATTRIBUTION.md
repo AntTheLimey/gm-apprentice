@@ -24,6 +24,16 @@ developed and authored by John Harper, and licensed for our use
 under the Creative Commons Attribution 3.0 Unported license
 (https://creativecommons.org/licenses/by/3.0/).
 
+Content derived from the SRD includes: action ratings and
+resolution, position and effect, resistance and armor,
+consequences and harm, stress and trauma, downtime activities,
+faction mechanics (status, tier, development, faction turn),
+crew advancement, playbook and crew-type frameworks, gathering
+information, cohort rules, entanglements, ritual crafting, and
+score procedures. All content is paraphrased; setting IP
+(Doskvol, named factions, named NPCs) is excluded from
+distributed files.
+
 ### Basic Roleplaying Universal Game Engine
 
 This work includes material from Basic Roleplaying: Universal

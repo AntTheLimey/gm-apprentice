@@ -21,9 +21,8 @@ ability and 5 personal items.
 
 **Starting action dots**: Skirmish 2, Command 1
 
-**Friends/Rivals**: Marlane (a pugilist), Chael (a vicious
-thug), Mercy (a cold killer), Grace (an extortionist),
-Sawtooth (a physicker)
+**Friends/Rivals**: A pugilist, a vicious thug, a cold
+killer, an extortionist, a physicker
 
 ### Special Abilities
 
@@ -60,8 +59,8 @@ Scary weapon or tool, Manacles & chain, Rage essence vial
 
 **Starting action dots**: Hunt 2, Survey 1
 
-**Friends/Rivals**: Steiner (an assassin), Celene (a sentinel),
-Melvir (a physicker), Veleris (a spy), Casta (a bounty hunter)
+**Friends/Rivals**: An assassin, a sentinel, a physicker,
+a spy, a bounty hunter
 
 ### Special Abilities
 
@@ -101,9 +100,8 @@ calculation.
 
 **Starting action dots**: Tinker 2, Wreck 1
 
-**Friends/Rivals**: Stazia (an apothecary), Veldren (a
-psychonaut), Eckerd (a corpse thief), Jul (a blood dealer),
-Malista (a priestess)
+**Friends/Rivals**: An apothecary, a psychonaut, a corpse
+thief, a blood dealer, a priestess
 
 ### Special Abilities
 
@@ -145,9 +143,8 @@ Ghost key (arcane)
 
 **Starting action dots**: Prowl 2, Finesse 1
 
-**Friends/Rivals**: Telda (a beggar), Darmot (a Bluecoat),
-Frake (a locksmith), Roslyn Kellis (a noble), Petra (a city
-clerk)
+**Friends/Rivals**: A beggar, a city watch officer, a
+locksmith, a noble, a city clerk
 
 ### Special Abilities
 
@@ -188,9 +185,8 @@ influence.
 
 **Starting action dots**: Sway 2, Consort 1
 
-**Friends/Rivals**: Bryl (a drug dealer), Bazso Baz (a gang
-leader), Klyra (a tavern owner), Nyryx (a prostitute),
-Harker (a jail-bird)
+**Friends/Rivals**: A drug dealer, a gang leader, a tavern
+owner, a prostitute, a jail-bird
 
 ### Special Abilities
 
@@ -228,9 +224,8 @@ conspiracy.
 
 **Starting action dots**: Consort 2, Study 1
 
-**Friends/Rivals**: Salia (an information broker), Augus (a
-master architect), Jennah (a servant), Riven (a chemist),
-Jeren (a Bluecoat archivist)
+**Friends/Rivals**: An information broker, a master
+architect, a servant, a chemist, a city watch archivist
 
 ### Special Abilities
 
@@ -269,9 +264,8 @@ power.
 
 **Starting action dots**: Attune 2, Study 1
 
-**Friends/Rivals**: Nyryx (a possessor ghost), Scurlock (a
-vampire), Setarra (a demon), Quellyn (a witch), Flint (a
-spirit trafficker)
+**Friends/Rivals**: A possessor ghost, a vampire, a demon,
+a witch, a spirit trafficker
 
 ### Special Abilities
 

@@ -30,16 +30,11 @@ placed. Your character will grow and change over time.
 Your heritage describes where your family line is from. Write
 a detail about your family life on the character sheet.
 
-Heritage options (Doskvol default):
-- Akoros (Duskwall and the land mass it sits on)
-- The Dagger Isles (a scattered group of islands)
-- Iruvia (a hot land of ancient culture)
-- Severos (cold, mountainous, northern)
-- Skovlan (rainy, wild; recently conquered)
-- Tycheros (mysterious; far away; people born with demon blood)
-
-Heritage affects how NPCs perceive you and can be expressed
-during play to earn xp.
+Choose a heritage region and write a detail about your family
+life. Heritage regions are setting-dependent — the GM
+establishes which regions exist in the game world. Each region
+should evoke a distinct cultural identity that affects how NPCs
+perceive you.
 
 ### Step 3: Choose a Background
 
@@ -269,75 +264,8 @@ Optionally, increase intensity to +2 and -2 status instead.
 
 ## Cohorts
 
-A cohort is a gang or expert NPC who works for your crew.
-Recruiting a new cohort costs two upgrade boxes.
-
-### Gangs
-
-Choose a gang type:
-- **Adepts**: Scholars, tinkerers, occultists, chemists
-- **Rooks**: Con artists, spies, socialites
-- **Rovers**: Sailors, carriage drivers, deathlands scavengers
-- **Skulks**: Scouts, infiltrators, thieves
-- **Thugs**: Killers, brawlers, roustabouts
-
-A gang has scale and quality equal to your crew Tier. Elite
-upgrades give +1d for a given type.
-
-### Experts
-
-Record the expert's specific area of expertise (Doctor,
-Investigator, Occultist, Assassin, Spy, etc.). Quality equals
-crew Tier + 1, scale always zero.
-
-### Edges and Flaws
-
-Give each cohort one or two edges and an equal number of flaws.
-
-**Edges**: Fearsome, Independent, Loyal, Tenacious
-**Flaws**: Principled, Savage, Unreliable, Wild
-
-### Cohort Harm
-
-| Level | Effect |
-|-------|--------|
-| Weakened | Reduced effect |
-| Impaired | -1d to quality rolls |
-| Broken | Can't do anything until recovered |
-| Dead | Destroyed; replace at Tier + 2 coin plus two downtime activities |
-
-All cohorts heal one level during downtime. A PC spending a
-downtime activity to help removes two levels instead.
-
-### Using a Cohort
-
-When you send a cohort to achieve a goal, roll their quality
-to see how it goes. Or, a PC can oversee the maneuver by
-leading a group action: roll Command if you direct their
-efforts, or the appropriate action if you participate alongside.
-
-You can add an additional type to a gang or expert by spending
-two crew upgrades (max two types per cohort). Actions matching
-their type use full quality; otherwise quality is zero.
-
-## Starting Situation in Doskvol
-
-The default setting is the haunted industrial city of Doskvol
-(Duskwall). Key elements for new crews:
-
-- The city is trapped behind lightning barriers that hold back
-  the death-lands and hungry ghosts outside
-- Leviathan blood (electroplasm) powers industry and the
-  lightning barriers
-- The Spirit Wardens collect and destroy the ghosts of the dead
-- The Imperial government, noble houses, and criminal factions
-  all vie for power
-- Your crew is at the bottom of the ladder (Tier 0) and must
-  claw up through scores, reputation, and daring
-
-Establish relationships (positive and negative) with at least
-two or three factions during creation, giving the GM immediate
-hooks for entanglements and opportunities.
+See `systems/fitd/cohorts.md` for full cohort rules (gang
+types, experts, edges/flaws, cohort harm, using cohorts).
 
 ---
 *This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*

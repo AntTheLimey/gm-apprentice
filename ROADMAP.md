@@ -45,7 +45,7 @@ Items are force-ranked by score. Higher score = do first.
 | Build-time section extraction for routing | 3 | 1 | M (2) | 3.5 | Experiment | Pre-process multi-section reference files into per-section extracts or line-range indexes at build time. [Findings](docs/experiment-section-extraction.md) |
 | LoM-style 8-bit scene illustration | 4 | 1 | L (3) | 3.0 | Experiment | Programmatic 8-bit landscape vistas (Lords of Midnight style) from vault metadata using Pillow. No AI models, no API cost. [Prototype findings](docs/image-gen-lom-prototype-findings.md) |
 | Pulp Cthulhu variant support | 4 | 4 | XL (4) | 3.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality. Blocked on finding a legit distributable source — Chaosium BRP ORC license may not cover Pulp-specific content |
-| FitD SRD enrichment (Phase 5b) | 2 | 2 | M (2) | 3.0 | Planned | Expand FitD files to GURPS-level depth: more factions, crew types, entanglements |
+| ~~FitD SRD enrichment (Phase 5b)~~ | 2 | 2 | M (2) | 3.0 | ~~Done~~ | ~~Expand FitD files to GURPS-level depth~~ |
 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for clue entities with status, linked scenes, discovery conditions |
@@ -77,6 +77,7 @@ Items are force-ranked by score. Higher score = do first.
 - ~~Entity creation must read template before writing~~ — Template-reading gate in campaign-organizer, session-wrapup, vault-ingest
 - ~~Remove model-specific prescriptions from all skills~~ — Replaced hardcoded model names with complexity guidance (PRs #26, #27)
 - ~~Skill roles audit~~ — Skill taxonomy table in README, clarified advisor-only boundaries (PR #27)
+- ~~FitD SRD enrichment (Phase 5b)~~ — Copyright compliance, 3 new SRD files, depth pass, personal reference build-out, skill routing
 - ~~CoC/BRP SRD enrichment (Phase 5a)~~ — Terminology fixes, 18 content files, Regency variant overlay
 - ~~Regency Cthulhu system support~~ — 5 overlay files in variants/regency/, routing updates
 - ~~GURPS content restructure (Phase 4)~~ — 31 files, 7 chargen kits

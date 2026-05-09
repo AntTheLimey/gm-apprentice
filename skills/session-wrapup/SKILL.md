@@ -131,6 +131,12 @@ rules below still apply: read templates before creating,
 `source_confidence: DRAFT` for new entities, receipt
 lifecycle, wiki-links.
 
+**Personal reference files:**
+`systems/{system}/personal/` may contain the user's own
+setting reference (factions, NPCs, districts). Check here
+when creating entities to cross-reference faction ties,
+locations, and NPC relationships.
+
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
   the vault file using that template as the structure.

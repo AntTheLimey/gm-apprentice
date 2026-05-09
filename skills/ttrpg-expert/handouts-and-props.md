@@ -10,7 +10,7 @@ and mechanical stats in handouts, also read:
 - CoC 7e: `systems/coc-7e/setting-lovecraft.md`, `systems/coc-7e/equipment-weapons.md`
 - D&D 5e: `systems/dnd-5e-2024/magic-items.md`
 - GURPS 4e: `systems/gurps-4e/equipment-weapons.md`
-- FitD: `systems/fitd/setting-doskvol.md`
+- FitD: `systems/fitd/rituals-crafting.md`
 
 ## When to Create Handouts
 

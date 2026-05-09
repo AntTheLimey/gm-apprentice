@@ -1,4 +1,4 @@
-# Forged in the Dark -- Factions of Doskvol
+# Forged in the Dark -- Faction Mechanics
 
 *GM activities: Prep, Track, Build*
 
@@ -6,6 +6,7 @@
 - Score/downtime procedures: `systems/fitd/session-procedures.md`
 - Core rules: `systems/fitd/rules-reference.md`, `systems/fitd/mechanics.md`
 - Entanglements: `systems/fitd/entanglements.md`
+- Cohorts: `systems/fitd/cohorts.md`
 
 Factions have Tier (0-VI), hold (weak/strong), and long-term
 goals tracked with clocks. GM advances clocks during downtime.
@@ -22,150 +23,106 @@ goals tracked with clocks. GM advances clocks during downtime.
 | -2 | Hostile — actively seek to hurt you |
 | -3 | War — go out of their way, even at cost |
 
----
+At war: crew suffers +1 heat from scores, temporarily loses
+1 hold, and PCs get only one downtime action instead of two.
+End a war by eliminating the enemy or negotiating a new status.
+If your crew has weak hold when war starts, the temporary hold
+loss costs you one Tier (restored when war ends).
 
-## The Underworld
+## Tier and Hold
 
-**The Hive** — Tier IV, Strong. Most powerful criminal org.
-Drug/vice trade, protection rackets, political corruption.
-NPCs: Djera Maha (leader, ruthless).
+Tier (0-VI) measures wealth, influence, and scale. It
+determines item quality, cohort quality and scale, and is
+used for fortune rolls where crew power is the primary factor.
 
-**The Crows** — Tier II, Strong. Old gang controlling Crow's
-Foot. Extortion, gambling, smuggling. Aggressive, territorial.
-NPCs: Lyssa (leader, fierce), Roric (former leader, murdered).
+Hold (weak/strong) represents how well a faction maintains its
+position. Your crew begins at Tier 0, strong hold.
 
-**The Lampblacks** — Tier II, Weak. Rough criminals in Crow's
-Foot, former laborers. Bitter Red Sash rivalry. Extortion,
-sabotage, arson. NPCs: Bazso Baz (leader, charismatic brute
-who drinks at the Leaky Bucket and calls in favours when
-threatened), Pickett (lieutenant, cunning — the one who
-quietly investigates while Bazso rages).
+### Gang Scale by Tier
 
-**The Red Sashes** — Tier II, Weak. Iruvian sword school
-turned criminal. Elegant, deadly. High-quality vice, noble
-connections. At war with Lampblacks. NPCs: Mylera Klev
-(leader, refined and ruthless — cultivates Iruvian noble
-patrons and plays the long game).
+| Tier | Scale |
+|------|-------|
+| 0 | 1-2 people |
+| I | Small gang (3-6) |
+| II | Medium gang (12) |
+| III | Large gang (20) |
+| IV | Huge gang (40) |
+| V | Massive gang (80) |
 
-**The Billhooks** — Tier II, Strong. Brutal gang in Coalridge.
-Extreme violence/intimidation. Labor rackets, butchery front.
-NPCs: Tarvul (leader, vicious patriarch), Coran and Bryl (sons).
+## Development
 
-**The Fog Hounds** — Tier I, Strong. Small capable smuggler
-crew around Silkshore/canals. Discreet transport, info
-brokering.
+Earn rep from scores: base 2, +1 per Tier the target exceeds
+yours, -1 per Tier below (minimum 0). Fill the 12-segment rep
+tracker to develop:
 
-**The Gray Cloaks** — Tier II, Weak. Thieves and spies. Quiet,
-subtle. Burglary, espionage, blackmail, information trade.
+- Weak hold → becomes strong. Reset rep to zero.
+- Strong hold → pay coin equal to (new Tier × 8) to increase
+  Tier by one. Reset rep to zero, hold becomes weak.
 
-**The Wraiths** — Tier I, Strong. Skilled burglars. Precision
-heists, well-protected targets. Quiet, professional.
+### Turf
 
-**The Unseen** — Tier IV, Weak. Secretive assassin/spy org.
-Existence only rumored. Contracts from wealthy/powerful.
+Each piece of turf reduces the rep needed to develop by 1
+(max 6 turf). Turf marks persist when you reset rep.
+Acquiring turf expands your hunting grounds.
 
-**The Silver Nails** — Tier I, Strong. Mercenaries/soldiers
-of fortune. Dangerous contracts, bodyguard work, bounty hunting.
+## Claims
 
----
+Each crew type has a claim map — territory and assets to seize.
+Follow the paths from your lair, or attempt any claim on the
+map (harder, requires investigation first).
 
-## Institutions
+To seize a claim: execute a score against the faction that
+holds it. On success, gain the claim's benefit. Typically
+causes -2 status with the target faction.
 
-**The Bluecoats** — Tier III, Strong. City watch/police.
-Corrupt, brutal. Many officers on criminal payrolls.
+Claims may count as turf or provide special benefits (bonus
+dice, extra coin, new action opportunities).
 
-**The Inspectors** — Tier III, Strong. Investigative branch.
-More competent and less corrupt than Bluecoats. Build cases,
-answer to magistrates.
+Losing a claim: an enemy faction may try to seize your claims.
+If your lair is lost, you lose all claim benefits until you
+restore or establish a new lair.
 
-**The Spirit Wardens** — Tier IV, Strong. Masked guardians who
-collect/destroy ghosts. Enforce cremation laws. Feared,
-mysterious methods.
+## Reducing Hold
 
-**The Imperial Military** — Tier VI, Strong. Imperial armed
-forces. Garrison the city, external threats focus. Don't
-typically interfere in local crime.
+You may run a score specifically to reduce another faction's
+hold. Success costs them 1 level. If already weak, they lose
+1 Tier and stay weak. Your crew can lose hold the same way.
 
-**Ironhook Prison** — Tier IV, Strong. Overcrowded, brutal,
-corrupt. Gangs operate inside as openly as outside.
+If your crew is Tier 0 with weak hold and loses hold, your
+lair comes under threat.
 
----
+## The Faction Turn
 
-## The Elite
-
-**City Council** — Tier V, Strong. Governing body. Wealthy
-merchants/minor nobles. Laws benefit the rich.
-
-**Lord Scurlock** — Tier III, Strong. Reclusive noble, great
-age, dark reputation. Rumored vampire. Vast estate, deep
-underworld/elite connections. Occult research, artifact
-collecting.
-
-**The Dimmer Sisters** — Tier III, Strong. Reclusive occultist
-sisters in Barrowcleft. Spirit trafficking, arcane artifacts,
-forbidden knowledge.
-
-**The Brigmore Witches** — Tier I, Weak. Small coven practicing
-forbidden rituals, dark powers. Keep to shadows.
-
----
-
-## Labor and Trade
-
-**The Dockers** — Tier III, Strong. Longshoremen's guild.
-Control docks/shipping labor. Powerful through numbers and
-commerce control.
-
-**The Gondoliers** — Tier III, Strong. Canal transport guild.
-Know every waterway/tunnel. Secret role managing things beneath
-the canals.
-
-**The Sparkwrights** — Tier IV, Strong. Engineers maintaining
-lightning barrier and electroplasmic infrastructure.
-
-**The Leviathan Hunters** — Tier V, Strong. Massive ships
-hunting leviathans for blood. Lifeblood of city economy.
-
----
-
-## Religious
-
-**Church of the Ecstasy of the Flesh** — Tier IV, Strong.
-Dominant religion. Life is short, live fully. Politically
-powerful, wealthy, often corrupt.
-
-**The Path of Echoes** — Tier II, Weak. Heretical cult
-worshipping the dead. Seek communion with spirits. Persecuted
-by Spirit Wardens.
-
-**The Reconciled** — Tier I, Weak. Sane ghosts retaining
-identity after death. Seek peaceful coexistence, resist
-Spirit Wardens' destruction.
-
----
-
-## Using Factions in Play
-
-### Starting Crew Relationships
-
-During crew creation: hunting grounds (+1 or conflict with
-claiming faction), crew upgrades (+1/-2 status), favorite
-contact (+1/-1 related factions).
-
-### The Faction Turn
-
-Between sessions:
+Between sessions, the GM advances the world:
 1. Select 2-4 relevant factions
-2. Advance project clocks (fortune roll using Tier if uncertain)
-3. Choose 1-2 downtime maneuvers each
-4. Share news through PC contacts/vice purveyors
+2. Advance their project clocks (fortune roll using Tier if
+   outcome is uncertain)
+3. Choose 1-2 downtime maneuvers for each
+4. Share news through PC contacts and vice purveyors
 
-### Faction Clock Examples
+### Faction Clock Design
 
-- Lampblacks: "Destroy the Red Sashes" (8-clock)
-- Bluecoats: "Major crackdown on Crow's Foot" (6-clock)
-- Lord Scurlock: "Acquire the Kotar ghost artifact" (8-clock)
-- The Hive: "Absorb the Fog Hounds" (6-clock)
+Faction clocks represent medium-to-long-term goals (typically
+6 or 8 segments). Choose goals that intersect with the crew's
+interests — factions pursuing objectives the crew doesn't
+care about are background noise, not clock-worthy.
+
+### Status Changes from Operations
+
+When you execute an operation:
+- Gain -1 or -2 status with factions hurt by your actions
+- May gain +1 with a faction your operation helps
+- Keeping an operation completely quiet: no status changes
+- Favors and refused demands also shift status
+
+## Starting Crew Relationships
+
+During crew creation, establish faction relationships:
+- Hunting grounds: +1 or conflict with the claiming faction
+- Crew upgrades: +1 with a helping faction, -2 with a harmed
+  faction (spend coin to soften)
+- Favorite contact: +1 with a friendly faction, -1 with an
+  unfriendly faction
 
 ---
-*Based on Blades in the Dark by John Harper, CC BY 3.0.*
+*This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*

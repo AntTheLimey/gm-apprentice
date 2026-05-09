@@ -91,6 +91,14 @@ GM-craft advice (spotlight, pacing, improv, difficulty tuning)
 during play. Use it as a companion reference — don't summarize
 it, route to the relevant section and deliver the answer.
 
+### Personal Reference Files
+
+`systems/{system}/personal/` may contain the user's own
+setting reference (factions, NPCs, locations, random tables).
+Gitignored — never distributed. Check here during
+improvisation when public SRD/ORC files lack the setting
+detail you need.
+
 ## Capture Shorthand
 
 When taking play notes, use these markers so session-wrapup

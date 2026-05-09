@@ -34,7 +34,7 @@ Read only the file(s) relevant to the current request.
 | Feats | D&D: `feats.md` | — |
 | Conditions | D&D: `conditions-rules.md` | — |
 | Creatures / monsters | CoC: `creatures.md`. D&D: `monsters.md` / `animals.md` | — |
-| Setting / lore | CoC: `setting-lovecraft.md`. FitD: `setting-doskvol.md` | — |
+| Setting / lore | CoC: `setting-lovecraft.md`. FitD: check `personal/` | — |
 | Variant-specific rules | `{system}/variants/{variant}/*.md` | Base system file for same topic |
 | Factions | FitD: `factions.md`. Others: `content-generation.md` | `relationship-patterns.md` |
 | Classes / occupations | CoC: `occupations.md`. FitD: `playbooks.md`. D&D: `classes.md` | — |
@@ -48,7 +48,7 @@ Read only the file(s) relevant to the current request.
 |---------|------|-----------|
 | NPC generation | `npc-generation.md` | `{system}/mechanics.md`; CoC: `occupations.md`, FitD: `playbooks.md`, D&D: `classes.md` |
 | Scene / encounter | `content-generation.md` | `scene-encounter-patterns.md`; `{system}/session-procedures.md` |
-| Location | `content-generation.md` | CoC: `setting-lovecraft.md`. FitD: `setting-doskvol.md` |
+| Location | `content-generation.md` | CoC: `setting-lovecraft.md`. FitD: check `personal/` |
 | Faction generation | `content-generation.md` | `relationship-patterns.md` |
 | Item / artifact | `content-generation.md` | `{system}/mechanics.md` |
 | Creature generation | `content-generation.md` | CoC: `creatures.md`. D&D: `monsters.md` |
