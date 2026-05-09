@@ -219,7 +219,7 @@ No variant keyword or tag → use base CoC files only.
 
 | Request | File |
 |---------|------|
-| Doskvol districts | setting-doskvol.md |
+| Doskvol districts | check `personal/` directory |
 | Factions | factions.md |
 | Playbooks | playbooks.md |
 | Crew types | crew-types.md |
