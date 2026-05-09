@@ -38,7 +38,9 @@ Match user intent → go directly to the file. Skip clarification.
 **FitD faction** → `systems/fitd/factions.md`
 **FitD playbook** → `systems/fitd/playbooks.md`
 **FitD crew type** → `systems/fitd/crew-types.md`
-**FitD Doskvol/setting** → `systems/fitd/setting-doskvol.md`
+**FitD gathering info** → `systems/fitd/gathering-information.md`
+**FitD cohorts** → `systems/fitd/cohorts.md`
+**FitD GM techniques** → `systems/fitd/gm-techniques.md`
 **FitD ritual/crafting** → `systems/fitd/rituals-crafting.md`
 **FitD entanglement/heat** → `systems/fitd/entanglements.md`
 **FitD magnitude** → `systems/fitd/magnitude.md`
