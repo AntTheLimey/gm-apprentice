@@ -48,16 +48,15 @@ Ransom
 ### Crew Upgrades
 
 - Assassin rigging (2 free load of weapons or supplies)
-- Ironhook contacts (Tier is effectively +1 higher in prison)
+- Prison contacts (Tier is effectively +1 higher in prison)
 - Elite Skulks (cohorts of that type get +1d)
 - Elite Thugs (cohorts of that type get +1d)
 - Hardened (+1 trauma box for each PC; costs 3 boxes)
 
 ### Contacts
 
-Trevul Hadrathi (a bounty hunter), Casta (a magistrate),
-Sevoy (a merchant lord), Leander (an information broker),
-Hoxley (a smuggler)
+A bounty hunter, a magistrate, a merchant lord, an
+information broker, a smuggler
 
 ### Claim Map Highlights
 
@@ -102,15 +101,15 @@ Show of Force
 ### Crew Upgrades
 
 - Bravos rigging (2 free load of weapons or armor)
-- Ironhook contacts
+- Prison contacts
 - Elite Rovers (cohorts of that type get +1d)
 - Elite Thugs (cohorts of that type get +1d)
 - Ironforged (+1 stress box for each PC; costs 3 boxes)
 
 ### Contacts
 
-Meg (a tavern owner), Conway (a Bluecoat), Keller (a
-blacksmith), Tomas (a physicker), Petra (a spy)
+A tavern owner, a city watch officer, a blacksmith,
+a physicker, a spy
 
 ### Claim Map Highlights
 
@@ -158,16 +157,15 @@ Sacrifice, Occult
 ### Crew Upgrades
 
 - Cult rigging (2 free load of documents or implements)
-- Ironhook contacts
+- Prison contacts
 - Elite Adepts (cohorts of that type get +1d)
 - Elite Thugs (cohorts of that type get +1d)
 - Ancient Obelisk (reduce ritual stress cost by 1)
 
 ### Contacts
 
-Gagan (an academic), Adikin (an occultist), Hutchins (an
-antiquarian), Moriya (a spirit trafficker), Mateas Kline (a
-noble)
+An academic, an occultist, an antiquarian, a spirit
+trafficker, a noble
 
 ### Claim Map Highlights
 
@@ -214,15 +212,15 @@ Force, Supply
 ### Crew Upgrades
 
 - Hawker rigging (2 free load of supplies or gear)
-- Ironhook contacts
+- Prison contacts
 - Elite Rooks (cohorts of that type get +1d)
 - Elite Thugs (cohorts of that type get +1d)
 - Composed (+1 stress box for each PC; costs 3 boxes)
 
 ### Contacts
 
-Reyf (a drug dealer), Laroze (a Bluecoat), Lydra (a deal
-broker), Hoxley (a smuggler), Anya (a dilettante)
+A drug dealer, a city watch officer, a deal broker,
+a smuggler, a dilettante
 
 ### Claim Map Highlights
 
@@ -268,15 +266,15 @@ Sabotage
 ### Crew Upgrades
 
 - Thief rigging (2 free load of tools or gear)
-- Ironhook contacts
+- Prison contacts
 - Elite Rooks (cohorts of that type get +1d)
 - Elite Skulks (cohorts of that type get +1d)
 - Underground Maps and Passkeys
 
 ### Contacts
 
-Dowler (an explorer), Laroze (a Bluecoat), Amancio (a deal
-broker), Fitz (a collector), Adelaide Phroaig (a noble)
+An explorer, a city watch officer, a deal broker,
+a collector, a noble
 
 ### Claim Map Highlights
 
@@ -325,15 +323,15 @@ Contraband, Smuggling Passengers
 ### Crew Upgrades
 
 - Smuggler rigging (2 free load of gear or tools)
-- Ironhook contacts
+- Prison contacts
 - Elite Rovers (cohorts of that type get +1d)
 - Barge (+2 scale for waterway transport)
 - Camouflage
 
 ### Contacts
 
-Elynn (a dock worker), Rolan (a drug dealer), Sera (an
-information broker), Nyelle (a smuggler), Decker (an anarchist)
+A dock worker, a drug dealer, an information broker,
+a smuggler, an anarchist
 
 ### Claim Map Highlights
 
