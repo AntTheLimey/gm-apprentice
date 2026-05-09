@@ -134,9 +134,11 @@ GURPS uses topic-based files for efficient lookup.
   reference. All curated Basic Set content (point costs,
   tables, workflows) is distributed under the SJG Online
   Policy. Check `sources.md` for which books are currently
-  integrated. Users with GURPS PDFs can add personal
-  reference files to `systems/gurps-4e/personal/` for richer
-  lookups.
+  integrated.
+
+All systems support personal reference files for setting
+content and supplements you own. See
+[Adding Your Own Reference Material](personal-reference-files.md).
 
 - **Other systems** — `systems/generic/`. Universal RPG
   guidance for any system not listed above. Covers common

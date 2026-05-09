@@ -162,6 +162,12 @@ You now have a working campaign vault with structured content, linked entities, 
 - **Periodically:** Run campaign-qa to keep your vault clean.
 - **Anytime:** Use ttrpg-expert to generate new content, look up rules, or check continuity.
 
+**Want deeper system coverage?** If you own rulebooks or
+supplements beyond what's in the free SRDs, you can add
+personal reference files so Claude can access your setting
+content, factions, NPCs, and generation tables. See
+[Adding Your Own Reference Material](personal-reference-files.md).
+
 For detailed guidance on each skill, see the individual skill guides:
 
 - [ttrpg-expert](ttrpg-expert.md)

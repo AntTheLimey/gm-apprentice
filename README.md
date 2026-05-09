@@ -120,6 +120,8 @@ Install via the CLI method instead:
   processing and recaps
 - [publish-tool](docs/publish-tool.md) -- publishing your vault
   as a static website
+- [Personal reference files](docs/personal-reference-files.md)
+  -- adding your own rulebook content for deeper system support
 - [gm-apprentice-publish](tools/publish/README.md) -- npm package
   reference for the publish tool
 
