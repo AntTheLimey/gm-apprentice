@@ -219,7 +219,7 @@ No variant keyword or tag → use base CoC files only.
 
 | Request | File |
 |---------|------|
-| Doskvol districts | check `personal/` directory |
+| Doskvol setting/districts | `personal/` (requires personal files) |
 | Factions | factions.md |
 | Playbooks | playbooks.md |
 | Crew types | crew-types.md |
@@ -245,22 +245,12 @@ No variant keyword or tag → use base CoC files only.
 
 ### Personal Reference Files
 
-Each system directory may contain a `personal/` subdirectory
-with the user's own licensed reference material — setting
-content, named NPCs, factions, locations, random generation
-tables. These files are gitignored and never distributed with
-the plugin.
-
-When a question involves setting-specific content that the
-public system files don't cover (named factions, specific NPCs,
-district details, heritage regions, world lore), check
-`systems/{system}/personal/` for relevant files. Some systems
-organize personal content into subdirectories — for example,
-`personal/districts/` may contain per-district reference files.
-
-If no personal files exist, note that public files cover
-SRD/ORC mechanics only and suggest the user add their own
-reference material to `personal/` for setting-specific support.
+`systems/{system}/personal/` may contain the user's own
+setting reference (factions, NPCs, districts, world lore,
+random tables). Gitignored — never distributed. Check here
+when a question needs setting-specific content the public
+SRD/ORC files don't cover. Subdirectories like
+`personal/districts/` may exist.
 
 ## Canon and Validation
 

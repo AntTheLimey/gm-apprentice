@@ -54,17 +54,11 @@ persistent artifact — conversation is ephemeral.
 
 ### Personal Reference Files
 
-Each system directory may contain a `personal/` subdirectory
-with the user's own reference material (setting content, named
-factions, NPCs, locations, random tables). These are gitignored
-and never distributed.
-
-During prep, check `systems/{system}/personal/` for: faction
-turn execution (named factions with tiers and goals), scene
-building (district details and atmosphere), encounter design
-(NPC references), and score planning (random tables, faction
-score hooks). If no personal files exist, work from public
-system files (SRD/ORC mechanics only) and the campaign vault.
+`systems/{system}/personal/` may contain the user's own
+setting reference (factions, NPCs, locations, random tables).
+Gitignored — never distributed. Check here when prep needs
+setting detail the public SRD/ORC files don't cover —
+faction rosters, NPC references, location atmosphere.
 
 ## Phase 1: Reconcile (conditional)
 

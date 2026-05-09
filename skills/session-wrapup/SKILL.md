@@ -131,13 +131,11 @@ rules below still apply: read templates before creating,
 `source_confidence: DRAFT` for new entities, receipt
 lifecycle, wiki-links.
 
-**Personal reference files:** Each system directory may contain
-a `personal/` subdirectory with the user's own reference
-material (factions, NPCs, districts, locations). When creating
-or updating entity files, check `systems/{system}/personal/`
-to cross-reference faction affiliations, district locations,
-and NPC relationships. This ensures new entities are correctly
-linked to the setting's existing power structures.
+**Personal reference files:**
+`systems/{system}/personal/` may contain the user's own
+setting reference (factions, NPCs, districts). Check here
+when creating entities to cross-reference faction ties,
+locations, and NPC relationships.
 
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
