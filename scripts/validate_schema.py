@@ -26,6 +26,14 @@ SCENE_TYPES = {
     "transition", "horror", "downtime", "other"
 }
 NPC_STATUS = {"alive", "dead", "missing", "unknown"}
+ADVENTURE_BRIEF_SCOPE = {"campaign", "one-shot", "few-shot"}
+ADVENTURE_BRIEF_CONTINUATION = {
+    "new", "new-chapter", "new-arc", "time-jump",
+    "prequel", "parallel", "new-pcs"
+}
+ADVENTURE_BRIEF_SHAPE = {
+    "linear", "branching", "hub-and-spoke", "open-node", "sandbox"
+}
 
 # Required fields per entity type
 # All entities need: type, source_confidence
@@ -40,6 +48,7 @@ REQUIRED_FIELDS = {
     "clue": ["type", "source_confidence"],
     "event": ["type", "source_confidence"],
     "document": ["type", "source_confidence"],
+    "adventure-brief": ["type", "source_confidence", "scope"],
     "session": ["type", "session_number", "status", "documents"],
     "session-plan": ["type", "source_confidence", "session"],
     "session-play-notes": ["type", "source_confidence", "session"],
@@ -194,6 +203,36 @@ def validate_file(filepath: Path) -> list[str]:
                 f"Invalid status '{value}' — "
                 f"must be one of: {', '.join(sorted(NPC_STATUS))}"
             )
+
+    # Validate adventure-brief fields
+    if entity_type == "adventure-brief":
+        if "scope" in frontmatter:
+            value = frontmatter["scope"]
+            if not isinstance(value, str):
+                errors.append("Field 'scope' must be a string")
+            elif value not in ADVENTURE_BRIEF_SCOPE:
+                errors.append(
+                    f"Invalid scope '{value}' — "
+                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SCOPE))}"
+                )
+        if "continuation_type" in frontmatter:
+            value = frontmatter["continuation_type"]
+            if not isinstance(value, str):
+                errors.append("Field 'continuation_type' must be a string")
+            elif value not in ADVENTURE_BRIEF_CONTINUATION:
+                errors.append(
+                    f"Invalid continuation_type '{value}' — "
+                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_CONTINUATION))}"
+                )
+        if "adventure_shape" in frontmatter:
+            value = frontmatter["adventure_shape"]
+            if not isinstance(value, str):
+                errors.append("Field 'adventure_shape' must be a string")
+            elif value not in ADVENTURE_BRIEF_SHAPE:
+                errors.append(
+                    f"Invalid adventure_shape '{value}' — "
+                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SHAPE))}"
+                )
 
     # Validate portrait field — only allowed for supported entity types
     portrait = frontmatter.get("portrait")
