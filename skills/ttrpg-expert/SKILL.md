@@ -243,6 +243,25 @@ No variant keyword or tag → use base CoC files only.
 | Conditions / rules | conditions-rules.md |
 | Combat / actions | rules-reference.md |
 
+### Personal Reference Files
+
+Each system directory may contain a `personal/` subdirectory
+with the user's own licensed reference material — setting
+content, named NPCs, factions, locations, random generation
+tables. These files are gitignored and never distributed with
+the plugin.
+
+When a question involves setting-specific content that the
+public system files don't cover (named factions, specific NPCs,
+district details, heritage regions, world lore), check
+`systems/{system}/personal/` for relevant files. Some systems
+organize personal content into subdirectories — for example,
+`personal/districts/` may contain per-district reference files.
+
+If no personal files exist, note that public files cover
+SRD/ORC mechanics only and suggest the user add their own
+reference material to `personal/` for setting-specific support.
+
 ## Canon and Validation
 
 Generated content starts as DRAFT → GM confirms as

@@ -52,6 +52,20 @@ persistent artifact — conversation is ephemeral.
 3. Vault dives — targeted reads only, proportional to
    upcoming session complexity, not campaign size
 
+### Personal Reference Files
+
+Each system directory may contain a `personal/` subdirectory
+with the user's own reference material (setting content, named
+factions, NPCs, locations, random tables). These are gitignored
+and never distributed.
+
+During prep, check `systems/{system}/personal/` for: faction
+turn execution (named factions with tiers and goals), scene
+building (district details and atmosphere), encounter design
+(NPC references), and score planning (random tables, faction
+score hooks). If no personal files exist, work from public
+system files (SRD/ORC mechanics only) and the campaign vault.
+
 ## Phase 1: Reconcile (conditional)
 
 Runs when most recent session has status `wrap-up` (not yet
