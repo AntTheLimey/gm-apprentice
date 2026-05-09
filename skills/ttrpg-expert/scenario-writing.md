@@ -72,6 +72,23 @@ The Alexandrian: prepare situations (locations, NPCs,
 motivations, resources, threats), not sequences. The scenario
 defines what exists; PCs determine what happens.
 
+### Adventure Shapes
+
+Choose the structural skeleton before building content. The
+shape constrains what content to develop and how PCs navigate.
+
+| Shape | Description | Best For |
+|-------|-------------|----------|
+| Linear | A → B → C. Fixed sequence. | One-shots, tutorials, tightly paced horror |
+| Branching | Forks with distinct paths. Paths may reconverge. | Mystery with multiple suspect lines, moral dilemmas |
+| Hub-and-spoke | Central base, radiating locations/missions. Return between. | Sandbox investigation, heist prep, faction play |
+| Open-node | Interconnected nodes, any order. Each node self-contained. | Hexcrawl, pointcrawl, exploration campaigns |
+| Sandbox | No predetermined structure. World reacts to PC actions. | Living-world campaigns, emergent play, FitD |
+
+Linear is not inherently bad — a tightly paced one-shot benefits
+from it. But flag when a concept needs branching and the GM is
+building linear.
+
 ## NPC Approach Patterns
 
 ### Proactive NPCs
@@ -80,6 +97,12 @@ Five components per significant NPC: Goal, Plan, Timeline,
 Reaction, Escalation. When PCs ignore an NPC, their plan
 advances along the timeline; consequences eventually reach
 the PCs.
+
+**Victory-state design:** Start from what the world looks like
+if the villain succeeds. Work backwards through 3-5 logistical
+steps to reach that state. Each step becomes a pressure point
+PCs can discover, disrupt, or accelerate. This prevents villain-
+goal drift and naturally generates hooks at each stage.
 
 ### Proactive Clues (when players stall)
 
@@ -140,6 +163,46 @@ engagement visibly.
 - **Scripted dialogue:** constrains GM, feels stilted. Provide
   personality + motivation + key info instead.
 
+### One-Shot Structural Constraints
+
+One-shots need hard constraints at conception — there is no
+next session to recover from loose threads:
+
+- Single inciting event that cannot be ignored
+- Contained location or social space (one building, one
+  neighbourhood, one ship)
+- Pre-generated or pre-tied PCs (no time for organic bonds)
+- Resolution that closes within session (3-4 hours)
+- No more than 3 key NPCs, 2 locations, 1 faction
+
+### Few-Shot Guidance (2-8 Sessions)
+
+Few-shots need campaign depth with one-shot closure. No
+established framework exists — build from these principles:
+
+- Single arc with a built-in ending (the ritual date, the
+  ship's departure, the election)
+- Session count should be explicit at conception ("this is
+  a 4-session arc")
+- Escalation tied to the timeline, not PC actions — the
+  clock ticks whether they engage or not
+- Final session must be satisfying even if PCs haven't
+  resolved everything — the world moves on
+
+### Playability Stress Test
+
+Before committing to a concept, test it for RPG viability:
+
+- Can the premise branch? If there's only one path through,
+  it's a story, not an adventure.
+- Does it have player agency? If the PCs are audience to
+  events rather than participants, restructure.
+- Does adapting from fiction require removing the fixed
+  narrative? If yes, extract the setting and discard the
+  plot.
+- Can a session end mid-adventure without losing momentum?
+  If not, it might need to be a one-shot.
+
 ## System-Specific Conventions
 
 ### CoC 7e
@@ -177,4 +240,7 @@ The Alexandrian (Three Clue Rule, Don't Prep Plots, Node-
 Based Design); Sly Flourish (Lazy DM); Sandy Petersen (Onion
 Layer); Chaosium (CoC Style Guide); Robin Laws / Pelgrane
 (GUMSHOE, core clue design); John Harper (BitD SRD); WotC
-(2024 DMG).
+(2024 DMG); Scott Rehm / The Angry GM (Adventure Shapes,
+Momentous & Inertial Design); Johnn Four / Roleplaying Tips
+(Campaign Seed Recipe); Mythcreants (Story-to-Campaign
+Adaptation).
