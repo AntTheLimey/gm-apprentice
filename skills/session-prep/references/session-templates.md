@@ -197,8 +197,8 @@ promoted to AUTHORITATIVE via reconcile.
 
 ```markdown
 ---
-type: session-wrap-up
-session: "[[Session NN - Title]]"
+type: session_wrap
+session: "[[Session_NN_Wrap_Up]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
 source_confidence: DRAFT

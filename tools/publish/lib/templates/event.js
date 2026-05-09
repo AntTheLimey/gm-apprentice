@@ -34,8 +34,9 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     : '';
 
   const metaItems = [];
-  if (fm.date) {
-    metaItems.push(`<span><span class="label">Date</span> ${escapeHtml(fm.date)}</span>`);
+  const dateVal = fm.in_game_date || fm.date;
+  if (dateVal) {
+    metaItems.push(`<span><span class="label">Date</span> ${escapeHtml(dateVal)}</span>`);
   }
   if (fm.location) {
     const locRaw = String(fm.location).trim();

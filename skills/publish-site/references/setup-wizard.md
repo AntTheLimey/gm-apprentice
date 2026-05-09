@@ -147,17 +147,20 @@ Open `package.json` in `<targetDir>`. Find the `gm-apprentice-publish`
 dependency — the scaffold sets it to `"latest"` by default, which can
 resolve to a stale cached version.
 
-Replace it with a `file:` path pointing at the current plugin cache:
+Replace it with a `file:` path pointing at the current plugin cache
+for the GM's platform:
 
 ```json
 {
   "dependencies": {
-    "gm-apprentice-publish": "file:~/.claude/plugins/cache/gm-apprentice/gm-apprentice/<plugin-version>/tools/publish"
+    "gm-apprentice-publish": "file:<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish"
   }
 }
 ```
 
-Where `<plugin-version>` is the current gm-apprentice plugin version
+Use the plugin cache path for the GM's OS (e.g.
+`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). Where
+`<plugin-version>` is the current gm-apprentice plugin version
 (read it from `.claude-plugin/plugin.json` in the plugin directory, or
 infer it from the skill's own cache path).
 
