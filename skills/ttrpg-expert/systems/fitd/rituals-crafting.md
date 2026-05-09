@@ -93,6 +93,113 @@ questions to establish new parameters if things get out of hand.
 > Player: "My new fear is what happens if the spirits figure out
 > where the ward came from and turn their vengeance on me."
 
+### More Example Rituals
+
+> **Ward of Sealed Thresholds** (protection)
+>
+> Player: "The ritual wards a doorway so that spirits cannot
+> pass through it. It's weird because the door sometimes
+> whispers the names of ghosts that have tried to cross."
+>
+> GM: "Chalk glyphs around the doorframe using ground bone
+> mixed with electroplasm. Spend a downtime action and take at
+> least 2 stress. The ward's quality equals the stress spent,
+> resisted by a spirit's Tier. The ward lasts until the glyphs
+> are disturbed or a spirit of sufficient power forces through."
+>
+> Player: "I now believe that doors remember every death that
+> has passed through them."
+
+> **Compel the Unwilling Tongue** (binding)
+>
+> Player: "The ritual forces a ghost to answer three questions
+> truthfully. It's weird because the ghost speaks through my
+> mouth while my eyes go black."
+>
+> GM: "You need a personal possession of the ghost's former
+> life and a circle drawn in electroplasmic salt. Spend a
+> downtime action, take at least 3 stress. Roll Attune
+> (desperate) — on a partial, the ghost answers but plants a
+> false memory in you. On a miss, it escapes the binding."
+>
+> Player: "My new fear is that one day a ghost will answer
+> through me and refuse to leave."
+
+> **Eyes of the Echo** (divination)
+>
+> Player: "The ritual lets me see through the eyes of someone
+> whose blood I possess. It's weird because while I watch, I
+> feel their emotions as if they were mine."
+>
+> GM: "Burn the blood sample in a silver dish and inhale the
+> fumes. Spend a downtime action, take at least 4 stress. The
+> vision lasts for a scene. You can see and hear but not
+> interact. If the target has arcane defenses, roll Attune
+> against their Tier."
+>
+> Player: "I now fear that someone might do this to me — that
+> I'm being watched through my own eyes."
+
+> **Ghost Mantle** (transformation)
+>
+> Player: "The ritual lets me temporarily take on a ghost's
+> ability to pass through solid matter. It's weird because my
+> body becomes translucent and cold, and I leave frost on
+> everything I touch."
+>
+> GM: "Consume a vial of refined electroplasm mixed with your
+> own blood. Spend a downtime action, take at least 5 stress.
+> The effect lasts for minutes, not hours. While transformed,
+> you're vulnerable to spirit-bane and electroplasmic barriers.
+> Start a 'Spiritual Corruption' 6-clock — tick it each time
+> you use this ritual."
+>
+> Player: "I believe that the boundary between living and dead
+> is thinner than anyone admits, and I've proven it."
+
+### Sample Alchemicals and Gadgets
+
+These use the inventing and crafting rules above. Each has at
+least one drawback as the GM would assign.
+
+**Spectral Lantern** (spark-craft device)
+A modified lantern that emits a frequency of electroplasmic
+light visible only to attuned individuals. Reveals ghostly
+residue, spirit trails, and hidden arcane wards within its
+glow. Minimum quality: Tier + 2.
+*Drawbacks:* Conspicuous (the light draws attention from
+supernatural entities), Unreliable (roll quality — on 1-3
+it attracts a ghost rather than just revealing them).
+
+**Ghost Smoke** (alchemical consumable)
+A glass vial that, when shattered, releases a cloud of pale
+vapor. Spirits within the cloud become briefly visible to
+everyone, even those without arcane sight. Lasts about 30
+seconds. Minimum quality: Tier + 1.
+*Drawbacks:* Consumable (single use), Volatile (the smoke
+irritates the lungs — take level 1 harm "Wracking Cough"
+unless resisted).
+
+**Resonance Blade** (modified weapon)
+A bladed weapon treated with electroplasmic solution and
+inscribed with harmonic frequencies. Gains potency against
+spirits and ghosts — can harm them as if they were physical.
+Minimum quality: Tier + 3.
+*Drawbacks:* Rare (requires refined electroplasm and a
+whisper's blessing), Complex (two crafting stages: blade
+treatment and harmonic inscription).
+
+**Echo Tuning Fork** (arcane implement)
+A specially crafted tuning fork that, when struck, resonates
+with the ghost field. The user can "hear" nearby spirits as
+distinct tones — different pitches for different types
+(lingering dead, bound spirits, demons). Minimum quality:
+Tier + 2.
+*Drawbacks:* Unreliable (fortune roll each use — on 1-3 the
+fork picks up overwhelming noise and the user takes 2 stress),
+Conspicuous (the ringing tone is audible to spirits, who know
+they've been detected).
+
 ---
 
 ## Crafting
