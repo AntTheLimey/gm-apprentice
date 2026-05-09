@@ -381,7 +381,7 @@ function build(options = {}) {
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
           }
           if (page.frontmatter.type === 'chapter') {
-            const chapterTitle = String(page.frontmatter.title || '');
+            const chapterTitle = String(page.frontmatter.title || page.displayTitle || '');
             const chapterTitleNorm = chapterTitle.toLowerCase();
             const chapterFilename = page.title.replace(/_/g, ' ');
             const chapterSessions = (pages || []).filter(p => {
