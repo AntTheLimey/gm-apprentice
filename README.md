@@ -40,7 +40,9 @@ generation to campaign management and session lifecycle support.
 - Call of Cthulhu 7th Edition (CoC 7e)
 - GURPS 4th Edition — includes 7 archetype chargen kits,
   24 topic-based reference files, and curated Basic Set content
-- Forged in the Dark (Blades in the Dark)
+- Forged in the Dark (Blades in the Dark) — 14 SRD reference
+  files covering mechanics, playbooks, crew types, cohorts,
+  gathering information, GM techniques, and faction procedures
 - D&D 5th Edition (2024 Revision)
 
 ## Installation
