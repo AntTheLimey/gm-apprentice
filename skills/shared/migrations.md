@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.4.22"
+current_version: "1.5.1"
 ---
 
 # Vault Migration Registry

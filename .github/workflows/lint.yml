@@ -139,8 +139,8 @@ jobs:
         run: |
           ./scripts/build-skill-zips.sh
           ZIP_COUNT=$(ls dist/*.zip 2>/dev/null | wc -l | xargs)
-          if [ "$ZIP_COUNT" -ne 8 ]; then
-            echo "::error::Expected 8 skill zips, got $ZIP_COUNT"
+          if [ "$ZIP_COUNT" -ne 9 ]; then
+            echo "::error::Expected 9 skill zips, got $ZIP_COUNT"
             exit 1
           fi
           for z in dist/*.zip; do

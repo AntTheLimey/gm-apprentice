@@ -4,7 +4,7 @@ description: "Guided adventure creation through creative conversation. Helps GMs
 ---
 
 **On start, print:**
-```
+```text
 \033[1;42;37m  THE MIDWIFE  \033[0m
 ```
 
