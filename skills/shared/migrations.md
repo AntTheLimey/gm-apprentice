@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.4.22"
+current_version: "1.5.1"
 ---
 
 # Vault Migration Registry
@@ -150,3 +150,30 @@ Standardizes date field names across session and event entities.
 - **Session wrap-up files**: standardize `type:` to `session_wrap`
   (from any of: `session-wrap-up`, `session_wrap_up`, `session_note`).
   Opt-in per file — review before applying.
+
+## Migration: 1.4.22 → 1.5.1
+
+### Structural
+
+- **New entity type:** `adventure-brief` added to entity schema
+  under `narrative (abstract)`. No vault changes required — the
+  type is available for new files immediately. Existing vaults
+  continue to work without modification.
+
+### Content
+
+- **New folder:** `Adventures/` added to default folder mapping
+  for `adventure-brief` entities. Created automatically when the
+  midwife writes its first adventure brief. No action needed for
+  existing vaults.
+
+- **New workspace folder:** `_midwife/` added to vault
+  structure for midwife working files. Created automatically
+  on first midwife invocation. No action needed for existing
+  vaults.
+
+- **Adventures/ subfolder convention:** Adventure briefs
+  now use per-adventure subdirectories
+  (`Adventures/{name}/{name}.md`). Existing briefs in flat
+  `Adventures/` continue to work. No action needed for
+  existing vaults.

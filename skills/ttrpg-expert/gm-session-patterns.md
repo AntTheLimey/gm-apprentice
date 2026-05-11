@@ -98,6 +98,23 @@ Establish expectations before campaign starts:
 6. House rules and system choices
 7. Player expectations and goals
 
+### CATS Pitch (Patrick O'Leary)
+
+Pitch the adventure to players before character creation.
+Four components:
+
+- **Concept:** What kind of story is this? (one sentence)
+- **Aim:** What will players be doing? (investigate, heist,
+  survive, explore, build)
+- **Tone:** What's the emotional register? (dread, swashbuckling,
+  gritty noir, cosmic horror, heroic fantasy)
+- **Subject matter:** What themes appear? Flag anything that
+  needs Lines/Veils discussion.
+
+CATS ensures player buy-in before anyone builds a character.
+A player who hears "gritty survival horror" and builds a
+wisecracking swashbuckler wasn't given the CATS pitch.
+
 ## Scene Framing
 
 **Open:** Cut to the Chase (mid-action), In Media Res
@@ -187,7 +204,8 @@ Bargains prepared.
 
 Sly Flourish (Lazy DM); The Alexandrian (Three Clue Rule);
 Vincent Baker (Fronts, Apocalypse World); John Harper
-(Progress Clocks, BitD); Johnn Four (Five Room Dungeon).
+(Progress Clocks, BitD); Johnn Four (Five Room Dungeon);
+Patrick O'Leary (CATS Method).
 
 ## External References
 

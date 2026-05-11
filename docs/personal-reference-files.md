@@ -30,7 +30,7 @@ host it publicly, or circumvent publisher licensing terms.
 
 ## Where Personal Files Live
 
-```
+```text
 skills/ttrpg-expert/systems/
   fitd/
     personal/           <-- your FitD setting content

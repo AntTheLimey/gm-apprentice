@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] — 2026-05-09
+
+### Added
+
+- **the-midwife skill** — guided adventure creation through
+  creative conversation. Handles greenfield campaigns and
+  existing vault continuations (new chapters, arcs, prequels,
+  time jumps). Produces an adventure brief and scaffolds the
+  vault for Session 0 handoff.
+- **adventure-brief entity type** — new entity under
+  `narrative (abstract)` for structured adventure design
+  documents with scope, shape, and continuation metadata.
+- **Adventure Shapes framework** — structural skeleton
+  taxonomy (linear, branching, hub-and-spoke, open-node,
+  sandbox) in scenario-writing reference.
+- **CATS pitch method** — Concept/Aim/Tone/Subject session 0
+  pitch framework in gm-session-patterns reference.
+- **One-shot and few-shot structural guidance** — conception-
+  phase constraints and principles in scenario-writing
+  reference.
+- **Victory-state antagonist design** — reverse-engineering
+  villain plans from victory state in scenario-writing
+  reference.
+- **Playability stress test** — checklist for testing RPG
+  viability of adventure concepts.
+- **Midwife workspace** — per-adventure working directories
+  with automatic topic splitting, shared seed bank, and
+  context-aware reading. Replaces monolithic
+  `_midwife-notes.md`. Supports multiple adventures in
+  parallel.
+- **Adventures/ subfolder convention** — adventure briefs
+  now live in `Adventures/{adventure-name}/` subdirectories.
+- **`_midwife/` vault folder** — creative workspace added
+  to vault structure for midwife working files.
+
 ## [1.5.0] — 2026-05-09
 
 ### Added
@@ -524,6 +559,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.0...v1.5.1
+[1.5.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.22...v1.5.0
 [1.4.22]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.21...v1.4.22
 [1.4.19]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.18...v1.4.19
 [1.4.18]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.17...v1.4.18

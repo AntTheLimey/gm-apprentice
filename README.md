@@ -33,7 +33,7 @@ generation to campaign management and session lifecycle support.
 | | session-wrapup | Post-session processing | Turns raw play notes into canon. Creates/updates entities, events, timeline. Feeds session-prep. |
 | **Content ingestion** | vault-ingest | Old materials to structured vault | Adapter — classifies, interviews GM, synthesizes. Hands off to campaign-organizer and session-wrapup. |
 | **Content publication** | publish-site | Vault to static website | Reads vault, generates HTML. No vault writes. |
-| **Adventure creation** | the-midwife *(planned)* | Idea to starting adventure + vault | Creative midwife — draws ideas out of the GM, shapes them into a playable starting point. |
+| **Adventure creation** | the-midwife | Idea to starting adventure + vault | Creative guide — draws ideas out of the GM through conversation, shapes them into a playable starting point with adventure brief and vault scaffold. |
 
 ## Supported Game Systems
 

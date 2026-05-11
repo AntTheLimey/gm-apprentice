@@ -84,6 +84,9 @@ to your environment's tools per `shared/filesystem-mode.md`.
 - `_inbox/` — Staging area for vault-ingest. **Ignore during
   all audit modes.** Do not flag files here as orphans or
   structural issues.
+- `_midwife/` — Midwife creative workspace. **Ignore during
+  all audit modes.** Entity sketches here are drafts, not
+  vault entities.
 
 **Shared references** (read as needed for schema definitions):
 - `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/SUPERSEDED

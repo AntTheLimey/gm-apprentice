@@ -13,6 +13,7 @@ Written to `_meta/vault-config.md` on first setup.
 │   ├── creatures/   (creature art)
 │   ├── events/      (scene art)
 │   └── documents/   (scans, letter images)
+├── _midwife/        (adventure workspace — see below)
 ├── _Campaign/
 │   ├── Campaign Overview.md
 │   ├── Player Characters.md
@@ -20,6 +21,9 @@ Written to `_meta/vault-config.md` on first setup.
 ├── _Templates/      (one per type)
 ├── _inbox/          (staging area for vault-ingest)
 │   └── _processed/  (completed imports, date-stamped)
+├── Adventures/
+│   └── {Adventure Name}/
+│       └── {Adventure Name}.md
 ├── Chapters/
 │   └── Chapter N - {Title}/
 │       ├── Chapter N Overview.md
@@ -100,3 +104,65 @@ ingestion, files move to `_inbox/_processed/` with a date stamp.
 `campaign-qa` ignores `_inbox/` during audits.
 `campaign-organizer` creates it during vault setup but does
 not process its contents.
+
+## Adventures
+
+The `Adventures/` folder stores adventure briefs — structured
+design documents produced by the midwife skill. Each adventure
+gets its own subfolder:
+
+```text
+Adventures/
+└── {Adventure Name}/
+    └── {Adventure Name}.md    (adventure brief)
+```
+
+The adventure brief is the folder's primary file. Entity files
+referenced by the brief live in their normal type folders
+(Characters/, Locations/, etc.), not under Adventures/.
+
+## Midwife Workspace
+
+The `_midwife/` folder is the midwife skill's creative
+workspace. It stores working notes, seed ideas, entity
+sketches, and other artifacts produced during adventure
+brainstorming. Created automatically on first midwife
+invocation.
+
+```text
+_midwife/
+├── index.md             (master manifest — all adventures)
+├── seeds/               (shared idea bank across adventures)
+│   ├── premises/        (adventure concepts, genre combos)
+│   ├── npcs/            (NPC ideas that didn't fit)
+│   ├── locations/       (place concepts)
+│   ├── hooks/           (plot hooks, inciting events)
+│   ├── tone/            (tone/genre/atmosphere ideas)
+│   └── mechanics/       (system-specific ideas)
+└── {adventure-name}/    (per-adventure working directory)
+    ├── index.md         (adventure TOC, status, open Qs)
+    ├── discoveries.md
+    ├── chapter-shape.md
+    ├── adventures/      (confirmed sub-adventures)
+    ├── npcs/            (confirmed NPC profiles)
+    ├── entity-sketches/ (draft entities for promotion)
+    ├── image-prompts/   (visual concept descriptions)
+    └── session-0/       (CATS pitch, safety, handouts)
+```
+
+Additional topic files (weather, cover stories, social events,
+romance threads) are created on demand. See the-midwife
+SKILL.md for the full list.
+
+Each adventure is an independent working directory. The
+midwife can work on multiple adventures in parallel.
+Adventures stay here until explicitly ingested into the vault
+via `Adventures/`. They may never be ingested — parked
+adventures remain as creative archives.
+
+The `seeds/` folder is shared across all adventures. When an
+idea is generated but not used, it goes to the appropriate
+seed category. When starting a new adventure, the midwife
+scans seeds for relevant prior ideas.
+
+`campaign-qa` ignores `_midwife/` during audits.
