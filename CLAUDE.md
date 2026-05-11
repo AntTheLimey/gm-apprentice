@@ -5,9 +5,10 @@ Context for Claude sessions working in this repository.
 ## What this is
 
 A Claude Code plugin marketplace at `AntTheLimey/gm-apprentice` containing
-eight TTRPG Game Master skills:
+nine TTRPG Game Master skills:
 
 - `ttrpg-expert` — rules, content generation, session planning
+- `the-midwife` — guided adventure creation through creative conversation
 - `campaign-organizer` — vault structure, knowledge graph metadata
 - `campaign-qa` — canon auditing, graph health checks
 - `session-prep` — between-session preparation and reconciliation

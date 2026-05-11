@@ -6,11 +6,12 @@ This guide walks you through setting up a new TTRPG campaign with gm-apprentice,
 
 Claude Code uses "skills" — specialized instructions that activate automatically based on what you ask Claude to do. You don't need to select a skill manually. When you say "build me an NPC," Claude recognizes this as a ttrpg-expert task and uses that skill's knowledge to respond.
 
-gm-apprentice installs eight skills:
+gm-apprentice installs nine skills:
 
 | Skill | What it does |
 |-------|-------------|
 | **ttrpg-expert** | Rules, content generation, continuity |
+| **the-midwife** | Guided adventure creation through creative conversation |
 | **campaign-organizer** | Vault structure and knowledge graphs |
 | **campaign-qa** | Campaign quality auditing |
 | **session-prep** | Between-session preparation and reconciliation |
@@ -171,6 +172,7 @@ content, factions, NPCs, and generation tables. See
 For detailed guidance on each skill, see the individual skill guides:
 
 - [ttrpg-expert](ttrpg-expert.md)
+- [the-midwife](../README.md#skills)
 - [campaign-organizer](campaign-organizer.md)
 - [campaign-qa](campaign-qa.md)
 - [session-prep](session-prep.md)

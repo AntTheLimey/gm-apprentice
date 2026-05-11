@@ -127,10 +127,10 @@ Install via the CLI method instead:
 
 ## Obsidian Setup
 
-Six of the eight skills (campaign-organizer, campaign-qa,
+Six of the nine skills (campaign-organizer, campaign-qa,
 session-prep, session-play, session-wrapup, vault-ingest) work
 with an Obsidian vault to manage campaign content. The
-ttrpg-expert and publish-site skills work standalone.
+ttrpg-expert, the-midwife, and publish-site skills work standalone.
 
 ### Dependency Tiers
 
@@ -142,6 +142,7 @@ ttrpg-expert and publish-site skills work standalone.
 | session-play | Functional (filesystem mode) | Read-only lookups | Full play support |
 | session-wrapup | Functional (filesystem mode) | Read-only analysis | Full wrap-up workflow |
 | campaign-organizer | Functional (filesystem mode) | Manual vault management | Full automation |
+| the-midwife | Fully functional | Enhanced (reads existing vault) | Best experience |
 
 ### Required Obsidian Community Plugins
 
