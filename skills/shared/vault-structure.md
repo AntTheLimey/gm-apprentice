@@ -117,7 +117,7 @@ Adventures/
     └── {Adventure Name}.md    (adventure brief)
 ```
 
-The adventure brief is the folder's index file. Entity files
+The adventure brief is the folder's primary file. Entity files
 referenced by the brief live in their normal type folders
 (Characters/, Locations/, etc.), not under Adventures/.
 

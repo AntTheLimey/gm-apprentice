@@ -402,6 +402,11 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 **Clue:** `clue_type` (physical, testimonial, documentary),
 `found_at` (wiki-link), `found_by`, `leads_to`, `reliability`
 
+**Adventure Brief:** `scope` (campaign/one-shot/few-shot),
+`sessions_estimated`, `continuation_type` (new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
+`adventure_shape` (linear/branching/hub-and-spoke/open-node/sandbox),
+`system`
+
 **Creature:** `creature_type` (beast, undead, aberration, etc.),
 `location` (wiki-link), `abilities`, `weaknesses`, `portrait` (optional)
 

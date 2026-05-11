@@ -149,4 +149,4 @@ jobs:
               exit 1
             fi
           done
-          echo "All 8 skill zips valid"
+          echo "All $ZIP_COUNT skill zips valid"
