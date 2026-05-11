@@ -468,7 +468,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | event (all subtypes) | Events/ |
 | document (all subtypes) | Documents/ |
 | clue | Clues/ |
-| adventure-brief | Adventures/ |
+| adventure-brief | Adventures/{adventure-name}/ |
 
 ## Vault Configuration Fields
 
