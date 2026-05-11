@@ -166,3 +166,14 @@ Standardizes date field names across session and event entities.
   for `adventure-brief` entities. Created automatically when the
   midwife writes its first adventure brief. No action needed for
   existing vaults.
+
+- **New workspace folder:** `_midwife/` added to vault
+  structure for midwife working files. Created automatically
+  on first midwife invocation. No action needed for existing
+  vaults.
+
+- **Adventures/ subfolder convention:** Adventure briefs
+  now use per-adventure subdirectories
+  (`Adventures/{name}/{name}.md`). Existing briefs in flat
+  `Adventures/` continue to work. No action needed for
+  existing vaults.

@@ -32,6 +32,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference.
 - **Playability stress test** — checklist for testing RPG
   viability of adventure concepts.
+- **Midwife workspace** — per-adventure working directories
+  with automatic topic splitting, shared seed bank, and
+  context-aware reading. Replaces monolithic
+  `_midwife-notes.md`. Supports multiple adventures in
+  parallel.
+- **Adventures/ subfolder convention** — adventure briefs
+  now live in `Adventures/{adventure-name}/` subdirectories.
+- **`_midwife/` vault folder** — creative workspace added
+  to vault structure for midwife working files.
 
 ## [1.5.0] — 2026-05-09
 
