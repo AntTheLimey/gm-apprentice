@@ -150,6 +150,10 @@ _midwife/
     └── session-0/       (CATS pitch, safety, handouts)
 ```
 
+Additional topic files (weather, cover stories, social events,
+romance threads) are created on demand. See the-midwife
+SKILL.md for the full list.
+
 Each adventure is an independent working directory. The
 midwife can work on multiple adventures in parallel.
 Adventures stay here until explicitly ingested into the vault
