@@ -172,11 +172,11 @@ content, factions, NPCs, and generation tables. See
 For detailed guidance on each skill, see the individual skill guides:
 
 - [ttrpg-expert](ttrpg-expert.md)
-- [the-midwife](../README.md#skills)
+- [the-midwife](the-midwife.md)
 - [campaign-organizer](campaign-organizer.md)
 - [campaign-qa](campaign-qa.md)
 - [session-prep](session-prep.md)
 - [session-play](session-play.md)
 - [session-wrapup](session-wrapup.md)
-- [vault-ingest](../README.md#skills)
+- [vault-ingest](vault-ingest.md)
 - [publish-site](publish-tool.md)

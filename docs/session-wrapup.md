@@ -20,11 +20,33 @@ Reach for session-wrapup when you need to:
 
 ## Example Prompts
 
+### Full Wrap-Up
+
 - "Session's over — here are my notes"
 - "Process these play notes into a recap"
 - "We just finished session 5, wrap it up"
 - "Here's what happened today — [paste raw notes]"
+
+### Entity Updates
+
 - "Update all the entity files based on what happened"
+- "Inspector Barrow was killed this session — update his file"
+- "The investigators gained a new ally — create an entity for Dr. Chen"
+- "The cult relocated to the old lighthouse — update the faction file"
+
+### Carry-Forward and Consequences
+
+- "What carries forward to next session?"
+- "List the consequences of what happened tonight"
+- "What ticking clocks advanced this session?"
+- "Which NPCs need to react to what the players did?"
+
+### Recap and Timeline
+
+- "Write me a narrative recap I can read to the players next session"
+- "Add tonight's events to the campaign timeline"
+- "Summarize each PC's arc progress this session"
+- "What clues did the players uncover tonight?"
 
 ## What to Expect
 

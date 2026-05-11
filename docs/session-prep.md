@@ -20,16 +20,41 @@ Reach for session-prep when you need to:
 
 ## Example Prompts
 
+### Full Session Prep
+
 - "Help me prep for next session — we play on Saturday"
 - "What do I need to prepare for session 7?"
+- "Prep me for the next session of our CoC campaign"
+- "Walk me through what I need to have ready for next week"
+
+### Reviewing Where Things Stand
+
 - "Summarize where we left off last session"
-- "Which threads are dangling that I should pick up?"
 - "What's the current status of each PC?"
-- "Are there any NPCs I need to have ready for next session?"
-- "What did we skip from my prep?"
+- "Which threads are dangling that I should pick up?"
+- "What NPCs are the players likely to encounter next?"
+- "What ticking clocks are about to go off?"
+
+### Reconciling Prep vs Reality
+
 - "Reconcile my session 6 prep with what actually happened"
-- "Which clues did the players miss that they still need to find?"
+- "What did we skip from my prep?"
 - "Salvage the unused encounters from last session's prep"
+- "The players went completely off-script — what planned content can I reuse?"
+
+### Thread and Clue Management
+
+- "Which clues did the players miss that they still need to find?"
+- "Are there any Chekhov's guns I've planted that need to fire soon?"
+- "What plot threads have been dormant for more than two sessions?"
+- "Which NPCs have unfinished business with the PCs?"
+
+### Spotlight and Arc Planning
+
+- "Which PC hasn't had the spotlight recently?"
+- "What's the current arc stage for each PC?"
+- "One PC is stuck in the same arc stage — help me plan a catalyst"
+- "How do I balance spotlight between five PCs next session?"
 
 ## What to Expect
 
