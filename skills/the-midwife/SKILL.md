@@ -55,16 +55,86 @@ hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`).
 Skip if no `_meta/`.
 
-## Progressive Notes
+## Content Management
 
-From Phase 1 onward, write working notes to
-`_midwife-notes.md` (vault root or CWD). Every decision,
-idea, and parked concept goes on disk immediately — nothing
-lives only in conversation context.
+The Midwife maintains a workspace at `_midwife/` (vault root
+or CWD). Every decision, idea, and parked concept goes on
+disk immediately — nothing lives only in conversation context.
 
-- Created at first discovery, append-only during Phases 1-3
-- Consumed and synthesized into adventure brief in Phase 4
-- Kept alongside the brief (GM may revisit parked ideas)
+### Workspace Setup
+
+On first invocation, create `_midwife/index.md` (master
+manifest) and `_midwife/seeds/` (empty seed categories:
+`premises/`, `npcs/`, `locations/`, `hooks/`, `tone/`,
+`mechanics/`). If `_midwife/` already exists, read the
+master index to discover existing adventures and seeds.
+
+When the GM names the adventure (or at first discovery),
+create `_midwife/{adventure-name}/index.md`.
+
+### Master Index
+
+`_midwife/index.md` — always read on start. Lists all
+adventures with status (Active / Parked / Complete /
+Ingested) and seed bank summary. Keep under 100 lines.
+
+### Adventure Index
+
+`_midwife/{adventure}/index.md` — read when working on a
+specific adventure. Contains:
+
+- Status and current phase
+- File manifest with one-line summary per topic file
+- Open Questions (parked GM decisions)
+- Active thread (what the conversation is working on)
+
+Keep under 150 lines.
+
+### Reading Pattern
+
+1. Always read `_midwife/index.md` (~50-100 lines)
+2. Read `_midwife/{adventure}/index.md` (~100-150 lines)
+3. Read only topic files relevant to the current conversation
+4. Never bulk-read all files — load on demand
+
+### Topic Files
+
+Not all files are created upfront. Create on demand as
+content emerges. Only `index.md` is guaranteed.
+
+Possible topic files per adventure:
+
+- `discoveries.md` — Phase 1 vault mining, constraints
+- `chapter-shape.md` — structure, shape, climax plan
+- `weather-atmosphere.md` — setting colour by location
+- `adventures/{name}.md` — confirmed sub-adventures
+- `npcs/{name}.md` — confirmed NPC profiles or groups
+- `cover-stories.md` — PC covers, obligations
+- `social-events.md` — set pieces, social calendar
+- `romance-threads.md` — PC relationship threads
+- `entity-sketches/{name}.md` — draft entities
+- `image-prompts/{name}.md` — visual concepts
+- `session-0/{name}.md` — CATS pitch, safety, handouts
+
+### Automatic Filing
+
+When content is confirmed ("done", "let's move on", GM
+approval), write it to the appropriate topic file, update
+the adventure index, and mention it briefly. The GM never
+manages files.
+
+When an idea is rejected or parked for later, write it to
+a file in the appropriate `seeds/` subfolder with a title
+and a paragraph capturing the concept. Seeds accumulate
+across all adventures and are never deleted.
+
+### Splitting
+
+When any topic file exceeds ~400 lines, split it by
+subtopic (e.g., `indian-allies.md` → per-ally files under
+`npcs/`). Update the adventure index. Adventures always
+get their own file under `adventures/` once confirmed,
+regardless of size.
 
 ## Phase 1: Discover
 
@@ -98,7 +168,12 @@ for genre patterns. Ask which seed wants to grow.
 Adapt to what the GM gives. Full concept → validate, move to
 Shape. Single image → explore it. One question at a time.
 
-Write discoveries to notes file as they emerge.
+**Seed bank:** On new adventures, scan `_midwife/seeds/`
+for relevant prior ideas. Surface any seeds that connect
+to the GM's interests alongside fresh brainstorming.
+
+Write discoveries to `_midwife/{adventure}/discoveries.md`
+as they emerge. Update the adventure index.
 
 ## Phase 2: Shape
 
@@ -140,7 +215,9 @@ connections the GM might not have seen.
 - `ttrpg-expert/gm-session-patterns.md` — session 0
 - `ttrpg-expert/arc-spotlight-reference.md` — long-term arcs
 
-Update notes file.
+Write confirmed shape decisions to
+`_midwife/{adventure}/chapter-shape.md`. File rejected
+concepts to `_midwife/seeds/`. Update the adventure index.
 
 ## Phase 3: Structure
 
@@ -175,7 +252,10 @@ structure.
 Three strong NPCs beat six sketches. Two vivid locations beat
 five names on a map.
 
-Update notes file.
+Write confirmed structure to topic files under
+`_midwife/{adventure}/` — NPCs to `npcs/`, sub-adventures
+to `adventures/`, etc. File unused ideas to
+`_midwife/seeds/`. Update the adventure index.
 
 ## Phase 4: Scaffold & Handoff
 
@@ -184,20 +264,45 @@ Update notes file.
 ### Step 1: Synthesize Adventure Brief
 
 Read `shared/entity-schema.md` for adventure-brief type.
-Synthesize notes into the brief using the template below.
+Synthesize the adventure index and topic files into the
+brief using the template below.
 
-- **Existing vault:** Write to vault under `Adventures/`.
+- **Existing vault:** Write to
+  `Adventures/{adventure-name}/{adventure-name}.md`.
   Use `[[wiki-links]]` for existing entities. Flag entity
   updates the adventure implies.
-- **Greenfield:** Write to CWD.
+- **Greenfield:** Write to CWD. The adventure brief is
+  written to `Adventures/{adventure-name}/{adventure-name}.md`
+  relative to CWD — campaign-organizer will wrap the vault
+  around it.
 
-### Step 2: Vault Scaffold (greenfield only)
+### Step 2: Entity Promotion
+
+List all entity sketches from
+`_midwife/{adventure}/entity-sketches/` and ask which
+to promote to real vault entities:
+
+"These entities emerged during design:
+[Name] ([type]), [Name] ([type]), ...
+Which should I create as vault entities?"
+
+Approved entities are filed by campaign-organizer to the
+correct vault folders with proper frontmatter. Do not
+auto-promote — the GM chooses.
+
+### Step 3: Vault Scaffold (greenfield only)
 
 Ask: "Ready to set up the vault for this campaign?"
 If yes, hand off to campaign-organizer with the adventure
-brief as context.
+brief as context. campaign-organizer builds the vault
+around the existing `Adventures/` folder.
 
-### Step 3: Session 0 Handoff
+### Step 4: Update Status
+
+Mark the adventure as "Ingested" in `_midwife/index.md`.
+The working directory stays as creative archive.
+
+### Step 5: Session 0 Handoff
 
 Read `ttrpg-expert/gm-session-patterns.md`, Session Zero and
 CATS sections.
