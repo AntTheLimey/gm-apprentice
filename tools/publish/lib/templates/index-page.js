@@ -424,12 +424,25 @@ function renderCampaignDeepDive(pages, indexDir, publishConfig) {
   const system = fm.game_system || '';
   const year = fm.setting_year || '';
   const points = fm.point_total || '';
+  const gameDate = fm.current_game_date || '';
+  const lastPlayed = fm.last_play_date || '';
   const genres = Array.isArray(fm.genre_tags) ? fm.genre_tags : [];
 
   const paramCards = [];
   if (system) paramCards.push(`<div class="cdd-param"><span class="cdd-param-label">System</span><span class="cdd-param-value">${escapeHtml(String(system))}</span></div>`);
   if (year) paramCards.push(`<div class="cdd-param"><span class="cdd-param-label">Setting Year</span><span class="cdd-param-value">${escapeHtml(String(year))}</span></div>`);
+  if (gameDate) paramCards.push(`<div class="cdd-param"><span class="cdd-param-label">Game Date</span><span class="cdd-param-value">${escapeHtml(String(gameDate))}</span></div>`);
   if (points) paramCards.push(`<div class="cdd-param"><span class="cdd-param-label">Point Total</span><span class="cdd-param-value">${escapeHtml(String(points))}</span></div>`);
+  if (lastPlayed) paramCards.push(`<div class="cdd-param"><span class="cdd-param-label">Last Played</span><span class="cdd-param-value">${escapeHtml(String(lastPlayed))}</span></div>`);
+
+  const arcsPlanned = parseInt(fm.arcs_planned, 10) || 0;
+  if (fm.current_arc) {
+    const arcValue = arcsPlanned > 0
+      ? `${escapeHtml(String(fm.current_arc))} (of ${arcsPlanned})`
+      : escapeHtml(String(fm.current_arc));
+    paramCards.push(`<div class="cdd-param"><span class="cdd-param-label">Current Arc</span><span class="cdd-param-value">${arcValue}</span></div>`);
+  }
+
   const paramsHtml = paramCards.length > 0
     ? `<div class="cdd-params">${paramCards.join('\n')}</div>`
     : '';
@@ -443,24 +456,19 @@ function renderCampaignDeepDive(pages, indexDir, publishConfig) {
     ? `<section class="cdd-section"><h2 class="cdd-section-title">Premise</h2><div class="cdd-prose">${mdRenderer.render(premiseMd)}</div></section>`
     : '';
 
+  const settingMd = sections['Setting'] || '';
+  const settingHtml = settingMd
+    ? `<section class="cdd-section"><h2 class="cdd-section-title">Setting</h2><div class="cdd-prose">${mdRenderer.render(settingMd)}</div></section>`
+    : '';
+
   const themesMd = sections['Key Themes'] || '';
   const themesHtml = themesMd
     ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Themes</h2><div class="cdd-themes">${mdRenderer.render(themesMd)}</div></section>`
     : '';
 
-  const threatsMd = sections['Known Fragment-Empowered Individuals'] || sections['Known Threats'] || '';
-  const threatsHtml = threatsMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Known Threats</h2><div class="cdd-threats">${mdRenderer.render(threatsMd)}</div></section>`
-    : '';
-
-  const orgsMd = sections['Key Organizations'] || '';
-  const orgsHtml = orgsMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Organizations</h2><div class="cdd-prose">${mdRenderer.render(orgsMd)}</div></section>`
-    : '';
-
-  const individualsMd = sections['Key Individuals'] || '';
-  const individualsHtml = individualsMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Individuals</h2><div class="cdd-prose">${mdRenderer.render(individualsMd)}</div></section>`
+  const factionsMd = sections['Key Factions'] || '';
+  const factionsHtml = factionsMd
+    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Factions</h2><div class="cdd-prose">${mdRenderer.render(factionsMd)}</div></section>`
     : '';
 
   const overviewHref = relHref(overview, indexDir);
@@ -471,10 +479,9 @@ function renderCampaignDeepDive(pages, indexDir, publishConfig) {
     ${genreHtml}
   </div>
   ${premiseHtml}
+  ${settingHtml}
   ${themesHtml}
-  ${threatsHtml}
-  ${orgsHtml}
-  ${individualsHtml}
+  ${factionsHtml}
   <div class="cdd-full-link"><a href="${escapeHtml(overviewHref)}">Read full campaign overview &rarr;</a></div>
 </div>`;
 }
