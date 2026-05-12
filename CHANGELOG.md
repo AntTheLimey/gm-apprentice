@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.2] — 2026-05-12
+
+### Added
+
+- **Campaign overview template** — new `campaign_overview` entity type
+  with frontmatter for game date, session tracking, and narrative
+  position (arc/chapter progress).
+- **Session-wrapup auto-updates** — campaign overview mechanical fields
+  (game date, session count, last session, last play date) updated
+  after each wrap-up with GM confirmation.
+- **The-midwife integration** — creates campaign overview during vault
+  scaffolding, populated from the adventure brief conversation.
+- **Publish tool rendering** — campaign landing page shows new sections
+  (Premise, Setting, Key Themes, Key Factions) with game date and
+  current arc param cards.
+
+### Changed
+
+- Publish tool landing page replaces Known Threats / Key Organizations
+  / Key Individuals sections with Setting and Key Factions.
+
+---
+
 ## [1.5.1] — 2026-05-09
 
 ### Added
