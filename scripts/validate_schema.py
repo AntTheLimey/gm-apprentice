@@ -27,6 +27,10 @@ SCENE_TYPES = {
 }
 NPC_STATUS = {"alive", "dead", "missing", "unknown"}
 ADVENTURE_BRIEF_SCOPE = {"campaign", "one-shot", "few-shot"}
+CAMPAIGN_OVERVIEW_STATUS = {
+    "not_started", "in_progress", "paused", "completed", "abandoned"
+}
+CAMPAIGN_OVERVIEW_SCOPE = {"campaign", "one-shot", "few-shot"}
 ADVENTURE_BRIEF_CONTINUATION = {
     "new", "new-chapter", "new-arc", "time-jump",
     "prequel", "parallel", "new-pcs"
@@ -59,10 +63,11 @@ REQUIRED_FIELDS = {
     "meta": ["type"],
     "timeline": ["type"],
     "player-characters": ["type"],
+    "campaign_overview": ["type", "source_confidence"],
 }
 
 # Optional fields that support portraits (for future validation)
-PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature"}
+PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature", "campaign_overview"}
 
 # Valid optional fields per entity type (used for deprecation warnings)
 DEPRECATED_FIELDS: dict[str, list[tuple[str, str]]] = {
@@ -232,6 +237,27 @@ def validate_file(filepath: Path) -> list[str]:
                 errors.append(
                     f"Invalid adventure_shape '{value}' — "
                     f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SHAPE))}"
+                )
+
+    # Validate campaign_overview fields
+    if entity_type == "campaign_overview":
+        if "status" in frontmatter:
+            value = frontmatter["status"]
+            if not isinstance(value, str):
+                errors.append("Field 'status' must be a string")
+            elif value not in CAMPAIGN_OVERVIEW_STATUS:
+                errors.append(
+                    f"Invalid status '{value}' — "
+                    f"must be one of: {', '.join(sorted(CAMPAIGN_OVERVIEW_STATUS))}"
+                )
+        if "scope" in frontmatter:
+            value = frontmatter["scope"]
+            if not isinstance(value, str):
+                errors.append("Field 'scope' must be a string")
+            elif value not in CAMPAIGN_OVERVIEW_SCOPE:
+                errors.append(
+                    f"Invalid scope '{value}' — "
+                    f"must be one of: {', '.join(sorted(CAMPAIGN_OVERVIEW_SCOPE))}"
                 )
 
     # Validate portrait field — only allowed for supported entity types
