@@ -1,7 +1,11 @@
 ---
-type: campaign
+type: campaign_overview
+campaign: "Test Campaign"
+source_confidence: DRAFT
 ---
 
-# Campaign Overview
+# Test Campaign
 
-Test campaign.
+## Premise
+
+A minimal test campaign.

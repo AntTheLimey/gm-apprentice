@@ -85,7 +85,8 @@ narrative (abstract)
 │   ├── betrayal_event
 │   └── celebration
 ├── clue
-└── adventure-brief
+├── adventure-brief
+└── campaign_overview
 ```
 
 Abstract types cannot be assigned directly to entities but are
@@ -278,6 +279,26 @@ Extraction defaults:
 | adventure_shape | string | linear / branching / hub-and-spoke / open-node / sandbox |
 | system | string | Game system identifier or "undecided" |
 
+### Campaign Overview
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| campaign | string | Campaign name |
+| game_system | string | Game system identifier |
+| setting_year | string | In-game era or year |
+| current_game_date | string | Current in-game date (auto-updated by session-wrapup) |
+| genre_tags | array | Genre descriptors |
+| scope | string | campaign / one-shot / few-shot |
+| status | string | not_started / in_progress / paused / completed / abandoned |
+| sessions_played | number | Total sessions played (auto-updated by session-wrapup) |
+| last_session | string | Wiki-link to most recent session file (auto-updated) |
+| last_play_date | string | Real-world ISO date of last session (auto-updated) |
+| current_arc | string | Name of the active story arc |
+| arcs_planned | number | Total arcs outlined (0 for sandbox) |
+| current_chapter | string | Wiki-link to active chapter |
+| chapters_planned | number | Chapters in current arc (or total if no arcs) |
+| portrait | string | Optional: path to campaign image under `_attachments/` |
+
 ## Narrative Element Schemas
 
 **Chapter:**
@@ -407,6 +428,11 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 `adventure_shape` (linear/branching/hub-and-spoke/open-node/sandbox),
 `system`
 
+**Campaign Overview:** `campaign`, `game_system`, `setting_year`,
+`current_game_date`, `genre_tags`, `scope`, `status`, `sessions_played`,
+`last_session`, `last_play_date`, `current_arc`, `arcs_planned`,
+`current_chapter`, `chapters_planned`, `portrait` (optional)
+
 **Creature:** `creature_type` (beast, undead, aberration, etc.),
 `location` (wiki-link), `abilities`, `weaknesses`, `portrait` (optional)
 
@@ -474,6 +500,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | document (all subtypes) | Documents/ |
 | clue | Clues/ |
 | adventure-brief | Adventures/{adventure-name}/ |
+| campaign_overview | _Campaign/ |
 
 ## Vault Configuration Fields
 

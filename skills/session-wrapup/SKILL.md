@@ -174,6 +174,40 @@ entities via wiki-links only.
 
 Every entity reference: `[[wiki-link]]`.
 
+### 4b. Update Campaign Overview
+
+If `_Campaign/Campaign Overview.md` exists, update its mechanical
+frontmatter fields. Read the file first, then present proposed
+changes to the GM for confirmation.
+
+**Auto-updated fields:**
+
+| Field | Source | Logic |
+|-------|--------|-------|
+| `current_game_date` | In-game date at session end (from World State or GM) | Overwrite |
+| `sessions_played` | Current value + 1 | Increment |
+| `last_session` | Wiki-link to this session's index file | Overwrite |
+| `last_play_date` | This session's `play_date` | Overwrite |
+| `lastUpdated` | Current session reference | Overwrite |
+| `asOfSession` | Current session reference | Overwrite |
+
+**Confirmation prompt:**
+
+"Campaign overview updates:
+  current_game_date: "{old}" → "{new}"
+  sessions_played: {old} → {new}
+  last_session: [[{session title}]]
+  last_play_date: {date}
+
+Apply these updates?"
+
+On yes: write the updated frontmatter. On no: skip — the GM
+can update manually later.
+
+**Do not update:** `current_arc`, `arcs_planned`,
+`current_chapter`, `chapters_planned`, `status`, or any body
+sections. These are narrative decisions the GM makes explicitly.
+
 ### 5. What Carries Forward
 
 Write into Wrap-Up file:

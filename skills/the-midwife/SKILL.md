@@ -293,9 +293,30 @@ auto-promote — the GM chooses.
 ### Step 3: Vault Scaffold (greenfield only)
 
 Ask: "Ready to set up the vault for this campaign?"
-If yes, hand off to campaign-organizer with the adventure
-brief as context. campaign-organizer builds the vault
-around the existing `Adventures/` folder.
+If yes:
+
+1. **Create Campaign Overview** at
+   `_Campaign/Campaign Overview.md` using the template from
+   `shared/templates/campaign-overview.md`. Populate from the
+   adventure brief conversation:
+   - `campaign`: adventure/campaign name
+   - `game_system`: system chosen (or empty if undecided)
+   - `setting_year`: era discussed (or empty)
+   - `current_game_date`: same as `setting_year` if known
+   - `genre_tags`: from tone/genre discussion
+   - `scope`: from adventure brief scope
+   - `status`: `not_started`
+   - `sessions_played`: 0
+   - Premise section: from the adventure brief premise
+   - Setting section: from worldbuilding discussion
+   - Key Themes section: from tone and genre conversation
+   - Key Factions section: from driving forces in the brief
+   - Current Arc section: "Not yet begun."
+   - GM Notes section: empty
+
+2. **Hand off** to campaign-organizer with the adventure
+   brief as context. campaign-organizer builds the vault
+   around the existing `Adventures/` and `_Campaign/` folders.
 
 ### Step 4: Update Status
 
