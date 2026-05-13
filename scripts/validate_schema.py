@@ -30,7 +30,6 @@ ADVENTURE_BRIEF_SCOPE = {"campaign", "one-shot", "few-shot"}
 CAMPAIGN_OVERVIEW_STATUS = {
     "not_started", "in_progress", "paused", "completed", "abandoned"
 }
-CAMPAIGN_OVERVIEW_SCOPE = {"campaign", "one-shot", "few-shot"}
 ADVENTURE_BRIEF_CONTINUATION = {
     "new", "new-chapter", "new-arc", "time-jump",
     "prequel", "parallel", "new-pcs"
@@ -254,10 +253,10 @@ def validate_file(filepath: Path) -> list[str]:
             value = frontmatter["scope"]
             if not isinstance(value, str):
                 errors.append("Field 'scope' must be a string")
-            elif value not in CAMPAIGN_OVERVIEW_SCOPE:
+            elif value not in ADVENTURE_BRIEF_SCOPE:
                 errors.append(
                     f"Invalid scope '{value}' — "
-                    f"must be one of: {', '.join(sorted(CAMPAIGN_OVERVIEW_SCOPE))}"
+                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SCOPE))}"
                 )
 
     # Validate portrait field — only allowed for supported entity types
