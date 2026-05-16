@@ -62,6 +62,14 @@ proceeding with ingestion. Resume after migration completes.
 Skip this check if `_meta/` doesn't exist (that's first-time
 setup, not migration).
 
+## Gotchas
+
+1. **Read `_Templates/_Template_{Type}.md` before creating any entity** — Template is canonical structure. Pattern-matching off existing entities propagates drift and deprecated fields.
+2. **ONE file per entity** — Multiple entities in one file break wiki-link resolution and publish rendering.
+3. **Never modify external source files** — Read-only access. The GM's originals are their backup and legal proof of ownership.
+4. **Process buckets chronologically, earliest first** — Later buckets reference entities created by earlier ones. Out-of-order processing creates dangling wiki-links and duplicate entities.
+5. **Move processed `_inbox/` files to `_inbox/_processed/` with date stamp, never delete** — Source provenance. The GM may need to re-ingest if errors are found, and the original file is the audit trail.
+
 ## The Pipeline
 
 Six phases, sequential. Phases 1-4 owned by vault-ingest.

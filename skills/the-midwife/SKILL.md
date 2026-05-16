@@ -136,6 +136,13 @@ subtopic (e.g., `indian-allies.md` → per-ally files under
 get their own file under `adventures/` once confirmed,
 regardless of size.
 
+## Gotchas
+
+1. **Write nothing to the vault until the GM confirms** — The Midwife's workspace (`_midwife/`) is scratch space. Vault entities are permanent canon — premature creation pollutes the knowledge graph with unconfirmed content.
+2. **Never invent answers for Open Questions** — Unresolved GM decisions stay as explicit "Open Questions" in the adventure brief. Filling them in removes the GM's creative agency and may contradict their unstated vision.
+3. **Three strong ideas beat six half-formed ones** — Each NPC, location, or hook presented to the GM should have enough flesh to provoke a reaction. Quantity without quality wastes the GM's decision-making bandwidth.
+4. **Adventure brief `scope` must match what emerged, not what was asked** — If the GM said "one-shot" but the concept grew to 4 sessions, that's a `few-shot`. Forcing the wrong scope creates unplayable briefs.
+
 ## Phase 1: Discover
 
 **Goal:** Understand what the GM has.

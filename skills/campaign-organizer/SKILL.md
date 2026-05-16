@@ -191,6 +191,16 @@ detect these patterns independently.
 Read `shared/vault-structure.md` for naming conventions and accepted
 formats.
 
+## Gotchas
+
+1. **Read `_Templates/_Template_{Type}.md` before creating any entity** — Template is canonical structure. Pattern-matching off existing entities propagates drift and deprecated fields.
+2. **ONE file per entity** — Multiple entities in one file break wiki-link resolution and publish rendering.
+3. **`source_confidence: DRAFT` for new entities, `STUB` for placeholders** — Confidence level drives reconcile workflow and publish filtering. Wrong levels either block review or publish unverified content.
+4. **Never default to CWD for vault path** — Ask user to confirm. Accidentally creating vault structure in a code project directory is destructive and hard to undo.
+5. **Preserve temporal fields (`lastUpdated`, `asOfSession`, `createdSession`) during reorganization** — These track when content was last verified. Deleting them breaks campaign-qa's staleness detection.
+6. **`_meta/` files are the live schema, not this skill** — On existing vaults, always read `_meta/entity-types.md` before assuming type definitions. The vault may have evolved types this skill doesn't know about.
+7. **Images go in `_attachments/{subfolder}/`, path in `portrait` frontmatter field** — Obsidian renders from this path. Wrong location or field name means broken images in both Obsidian and publish.
+
 ## The Two Layers
 
 ### Narrative Layer (linear)

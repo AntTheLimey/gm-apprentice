@@ -41,6 +41,17 @@ names — not `planned_date` or `actual_date`.
 **Trigger phrases:** "session's over", "wrap up", "post-session",
 "process my notes", "what happened today"
 
+## Gotchas
+
+1. **Read `_Templates/_Template_{Type}.md` before creating any entity** — Template is canonical structure. Pattern-matching off existing entities propagates drift and deprecated fields.
+2. **ONE file per entity** — Multiple entities in one file break wiki-link resolution and publish rendering.
+3. **`source_confidence: DRAFT` for all new entities** — Only reconcile promotes to AUTHORITATIVE. Premature promotion blocks the review workflow.
+4. **Date fields must parse via JS `new Date()`** — Publish tool and timeline rendering break on narrative dates. Good: `"August 11, 1814"`. Bad: `"Evening, 11 August 1814"`.
+5. **Entity content goes in entity files, not the Wrap-Up** — Wrap-Up references entities via wiki-links only. Duplicating content causes drift between the entity file and the wrap-up.
+6. **Use `play_date` and `in_game_date`, never `planned_date` or `actual_date`** — Deprecated field names fail schema validation and break publish tool date rendering.
+7. **Event frontmatter uses `in_game_date:`, not `date:`** — The `date:` field was renamed in migration 1.4.22. Old field triggers deprecation warnings and won't render on the timeline page.
+8. **Wrap-Up filename: `Session_NN_Wrap_Up.md` (zero-padded, underscores)** — Session index `documents.wrap_up` wiki-links expect this exact pattern. Mismatched names create broken links.
+
 ## Workflow
 
 ### 1. Gather Sources
