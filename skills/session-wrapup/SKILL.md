@@ -151,7 +151,9 @@ locations, and NPC relationships.
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
   the vault file using that template as the structure.
-  Don't ask — do it. `source_confidence: DRAFT`. If
+  Don't ask — do it. Asking creates friction that leads to
+  skipped entities, which become orphaned references in later
+  sessions. `source_confidence: DRAFT`. If
   session-play already saved provisional content, incorporate
   rather than recreate. Never pattern-match off existing
   entity files — the template is canonical.
@@ -176,6 +178,14 @@ locations, and NPC relationships.
   `"Midnight–dawn, August 7–8, 1814"`. Time-of-day or narrative
   context belongs in the event body text, not the date field.
 
+**Self-check after each entity:**
+1. Re-read the entity file just written
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Verify: date fields (`in_game_date`, `play_date`) parse via `new Date()` — no narrative dates
+6. Fix any issues before proceeding to the next entity
+
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and
 `## Updated Entities`. This is the review artifact. Do **NOT**
@@ -183,7 +193,7 @@ write these appendices into the Wrap-Up file. Entity
 files are the permanent record. The Wrap-Up file references
 entities via wiki-links only.
 
-Every entity reference: `[[wiki-link]]`.
+Every entity reference: `[[wiki-link]]` — bare text names create no graph edges, no backlinks, and no publish cross-references.
 
 ### 4b. Update Campaign Overview
 

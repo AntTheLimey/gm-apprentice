@@ -50,7 +50,10 @@ If no vault detected:
 > campaign-organizer to set one up first, or point me to your
 > vault's location?"
 
-Do not proceed without a vault.
+Do not proceed without a vault — ingested entities need
+folder structure, templates, and `_meta/` schema to file
+correctly. Without these, entities get created with wrong
+paths and missing metadata.
 
 **Version check:** After confirming the vault exists, read
 `gm_apprentice_version` from `_meta/vault-config.md` and
@@ -184,6 +187,14 @@ Read `references/synthesis-templates.md` for the output format.
    consolidated character story entry per
    `references/synthesis-templates.md` § Character Story
    Backstory Entries
+
+**Self-check after each entity:**
+1. Re-read the entity file just written
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Verify: date fields (`in_game_date`, `play_date`) parse via `new Date()` — no narrative dates
+6. Fix any issues before proceeding to the next entity
 
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.

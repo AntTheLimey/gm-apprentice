@@ -139,6 +139,14 @@ When content doesn't fit existing types:
 This is just editing the vault's own schema. Built-in and evolved
 types are identical.
 
+**Self-check after each entity creation:**
+1. Re-read the entity file just written
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Verify: date fields parse via `new Date()` — no narrative dates, no time-of-day in date fields
+6. Fix any issues before proceeding to the next entity
+
 ### Temporal and Entity Fields
 
 For universal temporal fields (`lastUpdated`, `asOfSession`,
@@ -153,7 +161,9 @@ fields during Organize or Weave passes.
 **campaign-tracker.md** may exist at the vault root with
 consequence logs, foreshadowing logs, world state snapshots,
 and rumour boards. Do not reorganise this file — it is
-updated by the world-evolution procedure.
+updated by the world-evolution procedure and session-wrapup.
+Reorganizing it breaks the append-only contract those
+workflows depend on.
 
 **Campaign-timeline.md** may exist at the vault root as an
 append-only session-by-session record of what happened. Do

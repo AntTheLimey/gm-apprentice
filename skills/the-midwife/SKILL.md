@@ -293,6 +293,13 @@ to promote to real vault entities:
 [Name] ([type]), [Name] ([type]), ...
 Which should I create as vault entities?"
 
+**Self-check after each promoted entity:**
+1. Re-read the entity file just created
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence: DRAFT` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Fix any issues before promoting the next entity
+
 Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
 auto-promote — the GM chooses.
@@ -339,7 +346,9 @@ CATS sections.
 session-prep can help you plan it — or if you'd like to stop
 here and marinate on the concept, that's good too."
 
-Do not auto-invoke session-prep. Offer it.
+Do not auto-invoke session-prep. Offer it — the GM may want
+to sit with the concept, discuss with players, or revise the
+brief before committing to prep work.
 
 ## Adventure Brief Template
 
