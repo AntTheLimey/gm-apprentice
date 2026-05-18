@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.3] — 2026-05-16
+
+### Added
+
+- **Gotchas sections** — consolidated critical constraints with inline
+  reasoning added to vault-ingest (5) and the-midwife (4). Placed
+  before workflow steps to front-load common failure modes.
+- **Validation loops** — inline self-check steps after entity creation
+  in vault-ingest and the-midwife. Re-read file, compare frontmatter
+  against template, verify type/confidence/wiki-links, fix before
+  proceeding.
+- **Why-reasoning** — downstream-consequence explanations added to bare
+  directives in vault-ingest (vault dependency) and the-midwife
+  (session-prep invocation).
+- **Benchmark questions** — new test suites for vault-ingest (4 Qs) and
+  the-midwife (4 Qs), matching the existing session-wrapup and
+  campaign-organizer format.
+
+---
+
 ## [1.5.2] — 2026-05-12
 
 ### Added
@@ -582,6 +602,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.5.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.4.22...v1.5.0

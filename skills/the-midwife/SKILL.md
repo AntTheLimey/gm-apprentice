@@ -136,6 +136,13 @@ subtopic (e.g., `indian-allies.md` → per-ally files under
 get their own file under `adventures/` once confirmed,
 regardless of size.
 
+## Gotchas
+
+1. **Write nothing to the vault until the GM confirms** — The Midwife's workspace (`_midwife/`) is scratch space. Vault entities are permanent canon — premature creation pollutes the knowledge graph with unconfirmed content.
+2. **Never invent answers for Open Questions** — Unresolved GM decisions stay as explicit "Open Questions" in the adventure brief. Filling them in removes the GM's creative agency and may contradict their unstated vision.
+3. **Three strong ideas beat six half-formed ones** — Each NPC, location, or hook presented to the GM should have enough flesh to provoke a reaction. Quantity without quality wastes the GM's decision-making bandwidth.
+4. **Adventure brief `scope` must match what emerged, not what was asked** — If the GM said "one-shot" but the concept grew to 4 sessions, that's a `few-shot`. Forcing the wrong scope creates unplayable briefs.
+
 ## Phase 1: Discover
 
 **Goal:** Understand what the GM has.
@@ -286,6 +293,13 @@ to promote to real vault entities:
 [Name] ([type]), [Name] ([type]), ...
 Which should I create as vault entities?"
 
+**Self-check after each promoted entity:**
+1. Re-read the entity file just created
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence: DRAFT` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Fix any issues before promoting the next entity
+
 Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
 auto-promote — the GM chooses.
@@ -332,7 +346,9 @@ CATS sections.
 session-prep can help you plan it — or if you'd like to stop
 here and marinate on the concept, that's good too."
 
-Do not auto-invoke session-prep. Offer it.
+Do not auto-invoke session-prep. Offer it — the GM may want
+to sit with the concept, discuss with players, or revise the
+brief before committing to prep work.
 
 ## Adventure Brief Template
 
