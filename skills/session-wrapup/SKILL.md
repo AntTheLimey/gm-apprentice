@@ -41,17 +41,6 @@ names — not `planned_date` or `actual_date`.
 **Trigger phrases:** "session's over", "wrap up", "post-session",
 "process my notes", "what happened today"
 
-## Gotchas
-
-1. **Read `_Templates/_Template_{Type}.md` before creating any entity** — Template is canonical structure. Pattern-matching off existing entities propagates drift and deprecated fields.
-2. **ONE file per entity** — Multiple entities in one file break wiki-link resolution and publish rendering.
-3. **`source_confidence: DRAFT` for all new entities** — Only reconcile promotes to AUTHORITATIVE. Premature promotion blocks the review workflow.
-4. **Date fields must parse via JS `new Date()`** — Publish tool and timeline rendering break on narrative dates. Good: `"August 11, 1814"`. Bad: `"Evening, 11 August 1814"`.
-5. **Entity content goes in entity files, not the Wrap-Up** — Wrap-Up references entities via wiki-links only. Duplicating content causes drift between the entity file and the wrap-up.
-6. **Use `play_date` and `in_game_date`, never `planned_date` or `actual_date`** — Deprecated field names fail schema validation and break publish tool date rendering.
-7. **Event frontmatter uses `in_game_date:`, not `date:`** — The `date:` field was renamed in migration 1.4.22. Old field triggers deprecation warnings and won't render on the timeline page.
-8. **Wrap-Up filename: `Session_NN_Wrap_Up.md` (zero-padded, underscores)** — Session index `documents.wrap_up` wiki-links expect this exact pattern. Mismatched names create broken links.
-
 ## Workflow
 
 ### 1. Gather Sources
@@ -151,9 +140,7 @@ locations, and NPC relationships.
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
   the vault file using that template as the structure.
-  Don't ask — do it. Asking creates friction that leads to
-  skipped entities, which become orphaned references in later
-  sessions. `source_confidence: DRAFT`. If
+  Don't ask — do it. `source_confidence: DRAFT`. If
   session-play already saved provisional content, incorporate
   rather than recreate. Never pattern-match off existing
   entity files — the template is canonical.
@@ -178,14 +165,6 @@ locations, and NPC relationships.
   `"Midnight–dawn, August 7–8, 1814"`. Time-of-day or narrative
   context belongs in the event body text, not the date field.
 
-**Self-check after each entity:**
-1. Re-read the entity file just written
-2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
-3. Verify: `type` matches, `source_confidence` is set, all required fields present
-4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
-5. Verify: date fields (`in_game_date`, `play_date`) parse via `new Date()` — no narrative dates
-6. Fix any issues before proceeding to the next entity
-
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and
 `## Updated Entities`. This is the review artifact. Do **NOT**
@@ -193,7 +172,7 @@ write these appendices into the Wrap-Up file. Entity
 files are the permanent record. The Wrap-Up file references
 entities via wiki-links only.
 
-Every entity reference: `[[wiki-link]]` — bare text names create no graph edges, no backlinks, and no publish cross-references.
+Every entity reference: `[[wiki-link]]`.
 
 ### 4b. Update Campaign Overview
 
