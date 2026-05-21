@@ -1,97 +1,127 @@
 # Benchmark Questions — vault-ingest
 
 **Skill:** vault-ingest
-**Purpose:** Validate ingestion pipeline judgment and output quality
-**Runs:** 3 per variant (Sonnet agent), blind evaluation (Opus)
+**Purpose:** Baseline quality before gotchas/validation/why-reasoning improvements
+**Runs:** 1 per variant (Phase 1), expand to 3 if warranted
 **Campaign data:** `tests/benchmark-campaign/`
-**Models:** claude-sonnet-4-6 (agents), claude-opus-4-6 (evaluator)
+**Models:** claude-sonnet-4-6 (agents), claude-sonnet-4-6 (evaluator)
 
 ## Questions
 
-### Q1 — Prep-vs-play discrimination
+### Q1 — Source classification
 
-Here is a mixed document. Classify each section as play
-transcript, play fragment, scenario prep, research/brainstorm,
-or keeper recollection. Explain your reasoning.
+I have these files to ingest into my campaign vault at
+tests/benchmark-campaign/:
 
-[Use test fixture: tests/benchmark-campaign/_inbox/mixed-source.md]
+1. A 2-page document with NPC names, descriptions, and faction ties
+2. A handwritten session log with dice rolls and skill check results
+3. A timeline of in-game events with dates
+4. A character sheet PDF for a new PC joining mid-campaign
 
-### Q2 — Name deduplication
+Classify each document and tell me what vault entities each
+would produce.
 
-Read the source material in tests/benchmark-campaign/_inbox/.
-Two documents mention characters with similar but inconsistent
-names. Identify which names refer to the same entity and which
-are distinct characters.
+### Q2 — Entity creation from pasted NPC list
 
-### Q3 — Canon confidence assignment
+Ingest these NPCs into my campaign vault at
+tests/benchmark-campaign/. Create proper entity files:
 
-Given the classified source material from Q1, assign
-source_confidence to each extracted entity. Show your reasoning
-for AUTHORITATIVE vs DRAFT vs NOT CANON.
+- Lady Ashworth: Patron of the arts, secretly funding occult
+  research. Connected to The Hermetic Order. Status: alive.
+- Dr. Crane: Alienist at Arkham Sanitarium, treating patients
+  who've seen too much. Status: alive.
+- The Confessor: Anonymous letter-writer threatening to expose
+  the Order's activities. Status: unknown.
 
-### Q4 — Interview question quality
+### Q3 — Bucket sorting with ambiguity
 
-Given this gaps list from a hypothetical ingestion:
-- Unknown: Did the investigators visit the lighthouse?
-- Unknown: What happened to Captain Mercer after the storm?
-- Unknown: Were the handouts from the library found?
-- Unknown: How did the confrontation at the docks end?
+I have session notes that mention "the incident at the docks"
+and reference both Inspector Crane and Lady Ashworth. There's
+no session number, but it mentions "three weeks after the gala"
+and the in-game date is sometime in November 1923. My campaign
+at tests/benchmark-campaign/ has sessions through Session 2.
+Where does this material belong? What confidence level would
+you assign?
 
-Write the first three interview questions you'd ask the GM.
-Each must be contextual, single, and designed to trigger memory.
+### Q4 — Full synthesis pipeline
 
-### Q5 — Synthesized play notes quality
+Process these raw play notes into a proper wrap-up for my
+campaign at tests/benchmark-campaign/. The notes are for a
+new Session 3:
 
-Given these confirmed play events and GM answers, produce a
-Play Notes file that session-wrapup can process. Include
-proper frontmatter per the document chain standard.
-
-[Use confirmed events from Q1-Q4 fixture answers]
-
-### Q6 — Image classification
-
-You receive three images:
-- A character sheet PDF
-- A hand-drawn map with location labels
-- A portrait illustration of an NPC
-
-For each: where does it go in _attachments/? Do you attempt
-content extraction? What entity does it attach to?
-
-### Q7 — Bootstrap detection
-
-You're invoked with source material but the working directory
-has no _meta/ folder and no vault structure. What do you do?
-
-### Q8 — Bucket sorting
-
-Given source material spanning three different time periods
-with mixed chronological signals, sort it into buckets. Show
-your sorting signals and confidence levels.
+"Players investigated the warehouse on Dock Street. Found
+crates marked with the Elder Sign. Marcus (PC) failed his
+Spot Hidden (rolled 89 vs 45). Sarah (PC) succeeded her
+Library Use (rolled 23 vs 65) and found shipping manifests
+linking crates to Miskatonic University. New NPC: Dock
+foreman Big Pete, gruff, knows something. They left at
+sunset heading to the university. In-game date: Nov 15, 1923."
 
 ## Agent Prompts
 
-### Test prompt (vault-ingest skill)
+### Control prompt (current main)
 
-````text
-You are a TTRPG vault ingestion assistant. Read the skill entry
-point: skills/vault-ingest/SKILL.md
-Follow routing to find reference files for each question.
-Answer each question concisely (under 150 words each, except Q5
-which can be up to 300 words).
+```text
+You are a TTRPG vault ingestion assistant. Read the skill entry point:
+skills/vault-ingest/SKILL.md
+Follow routing to find the right reference files for each question.
+Answer each question concisely (under 200 words each, except Q4
+which can be up to 400 words). When creating entity files, show
+complete frontmatter and body content.
 
 Also read the campaign files at:
 tests/benchmark-campaign/
-Start with the index at _meta/index.md, then read _inbox/ files
-and entity files as needed.
+Start with the index at _meta/index.md, then read entity files,
+session files, and templates as needed.
 
 Questions:
-[all 8 questions above]
-````
+
+Q1: I have these files to ingest into my campaign vault at
+tests/benchmark-campaign/:
+1. A 2-page document with NPC names, descriptions, and faction ties
+2. A handwritten session log with dice rolls and skill check results
+3. A timeline of in-game events with dates
+4. A character sheet PDF for a new PC joining mid-campaign
+Classify each document and tell me what vault entities each
+would produce.
+
+Q2: Ingest these NPCs into my campaign vault at
+tests/benchmark-campaign/. Create proper entity files:
+- Lady Ashworth: Patron of the arts, secretly funding occult
+  research. Connected to The Hermetic Order. Status: alive.
+- Dr. Crane: Alienist at Arkham Sanitarium, treating patients
+  who've seen too much. Status: alive.
+- The Confessor: Anonymous letter-writer threatening to expose
+  the Order's activities. Status: unknown.
+
+Q3: I have session notes that mention "the incident at the docks"
+and reference both Inspector Crane and Lady Ashworth. There's
+no session number, but it mentions "three weeks after the gala"
+and the in-game date is sometime in November 1923. My campaign
+at tests/benchmark-campaign/ has sessions through Session 2.
+Where does this material belong? What confidence level would
+you assign?
+
+Q4: Process these raw play notes into a proper wrap-up for my
+campaign at tests/benchmark-campaign/. The notes are for a
+new Session 3:
+"Players investigated the warehouse on Dock Street. Found
+crates marked with the Elder Sign. Marcus (PC) failed his
+Spot Hidden (rolled 89 vs 45). Sarah (PC) succeeded her
+Library Use (rolled 23 vs 65) and found shipping manifests
+linking crates to Miskatonic University. New NPC: Dock
+foreman Big Pete, gruff, knows something. They left at
+sunset heading to the university. In-game date: Nov 15, 1923."
+```
+
+### Test prompt (improved skill)
+
+Same as control prompt — identical text. The skill file content
+on the branch differs (has gotchas, validation loops, why-reasoning).
 
 ### Evaluator prompt (blind scoring)
 
-````text
+```text
 You are evaluating two TTRPG GM assistant responses. One is
 labelled A, one B. You do not know which is control or test.
 
@@ -99,21 +129,18 @@ Score each answer on 5 dimensions (1-3 each, 15 max per question):
 
 | Dimension | 1 (Poor) | 2 (Partial) | 3 (Nailed it) |
 |-----------|----------|-------------|----------------|
-| Classification accuracy | Wrong types, prep treated as play | Mostly correct, missed fragments | Perfect prep/play/research discrimination |
-| Canon judgment | Wrong confidence, invented content | Mostly correct confidence | Correct confidence, no invention, proper flags |
-| Interview quality | Bulk questions, no context | Some context but generic | Contextual, single, memory-triggering |
-| Schema conformance | Wrong frontmatter, wrong paths | Partial conformance | Perfect document chain compliance |
-| Actionability | Needs significant rework | Usable with GM effort | Drop-in ready, downstream skills accept output |
+| Factual accuracy | Wrong stats, hallucinated names | Mostly correct, minor errors | All verifiable facts correct |
+| System specificity | Could be any system, no mechanics | Right system but generic | Uses system-specific idiom, conventions, tone |
+| Actionability | Needs significant rework | Usable with GM effort | Drop-in ready, use as-is |
+| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls, thresholds |
+| Table-ready fiction | Generic/obvious/AI slop | Fits system but predictable | Evocative, system-native, sparks play |
 
 Questions for context:
-Q1: Prep-vs-play discrimination
-Q2: Name deduplication across documents
-Q3: Canon confidence assignment
-Q4: Interview question quality
-Q5: Synthesized play notes for session-wrapup
-Q6: Image classification and attachment
-Q7: Bootstrap detection (no vault)
-Q8: Bucket sorting with mixed signals
+
+Q1: Classify source documents and identify what vault entities each produces
+Q2: Create NPC entity files from a pasted list (frontmatter + body)
+Q3: Sort ambiguous source material into chronological buckets
+Q4: Full synthesis — raw play notes into wrap-up + entity files
 
 For each question, output:
 - Scores for A and B on each dimension
@@ -121,4 +148,4 @@ For each question, output:
 - Total per question and overall total
 
 Do NOT reveal which you think is control or test.
-````
+```

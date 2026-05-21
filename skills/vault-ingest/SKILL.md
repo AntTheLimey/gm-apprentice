@@ -50,7 +50,10 @@ If no vault detected:
 > campaign-organizer to set one up first, or point me to your
 > vault's location?"
 
-Do not proceed without a vault.
+Do not proceed without a vault — ingested entities need
+folder structure, templates, and `_meta/` schema to file
+correctly. Without these, entities get created with wrong
+paths and missing metadata.
 
 **Version check:** After confirming the vault exists, read
 `gm_apprentice_version` from `_meta/vault-config.md` and
@@ -61,6 +64,14 @@ to campaign-organizer's migration workflow
 proceeding with ingestion. Resume after migration completes.
 Skip this check if `_meta/` doesn't exist (that's first-time
 setup, not migration).
+
+## Gotchas
+
+1. **Read `_Templates/_Template_{Type}.md` before creating any entity** — Template is canonical structure. Pattern-matching off existing entities propagates drift and deprecated fields.
+2. **ONE file per entity** — Multiple entities in one file break wiki-link resolution and publish rendering.
+3. **Never modify external source files** — Read-only access. The GM's originals are their backup and legal proof of ownership.
+4. **Process buckets chronologically, earliest first** — Later buckets reference entities created by earlier ones. Out-of-order processing creates dangling wiki-links and duplicate entities.
+5. **Move processed `_inbox/` files to `_inbox/_processed/` with date stamp, never delete** — Source provenance. The GM may need to re-ingest if errors are found, and the original file is the audit trail.
 
 ## The Pipeline
 
@@ -176,6 +187,14 @@ Read `references/synthesis-templates.md` for the output format.
    consolidated character story entry per
    `references/synthesis-templates.md` § Character Story
    Backstory Entries
+
+**Self-check after each entity:**
+1. Re-read the entity file just written
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Verify: date fields (`in_game_date`, `play_date`) parse via `new Date()` — no narrative dates
+6. Fix any issues before proceeding to the next entity
 
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.
