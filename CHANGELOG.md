@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.3] — 2026-05-22
+
+### Added
+
+- **Session-wrapup world fact detection** — scans session notes
+  for unrecognized heritages, place names, cultural practices,
+  deity names, and other world facts; stages findings for
+  reconcile review
+- **Reconcile step 2.5** — world fact review with three-state
+  prompts (canon/ignore/defer) during post-session reconciliation
+- **Reconcile step 5 world-rule validation** — checks entities
+  against `_World/` rules during promotion to AUTHORITATIVE
+- **Deferred flag accumulation** — mention counting and
+  resurfacing for deferred world facts
+- **World fact detection heuristics** — signal/noise distinction
+  reference for session-wrapup scanning
+
+---
+
 ## [1.6.2] — 2026-05-22
 
 ### Added
@@ -661,6 +680,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.3...v1.6.0
