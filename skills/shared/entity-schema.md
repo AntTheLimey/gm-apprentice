@@ -24,6 +24,7 @@ Apply to **every** entity type. Enable temporal queries
 | createdSession | string | Session when first introduced |
 | source | string | How it entered canon: "play", "prep", or "backstory" |
 | confidence | string | Canon confidence: DRAFT / AUTHORITATIVE / SUPERSEDED |
+| era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"). Assumed campaign present if absent. |
 
 Always set `lastUpdated` and `asOfSession` to current session
 when filing or updating.
@@ -87,6 +88,11 @@ narrative (abstract)
 ├── clue
 ├── adventure-brief
 └── campaign_overview
+
+world (abstract)
+├── heritage
+├── world_domain
+└── world_flags
 ```
 
 Abstract types cannot be assigned directly to entities but are
@@ -199,6 +205,7 @@ Extraction defaults:
 | recentActions | array | Last 1-3 sessions |
 | status | string | active / weakened / destroyed / allied / dormant |
 | portrait | string | Optional: path to logo or HQ image under `_attachments/` |
+| part_of | string | Optional: wiki-link to parent organization (`"[[Parent Org]]"`) |
 
 ### Clue
 
@@ -248,6 +255,7 @@ Extraction defaults:
 | resources | string | Available assets |
 | notable_members | array | Important people |
 | portrait | string | Optional: path to logo or HQ image under `_attachments/` |
+| part_of | string | Optional: wiki-link to parent organization (`"[[Parent Org]]"`) |
 
 ### Event
 
@@ -298,6 +306,45 @@ Extraction defaults:
 | current_chapter | string | Wiki-link to active chapter |
 | chapters_planned | number | Chapters in current arc (or total if no arcs) |
 | portrait | string | Optional: path to campaign image under `_attachments/` |
+
+### Heritage
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| lifespan_range | array | [min, max] age range |
+| maturity_age | number | Age of adulthood |
+| average_height | string | Typical height range |
+| notable_traits | array | Distinguishing biological/cultural traits |
+| portrait | string | Optional: path to heritage illustration under `_attachments/` |
+
+### World Domain
+
+Structural file defining world rules for one domain (e.g.,
+heritages, geography, economics). Lives in `_World/`. Not a
+knowledge-graph entity — a structural file like Campaign
+Overview.
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| domain | string | Domain identifier (e.g., `heritages`, `geography-climate`) |
+| status | string | active / stub / inactive |
+| summary | string | One-line domain summary |
+| rules | array | Machine-checkable world rules (see below) |
+
+Each rule in the `rules` array has:
+- `id` — unique identifier for flag tracking
+- `rule` — human-readable description
+- `check` — structured object for validation (field comparisons,
+  allowed values, range checks)
+
+### World Flags
+
+Structural file tracking the three-state flag system. One per
+campaign at `_World/_flags.md`. Not a knowledge-graph entity.
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| last_reviewed | string | Date of last flag review |
 
 ## Narrative Element Schemas
 
@@ -485,6 +532,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | `creature` | `located_at` |
 | `faction` | `headquartered_at` |
 | `organization` | `headquartered_at` |
+| `heritage` | — (none required) |
 
 ## Default Folder Mapping
 
@@ -501,6 +549,9 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | clue | Clues/ |
 | adventure-brief | Adventures/{adventure-name}/ |
 | campaign_overview | _Campaign/ |
+| heritage | Heritages/ |
+| world_domain | _World/ |
+| world_flags | _World/ |
 
 ## Vault Configuration Fields
 

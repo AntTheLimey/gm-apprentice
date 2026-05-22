@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0] — 2026-05-22
+
+### Added
+
+- **Heritage entity type** — first-class vault entity for species/ancestry
+  definitions with lifespan ranges, maturity age, notable traits, and
+  Second-Order Notes
+- **`_World/` vault layer** — 10 domain files for world rules (heritages,
+  geography, history, politics, economics, magic/technology, cosmology,
+  culture, ecology, language), each with machine-checkable rules
+- **Three-state flag system** — `_flags.md` tracks world facts as canon,
+  ignored, or deferred with accumulation and resurfacing
+- **Organization hierarchy** — `part_of` field on faction/organization
+  entities enables nested political, military, and religious structures
+- **Era field** — optional `era` universal field for temporal referencing
+  against world history eras
+- **World structural templates** — world-index, world-flags, world-domain,
+  heritage, and faction templates in `skills/shared/templates/`
+- **Schema validation** — `heritage`, `world_domain`, `world_flags` types
+  and `WORLD_DOMAIN_STATUS` enum in `validate_schema.py`
+- **Benchmark fixtures** — `_World/` and `Heritages/` test data in
+  benchmark campaign
+
+---
+
 ## [1.5.3] — 2026-05-16
 
 ### Added
@@ -602,6 +627,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.3...v1.6.0
 [1.5.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.0...v1.5.1

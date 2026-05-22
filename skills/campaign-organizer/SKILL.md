@@ -236,7 +236,16 @@ tools used to read, write, and search differ.
    contents. It is not part of the campaign vault structure.
 3. **Propose structure** — Present vault layout. Read
    `shared/vault-structure.md` for the default layout.
-   Adapt to content.
+   Adapt to content. During new vault setup, scaffold:
+   - `_World/` — create `world-index.md` and `_flags.md` from
+     `shared/templates/world-index.md` and
+     `shared/templates/world-flags.md`. Do not create individual
+     domain files — those are created on demand when content exists.
+   - `Heritages/` — entity folder for heritage entities. Add
+     `_Templates/_Template_Heritage.md` from
+     `shared/templates/heritage.md`.
+   - Add `_Templates/_Template_Faction.md` from
+     `shared/templates/faction.md` if not already present.
 4. **Extract and file** — For each entity, read
    `_Templates/_Template_{Type}.md` first, then create the note
    using that template as the structure. Fill in frontmatter per

@@ -14,6 +14,9 @@ Written to `_meta/vault-config.md` on first setup.
 │   ├── events/      (scene art)
 │   └── documents/   (scans, letter images)
 ├── _midwife/        (adventure workspace — see below)
+├── _World/          (world rules and domain files)
+│   ├── world-index.md
+│   └── _flags.md
 ├── _Campaign/
 │   ├── Campaign Overview.md
 │   ├── Player Characters.md
@@ -34,6 +37,7 @@ Written to `_meta/vault-config.md` on first setup.
 ├── Factions & Organizations/
 ├── Items & Artifacts/
 ├── Creatures/
+├── Heritages/
 ├── Events/
 ├── Documents/
 └── Clues/
@@ -166,3 +170,33 @@ seed category. When starting a new adventure, the midwife
 scans seeds for relevant prior ideas.
 
 `campaign-qa` ignores `_midwife/` during audits.
+
+## World Layer
+
+The `_World/` folder stores world rules and domain definitions.
+Created on demand by any skill that needs to write world content.
+Domain files define machine-checkable rules; heritage entities in
+`Heritages/` are first-class vault entities.
+
+```text
+_World/
+├── world-index.md            (active domains, world summary)
+├── _flags.md                 (three-state flag tracker)
+├── heritages.md              (species/ancestry rules)
+├── geography-climate.md      (landforms, biomes, resources)
+├── history-timeline.md       (ages, eras, events)
+├── politics-governance.md    (power structures, borders)
+├── economics-trade.md        (resources, currency, trade)
+├── magic-technology.md       (systems, limits, access)
+├── cosmology-religion.md     (planes, gods, faiths)
+├── culture-daily-life.md     (customs, food, dress)
+├── ecology.md                (flora, fauna, food chains)
+└── language-communication.md (naming, scripts, barriers)
+```
+
+Individual domain files are created when content exists — not
+all 10 are required. `world-index.md` and `_flags.md` are
+created as stubs during vault scaffolding.
+
+`campaign-qa` audits `_World/` domain rules against entities.
+`campaign-organizer` creates `_World/` during vault setup.
