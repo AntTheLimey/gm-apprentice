@@ -123,6 +123,10 @@ Match user intent → go directly to the file. Skip clarification.
 **"What happened in session [N]?"** / **"campaign recap"**
 → `campaign-timeline.md` (vault root or campaign/).
 
+**"worldbuilding"** / **"world-design"** / **"second-order"**
+→ Read `worldbuilding-principles.md` for advisory guidance.
+For interactive worldbuilding sessions, hand off to the midwife.
+
 ## Modes
 
 **Analysis** — Validate, review, check, advise.
