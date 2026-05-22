@@ -3,7 +3,7 @@ type: world_domain
 domain: heritages
 status: active
 source_confidence: AUTHORITATIVE
-last_updated: "2"
+lastUpdated: "2"
 asOfSession: "2"
 summary: "Human-only world; non-human entities are Mythos horrors"
 rules:

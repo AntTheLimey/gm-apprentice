@@ -3,7 +3,7 @@ type: world_domain
 domain: index
 status: active
 source_confidence: AUTHORITATIVE
-last_updated: "2"
+lastUpdated: "2"
 asOfSession: "2"
 summary: "1920s New England — human world with whispered horrors"
 rules: []
