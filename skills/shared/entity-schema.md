@@ -202,6 +202,7 @@ Extraction defaults:
 | recentActions | array | Last 1-3 sessions |
 | status | string | active / weakened / destroyed / allied / dormant |
 | portrait | string | Optional: path to logo or HQ image under `_attachments/` |
+| part_of | string | Optional: wiki-link to parent organization (`"[[Parent Org]]"`) |
 
 ### Clue
 
@@ -251,6 +252,7 @@ Extraction defaults:
 | resources | string | Available assets |
 | notable_members | array | Important people |
 | portrait | string | Optional: path to logo or HQ image under `_attachments/` |
+| part_of | string | Optional: wiki-link to parent organization (`"[[Parent Org]]"`) |
 
 ### Event
 
