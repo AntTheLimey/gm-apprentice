@@ -215,9 +215,11 @@ facts (heritage references, deity names, new place names):
 
 1. Scan session notes using heuristics from
    `references/world-fact-detection.md`
-2. Check each finding against `_World/_flags.md` for
-   deduplication (ignored → suppress, deferred → increment,
-   canon → suppress)
+2. Deduplicate each finding against `_World/_flags.md`
+   (ignored → suppress, deferred → increment, canon →
+   suppress), `_World/` domain files (already encoded →
+   suppress), and existing entity files (already exists →
+   suppress)
 3. Stage findings in the Wrap-Up file under
    `## World Fact Findings`
 

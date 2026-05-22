@@ -38,7 +38,8 @@ Before staging a finding:
 1. Check `_World/_flags.md` — is this already tracked?
    - **Ignored** → suppress silently, do not stage
    - **Deferred** → increment mention count, note session
-     number, stage for reconcile if accumulation threshold met
+     number. Stage for reconcile when the topic has been
+     mentioned in 3 or more sessions.
    - **Canon** → suppress, it's already resolved
 2. Check `_World/` domain files — is this fact already encoded?
    If so, suppress.

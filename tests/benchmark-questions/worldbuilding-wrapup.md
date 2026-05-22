@@ -78,7 +78,7 @@ wrapup with no errors or empty world sections.
 | Internal consistency | Creates contradictions with existing world state | Clean but minimal | Actively reinforces existing world coherence |
 | Actionability | Vague findings | Workable findings needing GM effort | Specific, staged findings ready for reconcile review |
 
-### C1 (existing 5-dimension rubric)
+### C1 (existing 5-dimensional rubric)
 
 Standard session-wrapup quality — complete recap, entity
 updates, timeline entries, carry-forward. No world-fact section
