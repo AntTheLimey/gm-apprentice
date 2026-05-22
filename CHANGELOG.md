@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.1] — 2026-05-22
+
+### Added
+
+- **Midwife standalone worldbuilding mode** — why-chain
+  conversations for fleshing out world domains, with per-domain
+  question banks, cross-domain implication surfacing, and
+  Second-Order Notes
+- **Midwife woven worldbuilding** — one-question why-chain
+  prompts during adventure creation when world facts are implied
+- **Worldbuilding reference files** — question banks (10
+  domains), cross-domain implication matrix, spiral/iceberg
+  principles, pitfall avoidance
+- **TTRPG-expert worldbuilding advisory** — principles reference
+  with per-system notes and midwife handoff
+- **Worldbuilding benchmarks** — A1-A6 purposeful worldbuilding
+  and C2 adventure creation regression
+
+---
+
 ## [1.6.0] — 2026-05-22
 
 ### Added
@@ -627,6 +647,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.3...v1.6.0
 [1.5.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.1...v1.5.2
