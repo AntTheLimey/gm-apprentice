@@ -37,6 +37,7 @@ ADVENTURE_BRIEF_CONTINUATION = {
 ADVENTURE_BRIEF_SHAPE = {
     "linear", "branching", "hub-and-spoke", "open-node", "sandbox"
 }
+WORLD_DOMAIN_STATUS = {"active", "stub", "inactive"}
 
 # Required fields per entity type
 # All entities need: type, source_confidence
@@ -63,10 +64,13 @@ REQUIRED_FIELDS = {
     "timeline": ["type"],
     "player-characters": ["type"],
     "campaign_overview": ["type", "source_confidence"],
+    "heritage": ["type", "source_confidence"],
+    "world_domain": ["type", "domain", "status"],
+    "world_flags": ["type"],
 }
 
 # Optional fields that support portraits (for future validation)
-PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature", "campaign_overview"}
+PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature", "campaign_overview", "heritage"}
 
 # Valid optional fields per entity type (used for deprecation warnings)
 DEPRECATED_FIELDS: dict[str, list[tuple[str, str]]] = {
@@ -258,6 +262,17 @@ def validate_file(filepath: Path) -> list[str]:
                     f"Invalid scope '{value}' — "
                     f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SCOPE))}"
                 )
+
+    # Validate world_domain status
+    if entity_type == "world_domain" and "status" in frontmatter:
+        value = frontmatter["status"]
+        if not isinstance(value, str):
+            errors.append("Field 'status' must be a string")
+        elif value not in WORLD_DOMAIN_STATUS:
+            errors.append(
+                f"Invalid status '{value}' — "
+                f"must be one of: {', '.join(sorted(WORLD_DOMAIN_STATUS))}"
+            )
 
     # Validate portrait field — only allowed for supported entity types
     portrait = frontmatter.get("portrait")
