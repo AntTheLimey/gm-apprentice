@@ -116,6 +116,26 @@ those flagged in carry-forward or threads.
 Date, location, threats, factions, clocks.
 → Write `## World State` to Plan file.
 
+#### Step 10b: World threads
+
+If `_World/_flags.md` exists, read the **Deferred** section.
+Surface items gaining traction:
+
+> **World threads gaining traction:**
+> - "The Old Empire" — mentioned 3 times across sessions 3-5,
+>   still no detail. Worth a midwife worldbuilding session?
+> - "River spirits" — mentioned twice, possibly related to the
+>   Thornwood arc
+
+**Resurfacing criteria:**
+- Referenced in 3+ distinct sessions
+- 3+ mentions within a single session
+- Related to the upcoming adventure's themes or locations
+
+**Awareness only** — no three-state prompt. The GM decides
+whether to act. If they want to resolve, suggest a midwife
+worldbuilding conversation.
+
 If Reconcile ran, steps 7-10 read `## Reconciliation Context` and skip
 what's already established.
 
