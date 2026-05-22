@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.2] — 2026-05-22
+
+### Added
+
+- **Entity validation against world rules** — campaign-organizer
+  checks NPCs, locations, and factions against `_World/` domain
+  rules during creation and updates
+- **Three-state flag prompts** — violations surface as advisory
+  prompts with canon/ignore/defer responses
+- **Ad-hoc bootstrap** — world infrastructure created on demand
+  when validation needs a domain file that doesn't exist yet
+
+---
+
 ## [1.6.1] — 2026-05-22
 
 ### Added
@@ -647,6 +661,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.3...v1.6.0
 [1.5.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.5.2...v1.5.3

@@ -251,6 +251,12 @@ tools used to read, write, and search differ.
    using that template as the structure. Fill in frontmatter per
    schema and embed `[[wiki-links]]`. Never pattern-match off
    existing entity files — the template is canonical.
+
+**World-rule validation:** After creating or updating an entity,
+if `_World/` exists, check the entity against active domain
+rules. Read `references/world-validation.md` for the full
+procedure. Surface violations as advisory prompts with
+three-state responses (canon / ignore / defer).
 5. **Link pass** — Find missed cross-references.
 6. **Graph audit** — Read `references/graph-hygiene.md` and
    run hygiene checks.
@@ -288,6 +294,10 @@ tools used to read, write, and search differ.
 4. **Propose** — Group by confidence: Explicit, Inferred, Possible.
 5. **Apply** — After confirmation, update frontmatter and links.
    Read `references/graph-hygiene.md` for link conventions.
+
+When adding relationships or updating entity fields, check
+new values against `_World/` rules (if `_World/` exists).
+Follow `references/world-validation.md`.
 6. **Update index** — Refresh `_meta/index.md`.
 7. **Graph audit** — Read `references/graph-hygiene.md` and
    run full hygiene check.
@@ -301,7 +311,11 @@ tools used to read, write, and search differ.
 2. **Semantic checks:** redundant edges, implied traversal edges,
    hub overload, generic type usage (`associated_with` etc.).
    Read `references/graph-hygiene.md` for anti-patterns.
-3. **Report** — Categorized findings with severity and fixes.
+3. **World-rule checks:** If `_World/` exists with active domain
+   files, check all entities against world rules. Report
+   violations as findings (not blocking). Follow
+   `references/world-validation.md` for check procedures.
+4. **Report** — Categorized findings with severity and fixes.
 
 ## Handling Ambiguity
 
