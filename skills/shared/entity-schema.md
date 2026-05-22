@@ -87,6 +87,9 @@ narrative (abstract)
 ├── clue
 ├── adventure-brief
 └── campaign_overview
+
+world (abstract)
+└── heritage
 ```
 
 Abstract types cannot be assigned directly to entities but are
@@ -299,6 +302,16 @@ Extraction defaults:
 | chapters_planned | number | Chapters in current arc (or total if no arcs) |
 | portrait | string | Optional: path to campaign image under `_attachments/` |
 
+### Heritage
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| lifespan_range | array | [min, max] age range |
+| maturity_age | number | Age of adulthood |
+| average_height | string | Typical height range |
+| notable_traits | array | Distinguishing biological/cultural traits |
+| portrait | string | Optional: path to heritage illustration under `_attachments/` |
+
 ## Narrative Element Schemas
 
 **Chapter:**
@@ -485,6 +498,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | `creature` | `located_at` |
 | `faction` | `headquartered_at` |
 | `organization` | `headquartered_at` |
+| `heritage` | — (none required) |
 
 ## Default Folder Mapping
 
@@ -501,6 +515,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | clue | Clues/ |
 | adventure-brief | Adventures/{adventure-name}/ |
 | campaign_overview | _Campaign/ |
+| heritage | Heritages/ |
 
 ## Vault Configuration Fields
 
