@@ -66,6 +66,32 @@ Surface everything that needs GM attention:
 
 Present as a short inventory, not a wall of text.
 
+### 2.5. World fact review
+
+If the Wrap-Up file contains a `## World Fact Findings` section
+(staged by session-wrapup), review each finding with the GM.
+
+For each finding, present the three-state prompt:
+
+- **Canon** → create or update the relevant `_World/` domain
+  file and entities. Example: new heritage confirmed → create
+  `Heritages/{Name}.md` from `shared/templates/heritage.md`,
+  add entry to `_World/heritages.md`, record in `_flags.md`
+  canon section.
+  If `_World/` doesn't exist, create it first (world-index.md
+  + _flags.md stubs from shared/templates/).
+- **Ignore** → add to `_flags.md` ignored section with date
+  and context. Future flags on this topic are suppressed.
+- **Defer** → add to `_flags.md` deferred section with session
+  number and context. If the item was being re-surfaced
+  (accumulated mentions), present the accumulated context:
+  "The Old Empire has come up in 3 sessions now — should we
+  flesh this out?"
+
+One finding at a time. Wait for GM decision before continuing.
+Record each resolution in the `## Reconciliation Context`
+section (step 6).
+
 ### 3. Walk through conflicts
 
 One conflict at a time. For each:
@@ -99,6 +125,15 @@ On GM approval:
 2. Update session index `status` to `reviewed`
 3. Promote related entity `source_confidence` from DRAFT
    to AUTHORITATIVE where GM confirmed content
+   3b. Before finalizing each entity promotion, check the entity
+       against active `_World/` rules (if `_World/` exists).
+       If a world rule is violated:
+       - Surface: "This NPC is 400 years old, but world rules
+         say humans live 60-85 years. Is that intentional?"
+       - **Yes, intentional** → promote with a note explaining
+         the exception
+       - **Correct it** → update the entity before promotion
+       - **Defer** → promote but tag `needs_review: true`
 4. Mark any contradicted content as `SUPERSEDED` with
    `superseded_by` reference
 
