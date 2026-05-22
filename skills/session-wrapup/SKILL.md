@@ -208,6 +208,28 @@ can update manually later.
 `current_chapter`, `chapters_planned`, `status`, or any body
 sections. These are narrative decisions the GM makes explicitly.
 
+### 4c. World Fact Scan
+
+If `_World/` exists OR session notes contain potential world
+facts (heritage references, deity names, new place names):
+
+1. Scan session notes using heuristics from
+   `references/world-fact-detection.md`
+2. Deduplicate each finding against `_World/_flags.md`
+   (ignored → suppress, deferred → increment, canon →
+   suppress), `_World/` domain files (already encoded →
+   suppress), and existing entity files (already exists →
+   suppress)
+3. Stage findings in the Wrap-Up file under
+   `## World Fact Findings`
+
+**Do not present three-state prompts.** Findings are staged
+for the reconcile procedure (step 2.5) to present during
+review. Session-wrapup detects; reconcile decides.
+
+If `_World/` doesn't exist and no findings are detected, skip
+this step entirely — no empty section.
+
 ### 5. What Carries Forward
 
 Write into Wrap-Up file:
@@ -256,6 +278,7 @@ Wrap-up **must** produce all sections so prep reads one file:
 | What Carries Forward | Yes | Wrap-Up file |
 | World State | Yes | Wrap-Up file |
 | Keeper Checklist | Yes | Wrap-Up file |
+| World Fact Findings | If findings exist | Wrap-Up file |
 
 Entity files and timeline are updated separately (Step 4).
 Character story files are updated separately (Step 3b).
