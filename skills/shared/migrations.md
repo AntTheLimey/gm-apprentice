@@ -177,3 +177,29 @@ Standardizes date field names across session and event entities.
   (`Adventures/{name}/{name}.md`). Existing briefs in flat
   `Adventures/` continue to work. No action needed for
   existing vaults.
+
+## Migration: 1.5.3 → 1.6.0
+
+### Structural
+
+- **New entity type:** `heritage` added to entity schema under
+  `world (abstract)`. Existing vaults continue to work without
+  modification.
+- **New structural types:** `world_domain` and `world_flags`
+  added to entity schema. These are structural files in `_World/`,
+  not knowledge-graph entities.
+- **New field:** `part_of` added to faction and organization
+  entity types. Optional — existing entities are unaffected.
+- **New universal field:** `era` added as optional field for
+  temporal referencing. Existing entities are unaffected.
+
+### Content
+
+- **New folder:** `_World/` added to vault structure with
+  `world-index.md` and `_flags.md` stubs. Created during vault
+  scaffolding. Individual domain files created on demand.
+- **New folder:** `Heritages/` added to entity folder structure
+  for heritage entities.
+- **New templates:** `heritage.md`, `faction.md`, `world-index.md`,
+  `world-flags.md`, `world-domain.md` added to
+  `skills/shared/templates/`.
