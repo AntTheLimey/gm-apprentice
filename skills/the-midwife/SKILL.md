@@ -442,8 +442,8 @@ worldbuilding."
 
 ### Key Principles
 
-- Ask questions the world needs answered, not questions a
-  template needs filled
+- Ask questions the world needs to be answered, not questions a
+  template needs to be filled
 - Follow `references/worldbuilding-principles.md` — spiral
   method, iceberg principle, pitfall avoidance
 - Read `_World/_flags.md` for deferred items related to the
