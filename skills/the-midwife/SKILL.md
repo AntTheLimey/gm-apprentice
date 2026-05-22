@@ -264,6 +264,25 @@ Write confirmed structure to topic files under
 to `adventures/`, etc. File unused ideas to
 `_midwife/seeds/`. Update the adventure index.
 
+### Woven Worldbuilding (Adventure Creation)
+
+During Discover → Shape → Structure → Scaffold, when the
+midwife encounters something that implies world facts, pause
+for one worldbuilding question per trigger:
+
+- Castle on a hill → "Why this hill? Strategic, economic,
+  historical?"
+- New faction → "What's their economic base?"
+- Unrecognized heritage → trigger three-state flag prompt
+  (canon / ignore / defer)
+
+**One question per trigger.** Don't interrogate — light touch.
+Accumulated world facts are written to `_World/` domain files
+during the Scaffold phase (Phase 4).
+
+Consult `references/cross-domain-implications.md` for which
+questions to ask based on the domain being touched.
+
 ## Phase 4: Scaffold & Handoff
 
 **Goal:** Adventure brief written, vault ready for Session 0.
@@ -391,6 +410,47 @@ source_document: ""
 "If They Do Nothing" is required. Open Questions are preserved
 — never invent answers for things the GM was undecided on.
 
+## Worldbuilding Mode
+
+Triggered when the GM asks to work on world-level content
+rather than an adventure: "help me flesh out my world's
+economics," "I want to define my heritages," "let's do some
+worldbuilding."
+
+### Standalone Worldbuilding Conversation
+
+1. **Read the target domain file** in `_World/` (or create a
+   stub from `shared/templates/world-domain.md` if none exists).
+   If `_World/` doesn't exist, create it with `world-index.md`
+   and `_flags.md` stubs first.
+2. **Read related domain files** for cross-domain context.
+   Consult `references/cross-domain-implications.md` to identify
+   which domains connect to the target.
+3. **Run a why-chain conversation.** Use questions from
+   `references/worldbuilding-questions.md` for the target domain.
+   One question at a time. Drill into causes and consequences
+   for 2-3 turns per thread before moving to the next question.
+4. **Update the domain file** — narrative body and any
+   machine-checkable rules that emerged from the conversation.
+   Rules use the `{ id, rule, check }` format.
+5. **Surface cross-domain implications.** After the
+   conversation, check `references/cross-domain-implications.md`
+   and offer to update related domain files.
+6. **Record Second-Order Notes** in relevant entity or domain
+   files under `## Second-Order Notes` — non-obvious insights
+   from why-chain conversations.
+
+### Key Principles
+
+- Ask questions the world needs answered, not questions a
+  template needs filled
+- Follow `references/worldbuilding-principles.md` — spiral
+  method, iceberg principle, pitfall avoidance
+- Read `_World/_flags.md` for deferred items related to the
+  target domain — offer to resolve them during the conversation
+- One question at a time. Wait for the GM's answer before
+  asking the next question.
+
 ## Companion Skills
 
 - **ttrpg-expert** — domain knowledge. All cross-routing for
@@ -401,3 +461,7 @@ source_document: ""
 - **session-prep** — Session 0 planning after handoff. Offered,
   never auto-invoked.
 - **campaign-qa** — optional post-scaffold health check.
+- **Worldbuilding references:**
+  `references/worldbuilding-questions.md` (per-domain question banks),
+  `references/cross-domain-implications.md` (implication matrix),
+  `references/worldbuilding-principles.md` (spiral, iceberg, pitfalls)
