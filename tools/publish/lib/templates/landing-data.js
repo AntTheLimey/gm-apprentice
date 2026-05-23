@@ -201,7 +201,7 @@ function getLatestWrapUp(pages, session) {
   if (sessionTitle) {
     for (const wu of wrapUps) {
       const ref = String(wu.frontmatter.session || wu.title || '');
-      if (ref === sessionTitle) return wu;
+      if (ref === sessionTitle || ref.includes(sessionTitle)) return wu;
     }
   }
   return null;

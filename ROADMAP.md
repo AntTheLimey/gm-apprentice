@@ -65,7 +65,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
-- ~~Publish tool: landing recap + wrap-up sidebar fix~~ — Landing page now extracts recap from wrap-up file, links to wrap-up page, wrap-up pages suppress backlinks sidebar, world_flags excluded from build
+- ~~Publish tool: landing recap + wrap-up sidebar fix~~ — Landing page now extracts recap from wrap-up file, links to wrap-up page, wrap-up pages suppress backlinks sidebar, world_flags excluded from build (PR #51)
 - ~~Campaign overview template with current game date~~ — `campaign_overview` entity type with session-wrapup auto-updates and the-midwife creation
 - ~~the-midwife: guided adventure creation skill~~ — Adventure creation skill with adventure-brief entity type, vault-mining, Session 0 handoff
 - ~~Publish tool: site redesign v1.2~~ — Navigation overhaul, breadcrumbs, genre presets, system-specific PC sheets (CoC/GURPS/D&D/FitD), lunr search, relationship graphs, timeline pages, context sidebars, index page redesigns, landing page rewrite (PR #40)

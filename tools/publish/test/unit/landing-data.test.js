@@ -76,6 +76,15 @@ describe('getLatestWrapUp', () => {
     assert.strictEqual(getLatestWrapUp(pages, null), null);
   });
 
+  it('matches wrap-up by title containment', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session: 'Recap for Session 05 extras' }, title: 'Session_05_Wrap_Up' },
+    ];
+    const noNumSession = { title: 'Session 05', frontmatter: { type: 'session' } };
+    const result = getLatestWrapUp(pages, noNumSession);
+    assert.strictEqual(result.title, 'Session_05_Wrap_Up');
+  });
+
   it('recognizes all wrap-up type variants', () => {
     const variants = ['session-wrap-up', 'session_wrap', 'session-wrapup'];
     for (const type of variants) {
