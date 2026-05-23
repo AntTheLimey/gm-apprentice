@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -20,10 +20,10 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
 
   const statItems = [];
   if (fm.lifespan_range && Array.isArray(fm.lifespan_range) && fm.lifespan_range.length === 2) {
-    statItems.push(`<dt>Lifespan</dt><dd>${fm.lifespan_range[0]}–${fm.lifespan_range[1]} years</dd>`);
+    statItems.push(`<dt>Lifespan</dt><dd>${escapeHtml(String(fm.lifespan_range[0]))}–${escapeHtml(String(fm.lifespan_range[1]))} years</dd>`);
   }
   if (fm.maturity_age) {
-    statItems.push(`<dt>Maturity</dt><dd>${fm.maturity_age} years</dd>`);
+    statItems.push(`<dt>Maturity</dt><dd>${escapeHtml(String(fm.maturity_age))} years</dd>`);
   }
   if (fm.average_height) {
     statItems.push(`<dt>Height</dt><dd>${escapeHtml(fm.average_height)}</dd>`);

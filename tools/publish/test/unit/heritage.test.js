@@ -8,6 +8,7 @@ const baseConfig = { siteTitle: 'Test', footer: '', attachmentsDir: '_attachment
 
 describe('heritageTemplate', () => {
   const basePage = {
+    title: 'Elves',
     displayTitle: 'Elves',
     outputPath: 'heritages/elves.html',
     frontmatter: { type: 'heritage' },
@@ -48,10 +49,24 @@ describe('heritageTemplate', () => {
     assert.ok(html.includes('Graceful folk'), 'should render body content');
     assert.ok(!html.includes('heritage-stats'), 'should not render stat card when no stats');
   });
+
+  it('renders relationship graph when provided', () => {
+    const context = { publishConfig: { _entityGraphs: { 'Elves': '<svg>graph</svg>' }, _backlinks: {} } };
+    const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
+    assert.ok(html.includes('Connections'), 'should render graph heading');
+    assert.ok(html.includes('<svg>graph</svg>'), 'should include graph SVG');
+  });
+
+  it('renders context sidebar with backlinks', () => {
+    const context = { publishConfig: { _backlinks: { 'Elves': [{ title: 'Legolas', outputPath: 'characters/npcs/legolas.html' }] } } };
+    const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
+    assert.ok(html.includes('content-with-sidebar'), 'should use sidebar layout');
+  });
 });
 
 describe('worldDomainTemplate', () => {
   const basePage = {
+    title: 'Geography',
     displayTitle: 'Geography',
     outputPath: 'world/geography.html',
     frontmatter: { type: 'world_domain' },

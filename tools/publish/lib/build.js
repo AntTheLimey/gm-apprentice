@@ -370,7 +370,6 @@ function build(options = {}) {
           html = heritageTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
           break;
         case 'world_domain':
-          if (page.frontmatter.status !== 'active') break;
           html = worldDomainTemplate(page, processed, navFor, config, { publishConfig });
           break;
         default: {

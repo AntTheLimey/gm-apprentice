@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
