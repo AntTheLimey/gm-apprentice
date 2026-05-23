@@ -7,6 +7,8 @@ const { locationTemplate } = require('./location');
 const { itemTemplate } = require('./item');
 const { factionTemplate } = require('./faction');
 const { eventTemplate } = require('./event');
+const { heritageTemplate } = require('./heritage');
+const { worldDomainTemplate } = require('./world-domain');
 const { wikiTemplate } = require('./wiki');
 const { indexTemplate } = require('./index-page');
 const { landingTemplate } = require('./landing');
@@ -30,6 +32,8 @@ module.exports = {
   itemTemplate,
   factionTemplate,
   eventTemplate,
+  heritageTemplate,
+  worldDomainTemplate,
   wikiTemplate,
   indexTemplate,
   landingTemplate,
