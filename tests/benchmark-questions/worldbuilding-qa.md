@@ -13,7 +13,9 @@ Run session-prep for Session 3 of the Ashford Case campaign.
 The campaign has `_World/_flags.md` with one deferred item
 ("The Silver Twilight's true purpose" — 2 mentions across
 sessions 1-2). A Plan file exists for Session 3 referencing
-the docks investigation.
+the docks investigation. The deferred item is thematically
+relevant to the upcoming session, meeting the "related to
+upcoming adventure's themes" surfacing criterion.
 
 Verify the prep output includes the deferred flag awareness
 section without it dominating the prep. Existing prep quality
