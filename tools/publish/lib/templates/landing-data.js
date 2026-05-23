@@ -187,4 +187,24 @@ function getRecentEvents(pages, max) {
     .slice(0, max || 4);
 }
 
-module.exports = { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
+function getLatestWrapUp(pages, session) {
+  if (!session) return null;
+  const wrapTypes = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
+  const wrapUps = pages.filter(p => wrapTypes.has(p.frontmatter.type));
+  const num = session.frontmatter.session_number;
+  if (num != null) {
+    for (const wu of wrapUps) {
+      if (wu.frontmatter.session_number === num) return wu;
+    }
+  }
+  const sessionTitle = session.title || '';
+  if (sessionTitle) {
+    for (const wu of wrapUps) {
+      const ref = String(wu.frontmatter.session || wu.title || '');
+      if (ref === sessionTitle) return wu;
+    }
+  }
+  return null;
+}
+
+module.exports = { getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
