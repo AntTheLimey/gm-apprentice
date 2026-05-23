@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getLatestSession, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
+const { getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -37,6 +37,61 @@ describe('getLatestSession', () => {
     ];
     const result = getLatestSession(pages);
     assert.strictEqual(result.title, 'Session 5');
+  });
+});
+
+describe('getLatestWrapUp', () => {
+  const session = { title: 'Session 05', frontmatter: { type: 'session', session_number: 5 } };
+
+  it('matches wrap-up by session_number', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session_number: 5 }, title: 'Session_05_Wrap_Up' },
+      { frontmatter: { type: 'session_wrap', session_number: 4 }, title: 'Session_04_Wrap_Up' },
+    ];
+    const result = getLatestWrapUp(pages, session);
+    assert.strictEqual(result.title, 'Session_05_Wrap_Up');
+  });
+
+  it('falls back to title match when session_number is absent on wrap-up', () => {
+    const pages = [
+      { frontmatter: { type: 'session-wrapup', session: 'Session 05' }, title: 'Session_05_Wrap_Up' },
+    ];
+    const noNumSession = { title: 'Session 05', frontmatter: { type: 'session' } };
+    const result = getLatestWrapUp(pages, noNumSession);
+    assert.strictEqual(result.title, 'Session_05_Wrap_Up');
+  });
+
+  it('returns null when no wrap-up matches', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session_number: 3 }, title: 'Session_03_Wrap_Up' },
+    ];
+    const result = getLatestWrapUp(pages, session);
+    assert.strictEqual(result, null);
+  });
+
+  it('returns null for null session', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session_number: 5 }, title: 'Session_05_Wrap_Up' },
+    ];
+    assert.strictEqual(getLatestWrapUp(pages, null), null);
+  });
+
+  it('matches wrap-up by title containment', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session: 'Recap for Session 05 extras' }, title: 'Session_05_Wrap_Up' },
+    ];
+    const noNumSession = { title: 'Session 05', frontmatter: { type: 'session' } };
+    const result = getLatestWrapUp(pages, noNumSession);
+    assert.strictEqual(result.title, 'Session_05_Wrap_Up');
+  });
+
+  it('recognizes all wrap-up type variants', () => {
+    const variants = ['session-wrap-up', 'session_wrap', 'session-wrapup'];
+    for (const type of variants) {
+      const pages = [{ frontmatter: { type, session_number: 5 }, title: `WU-${type}` }];
+      const result = getLatestWrapUp(pages, session);
+      assert.ok(result, `should match type "${type}"`);
+    }
   });
 });
 

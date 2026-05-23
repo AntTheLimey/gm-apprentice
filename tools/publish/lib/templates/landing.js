@@ -1,7 +1,7 @@
 const { escapeHtml } = require('../processor');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, confidenceBadge, clientScripts } = require('./base');
 const {
-  getLatestSession, extractRecap, getInitials, getPCs,
+  getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
 
@@ -41,7 +41,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
     ? `<img class="landing-hero-img" src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}">`
     : '';
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
-  const sessionCount = pages.filter(p => p.frontmatter.type === 'session' && p.frontmatter.status === 'played').length;
+  const sessionCount = (publishConfig && publishConfig.total_sessions != null)
+    ? publishConfig.total_sessions
+    : pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
   const heroDateParts = [];
   if (settingYear) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(settingYear))}</span>`);
   heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);
@@ -56,12 +58,15 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
 
   // --- Zone 2: Latest Session Recap ---
   const latestSession = getLatestSession(pages);
+  const latestWrapUp = getLatestWrapUp(pages, latestSession);
   let recapZone = '';
   if (latestSession) {
-    const recap = extractRecap(latestSession);
+    const recapSource = latestWrapUp || latestSession;
+    const recap = extractRecap(recapSource);
     const dateStr = formatDate(latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
-    const recapLink = `<a class="recap-link" href="${escapeHtml(latestSession.outputPath)}">Read full session &rarr;</a>`;
+    const linkTarget = latestWrapUp || latestSession;
+    const recapLink = `<a class="recap-link" href="${escapeHtml(linkTarget.outputPath)}">Read full session &rarr;</a>`;
     recapZone = `<div class="dashboard-section">
   <h2>Latest Session${dateBadge}</h2>
   <div class="recap">${recap ? escapeHtml(recap) : '<em>No recap available.</em>'}

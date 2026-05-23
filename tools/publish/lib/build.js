@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
@@ -308,6 +308,7 @@ function build(options = {}) {
   let errorCount = 0;
   for (const page of pages) {
     try {
+      if (page.frontmatter.type === 'world_flags') continue;
       if (page.frontmatter.portrait) {
         const basename = String(page.frontmatter.portrait).split('/').pop();
         if (basename && imageMap[basename]) usedImages.add(basename);
@@ -364,6 +365,12 @@ function build(options = {}) {
           break;
         case 'event':
           html = eventTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
+          break;
+        case 'heritage':
+          html = heritageTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
+          break;
+        case 'world_domain':
+          html = worldDomainTemplate(page, processed, navFor, config, { publishConfig });
           break;
         default: {
           let extraSidebar = {};

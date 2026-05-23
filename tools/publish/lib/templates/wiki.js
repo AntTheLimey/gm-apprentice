@@ -44,8 +44,11 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   }
 
   // Standard sidebar + extra sections
+  const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
+  const isWrapUp = WRAP_UP_TYPES.has(fm.type);
+
   let sidebar = renderContextSidebar({
-    backlinks,
+    backlinks: isWrapUp ? [] : backlinks,
     relationships: normalizeRelationships(fm.relationships, linkMap),
     currentOutputPath: page.outputPath,
   });

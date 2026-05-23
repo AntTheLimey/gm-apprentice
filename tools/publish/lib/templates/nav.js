@@ -14,8 +14,8 @@ const NAV_GROUPS = [
   },
   {
     name: 'World',
-    dirs: ['locations', 'factions', 'items'],
-    labels: { locations: 'Locations', factions: 'Factions & Organizations', items: 'Items & Artifacts' },
+    dirs: ['world', 'heritages', 'locations', 'factions', 'items'],
+    labels: { world: 'World Overview', heritages: 'Heritages', locations: 'Locations', factions: 'Factions & Organizations', items: 'Items & Artifacts' },
   },
   {
     name: 'Reference',

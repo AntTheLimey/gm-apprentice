@@ -179,6 +179,45 @@ Body content renders below the participants section.
 
 ---
 
+### Heritage
+
+`type: heritage`
+
+| Field | Status | Description |
+|-------|--------|-------------|
+| `lifespan_range` | Optional | Two-element array `[min, max]` — rendered as "min–max years" in the stat card |
+| `maturity_age` | Optional | Age at which members reach adulthood — rendered in the stat card |
+| `average_height` | Optional | Typical height range as a string (e.g. "5'6\"–6'2\"") — rendered in the stat card |
+| `notable_traits` | Optional | List of defining traits — rendered as badge pills below the header |
+| `portrait` | Optional | Path relative to vault root |
+
+The heritage template renders a stat card (lifespan, maturity,
+height) beside the portrait, with notable traits as badge pills
+below. Body content follows, then the relationship graph and
+context sidebar.
+
+---
+
+### World Domain
+
+`type: world_domain`
+
+| Field | Status | Description |
+|-------|--------|-------------|
+| `summary` | Optional | One-line description rendered as a subtitle below the page title |
+| `rules` | Optional | List of rule objects with `rule` (or `id`) field — rendered in a sidebar panel |
+| `publish_rules` | Optional | Set to `false` to suppress the rules sidebar even when `rules` is present |
+
+The world domain template renders body content with an optional
+rules sidebar. Each rule object's `rule` (or `id`) field is
+displayed as a list item.
+
+**World flags** (`type: world_flags`) are excluded from the
+published site entirely — `_flags.md` is an internal tracking
+file and is skipped during build.
+
+---
+
 ## Smart Wiki Fallback
 
 Any entity whose `type` does not match a dedicated template

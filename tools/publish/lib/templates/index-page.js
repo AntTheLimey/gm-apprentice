@@ -188,6 +188,9 @@ function renderChapterList(pages, indexDir) {
     const anyPlayed = chSessions.some(s => s.frontmatter.status === 'played' || s.frontmatter.status === 'reviewed');
     if (allPlayed) return '<span class="chapter-status chapter-complete">Complete</span>';
     if (anyPlayed) return '<span class="chapter-status chapter-active">In Progress</span>';
+    const chStatus = String(chapter.frontmatter.status || '').toLowerCase();
+    if (chStatus === 'complete' || chStatus === 'completed') return '<span class="chapter-status chapter-complete">Complete</span>';
+    if (chStatus === 'active' || chStatus === 'in-progress' || chStatus === 'in_progress') return '<span class="chapter-status chapter-active">In Progress</span>';
     return '<span class="chapter-status chapter-upcoming">Upcoming</span>';
   }
 
