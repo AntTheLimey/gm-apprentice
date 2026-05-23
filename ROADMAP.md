@@ -33,7 +33,7 @@ Items are force-ranked by score. Higher score = do first.
 
 | Item | Impact | Urgency | Effort | Score | Status | Notes |
 |------|:------:|:-------:|:------:|:-----:|--------|-------|
-| Publish tool: landing recap + wrap-up sidebar fix | 5 | 4 | S (1) | 14.0 | Planned | Landing page extracts recap from session index (no narrative) instead of wrap-up; link targets session index instead of wrap-up; wrap-up pages get a useless "Mentioned In" sidebar that compresses content. [Implementation](docs/publish-landing-recap-fix.md) |
+| ~~Publish tool: landing recap + wrap-up sidebar fix~~ | 5 | 4 | S (1) | 14.0 | ~~Done~~ | ~~Landing page extracts recap from session index (no narrative) instead of wrap-up; link targets session index instead of wrap-up; wrap-up pages get a useless "Mentioned In" sidebar that compresses content. [Implementation](docs/publish-landing-recap-fix.md)~~ |
 | Gotchas sections for vault-writing skills | 3 | 3 | S (1) | 9.0 | Idea | Add explicit gotchas blocks to session-wrapup, campaign-organizer, vault-ingest, the-midwife. Consolidate scattered constraints (template-reading gate, protected sections, date formats, entity-per-file) into a single block near the top of each SKILL.md. Benchmark before/after. |
 | Validation loops for entity creation | 3 | 2 | S (1) | 8.0 | Idea | Add self-validation steps to session-wrapup Step 4, vault-ingest, and campaign-organizer entity creation. Pattern: create entity, check frontmatter against template and schema, fix before moving on. Benchmark before/after. |
 | "Why" reasoning on rigid skill directives | 3 | 2 | S (1) | 8.0 | Idea | Add reasoning to key bare directives across all skills. "ONE file per entity — multiple entities break wiki-link resolution and publish rendering." Models comply more reliably when they understand downstream consequences. Benchmark before/after. |
@@ -65,6 +65,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~Publish tool: landing recap + wrap-up sidebar fix~~ — Landing page now extracts recap from wrap-up file, links to wrap-up page, wrap-up pages suppress backlinks sidebar, world_flags excluded from build
 - ~~Campaign overview template with current game date~~ — `campaign_overview` entity type with session-wrapup auto-updates and the-midwife creation
 - ~~the-midwife: guided adventure creation skill~~ — Adventure creation skill with adventure-brief entity type, vault-mining, Session 0 handoff
 - ~~Publish tool: site redesign v1.2~~ — Navigation overhaul, breadcrumbs, genre presets, system-specific PC sheets (CoC/GURPS/D&D/FitD), lunr search, relationship graphs, timeline pages, context sidebars, index page redesigns, landing page rewrite (PR #40)

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.5] — 2026-05-22
+
+### Added
+
+- **Heritage page template** — stat card (lifespan, maturity,
+  height), notable traits badges, portrait, relationship graph,
+  and context sidebar for published heritage pages
+- **World domain page template** — rules sidebar (hideable via
+  `publish_rules: false`), summary subtitle for world domain
+  pages
+- **World nav group entries** — World Overview and Heritages
+  added to the World navigation group
+- **Vault config template** — `_World` and `Heritages` folder
+  mappings added to scaffold template
+
+### Fixed
+
+- **Landing page recap** — now extracts narrative from the
+  session's Wrap-Up file instead of the session index
+- **Landing page recap link** — points to the Wrap-Up page
+  instead of the session index
+- **Wrap-up sidebar suppression** — wrap-up pages no longer
+  show a "Mentioned In" backlinks sidebar that compressed
+  content
+- **World flags exclusion** — `_flags.md` (`type: world_flags`)
+  is skipped during build instead of generating an error page
+
+---
+
 ## [1.6.4] — 2026-05-22
 
 ### Added
@@ -695,6 +724,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.5]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.1...v1.6.2

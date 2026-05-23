@@ -38,10 +38,17 @@ describe('generateNavGroups', () => {
     assert.ok(labels.includes('Creatures'));
   });
 
-  it('World group contains Locations, Factions, and Items', () => {
-    const groups = generateNavGroups(pages);
+  it('World group contains World Overview, Heritages, Locations, Factions, and Items', () => {
+    const worldPages = [
+      ...pages,
+      { outputDir: 'world', outputPath: 'world/geography.html', displayTitle: 'Geography' },
+      { outputDir: 'heritages', outputPath: 'heritages/elves.html', displayTitle: 'Elves' },
+    ];
+    const groups = generateNavGroups(worldPages);
     const world = groups.find(g => g.name === 'World');
     const labels = world.links.map(l => l.label);
+    assert.ok(labels.includes('World Overview'));
+    assert.ok(labels.includes('Heritages'));
     assert.ok(labels.includes('Locations'));
     assert.ok(labels.includes('Factions & Organizations'));
     assert.ok(labels.includes('Items & Artifacts'));
