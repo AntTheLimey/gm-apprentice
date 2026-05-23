@@ -244,15 +244,41 @@ for the full procedure.
   `asOfSession` is more than 1 session behind the latest
   wrap-up
 
+### World Consistency
+
+**Use when:** Checking entities against `_World/` domain rules.
+**Trigger phrases:** "world check", "world consistency",
+"heritage audit", "world rules"
+
+If `_World/` exists with active domain files, run world-rule
+audits against all entities. Read
+`references/world-audit-criteria.md` for check procedures.
+
+**What it checks:**
+- Heritage consistency — NPC/PC ages vs heritage lifespan
+  rules, heritage values vs allowed list
+- Geographic plausibility — locations vs geography domain
+  rules (if defined)
+- Economic coherence — factions/settlements with no economic
+  base (soft check)
+- Timeline contradictions — entity dates vs history-timeline
+  events and era ordering
+- Deferred flag review — all deferred items with mention
+  counts and session references
+
+Only checks domains with `status: active` and `rules`
+entries. Skip undefined domains — no false positives.
+
 ### Full Audit
 
 **Use when:** Running all checks in sequence.
 **Trigger phrases:** "full QA", "audit everything",
 "full check", "campaign health check"
 
-Runs all five modes in order: Canon Audit → Timeline
+Runs all six modes in order: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
-Health. Deduplicates findings that appear in multiple checks.
+Health → World Consistency (if `_World/` exists).
+Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 
 For full audits, present findings grouped by severity

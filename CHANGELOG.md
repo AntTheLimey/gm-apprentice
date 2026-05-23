@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.4] — 2026-05-22
+
+### Added
+
+- **Session-prep deferred flag surfacing** — world threads
+  gaining traction are surfaced during prep (awareness only,
+  no prompts)
+- **Campaign-QA world consistency audits** — heritage
+  consistency, geographic plausibility, economic coherence,
+  timeline contradictions, and deferred flag review
+- **World audit criteria reference** — hard checks vs soft
+  checks, scoping rules, output format
+
+---
+
 ## [1.6.3] — 2026-05-22
 
 ### Added
@@ -680,6 +695,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.6.4]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.0...v1.6.1
