@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **World flags exclusion** — `_flags.md` (`type: world_flags`)
   is skipped during build instead of generating an error page
 
+### Fixed (upstream from publish-patches-1.5.1)
+
+- **Session count includes reviewed status** — landing page hero
+  now counts both `played` and `reviewed` sessions; supports
+  `total_sessions` config override
+- **Chapter status fallback** — chapters with `status: complete`
+  in frontmatter render correctly even without published session
+  index files
+- **Scanner uses frontmatter title** — `displayTitle` prefers
+  frontmatter `title` over filename, fixing redundant session
+  titles on chapter index pages
+
 ---
 
 ## [1.6.4] — 2026-05-22

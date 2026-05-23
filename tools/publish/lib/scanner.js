@@ -58,7 +58,7 @@ function scanVault(config) {
         if (!outputDir && dirRel !== '') continue; // skip unmapped directories
 
         const baseName = path.basename(entry.name, '.md');
-        const displayTitle = baseName.replace(/_/g, ' ');
+        const displayTitle = frontmatter.title || baseName.replace(/_/g, ' ');
         const slug = slugify(baseName);
         const outputPath = outputDir
           ? outputDir + '/' + slug + '.html'

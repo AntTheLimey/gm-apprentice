@@ -41,7 +41,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
     ? `<img class="landing-hero-img" src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}">`
     : '';
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
-  const sessionCount = pages.filter(p => p.frontmatter.type === 'session' && p.frontmatter.status === 'played').length;
+  const sessionCount = (publishConfig && publishConfig.total_sessions) || pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
   const heroDateParts = [];
   if (settingYear) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(settingYear))}</span>`);
   heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);
