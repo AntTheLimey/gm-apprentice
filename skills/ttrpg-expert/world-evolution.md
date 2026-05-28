@@ -4,6 +4,11 @@ The world does not wait for the PCs. Between sessions, factions
 advance plans, consequences ripen, rumours spread, and the
 calendar turns. Run this procedure after every session.
 
+**Invocation:** This procedure normally runs as reconcile
+step 5.5 — offered to the GM after session confidence is
+promoted. It can also be invoked standalone via ttrpg-expert
+("update the world" / "post-session update").
+
 > "Every antagonist faction has a plan that advances whether
 > the PCs act or not. The PCs don't start the story — they
 > *interrupt* it."
@@ -28,9 +33,12 @@ visible to the GM before it becomes canon.
 - **Match system tone.** CoC: creeping dread. FitD: noir crime.
   D&D: living political/adventure landscape.
 
-## Storage Checkpoint
+## Storage Checkpoint (standalone only)
 
-Before the first update, determine where campaign state lives:
+Skip this step when invoked from reconcile — the vault
+location is already established.
+
+When invoked standalone, determine where campaign state lives:
 
 1. **campaign-organizer** (recommended if vault exists)
 2. **Set up campaign-organizer now** — pause, configure, return
@@ -97,7 +105,7 @@ or rejects each. Then execute the filing protocol.
 ### Filing Protocol
 
 **New entities:** create file per `shared/entity-schema.md` schema.
-Set `source: "play"`, `createdSession`, `lastUpdated`,
+Set `source: "world-evolution"`, `createdSession`, `lastUpdated`,
 `asOfSession` to current session.
 
 **Changed entities:** update changed fields only. Set
@@ -123,6 +131,11 @@ Set `source: "play"`, `createdSession`, `lastUpdated`,
 
 After filing: "Updates filed. Run campaign-qa to validate,
 or proceed to session prep?"
+
+**When invoked from reconcile:** skip this prompt — results
+flow into reconcile step 6's `## Reconciliation Context`
+under `### World Evolution`. Set `world_evolved` on the
+session index to the current session reference.
 
 ## Universal Faction Turn
 
