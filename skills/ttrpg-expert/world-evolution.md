@@ -62,7 +62,7 @@ System-specific modules override when available:
 
 ### Step 3: Consequence Surfacing
 
-Review the Consequence Tracker. For each deferred consequence:
+Review carry-forward items and active threads. For each deferred consequence:
 has enough time passed? Does the current situation make surfacing
 natural? Manifests as event, NPC reaction, environmental change,
 or rumour?
@@ -145,54 +145,18 @@ Five questions per active faction:
 5. **What becomes visible to PCs?** Directly, through allies,
    through rumour, or not at all.
 
-## Tracking Templates
+## Tracking State
 
-### Consequence Tracker
+Consequences, foreshadowing, and discovery state are tracked
+via the entity schema — not standalone files. See
+`shared/entity-schema.md` for:
 
-```markdown
-| # | Action | Deferred Consequence | Surfaces In | Manifests As | Status |
-|---|--------|---------------------|-------------|-------------|--------|
-```
+- **Thread entities** with `threadType: "Foreshadowing"`,
+  `plantedDetail`, `intendedPayoff`, `ripeness`
+- **Clue entities** with `discoveryState` (per-PC knowledge
+  levels: Unknown → Rumoured → Observed → Investigated →
+  Understood)
 
-Status: Pending → Surfaced → Spent. Also: Banked (available
-when narratively useful).
-
-### Foreshadowing Log
-
-```markdown
-| # | Planted | Element | Noticed By | Intended Payoff | Ripeness | Pay Off By |
-|---|---------|---------|------------|-----------------|----------|------------|
-```
-
-Ripeness 1/5 (barely hinted) to 5/5 (payoff imminent). At 5/5,
-deliver next session or impact fades.
-
-### Campaign Tracker
-
-```markdown
-## Campaign Tracker
-**Campaign:**  **System:**  **Session Count:**
-**Current In-World Date:**
-
-### World State Snapshot
-[2-3 sentence current state as PCs know it]
-
-### Active Consequences
-[Pending/Banked entries with expected surface session]
-
-### Active Foreshadowing
-[Entries not yet paid off, with ripeness and target]
-
-### Rumour Board
-[Current rumours — mark True, Partially True, or False]
-```
-
-### Per-PC Discovery State
-
-```markdown
-## Discovery State: [Clue/Secret Name]
-| PC | Level | Changed | How |
-|----|-------|---------|-----|
-```
-
-Levels: Unknown, Rumoured, Observed, Investigated, Understood.
+Consequences surface through session-wrapup's carry-forward
+section and session-prep's thread review. World state snapshots
+are maintained in the Wrap-Up → Plan handoff chain.
