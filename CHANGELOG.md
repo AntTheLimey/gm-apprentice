@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.6] — 2026-05-28
+
+### Added
+
+- **World evolution in reconcile** — reconcile step 5.5
+  offers faction turns, consequence surfacing, foreshadowing
+  review, and discovery state updates after session confidence
+  is promoted. Gated to most recent session only.
+- **`world-evolution` entity source** — entities created by
+  the world-evolution procedure are tagged with
+  `source: "world-evolution"` for provenance tracking
+- **`world_evolved` session field** — session index records
+  when world-evolution has run, preventing duplicate offers
+
+### Removed
+
+- **campaign-tracker.md references** — removed dead reference
+  from campaign-organizer. The file was never created; its
+  functionality is covered by the entity schema and session
+  document chain.
+- **Tracking templates** — replaced consequence tracker,
+  foreshadowing log, campaign tracker, and per-PC discovery
+  state templates in world-evolution.md with a pointer to the
+  entity schema where these are now tracked
+
+### Changed
+
+- **world-evolution.md** — Storage Checkpoint and timeline
+  entry marked standalone-only (reconcile skips both). Filing
+  protocol updated for reconcile handoff.
+
 ## [1.6.5] — 2026-05-22
 
 ### Added
