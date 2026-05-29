@@ -42,7 +42,7 @@ On GM confirmation:
 - Set Wrap-Up `source_confidence` to `AUTHORITATIVE`
 - Promote all DRAFT entities from this session to AUTHORITATIVE
 - Update session index `status` to `reviewed`
-- Skip to step 6 (record decisions)
+- Skip to step 5.5 (world evolution offer)
 
 If any condition fails → proceed with the full 6-step procedure
 below.
