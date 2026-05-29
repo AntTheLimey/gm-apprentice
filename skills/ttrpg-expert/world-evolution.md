@@ -111,7 +111,10 @@ Set `source: "world-evolution"`, `createdSession`, `lastUpdated`,
 **Changed entities:** update changed fields only. Set
 `lastUpdated` and `asOfSession`.
 
-**Timeline entry** — append to `campaign-timeline.md`:
+**Timeline entry (standalone only)** — when invoked outside
+reconcile, append to `campaign-timeline.md`. Skip when
+invoked from reconcile — session-wrapup already wrote the
+session's timeline entry.
 
 ```markdown
 ## Session [N] — [date]
