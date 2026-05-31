@@ -203,3 +203,33 @@ Standardizes date field names across session and event entities.
 - **New templates:** `heritage.md`, `faction.md`, `world-index.md`,
   `world-flags.md`, `world-domain.md` added to
   `skills/shared/templates/`.
+
+## Migration: 1.6.6 → 1.7.0
+
+### Structural
+
+- **New entity type:** `plan` added to entity schema under
+  `narrative (abstract)`, alongside `event` and `clue`.
+  Existing vaults continue to work without modification.
+- **New field:** `plan_type` on plan entities — values:
+  `arc`, `scene`, `investigation`, `timeline`.
+- **New fields:** `participants` and `locations` on plan
+  entities — wiki-link arrays pointing to existing vault
+  entities.
+- **New relationship types:** `leads_to`, `precedes`,
+  `alternative_to` added to relationship ontology for
+  expressing sequencing, causation, and branching between
+  plan entities.
+
+### Content
+
+- **New folder:** `Planning/` added to chapter directory
+  structure. Created during chapter scaffolding (Midwife
+  Phase 4 handoff) or on demand by campaign-organizer.
+  Not backfilled — existing chapters are unaffected until
+  the GM creates plans.
+- **New template:** `plan.md` added to
+  `skills/shared/templates/`.
+- **Existing `_midwife/` content** is NOT auto-promoted.
+  The GM decides if/when to bring old Midwife output into
+  the vault using the new structure.

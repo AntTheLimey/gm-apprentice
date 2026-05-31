@@ -86,6 +86,7 @@ narrative (abstract)
 │   ├── betrayal_event
 │   └── celebration
 ├── clue
+├── plan
 ├── adventure-brief
 └── campaign_overview
 
@@ -266,6 +267,15 @@ Extraction defaults:
 | location | string | Where (wiki-link to Location entity) |
 | participants | array | Who — entries can be `[[Entity]] (role)`, `[[Entity\|Display]] (role)`, or plain text |
 | outcome | string | Result |
+
+### Plan
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| plan_type | string | `arc`, `scene`, `investigation`, or `timeline` |
+| chapter | string | Wiki-link to chapter overview (`"[[Chapter_N_Overview]]"`) |
+| participants | array | Wiki-link array to NPCs, factions, creatures involved |
+| locations | array | Wiki-link array to location entities |
 
 ### Document
 
@@ -547,6 +557,7 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 | event (all subtypes) | Events/ |
 | document (all subtypes) | Documents/ |
 | clue | Clues/ |
+| plan | `Chapters/{chapter}/Planning/` |
 | adventure-brief | Adventures/{adventure-name}/ |
 | campaign_overview | _Campaign/ |
 | heritage | Heritages/ |

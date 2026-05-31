@@ -38,6 +38,7 @@ ADVENTURE_BRIEF_SHAPE = {
     "linear", "branching", "hub-and-spoke", "open-node", "sandbox"
 }
 WORLD_DOMAIN_STATUS = {"active", "stub", "inactive"}
+PLAN_TYPES = {"arc", "scene", "investigation", "timeline"}
 
 # Required fields per entity type
 # All entities need: type, source_confidence
@@ -65,6 +66,7 @@ REQUIRED_FIELDS = {
     "player-characters": ["type"],
     "campaign_overview": ["type", "source_confidence"],
     "heritage": ["type", "source_confidence"],
+    "plan": ["type", "source_confidence", "plan_type", "chapter"],
     "world_domain": ["type", "domain", "status"],
     "world_flags": ["type"],
 }
@@ -273,6 +275,18 @@ def validate_file(filepath: Path) -> list[str]:
                 f"Invalid status '{value}' — "
                 f"must be one of: {', '.join(sorted(WORLD_DOMAIN_STATUS))}"
             )
+
+    # Validate plan fields
+    if entity_type == "plan":
+        if "plan_type" in frontmatter:
+            value = frontmatter["plan_type"]
+            if not isinstance(value, str):
+                errors.append("Field 'plan_type' must be a string")
+            elif value not in PLAN_TYPES:
+                errors.append(
+                    f"Invalid plan_type '{value}' — "
+                    f"must be one of: {', '.join(sorted(PLAN_TYPES))}"
+                )
 
     # Validate portrait field — only allowed for supported entity types
     portrait = frontmatter.get("portrait")

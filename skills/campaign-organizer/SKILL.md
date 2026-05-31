@@ -241,6 +241,12 @@ tools used to read, write, and search differ.
      `shared/templates/heritage.md`.
    - Add `_Templates/_Template_Faction.md` from
      `shared/templates/faction.md` if not already present.
+   - Add `_Templates/_Template_Plan.md` from
+     `shared/templates/plan.md` if not already present.
+   - For each chapter directory, create `Planning/` subfolder
+     if it doesn't already exist. This is where narrative
+     planning entities (scene designs, arc structures,
+     investigation flows) live.
 4. **Extract and file** — For each entity, read
    `_Templates/_Template_{Type}.md` first, then create the note
    using that template as the structure. Fill in frontmatter per

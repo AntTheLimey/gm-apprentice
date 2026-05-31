@@ -139,6 +139,32 @@ worldbuilding conversation.
 If Reconcile ran, steps 7-10 read `## Reconciliation Context` and skip
 what's already established.
 
+#### Step 10c: Narrative plans
+
+If `Chapters/{chapter}/Planning/` exists, scan it for plan
+entities relevant to the upcoming session:
+
+1. Read all files in `Planning/` and categorize by
+   `plan_type` (arc, scene, investigation, timeline)
+2. Surface scene plans whose `participants` or `locations`
+   overlap with the threads, NPCs, or locations already
+   gathered in steps 8-10
+3. Present a brief summary:
+
+> **Narrative plans available for this chapter:**
+> - Arc: Arc_Shape.md — four-phase dramatic structure
+> - Scenes: Temple_Approach.md, Recognition_Scene.md,
+>   Escort_Betrayal.md — scene designs with decision trees
+> - Investigation: Investigation_Design.md — clue flow
+>
+> **Most relevant for next session:** [list based on thread
+> and NPC overlap]
+
+Do not copy plan content into the session plan — link to
+it. Plans are reference documents the GM consults during
+play, not material to be duplicated.
+→ Write `## Available Plans` to Plan file.
+
 ## Phase 2: Prep Forward — Creative Planning
 
 **11. PC Roster + Arc Check** — Per-PC deep review:

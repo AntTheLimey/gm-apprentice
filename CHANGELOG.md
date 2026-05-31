@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] — 2026-05-30
+
+### Added
+
+- **Plan entity type** — new `plan` entity under `narrative`
+  hierarchy with `plan_type` discriminator (arc, scene,
+  investigation, timeline). Plans live in `Planning/` under
+  their chapter directory, capturing the GM's narrative
+  planning content (scene designs, arc structures,
+  investigation flows, timelines) as first-class vault entities.
+- **Plan template** — `skills/shared/templates/plan.md` added
+  as canonical template for plan entities
+- **Midwife plan promotion** — Phase 4 handoff now promotes
+  narrative planning content from `_midwife/` to vault
+  `Planning/` folder alongside existing entity promotion
+- **Session prep plan surfacing** — context gathering reads
+  `Planning/` and surfaces relevant scene plans for the
+  upcoming session
+- **Session play plan lookup** — scene plans accessible via
+  mid-game routing table
+- **Campaign QA plan validation** — graph health checks
+  validate plan entity frontmatter and references
+- **Vault ingest plan support** — planning content from
+  external sources can be ingested as plan entities
+- **Schema validation** — `validate_schema.py` validates
+  plan entities (required fields, plan_type enum)
+- **Migration 1.6.6 → 1.7.0** — documents structural and
+  content changes for existing vaults
+
+---
+
 ## [1.6.6] — 2026-05-28
 
 ### Added
@@ -767,6 +798,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.7.0]: https://github.com/AntTheLimey/gm-apprentice/releases/tag/v1.7.0
 [1.6.6]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.5...v1.6.6
 [1.6.5]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/AntTheLimey/gm-apprentice/compare/v1.6.3...v1.6.4

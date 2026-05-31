@@ -302,9 +302,9 @@ brief using the template below.
   relative to CWD — campaign-organizer will wrap the vault
   around it.
 
-### Step 2: Entity Promotion
+### Step 2: Entity & Plan Promotion
 
-List all entity sketches from
+**2a. Entity promotion** — List all entity sketches from
 `_midwife/{adventure}/entity-sketches/` and ask which
 to promote to real vault entities:
 
@@ -312,16 +312,64 @@ to promote to real vault entities:
 [Name] ([type]), [Name] ([type]), ...
 Which should I create as vault entities?"
 
-**Self-check after each promoted entity:**
-1. Re-read the entity file just created
-2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
-3. Verify: `type` matches, `source_confidence: DRAFT` is set, all required fields present
-4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
-5. Fix any issues before promoting the next entity
-
 Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
 auto-promote — the GM chooses.
+
+**2b. Plan promotion** — List all topic files from
+`_midwife/{adventure}/` that contain narrative planning
+content (arc design, scene designs, investigation flows,
+timelines). Categorize each:
+
+"These planning documents are ready for the vault:
+
+Arc/structure:
+- chapter-shape.md → Arc_Shape.md (plan_type: arc)
+- narrative-arc.md → Narrative_Arc.md (plan_type: arc)
+
+Investigation:
+- investigation-shape.md → Investigation_Design.md (plan_type: investigation)
+
+Scenes:
+- temple-approach.md → Temple_Approach.md (plan_type: scene)
+- recognition-scene.md → Recognition_Scene.md (plan_type: scene)
+[etc.]
+
+Timeline:
+- timeline.md → Timeline.md (plan_type: timeline)
+
+Which should I promote to the vault?"
+
+For each approved plan:
+1. Create `Planning/` under the chapter directory if it
+   doesn't exist
+2. Read `_Templates/_Template_Plan.md` for the frontmatter
+   structure
+3. Transform the freeform Midwife draft into a vault entity:
+   - Set `plan_type` based on the categorization above
+   - Set `chapter` to the chapter overview wiki-link
+   - Populate `participants` with wiki-links to NPCs,
+     factions, and creatures mentioned in the plan
+   - Populate `locations` with wiki-links to locations
+     mentioned in the plan
+   - Add `relationships` between plans where sequencing
+     or branching exists (e.g., `leads_to`, `precedes`,
+     `alternative_to`)
+   - Preserve the full narrative content in body sections,
+     adapting section headers to fit the plan type
+4. Write to `Chapters/{chapter}/Planning/{Plan_Name}.md`
+
+**Self-check after each promoted entity or plan:**
+1. Re-read the file just created
+2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
+3. Verify: `type` matches, `source_confidence: DRAFT` is set, all required fields present
+4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+5. Fix any issues before promoting the next item
+
+Content left in `_midwife/` after promotion (seeds, unused
+sketches, half-formed ideas) stays as creative archive.
+Update `_midwife/index.md` to record what was promoted
+and what remains.
 
 ### Step 3: Vault Scaffold (greenfield only)
 

@@ -199,6 +199,14 @@ Read `references/synthesis-templates.md` for the output format.
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.
 
+**Planning content:** If the ingested material contains
+narrative planning documents (scene designs, arc structures,
+investigation flows), create them as `type: plan` entities
+in `Chapters/{chapter}/Planning/`. Read
+`_Templates/_Template_Plan.md` for the frontmatter structure.
+Set `plan_type` to the closest match: `arc`, `scene`,
+`investigation`, or `timeline`.
+
 ### Phase 6: Review
 
 Invoke `shared/reconcile.md` to walk the GM through reviewing
