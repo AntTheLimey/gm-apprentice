@@ -52,6 +52,7 @@ Items are force-ranked by score. Higher score = do first.
 | Pulp Cthulhu variant support | 4 | 4 | XL (4) | 3.0 | Idea | CoC variant overlay: hero/pulp talents, psychic powers, archetypes, adjusted lethality. Blocked on finding a legit distributable source — Chaosium BRP ORC license may not cover Pulp-specific content |
 | ~~FitD SRD enrichment (Phase 5b)~~ | 2 | 2 | M (2) | 3.0 | ~~Done~~ | ~~Expand FitD files to GURPS-level depth~~ |
 | Publish tool: Chapter/Session/Scene templates + hierarchy nav | 3 | 2 | L (3) | 2.7 | Idea | Dedicated templates for narrative hierarchy with parent/child nav |
+| Zero-subscription GM access | 4 | 2 | XL (4) | 2.5 | Idea | Figure out how a GM with no Claude knowledge or subscription can use gm-apprentice. Research: hosted web UI wrapping the API, simplified onboarding that hides the Claude layer, free/low-cost access model, or a different distribution path entirely. Product strategy question before it's a technical one. |
 | Skill description optimization | 2 | 1 | M (2) | 2.5 | Idea | Marketplace description and SKILL.md routing improvements for discoverability |
 | Publish tool: Clue dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for clue entities with status, linked scenes, discovery conditions |
 | Publish tool: Document dedicated template | 2 | 1 | M (2) | 2.5 | Idea | Template for in-world documents (letters, newspapers, journals) |
