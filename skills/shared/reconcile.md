@@ -42,7 +42,7 @@ On GM confirmation:
 - Set Wrap-Up `source_confidence` to `AUTHORITATIVE`
 - Promote all DRAFT entities from this session to AUTHORITATIVE
 - Update session index `status` to `reviewed`
-- Skip to step 6 (record decisions)
+- Skip to step 5.5 (world evolution offer)
 
 If any condition fails → proceed with the full 6-step procedure
 below.
@@ -141,6 +141,41 @@ Do the bookkeeping immediately — don't leave a list for
 the GM. Hand off to campaign-organizer if entity filing
 is needed.
 
+### 5.5. World evolution (conditional)
+
+**Gate:** Only offer when reconciling the **most recent**
+session. Check the session index for a `world_evolved` field
+— if present and matching this session, skip.
+
+> "Session is settled. Want to evolve the world — faction
+> turns, consequence surfacing, foreshadowing review? This
+> updates how the world responds to what just happened. (y/n)"
+
+If the GM declines → skip to step 6.
+
+If the GM accepts → read and follow
+`ttrpg-expert/world-evolution.md`, skipping the Storage
+Checkpoint (already established). Run the 6-step procedure:
+thread state updates, faction turns, consequence surfacing,
+foreshadowing review, discovery state updates, world state
+changes. One item at a time, GM approves each — same
+conversational style as the rest of reconcile.
+
+**On completion:**
+- Set `world_evolved: "Session_NN"` on the session index
+  (current session reference)
+- Entity files created or updated use
+  `source: "world-evolution"`, with `lastUpdated` and
+  `asOfSession` set to the current session
+- Results feed into step 6's `## Reconciliation Context`
+  under `### World Evolution`, containing:
+  - Faction turn summaries (one line per faction: action,
+    impact level, what's visible to PCs)
+  - Surfaced consequences (trigger, manifestation)
+  - Foreshadowing changes (ripeness updates, new plants)
+  - Discovery state changes (per-PC knowledge shifts)
+  - World state changes (calendar, environment, politics)
+
 ### 6. Record decisions
 
 Write a `## Reconciliation Context` section capturing:
@@ -149,6 +184,10 @@ Write a `## Reconciliation Context` section capturing:
   play notes, no invention)
 - **Salvageable prep** — disposition of each unplayed item
 - **GM decisions** — each conflict resolution with rationale
+- **World evolution** — if step 5.5 ran, include a
+  `### World Evolution` sub-section with faction turn
+  summaries, surfaced consequences, foreshadowing and
+  discovery state changes, and world state updates
 
 This section provides cross-conversation continuity.
 Session-prep reads it to avoid re-gathering context.
@@ -178,3 +217,6 @@ file is the canonical location.
 - `shared/session-principles.md` — Shared session rules
 - `ttrpg-expert/canon-management.md` — Full conflict
   detection and resolution workflow
+- `ttrpg-expert/world-evolution.md` — Post-session world
+  evolution procedure (faction turns, consequences,
+  foreshadowing, discovery state)

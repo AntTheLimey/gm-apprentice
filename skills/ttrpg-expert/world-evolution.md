@@ -4,6 +4,11 @@ The world does not wait for the PCs. Between sessions, factions
 advance plans, consequences ripen, rumours spread, and the
 calendar turns. Run this procedure after every session.
 
+**Invocation:** This procedure normally runs as reconcile
+step 5.5 — offered to the GM after session confidence is
+promoted. It can also be invoked standalone via ttrpg-expert
+("update the world" / "post-session update").
+
 > "Every antagonist faction has a plan that advances whether
 > the PCs act or not. The PCs don't start the story — they
 > *interrupt* it."
@@ -28,9 +33,12 @@ visible to the GM before it becomes canon.
 - **Match system tone.** CoC: creeping dread. FitD: noir crime.
   D&D: living political/adventure landscape.
 
-## Storage Checkpoint
+## Storage Checkpoint (standalone only)
 
-Before the first update, determine where campaign state lives:
+Skip this step when invoked from reconcile — the vault
+location is already established.
+
+When invoked standalone, determine where campaign state lives:
 
 1. **campaign-organizer** (recommended if vault exists)
 2. **Set up campaign-organizer now** — pause, configure, return
@@ -62,7 +70,7 @@ System-specific modules override when available:
 
 ### Step 3: Consequence Surfacing
 
-Review the Consequence Tracker. For each deferred consequence:
+Review carry-forward items and active threads. For each deferred consequence:
 has enough time passed? Does the current situation make surfacing
 natural? Manifests as event, NPC reaction, environmental change,
 or rumour?
@@ -97,13 +105,16 @@ or rejects each. Then execute the filing protocol.
 ### Filing Protocol
 
 **New entities:** create file per `shared/entity-schema.md` schema.
-Set `source: "play"`, `createdSession`, `lastUpdated`,
+Set `source: "world-evolution"`, `createdSession`, `lastUpdated`,
 `asOfSession` to current session.
 
 **Changed entities:** update changed fields only. Set
 `lastUpdated` and `asOfSession`.
 
-**Timeline entry** — append to `campaign-timeline.md`:
+**Timeline entry (standalone only)** — when invoked outside
+reconcile, append to `campaign-timeline.md`. Skip when
+invoked from reconcile — session-wrapup already wrote the
+session's timeline entry.
 
 ```markdown
 ## Session [N] — [date]
@@ -123,6 +134,11 @@ Set `source: "play"`, `createdSession`, `lastUpdated`,
 
 After filing: "Updates filed. Run campaign-qa to validate,
 or proceed to session prep?"
+
+**When invoked from reconcile:** skip this prompt — results
+flow into reconcile step 6's `## Reconciliation Context`
+under `### World Evolution`. Set `world_evolved` on the
+session index to the current session reference.
 
 ## Universal Faction Turn
 
@@ -145,54 +161,18 @@ Five questions per active faction:
 5. **What becomes visible to PCs?** Directly, through allies,
    through rumour, or not at all.
 
-## Tracking Templates
+## Tracking State
 
-### Consequence Tracker
+Consequences, foreshadowing, and discovery state are tracked
+via the entity schema — not standalone files. See
+`shared/entity-schema.md` for:
 
-```markdown
-| # | Action | Deferred Consequence | Surfaces In | Manifests As | Status |
-|---|--------|---------------------|-------------|-------------|--------|
-```
+- **Thread entities** with `threadType: "Foreshadowing"`,
+  `plantedDetail`, `intendedPayoff`, `ripeness`
+- **Clue entities** with `discoveryState` (per-PC knowledge
+  levels: Unknown → Rumoured → Observed → Investigated →
+  Understood)
 
-Status: Pending → Surfaced → Spent. Also: Banked (available
-when narratively useful).
-
-### Foreshadowing Log
-
-```markdown
-| # | Planted | Element | Noticed By | Intended Payoff | Ripeness | Pay Off By |
-|---|---------|---------|------------|-----------------|----------|------------|
-```
-
-Ripeness 1/5 (barely hinted) to 5/5 (payoff imminent). At 5/5,
-deliver next session or impact fades.
-
-### Campaign Tracker
-
-```markdown
-## Campaign Tracker
-**Campaign:**  **System:**  **Session Count:**
-**Current In-World Date:**
-
-### World State Snapshot
-[2-3 sentence current state as PCs know it]
-
-### Active Consequences
-[Pending/Banked entries with expected surface session]
-
-### Active Foreshadowing
-[Entries not yet paid off, with ripeness and target]
-
-### Rumour Board
-[Current rumours — mark True, Partially True, or False]
-```
-
-### Per-PC Discovery State
-
-```markdown
-## Discovery State: [Clue/Secret Name]
-| PC | Level | Changed | How |
-|----|-------|---------|-----|
-```
-
-Levels: Unknown, Rumoured, Observed, Investigated, Understood.
+Consequences surface through session-wrapup's carry-forward
+section and session-prep's thread review. World state snapshots
+are maintained in the Wrap-Up → Plan handoff chain.

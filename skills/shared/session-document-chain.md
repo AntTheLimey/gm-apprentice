@@ -25,6 +25,7 @@ documents:
   wrap_up: "[[Session_NN_Wrap_Up]]"
 scenes:
   - "[[Scene Title]]"
+world_evolved: null
 tags: []
 ---
 ```
@@ -46,6 +47,12 @@ metadata.
 | played | Play Notes file exists |
 | wrap-up | Wrap-Up file exists |
 | reviewed | GM has reviewed and confirmed the Wrap-Up |
+
+**`world_evolved`:** Set by reconcile step 5.5 after the
+world-evolution procedure completes. Value is the session
+reference (e.g., `"Session_07"`). Null until world-evolution
+runs. Prevents reconcile from re-offering world-evolution
+for the same session.
 
 ### 2. Session Plan (`Session {NN} - {Title} - Plan.md`)
 

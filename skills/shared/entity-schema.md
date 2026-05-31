@@ -22,7 +22,7 @@ Apply to **every** entity type. Enable temporal queries
 | lastUpdated | string | Session number or date of last modification |
 | asOfSession | string | Session when current state was confirmed accurate |
 | createdSession | string | Session when first introduced |
-| source | string | How it entered canon: "play", "prep", or "backstory" |
+| source | string | How it entered canon: "play", "prep", "backstory", or "world-evolution" |
 | confidence | string | Canon confidence: DRAFT / AUTHORITATIVE / SUPERSEDED |
 | era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"). Assumed campaign present if absent. |
 
