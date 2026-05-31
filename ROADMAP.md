@@ -65,6 +65,7 @@ Items are force-ranked by score. Higher score = do first.
 
 ## Completed
 
+- ~~World evolution integration into reconcile~~ — Reconcile step 5.5 offers faction turns, consequence surfacing, foreshadowing review after session confidence is promoted. Removed dead campaign-tracker.md references. Added `world-evolution` entity source and `world_evolved` session field (PR #52)
 - ~~Publish tool: landing recap + wrap-up sidebar fix~~ — Landing page now extracts recap from wrap-up file, links to wrap-up page, wrap-up pages suppress backlinks sidebar, world_flags excluded from build (PR #51)
 - ~~Campaign overview template with current game date~~ — `campaign_overview` entity type with session-wrapup auto-updates and the-midwife creation
 - ~~the-midwife: guided adventure creation skill~~ — Adventure creation skill with adventure-brief entity type, vault-mining, Session 0 handoff
