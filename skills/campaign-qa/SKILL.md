@@ -244,9 +244,10 @@ for the full procedure.
   `asOfSession` is more than 1 session behind the latest
   wrap-up
 - Plan entity validation: plan entities in `Planning/` with
-  missing `plan_type`, empty `participants` or `locations`,
-  or `chapter` links pointing to non-existent chapter
-  overviews
+  missing `plan_type`, `chapter` links pointing to
+  non-existent chapter overviews, or scene plans with empty
+  `participants` or `locations` (arc and timeline plans may
+  legitimately have sparse relational data)
 
 ### World Consistency
 

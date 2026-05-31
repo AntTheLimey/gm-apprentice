@@ -8,7 +8,7 @@ asOfSession: ""
 lastUpdated: ""
 aliases: []
 tags: []
-plan_type: ""
+plan_type: ""               # arc | scene | investigation | timeline
 chapter: "[[]]"
 campaign: "[[Campaign_Overview_Updated]]"
 participants: []
