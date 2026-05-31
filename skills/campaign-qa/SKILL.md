@@ -243,7 +243,7 @@ for the full procedure.
   companion `{Name}_Story.md` file, story files where
   `asOfSession` is more than 1 session behind the latest
   wrap-up
-- Plan entity validation: plan entities in `Planning/` with
+- Plan entity validation: plan entities in `Chapters/{chapter}/Planning/` with
   missing `plan_type`, `chapter` links pointing to
   non-existent chapter overviews, or scene plans with empty
   `participants` or `locations` (arc and timeline plans may
