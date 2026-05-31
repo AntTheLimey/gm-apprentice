@@ -85,6 +85,7 @@ Route these requests directly — don't search, load the file.
 | Scene fell flat | `ttrpg-expert/active-play-management.md` §Mid-Session Adjustments |
 | Pacing / tension | `ttrpg-expert/active-play-management.md` §Pacing and Flow |
 | Improvisation help | `ttrpg-expert/active-play-management.md` §Improvisation |
+| Scene plan | `Chapters/{chapter}/Planning/{scene}.md` — read the relevant plan entity for decision trees and contingencies |
 
 Read `ttrpg-expert/active-play-management.md` when the GM needs
 GM-craft advice (spotlight, pacing, improv, difficulty tuning)

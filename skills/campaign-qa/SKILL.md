@@ -243,6 +243,10 @@ for the full procedure.
   companion `{Name}_Story.md` file, story files where
   `asOfSession` is more than 1 session behind the latest
   wrap-up
+- Plan entity validation: plan entities in `Planning/` with
+  missing `plan_type`, empty `participants` or `locations`,
+  or `chapter` links pointing to non-existent chapter
+  overviews
 
 ### World Consistency
 
