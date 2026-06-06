@@ -166,7 +166,11 @@ limited source data, not a gap in the skill's work.}
 4. **Scale prose to available data.** Rich sources get longer
    entries. Sparse sources get shorter entries with a
    `<!-- sparse source material -->` marker. Never fabricate
-   detail to fill space.
+   detail to fill space. Authoring a backstory entry is a grudging
+   exception — you write because no story prose exists yet, not to
+   improve the GM's own words; where a source already holds
+   finished prose, preserve it.
+   (authoring exception to `shared/content-fidelity.md`)
 
 5. **Create file from template if needed.** Use
    `shared/templates/character-story.md`. If a story file

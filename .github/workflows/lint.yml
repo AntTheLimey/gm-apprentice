@@ -20,6 +20,7 @@ jobs:
             docs/**/*.md
             !docs/plans/**
             tests/**/*.md
+            !tests/benchmark-content-fidelity/results/**
             README.md
 
   consistency-checks:

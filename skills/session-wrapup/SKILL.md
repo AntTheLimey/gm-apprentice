@@ -60,17 +60,22 @@ gmassistant-specific instructions in Steps 2 and 4 below.
 
 ### 2. Narrative Recap
 
-**Standard path:** 3-5 paragraphs of campaign prose. Dramatic,
-character names, `[[wiki-links]]` for every entity.
-Tone-calibrate per `references/recap-formats.md`. Also generate
-**Quick Bullets** (5-8 points). Write both formats into the
-Wrap-Up file.
+**Standard path:** *Authoring operation — the input is shorthand
+play notes, not finished prose, so generating the recap is the
+job here.* Write 3-5 paragraphs of campaign prose. Dramatic,
+character names, `[[wiki-links]]` for every entity. Tone-calibrate
+per `references/recap-formats.md`. Stay faithful to the notes — no
+embellishment, never invent beyond what they record. Also generate
+**Quick Bullets** (5-8 points). Write both formats into the Wrap-Up
+file. (authoring exception to `shared/content-fidelity.md`)
 
 **gmassistant.app path:** Adopt the content of the Play Notes'
 `## Summary` section into the Wrap-Up file under the
 `## Narrative Recap` heading. No rewriting, no condensing, no
-tone adjustment — but do add `[[wiki-links]]` to every entity
-reference (matching the standard path's linking requirement).
+tone adjustment (the exemplar preserve-guard; see
+`shared/content-fidelity.md`) — but do add `[[wiki-links]]` to
+every entity reference (matching the standard path's linking
+requirement).
 Skip Quick Bullets — the `## Scenes` section in the Play Notes
 already serves that purpose.
 
@@ -105,6 +110,12 @@ for the full format, voice, and append protocol.
 
 **Input:** Narrative Recap (Step 2) and PC Carry-Forward
 (Step 3). No new source gathering.
+
+*Authoring operation — a PC-perspective story entry doesn't exist
+yet, so writing it is the job. Stay grounded in what the recap and
+carry-forward record; no embellishment, never invent events or
+feelings the session didn't produce.*
+(authoring exception to `shared/content-fidelity.md`)
 
 **Output:** One appended entry per active PC's story file.
 
@@ -142,8 +153,11 @@ locations, and NPC relationships.
   the vault file using that template as the structure.
   Don't ask — do it. `source_confidence: DRAFT`. If
   session-play already saved provisional content, incorporate
-  rather than recreate. Never pattern-match off existing
-  entity files — the template is canonical.
+  it verbatim rather than recreate — preserve the wording the
+  notes already have; the template supplies structure, not
+  replacement prose. Never pattern-match off existing entity
+  files — the template is canonical.
+  (rationale: `shared/content-fidelity.md`)
 
 - **Updated entities**: Update the entity's own vault file.
   ONE file per entity. No separate "update" files.
@@ -151,6 +165,9 @@ locations, and NPC relationships.
 - **Timeline**: Linked events:
   `- **{in_game_date}** — [[Event_Name]] — {summary}`.
   Inline events: `- **{in_game_date}** — {description}`.
+  The `{summary}`/`{description}` line is authored from the event
+  — keep it factual, no invention.
+  (authoring exception to `shared/content-fidelity.md`)
 
 - **Event decomposition**: Create Event entity files for
   moments meeting the threshold (≥2 of: changes entity state,

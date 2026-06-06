@@ -290,8 +290,12 @@ questions to ask based on the domain being touched.
 ### Step 1: Synthesize Adventure Brief
 
 Read `shared/entity-schema.md` for adventure-brief type.
-Synthesize the adventure index and topic files into the
-brief using the template below.
+Assemble the adventure index and topic files into the brief
+using the template below. Apply the block/seam test: where a
+topic file already holds finished prose, lift it verbatim;
+author only the connective seams and fragment-derived text. Do
+not re-voice writing that is already written.
+(rationale: `shared/content-fidelity.md`)
 
 - **Existing vault:** Write to
   `Adventures/{adventure-name}/{adventure-name}.md`.
@@ -345,7 +349,8 @@ For each approved plan:
    doesn't exist
 2. Read `_Templates/_Template_Plan.md` for the frontmatter
    structure
-3. Transform the freeform Midwife draft into a vault entity:
+3. Reshape the freeform Midwife draft into a vault entity —
+   structure only, never the prose:
    - Set `plan_type` based on the categorization above
    - Set `chapter` to the chapter overview wiki-link
    - Populate `participants` with wiki-links to NPCs,
@@ -355,8 +360,12 @@ For each approved plan:
    - Add `relationships` between plans where sequencing
      or branching exists (e.g., `leads_to`, `precedes`,
      `alternative_to`)
-   - Preserve the full narrative content in body sections,
-     adapting section headers to fit the plan type
+   - **Preserve the body prose verbatim.** Carry the full
+     narrative content across unchanged; only adapt section
+     headers to the plan type and add `[[wiki-links]]`. Do not
+     condense, paraphrase, re-voice, or "improve" it — promotion
+     files the GM's writing, it does not re-author it.
+     (rationale: `shared/content-fidelity.md`)
 4. Write to `Chapters/{chapter}/Planning/{Plan_Name}.md`
 
 **Self-check after each promoted entity or plan:**
