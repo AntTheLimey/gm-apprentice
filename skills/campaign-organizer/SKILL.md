@@ -250,8 +250,12 @@ tools used to read, write, and search differ.
 4. **Extract and file** — For each entity, read
    `_Templates/_Template_{Type}.md` first, then create the note
    using that template as the structure. Fill in frontmatter per
-   schema and embed `[[wiki-links]]`. Never pattern-match off
-   existing entity files — the template is canonical.
+   schema and embed `[[wiki-links]]`. When the source already
+   describes the entity, carry that prose into the body verbatim
+   — the template supplies structure, not replacement text; do
+   not summarize or re-voice it. Never pattern-match off existing
+   entity files — the template is canonical.
+   (rationale: `shared/content-fidelity.md`)
 
 **World-rule validation:** After creating or updating an entity,
 if `_World/` exists, check the entity against active domain
@@ -276,9 +280,13 @@ three-state responses (canon / ignore / defer).
 4. **Extract** — One note per entity AND per narrative element:
    chapter overviews, scene notes, session notes, entity notes.
    For each entity, read `_Templates/_Template_{Type}.md` first
-   and use that template as the structure. Include frontmatter,
-   body summary, `[[wiki-links]]`. Never pattern-match off
-   existing entity files — the template is canonical.
+   and use that template as the structure. Carry each entity's
+   source slice into the body verbatim — include frontmatter, the
+   preserved body prose, and `[[wiki-links]]`. Do not summarize or
+   condense the slice; an over-long entity is recoverable, a
+   summarized one is lossy. Never pattern-match off existing
+   entity files — the template is canonical.
+   (rationale: `shared/content-fidelity.md`)
 5. **Stub** — Read `_Templates/_Template_{Type}.md`, create with
    that structure, set `source_confidence: STUB`. Leave template
    sections empty. Include `## Needs` section.
@@ -293,8 +301,9 @@ three-state responses (canon / ignore / defer).
 2. **Scan** — Index all entity names, aliases, relationships.
 3. **Discover** — Find missing links in body text.
 4. **Propose** — Group by confidence: Explicit, Inferred, Possible.
-5. **Apply** — After confirmation, update frontmatter and links.
-   Read `references/graph-hygiene.md` for link conventions.
+5. **Apply** — After confirmation, update frontmatter and links
+   only — Weave never rewrites body prose. Read
+   `references/graph-hygiene.md` for link conventions.
 
 When adding relationships or updating entity fields, check
 new values against `_World/` rules (if `_World/` exists).
