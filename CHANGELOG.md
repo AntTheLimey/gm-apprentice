@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.1] — 2026-06-06
+
+### Added
+
+- **Content-fidelity shared rule** — `skills/shared/content-fidelity.md`
+  establishes preserve-by-default for content-moving operations: moving
+  existing prose preserves it verbatim; authoring new prose is an explicit,
+  justified exception. Includes the block/seam test for mixed operations.
+- **Compactor rationale category** — the skill-compactor now treats rule
+  rationale ("why") as a preserved category, so the reasoning behind a rule
+  is not stripped as verbose connective tissue.
+
+### Changed
+
+- **Fidelity guards across skills** — the-midwife (plan promotion, brief
+  synthesis), campaign-organizer (Organize, Dissect, Weave), session-wrapup
+  (recap, character story, new entities, timeline), vault-ingest (synthesis,
+  backstory entries), and session-prep now carry explicit preserve-guards or
+  grudging authoring carve-outs pointing at `content-fidelity.md`.
+- **campaign-organizer Dissect** — removed the "body summary" instruction;
+  each entity now carries its source slice verbatim rather than condensing it.
+
+---
+
 ## [1.7.0] — 2026-05-30
 
 ### Added
