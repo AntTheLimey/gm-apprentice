@@ -163,6 +163,7 @@ entities relevant to the upcoming session:
 Do not copy plan content into the session plan — link to
 it. Plans are reference documents the GM consults during
 play, not material to be duplicated.
+(rationale: `shared/content-fidelity.md`)
 → Write `## Available Plans` to Plan file.
 
 ## Phase 2: Prep Forward — Creative Planning
