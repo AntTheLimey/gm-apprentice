@@ -167,6 +167,7 @@ locations, and NPC relationships.
   Inline events: `- **{in_game_date}** — {description}`.
   The `{summary}`/`{description}` line is authored from the event
   — keep it factual, no invention.
+  (authoring exception to `shared/content-fidelity.md`)
 
 - **Event decomposition**: Create Event entity files for
   moments meeting the threshold (≥2 of: changes entity state,
