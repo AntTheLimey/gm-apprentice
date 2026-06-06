@@ -163,7 +163,10 @@ valid zips). For publish tool changes, run the publish tool test suite.
   routing design. **Sonnet is fine** for mechanical edits
   (replacements, references, structural changes) when the exact
   content is specified in a plan or instructions.
-- **Run `skill-creator` validation** before committing skill changes
+- **Run `skill-creator` validation** before committing skill changes.
+  **CI does not run this** — schema + markdownlint passing does *not* cover it.
+  Run it manually and never defer it: it has no automated backstop, so a
+  deferred skill-creator check simply never happens. "CI is green" ≠ "validated."
 - `SKILL.md` is the routing layer — keep it concise
 - Detailed content belongs in `skills/*/references/`
 - **Inline vs extract threshold:** Every file read costs ~90 tokens of
