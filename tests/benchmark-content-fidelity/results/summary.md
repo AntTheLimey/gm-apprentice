@@ -20,6 +20,20 @@ the written outputs, not self-reported.
 | Authoring (session-wrapup recap) | fidelity to notes (no invention) | embellished | tighter to source | NEW more faithful, quality comparable |
 | Compaction round-trip (the-midwife) | rationale "why" surviving compaction | n/a | 100% (4/4 phrases) | **guard works — why not stripped** |
 
+## Scorecard — quality / tokens / time / tools, OLD → NEW (Δ)
+
+| Scenario | Quality | Tokens | Time | Tool calls |
+|---|---|---|---|---|
+| Relocation | 100% → 100% (0) | 21,267 → 21,569 (+302) | 12.2s → 14.2s (+2.0s) | 2 → 3 (+1) |
+| Dissect | 0% → 100% (+100pp) | 21,750 → 22,028 (+278) | 15.0s → 19.4s (+4.4s) | 2 → 3 (+1) |
+| Authoring | 3/3 embellished → 3/3 faithful (fidelity↑) | 21,977 → 21,902 (−75) | 29.8s → 26.3s (−3.4s) | 3 → 3 (0) |
+| Compaction (single run) | 100% why survived (4/4) | 32,503 | 177.4s | 6 |
+
+Quality metric differs by scenario: verbatim-preservation % (Relocation, Dissect),
+prose-quality 1–3 + invention check (Authoring), rationale-survival % (Compaction).
+Only meaningful delta is quality (Dissect +100pp); token cost of the fix is +1.3–1.4%
+or negative; time deltas are n=1 noise.
+
 ## Per-agent metrics (stamped from agent metadata)
 
 | Agent | Tokens | Wall clock (ms) |
