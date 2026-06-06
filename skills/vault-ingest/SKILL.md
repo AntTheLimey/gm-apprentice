@@ -180,7 +180,11 @@ Read `references/synthesis-templates.md` for the output format.
 1. For buckets with no existing session files, hand to
    `campaign-organizer` for chapter/session skeleton creation
 2. Write synthesized content as a Play Notes file per
-   `shared/session-document-chain.md`
+   `shared/session-document-chain.md`. Apply the block/seam test:
+   preserve finished-prose blocks from the sources verbatim;
+   author only the fragment-derived text and the seams. Synthesis
+   assembles fragments — it does not re-voice writing that is
+   already written. (rationale: `shared/content-fidelity.md`)
 3. Follow `session-wrapup` workflow to produce the Wrap-Up
    file and create/update entities
 4. For each PC active during the ingested period, write a
