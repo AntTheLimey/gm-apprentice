@@ -3,7 +3,14 @@ function getLatestSession(pages) {
     p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
   );
   if (played.length === 0) return null;
-  played.sort((a, b) => (b.frontmatter.session_number || 0) - (a.frontmatter.session_number || 0));
+  // "Latest" = most recently played (by play_date), not highest session_number — chapters can
+  // restart numbering. Fall back to session_number only when play dates tie or are absent.
+  played.sort((a, b) => {
+    const da = new Date(a.frontmatter.play_date || a.frontmatter.actual_date || 0).getTime() || 0;
+    const db = new Date(b.frontmatter.play_date || b.frontmatter.actual_date || 0).getTime() || 0;
+    if (db !== da) return db - da;
+    return (b.frontmatter.session_number || 0) - (a.frontmatter.session_number || 0);
+  });
   return played[0];
 }
 

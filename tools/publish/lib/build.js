@@ -125,6 +125,11 @@ function build(options = {}) {
   console.log('Scanning vault:', config.vaultPath);
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
+  // The full scanned corpus stays available for templates to read context from (campaign-overview
+  // metadata, cross-references, link resolution) — independent of the manifest/draft filtering
+  // below, which only governs what gets *rendered*. Captured here because the filters reassign
+  // `pages` to the published subset.
+  const corpus = pages.slice();
   pairStoryFiles(pages, config.vaultPath);
 
   // Exclude DRAFT entities when configured (after pairing so story files resolve)
@@ -497,7 +502,7 @@ function build(options = {}) {
   }
 
   // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap);
+  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
 

@@ -28,24 +28,43 @@ function statusLabel(status) {
   return 'Active';
 }
 
-function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
+// Resolve a wiki-link such as "[[Session 03 - Give Rest]]" to its session page by matching the
+// page's source filename (page.title). Returns null when no matching session page is present.
+function resolveSessionLink(link, pages) {
+  if (!link) return null;
+  const target = String(link).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+  if (!target) return null;
+  return pages.find(p => p.frontmatter.type === 'session' && p.title === target) || null;
+}
+
+function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus) {
   const outputPath = 'index.html';
   const theme = (publishConfig && publishConfig.theme) || {};
   const campaignImage = theme.campaign_image || null;
   const settingYear = publishConfig ? publishConfig.setting_year : null;
   const landingConfig = (publishConfig && publishConfig.landing) || {};
   const genre = publishConfig._genrePreset || null;
+  // The full corpus (all scanned pages, pre-publish-filter) is available for context; fall back to
+  // the published `pages` if a caller doesn't supply it. The _Campaign overview holds authoritative
+  // campaign state (maintained by the session-wrapup skill: current_game_date, sessions_played,
+  // last_session, last_play_date). Looked up by `type === 'campaign_overview'`, never by filename,
+  // so name drift such as "Campaign_Overview_Updated" is tolerated.
+  const corpusPages = (corpus && corpus.length) ? corpus : pages;
+  const overviewFm = (corpusPages.find(p => p.frontmatter.type === 'campaign_overview') || {}).frontmatter || {};
+  const inGameLabel = overviewFm.current_game_date || settingYear;
 
   // --- Zone 1: Hero ---
   const heroImgHtml = campaignImage
     ? `<img class="landing-hero-img" src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}">`
     : '';
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
-  const sessionCount = (publishConfig && publishConfig.total_sessions != null)
-    ? publishConfig.total_sessions
-    : pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
+  const sessionCount = (overviewFm.sessions_played != null)
+    ? overviewFm.sessions_played
+    : (publishConfig && publishConfig.total_sessions != null)
+      ? publishConfig.total_sessions
+      : pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
   const heroDateParts = [];
-  if (settingYear) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(settingYear))}</span>`);
+  if (inGameLabel) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(inGameLabel))}</span>`);
   heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);
   const heroDates = heroDateParts.length > 0 ? `<div class="hero-dates">${heroDateParts.join('')}</div>` : '';
 
@@ -57,13 +76,15 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap) {
 </div>`;
 
   // --- Zone 2: Latest Session Recap ---
-  const latestSession = getLatestSession(pages);
+  // Prefer the overview's authoritative last_session pointer; fall back to scanning sessions only
+  // when it is absent or unresolvable (e.g. the named session page is not itself published).
+  const latestSession = resolveSessionLink(overviewFm.last_session, corpusPages) || getLatestSession(pages);
   const latestWrapUp = getLatestWrapUp(pages, latestSession);
   let recapZone = '';
   if (latestSession) {
     const recapSource = latestWrapUp || latestSession;
     const recap = extractRecap(recapSource);
-    const dateStr = formatDate(latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
+    const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const linkTarget = latestWrapUp || latestSession;
     const recapLink = `<a class="recap-link" href="${escapeHtml(linkTarget.outputPath)}">Read full session &rarr;</a>`;
