@@ -125,10 +125,12 @@ function build(options = {}) {
   console.log('Scanning vault:', config.vaultPath);
   let pages = scanVault(config);
   console.log(`Found ${pages.length} pages`);
-  // The full scanned corpus stays available for templates to read context from (campaign-overview
-  // metadata, cross-references, link resolution) — independent of the manifest/draft filtering
-  // below, which only governs what gets *rendered*. Captured here because the filters reassign
-  // `pages` to the published subset.
+  // Capture the scanned pages before the manifest/draft filters reassign `pages` to the published
+  // subset, so templates can reach context that is excluded from rendering — above all the
+  // `_Campaign` overview, which is normally unpublished. This preserves page *membership* only:
+  // the page objects are shared, so any later field-level frontmatter filtering on published pages
+  // is visible here too. Use corpus to reach excluded *pages* (e.g. the overview), not to recover
+  // fields stripped from a *published* page.
   const corpus = pages.slice();
   pairStoryFiles(pages, config.vaultPath);
 
