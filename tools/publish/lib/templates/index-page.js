@@ -675,7 +675,11 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
     bodyContent = renderFactions(pages, dir);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
-  } else if (isCampaign) {
+  } else if (isCampaign && pages.some(p => p.frontmatter.type === 'campaign_overview')) {
+    // Only render the overview deep-dive (which surfaces the overview's prose) when the overview
+    // is actually published. In player mode the overview is excluded as a spoiler doc, so fall
+    // through to the normal card index of the published _Campaign pages rather than showing
+    // "No campaign overview found".
     bodyContent = renderCampaignDeepDive(pages, dir, publishConfig);
   } else {
     const cardItems = pages.map(p => {

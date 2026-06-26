@@ -38,6 +38,26 @@ describe('getLatestSession', () => {
     const result = getLatestSession(pages);
     assert.strictEqual(result.title, 'Session 5');
   });
+
+  it('picks the most recently played session even when a later chapter restarts numbering', () => {
+    // Regression: "latest" must mean most recently played (play_date), not highest session_number.
+    // Vienna ran 1-14; Calcutta restarted at 1-3 — the June session (number 3) is the real latest.
+    const pages = [
+      { frontmatter: { type: 'session', status: 'reviewed', session_number: 14, play_date: '2026-05-21' }, title: 'Session 14' },
+      { frontmatter: { type: 'session', status: 'reviewed', session_number: 3, play_date: '2026-06-25' }, title: 'Session 03 - Give Rest' },
+    ];
+    const result = getLatestSession(pages);
+    assert.strictEqual(result.title, 'Session 03 - Give Rest');
+  });
+
+  it('falls back to session_number when play dates are equal or absent', () => {
+    const pages = [
+      { frontmatter: { type: 'session', status: 'played', session_number: 2 }, title: 'Session 2' },
+      { frontmatter: { type: 'session', status: 'played', session_number: 5 }, title: 'Session 5' },
+    ];
+    const result = getLatestSession(pages);
+    assert.strictEqual(result.title, 'Session 5');
+  });
 });
 
 describe('getLatestWrapUp', () => {
