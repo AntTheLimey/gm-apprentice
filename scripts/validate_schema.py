@@ -371,8 +371,9 @@ FreshnessResult = namedtuple(
 )
 
 # A PC with one of these statuses is intentionally frozen at the session
-# it left the story — staleness there is correct, not drift.
-FROZEN_PC_STATUSES = {"dead"}
+# it left active play — died, or off-screen/missing — so staleness there
+# is correct, not drift. `alive` and `unknown` PCs are checked.
+FROZEN_PC_STATUSES = {"dead", "missing"}
 
 
 def parse_session_ordinal(value: str | None) -> tuple[int, int] | None:

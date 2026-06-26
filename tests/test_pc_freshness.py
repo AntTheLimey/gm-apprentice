@@ -61,6 +61,12 @@ class FindStalePcsTests(unittest.TestCase):
         names = [s.name for s in self.result.stale]
         self.assertNotIn("Fallen_Knight", names)
 
+    def test_missing_pc_is_skipped(self):
+        # A missing/off-screen PC's sheet legitimately freezes while
+        # they're out of play — frozen like a dead PC, not a drift bug.
+        names = [s.name for s in self.result.stale]
+        self.assertNotIn("Vanished_Agent", names)
+
     def test_current_pc_not_flagged(self):
         names = [s.name for s in self.result.stale]
         self.assertNotIn("Current_Scout", names)

@@ -132,8 +132,9 @@ its frontmatter and its **published** `## Current Status` freeze
 sessions behind the narrative. The `## Current Status` block is
 the PC's **cumulative living state** — the canonical, always-current
 answer to "where is this character now, and what's still open for
-them." Refresh each **active** PC sheet (skip PCs whose `status` is
-`dead`):
+them." Refresh the sheet of each PC **active in this session** (the
+same set Step 3b writes a story entry for — this excludes `dead` PCs
+and any who were off-screen this session):
 
 1. Frontmatter: set `asOfSession` and `lastUpdated` to the
    current session (same values Step 3b writes to the Story file).
