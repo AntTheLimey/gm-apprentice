@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.2] — 2026-06-26
+
+### Fixed
+
+- **Landing page reflects authoritative campaign state.** The hero (in-game date
+  and session count) and the *Latest Session* card now read `current_game_date`,
+  `sessions_played`, `last_session`, and `last_play_date` from the `_Campaign`
+  overview frontmatter (maintained by `session-wrapup`) instead of re-deriving
+  them by scanning session pages. The overview is located by its
+  `type: campaign_overview` frontmatter — not by filename, so a renamed overview
+  such as `Campaign_Overview_Updated` still works — and is read from the full
+  vault corpus, so it applies even though the overview is normally excluded from
+  publishing. `getLatestSession` now sorts by `play_date` (most recently played),
+  with `session_number` only as a tiebreak, so chapters that restart session
+  numbering no longer surface the wrong "latest" session. All fields fall back to
+  the previous behaviour when absent.
+
+### Internal
+
+- `build` now exposes the full scanned corpus to the landing template, kept
+  separate from the manifest publish-filter that governs what is rendered.
+
+---
+
 ## [1.7.1] — 2026-06-06
 
 ### Added

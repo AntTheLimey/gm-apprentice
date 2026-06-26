@@ -76,9 +76,10 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
 </div>`;
 
   // --- Zone 2: Latest Session Recap ---
-  // Prefer the overview's authoritative last_session pointer; fall back to scanning sessions only
-  // when it is absent or unresolvable (e.g. the named session page is not itself published).
-  const latestSession = resolveSessionLink(overviewFm.last_session, corpusPages) || getLatestSession(pages);
+  // Prefer the overview's authoritative last_session pointer, resolved against the *published*
+  // pages so the "Read full session" link always targets a rendered page. Fall back to scanning
+  // when last_session is absent or points to a page that isn't itself published.
+  const latestSession = resolveSessionLink(overviewFm.last_session, pages) || getLatestSession(pages);
   const latestWrapUp = getLatestWrapUp(pages, latestSession);
   let recapZone = '';
   if (latestSession) {

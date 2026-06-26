@@ -22,7 +22,16 @@ any equivalent in `vault.config.json`.
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
 | Overrides | `publish.overrides` | Per-file include/exclude/field overrides |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
-| Setting year | `setting_year` | In-game date shown on the landing page |
+| Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
+
+> **Landing page state.** The landing hero (in-game date, session count) and the
+> *Latest Session* card are driven by the **`_Campaign` overview frontmatter** —
+> `current_game_date`, `sessions_played`, `last_session`, `last_play_date` — which
+> the `session-wrapup` skill keeps current. The overview is located by its
+> `type: campaign_overview` frontmatter (not by filename, so a renamed overview
+> still resolves) and is read from the full vault corpus, so it applies even
+> though the overview is normally excluded from publishing. `setting_year` and
+> `total_sessions` remain as fallbacks when those fields are absent.
 
 ## `vault.config.json` (in the site repo)
 
