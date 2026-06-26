@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.4] — 2026-06-26
+
+### Fixed
+
+- **session-wrapup now keeps PC entity sheets current.** Wrap-up advanced
+  each active PC's Story file (Step 3b) and the campaign overview (Step 4b)
+  every session, but never the PC's own entity sheet — so its `asOfSession`,
+  `lastUpdated`, chapter `tags`, and especially the player-facing
+  `## Current Status` block froze at whatever session it was last hand-edited.
+  Because `## Current Status` publishes (it sits outside the `<!-- gm-only -->`
+  fence), the live character page rendered a stale status that contradicted
+  the current Story narrative on the same page. A new **Step 3c (PC Sheet
+  Refresh)** reconciles those fields and the `## Current Status` block every
+  wrap-up, skipping `dead` PCs.
+
+### Added
+
+- **`## Current Status` is now a canonical PC body section.** Documented in
+  `shared/entity-schema.md` and added to all six `pc-*` templates as a
+  skill-maintained, player-facing block holding the PC's **cumulative living
+  state** in labelled fields (`Location`, `Condition`, `Carrying`,
+  `Open threads`, `Knows (exclusive)`) — the counterpart to the protected
+  `## Notes`/`## GM Notes`. Each wrap-up reconciles it cumulatively:
+  unresolved `Open threads` carry forward across sessions, new ones are
+  added, resolved ones removed — so a single read of the latest sheet gives
+  the always-current state without walking old wrap-ups. Existing sheets
+  self-heal on their next wrap-up.
+- **PC freshness check** (`validate_schema.py freshness <vault>`): flags
+  active PC entity sheets whose `asOfSession` lags the campaign overview's,
+  with a Python regression suite (`tests/test_pc_freshness.py`) and fixture.
+  Pointed at a vault with the old behaviour it fails; after a wrap-up it
+  passes — guarding the drift from returning.
+
+---
+
 ## [1.7.3] — 2026-06-26
 
 ### Fixed

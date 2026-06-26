@@ -439,6 +439,7 @@ same skeleton.
 ## Background          — backstory, personality, description
 ## [System Sections]   — varies by system (see per-system template)
 ## Equipment           — gear, possessions, wealth/encumbrance
+## Current Status      — player-facing present-state snapshot (maintained by session-wrapup)
 ## Notes               — player-facing (protected: skills never modify)
 ## GM Notes            — keeper-only (protected: skills never modify)
 ```
@@ -449,6 +450,43 @@ have no `## Equipment` — gear is handled through Quality).
 `## Notes` and `## GM Notes` are **protected sections** — only
 the GM edits them directly. Automated skills must preserve
 their content unchanged.
+
+`## Current Status` is the inverse: a **skill-maintained**,
+player-facing block holding the PC's **cumulative living state** —
+the single always-current answer to "where is this character now,
+and what's still open for them." session-wrapup maintains it every
+session (Step 3c), so the published page and any future consumer
+never drift behind the narrative. It is the canonical current-state
+source, distinct from the `_Story.md` companion (retrospective
+narrative) and the Wrap-Up's PC Carry-Forward (a per-session delta
+that feeds this block).
+
+It uses **stable labelled fields** so the block is both publishable
+and machine-readable; an optional one-line prose lede may precede the
+labels for the website's human read. Fields are omitted when empty:
+
+```markdown
+## Current Status
+
+{optional one-line present-tense lede}
+
+**Location:** {where the PC is now}
+**Condition:** {wounds, SAN, conditions, phobias}
+**Carrying:** {narratively-significant items/objects in hand — not the full Equipment list}
+**Open threads:**
+- {unresolved, forward-looking item}
+**Knows (exclusive):** {secret/exclusive information this PC holds}
+```
+
+`Open threads` is the load-bearing field: a **cumulative** list that
+carries unresolved items forward across sessions, gains items as they
+arise, and loses them only when resolved. NPC-relationship shifts fold
+into Open threads rather than a separate field.
+
+The block **must** sit outside any `<!-- gm-only -->` fence (it
+publishes) and before the protected `## Notes`/`## GM Notes` sections.
+The GM may also edit it directly; the next wrap-up reconciles it either
+way.
 
 ### Story Companion Convention
 
