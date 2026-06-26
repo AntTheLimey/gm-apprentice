@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.3] — 2026-06-26
+
+### Fixed
+
+- **"NPCs in Play" now reflects who's actually in recent play.** `scoreByRecency`
+  identified recent sessions by `session_number`, which breaks when a chapter
+  restarts numbering (Calcutta 1–3 ranked below Vienna 12–14), so the landing
+  surfaced old NPCs. It now selects recent sessions by `play_date`, scores
+  mentions from the paired **wrap-up recaps** (the session index pages are thin
+  stubs), counts sessions that are still in the `wrap-up` state (played but not yet
+  reviewed), and **recency-weights** so the latest session counts most. Terminal-status
+  entities (dead, destroyed, …) are no longer hidden outright — they appear when
+  they feature in the **latest** session (e.g. an NPC who just died) and are
+  otherwise retired from the list.
+
+---
+
 ## [1.7.2] — 2026-06-26
 
 ### Fixed

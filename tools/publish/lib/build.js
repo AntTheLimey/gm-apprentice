@@ -209,6 +209,7 @@ function build(options = {}) {
   const chapters = pages.filter(p => p.frontmatter.type === 'chapter');
   const npcs = pages.filter(p => p.frontmatter.type === 'npc');
   const locations = pages.filter(p => p.frontmatter.type === 'location');
+  const wrapUps = pages.filter(p => ['session-wrap-up', 'session_wrap', 'session-wrapup'].includes(p.frontmatter.type));
 
   const landingConfig = (publishConfig.landing || {});
   const recencyWindow = landingConfig.recency_window || 3;
@@ -217,12 +218,14 @@ function build(options = {}) {
     window: recencyWindow,
     max: landingConfig.max_npcs || 6,
     type: 'npc',
+    wrapUps,
   });
 
   const recentLocations = scoreByRecency(locations, sessions, chapters, {
     window: recencyWindow,
     max: landingConfig.max_locations || 4,
     type: 'location',
+    wrapUps,
   });
 
   console.log(`Recency: ${recentNPCs.length} NPCs, ${recentLocations.length} locations`);
