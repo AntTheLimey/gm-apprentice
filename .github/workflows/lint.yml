@@ -105,6 +105,9 @@ jobs:
       - name: Validate content filtering rules
         run: python scripts/validate_schema.py filtering tests/benchmark-campaign
 
+      - name: PC entity-sheet freshness regression
+        run: python tests/test_pc_freshness.py
+
   pr-discipline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
