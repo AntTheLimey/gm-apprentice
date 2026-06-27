@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.6.0"
+current_version: "1.7.4"
 ---
 
 # Vault Migration Registry
@@ -233,3 +233,26 @@ Standardizes date field names across session and event entities.
 - **Existing `_midwife/` content** is NOT auto-promoted.
   The GM decides if/when to bring old Midwife output into
   the vault using the new structure.
+
+## Migration: 1.7.3 → 1.7.4
+
+### Content
+
+- **New canonical PC section:** `## Current Status` added to the
+  PC body skeleton (`shared/entity-schema.md`) and to all six
+  `pc-*` templates. It is a player-facing, skill-maintained block
+  holding the PC's cumulative living state in **labelled fields**
+  (`Location`, `Condition`, `Carrying`, `Open threads`,
+  `Knows (exclusive)`) with an optional prose lede. Not backfilled
+  and no GM action required — existing PC sheets without the section
+  gain it automatically on their next wrap-up (the step creates it
+  if absent), and sheets that already carry a hand-written
+  `## Current Status` are reconciled in place.
+- **session-wrapup now refreshes PC entity sheets** (Step 3c):
+  each active PC's `asOfSession`, `lastUpdated`, chapter `tags`,
+  and `## Current Status` advance every session. The status block
+  is reconciled cumulatively — unresolved `Open threads` carry
+  forward across sessions, new ones are added, resolved ones
+  removed — so the published character page no longer drifts behind
+  the Story file and campaign overview. No vault changes are
+  required; the refresh happens during normal wrap-up.

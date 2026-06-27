@@ -132,6 +132,21 @@ createdSession: ""
 |------|------|
 | | |
 
+## Current Status
+
+{Optional one-line present-tense lede for the published page.}
+
+**Location:** {where the PC is now}
+**Condition:** {harm, stress, trauma}
+**Carrying:** {narratively-significant items in hand}
+**Open threads:**
+- {unresolved, forward-looking item}
+**Knows (exclusive):** {secret/exclusive knowledge, if any}
+
+{Player-facing; sits outside any gm-only fence. Maintained cumulatively
+by session-wrapup (Step 3c): carries unresolved Open threads forward,
+adds new, removes resolved. See shared/entity-schema.md.}
+
 ## Notes
 
 {Player-facing notes. Protected — skills never modify.}

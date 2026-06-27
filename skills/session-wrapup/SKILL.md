@@ -123,6 +123,54 @@ Writes for the current session only — no backfilling. If prior
 sessions are missing from a story file, that's vault-ingest
 territory. Never edit prior session entries (append-only).
 
+### 3c. PC Sheet Refresh
+
+The Story file (3b) and PC Carry-Forward (3) advance every
+session, but the PC's own entity sheet
+(`Characters/PCs/{Name}.md`) does not unless refreshed here — so
+its frontmatter and its **published** `## Current Status` freeze
+sessions behind the narrative. The `## Current Status` block is
+the PC's **cumulative living state** — the canonical, always-current
+answer to "where is this character now, and what's still open for
+them." Refresh the sheet of each PC **active in this session** (the
+same set Step 3b writes a story entry for — this excludes `dead` PCs
+and any who were off-screen this session):
+
+1. Frontmatter: set `asOfSession` and `lastUpdated` to the
+   current session (same values Step 3b writes to the Story file).
+2. `tags`: replace the prior chapter/arc tag with the current
+   chapter's tag (from the session index or campaign overview).
+   Preserve all non-chapter tags (archetype, system, status).
+3. `## Current Status`: **reconcile** the block — don't just
+   overwrite it. Read the PC's *prior* block, then update it
+   against this session's PC Carry-Forward (Step 3) and Recap:
+   - **Carry** unresolved `Open threads` forward unchanged.
+   - **Add** threads and exclusive knowledge introduced this session.
+   - **Remove** `Open threads` the session resolved.
+   - **Refresh** `Location` / `Condition` / `Carrying` to current truth.
+
+   Use the labelled-field format (present tense, player-facing),
+   **not** the retrospective narrative of the Story file. If the
+   section is absent, create it; place it before `## Notes`, outside
+   any `<!-- gm-only -->` fence. See `shared/entity-schema.md` for the
+   field spec.
+4. Leave `## Notes`, `## GM Notes`, and all gm-only content
+   untouched (protected sections).
+
+**Input:** the prior `## Current Status` block + this session's PC
+Carry-Forward (Step 3) and Narrative Recap (Step 2). No new source
+gathering.
+
+*Authoring operation — reconcile the living state to match the
+session just played. Stay grounded in the carry-forward and recap;
+no embellishment, never invent state the session didn't produce.*
+(authoring exception to `shared/content-fidelity.md`)
+
+Surface each PC's refreshed `## Current Status` and changed
+frontmatter in the conversation for GM review (alongside the
+Step 4 entity receipt). Do **not** write a receipt into the
+Wrap-Up file — the PC sheet is the permanent record.
+
 ### 4. Update the World
 
 **gmassistant.app path:** When the Play Notes are a
@@ -299,6 +347,8 @@ Wrap-up **must** produce all sections so prep reads one file:
 
 Entity files and timeline are updated separately (Step 4).
 Character story files are updated separately (Step 3b).
+Active PC entity sheets are refreshed separately (Step 3c) —
+frontmatter, chapter tags, and the published `## Current Status`.
 The session index is updated to `wrap-up` status (or `reviewed`
 if reconcile completes). Update `play_date` and `in_game_date`
 on the session index if not already set.

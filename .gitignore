@@ -34,6 +34,10 @@ _backup/
 # Skill zip distribution files (built by scripts/build-skill-zips.sh)
 dist/
 
+# Python bytecode (from scripts/ and tests/)
+__pycache__/
+*.pyc
+
 # Personal GURPS reference files (not for distribution)
 skills/ttrpg-expert/systems/gurps-4e/personal/
 

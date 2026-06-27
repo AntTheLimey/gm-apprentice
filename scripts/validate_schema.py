@@ -15,6 +15,7 @@ Defaults to tests/benchmark-campaign/ if no path provided.
 
 import re
 import sys
+from collections import namedtuple
 from pathlib import Path
 
 # Valid enum values
@@ -64,6 +65,7 @@ REQUIRED_FIELDS = {
     "meta": ["type"],
     "timeline": ["type"],
     "player-characters": ["type"],
+    "character-story": ["type", "source_confidence"],
     "campaign_overview": ["type", "source_confidence"],
     "heritage": ["type", "source_confidence"],
     "plan": ["type", "source_confidence", "plan_type", "chapter"],
@@ -355,6 +357,126 @@ def validate_filtering(campaign_dir: Path) -> int:
     return errors
 
 
+# PC entity-sheet freshness
+#
+# session-wrapup advances each active PC's Story file and the campaign
+# overview every session, but historically never the PC's own entity
+# sheet — so `asOfSession` (and the published `## Current Status`) froze
+# sessions behind the rest of the vault. This check flags active PC
+# sheets whose `asOfSession` lags the campaign overview's.
+
+StalePc = namedtuple("StalePc", ["name", "pc_asof", "campaign_asof"])
+FreshnessResult = namedtuple(
+    "FreshnessResult", ["stale", "campaign_asof", "unparseable", "checked", "reference"]
+)
+
+# A PC with one of these statuses is intentionally frozen at the session
+# it left active play — died, or off-screen/missing — so staleness there
+# is correct, not drift. `alive` and `unknown` PCs are checked.
+FROZEN_PC_STATUSES = {"dead", "missing"}
+
+
+def parse_session_ordinal(value: str | None) -> tuple[int, int] | None:
+    """Parse an `asOfSession` label into a comparable (chapter, session) pair.
+
+    Handles the mixed labelling real vaults accumulate as chapters
+    renumber sessions: "Chapter 4, Session 3" -> (4, 3),
+    "Session 10" -> (0, 10), "Chapter 2" -> (2, 0). A missing chapter
+    sorts as chapter 0, so any bare "Session N" ranks below a later
+    chapter. Returns None when neither a chapter nor a session number is
+    present (unparseable — skipped rather than guessed).
+    """
+    if not isinstance(value, str):
+        return None
+    chapter = re.search(r"\bchapter\s*(\d+)", value, re.IGNORECASE)
+    session = re.search(r"\bsession\s*(\d+)", value, re.IGNORECASE)
+    if not chapter and not session:
+        return None
+    return (
+        int(chapter.group(1)) if chapter else 0,
+        int(session.group(1)) if session else 0,
+    )
+
+
+def find_stale_pcs(campaign_dir: Path) -> FreshnessResult:
+    """Find active PC entity sheets lagging the campaign overview's asOfSession.
+
+    Only `type: pc` sheets are inspected — never `character-story`
+    companions or the `player-characters` digest. The check no-ops when
+    there is no campaign overview asOfSession to compare against.
+    """
+    campaign_asof = None
+    pcs = []  # (name, asOfSession, status)
+
+    for filepath in sorted(campaign_dir.rglob("*.md")):
+        # Skip template scaffolding — templates carry empty temporal
+        # fields by design and are never "stale".
+        if "_Templates" in filepath.parts or filepath.stem.startswith("_Template"):
+            continue
+        try:
+            content = filepath.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        frontmatter = extract_frontmatter(content)
+        if frontmatter is None:
+            continue
+        entity_type = frontmatter.get("type", "")
+        if entity_type == "campaign_overview":
+            campaign_asof = frontmatter.get("asOfSession") or campaign_asof
+        elif entity_type == "pc":
+            pcs.append(
+                (filepath.stem, frontmatter.get("asOfSession"), frontmatter.get("status"))
+            )
+
+    reference = parse_session_ordinal(campaign_asof)
+    stale = []
+    unparseable = []
+    checked = 0
+
+    if reference is None:
+        # No usable campaign position — cannot judge freshness.
+        return FreshnessResult([], campaign_asof, unparseable, checked, None)
+
+    for name, pc_asof, status in pcs:
+        if status in FROZEN_PC_STATUSES:
+            continue
+        pc_ordinal = parse_session_ordinal(pc_asof)
+        if pc_ordinal is None:
+            unparseable.append(name)
+            continue
+        checked += 1
+        if pc_ordinal < reference:
+            stale.append(StalePc(name, pc_asof, campaign_asof))
+
+    return FreshnessResult(stale, campaign_asof, unparseable, checked, reference)
+
+
+def validate_freshness(campaign_dir: Path) -> int:
+    """Report stale PC entity sheets. Returns exit code (1 if any stale)."""
+    result = find_stale_pcs(campaign_dir)
+
+    if result.reference is None:
+        print(
+            "  No comparable campaign-overview asOfSession found — "
+            "skipping PC freshness check."
+        )
+        return 0
+
+    print(f"  Campaign position: asOfSession = {result.campaign_asof!r}")
+    print(f"  Active PC sheets checked: {result.checked}")
+
+    for name in result.unparseable:
+        print(f"  WARN  {name}: unparseable asOfSession — skipped")
+
+    for pc in result.stale:
+        print(
+            f"  STALE {pc.name}: asOfSession {pc.pc_asof!r} lags "
+            f"campaign {pc.campaign_asof!r}"
+        )
+
+    return 1 if result.stale else 0
+
+
 def validate_campaign(campaign_dir: Path) -> int:
     """Validate campaign entity schemas. Returns exit code."""
     md_files = list(campaign_dir.rglob("*.md"))
@@ -395,6 +517,9 @@ def main():
     if args and args[0] == "filtering":
         mode = "filtering"
         campaign_dir = Path(args[1]) if len(args) > 1 else campaign_dir
+    elif args and args[0] == "freshness":
+        mode = "freshness"
+        campaign_dir = Path(args[1]) if len(args) > 1 else campaign_dir
     elif args:
         campaign_dir = Path(args[0])
 
@@ -411,6 +536,9 @@ def main():
         else:
             print("\nAll scenes have deterministic filtering rules")
             sys.exit(0)
+    elif mode == "freshness":
+        print(f"PC freshness validation: {campaign_dir}")
+        sys.exit(validate_freshness(campaign_dir))
     else:
         sys.exit(validate_campaign(campaign_dir))
 
