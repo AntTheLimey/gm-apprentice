@@ -48,7 +48,8 @@ persistent artifact — conversation is ephemeral.
 
 **Read pattern:**
 1. Last session's Wrap-Up file — primary context
-2. PC roster — always
+2. PC roster — always, including each active PC's `## Current Status`
+   block (Location, Condition, Carrying, Open threads, Knows (exclusive))
 3. Vault dives — targeted reads only, proportional to
    upcoming session complexity, not campaign size
 
@@ -102,6 +103,9 @@ happen. The vault stays frozen at pre-session state.
 
 **8. Threads** — Review carry-forward + unresolved questions,
 impressive NPCs, unfollowed clues, pending consequences.
+Fold in each active PC's `## Current Status` → `Open threads`:
+the always-current per-PC thread list (items carry forward even
+when they dropped out of the last session's carry-forward).
 Flag stale threads (3+ sessions without advancement).
 Reference `skills/ttrpg-expert/continuity-engine.md` for
 stale thread detection.
@@ -172,6 +176,9 @@ play, not material to be duplicated.
 - Backstory hooks, stated goals, current arc stage (five-stage
   model), arc theme, relationships with other PCs and NPCs
 - Decisions from recent sessions needing consequences
+- `## Current Status` read: `Open threads` → decisions needing
+  consequences / next arc beat; `Knows (exclusive)` → personalized
+  touchpoint fuel (feeds Step 12)
 - Mechanical highlights (signature abilities, resources)
 - Last spotlight level, sessions since last B-plot feature
 - Next arc beat: what should happen next in this PC's arc

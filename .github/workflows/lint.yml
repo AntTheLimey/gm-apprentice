@@ -108,6 +108,9 @@ jobs:
       - name: PC entity-sheet freshness regression
         run: python tests/test_pc_freshness.py
 
+      - name: PC Current Status consumer regression
+        run: python tests/test_current_status_consumers.py
+
   pr-discipline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

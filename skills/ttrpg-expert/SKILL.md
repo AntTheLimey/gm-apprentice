@@ -96,7 +96,8 @@ Match user intent → go directly to the file. Skip clarification.
 
 **"Stale threads?"** / **"loose ends?"**
 → `continuity-engine.md` (Chekhov Protocol). Threads open 3-5
-  sessions: resolve, advance, or retire.
+  sessions: resolve, advance, or retire. Consult each active PC's
+  `## Current Status` → `Open threads` (the always-current per-PC list).
 
 **"Spotlight check"** / **"PC balance"**
 → `arc-spotlight-reference.md` (Spotlight Theory). Review
@@ -106,7 +107,9 @@ Match user intent → go directly to the file. Skip clarification.
 **"Character arc stage"** / **"what's next for this PC?"**
 → `arc-spotlight-reference.md` (Five-Stage Arc Model). Map PC
   to stage (Establishment → Testing → Crisis → Transformation
-  → New Equilibrium). Suggest scenes for next stage.
+  → New Equilibrium). Suggest scenes for next stage. Read the PC's
+  `## Current Status` — `Open threads` for next beats,
+  `Knows (exclusive)` for personalized hooks.
 
 **"Fail forward"** / **"failed roll, now what?"**
 → `active-play-management.md` (Fail Forward). Six patterns:

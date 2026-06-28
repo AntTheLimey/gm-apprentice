@@ -158,6 +158,10 @@ full procedure.
   in session plans)
 - Facts in session plans that aren't traceable to entity files
   (canon fabrication / hallucination detection)
+- PC `## Current Status` consistency: an active PC (not `status: dead`)
+  missing or with an empty block despite a live arc; `Open threads` still
+  listed open for an entity the timeline shows resolved or dead, or whose
+  payoff already happened in a recap
 
 ### Timeline Validation
 

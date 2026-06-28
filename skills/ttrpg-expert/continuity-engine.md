@@ -128,6 +128,16 @@ Urgency: [Immediate / This arc / Long-term / Background]
 - Affects active NPCs/factions? → advance in background,
   let consequences surface naturally
 
+### Per-PC Always-Current Thread Source
+
+Each active PC's `## Current Status` → `Open threads` (in
+`Characters/PCs/{Name}.md`) is the canonical, cumulative list of that PC's
+unresolved forward items. Consult it directly for stale-thread detection:
+it is the always-current home that prevents thread-decay — a thread does
+not vanish just because it fell out of the last session's carry-forward.
+The list carries no per-thread age stamp, so age-based staleness still
+comes from session cross-referencing, not the block itself.
+
 ## Callback System
 
 | Type | Description | Example |

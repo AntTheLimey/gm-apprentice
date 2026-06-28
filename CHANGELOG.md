@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.5] — 2026-06-27
+
+### Changed
+
+- **The PC `## Current Status` block is now load-bearing.** PR #57 made it
+  a canonical, cumulative PC body block but left it read only by the
+  website and the GM. Four skills now consume it: **session-prep** folds
+  each active PC's `Open threads` into its Threads review (fixing
+  "thread-decay" — a thread no longer vanishes just because it fell out of
+  the last session's carry-forward) and reads `Open threads` /
+  `Knows (exclusive)` in its per-PC arc check; **the-midwife** mines it for
+  new-chapter hooks; **ttrpg-expert** routes its arc/thread commands
+  through it; **campaign-qa** gains a Canon Audit consistency check
+  (missing/empty block on an active PC, or an `Open threads` item the
+  timeline shows resolved). The read contract lives in
+  `ttrpg-expert/arc-spotlight-reference.md` and `continuity-engine.md`
+  (the bottom-level references the others already load), with a
+  `Consumed by:` pointer in `shared/entity-schema.md`. A new
+  `tests/test_current_status_consumers.py` regression (run in CI) fails if
+  any consumer is silently un-wired. No schema or template change.
+
 ## [1.7.4] — 2026-06-26
 
 ### Fixed

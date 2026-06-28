@@ -67,6 +67,25 @@ the vault. Compare facts stated in:
 - SUPERSEDED entries (these are expected to conflict with
   their replacements)
 
+### Step 2b: PC Current Status Consistency
+
+For each active PC entity (`type: pc`, not `status: dead`), read the
+`## Current Status` block from `Characters/PCs/{Name}.md` and check, using
+the latest sheet only (the block is cumulative — no history walk):
+
+- **Missing / empty block.** Flag a PC with no `## Current Status`, or with
+  an empty `Open threads`, when the PC has a live arc (recent session
+  activity). Distinguish from a legitimately quiet PC — surface as a
+  question, not a hard error.
+- **Canon-contradicting Open thread.** Flag an `Open threads` item still
+  listed open when the timeline or a session recap shows it resolved — e.g.
+  a thread about an NPC the timeline records as dead, or whose payoff
+  already occurred.
+
+This is a consistency check, not an age-based decay meter: `Open threads`
+carries no per-thread age stamp, so "how many sessions has this lingered"
+is out of scope here. Detect only; Validate mode handles the fix.
+
 ### Step 3: Check PC Roster Consistency
 
 Read `player_characters.md`. For each entry, verify:

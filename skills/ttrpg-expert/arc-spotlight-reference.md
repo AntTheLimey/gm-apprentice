@@ -6,6 +6,19 @@ For **session prep workflows**, see `session-prep`.
 For **system-specific arc drivers** (CoC SAN loss, GURPS disadvantages, FitD
 trauma, D&D backgrounds), see the per-system `session-procedures.md` files.
 
+## Reading per-PC current state
+
+Arc analysis and touchpoint personalization read each active PC's
+`## Current Status` block in `Characters/PCs/{Name}.md`:
+
+- **`Open threads`** — the forward-looking work-list. Design scenes and
+  touchpoints that pay off these dangling items.
+- **`Knows (exclusive)`** — per-PC secret knowledge. Fuel for personalized
+  hooks and Backstory-Connection touchpoints.
+
+The block is cumulative and always-current; reading the latest sheet is
+sufficient — no need to walk old wrap-ups. Skip PCs with `status: dead`.
+
 ## Five-Stage Arc Model
 
 TV-series structure: personal storylines weaving through the ensemble narrative, passing through five stages.
