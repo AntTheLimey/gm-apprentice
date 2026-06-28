@@ -150,9 +150,11 @@ regardless of size.
 **Existing vault:** Mine the vault before asking questions.
 Surface creative opportunities:
 
-- Unresolved threads and dormant factions
+- Unresolved threads and dormant factions — include each active
+  PC's `## Current Status` → `Open threads`
 - PC arcs needing attention — read
-  `ttrpg-expert/arc-spotlight-reference.md`
+  `ttrpg-expert/arc-spotlight-reference.md`; mine each active PC's
+  `## Current Status` (`Open threads`, `Knows (exclusive)`) for hooks
 - Chekhov elements planted but unfired — read
   `ttrpg-expert/continuity-engine.md`
 - NPCs with unfinished business
@@ -215,7 +217,9 @@ Playability Stress Test. Can it branch? Does it have agency?
 Adapting from fiction? Test and reshape if needed.
 
 **Existing vault:** Check new concept against canon. Surface
-connections the GM might not have seen.
+connections the GM might not have seen. Shape PC growth and
+new-chapter hooks around each active PC's `## Current Status`
+(`Open threads`, `Knows (exclusive)`) surfaced in Phase 1.
 
 **Anti-patterns:** Read:
 - `ttrpg-expert/scenario-writing.md` — anti-patterns table

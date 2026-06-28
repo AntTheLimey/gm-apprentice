@@ -53,5 +53,12 @@ class ConsumerTests(unittest.TestCase):
         self.assertIn("Knows (exclusive)", text)
 
 
+    def test_midwife_reads_current_status(self):
+        text = read("the-midwife/SKILL.md")
+        self.assertIn("## Current Status", text)
+        self.assertIn("Open threads", text)
+        self.assertIn("Knows (exclusive)", text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
