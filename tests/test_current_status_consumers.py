@@ -42,5 +42,16 @@ class SpineTests(unittest.TestCase):
         self.assertIn("campaign-qa", text)
 
 
+class ConsumerTests(unittest.TestCase):
+    def test_session_prep_reads_current_status(self):
+        text = read("session-prep/SKILL.md")
+        # Context Source declares the per-PC read
+        self.assertIn("## Current Status", text)
+        # Step 8 folds in Open threads as the always-current source
+        self.assertIn("Open threads", text)
+        # Step 11 uses Knows (exclusive) for personalization
+        self.assertIn("Knows (exclusive)", text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
