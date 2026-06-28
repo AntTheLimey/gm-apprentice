@@ -59,6 +59,10 @@ class ConsumerTests(unittest.TestCase):
         self.assertIn("Open threads", text)
         self.assertIn("Knows (exclusive)", text)
 
+    def test_ttrpg_expert_routes_reference_current_status(self):
+        text = read("ttrpg-expert/SKILL.md")
+        self.assertIn("## Current Status", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
