@@ -49,7 +49,7 @@ persistent artifact — conversation is ephemeral.
 **Read pattern:**
 1. Last session's Wrap-Up file — primary context
 2. PC roster — always, including each active PC's `## Current Status`
-   block (Location, Condition, Carrying, Open threads, Knows-exclusive)
+   block (Location, Condition, Carrying, Open threads, Knows (exclusive))
 3. Vault dives — targeted reads only, proportional to
    upcoming session complexity, not campaign size
 
