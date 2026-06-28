@@ -30,6 +30,12 @@ class SpineTests(unittest.TestCase):
         self.assertIn("Open threads", text)
         self.assertIn("Knows (exclusive)", text)
 
+    def test_continuity_engine_documents_current_status(self):
+        text = read("ttrpg-expert/continuity-engine.md")
+        self.assertIn("## Current Status", text)
+        self.assertIn("Open threads", text)
+        self.assertIn("thread-decay", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
