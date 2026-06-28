@@ -63,6 +63,13 @@ class ConsumerTests(unittest.TestCase):
         text = read("ttrpg-expert/SKILL.md")
         self.assertIn("## Current Status", text)
 
+    def test_campaign_qa_has_current_status_check(self):
+        skill = read("campaign-qa/SKILL.md")
+        proc = read("campaign-qa/references/check-procedures.md")
+        self.assertIn("## Current Status", skill)
+        self.assertIn("Current Status", proc)
+        self.assertIn("Open threads", proc)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
