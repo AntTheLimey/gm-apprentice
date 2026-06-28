@@ -36,6 +36,11 @@ class SpineTests(unittest.TestCase):
         self.assertIn("Open threads", text)
         self.assertIn("thread-decay", text)
 
+    def test_entity_schema_consumed_by_pointer(self):
+        text = read("shared/entity-schema.md")
+        self.assertIn("**Consumed by:**", text)
+        self.assertIn("campaign-qa", text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

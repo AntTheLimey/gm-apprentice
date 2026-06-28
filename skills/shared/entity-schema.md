@@ -488,6 +488,10 @@ publishes) and before the protected `## Notes`/`## GM Notes` sections.
 The GM may also edit it directly; the next wrap-up reconciles it either
 way.
 
+**Consumed by:** session-prep (Context Source, Threads, PC arc check),
+the-midwife (new-chapter hooks), ttrpg-expert (arc/thread analysis),
+campaign-qa (Current Status consistency check).
+
 ### Story Companion Convention
 
 Every PC entity `Characters/PCs/{Name}.md` may have a
