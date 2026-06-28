@@ -52,7 +52,6 @@ class ConsumerTests(unittest.TestCase):
         # Step 11 uses Knows (exclusive) for personalization
         self.assertIn("Knows (exclusive)", text)
 
-
     def test_midwife_reads_current_status(self):
         text = read("the-midwife/SKILL.md")
         self.assertIn("## Current Status", text)
