@@ -2551,29 +2551,32 @@ tr:nth-child(even) {
 
 /* ===== GURPS 4e — Modern Sheet ===== */
 
-/* Category hue tokens — dark mode defaults (low-alpha overlays on dark cards) */
+/* Category hue tokens — dark mode defaults.
+   Solid colors are LIGHT shades so category text/labels/borders stay legible
+   on dark cards; the -bg tints are low-alpha overlays. Light mode (below)
+   swaps both for deeper solids + opaque pastels. */
 :root {
-  --gc-attr:   #16a34a; --gc-attr-bg:   rgba(22, 163, 74, 0.12);
-  --gc-social: #d97706; --gc-social-bg: rgba(217, 119, 6, 0.12);
-  --gc-trait:  #ea7317; --gc-trait-bg:  rgba(234, 115, 23, 0.12);
-  --gc-skill:  #6366f1; --gc-skill-bg:  rgba(99, 102, 241, 0.12);
-  --gc-spell:  #8b5cf6; --gc-spell-bg:  rgba(139, 92, 246, 0.12);
-  --gc-table:  #0284c7; --gc-table-bg:  rgba(2, 132, 199, 0.12);
-  --gc-points: #64748b; --gc-points-bg: rgba(100, 116, 139, 0.10);
-  --gc-def:    #dc2626; --gc-def-bg:    rgba(220, 38, 38, 0.12);
+  --gc-attr:   #4ade80; --gc-attr-bg:   rgba(22, 163, 74, 0.14);
+  --gc-social: #fbbf24; --gc-social-bg: rgba(217, 119, 6, 0.14);
+  --gc-trait:  #fb923c; --gc-trait-bg:  rgba(234, 115, 23, 0.14);
+  --gc-skill:  #818cf8; --gc-skill-bg:  rgba(99, 102, 241, 0.14);
+  --gc-spell:  #a78bfa; --gc-spell-bg:  rgba(139, 92, 246, 0.14);
+  --gc-table:  #38bdf8; --gc-table-bg:  rgba(2, 132, 199, 0.14);
+  --gc-points: #94a3b8; --gc-points-bg: rgba(100, 116, 139, 0.12);
+  --gc-def:    #f87171; --gc-def-bg:    rgba(220, 38, 38, 0.14);
 }
 
-/* Light mode: opaque pastel tints (matches prototype's modern palette) */
+/* Light mode: deeper solid hues (good contrast on white) + opaque pastel tints */
 @media (prefers-color-scheme: light) {
   :root {
-    --gc-attr-bg:   #eafaf0;
-    --gc-social-bg: #fdf4e7;
-    --gc-trait-bg:  #fdf1e7;
-    --gc-skill-bg:  #eef0fe;
-    --gc-spell-bg:  #f3eefe;
-    --gc-table-bg:  #e8f5fc;
-    --gc-points-bg: #eef1f5;
-    --gc-def-bg:    #fdecec;
+    --gc-attr:   #15803d; --gc-attr-bg:   #eafaf0;
+    --gc-social: #b45309; --gc-social-bg: #fdf4e7;
+    --gc-trait:  #c2410c; --gc-trait-bg:  #fdf1e7;
+    --gc-skill:  #4f46e5; --gc-skill-bg:  #eef0fe;
+    --gc-spell:  #7c3aed; --gc-spell-bg:  #f3eefe;
+    --gc-table:  #0369a1; --gc-table-bg:  #e8f5fc;
+    --gc-points: #475569; --gc-points-bg: #eef1f5;
+    --gc-def:    #b91c1c; --gc-def-bg:    #fdecec;
   }
 }
 
