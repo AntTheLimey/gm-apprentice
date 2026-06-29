@@ -63,12 +63,13 @@ describe('build integration — GURPS PC', () => {
         path.join(outputDir, 'docs', 'characters', 'pcs', 'karl-brenner.html'),
         'utf-8'
       );
-      // The combat tab panel should exist with combat content
-      assert.ok(html.includes('tab-combat'), 'Should have tab-combat panel');
-      // Chain content from ## Combat Action Chains should appear
+      // Scope to the combat tab panel only
+      const combatPanelMatch = html.match(/<div[^>]+id="tab-combat"[\s\S]*?(?=<div[^>]+id="tab-(?!combat)[^"]*"|$)/);
+      const combatPanel = combatPanelMatch ? combatPanelMatch[0] : '';
+      assert.ok(combatPanel, 'Should have tab-combat panel');
       assert.ok(
-        html.includes('Shield Rush') || html.includes('chain') || html.includes('Chain'),
-        'Should contain chain content in combat tab'
+        combatPanel.includes('Shield Rush') || combatPanel.includes('chain') || combatPanel.includes('Chain'),
+        'Chain content should appear within the combat tab panel'
       );
     });
 
@@ -77,8 +78,11 @@ describe('build integration — GURPS PC', () => {
         path.join(outputDir, 'docs', 'characters', 'pcs', 'karl-brenner.html'),
         'utf-8'
       );
-      assert.ok(html.includes('tab-equipment'), 'Should have equipment tab panel');
-      assert.ok(html.includes('Broadsword'), 'Should list broadsword in equipment');
+      // Scope to the equipment tab panel only
+      const equipPanelMatch = html.match(/<div[^>]+id="tab-equipment"[\s\S]*?(?=<div[^>]+id="tab-(?!equipment)[^"]*"|$)/);
+      const equipPanel = equipPanelMatch ? equipPanelMatch[0] : '';
+      assert.ok(equipPanel, 'Should have tab-equipment panel');
+      assert.ok(equipPanel.includes('Broadsword'), 'Broadsword should appear in the equipment tab panel');
     });
 
     it('GURPS PC Equipment tab does not list encumbrance levels as items', () => {

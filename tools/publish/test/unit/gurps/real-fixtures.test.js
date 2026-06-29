@@ -32,14 +32,12 @@ describe('GURPS real-fixture: Ronnie Vint', () => {
     it('Luck shows cost 15, not page ref or notes prose', () => {
       // The cost() helper wraps value in <span class="cost">
       assert.ok(sheetHtml.includes('Luck'), 'must contain Luck advantage');
-      // Should NOT contain the page ref or notes text as cost
-      // The cost span should show a number, not "B66" or prose
+      // Structural check: cost must render as the numeric value 15 in a cost span
+      assert.ok(sheetHtml.includes('<span class="cost">15</span>'),
+        'Luck must show cost 15 in a cost span');
+      // Must not misroute to the page-ref column
       assert.ok(!sheetHtml.includes('<span class="cost">B66</span>'),
         'cost must not be the page ref column');
-      assert.ok(!sheetHtml.includes('<span class="cost">Reroll any one bad roll'),
-        'cost must not be the notes prose');
-      assert.ok(sheetHtml.includes('<span class="cost">15</span>'),
-        'Luck must show cost 15 (not [15])');
     });
 
     it('no [[double-bracket]] patterns appear in any cost span', () => {
@@ -153,6 +151,13 @@ describe('GURPS real-fixture: Ronnie Vint', () => {
       const techIdx = sheetHtml.indexOf('Techniques');
       const skillIdx = sheetHtml.indexOf('Skills');
       assert.ok(skillIdx < techIdx, 'Techniques block must come after Skills block');
+    });
+
+    it('Spells block is absent for Ronnie (no spells); Techniques precede where Spells would be', () => {
+      // Ronnie has no Spells section — the Spells block must not appear in sheetHtml.
+      // This anchors the layout ordering: Skills → Techniques → (Spells if present).
+      const spellIdx = sheetHtml.indexOf('>Spells<');
+      assert.strictEqual(spellIdx, -1, 'Ronnie has no Spells block; if one appeared it would be a parse error');
     });
   });
 

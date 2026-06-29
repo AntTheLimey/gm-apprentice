@@ -14,6 +14,12 @@ describe('renderSkills', () => {
     assert.ok(html.includes('Parry: 8'));
     assert.ok(html.includes('B182'));
     assert.ok(html.includes('fn-legend') || html.includes('class="fn"'));
+    // Relative level column
+    assert.ok(html.includes('<td class="num rel">DX+0</td>'), 'relative column shows DX+0');
+    assert.ok(html.includes('<td class="num rel">IQ+1</td>'), 'relative column shows IQ+1');
+    // Point cost column
+    assert.ok(html.includes('<span class="cost">1</span>'), 'points column shows 1');
+    assert.ok(html.includes('<span class="cost">2</span>'), 'points column shows 2');
   });
   it('returns null when no skills', () => {
     assert.strictEqual(renderSkills({ skills: [] }), null);
