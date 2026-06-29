@@ -352,6 +352,38 @@ function parseGrimoire(model, sections, fm) {
   }
 }
 
+function parseStatus(model, sections, fm) {
+  if (fm.status && typeof fm.status === 'object') {
+    model.status = { ...fm.status };
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'current status');
+  if (!sec) return;
+  // Parse **Key:** Value pairs from the section HTML
+  const text = sec.html.replace(/<[^>]+>/g, ' ');
+  const patterns = [
+    [/\*\*HP\*\*\s*:\s*(\S+)/i, 'hp'],
+    [/\*\*FP\*\*\s*:\s*(\S+)/i, 'fp'],
+    [/\*\*Move\*\*\s*:\s*(\S+)/i, 'move'],
+    [/\*\*Enc\*\*\s*:\s*(\S+)/i, 'enc'],
+    [/\*\*Condition\*\*\s*:\s*([^\n*]+)/i, 'condition'],
+  ];
+  for (const [re, key] of patterns) {
+    const m = text.match(re);
+    if (m) model.status[key] = m[1].trim();
+  }
+  // Also parse simple table rows if present
+  for (const row of parseTableRows(sec.html).slice(1)) {
+    if (!row[0]) continue;
+    const k = row[0].toLowerCase().replace(/\s+/g, '');
+    if (k === 'hp') model.status.hp = row[1];
+    else if (k === 'fp') model.status.fp = row[1];
+    else if (k === 'move') model.status.move = row[1];
+    else if (k === 'enc' || k === 'encumbrance') model.status.enc = row[1];
+    else if (k === 'condition') model.status.condition = row[1];
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -369,6 +401,7 @@ function parseGurps(frontmatter, sections) {
   parseMelee(model, secs, fm);
   parseRanged(model, secs, fm);
   parseGrimoire(model, secs, fm);
+  parseStatus(model, secs, fm);
   return model;
 }
 
