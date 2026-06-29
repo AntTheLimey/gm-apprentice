@@ -1,3 +1,4 @@
+const { escapeHtml } = require('../../processor');
 const { renderStatus } = require('./blocks/status');
 const { renderAttributes } = require('./blocks/attributes');
 const { renderSenses } = require('./blocks/senses');
@@ -16,6 +17,9 @@ const { renderGrimoire } = require('./blocks/grimoire');
 const { renderChains } = require('./blocks/chains');
 const { renderReference } = require('./blocks/reference');
 const { renderEquipment } = require('./blocks/equipment');
+const { findSectionByTitle } = require('./tables');
+
+const RICH_COMBAT_TITLES = ['multi-action combat skill chains', 'combat summary'];
 
 function buildSheet(model) {
   const status = renderStatus(model);
@@ -34,7 +38,7 @@ function buildSheet(model) {
   return (status || '') + `<div class="gurps-sheet"><div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
 }
 
-function buildCombat(model) {
+function buildCombat(model, sections) {
   const parts = [
     renderStatus(model),
     renderDefenses(model),
@@ -42,6 +46,15 @@ function buildCombat(model) {
     renderRanged(model),
     renderChains(model),
   ].filter(Boolean);
+
+  // Append rich combat sections (multi-action chains, combat summary) from raw sections
+  for (const titleKey of RICH_COMBAT_TITLES) {
+    const sec = findSectionByTitle(sections || [], titleKey);
+    if (sec && sec.html && sec.html.trim()) {
+      parts.push(`<section class="blk cat-skill"><h2>${escapeHtml(sec.title)}</h2>${sec.html}</section>`);
+    }
+  }
+
   if (parts.length === 0) return null;
   return `<div class="gurps-combat">${parts.join('\n')}${renderReference()}</div>`;
 }

@@ -31,7 +31,7 @@ const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'wea
 // When a GURPS system sheet is present these are dropped from the accordion
 // list so they don't duplicate the structured blocks. Prose/extra sections
 // (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
-const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status']);
+const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status', 'multi-action combat skill chains', 'combat summary']);
 
 function isGurpsSystem(publishConfig) {
   return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());
