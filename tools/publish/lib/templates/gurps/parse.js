@@ -150,6 +150,32 @@ function parseDefenses(model, sections, fm) {
   }
 }
 
+function parseEncumbrance(model, sections, fm) {
+  if (Array.isArray(fm.encumbrance)) {
+    model.encumbrance = fm.encumbrance.map(e => ({
+      level: String(e.level || ''), weight: String(e.weight || ''),
+      move: String(e.move || ''), dodge: String(e.dodge || ''), current: !!e.current,
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'encumbrance');
+  if (!sec) {
+    // also check Equipment section for ### Encumbrance subsection
+    const equip = findSectionByTitle(sections, 'equipment');
+    if (!equip) return;
+    const subHtml = extractSubsectionHtml(equip.html, 'Encumbrance');
+    if (!subHtml) return;
+    const rows = parseTableRows(subHtml).slice(1);
+    for (const row of rows) {
+      if (row[0]) model.encumbrance.push({ level: row[0], weight: row[1] || '', move: row[2] || '', dodge: row[3] || '', current: false });
+    }
+    return;
+  }
+  for (const row of parseTableRows(sec.html).slice(1)) {
+    if (row[0]) model.encumbrance.push({ level: row[0], weight: row[1] || '', move: row[2] || '', dodge: row[3] || '', current: false });
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -159,6 +185,7 @@ function parseGurps(frontmatter, sections) {
   parseTraits(model, secs, fm);
   parseSenses(model, secs, fm);
   parseDefenses(model, secs, fm);
+  parseEncumbrance(model, secs, fm);
   return model;
 }
 
