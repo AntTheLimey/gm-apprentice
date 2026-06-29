@@ -137,6 +137,24 @@ describe('parseGurps — Equipment section', () => {
   });
 });
 
+// parseChains: list-form parser (rendered markdown strips ** to plain text)
+describe('parseGurps — parseChains list form', () => {
+  const { extractSections } = require('../../../lib/processor');
+
+  it('parses numbered list with arrow-separated steps per item', () => {
+    const md = '## Combat Action Chains\n\n' +
+      '1. **Strike Combo:** Feint → Deceptive Attack → All-Out Attack\n' +
+      '2. **Defensive Rush:** Move → Block → Riposte\n';
+    const sections = extractSections(md);
+    const model = parseGurps({}, sections);
+    assert.strictEqual(model.chains.melee.length, 2, 'should parse 2 chains');
+    assert.strictEqual(model.chains.melee[0].name, 'Strike Combo');
+    assert.deepStrictEqual(model.chains.melee[0].steps, ['Feint', 'Deceptive Attack', 'All-Out Attack']);
+    assert.strictEqual(model.chains.melee[1].name, 'Defensive Rush');
+    assert.deepStrictEqual(model.chains.melee[1].steps, ['Move', 'Block', 'Riposte']);
+  });
+});
+
 // Fix 2: Defensive sort — renderGURPSSheet must not throw when skill entries lack name
 describe('renderGURPSSheet — defensive sort on missing name', () => {
   it('does not throw when skills lack name', () => {

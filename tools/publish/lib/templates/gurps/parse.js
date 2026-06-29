@@ -554,30 +554,35 @@ function parseChains(model, sections, fm) {
     }
   }
 
-  // Try list form: "**Name:** step1 → step2 → step3" or plain numbered list
-  const text = sec.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  // Try "**Name**: step1 → step2 → step3" pattern
-  const arrowPattern = /\*\*([^*]+)\*\*\s*:?\s*([\w\s/→\-,()]+(?:→[\w\s/\-,()+]+)+)/g;
-  let m;
+  // Try list form: rendered markdown converts "**Name:**" to "<strong>Name:</strong>".
+  // Process each <li> individually so multi-item lists don't bleed across entries.
+  // After stripping tags from a single item, "1. Name: step → step" is plain text.
+  const liItems = [];
+  const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+  let li;
+  while ((li = liRegex.exec(sec.html)) !== null) {
+    liItems.push(li[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+  }
+
   let found = false;
-  while ((m = arrowPattern.exec(text)) !== null) {
-    const name = m[1].trim();
-    const steps = m[2].split('→').map(s => s.trim()).filter(Boolean);
-    if (steps.length >= 2) {
-      model.chains.melee.push({ name, steps });
-      found = true;
+  // Match "Label: step → step → step" within a single list item
+  const arrowPattern = /^([^:→]{3,80}):\s*((?:[^→]+→[^→]+)+)$/;
+  for (const item of liItems) {
+    const m = item.match(arrowPattern);
+    if (m) {
+      const name = m[1].trim();
+      const steps = m[2].split('→').map(s => s.trim()).filter(Boolean);
+      if (steps.length >= 2) {
+        model.chains.melee.push({ name, steps });
+        found = true;
+      }
     }
   }
+
   if (!found) {
     // Fallback: parse list items as a single unnamed chain
-    const items = [];
-    const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
-    let li;
-    while ((li = liRegex.exec(sec.html)) !== null) {
-      items.push(li[1].replace(/<[^>]+>/g, '').trim());
-    }
-    if (items.length >= 2) {
-      model.chains.melee.push({ name: 'Default Chain', steps: items });
+    if (liItems.length >= 2) {
+      model.chains.melee.push({ name: 'Default Chain', steps: liItems });
     }
   }
 }
