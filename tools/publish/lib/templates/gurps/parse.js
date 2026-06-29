@@ -176,6 +176,18 @@ function parseEncumbrance(model, sections, fm) {
   }
 }
 
+function parseReactions(model, sections, fm) {
+  if (fm.reactions && typeof fm.reactions === 'object') {
+    for (const [k, v] of Object.entries(fm.reactions)) model.reactions[k] = String(v);
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'reaction modifiers', 'reactions');
+  if (!sec) return;
+  for (const row of parseTableRows(sec.html).slice(1)) {
+    if (row.length >= 2 && row[0]) model.reactions[row[0]] = row[1];
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -186,6 +198,7 @@ function parseGurps(frontmatter, sections) {
   parseSenses(model, secs, fm);
   parseDefenses(model, secs, fm);
   parseEncumbrance(model, secs, fm);
+  parseReactions(model, secs, fm);
   return model;
 }
 
