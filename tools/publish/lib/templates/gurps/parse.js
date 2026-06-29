@@ -3,10 +3,16 @@ const { splitMarkers, stripCost } = require('./render');
 
 const PRIMARY = ['ST', 'DX', 'IQ', 'HT'];
 
+// True secondary characteristics: computed from primaries, spend points to improve
+const SECONDARY_CHARS = ['HP', 'Will', 'Per', 'FP', 'Basic Speed', 'Basic Move'];
+
+// Derived/calculated values that appear in the Secondary Characteristics table
+const DERIVED_KEYS = ['Basic Lift', 'Damage (Thr)', 'Damage (Sw)', 'Size Modifier', 'TL'];
+
 function emptyModel() {
   return {
     identity: {}, status: {},
-    attributes: { primary: {}, secondary: {}, bl: null, thrust: null, swing: null, dodge: null },
+    attributes: { primary: {}, secondary: {}, derived: {}, bl: null, thrust: null, swing: null, dodge: null },
     senses: {}, defenses: { parry: [], block: [], dodge: null, hitLocations: [] },
     encumbrance: [], reactions: {},
     social: { cultural: [], languages: [] },
@@ -21,16 +27,44 @@ function emptyModel() {
 
 function cell(v) { const { value, markers } = splitMarkers(v); return { value, markers }; }
 
+// Header-row guard: returns true for rows that are table headers, not data.
+function isHeaderRow(row) {
+  if (row.length < 2) return false;
+  const c0 = row[0].toLowerCase();
+  const c1 = row[1].toLowerCase();
+  return /^(characteristic|attribute|trait|name)$/.test(c0) || /^(value|score)$/.test(c1);
+}
+
 function parseAttributes(model, sections, fm) {
   const sec = findSectionByTitle(sections, 'stat sheet');
   if (sec) {
     const primHtml = extractSubsectionHtml(sec.html, 'Primary Attributes') || sec.html;
-    for (const row of parseTableRows(primHtml)) {
-      if (row.length >= 2 && PRIMARY.includes(row[0])) model.attributes.primary[row[0]] = cell(row[1]);
+    const primRows = parseTableRows(primHtml);
+    // Detect Cost column from header row
+    const primHeader = primRows.length > 0 ? primRows[0].map(h => h.toLowerCase()) : [];
+    const costIdx = primHeader.findIndex(h => h === 'cost');
+    for (const row of primRows) {
+      if (isHeaderRow(row)) continue;
+      if (row.length >= 2 && PRIMARY.includes(row[0])) {
+        const c = cell(row[1]);
+        if (costIdx >= 0 && row[costIdx]) {
+          const { value: costVal } = require('./render').stripCost(row[costIdx]);
+          c.cost = costVal;
+        }
+        model.attributes.primary[row[0]] = c;
+      }
     }
     const secHtml = extractSubsectionHtml(sec.html, 'Secondary Characteristics');
     for (const row of parseTableRows(secHtml)) {
-      if (row.length >= 2) model.attributes.secondary[row[0]] = cell(row[1]);
+      if (isHeaderRow(row)) continue;
+      if (row.length >= 2 && row[0]) {
+        const key = row[0];
+        if (DERIVED_KEYS.includes(key)) {
+          model.attributes.derived[key] = cell(row[1]);
+        } else {
+          model.attributes.secondary[key] = cell(row[1]);
+        }
+      }
     }
   }
   if (fm.attributes) {
@@ -40,7 +74,12 @@ function parseAttributes(model, sections, fm) {
   }
   if (fm.secondary) {
     for (const [k, v] of Object.entries(fm.secondary)) {
-      model.attributes.secondary[k] = { value: String(v), markers: [] };
+      const c = { value: String(v), markers: [] };
+      if (DERIVED_KEYS.includes(k)) {
+        model.attributes.derived[k] = c;
+      } else {
+        model.attributes.secondary[k] = c;
+      }
     }
   }
 }
