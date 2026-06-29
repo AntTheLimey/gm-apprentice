@@ -165,9 +165,27 @@ Use the plugin cache path for the GM's OS (e.g.
 infer it from the skill's own cache path).
 
 This ensures the site always builds with the exact version of the
-publish tool that matches the installed plugin. The version check in
-routine updates (capability 2) will keep this path current when the
-plugin updates.
+publish tool that matches the installed plugin.
+
+**Why a hard-pinned version path (and not something "auto-updating")?**
+The plugin cache stores each installed version in its own folder
+(`.../gm-apprentice/<version>/tools/publish`) and Claude Code does not
+maintain a stable "current" alias we could point at. A floating pin
+(like `"latest"`) resolves to whatever npm last saw locally, which is
+how sites silently went stale before. A hard pin trades automatic
+freshness for reproducible builds: the site always builds with a known
+version, and it never breaks unexpectedly when the plugin changes. The
+two safety nets that keep a hard pin from going stale silently are:
+
+- The build tool prints a loud **version-drift warning** at the start
+  of any build when a newer version is installed in the cache, naming
+  the exact `file:` path to switch to.
+- Routine updates (capability 2) repoint the path and re-run
+  `npm install` whenever the plugin version changes.
+
+The build tool ships its runtime dependencies **vendored** (committed
+alongside the code), so a freshly-pinned cache version builds with no
+extra download step — `npm install` only needs to re-link the package.
 
 ---
 

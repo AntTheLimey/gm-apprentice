@@ -63,7 +63,13 @@ Workflow:
    set, ask for the absolute path to the site repo directory and
    offer to save it to vault-config for future sessions.
 2. **Check publish tool version.** Make sure the site repo is
-   using the current version of the build tool:
+   using the current version of the build tool. This matters
+   because a bare `/plugin` update drops a new version folder in
+   the plugin cache but never repoints existing sites, so builds
+   keep silently using the old renderer. (The build tool now also
+   prints a loud version-drift warning at the start of every
+   build as a backstop — but repoint it here so the GM never
+   sees that warning.)
    a. Read the plugin version from `.claude-plugin/plugin.json`
       in the gm-apprentice plugin directory (or infer it from the
       skill's own cache path). This is the **expected version**.
@@ -77,7 +83,13 @@ Workflow:
       version differs from the expected version:
       - Update the `file:` dependency in the site repo's
         `package.json` to point at the current cache path.
-      - Run `npm install` in the site repo directory.
+      - Run `npm install` in the site repo directory. The build
+        tool ships its runtime dependencies vendored, so this
+        only needs to re-link the package — it does not download
+        anything and works offline.
+      - Confirm the repoint took effect: re-read
+        `node_modules/gm-apprentice-publish/package.json` and
+        verify the version now matches expected.
       - Tell the GM: "Updated gm-apprentice-publish from
         {old version} to {new version}."
    d. If everything matches, continue silently.

@@ -60,3 +60,17 @@ tests/benchmark-results/
 !tests/benchmark-campaign/
 !tests/benchmark-questions/
 !tests/baselines/
+
+# Vendored runtime deps for the publish tool — committed on purpose.
+# The plugin cache is a git copy of this repo, and a site's `file:` pin symlinks the tool
+# out of that cache, so Node resolves the tool's require()s from the cache location. The
+# deps must travel with it or builds fail with "Cannot find module". This negation is LAST
+# so it overrides the earlier node_modules/, dist/, and bin/ rules for this one subtree.
+# See tools/publish/README.md ("Vendored dependencies").
+!tools/publish/node_modules/
+!tools/publish/node_modules/**
+# ...but never the npm-generated cruft: .bin holds machine-local (absolute-target)
+# symlinks that would ship as dangling links, and .package-lock.json is regenerable.
+tools/publish/node_modules/.bin/
+tools/publish/node_modules/.package-lock.json
+tools/publish/node_modules/**/.package-lock.json

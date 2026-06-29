@@ -26,6 +26,64 @@ function printVersion() {
   console.log(pkg.version);
 }
 
+// The tool ships its deps vendored under node_modules/; if that copy didn't make it
+// (e.g. a broken install), surface the cause instead of a raw "Cannot find module" trace.
+function missingDepsMessage(detail) {
+  const toolDir = path.join(__dirname, '..');
+  return (
+    `Error: gm-apprentice-publish is missing runtime dependencies${detail ? `: ${detail}` : ''}.\n` +
+    `This usually means the plugin install is incomplete. Reinstall/update the\n` +
+    `gm-apprentice plugin (/plugin), then ask the publish-site skill to "update my site",\n` +
+    `or run "npm install" inside ${toolDir}.`
+  );
+}
+
+// Fast, friendly preflight on the declared (direct) dependencies.
+function assertRuntimeDeps() {
+  const pkg = require('../package.json');
+  const toolDir = path.join(__dirname, '..');
+  const missing = [];
+  for (const dep of Object.keys(pkg.dependencies || {})) {
+    try {
+      require.resolve(dep, { paths: [toolDir] });
+    } catch {
+      missing.push(dep);
+    }
+  }
+  if (missing.length > 0) {
+    console.error(missingDepsMessage(missing.join(', ')));
+    process.exit(1);
+  }
+}
+
+// Load lib/build, converting a missing transitive dependency (which assertRuntimeDeps
+// can't see) from a raw stack trace into the same actionable message.
+function loadBuild() {
+  try {
+    return require('../lib/build');
+  } catch (err) {
+    if (err && err.code === 'MODULE_NOT_FOUND') {
+      const m = /Cannot find module '([^']+)'/.exec(err.message || '');
+      console.error(missingDepsMessage(m ? `'${m[1]}'` : ''));
+      process.exit(1);
+    }
+    throw err;
+  }
+}
+
+// Warn (non-fatal) if a newer build tool is installed than the one this site is pinned to.
+function warnIfVersionDrift() {
+  try {
+    const { detectVersionDrift } = require('../lib/version-check');
+    const result = detectVersionDrift();
+    if (result && result.drift) {
+      console.error(`\n${result.message}\n`);
+    }
+  } catch {
+    // Version checking is best-effort; never block a build on it.
+  }
+}
+
 if (command === '--help' || command === '-h' || !command) {
   printHelp();
   process.exit(0);
@@ -62,7 +120,11 @@ if (command === 'build') {
     process.exit(1);
   }
 
-  const { build } = require('../lib/build');
+  // Surface a stale version pin and missing deps before doing any work.
+  warnIfVersionDrift();
+  assertRuntimeDeps();
+
+  const { build } = loadBuild();
   try {
     build({ configPath });
   } catch (err) {

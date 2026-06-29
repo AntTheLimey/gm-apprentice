@@ -11,6 +11,44 @@ for GitHub Pages.
 
 Node 22 or later. Check with `node --version`.
 
+## Vendored dependencies
+
+This tool's runtime dependencies (`gray-matter`, `lunr`,
+`markdown-it`, and their transitive deps) are **committed** under
+`node_modules/` — an exception to the usual rule, enforced by a
+negation at the bottom of the repo's root `.gitignore`.
+
+This is deliberate. The gm-apprentice plugin distributes this tool
+by **git-copying** the repo into the plugin cache
+(`~/.claude/plugins/cache/gm-apprentice/.../tools/publish`). A
+campaign site then pins it with a `file:` dependency, which npm
+satisfies by **symlinking** the cache directory into the site's
+`node_modules`. At build time Node resolves the symlink to its real
+location and looks for the tool's own dependencies *there*, in the
+cache — not in the site. Since `npm install` is never run against
+the cached copy, the only reliable way for the dependencies to be
+present is for them to travel with the git copy. Vendoring them
+makes a fresh install build with zero extra steps, offline.
+
+The alternative — having the consuming site install the deps — does
+not work: Node resolves the symlinked tool from the cache path, so
+the site's `node_modules` is never consulted (confirmed empirically,
+including with `--preserve-symlinks`).
+
+**Re-vendoring after a dependency change:** edit `package.json` /
+`package-lock.json`, then:
+
+```bash
+cd tools/publish
+rm -rf node_modules && npm ci --omit=dev
+rm -rf node_modules/.bin node_modules/.package-lock.json
+git add node_modules
+```
+
+The `runtime-deps` test fails if a declared dependency is not both
+requireable and git-tracked, and the `clean-install` integration
+test fails if a clean git-copy + symlinked site cannot build.
+
 ## Installation
 
 Run without installing:
