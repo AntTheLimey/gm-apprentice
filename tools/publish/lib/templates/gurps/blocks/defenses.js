@@ -8,9 +8,9 @@ function renderDefenses(model) {
   if (!hasData) return null;
 
   const chips = [];
-  for (const p of (d.parry || [])) chips.push(`<span class="def-chip">Parry ${escapeHtml(p.label)}: ${escapeHtml(p.value)}</span>`);
-  for (const b of (d.block || [])) chips.push(`<span class="def-chip">Block ${escapeHtml(b.label)}: ${escapeHtml(b.value)}</span>`);
-  if (d.dodge != null) chips.push(`<span class="def-chip">Dodge: ${escapeHtml(String(d.dodge))}</span>`);
+  for (const p of (d.parry || [])) chips.push(`<span class="def-chip"><span class="def-chip-label">${escapeHtml(p.label)}</span> ${escapeHtml(p.value)}</span>`);
+  for (const b of (d.block || [])) chips.push(`<span class="def-chip"><span class="def-chip-label">${escapeHtml(b.label)}</span> ${escapeHtml(b.value)}</span>`);
+  if (d.dodge != null) chips.push(`<span class="def-chip"><span class="def-chip-label">Dodge</span> ${escapeHtml(String(d.dodge))}</span>`);
   const defRow = chips.length > 0 ? `<div class="defrow">${chips.join('')}</div>` : '';
 
   let locTable = '';

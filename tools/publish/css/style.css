@@ -2764,11 +2764,13 @@ tr:nth-child(even) {
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--gc-def-bg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--gc-def);
   font-size: 13px;
   font-weight: 600;
-  color: var(--gc-def);
+  color: var(--text);
 }
+
+.def-chip-label { color: var(--gc-def); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 4px; font-weight: 700; }
 
 /* Hit location table inside defenses block */
 .hit-loc { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -2925,11 +2927,12 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .rules-ref-body {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 24px;
   padding: 10px 14px 14px;
   border-top: 1px solid var(--border);
+  align-items: flex-start;
 }
-.ref-table { border-collapse: collapse; font-size: 12px; min-width: 200px; }
+.ref-table { border-collapse: collapse; font-size: 12px; min-width: 200px; width: auto; }
 .ref-table caption {
   font-size: 11px;
   font-weight: 600;
