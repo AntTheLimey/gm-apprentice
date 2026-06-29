@@ -1,5 +1,5 @@
 const { renderCoCSheet } = require('./pc-coc');
-const { renderGURPSSheet } = require('./pc-gurps');
+const { renderGURPSSheet } = require('./gurps/index');
 const { renderDnDSheet } = require('./pc-dnd');
 const { renderFitDSheet } = require('./pc-fitd');
 
