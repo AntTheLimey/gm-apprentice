@@ -9,7 +9,8 @@ function renderStatus(model) {
   if (s.move != null) pips.push(`<span class="pip">Move: ${escapeHtml(String(s.move))}</span>`);
   if (s.enc != null) pips.push(`<span class="pip">Enc: ${escapeHtml(String(s.enc))}</span>`);
   const condition = s.condition ? `<span class="condition">${escapeHtml(s.condition)}</span>` : '';
-  return `<div class="status">${pips.join('')}${condition}</div>`;
+  const location = s.location ? `<span class="location"><span class="status-label">Location:</span> ${escapeHtml(s.location)}</span>` : '';
+  return `<div class="status">${pips.join('')}${condition}${location}</div>`;
 }
 
 module.exports = { renderStatus };

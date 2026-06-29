@@ -7,6 +7,7 @@ const { renderReactions } = require('./blocks/reactions');
 const { renderCultural, renderLanguages } = require('./blocks/social');
 const { renderTraitList } = require('./blocks/traits');
 const { renderSkills } = require('./blocks/skills');
+const { renderTechniques } = require('./blocks/techniques');
 const { renderSpells } = require('./blocks/spells');
 const { renderPoints } = require('./blocks/points');
 const { renderMelee } = require('./blocks/melee');
@@ -26,7 +27,7 @@ function buildSheet(model) {
     renderTraitList(model, 'perks', 'trait', 'Perks'),
     renderTraitList(model, 'disadvantages', 'trait', 'Disadvantages'),
     renderTraitList(model, 'quirks', 'trait', 'Quirks'),
-    renderSkills(model), renderSpells(model), renderPoints(model),
+    renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
   ].filter(Boolean);
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
   if (flow.length === 0 && wideBlocks.length === 0 && !status) return null;

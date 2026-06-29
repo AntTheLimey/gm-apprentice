@@ -1,5 +1,5 @@
 const { parseTableRows, findSectionByTitle, extractSubsectionHtml } = require('./tables');
-const { splitMarkers } = require('./render');
+const { splitMarkers, stripCost } = require('./render');
 
 const PRIMARY = ['ST', 'DX', 'IQ', 'HT'];
 
@@ -63,30 +63,47 @@ function parseSkills(model, sections, fm) {
   if (!sec) return;
   const rows = parseTableRows(sec.html);
   const header = (rows[0] || []).map(h => h.toLowerCase());
-  const idx = (names) => header.findIndex(h => names.some(n => h.includes(n)));
-  const iName = idx(['name']) >= 0 ? idx(['name']) : 0;
-  const iLevel = idx(['effective', 'level']);
-  const iRel = idx(['relative']);
-  const iPts = idx(['point']);
+  // Detect columns explicitly by header substring.
+  // 'effective' must be checked before generic 'level' to avoid hitting 'relative level'.
+  const iName = header.findIndex(h => h.includes('name')) >= 0
+    ? header.findIndex(h => h.includes('name')) : 0;
+  // 'effective' takes priority over 'level'; 'relative level' must not match 'effective'
+  const iEffective = header.findIndex(h => h.includes('effective'));
+  // 'relative level' matches 'relative', not 'effective'
+  const iRel = header.findIndex(h => h.includes('relative'));
+  // Use 'effective' as level if found; otherwise fall back to a plain 'level' col
+  const iLevelFallback = header.findIndex(h => h.includes('level') && !h.includes('relative'));
+  const iLevel = iEffective >= 0 ? iEffective : iLevelFallback;
+  const iPts = header.findIndex(h => h.includes('point'));
   for (const row of rows.slice(1)) {
     if (!row[iName]) continue;
-    const { name, source } = splitCitation(row[iName]);
+    // Strip trailing footnote markers from name cell
+    const rawName = row[iName];
+    const { value: nameClean, markers: nameMarkers } = splitMarkers(rawName);
+    const { name, source } = splitCitation(nameClean);
     const lv = splitMarkers(iLevel >= 0 ? row[iLevel] : '');
+    const pts = stripCost(iPts >= 0 ? row[iPts] : '');
     model.skills.push({
       name, level: lv.value, relative: iRel >= 0 ? row[iRel] : '',
-      points: iPts >= 0 ? row[iPts] : '', parry: null, block: null,
-      markers: lv.markers, source,
+      points: pts.value, parry: null, block: null,
+      markers: [...nameMarkers, ...lv.markers], source,
     });
   }
 }
 
 function readTraitRows(html) {
+  const rows = parseTableRows(html);
+  if (rows.length === 0) return [];
+  // Detect Cost column by header (case-insensitive); fall back to col 1
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  let costIdx = header.findIndex(h => h.includes('cost'));
+  if (costIdx < 0) costIdx = 1;
   const out = [];
-  for (const row of parseTableRows(html).slice(1)) {
+  for (const row of rows.slice(1)) {
     if (!row[0]) continue;
     const { name, source } = splitCitation(row[0]);
-    const costCell = row[row.length - 1] || '';
-    const cm = splitMarkers(costCell);
+    const costCell = row[costIdx] || '';
+    const cm = stripCost(costCell);
     out.push({ name, cost: cm.value, markers: cm.markers, source });
   }
   return out;
@@ -359,20 +376,37 @@ function parseStatus(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'current status');
   if (!sec) return;
-  // Parse **Key:** Value pairs from the section HTML
-  const text = sec.html.replace(/<[^>]+>/g, ' ');
-  const patterns = [
-    [/\*\*HP\*\*\s*:\s*(\S+)/i, 'hp'],
-    [/\*\*FP\*\*\s*:\s*(\S+)/i, 'fp'],
-    [/\*\*Move\*\*\s*:\s*(\S+)/i, 'move'],
-    [/\*\*Enc\*\*\s*:\s*(\S+)/i, 'enc'],
-    [/\*\*Condition\*\*\s*:\s*([^\n*]+)/i, 'condition'],
-  ];
-  for (const [re, key] of patterns) {
-    const m = text.match(re);
-    if (m) model.status[key] = m[1].trim();
+  // The section HTML has **Key:** Value pairs rendered as <strong>Key:</strong> Value.
+  // Match them from raw HTML where the key is in <strong> tags.
+  const strongPattern = /<strong[^>]*>([^<:]+):?<\/strong>\s*:?\s*([^<\n]+)/gi;
+  let sm;
+  while ((sm = strongPattern.exec(sec.html)) !== null) {
+    const key = sm[1].replace(/<[^>]+>/g, '').trim().toLowerCase();
+    const val = sm[2].replace(/<[^>]+>/g, '').trim();
+    if (!val) continue;
+    if (key === 'hp') model.status.hp = val;
+    else if (key === 'fp') model.status.fp = val;
+    else if (key === 'move') model.status.move = val;
+    else if (key === 'enc' || key === 'encumbrance') model.status.enc = val;
+    else if (key === 'condition') model.status.condition = val;
+    else if (key === 'location') model.status.location = val;
+    else if (key === 'carrying') model.status.carrying = val;
   }
-  // Also parse simple table rows if present
+  // Also scan plain text for patterns like "HP: 12/12" that may not be bold
+  const text = sec.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const plainPatterns = [
+    [/\bHP\s*:\s*(\S+)/i, 'hp'],
+    [/\bFP\s*:\s*(\S+)/i, 'fp'],
+    [/\bMove\s*:\s*(\S+)/i, 'move'],
+    [/\bEnc(?:umbrance)?\s*:\s*(\S+)/i, 'enc'],
+  ];
+  for (const [re, key] of plainPatterns) {
+    if (model.status[key] == null) {
+      const m = text.match(re);
+      if (m) model.status[key] = m[1].trim();
+    }
+  }
+  // Also parse simple table rows if present (HP x/y, FP x/y in table form)
   for (const row of parseTableRows(sec.html).slice(1)) {
     if (!row[0]) continue;
     const k = row[0].toLowerCase().replace(/\s+/g, '');
@@ -381,6 +415,39 @@ function parseStatus(model, sections, fm) {
     else if (k === 'move') model.status.move = row[1];
     else if (k === 'enc' || k === 'encumbrance') model.status.enc = row[1];
     else if (k === 'condition') model.status.condition = row[1];
+    else if (k === 'location') model.status.location = row[1];
+  }
+}
+
+function parseTechniques(model, sections, fm) {
+  if (Array.isArray(fm.techniques)) {
+    model.techniques = fm.techniques.map(t => ({
+      name: t.name || '', def: t.default || t.def || '',
+      points: String(t.points ?? ''), level: String(t.level ?? t.effective ?? ''),
+      markers: [],
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'techniques');
+  if (!sec) return;
+  const rows = parseTableRows(sec.html);
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const iName = header.findIndex(h => h.includes('name')) >= 0
+    ? header.findIndex(h => h.includes('name')) : 0;
+  const iDef = header.findIndex(h => h.includes('default'));
+  const iPts = header.findIndex(h => h.includes('point'));
+  const iEff = header.findIndex(h => h.includes('effective'));
+  for (const row of rows.slice(1)) {
+    if (!row[iName]) continue;
+    const { value: nameClean, markers: nameMarkers } = splitMarkers(row[iName]);
+    const { name, source } = splitCitation(nameClean);
+    const pts = stripCost(iPts >= 0 ? row[iPts] : '');
+    const eff = splitMarkers(iEff >= 0 ? row[iEff] : '');
+    model.techniques.push({
+      name, def: iDef >= 0 ? row[iDef] : '',
+      points: pts.value, level: eff.value,
+      markers: [...nameMarkers, ...pts.markers, ...eff.markers], source: source || null,
+    });
   }
 }
 
@@ -397,14 +464,32 @@ function parseChains(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'combat action chains', 'multi-action combat skill chains');
   if (!sec) return;
-  // Parse named chains from the section. Each chain starts with a heading or bold name,
-  // followed by numbered/bulleted steps, or a plain ordered list.
-  // We look for patterns like:
-  //   **Chain Name**: Step1 → Step2 → Step3
-  //   or a heading followed by a list
+
+  // Try table form first: header row with a 'chain' column.
+  // Expected columns: # | Chain | Key Rolls | Outcome  (or similar)
+  const tableRows = parseTableRows(sec.html);
+  if (tableRows.length >= 2) {
+    const header = (tableRows[0] || []).map(h => h.toLowerCase());
+    const iChain = header.findIndex(h => h.includes('chain'));
+    const iRolls = header.findIndex(h => h.includes('roll') || h.includes('key'));
+    const iOutcome = header.findIndex(h => h.includes('outcome'));
+    if (iChain >= 0) {
+      for (const row of tableRows.slice(1)) {
+        const name = row[iChain] || '';
+        if (!name) continue;
+        const steps = [];
+        if (iRolls >= 0 && row[iRolls]) steps.push(row[iRolls]);
+        if (iOutcome >= 0 && row[iOutcome]) steps.push(row[iOutcome]);
+        model.chains.melee.push({ name, steps });
+      }
+      return;
+    }
+  }
+
+  // Try list form: "**Name:** step1 → step2 → step3" or plain numbered list
   const text = sec.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  // Try "Name: step1 → step2 → step3" pattern first
-  const arrowPattern = /\*\*([^*]+)\*\*\s*:?\s*([\w\s/→\-,]+(?:→[\w\s/\-,]+)+)/g;
+  // Try "**Name**: step1 → step2 → step3" pattern
+  const arrowPattern = /\*\*([^*]+)\*\*\s*:?\s*([\w\s/→\-,()]+(?:→[\w\s/\-,()+]+)+)/g;
   let m;
   let found = false;
   while ((m = arrowPattern.exec(text)) !== null) {
@@ -523,6 +608,7 @@ function parseGurps(frontmatter, sections) {
   const model = emptyModel();
   parseAttributes(model, secs, fm);
   parseSkills(model, secs, fm);
+  parseTechniques(model, secs, fm);
   parseTraits(model, secs, fm);
   parseSenses(model, secs, fm);
   parseDefenses(model, secs, fm);
