@@ -110,6 +110,20 @@ function parseTraits(model, sections, fm) {
   }
 }
 
+function parseSenses(model, sections, fm) {
+  if (fm.senses && typeof fm.senses === 'object') {
+    for (const [k, v] of Object.entries(fm.senses)) model.senses[k] = String(v);
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'stat sheet');
+  if (!sec) return;
+  const subHtml = extractSubsectionHtml(sec.html, 'Appearance & Social') ||
+    extractSubsectionHtml(sec.html, 'Senses') || '';
+  for (const row of parseTableRows(subHtml).slice(1)) {
+    if (row.length >= 2 && row[0]) model.senses[row[0]] = row[1];
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -117,6 +131,7 @@ function parseGurps(frontmatter, sections) {
   parseAttributes(model, secs, fm);
   parseSkills(model, secs, fm);
   parseTraits(model, secs, fm);
+  parseSenses(model, secs, fm);
   return model;
 }
 
