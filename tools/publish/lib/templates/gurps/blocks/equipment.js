@@ -3,14 +3,14 @@ const { wide } = require('../render');
 
 function inventoryTable(items) {
   if (!items || items.length === 0) return '';
-  const rows = items.map(item => {
-    const locCell = item.location != null ? `<td>${escapeHtml(item.location)}</td>` : '';
-    const notesCell = item.notes != null ? `<td>${escapeHtml(item.notes)}</td>` : '';
-    return `<tr><td class="num">${escapeHtml(String(item.qty))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(item.cost)}</td><td class="num">${escapeHtml(item.weight)}</td>${locCell}${notesCell}</tr>`;
-  }).join('\n');
-  // Determine whether location/notes columns are needed
+  // Determine column presence across ALL items first, so every row is consistent.
   const hasLoc = items.some(i => i.location != null);
   const hasNotes = items.some(i => i.notes != null);
+  const rows = items.map(item => {
+    const locCell = hasLoc ? `<td>${escapeHtml(item.location ?? '')}</td>` : '';
+    const notesCell = hasNotes ? `<td>${escapeHtml(item.notes ?? '')}</td>` : '';
+    return `<tr><td class="num">${escapeHtml(String(item.qty))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(item.cost)}</td><td class="num">${escapeHtml(item.weight)}</td>${locCell}${notesCell}</tr>`;
+  }).join('\n');
   const locTh = hasLoc ? '<th>Location</th>' : '';
   const notesTh = hasNotes ? '<th>Notes</th>' : '';
   return `<table class="equip-table"><thead><tr><th class="num">Qty</th><th>Item</th><th class="num">Cost</th><th class="num">Weight</th>${locTh}${notesTh}</tr></thead><tbody>${rows}</tbody></table>`;

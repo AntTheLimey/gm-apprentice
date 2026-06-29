@@ -67,4 +67,34 @@ describe('renderEquipment', () => {
     assert.ok(html.includes('Adventuring'), 'should include load-out name');
     assert.ok(html.includes('Totals'), 'should include totals row');
   });
+
+  it('mixed location/notes: all rows have same <td> count (column alignment)', () => {
+    // Only item 0 has a location, only item 1 has notes.
+    // After fix, both rows must emit a <td> for each column that exists in ANY row.
+    const model = {
+      equipment: {
+        items: [
+          { qty: '1', name: 'Sword',   cost: '$600', weight: '3 lb', location: 'Belt',  notes: null   },
+          { qty: '2', name: 'Rations', cost: '$5',   weight: '1 lb', location: null,    notes: 'Iron' },
+        ],
+        loadouts: [],
+      },
+    };
+    const html = renderEquipment(model);
+    assert.ok(html, 'should render html');
+    // Count <td> elements in each <tr> — they must be equal.
+    const rowMatches = html.match(/<tr>([\s\S]*?)<\/tr>/g) || [];
+    // Skip the header row (uses <th>)
+    const dataRows = rowMatches.filter(r => r.includes('<td'));
+    assert.ok(dataRows.length >= 2, 'should have at least 2 data rows');
+    const tdCounts = dataRows.map(r => (r.match(/<td/g) || []).length);
+    const allSame = tdCounts.every(c => c === tdCounts[0]);
+    assert.ok(allSame, `td counts must be equal across rows; got ${tdCounts.join(', ')}`);
+    // Both column headers present
+    assert.ok(html.includes('<th>Location</th>'), 'Location header present');
+    assert.ok(html.includes('<th>Notes</th>'), 'Notes header present');
+    // The row without location shows an empty td (not missing td)
+    assert.ok(html.includes('<td>Belt</td>'), 'location cell for Sword');
+    assert.ok(html.includes('<td>Iron</td>'), 'notes cell for Rations');
+  });
 });
