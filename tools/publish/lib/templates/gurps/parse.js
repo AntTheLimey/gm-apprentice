@@ -124,6 +124,32 @@ function parseSenses(model, sections, fm) {
   }
 }
 
+function parseDefenses(model, sections, fm) {
+  if (fm.defenses && typeof fm.defenses === 'object') {
+    model.defenses = { parry: fm.defenses.parry || [], block: fm.defenses.block || [],
+      dodge: fm.defenses.dodge != null ? String(fm.defenses.dodge) : null,
+      hitLocations: fm.defenses.hitLocations || [] };
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'active defenses');
+  if (sec) {
+    for (const row of parseTableRows(sec.html).slice(1)) {
+      if (!row[0]) continue;
+      const lower = row[0].toLowerCase();
+      const { value } = splitMarkers(row[1] || '');
+      if (lower.includes('parry')) model.defenses.parry.push({ label: row[0], value });
+      else if (lower.includes('block')) model.defenses.block.push({ label: row[0], value });
+      else if (lower.includes('dodge')) model.defenses.dodge = value;
+    }
+  }
+  const drSec = findSectionByTitle(sections, 'dr by hit location', 'hit location');
+  if (drSec) {
+    for (const row of parseTableRows(drSec.html).slice(1)) {
+      if (row[0]) model.defenses.hitLocations.push({ location: row[0], dr: row[1] || '0' });
+    }
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -132,6 +158,7 @@ function parseGurps(frontmatter, sections) {
   parseSkills(model, secs, fm);
   parseTraits(model, secs, fm);
   parseSenses(model, secs, fm);
+  parseDefenses(model, secs, fm);
   return model;
 }
 
