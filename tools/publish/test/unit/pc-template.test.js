@@ -23,3 +23,68 @@ describe('pcTemplate combat tab', () => {
     assert.ok(html.includes('probe-equip'));
   });
 });
+
+describe('pcTemplate GURPS consumed-titles graceful degradation', () => {
+  const gurpsConfig = { publishConfig: { system: 'gurps-4e' } };
+  const skillsSection = { title: 'Skills', id: 'skills', html: '<p>Some skills content</p>' };
+  const combatSection = { title: 'Combat Action Chains', id: 'combat-action-chains', html: '<p>chains</p>' };
+
+  it('GURPS PC with null sheetHtml keeps Skills accordion visible', () => {
+    // systemSheetHtml is null — renderer returned nothing. Skills must NOT be suppressed.
+    const html = pcTemplate(
+      page,
+      { html: '', relationships: '' },
+      [skillsSection],
+      noop,
+      cfg,
+      {},
+      undefined,
+      { ...gurpsConfig, systemSheetHtml: null, systemCombatHtml: null },
+    );
+    assert.ok(html.includes('Some skills content'), 'Skills accordion must appear when sheetHtml is null');
+  });
+
+  it('GURPS PC with real sheetHtml suppresses Skills accordion (deduplication)', () => {
+    // systemSheetHtml is present — Skills is consumed, so accordion should be suppressed.
+    const html = pcTemplate(
+      page,
+      { html: '', relationships: '' },
+      [skillsSection],
+      noop,
+      cfg,
+      {},
+      undefined,
+      { ...gurpsConfig, systemSheetHtml: '<div class="gurps-sheet">sheet</div>', systemCombatHtml: null },
+    );
+    assert.ok(!html.includes('Some skills content'), 'Skills accordion must be suppressed when sheetHtml is present');
+  });
+
+  it('GURPS PC with null combatHtml keeps Combat Action Chains accordion visible', () => {
+    // systemCombatHtml is null — combat chains must stay in accordions.
+    const html = pcTemplate(
+      page,
+      { html: '', relationships: '' },
+      [combatSection],
+      noop,
+      cfg,
+      {},
+      undefined,
+      { ...gurpsConfig, systemSheetHtml: null, systemCombatHtml: null },
+    );
+    assert.ok(html.includes('chains'), 'Combat chains accordion must appear when combatHtml is null');
+  });
+
+  it('GURPS PC with real combatHtml suppresses Combat Action Chains accordion', () => {
+    const html = pcTemplate(
+      page,
+      { html: '', relationships: '' },
+      [combatSection],
+      noop,
+      cfg,
+      {},
+      undefined,
+      { ...gurpsConfig, systemSheetHtml: null, systemCombatHtml: '<div>combat</div>' },
+    );
+    assert.ok(!html.includes('chains'), 'Combat chains accordion must be suppressed when combatHtml is present');
+  });
+});

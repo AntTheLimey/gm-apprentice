@@ -180,6 +180,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     epithet = `<div class="pull-quote">${extractFirstSentence(processedContent.html)}</div>`;
   }
 
+  // Read system HTML before filtering so the filter can react to what was actually rendered.
+  const systemHtml = (context || {}).systemSheetHtml || null;
+  const systemCombatHtml = (context || {}).systemCombatHtml || null;
+  const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
+
+  // Combat-only consumed titles: only suppress when combat HTML is present.
+  const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
+
   // --- Sheet Tab ---
   const emptyRelPattern = /^\s*(<p><strong>Outgoing:<\/strong><\/p>\s*<p><strong>Incoming:<\/strong><\/p>)?\s*$/;
   const emptyAppearPattern = /^\s*(<p><em>Scenes and sessions where .+ appears\.<\/em><\/p>)?\s*$/;
@@ -188,7 +196,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
-    if (gurpsSheet && GURPS_CONSUMED_TITLES.has(lower)) return false;
+    if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
+    if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;
@@ -206,9 +215,6 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   </div>
 </div>`).join('\n');
 
-  const systemHtml = (context || {}).systemSheetHtml || null;
-  const systemCombatHtml = (context || {}).systemCombatHtml || null;
-  const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
   let sheetContent;
   if (systemHtml) {
     sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
