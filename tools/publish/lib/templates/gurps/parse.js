@@ -246,6 +246,24 @@ function parseSpells(model, sections, fm) {
   }
 }
 
+function parsePoints(model, sections, fm) {
+  if (Array.isArray(fm.points)) {
+    model.points = fm.points.map(p => ({
+      label: p.label, value: String(p.value ?? ''), total: !!p.total, unspent: !!p.unspent,
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'points summary', 'points');
+  if (!sec) return;
+  for (const row of parseTableRows(sec.html).slice(1)) {
+    if (!row[0]) continue;
+    const label = row[0];
+    const value = row[row.length - 1] || '';
+    const lowerLabel = label.toLowerCase();
+    model.points.push({ label, value, total: lowerLabel.includes('total'), unspent: lowerLabel.includes('unspent') });
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -259,6 +277,7 @@ function parseGurps(frontmatter, sections) {
   parseReactions(model, secs, fm);
   parseSocial(model, secs, fm);
   parseSpells(model, secs, fm);
+  parsePoints(model, secs, fm);
   return model;
 }
 
