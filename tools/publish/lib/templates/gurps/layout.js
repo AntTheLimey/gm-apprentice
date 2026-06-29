@@ -1,6 +1,7 @@
 const { escapeHtml } = require('../../processor');
 const { renderStatus } = require('./blocks/status');
 const { renderAttributes } = require('./blocks/attributes');
+const { renderLiftingFeats, renderSlamTable } = require('./blocks/lifting');
 const { renderSenses } = require('./blocks/senses');
 const { renderDefenses } = require('./blocks/defenses');
 const { renderEncumbrance } = require('./blocks/encumbrance');
@@ -24,7 +25,8 @@ const RICH_COMBAT_TITLES = ['multi-action combat skill chains', 'combat summary'
 function buildSheet(model) {
   const status = renderStatus(model);
   const flow = [
-    renderAttributes(model), renderSenses(model), renderDefenses(model), renderEncumbrance(model),
+    renderAttributes(model), renderLiftingFeats(model), renderSlamTable(model),
+    renderSenses(model), renderDefenses(model), renderEncumbrance(model),
     renderReactions(model), renderCultural(model), renderLanguages(model),
     renderTraitList(model, 'templates', 'trait', 'Templates & Meta-Traits'),
     renderTraitList(model, 'advantages', 'trait', 'Advantages'),
