@@ -384,6 +384,139 @@ function parseStatus(model, sections, fm) {
   }
 }
 
+function parseChains(model, sections, fm) {
+  // frontmatter.chains = { melee: [{name, steps:[]}], ranged: [...] }
+  if (fm.chains && (Array.isArray(fm.chains.melee) || Array.isArray(fm.chains.ranged))) {
+    model.chains.melee = (fm.chains.melee || []).map(c => ({
+      name: c.name || '', steps: Array.isArray(c.steps) ? c.steps.map(String) : [],
+    }));
+    model.chains.ranged = (fm.chains.ranged || []).map(c => ({
+      name: c.name || '', steps: Array.isArray(c.steps) ? c.steps.map(String) : [],
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'combat action chains', 'multi-action combat skill chains');
+  if (!sec) return;
+  // Parse named chains from the section. Each chain starts with a heading or bold name,
+  // followed by numbered/bulleted steps, or a plain ordered list.
+  // We look for patterns like:
+  //   **Chain Name**: Step1 → Step2 → Step3
+  //   or a heading followed by a list
+  const text = sec.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  // Try "Name: step1 → step2 → step3" pattern first
+  const arrowPattern = /\*\*([^*]+)\*\*\s*:?\s*([\w\s/→\-,]+(?:→[\w\s/\-,]+)+)/g;
+  let m;
+  let found = false;
+  while ((m = arrowPattern.exec(text)) !== null) {
+    const name = m[1].trim();
+    const steps = m[2].split('→').map(s => s.trim()).filter(Boolean);
+    if (steps.length >= 2) {
+      model.chains.melee.push({ name, steps });
+      found = true;
+    }
+  }
+  if (!found) {
+    // Fallback: parse list items as a single unnamed chain
+    const items = [];
+    const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+    let li;
+    while ((li = liRegex.exec(sec.html)) !== null) {
+      items.push(li[1].replace(/<[^>]+>/g, '').trim());
+    }
+    if (items.length >= 2) {
+      model.chains.melee.push({ name: 'Default Chain', steps: items });
+    }
+  }
+}
+
+function parseEquipment(model, sections, fm) {
+  // frontmatter.loadouts = [{name, items:[{qty,name,cost,weight,location?,notes?}], totalCost, totalWeight}]
+  if (fm.loadouts && Array.isArray(fm.loadouts)) {
+    model.equipment.loadouts = fm.loadouts.map(lo => ({
+      name: lo.name || '',
+      items: (lo.items || []).map(i => ({
+        qty: String(i.qty ?? '1'), name: i.name || '', cost: String(i.cost ?? ''),
+        weight: String(i.weight ?? ''), location: i.location || null, notes: i.notes || null,
+      })),
+      totalCost: lo.totalCost != null ? String(lo.totalCost) : null,
+      totalWeight: lo.totalWeight != null ? String(lo.totalWeight) : null,
+    }));
+  }
+  // Parse ## Equipment table → items
+  const sec = findSectionByTitle(sections, 'equipment');
+  if (sec) {
+    const rows = parseTableRows(sec.html);
+    const header = (rows[0] || []).map(h => h.toLowerCase());
+    const idx = n => header.findIndex(h => h.includes(n));
+    const iQty = idx('qty') >= 0 ? idx('qty') : idx('#') >= 0 ? idx('#') : -1;
+    const iName = idx('name') >= 0 ? idx('name') : idx('item') >= 0 ? idx('item') : 0;
+    const iCost = idx('cost');
+    const iWt = idx('weight') >= 0 ? idx('weight') : idx('wt');
+    const iLoc = idx('location') >= 0 ? idx('location') : idx('loc');
+    const iNotes = idx('notes');
+    for (const row of rows.slice(1)) {
+      if (!row[iName]) continue;
+      model.equipment.items.push({
+        qty: iQty >= 0 ? row[iQty] : '1',
+        name: row[iName],
+        cost: iCost >= 0 ? row[iCost] : '',
+        weight: iWt >= 0 ? row[iWt] : '',
+        location: iLoc >= 0 ? row[iLoc] || null : null,
+        notes: iNotes >= 0 ? row[iNotes] || null : null,
+      });
+    }
+    // Parse ### Load-Outs subsection if not already set from frontmatter
+    if (model.equipment.loadouts.length === 0) {
+      const loHtml = extractSubsectionHtml(sec.html, 'Load-Outs') ||
+        extractSubsectionHtml(sec.html, 'Loadouts') || '';
+      if (loHtml) {
+        // Each load-out is a sub-sub-table or bold heading + table
+        // Simple approach: parse bold headings as load-out names, then the following table
+        const loText = loHtml;
+        const loNameRegex = /<(?:h4|strong|b)[^>]*>([\s\S]*?)<\/(?:h4|strong|b)>/gi;
+        const loTableRegex = /<table[\s\S]*?<\/table>/gi;
+        const loNames = [];
+        let nm;
+        while ((nm = loNameRegex.exec(loText)) !== null) {
+          loNames.push(nm[1].replace(/<[^>]+>/g, '').trim());
+        }
+        const loTables = [];
+        let tb;
+        while ((tb = loTableRegex.exec(loText)) !== null) {
+          loTables.push(tb[0]);
+        }
+        for (let i = 0; i < loTables.length; i++) {
+          const loRows = parseTableRows(loTables[i]);
+          const loHeader = (loRows[0] || []).map(h => h.toLowerCase());
+          const liQty = loHeader.findIndex(h => h.includes('qty') || h.includes('#'));
+          const liName = Math.max(0, loHeader.findIndex(h => h.includes('name') || h.includes('item')));
+          const liCost = loHeader.findIndex(h => h.includes('cost'));
+          const liWt = loHeader.findIndex(h => h.includes('weight') || h.includes('wt'));
+          const items = [];
+          let totalCost = null; let totalWeight = null;
+          for (const r of loRows.slice(1)) {
+            const rName = r[liName] || '';
+            if (rName.toLowerCase().includes('total')) {
+              totalCost = liCost >= 0 ? r[liCost] || null : null;
+              totalWeight = liWt >= 0 ? r[liWt] || null : null;
+              continue;
+            }
+            if (!rName) continue;
+            items.push({
+              qty: liQty >= 0 ? r[liQty] : '1',
+              name: rName,
+              cost: liCost >= 0 ? r[liCost] : '',
+              weight: liWt >= 0 ? r[liWt] : '',
+              location: null, notes: null,
+            });
+          }
+          model.equipment.loadouts.push({ name: loNames[i] || `Load-Out ${i + 1}`, items, totalCost, totalWeight });
+        }
+      }
+    }
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -402,6 +535,8 @@ function parseGurps(frontmatter, sections) {
   parseRanged(model, secs, fm);
   parseGrimoire(model, secs, fm);
   parseStatus(model, secs, fm);
+  parseChains(model, secs, fm);
+  parseEquipment(model, secs, fm);
   return model;
 }
 
