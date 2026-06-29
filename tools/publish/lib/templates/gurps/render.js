@@ -37,4 +37,9 @@ function cost(v) {
   return `<span class="cost">${escapeHtml(String(v))}</span>`;
 }
 
-module.exports = { splitMarkers, footnoteRegistry, block, cost };
+function wide(category, title, inner) {
+  if (!inner || !String(inner).trim()) return null;
+  return `<div class="wide cat-${category}"><h2>${escapeHtml(title)}</h2>${inner}</div>`;
+}
+
+module.exports = { splitMarkers, footnoteRegistry, block, cost, wide };

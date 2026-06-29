@@ -264,6 +264,94 @@ function parsePoints(model, sections, fm) {
   }
 }
 
+function parseMelee(model, sections, fm) {
+  if (Array.isArray(fm.melee)) {
+    model.melee = fm.melee.map(a => ({
+      weapon: a.weapon || '', skill: String(a.skill ?? ''), parry: String(a.parry ?? ''),
+      damage: a.damage || '', reach: a.reach || '', st: String(a.st ?? ''), notes: a.notes || '',
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'melee weapons', 'melee');
+  if (!sec) return;
+  const rows = parseTableRows(sec.html);
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const idx = n => header.findIndex(h => h.includes(n));
+  const iWep = Math.max(0, idx('weapon') >= 0 ? idx('weapon') : idx('mode') >= 0 ? idx('mode') : 0);
+  const iSkill = idx('skill'); const iParry = idx('parry'); const iDmg = idx('damage') >= 0 ? idx('damage') : idx('dmg');
+  const iReach = idx('reach'); const iSt = idx('st'); const iNotes = idx('notes');
+  for (const row of rows.slice(1)) {
+    if (!row[iWep]) continue;
+    model.melee.push({
+      weapon: row[iWep], skill: iSkill >= 0 ? row[iSkill] : '',
+      parry: iParry >= 0 ? row[iParry] : '', damage: iDmg >= 0 ? row[iDmg] : '',
+      reach: iReach >= 0 ? row[iReach] : '', st: iSt >= 0 ? row[iSt] : '',
+      notes: iNotes >= 0 ? row[iNotes] : '',
+    });
+  }
+}
+
+function parseRanged(model, sections, fm) {
+  if (Array.isArray(fm.ranged)) {
+    model.ranged = fm.ranged.map(a => ({
+      weapon: a.weapon || '', skill: String(a.skill ?? ''), damage: a.damage || '',
+      acc: String(a.acc ?? ''), range: a.range || '', rof: String(a.rof ?? ''),
+      shots: a.shots || '', st: String(a.st ?? ''), bulk: String(a.bulk ?? ''),
+      rcl: String(a.rcl ?? ''), notes: a.notes || '',
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'ranged weapons', 'ranged');
+  if (!sec) return;
+  const rows = parseTableRows(sec.html);
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const idx = n => header.findIndex(h => h.includes(n));
+  const iWep = Math.max(0, idx('weapon'));
+  const iSkill = idx('skill'); const iDmg = idx('damage') >= 0 ? idx('damage') : idx('dmg');
+  const iAcc = idx('acc'); const iRange = idx('range'); const iRof = idx('rof');
+  const iShots = idx('shots'); const iSt = idx('st'); const iBulk = idx('bulk');
+  const iRcl = idx('rcl'); const iNotes = idx('notes');
+  for (const row of rows.slice(1)) {
+    if (!row[iWep]) continue;
+    model.ranged.push({
+      weapon: row[iWep], skill: iSkill >= 0 ? row[iSkill] : '',
+      damage: iDmg >= 0 ? row[iDmg] : '', acc: iAcc >= 0 ? row[iAcc] : '',
+      range: iRange >= 0 ? row[iRange] : '', rof: iRof >= 0 ? row[iRof] : '',
+      shots: iShots >= 0 ? row[iShots] : '', st: iSt >= 0 ? row[iSt] : '',
+      bulk: iBulk >= 0 ? row[iBulk] : '', rcl: iRcl >= 0 ? row[iRcl] : '',
+      notes: iNotes >= 0 ? row[iNotes] : '',
+    });
+  }
+}
+
+function parseGrimoire(model, sections, fm) {
+  if (Array.isArray(fm.grimoire)) {
+    model.grimoire = fm.grimoire.map(g => ({
+      name: g.name, skill: String(g.skill ?? ''), class: g.class || '',
+      time: g.time || '', duration: g.duration || '', cost: g.cost || '',
+      college: g.college || '', page: g.page || '',
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'spell grimoire', 'grimoire');
+  if (!sec) return;
+  const rows = parseTableRows(sec.html);
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const idx = n => header.findIndex(h => h.includes(n));
+  const iName = Math.max(0, idx('name')); const iSkill = idx('skill');
+  const iClass = idx('class'); const iTime = idx('time'); const iDur = idx('duration') >= 0 ? idx('duration') : idx('dur');
+  const iCost = idx('cost'); const iCollege = idx('college'); const iPage = idx('page');
+  for (const row of rows.slice(1)) {
+    if (!row[iName]) continue;
+    model.grimoire.push({
+      name: row[iName], skill: iSkill >= 0 ? row[iSkill] : '',
+      class: iClass >= 0 ? row[iClass] : '', time: iTime >= 0 ? row[iTime] : '',
+      duration: iDur >= 0 ? row[iDur] : '', cost: iCost >= 0 ? row[iCost] : '',
+      college: iCollege >= 0 ? row[iCollege] : '', page: iPage >= 0 ? row[iPage] : '',
+    });
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -278,6 +366,9 @@ function parseGurps(frontmatter, sections) {
   parseSocial(model, secs, fm);
   parseSpells(model, secs, fm);
   parsePoints(model, secs, fm);
+  parseMelee(model, secs, fm);
+  parseRanged(model, secs, fm);
+  parseGrimoire(model, secs, fm);
   return model;
 }
 
