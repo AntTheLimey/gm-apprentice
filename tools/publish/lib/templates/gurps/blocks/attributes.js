@@ -16,7 +16,8 @@ function renderAttributes(model) {
   const prim = a.primary || {};
   const sec = a.secondary || {};
   const der = a.derived || {};
-  if (Object.keys(prim).length === 0 && Object.keys(sec).length === 0) return null;
+  const hasLegacy = a.bl != null || a.thrust != null || a.swing != null || a.dodge != null;
+  if (Object.keys(prim).length === 0 && Object.keys(sec).length === 0 && Object.keys(der).length === 0 && !hasLegacy) return null;
 
   // PRIMARY: 4 large boxes with value and cost
   const cards = PRIMARY.filter(k => prim[k]).map(k => {
