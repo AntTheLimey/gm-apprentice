@@ -18,7 +18,7 @@ session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
 play_date: null             # real-world date session was played, YYYY-MM-DD
-in_game_date: null          # In-game date(s): string "YYYY-MM-DD" or array ["YYYY-MM-DD", ...]
+in_game_date: null          # In-game date(s): "YYYY-MM-DD" preferred; month-name/seasonal or non-Earth forms with a 4-digit year also sort (see shared/session-document-chain.md). Array allowed for multi-day.
 status: planned
 documents:
   plan: "[[Session NN - Title - Plan]]"

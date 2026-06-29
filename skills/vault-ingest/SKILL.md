@@ -197,7 +197,7 @@ Read `references/synthesis-templates.md` for the output format.
 2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
 3. Verify: `type` matches, `source_confidence` is set, all required fields present
 4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
-5. Verify: date fields (`in_game_date`, `play_date`) parse via `new Date()` — no narrative dates
+5. Verify: `play_date` is `YYYY-MM-DD`; `in_game_date` uses a real-date form (ISO, month-name, or seasonal with a 4-digit year) or the campaign's own non-Earth calendar — never a fabricated Gregorian date, and no narrative time-of-day in the field (see `shared/session-document-chain.md`)
 6. Fix any issues before proceeding to the next entity
 
 Include `> [!info] Reconstruction Note` with source descriptions

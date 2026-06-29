@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.6] — 2026-06-28
+
+### Fixed
+
+- **Non-Earth campaign dates are no longer corrupted.** Three skills told
+  agents that `in_game_date` "must be parseable by JS `new Date()`"
+  (`session-wrapup`, `vault-ingest`, and the shared
+  `session-document-chain.md`). That was wrong: the published timeline
+  parser (`tools/publish/lib/timeline.js`) anchors on a 4-digit year and
+  accepts ISO, month-name, and seasonal forms — it does not require a
+  `new Date()`-parseable string. A compliant agent following the old rule
+  would *fabricate* a Gregorian date for a fantasy/sci-fi calendar (e.g.
+  rewriting "14th of Flamerule, 1492 DR" as "July 14, 1492"), silently
+  losing the campaign's real date. The rule now says to record non-Earth
+  dates in the world's own format and never invent a Gregorian date to
+  satisfy the parser. `play_date` is clarified as `YYYY-MM-DD`.
+
 ## [1.7.5] — 2026-06-27
 
 ### Changed
