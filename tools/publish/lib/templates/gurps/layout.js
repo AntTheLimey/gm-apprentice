@@ -12,6 +12,9 @@ const { renderPoints } = require('./blocks/points');
 const { renderMelee } = require('./blocks/melee');
 const { renderRanged } = require('./blocks/ranged');
 const { renderGrimoire } = require('./blocks/grimoire');
+const { renderChains } = require('./blocks/chains');
+const { renderReference } = require('./blocks/reference');
+const { renderEquipment } = require('./blocks/equipment');
 
 function buildSheet(model) {
   const status = renderStatus(model);
@@ -30,4 +33,20 @@ function buildSheet(model) {
   return (status || '') + `<div class="gurps-sheet"><div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
 }
 
-module.exports = { buildSheet };
+function buildCombat(model) {
+  const parts = [
+    renderStatus(model),
+    renderDefenses(model),
+    renderMelee(model),
+    renderRanged(model),
+    renderChains(model),
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return `<div class="gurps-combat">${parts.join('\n')}${renderReference()}</div>`;
+}
+
+function buildEquipment(model) {
+  return renderEquipment(model);
+}
+
+module.exports = { buildSheet, buildCombat, buildEquipment };
