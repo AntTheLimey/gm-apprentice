@@ -188,6 +188,41 @@ function parseReactions(model, sections, fm) {
   }
 }
 
+function parseSocial(model, sections, fm) {
+  if (Array.isArray(fm.cultural)) {
+    model.social.cultural = fm.cultural.map(c => ({ name: c.name || String(c), cost: String(c.cost ?? '0'), markers: [] }));
+  } else {
+    const sec = findSectionByTitle(sections, 'cultural familiarities', 'cultural');
+    if (sec) {
+      for (const row of parseTableRows(sec.html).slice(1)) {
+        if (row[0]) model.social.cultural.push({ name: row[0], cost: row[row.length - 1] || '0', markers: [] });
+      }
+    }
+  }
+  if (Array.isArray(fm.languages)) {
+    model.social.languages = fm.languages.map(l => ({
+      name: l.name, spoken: l.spoken || '', written: l.written || '', points: String(l.points ?? '0'),
+    }));
+  } else {
+    const sec = findSectionByTitle(sections, 'languages');
+    if (sec) {
+      const rows = parseTableRows(sec.html);
+      const header = (rows[0] || []).map(h => h.toLowerCase());
+      const iName = Math.max(0, header.findIndex(h => h.includes('name')));
+      const iSpoken = header.findIndex(h => h.includes('spoken'));
+      const iWritten = header.findIndex(h => h.includes('written'));
+      const iPts = header.findIndex(h => h.includes('point'));
+      for (const row of rows.slice(1)) {
+        if (!row[iName]) continue;
+        model.social.languages.push({
+          name: row[iName], spoken: iSpoken >= 0 ? row[iSpoken] : '',
+          written: iWritten >= 0 ? row[iWritten] : '', points: iPts >= 0 ? row[iPts] : '0',
+        });
+      }
+    }
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -199,6 +234,7 @@ function parseGurps(frontmatter, sections) {
   parseDefenses(model, secs, fm);
   parseEncumbrance(model, secs, fm);
   parseReactions(model, secs, fm);
+  parseSocial(model, secs, fm);
   return model;
 }
 
