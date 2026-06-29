@@ -80,12 +80,43 @@ function parseSkills(model, sections, fm) {
   }
 }
 
+function readTraitRows(html) {
+  const out = [];
+  for (const row of parseTableRows(html).slice(1)) {
+    if (!row[0]) continue;
+    const { name, source } = splitCitation(row[0]);
+    const costCell = row[row.length - 1] || '';
+    const cm = splitMarkers(costCell);
+    out.push({ name, cost: cm.value, markers: cm.markers, source });
+  }
+  return out;
+}
+
+function parseTraits(model, sections, fm) {
+  const map = [
+    ['advantages', ['advantages & perks', 'advantages']],
+    ['disadvantages', ['disadvantages & quirks', 'disadvantages']],
+  ];
+  for (const [key, titles] of map) {
+    if (Array.isArray(fm[key])) {
+      model.traits[key] = fm[key].map(t => ({ name: t.name || String(t), cost: String(t.cost ?? ''), markers: [], source: t.source || null }));
+      continue;
+    }
+    const sec = findSectionByTitle(sections, ...titles);
+    if (sec) model.traits[key] = readTraitRows(sec.html);
+  }
+  for (const key of ['perks', 'quirks', 'templates']) {
+    if (Array.isArray(fm[key])) model.traits[key] = fm[key].map(t => ({ name: t.name || String(t), cost: String(t.cost ?? ''), markers: [], source: t.source || null }));
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
   const model = emptyModel();
   parseAttributes(model, secs, fm);
   parseSkills(model, secs, fm);
+  parseTraits(model, secs, fm);
   return model;
 }
 
