@@ -223,6 +223,29 @@ function parseSocial(model, sections, fm) {
   }
 }
 
+function parseSpells(model, sections, fm) {
+  if (Array.isArray(fm.spells)) {
+    model.spells = fm.spells.map(s => ({
+      name: s.name, level: String(s.level ?? ''), points: String(s.points ?? '0'),
+      markers: [], source: s.source || null,
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'spells');
+  if (!sec) return;
+  const rows = parseTableRows(sec.html);
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const iName = Math.max(0, header.findIndex(h => h.includes('name')));
+  const iLevel = header.findIndex(h => h.includes('level') || h.includes('effective'));
+  const iPts = header.findIndex(h => h.includes('point'));
+  for (const row of rows.slice(1)) {
+    if (!row[iName]) continue;
+    const { name, source } = splitCitation(row[iName]);
+    const lv = splitMarkers(iLevel >= 0 ? row[iLevel] : '');
+    model.spells.push({ name, level: lv.value, points: iPts >= 0 ? row[iPts] : '0', markers: lv.markers, source });
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -235,6 +258,7 @@ function parseGurps(frontmatter, sections) {
   parseEncumbrance(model, secs, fm);
   parseReactions(model, secs, fm);
   parseSocial(model, secs, fm);
+  parseSpells(model, secs, fm);
   return model;
 }
 
