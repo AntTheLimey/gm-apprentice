@@ -114,7 +114,7 @@ document.addEventListener('click', function(e) {
 });
 (function() {
   var hash = location.hash.slice(1);
-  if (['sheet', 'equipment', 'story', 'journey'].includes(hash)) switchTab(hash);
+  if (['sheet', 'combat', 'equipment', 'story', 'journey'].includes(hash)) switchTab(hash);
   else if (hash) openAccordion(hash);
 })();
 </script>`;
@@ -195,6 +195,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 </div>`).join('\n');
 
   const systemHtml = (context || {}).systemSheetHtml || null;
+  const systemCombatHtml = (context || {}).systemCombatHtml || null;
+  const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
   let sheetContent;
   if (systemHtml) {
     sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
@@ -203,7 +205,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // --- Equipment Tab ---
-  const equipmentContent = extractEquipment(fm, sections);
+  const equipmentContent = systemEquipmentHtml || extractEquipment(fm, sections);
 
   // --- Story Tab ---
   const storyContent = storyHtml || '<p class="text-muted">No story content available.</p>';
@@ -216,18 +218,24 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const graphSection = graphSvg ? `<h2>Connections</h2>\n<div class="relationship-graph">${graphSvg}</div>` : '';
   const journeyContent = [routeMap, timelineSection, graphSection].filter(Boolean).join('\n') || '<p class="text-muted">Journey data builds as the campaign progresses.</p>';
 
+  // --- Combat Tab (system-provided, optional) ---
+  const combatTabButton = systemCombatHtml
+    ? `\n  <button class="pc-tab" data-tab="combat" onclick="switchTab('combat')">Combat</button>` : '';
+  const combatPanel = systemCombatHtml
+    ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
+
   // --- Assemble ---
   const body = `${heroBanner}
 ${epithet}
 <div class="tab-bar">
-  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>
+  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>${combatTabButton}
   <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
   <button class="pc-tab" data-tab="journey" onclick="switchTab('journey')">Journey</button>
 </div>
 <div class="tab-panel active" id="tab-sheet">
 ${sheetContent}
-</div>
+</div>${combatPanel}
 <div class="tab-panel" id="tab-equipment">
 ${equipmentContent}
 </div>
