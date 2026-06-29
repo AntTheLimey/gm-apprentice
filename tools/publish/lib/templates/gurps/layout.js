@@ -1,0 +1,68 @@
+const { escapeHtml } = require('../../processor');
+const { renderStatus } = require('./blocks/status');
+const { renderAttributes } = require('./blocks/attributes');
+const { renderLiftingFeats, renderSlamTable } = require('./blocks/lifting');
+const { renderSenses } = require('./blocks/senses');
+const { renderDefenses } = require('./blocks/defenses');
+const { renderEncumbrance } = require('./blocks/encumbrance');
+const { renderReactions } = require('./blocks/reactions');
+const { renderCultural, renderLanguages } = require('./blocks/social');
+const { renderTraitList } = require('./blocks/traits');
+const { renderSkills } = require('./blocks/skills');
+const { renderTechniques } = require('./blocks/techniques');
+const { renderSpells } = require('./blocks/spells');
+const { renderPoints } = require('./blocks/points');
+const { renderMelee } = require('./blocks/melee');
+const { renderRanged } = require('./blocks/ranged');
+const { renderGrimoire } = require('./blocks/grimoire');
+const { renderChains } = require('./blocks/chains');
+const { renderReference } = require('./blocks/reference');
+const { renderEquipment } = require('./blocks/equipment');
+const { findSectionByTitle } = require('./tables');
+
+const RICH_COMBAT_TITLES = ['multi-action combat skill chains', 'combat summary'];
+
+function buildSheet(model) {
+  const status = renderStatus(model);
+  const flow = [
+    renderAttributes(model), renderLiftingFeats(model), renderSlamTable(model),
+    renderSenses(model), renderDefenses(model), renderEncumbrance(model),
+    renderReactions(model), renderCultural(model), renderLanguages(model),
+    renderTraitList(model, 'templates', 'trait', 'Templates & Meta-Traits'),
+    renderTraitList(model, 'advantages', 'trait', 'Advantages'),
+    renderTraitList(model, 'perks', 'trait', 'Perks'),
+    renderTraitList(model, 'disadvantages', 'trait', 'Disadvantages'),
+    renderTraitList(model, 'quirks', 'trait', 'Quirks'),
+    renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
+  ].filter(Boolean);
+  const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
+  if (flow.length === 0 && wideBlocks.length === 0 && !status) return null;
+  return (status || '') + `<div class="gurps-sheet"><div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
+}
+
+function buildCombat(model, sections) {
+  const parts = [
+    renderStatus(model),
+    renderDefenses(model),
+    renderMelee(model),
+    renderRanged(model),
+    renderChains(model),
+  ].filter(Boolean);
+
+  // Append rich combat sections (multi-action chains, combat summary) from raw sections
+  for (const titleKey of RICH_COMBAT_TITLES) {
+    const sec = findSectionByTitle(sections || [], titleKey);
+    if (sec && sec.html && sec.html.trim()) {
+      parts.push(`<section class="blk cat-skill"><h2>${escapeHtml(sec.title)}</h2>${sec.html}</section>`);
+    }
+  }
+
+  if (parts.length === 0) return null;
+  return `<div class="gurps-combat">${parts.join('\n')}${renderReference()}</div>`;
+}
+
+function buildEquipment(model) {
+  return renderEquipment(model);
+}
+
+module.exports = { buildSheet, buildCombat, buildEquipment };

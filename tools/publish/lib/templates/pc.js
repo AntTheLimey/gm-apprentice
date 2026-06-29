@@ -27,6 +27,16 @@ function extractFirstSentence(html) {
 
 const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
 
+// Sections the structured GURPS renderer consumes into the sheet/combat tabs.
+// When a GURPS system sheet is present these are dropped from the accordion
+// list so they don't duplicate the structured blocks. Prose/extra sections
+// (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
+const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status', 'multi-action combat skill chains', 'combat summary']);
+
+function isGurpsSystem(publishConfig) {
+  return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
 function extractEquipment(frontmatter, sections) {
   if (Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0) {
     const items = frontmatter.equipment.map(item => {
@@ -114,7 +124,7 @@ document.addEventListener('click', function(e) {
 });
 (function() {
   var hash = location.hash.slice(1);
-  if (['sheet', 'equipment', 'story', 'journey'].includes(hash)) switchTab(hash);
+  if (['sheet', 'combat', 'equipment', 'story', 'journey'].includes(hash)) switchTab(hash);
   else if (hash) openAccordion(hash);
 })();
 </script>`;
@@ -170,13 +180,24 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     epithet = `<div class="pull-quote">${extractFirstSentence(processedContent.html)}</div>`;
   }
 
+  // Read system HTML before filtering so the filter can react to what was actually rendered.
+  const systemHtml = (context || {}).systemSheetHtml || null;
+  const systemCombatHtml = (context || {}).systemCombatHtml || null;
+  const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
+
+  // Combat-only consumed titles: only suppress when combat HTML is present.
+  const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
+
   // --- Sheet Tab ---
   const emptyRelPattern = /^\s*(<p><strong>Outgoing:<\/strong><\/p>\s*<p><strong>Incoming:<\/strong><\/p>)?\s*$/;
   const emptyAppearPattern = /^\s*(<p><em>Scenes and sessions where .+ appears\.<\/em><\/p>)?\s*$/;
 
+  const gurpsSheet = isGurpsSystem(publishConfig);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
+    if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
+    if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;
@@ -194,7 +215,6 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   </div>
 </div>`).join('\n');
 
-  const systemHtml = (context || {}).systemSheetHtml || null;
   let sheetContent;
   if (systemHtml) {
     sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
@@ -203,7 +223,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // --- Equipment Tab ---
-  const equipmentContent = extractEquipment(fm, sections);
+  const equipmentContent = systemEquipmentHtml || extractEquipment(fm, sections);
 
   // --- Story Tab ---
   const storyContent = storyHtml || '<p class="text-muted">No story content available.</p>';
@@ -216,18 +236,24 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const graphSection = graphSvg ? `<h2>Connections</h2>\n<div class="relationship-graph">${graphSvg}</div>` : '';
   const journeyContent = [routeMap, timelineSection, graphSection].filter(Boolean).join('\n') || '<p class="text-muted">Journey data builds as the campaign progresses.</p>';
 
+  // --- Combat Tab (system-provided, optional) ---
+  const combatTabButton = systemCombatHtml
+    ? `\n  <button class="pc-tab" data-tab="combat" onclick="switchTab('combat')">Combat</button>` : '';
+  const combatPanel = systemCombatHtml
+    ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
+
   // --- Assemble ---
   const body = `${heroBanner}
 ${epithet}
 <div class="tab-bar">
-  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>
+  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>${combatTabButton}
   <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
   <button class="pc-tab" data-tab="journey" onclick="switchTab('journey')">Journey</button>
 </div>
 <div class="tab-panel active" id="tab-sheet">
 ${sheetContent}
-</div>
+</div>${combatPanel}
 <div class="tab-panel" id="tab-equipment">
 ${equipmentContent}
 </div>

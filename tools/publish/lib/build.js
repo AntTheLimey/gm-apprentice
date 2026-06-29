@@ -349,8 +349,17 @@ function build(options = {}) {
 
           const system = publishConfig.system;
           const systemRenderer = getRenderer(system);
-          const systemHtml = systemRenderer ? systemRenderer(page.frontmatter, sections) : null;
-          html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, { publishConfig, pages, systemSheetHtml: systemHtml });
+          const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections) : null;
+          const systemOut = (rendered && typeof rendered === 'object')
+            ? rendered
+            : { sheetHtml: rendered || null };
+          html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
+            publishConfig,
+            pages,
+            systemSheetHtml: systemOut.sheetHtml || null,
+            systemCombatHtml: systemOut.combatHtml || null,
+            systemEquipmentHtml: systemOut.equipmentHtml || null,
+          });
           break;
         }
         case 'npc':

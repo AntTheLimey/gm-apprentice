@@ -2549,83 +2549,450 @@ tr:nth-child(even) {
   font-weight: 600;
 }
 
-/* GURPS 4e */
-.gurps-sheet { background: var(--bg-card); border-radius: 0.5rem; padding: 1.5rem; }
-.gurps-combat-bar {
+/* ===== GURPS 4e — Modern Sheet ===== */
+
+/* Category hue tokens — dark mode defaults.
+   Solid colors are LIGHT shades so category text/labels/borders stay legible
+   on dark cards; the -bg tints are low-alpha overlays. Light mode (below)
+   swaps both for deeper solids + opaque pastels. */
+:root {
+  --gc-attr:   #4ade80; --gc-attr-bg:   rgba(22, 163, 74, 0.14);
+  --gc-social: #fbbf24; --gc-social-bg: rgba(217, 119, 6, 0.14);
+  --gc-trait:  #fb923c; --gc-trait-bg:  rgba(234, 115, 23, 0.14);
+  --gc-skill:  #818cf8; --gc-skill-bg:  rgba(99, 102, 241, 0.14);
+  --gc-spell:  #a78bfa; --gc-spell-bg:  rgba(139, 92, 246, 0.14);
+  --gc-table:  #38bdf8; --gc-table-bg:  rgba(2, 132, 199, 0.14);
+  --gc-points: #94a3b8; --gc-points-bg: rgba(100, 116, 139, 0.12);
+  --gc-def:    #f87171; --gc-def-bg:    rgba(220, 38, 38, 0.14);
+}
+
+/* Light mode: deeper solid hues (good contrast on white) + opaque pastel tints */
+@media (prefers-color-scheme: light) {
+  :root {
+    --gc-attr:   #15803d; --gc-attr-bg:   #eafaf0;
+    --gc-social: #b45309; --gc-social-bg: #fdf4e7;
+    --gc-trait:  #c2410c; --gc-trait-bg:  #fdf1e7;
+    --gc-skill:  #4f46e5; --gc-skill-bg:  #eef0fe;
+    --gc-spell:  #7c3aed; --gc-spell-bg:  #f3eefe;
+    --gc-table:  #0369a1; --gc-table-bg:  #e8f5fc;
+    --gc-points: #475569; --gc-points-bg: #eef1f5;
+    --gc-def:    #b91c1c; --gc-def-bg:    #fdecec;
+  }
+}
+
+/* === Sheet container === */
+.gurps-sheet {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* === Status banner === */
+.status {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-}
-.combat-stat {
-  display: flex;
-  flex-direction: column;
+  gap: 10px;
   align-items: center;
-  min-width: 4.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 9px 14px;
+  border-radius: 10px;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 0.375rem;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text);
 }
-.combat-stat-value {
-  font-family: var(--font-mono);
+.status .tag {
   font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--accent);
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 11px;
+  color: var(--gc-def);
+  padding-right: 6px;
 }
-.combat-stat-label {
-  font-size: 0.65rem;
+.status .pip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.status .pip b { font-weight: 700; }
+.status .condition { color: var(--text-muted); font-style: italic; }
+.status .location { color: var(--text-muted); }
+.status .status-label {
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  margin-top: 0.2rem;
-  white-space: nowrap;
+  margin-right: 3px;
 }
-.gurps-primary-attrs {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-.gurps-attr-card {
-  text-align: center;
-  background: var(--bg);
+
+/* === Masonry flow === */
+.flow { column-count: 2; column-gap: 16px; }
+@media (max-width: 760px) { .flow { column-count: 1; } }
+
+/* === Block tiles === */
+.blk {
+  break-inside: avoid;
+  margin: 0 0 16px;
+  border-radius: 10px;
+  overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  padding: 0.75rem 1rem;
-  min-width: 4rem;
+  background: var(--bg-card);
 }
-.gurps-attr-card .attr-name {
-  font-size: 0.7rem;
+.blk h2 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 7px 11px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+}
+.blk h2::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--cat, var(--text-muted));
+}
+.blk table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.blk td, .blk th { padding: 3px 11px; text-align: left; }
+.blk th {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.blk tbody tr:nth-child(even) { background: var(--cat-bg, var(--bg)); }
+
+/* === Category assignments === */
+.cat-attr   { --cat: var(--gc-attr);   --cat-bg: var(--gc-attr-bg);   } .cat-attr   h2 { color: var(--gc-attr);   }
+.cat-social { --cat: var(--gc-social); --cat-bg: var(--gc-social-bg); } .cat-social h2 { color: var(--gc-social); }
+.cat-trait  { --cat: var(--gc-trait);  --cat-bg: var(--gc-trait-bg);  } .cat-trait  h2 { color: var(--gc-trait);  }
+.cat-skill  { --cat: var(--gc-skill);  --cat-bg: var(--gc-skill-bg);  } .cat-skill  h2 { color: var(--gc-skill);  }
+.cat-spell  { --cat: var(--gc-spell);  --cat-bg: var(--gc-spell-bg);  } .cat-spell  h2 { color: var(--gc-spell);  }
+.cat-table  { --cat: var(--gc-table);  --cat-bg: var(--gc-table-bg);  } .cat-table  h2 { color: var(--gc-table);  }
+.cat-points { --cat: var(--gc-points); --cat-bg: var(--gc-points-bg); } .cat-points h2 { color: var(--gc-points); }
+.cat-def    { --cat: var(--gc-def);    --cat-bg: var(--gc-def-bg);    } .cat-def    h2 { color: var(--gc-def);    }
+
+/* === Common cell classes (shared by .blk and .wide) === */
+.nm  { color: var(--accent); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rel { color: var(--text-muted); font-size: 12px; }
+.cost {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cost::before { content: "["; opacity: 0.6; }
+.cost::after  { content: "]"; opacity: 0.6; }
+.cite {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 4px;
+}
+.subline {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* === Attribute grid === */
+.attr-sublabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 5px 11px 2px;
+  font-weight: 600;
+}
+
+.attrgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  padding: 1px;
+}
+.attrgrid .a {
+  background: var(--bg-card);
+  text-align: center;
+  padding: 8px 4px;
+}
+.attrgrid .a .v { font-size: 22px; font-weight: 700; line-height: 1; color: var(--text); }
+.attrgrid .a .l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text); margin-top: 2px; font-weight: 600; }
+.attrgrid .a .p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+.subgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  padding: 1px 1px 0;
+}
+.subgrid .a {
+  background: var(--bg-card);
+  text-align: center;
+  padding: 6px 4px;
+}
+.subgrid .a .v { font-size: 16px; font-weight: 700; color: var(--text); }
+.subgrid .a .l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+
+/* Derived stats row (BL / Thr / Sw / SM inline spans) */
+.derived {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 5px 11px;
+  font-size: 12px;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+}
+.derived .der-label {
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--accent);
+  color: var(--text-muted);
+  margin-right: 3px;
 }
-.gurps-attr-card .attr-value {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 1.5rem;
-}
-.gurps-trait-list { list-style: none; padding: 0; margin: 0 0 1rem; }
-.gurps-trait-list li {
+
+/* === Defense chips === */
+.defrow {
   display: flex;
-  justify-content: space-between;
-  padding: 0.3rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.875rem;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 11px;
 }
-.gurps-trait-list .trait-cost {
-  font-family: var(--font-mono);
-  color: var(--accent);
+.def-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--gc-def);
+  font-size: 13px;
   font-weight: 600;
-  min-width: 3rem;
-  text-align: right;
+  color: var(--text);
 }
+
+.def-chip-label { color: var(--gc-def); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 4px; font-weight: 700; }
+
+/* Hit location table inside defenses block */
+.hit-loc { width: 100%; border-collapse: collapse; font-size: 12px; }
+.hit-loc th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); border-bottom: 1px solid var(--border); padding: 3px 11px; }
+.hit-loc td { padding: 2px 11px; }
+.hit-loc tbody tr:nth-child(even) { background: var(--gc-def-bg); }
+
+/* === Lifting Feats table === */
+.lift-feats { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lift-feats th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); border-bottom: 1px solid var(--border); padding: 3px 11px; }
+.lift-feats td { padding: 2px 11px; }
+.lift-feats tbody tr:nth-child(even) { background: var(--gc-attr-bg); }
+
+/* === Slam table === */
+.slam-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 11px 4px;
+}
+.slam-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  min-width: 40px;
+}
+.slam-v { font-size: 13px; font-weight: 700; color: var(--text); }
+.slam-l { font-size: 9px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.slam-note { font-size: 11px; color: var(--text-muted); padding: 2px 11px 6px; }
+
+/* === Encumbrance table === */
+.enc td { font-size: 12px; padding: 3px 8px; }
+.enc thead th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); border-bottom: 1px solid var(--border); padding: 3px 8px; }
+/* Level colour ramp — dark mode: tints blend with dark card bg */
+.enc .e0 { background: rgba(22, 163, 74, 0.10); }
+.enc .e1 { background: transparent; }
+.enc .e2 { background: rgba(217, 119, 6, 0.10); }
+.enc .e3 { background: rgba(234, 115, 23, 0.12); }
+.enc .e4 { background: rgba(220, 38, 38, 0.14); }
+.enc .cur { outline: 2px solid var(--gc-attr); outline-offset: -2px; }
+
+@media (prefers-color-scheme: light) {
+  .enc .e0 { background: #eafaf0; }
+  .enc .e1 { background: transparent; }
+  .enc .e2 { background: #fdf4e7; }
+  .enc .e3 { background: #fdf1e7; }
+  .enc .e4 { background: #fdecec; }
+}
+
+/* === Wide tables (melee / ranged / grimoire / equipment) === */
+.wide {
+  margin: 0 0 16px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  overflow-x: auto;
+}
+.wide h2 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 7px 11px;
+  color: var(--gc-table);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.wide h2::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: var(--cat, var(--gc-table));
+}
+.wide table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.wide th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  padding: 4px 9px;
+  text-align: left;
+}
+.wide td { padding: 3px 9px; border-bottom: 1px solid var(--border); color: var(--text); }
+.wide tbody tr:nth-child(even) { background: var(--gc-table-bg); }
+.wide .nm { color: var(--accent); }
+.wide .num { text-align: center; font-variant-numeric: tabular-nums; }
+.wide .dmg { background: rgba(2, 132, 199, 0.10); font-weight: 600; }
+@media (prefers-color-scheme: light) {
+  .wide .dmg { background: rgba(2, 132, 199, 0.08); }
+}
+
+/* === Points summary — row highlights === */
+.blk tr.total  td { font-weight: 700; color: var(--text); border-top: 1px solid var(--border); }
+.blk tr.unspent td { color: var(--gc-attr); font-weight: 600; }
+
+/* === Footnotes === */
+sup.fn { font-size: 9px; color: var(--text-muted); vertical-align: super; line-height: 0; margin-left: 1px; }
+.fn-legend {
+  padding: 5px 11px 6px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.fn-line { margin: 1px 0; }
+
+/* === Equipment container === */
+.gurps-equipment { margin-bottom: 1rem; }
+.equip-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.equip-table th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); border-bottom: 1px solid var(--border); padding: 4px 9px; text-align: left; }
+.equip-table td { padding: 3px 9px; border-bottom: 1px solid var(--border); color: var(--text); }
+.equip-table tbody tr:nth-child(even) { background: var(--gc-table-bg); }
+.equip-table .totals-row td { font-weight: 700; border-top: 1px solid var(--border); }
+.loadout-table { margin-top: 8px; }
+
+/* === Combat view container === */
+.gurps-combat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* === Combat action chains === */
+.chain-group { margin-bottom: 8px; }
+.chain-group h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+.chain-entry { margin-bottom: 6px; }
+.chain-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.chain-steps { font-size: 12px; color: var(--text-muted); }
+.chain-step {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+}
+.chain-arrow { color: var(--text-muted); margin: 0 2px; }
+
+/* === Rules reference appendix === */
+details.rules-ref {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+details.rules-ref > summary {
+  cursor: pointer;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  list-style: none;
+  user-select: none;
+}
+details.rules-ref > summary::-webkit-details-marker { display: none; }
+.rules-ref-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border);
+  align-items: flex-start;
+}
+.ref-table { border-collapse: collapse; font-size: 12px; min-width: 200px; width: auto; }
+.ref-table caption {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-align: left;
+  margin-bottom: 4px;
+  caption-side: top;
+}
+.ref-table th { font-size: 10px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); padding: 3px 8px; text-align: left; }
+.ref-table td { padding: 2px 8px; color: var(--text); }
+.ref-table tbody tr:nth-child(even) { background: var(--bg); }
+.ref-table + p.cite { margin: 4px 0 0; font-size: 10px; color: var(--text-muted); font-style: italic; }
 
 /* D&D 5e */
 .dnd-sheet { background: var(--bg-card); border-radius: 0.5rem; padding: 1.5rem; }
@@ -2800,6 +3167,7 @@ tr:nth-child(even) {
   }
   .accordion-body, .card-body, .tab-panel { display: block !important; }
   .tab-bar { display: none; }
+  #tab-combat, #tab-equipment { display: block !important; }
   body {
     font-size: 10pt;
     color: #000;
@@ -2807,4 +3175,32 @@ tr:nth-child(even) {
   }
   .content-with-sidebar { grid-template-columns: 1fr; }
   .story-prose { break-before: page; }
+
+  /* GURPS sheet print rules */
+  .flow { column-count: 2; }
+  .blk, .wide {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  .blk h2, .wide h2 { border-bottom: 1px solid #ccc; }
+  .status { border: 1px solid #ccc !important; background: #fff !important; box-shadow: none !important; }
+  /* Force rules-ref open in print regardless of open attribute */
+  details.rules-ref > summary { display: none; }
+  details.rules-ref > .rules-ref-body { display: flex !important; }
+  /* Encumbrance colour ramp in print */
+  .enc .e0 { background: #eafaf0 !important; }
+  .enc .e2 { background: #fdf4e7 !important; }
+  .enc .e3 { background: #fdf1e7 !important; }
+  .enc .e4 { background: #fdecec !important; }
+  /* Category backgrounds for print */
+  .cat-attr   { --gc-attr-bg:   #eafaf0; }
+  .cat-social { --gc-social-bg: #fdf4e7; }
+  .cat-trait  { --gc-trait-bg:  #fdf1e7; }
+  .cat-skill  { --gc-skill-bg:  #eef0fe; }
+  .cat-spell  { --gc-spell-bg:  #f3eefe; }
+  .cat-table  { --gc-table-bg:  #e8f5fc; }
+  .cat-points { --gc-points-bg: #eef1f5; }
+  .cat-def    { --gc-def-bg:    #fdecec; }
 }

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.7] — 2026-06-29
+
+### Added
+
+- **GURPS character sheets now publish as a complete Phoenix-style record.**
+  A new `tools/publish/lib/templates/gurps/` module replaces the previous
+  thin renderer. It reads standard markdown-table vault format (with optional
+  frontmatter overrides) and produces three output payloads assembled by the
+  PC shell:
+  - **Character Sheet** — 2-column block flow: attributes/secondary/derived,
+    lifting feats + slam derived tables, active defenses + hit-location DR,
+    senses + checks, encumbrance ramp, reaction modifiers, cultural
+    familiarities + languages, advantages/perks/disadvantages/quirks/templates,
+    skills with effective levels + footnote legend + parry/block sub-lines,
+    techniques, spells, points summary, melee + ranged attack tables, grimoire.
+  - **Combat tab** — dedicated dashboard tab with current status banner,
+    active defenses, melee and ranged attack tables, combat action chains +
+    multi-action chains, and a collapsible rules-reference appendix (hit
+    location B552, size/speed-range B550) with source citation. Appears only
+    for GURPS vaults; non-GURPS PCs are unaffected.
+  - **Equipment tab** — Phoenix-styled inventory table + per-load-out tables
+    with totals footer. Parses `## Equipment` and `### Encumbrance` / `### Load-Outs`
+    subsections from the PC body.
+  - Always-on footnote legend, page citations (`{p. Bxxx}`), and parry/block
+    sub-lines on skill rows. Dark/light theming via CSS variables. Print styles
+    force all tabs visible and rules-reference open.
+  - Parser hardening: header-row guard, cost-column auto-detection, encumbrance
+    subsection fallback, skill cross-reference to active defenses and melee
+    weapon parry values.
+
+---
+
 ## [1.7.6] — 2026-06-28
 
 ### Fixed
@@ -24,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dates in the world's own format and never invent a Gregorian date to
   satisfy the parser. `play_date` is clarified as `YYYY-MM-DD`.
 
+---
 ## [1.7.5] — 2026-06-27
 
 ### Changed
