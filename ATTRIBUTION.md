@@ -60,6 +60,16 @@ into topic-based reference files and archetype chargen kits.
 See `skills/ttrpg-expert/systems/gurps-4e/sources.md` for
 book coverage status.
 
+**`tools/publish/lib/templates/gurps/blocks/reference.js`**
+Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+Tables reproduced: Humanoid Hit Location (p. B552) and
+Size & Speed/Range (p. B550).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: reproduced as an optional collapsible
+reference appendix with citation, displayed only when the
+user expands the details element.
+
 ## Referenced Frameworks and Concepts
 
 The following frameworks and concepts are referenced in this
