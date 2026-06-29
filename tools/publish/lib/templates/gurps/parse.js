@@ -45,12 +45,47 @@ function parseAttributes(model, sections, fm) {
   }
 }
 
+function splitCitation(name) {
+  const m = String(name).match(/^(.*?)\s*\{p\.\s*([^}]+)\}\s*$/);
+  return m ? { name: m[1].trim(), source: m[2].trim() } : { name: String(name).trim(), source: null };
+}
+
+function parseSkills(model, sections, fm) {
+  if (Array.isArray(fm.skills)) {
+    model.skills = fm.skills.map(s => ({
+      name: s.name, level: String(s.level ?? ''), relative: s.relative || '',
+      points: String(s.points ?? ''), parry: s.parry != null ? String(s.parry) : null,
+      block: s.block != null ? String(s.block) : null, markers: [], source: s.source || null,
+    }));
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'skills');
+  if (!sec) return;
+  const rows = parseTableRows(sec.html);
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const idx = (names) => header.findIndex(h => names.some(n => h.includes(n)));
+  const iName = idx(['name']) >= 0 ? idx(['name']) : 0;
+  const iLevel = idx(['effective', 'level']);
+  const iRel = idx(['relative']);
+  const iPts = idx(['point']);
+  for (const row of rows.slice(1)) {
+    if (!row[iName]) continue;
+    const { name, source } = splitCitation(row[iName]);
+    const lv = splitMarkers(iLevel >= 0 ? row[iLevel] : '');
+    model.skills.push({
+      name, level: lv.value, relative: iRel >= 0 ? row[iRel] : '',
+      points: iPts >= 0 ? row[iPts] : '', parry: null, block: null,
+      markers: lv.markers, source,
+    });
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
   const model = emptyModel();
   parseAttributes(model, secs, fm);
-  // NOTE: later tasks add parseSkills/parseTraits/... calls here.
+  parseSkills(model, secs, fm);
   return model;
 }
 
