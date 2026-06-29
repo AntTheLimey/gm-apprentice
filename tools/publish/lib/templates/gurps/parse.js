@@ -11,7 +11,7 @@ function emptyModel() {
     encumbrance: [], reactions: {},
     social: { cultural: [], languages: [] },
     traits: { advantages: [], perks: [], disadvantages: [], quirks: [], templates: [] },
-    skills: [], techniques: [], spells: [], grimoire: [],
+    skills: [], skillFootnotes: {}, techniques: [], spells: [], grimoire: [],
     melee: [], ranged: [],
     equipment: { items: [], loadouts: [] },
     chains: { melee: [], ranged: [] },
@@ -48,6 +48,33 @@ function parseAttributes(model, sections, fm) {
 function splitCitation(name) {
   const m = String(name).match(/^(.*?)\s*\{p\.\s*([^}]+)\}\s*$/);
   return m ? { name: m[1].trim(), source: m[2].trim() } : { name: String(name).trim(), source: null };
+}
+
+function parseSkillFootnotes(sectionHtml) {
+  // Parse footnote legend paragraphs from the section HTML.
+  // These may be separate <p> elements starting with a glyph, OR multiple glyphs
+  // in a single <p> separated by newlines (e.g. † note \n‡ note).
+  // Returns a map: { '†': { kind: 'conditional'|'includes', text: '...' }, ... }
+  const map = {};
+  const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+  let m;
+  while ((m = pRegex.exec(sectionHtml)) !== null) {
+    const inner = m[1];
+    // Strip HTML tags and split on lines that start with a glyph
+    const text = inner.replace(/<[^>]+>/g, '');
+    // Split by newlines that are followed by a glyph character
+    const lines = text.split(/\n(?=[†‡§¶#])/);
+    for (const line of lines) {
+      const stripped = line.trim();
+      const glyphMatch = stripped.match(/^([†‡§¶#])\s+([\s\S]+)$/);
+      if (!glyphMatch) continue;
+      const glyph = glyphMatch[1];
+      const noteText = glyphMatch[2].trim();
+      const kind = /conditional/i.test(noteText) ? 'conditional' : 'includes';
+      map[glyph] = { kind, text: noteText };
+    }
+  }
+  return map;
 }
 
 function parseSkills(model, sections, fm) {
@@ -89,6 +116,8 @@ function parseSkills(model, sections, fm) {
       markers: [...nameMarkers, ...lv.markers], source,
     });
   }
+  // Parse footnote legend paragraphs from the section HTML
+  model.skillFootnotes = parseSkillFootnotes(sec.html);
 }
 
 function readTraitRows(html) {
@@ -602,6 +631,53 @@ function parseEquipment(model, sections, fm) {
   }
 }
 
+function normalizeSkillName(name) {
+  // Lowercase and strip parentheticals for loose matching, e.g. "Parry (Knife)" -> "knife"
+  return String(name).toLowerCase().replace(/\s*\([^)]*\)/g, '').trim();
+}
+
+function crossReferenceSkillDefenses(model) {
+  // For each skill, try to find a matching parry or block value from:
+  // 1) Active Defenses (preferred) — label like "Parry (Knife)" where "Knife" matches skill name
+  // 2) Melee Weapons — skill cell starts with skill name, has parry value
+  for (const skill of model.skills) {
+    if (skill.parry != null || skill.block != null) continue; // already set (frontmatter)
+    const skillNorm = normalizeSkillName(skill.name);
+    if (!skillNorm) continue;
+
+    // Check active defenses
+    for (const p of (model.defenses.parry || [])) {
+      // label format: "Parry (Knife)" or "Parry (Karate)" — extract inner part
+      const inner = p.label.replace(/^parry\s*/i, '').replace(/^\(|\)$/g, '').trim();
+      if (normalizeSkillName(inner) === skillNorm && p.value) {
+        skill.parry = p.value;
+        break;
+      }
+    }
+    if (skill.parry != null) continue;
+
+    for (const b of (model.defenses.block || [])) {
+      const inner = b.label.replace(/^block\s*/i, '').replace(/^\(|\)$/g, '').trim();
+      if (normalizeSkillName(inner) === skillNorm && b.value) {
+        skill.block = b.value;
+        break;
+      }
+    }
+    if (skill.block != null) continue;
+
+    // Fallback: melee weapons — skill cell starts with skill name, parry is present
+    for (const w of (model.melee || [])) {
+      // Skill cell may be "Knife 17" — strip trailing level number
+      const weaponSkillBase = String(w.skill || '').replace(/\s+\d+$/, '').trim();
+      const weaponSkillNorm = normalizeSkillName(weaponSkillBase);
+      if (weaponSkillNorm === skillNorm && w.parry && w.parry !== '—' && w.parry !== '-') {
+        skill.parry = w.parry;
+        break;
+      }
+    }
+  }
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -623,6 +699,7 @@ function parseGurps(frontmatter, sections) {
   parseStatus(model, secs, fm);
   parseChains(model, secs, fm);
   parseEquipment(model, secs, fm);
+  crossReferenceSkillDefenses(model);
   return model;
 }
 

@@ -185,3 +185,31 @@ From SAS door-kicker to **CEO of the Voss Corporation** — his whole history in
 **Location:** The rewritten present — last at the Las Vegas Airport, riding the limo to base as the corporation's new CEO.
 **Condition:** Unharmed.
 **Carrying:** His Voss Combat Suit; off-books wealth in the tens of millions.
+
+---
+
+## Multi-Action Combat Skill Chains
+
+*Common tactical sequences Ronnie would use in play.*
+
+### Chain 1: Dynamic Entry — Breach and Clear (2-3 Turn)
+
+**Situation:** Ronnie kicks a door, enters the room, and engages hostiles. Classic SAS CQB.
+
+| Turn | Maneuver | Action | Roll | Notes |
+|------|----------|--------|------|-------|
+| 1 | Attack | Breach door | Forced Entry | Guy handles explosive breaching. |
+| 2 | Move & Attack | Enter room, engage first target | Guns (Rifle) 17 - 4 = 13 | First man through. |
+| 3 | Attack | Engage second target | Guns (Rifle) 17 | Stack clears the angles. |
+
+---
+
+## Combat Summary
+
+### Active Defenses
+
+| Defense | Base | With CR | Notes |
+|---------|------|---------|-------|
+| Dodge (unarmoured) | 9 | **10** | -1 per encumbrance level |
+| Parry (Knife) | 11 | **12** | Knife 17/2 + 3 = 11 |
+| Parry (Karate) | 11 | **12** | Karate 17/2 + 3 = 11 |

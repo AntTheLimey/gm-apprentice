@@ -183,4 +183,56 @@ describe('GURPS real-fixture: Ronnie Vint', () => {
     });
   });
 
+  // ---------------------------------------------------------------
+  // FIX 3 — Parry sub-lines on skills (cross-reference)
+  // ---------------------------------------------------------------
+  describe('Skill parry sub-lines (FIX 3)', () => {
+    it('Karate skill shows a Parry sub-line', () => {
+      assert.ok(sheetHtml.includes('Karate'), 'must contain Karate skill');
+      // The defenses section has "Parry (Karate) | 12"
+      // crossReferenceSkillDefenses should attach parry: '12' to the Karate skill
+      assert.ok(sheetHtml.includes('Parry: 12'),
+        'Karate (and/or Knife/Judo) must show Parry: 12 sub-line');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // FIX 4 — Multi-Action Combat chains in combatHtml
+  // ---------------------------------------------------------------
+  describe('Multi-Action Combat content in combatHtml (FIX 4)', () => {
+    it('combatHtml contains Multi-Action Combat Skill Chains content', () => {
+      assert.ok(combatHtml, 'combatHtml must not be null');
+      assert.ok(
+        combatHtml.includes('Multi-Action Combat Skill Chains') ||
+        combatHtml.includes('Multi-Action'),
+        'combatHtml must include Multi-Action chains section'
+      );
+    });
+
+    it('combatHtml contains Combat Summary content', () => {
+      assert.ok(combatHtml.includes('Combat Summary'),
+        'combatHtml must include Combat Summary section');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // FIX 2 — Skill footnote legend non-empty
+  // ---------------------------------------------------------------
+  describe('Skill footnote legend (FIX 2)', () => {
+    it('sheetHtml skill footnote legend references encumbrance (†)', () => {
+      // The Skills section has "Encumbrance-penalized" footnote for †
+      assert.ok(
+        sheetHtml.includes('Encumbrance') || sheetHtml.includes('encumbrance'),
+        'footnote legend must contain encumbrance text from † footnote'
+      );
+    });
+    it('footnote legend for ‡ references Guns (LMG)', () => {
+      // The ‡ footnote text should include LMG or Targeting
+      assert.ok(
+        sheetHtml.includes('LMG') || sheetHtml.includes('Targeting'),
+        'footnote legend must contain LMG/Targeting text from ‡ footnote'
+      );
+    });
+  });
+
 });
