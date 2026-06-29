@@ -1,6 +1,6 @@
 const { escapeHtml } = require('../../processor');
 
-const GLYPHS = ['*', '†', '‡', '§', '¶', '#', '**', '††'];
+const GLYPHS = ['*', '†', '‡', '§', '¶', '#'];
 
 function splitMarkers(text) {
   const s = String(text == null ? '' : text).trim();

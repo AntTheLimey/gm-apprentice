@@ -119,7 +119,7 @@ function parseSkillFootnotes(sectionHtml) {
 function parseSkills(model, sections, fm) {
   if (Array.isArray(fm.skills)) {
     model.skills = fm.skills.map(s => ({
-      name: s.name, level: String(s.level ?? ''), relative: s.relative || '',
+      name: String(s.name ?? ''), level: String(s.level ?? ''), relative: s.relative || '',
       points: String(s.points ?? ''), parry: s.parry != null ? String(s.parry) : null,
       block: s.block != null ? String(s.block) : null, markers: [], source: s.source || null,
     }));
@@ -311,7 +311,7 @@ function parseSocial(model, sections, fm) {
 function parseSpells(model, sections, fm) {
   if (Array.isArray(fm.spells)) {
     model.spells = fm.spells.map(s => ({
-      name: s.name, level: String(s.level ?? ''), points: String(s.points ?? '0'),
+      name: String(s.name ?? ''), level: String(s.level ?? ''), points: String(s.points ?? '0'),
       markers: [], source: s.source || null,
     }));
     return;
@@ -490,7 +490,7 @@ function parseStatus(model, sections, fm) {
 function parseTechniques(model, sections, fm) {
   if (Array.isArray(fm.techniques)) {
     model.techniques = fm.techniques.map(t => ({
-      name: t.name || '', def: t.default || t.def || '',
+      name: String(t.name ?? ''), def: t.default || t.def || '',
       points: String(t.points ?? ''), level: String(t.level ?? t.effective ?? ''),
       markers: [],
     }));
@@ -595,10 +595,13 @@ function parseEquipment(model, sections, fm) {
       totalWeight: lo.totalWeight != null ? String(lo.totalWeight) : null,
     }));
   }
-  // Parse ## Equipment table → items
+  // Parse ## Equipment table → items (top-level only, before any ### subsection)
   const sec = findSectionByTitle(sections, 'equipment');
   if (sec) {
-    const rows = parseTableRows(sec.html);
+    // Restrict to HTML before the first <h3> so ### Encumbrance / ### Load-Outs rows
+    // are not flattened into the item list.
+    const topHtml = sec.html.split(/<h3[ >]/i)[0];
+    const rows = parseTableRows(topHtml);
     const header = (rows[0] || []).map(h => h.toLowerCase());
     const idx = n => header.findIndex(h => h.includes(n));
     const iQty = idx('qty') >= 0 ? idx('qty') : idx('#') >= 0 ? idx('#') : -1;

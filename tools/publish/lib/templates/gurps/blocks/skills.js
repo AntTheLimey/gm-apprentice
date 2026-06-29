@@ -2,7 +2,7 @@ const { escapeHtml } = require('../../../processor');
 const { block, cost } = require('../render');
 
 function renderSkills(model) {
-  const skills = (model.skills || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const skills = (model.skills || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   if (skills.length === 0) return null;
   const footnotes = model.skillFootnotes || {};
 

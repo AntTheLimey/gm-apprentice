@@ -80,6 +80,29 @@ describe('build integration — GURPS PC', () => {
       assert.ok(html.includes('tab-equipment'), 'Should have equipment tab panel');
       assert.ok(html.includes('Broadsword'), 'Should list broadsword in equipment');
     });
+
+    it('GURPS PC Equipment tab does not list encumbrance levels as items', () => {
+      const html = fs.readFileSync(
+        path.join(outputDir, 'docs', 'characters', 'pcs', 'karl-brenner.html'),
+        'utf-8'
+      );
+      // Find the equipment tab panel content
+      const tabMatch = html.match(/<div[^>]+id="tab-equipment"[\s\S]*?(?=<div[^>]+id="tab-|$)/);
+      const equipPanel = tabMatch ? tabMatch[0] : html;
+      // Encumbrance level labels must NOT appear as equipment item rows
+      assert.ok(!equipPanel.includes('<td>None (0)</td>'), 'None (0) must not be an equipment row');
+      assert.ok(!equipPanel.includes('<td>Light (1)</td>'), 'Light (1) must not be an equipment row');
+      assert.ok(!equipPanel.includes('<td>Medium (2)</td>'), 'Medium (2) must not be an equipment row');
+    });
+
+    it('GURPS PC Equipment tab lists exactly the expected items', () => {
+      const html = fs.readFileSync(
+        path.join(outputDir, 'docs', 'characters', 'pcs', 'karl-brenner.html'),
+        'utf-8'
+      );
+      assert.ok(html.includes('Large Shield'), 'Should list Large Shield');
+      assert.ok(html.includes('Mail Hauberk'), 'Should list Mail Hauberk');
+    });
   });
 
   describe('non-GURPS PC has no Combat tab', () => {

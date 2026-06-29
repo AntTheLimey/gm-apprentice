@@ -2,7 +2,7 @@ const { escapeHtml } = require('../../../processor');
 const { block, cost, footnoteRegistry } = require('../render');
 
 function renderTechniques(model) {
-  const techs = (model.techniques || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const techs = (model.techniques || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   if (techs.length === 0) return null;
   const fn = footnoteRegistry();
   const rows = techs.map(t => {

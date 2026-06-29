@@ -10,7 +10,8 @@ function renderStatus(model) {
   if (s.enc != null) pips.push(`<span class="pip">Enc: ${escapeHtml(String(s.enc))}</span>`);
   const condition = s.condition ? `<span class="condition">${escapeHtml(s.condition)}</span>` : '';
   const location = s.location ? `<span class="location"><span class="status-label">Location:</span> ${escapeHtml(s.location)}</span>` : '';
-  return `<div class="status">${pips.join('')}${condition}${location}</div>`;
+  const carrying = s.carrying ? `<span class="carrying"><span class="status-label">Carrying:</span> ${escapeHtml(s.carrying)}</span>` : '';
+  return `<div class="status">${pips.join('')}${condition}${location}${carrying}</div>`;
 }
 
 module.exports = { renderStatus };

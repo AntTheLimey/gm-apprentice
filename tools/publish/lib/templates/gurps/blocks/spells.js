@@ -2,7 +2,7 @@ const { escapeHtml } = require('../../../processor');
 const { block, cost, footnoteRegistry } = require('../render');
 
 function renderSpells(model) {
-  const spells = (model.spells || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+  const spells = (model.spells || []).slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   if (spells.length === 0) return null;
   const fn = footnoteRegistry();
   const rows = spells.map(s => {
