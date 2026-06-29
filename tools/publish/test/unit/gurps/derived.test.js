@@ -16,6 +16,7 @@ describe('parseBasicLift', () => {
   it('parses "80 lbs" → 80', () => assert.strictEqual(parseBasicLift('80 lbs'), 80));
   it('parses "29 lb"  → 29', () => assert.strictEqual(parseBasicLift('29 lb'), 29));
   it('parses "29"     → 29', () => assert.strictEqual(parseBasicLift('29'), 29));
+  it('parses "1,200 lbs" → 1200 (thousands separator)', () => assert.strictEqual(parseBasicLift('1,200 lbs'), 1200));
   it('returns null for empty string', () => assert.strictEqual(parseBasicLift(''), null));
   it('returns null for null',        () => assert.strictEqual(parseBasicLift(null), null));
 });

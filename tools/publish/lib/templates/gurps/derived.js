@@ -13,8 +13,8 @@
  */
 function parseBasicLift(blString) {
   if (blString == null) return null;
-  const s = String(blString).trim();
-  const m = s.match(/^([\d.]+)/);
+  const s = String(blString).trim().replace(/,/g, '');
+  const m = s.match(/^(\d+(?:\.\d+)?)/);
   if (!m) return null;
   const n = parseFloat(m[1]);
   return isFinite(n) ? n : null;
