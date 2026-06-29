@@ -27,6 +27,16 @@ function extractFirstSentence(html) {
 
 const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
 
+// Sections the structured GURPS renderer consumes into the sheet/combat tabs.
+// When a GURPS system sheet is present these are dropped from the accordion
+// list so they don't duplicate the structured blocks. Prose/extra sections
+// (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
+const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status']);
+
+function isGurpsSystem(publishConfig) {
+  return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
 function extractEquipment(frontmatter, sections) {
   if (Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0) {
     const items = frontmatter.equipment.map(item => {
@@ -174,9 +184,11 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const emptyRelPattern = /^\s*(<p><strong>Outgoing:<\/strong><\/p>\s*<p><strong>Incoming:<\/strong><\/p>)?\s*$/;
   const emptyAppearPattern = /^\s*(<p><em>Scenes and sessions where .+ appears\.<\/em><\/p>)?\s*$/;
 
+  const gurpsSheet = isGurpsSystem(publishConfig);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
+    if (gurpsSheet && GURPS_CONSUMED_TITLES.has(lower)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;
