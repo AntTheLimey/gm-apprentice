@@ -224,11 +224,15 @@ locations, and NPC relationships.
   `campaign-organizer/references/event-template.md`. Event
   frontmatter uses `in_game_date:` (not `date:`).
 
-  **Date format:** All date values (`in_game_date`, `play_date`)
-  must be parseable by JS `new Date()`. Good: `"August 11, 1814"`,
-  `"June 12, 1814"`, `"July 1814"`. Bad: `"Evening, 11 August 1814"`,
-  `"Midnight–dawn, August 7–8, 1814"`. Time-of-day or narrative
-  context belongs in the event body text, not the date field.
+  **Date format:** `play_date` is `YYYY-MM-DD`. For `in_game_date`,
+  the published timeline anchors on a 4-digit year and accepts
+  `"August 11, 1814"`, `"July 1814"`, or `"Autumn 1813"`; keep
+  time-of-day out of the field (`"Evening, 11 August 1814"` and
+  `"Midnight–dawn, August 7–8, 1814"` lose their date) — put it in the
+  event body. A non-Earth calendar (Forgotten Realms, stardates,
+  invented calendars) uses the world's own format — never fabricate a
+  Gregorian date to satisfy the parser; it simply won't auto-sort if it
+  lacks a 4-digit year. See `shared/session-document-chain.md`.
 
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and

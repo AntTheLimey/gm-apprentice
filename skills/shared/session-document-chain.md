@@ -31,12 +31,20 @@ tags: []
 ```
 
 **Date fields:** `play_date` is the real-world date the session
-was played. `in_game_date` is the fictional in-world date. Both
-must be parseable by JS `new Date()` — use formats like
-`"August 11, 1814"`, `"June 12, 1814"`, or `"July 1814"`.
-Do not include narrative time-of-day prefixes (e.g.,
-"Evening, 11 August 1814") — those belong in prose, not
-metadata.
+was played — always `YYYY-MM-DD`. `in_game_date` is the fictional
+in-world date; the published timeline sorts on it
+(`tools/publish/lib/timeline.js`) by anchoring on a **4-digit year**,
+and it accepts ISO dates, month-name dates (`"August 11, 1814"`,
+`"July 1814"`), and seasonal phrases (`"Autumn 1813"`). Keep
+narrative time-of-day out of the field (`"Evening, 11 August 1814"`
+loses its date) — put it in prose.
+
+For a **non-Earth calendar** (Forgotten Realms, stardates, invented
+calendars), record the date in the world's own format — never
+fabricate a Gregorian date to satisfy the parser. If the string
+contains a 4-digit year it still sorts roughly by year; if it has
+none it is left off the auto-built timeline (not an error) but still
+appears on its own entity page.
 
 **Status** reflects the furthest document that exists:
 
