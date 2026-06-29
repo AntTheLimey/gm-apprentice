@@ -19,8 +19,16 @@ function findSectionByTitle(sections, ...titles) {
   return sections.find(s => lower.includes(s.title.toLowerCase()));
 }
 
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function extractSubsectionHtml(sectionHtml, subsectionTitle) {
-  const pattern = new RegExp(`<h3[^>]*>\\s*${subsectionTitle}\\s*</h3>([\\s\\S]*?)(?=<h3|$)`, 'i');
+  // Escape regex metacharacters in the title, then allow `&` to match either
+  // the literal `&` or its HTML entity `&amp;` so titles like "Appearance & Social"
+  // match rendered HTML containing `&amp;`.
+  const escaped = escapeRegex(subsectionTitle).replace(/&/g, '&(?:amp;)?');
+  const pattern = new RegExp(`<h3[^>]*>\\s*${escaped}\\s*</h3>([\\s\\S]*?)(?=<h3|$)`, 'i');
   const match = sectionHtml.match(pattern);
   return match ? match[1] : '';
 }

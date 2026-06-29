@@ -16,4 +16,14 @@ describe('gurps/tables', () => {
     const html = '<h3>Secondary Characteristics</h3><table><tr><td>HP</td><td>10</td></tr></table><h3>Next</h3>';
     assert.ok(extractSubsectionHtml(html, 'Secondary Characteristics').includes('HP'));
   });
+  it('extractSubsectionHtml matches title with HTML-entity-encoded & (&amp;)', () => {
+    const html = '<h3>Appearance &amp; Social</h3><table><tr><td>Appearance</td><td>Attractive</td></tr></table><h3>Next</h3>';
+    const result = extractSubsectionHtml(html, 'Appearance & Social');
+    assert.ok(result.includes('Attractive'), 'should extract content under &amp;-encoded heading');
+  });
+  it('extractSubsectionHtml escapes regex metacharacters in title', () => {
+    // A title with () should not cause a regex syntax error
+    const html = '<h3>Senses (Extended)</h3><p>test</p>';
+    assert.doesNotThrow(() => extractSubsectionHtml(html, 'Senses (Extended)'));
+  });
 });
