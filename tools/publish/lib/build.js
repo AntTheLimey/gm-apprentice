@@ -371,6 +371,7 @@ function build(options = {}) {
             systemSheetHtml: systemOut.sheetHtml || null,
             systemCombatHtml: systemOut.combatHtml || null,
             systemEquipmentHtml: systemOut.equipmentHtml || null,
+            storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
         }
