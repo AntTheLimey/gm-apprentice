@@ -24,7 +24,9 @@ function relativePath(fromDir, toPath) {
 
 function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   return markdown.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, displayText) => {
-    const display = displayText || target;
+    // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
+    // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
+    const display = displayText || target.replace(/_/g, ' ');
     const targetPath = linkMap[target];
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));

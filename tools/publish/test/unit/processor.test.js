@@ -52,6 +52,23 @@ describe('resolveWikiLinks', () => {
     const result = resolveWikiLinks('See [[Unknown]]', linkMap, 'index.html');
     assert.strictEqual(result, 'See Unknown');
   });
+
+  it('humanizes underscore slugs in resolved link text (no raw slug)', () => {
+    const map = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const result = resolveWikiLinks('Meet [[Lord_Percival_Harcourt]]', map, 'index.html');
+    assert.strictEqual(result, 'Meet [Lord Percival Harcourt](characters/npcs/lord-percival-harcourt.html)');
+  });
+
+  it('humanizes underscore slugs for unresolved links (plain text, not a dead anchor)', () => {
+    const result = resolveWikiLinks('Meet [[Yog_Sothoth]]', {}, 'index.html');
+    assert.strictEqual(result, 'Meet Yog Sothoth');
+  });
+
+  it('still honors an explicit alias verbatim', () => {
+    const map = { 'Lord_Percival_Harcourt': 'x.html' };
+    const result = resolveWikiLinks('[[Lord_Percival_Harcourt|His Lordship]]', map, 'index.html');
+    assert.strictEqual(result, '[His Lordship](x.html)');
+  });
 });
 
 describe('filterSections', () => {
