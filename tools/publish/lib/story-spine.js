@@ -44,4 +44,16 @@ function buildWrapUpIndex(pages) {
   return { bySession, byChapter };
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES };
+// Recap for a unit: try its wrap-up first (the deliberate post-session/chapter recap),
+// then the unit's own file. Returns { title, html, sourcePage } or null.
+function resolveUnitRecap(unitPage, wrapUpPage) {
+  if (wrapUpPage) {
+    const r = findRecap(wrapUpPage);
+    if (r) return { ...r, sourcePage: wrapUpPage };
+  }
+  const own = findRecap(unitPage);
+  if (own) return { ...own, sourcePage: unitPage };
+  return null;
+}
+
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap };

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { findRecap, publishedOf, buildWrapUpIndex } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap } = require('../../lib/story-spine');
 
 describe('findRecap', () => {
   it('extracts the Narrative Recap H2 section as HTML', () => {
@@ -41,5 +41,26 @@ describe('buildWrapUpIndex', () => {
   it('keys chapter wrap-ups (no session ref) by their chapter ref target', () => {
     const idx = buildWrapUpIndex(pages);
     assert.strictEqual(idx.byChapter.get('Chapter_1_Overview').title, 'Chapter_1_Wrap_Up');
+  });
+});
+
+describe('resolveUnitRecap', () => {
+  const session = { title: 'Session_01', frontmatter: { type: 'session' }, markdown: '## Narrative Recap\nIN SESSION FILE' };
+  const wrapUp = { title: 'Session_01_Wrap_Up', frontmatter: { type: 'session-wrap-up', session: '[[Session_01]]' }, markdown: '## Narrative Recap\nIN WRAP UP' };
+
+  it('prefers the wrap-up recap over the unit file', () => {
+    const idx = buildWrapUpIndex([session, wrapUp]);
+    const r = resolveUnitRecap(session, idx.bySession.get('Session_01'));
+    assert.match(r.html, /IN WRAP UP/);
+  });
+
+  it('falls back to the unit file when there is no wrap-up recap', () => {
+    const r = resolveUnitRecap(session, null);
+    assert.match(r.html, /IN SESSION FILE/);
+  });
+
+  it('returns null when neither has a recap', () => {
+    const bare = { title: 'X', frontmatter: {}, markdown: '## Overview\nx' };
+    assert.strictEqual(resolveUnitRecap(bare, null), null);
   });
 });
