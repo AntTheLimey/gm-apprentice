@@ -114,13 +114,19 @@ Once confirmed, store as `targetDir`.
 
 ## Step 6: Scaffold the site
 
-Run:
+The build tool ships **inside the plugin** — never install it from the
+npm registry. Run its `init` from the plugin cache so the scaffold pins
+itself to the exact version the GM has installed. Determine
+`<plugin-version>` from `.claude-plugin/plugin.json` (or infer it from
+this skill's own cache path), then:
 
 ```bash
-npx gm-apprentice-publish init "<targetDir>"
+node "<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js" init "<targetDir>"
 ```
 
-This creates the following structure inside `<targetDir>`:
+Use the plugin cache path for the GM's OS (e.g.
+`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). This creates
+the following structure inside `<targetDir>`:
 
 ```text
 <targetDir>/
@@ -135,20 +141,17 @@ This creates the following structure inside `<targetDir>`:
 
 If the command fails with "command not found", explain:
 
-> "npx is part of Node.js. If you see 'command not found', your
-> Node.js installation may not be on your PATH. Try restarting
-> your terminal and running `node --version` first."
+> "That command needs Node.js. If you see 'command not found', your
+> Node.js installation may not be on your PATH. Try restarting your
+> terminal and running `node --version` first."
 
 ---
 
-## Step 7: Pin the build tool dependency
+## Step 7: Confirm the build tool pin
 
-Open `package.json` in `<targetDir>`. Find the `gm-apprentice-publish`
-dependency — the scaffold sets it to `"latest"` by default, which can
-resolve to a stale cached version.
-
-Replace it with a `file:` path pointing at the current plugin cache
-for the GM's platform:
+`init` auto-pins the scaffold's `package.json` to the exact tool it ran
+from — the plugin cache version — so there is no `"latest"` to replace
+and no manual edit in the normal case:
 
 ```json
 {
@@ -158,24 +161,26 @@ for the GM's platform:
 }
 ```
 
-Use the plugin cache path for the GM's OS (e.g.
-`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). Where
-`<plugin-version>` is the current gm-apprentice plugin version
-(read it from `.claude-plugin/plugin.json` in the plugin directory, or
-infer it from the skill's own cache path).
+Open `package.json` and confirm the `gm-apprentice-publish` value is a
+`file:` path ending in `/<plugin-version>/tools/publish`. If it shows
+anything else (e.g. `"latest"` from an older scaffold, or an
+out-of-date version), correct it to the path above — `<plugin-version>`
+is the current gm-apprentice plugin version from
+`.claude-plugin/plugin.json`.
 
 This ensures the site always builds with the exact version of the
 publish tool that matches the installed plugin.
 
-**Why a hard-pinned version path (and not something "auto-updating")?**
-The plugin cache stores each installed version in its own folder
-(`.../gm-apprentice/<version>/tools/publish`) and Claude Code does not
-maintain a stable "current" alias we could point at. A floating pin
-(like `"latest"`) resolves to whatever npm last saw locally, which is
-how sites silently went stale before. A hard pin trades automatic
-freshness for reproducible builds: the site always builds with a known
-version, and it never breaks unexpectedly when the plugin changes. The
-two safety nets that keep a hard pin from going stale silently are:
+**Why a `file:` cache pin (and not the npm registry or "auto-updating")?**
+The tool is distributed with the plugin, not published as a live npm
+package, so pinning to the cache is what keeps the renderer in lockstep
+with the skill that drives it. The plugin cache stores each installed
+version in its own folder (`.../gm-apprentice/<version>/tools/publish`)
+and Claude Code does not maintain a stable "current" alias to point at.
+A floating pin (like `"latest"`) would resolve from the npm registry —
+which lags the plugin — and is how sites silently went stale before. A
+cache pin trades automatic freshness for reproducible builds that match
+the plugin, with two safety nets against silent staleness:
 
 - The build tool prints a loud **version-drift warning** at the start
   of any build when a newer version is installed in the cache, naming
@@ -282,7 +287,7 @@ fonts, neutral blue-grey palette).
 
 ---
 
-## Step 12: Install dependencies
+## Step 12: Link the build tool
 
 In the terminal, navigate to `<targetDir>` and run:
 
@@ -290,8 +295,9 @@ In the terminal, navigate to `<targetDir>` and run:
 npm install
 ```
 
-This installs the `gm-apprentice-publish` package and its
-dependencies. It will take a moment on first run.
+This links the `gm-apprentice-publish` build tool from the plugin cache
+(the `file:` pin from Step 7). The tool ships its dependencies vendored,
+so this just creates the link — it downloads nothing and works offline.
 
 ---
 

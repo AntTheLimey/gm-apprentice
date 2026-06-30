@@ -24,19 +24,36 @@ proceeding. Resume after migration completes. Skip this check
 if `_meta/` doesn't exist (that's first-time setup, not
 migration).
 
-## npm Package
+## The build tool
 
-All build logic is handled by the `gm-apprentice-publish` package.
-You drive it via `npx gm-apprentice-publish ...` commands.
-You never replicate or rewrite its logic.
+All build logic is handled by the `gm-apprentice-publish` tool, which
+**ships inside this plugin** — it is not installed from the npm registry.
+The copy to use lives in the plugin cache at:
 
-**CLI commands:**
+```text
+<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish
+```
+
+Using the cache copy (not npm) is what keeps the renderer in lockstep
+with this skill: both come from the same plugin install. Determine
+`<plugin-version>` from `.claude-plugin/plugin.json` (or infer it from
+this skill's own cache path). You never replicate or rewrite its logic.
+
+**Scaffolding / one-off commands — run the tool from the cache:**
 
 ```bash
-npx gm-apprentice-publish init <target-dir>   # scaffold a new site
-npx gm-apprentice-publish build               # generate docs/ from vault
-npx gm-apprentice-publish --version
-npx gm-apprentice-publish --help
+TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
+node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
+node "$TOOL" --version
+node "$TOOL" --help
+```
+
+**Inside a scaffolded site — build with npm** (it resolves the tool from
+the `file:` pin the scaffold wrote, so no registry and no network):
+
+```bash
+npm install      # links the pinned build tool (deps ship vendored)
+npm run build    # generate docs/ from the vault
 ```
 
 Node 22 or later is required. If the GM hits a version error,

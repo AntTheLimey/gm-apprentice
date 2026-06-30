@@ -44,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Committed fully to the plugin-cache distribution model for the publish
+  tool.** The build tool ships inside the plugin and is driven from the
+  plugin cache, never the npm registry (which lagged at 1.2.1 and risked
+  version skew between the renderer and the skill). `init` now auto-pins a
+  new site's `package.json` to the exact cache version it ran from — the
+  scaffold default changed from `"latest"` to a self-referential `file:`
+  pin — so a new site needs no manual repoint and no registry round-trip.
+  The publish-site SKILL, setup wizard, and tool README were updated to
+  drive `init` from the cache and to stop pointing users at npm.
 - `gm-apprentice-publish` bumped to 1.3.0; lockfile version realigned to
   1.3.0 (it was stale at 1.2.1, two patches behind the previous
   `package.json` value of 1.2.3).

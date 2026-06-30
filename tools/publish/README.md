@@ -51,31 +51,30 @@ test fails if a clean git-copy + symlinked site cannot build.
 
 ## Installation
 
-Run without installing:
+**This tool ships inside the [gm-apprentice](https://github.com/AntTheLimey/gm-apprentice)
+plugin and is not installed from the npm registry.** When you install the
+plugin, the tool lands in the plugin cache, and the `publish-site` skill
+drives it from there — the skill scaffolds a site whose `package.json`
+pins the tool with a `file:` path into that cache, so every build uses the
+exact version that matches your installed plugin. There is nothing to
+`npm install` globally.
 
-```bash
-npx gm-apprentice-publish <command>
-```
-
-Or install globally:
-
-```bash
-npm install -g gm-apprentice-publish
-gm-apprentice-publish <command>
-```
-
-Or install as a project dependency:
-
-```bash
-npm install gm-apprentice-publish
-```
+> The published npm package exists for standalone CLI use but **lags the
+> plugin** and is not the supported path for plugin users. Prefer the
+> plugin. To run the in-cache copy directly without the skill:
+>
+> ```bash
+> node "<plugin-cache>/gm-apprentice/<version>/tools/publish/bin/gm-publish.js" <command>
+> ```
 
 ## Quick start
 
-**1. Scaffold a new site repo**
+**1. Scaffold a new site repo** (run the tool from the plugin cache; the
+scaffold auto-pins itself to that version)
 
 ```bash
-npx gm-apprentice-publish init my-campaign-site
+TOOL="<plugin-cache>/gm-apprentice/<version>/tools/publish/bin/gm-publish.js"
+node "$TOOL" init my-campaign-site
 cd my-campaign-site
 ```
 
@@ -97,10 +96,11 @@ Open `vault.config.json` and set `vaultPath` to the absolute or relative
 path of your gm-apprentice vault, and `siteUrl` to the GitHub Pages URL
 you plan to publish to (e.g. `https://username.github.io/campaign-name`).
 
-**3. Build**
+**3. Build** (the scaffold pinned the tool, so npm resolves it locally)
 
 ```bash
-npx gm-apprentice-publish build
+npm install   # links the pinned tool from the plugin cache (deps vendored)
+npm run build
 ```
 
 Output is written to the `docs/` folder. Push to GitHub and enable

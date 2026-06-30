@@ -44,6 +44,11 @@ async function init(targetDir = '.', options = {}) {
     ...DEFAULTS,
     SITE_TITLE: siteTitle,
     PACKAGE_NAME: slugify(siteTitle),
+    // Pin the scaffold to THIS tool — the copy running init, which lives in the plugin
+    // cache. The site then builds with the exact version of the plugin the GM installed,
+    // with no npm-registry round-trip and no manual repoint. options.toolDep is an escape
+    // hatch for tests. Forward slashes keep the value valid JSON on Windows too.
+    TOOL_DEP: options.toolDep || `file:${path.resolve(__dirname, '..').split(path.sep).join('/')}`,
   };
   const dest = path.resolve(targetDir);
 
