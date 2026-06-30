@@ -35,6 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The 404 page is themed (B4).** It loaded `style.css` + `theme.css` but
   not `css/themes/<genre>.css`, so it fell back to default accents; the genre
   overlay link is now emitted.
+- **Breadcrumb dead-links removed.** Breadcrumbs linked every last directory
+  segment to `index.html`, but only top-level dirs get one — chapter
+  subfolders 404'd; those segments are now plain text. The `parent_location`
+  breadcrumb also used the root-relative output path as a same-dir href
+  (resolving to `locations/locations/…`); it is now made relative.
+- **More raw-slug surfaces humanized.** Beyond body wikilinks (B1), event
+  participant/location links and item holder/origin links showed raw
+  underscore slugs; all now humanize via a shared `humanizeName` helper,
+  preserving explicit aliases. Against the Canticle vault this drives broken
+  links from 586 (pre-fix) to 15 and raw-slug links from 2043 to 0 (the
+  remaining 14 broken are relationship-graph SVG node paths, tracked
+  separately).
 - **Sparse sidebars no longer squeeze the article (B2).** A page with a
   single small sidebar box still reserved the full 18rem column; sidebars
   with ≤1 section now collapse to a single comfortably-wide column.
