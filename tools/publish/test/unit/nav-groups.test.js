@@ -73,4 +73,22 @@ describe('generateNav', () => {
     const html = navFor('index.html', { siteTitle: 'T' });
     assert.match(html, /href="story\.html"/);
   });
+
+  it('shows a standalone Story nav link when hasStory but no chapters/sessions/events exist', () => {
+    // New campaign: PC backstories published, no sessions played yet.
+    const pages = [{ outputPath: 'characters/pcs/hero.html', outputDir: 'characters/pcs', frontmatter: { type: 'pc' } }];
+    const navFor = generateNav(pages, { hasStory: true });
+    const html = navFor('index.html', { siteTitle: 'T' });
+    assert.match(html, /href="story\.html"/);
+    assert.match(html, />Story</);
+  });
+
+  it('does not add a duplicate Story entry when a Story group already exists', () => {
+    const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
+    const navFor = generateNav(pages, { hasStory: true });
+    const html = navFor('index.html', { siteTitle: 'T' });
+    // exactly one desktop story.html link in the top nav-groups (not two)
+    const desktopMatches = (html.match(/class="nav-group-toggle"[^>]*href="story\.html"/g) || []).length;
+    assert.strictEqual(desktopMatches, 1);
+  });
 });

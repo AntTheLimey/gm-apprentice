@@ -57,7 +57,11 @@ function renderTopNav(pages, currentOutputPath, config, options = {}) {
   const groups = generateNavGroups(pages);
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
 
-  const groupsHtml = groups.map(group => {
+  const hasStoryGroup = groups.some(g => g.name === 'Story');
+  const standaloneStory = options.hasStory && !hasStoryGroup;
+  const storyHref = relativePath(currentDir, 'story.html');
+
+  const desktopGroupsHtml = groups.map(group => {
     const linksHtml = group.links.map(link => {
       const href = relativePath(currentDir, link.href);
       return `        <a href="${href}">${escapeHtml(link.label)}</a>`;
@@ -75,15 +79,31 @@ ${linksHtml}
       </div>`;
   }).join('\n');
 
+  const standaloneDesktop = standaloneStory
+    ? `      <div class="nav-group"><a class="nav-group-toggle" href="${storyHref}">Story</a></div>`
+    : '';
+
+  const groupsHtml = standaloneStory
+    ? [standaloneDesktop, desktopGroupsHtml].filter(Boolean).join('\n')
+    : desktopGroupsHtml;
+
   const rootHref = relativePath(currentDir, 'index.html') || './index.html';
 
-  const mobileLinksHtml = groups.map(group => {
+  const mobileGroupsHtml = groups.map(group => {
     const links = group.links.map(link => {
       const href = relativePath(currentDir, link.href);
       return `    <li><a href="${href}">${escapeHtml(link.label)}</a></li>`;
     }).join('\n');
     return `  <h3>${escapeHtml(group.name)}</h3>\n  <ul>\n${links}\n  </ul>`;
   }).join('\n');
+
+  const standaloneMobile = standaloneStory
+    ? `  <a href="${storyHref}" class="mobile-nav-link">Story</a>`
+    : '';
+
+  const mobileLinksHtml = standaloneStory
+    ? [standaloneMobile, mobileGroupsHtml].filter(Boolean).join('\n')
+    : mobileGroupsHtml;
 
   return `<header class="top-nav">
   <a href="${rootHref}" class="nav-brand">${escapeHtml(config.siteTitle)}</a>
