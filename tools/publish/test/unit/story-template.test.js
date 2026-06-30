@@ -34,3 +34,22 @@ describe('characterStoryPage', () => {
     assert.match(html, /href="\.\.\/\.\.\/characters\/pcs\/adrien\.html"/);
   });
 });
+
+const { storyLanding } = require('../../lib/templates/story-landing');
+describe('storyLanding', () => {
+  const spine = [{ outputPath: 'story/chapter-1.html', title: 'Chapter 1', chapterTitle: 'Chapter 1', kind: 'chapter' }];
+  const chars = [{ outputPath: 'story/characters/adrien.html', title: 'Adrien', group: 'current' },
+                 { outputPath: 'story/characters/varrio.html', title: 'Varrio', group: 'fallen' }];
+  it('shows a Begin reading link and both branches', () => {
+    const html = storyLanding(spine, chars, cfg, pub, () => '');
+    assert.match(html, /Begin reading/);
+    assert.match(html, /Chapter 1/);
+    assert.match(html, /Adrien/);
+    assert.match(html, /Varrio/);
+    assert.match(html, /Fallen/);
+  });
+  it('omits a branch that is empty', () => {
+    const html = storyLanding(spine, [], cfg, pub, () => '');
+    assert.ok(!/Character Stories/.test(html));
+  });
+});
