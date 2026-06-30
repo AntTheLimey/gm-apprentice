@@ -34,4 +34,21 @@ function storyPage(unit, config, publishConfig, navFor) {
   });
 }
 
-module.exports = { storyPage };
+function characterStoryPage(story, config, publishConfig, navFor) {
+  const sheetLink = story.sheetOutputPath
+    ? `<p class="story-sheet-link"><a href="${relativeHref(story.outputPath, story.sheetOutputPath)}">View character sheet &rarr;</a></p>` : '';
+  const content = `
+    <article class="story-prose">
+      <h1 class="page-title">${escapeHtml(story.title)}</h1>
+      ${sheetLink}
+      ${story.html}
+    </article>`;
+  return baseShell({
+    title: story.title, siteTitle: config.siteTitle,
+    cssHref: cssPath(story.outputPath), navHtml: navFor(story.outputPath, config),
+    rootHref: rootPath(story.outputPath), content, footer: config.footer,
+    genrePreset: (publishConfig || {})._genrePreset, scripts: clientScripts(story.outputPath),
+  });
+}
+
+module.exports = { storyPage, characterStoryPage };

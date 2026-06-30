@@ -21,3 +21,16 @@ describe('storyPage', () => {
     assert.ok(!/&larr;/.test(html), 'no prev arrow at the start');
   });
 });
+
+const { characterStoryPage } = require('../../lib/templates/story');
+describe('characterStoryPage', () => {
+  it('character story page leads with the prose and links to the stat sheet', () => {
+    const pc = { displayTitle: 'Adrien de Montferrand', outputPath: 'characters/pcs/adrien.html' };
+    const html = characterStoryPage(
+      { title: 'Adrien de Montferrand', outputPath: 'story/characters/adrien.html', html: '<p>His tale.</p>', sheetOutputPath: pc.outputPath },
+      cfg, pub, () => '');
+    assert.match(html, /His tale\./);
+    assert.match(html, /Adrien de Montferrand/);
+    assert.match(html, /href="\.\.\/\.\.\/characters\/pcs\/adrien\.html"/);
+  });
+});

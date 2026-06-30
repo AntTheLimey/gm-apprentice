@@ -6,8 +6,8 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
-const { buildStorySpine, unitRefs } = require('./story-spine');
-const { storyPage: renderStoryUnit } = require('./templates/story');
+const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
+const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -543,6 +543,26 @@ function build(options = {}) {
     return items.length ? `<ul>${items.join('')}</ul>` : '';
   }
 
+  function buildCharacterStories() {
+    const { slugify } = require('./scanner');
+    const stories = [];
+    for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
+      const outputPath = `story/characters/${slugify(pc.title)}.html`;
+      const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
+      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages });
+      const story = {
+        title: pc.displayTitle, outputPath, html: processed.html,
+        sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
+      };
+      const full = path.join(outputDir, outputPath);
+      ensureDir(full);
+      fs.writeFileSync(full, characterStoryPage(story, config, publishConfig, navFor));
+      console.log(`  wrote ${outputPath}`);
+      stories.push(story);
+    }
+    return stories;
+  }
+
   function buildStory() {
     const spine = buildStorySpine(pages);
     for (const unit of spine) {
@@ -553,10 +573,11 @@ function build(options = {}) {
       fs.writeFileSync(outPath, html);
       console.log(`  wrote ${unit.outputPath}`);
     }
-    return spine;
+    const characterStories = buildCharacterStories();
+    return { spine, characterStories };
   }
 
-  const storySpine = buildStory();
+  const storyResult = buildStory();
 
   // Landing page
   const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);
