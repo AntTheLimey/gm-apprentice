@@ -1,3 +1,4 @@
+const path = require('path');
 const { extractSections, parseWikiRef } = require('./processor');
 const { slugify } = require('./scanner');
 
@@ -66,6 +67,38 @@ function chapterMatchesSession(chapterPage, sessionPage) {
   return norm.length > 0 && ref.toLowerCase().includes(norm);
 }
 
+function folderOf(page) {
+  return page && page.sourcePath ? path.dirname(page.sourcePath) : null;
+}
+function isUnder(childPath, dir) {
+  if (!childPath || !dir) return false;
+  const c = path.resolve(childPath);
+  const a = path.resolve(dir);
+  return c === a || c.startsWith(a + path.sep);
+}
+
+// A session belongs to a chapter if its file lives under the chapter's folder,
+// falling back to the title/ref match for flat-structured vaults.
+function chapterOwnsSession(chapter, session) {
+  if (isUnder(session.sourcePath, folderOf(chapter))) return true;
+  return chapterMatchesSession(chapter, session);
+}
+
+// The wrap-up for a unit (chapter or session): a wrap-up page in the SAME folder
+// as the unit's own page (chapter wrap-up sits in the chapter folder; a session
+// wrap-up sits in the session's subfolder). Falls back to the ref index.
+function wrapUpForUnit(unitPage, wrapUps, idx) {
+  const dir = folderOf(unitPage);
+  if (dir) {
+    const sameFolder = wrapUps.find(w => folderOf(w) === dir);
+    if (sameFolder) return sameFolder;
+  }
+  return idx.bySession.get(unitPage.title)
+    || idx.byChapter.get(unitPage.title)
+    || idx.byChapter.get(unitPage.title.replace(/_/g, ' '))
+    || null;
+}
+
 function unitOutputPath(id) { return `story/${id}.html`; }
 
 function asList(v) { return Array.isArray(v) ? v : (v == null ? [] : [v]); }
@@ -85,22 +118,22 @@ function buildStorySpine(pages) {
     .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
       || String(a.title).localeCompare(String(b.title)));
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
+  const wrapUps = pages.filter(p => p.frontmatter && WRAP_UP_TYPES.has(p.frontmatter.type));
   const idx = buildWrapUpIndex(pages);
 
   const units = [];
   for (const chapter of chapters) {
-    const chapterWrap = idx.byChapter.get(chapter.title)
-      || idx.byChapter.get(chapter.title.replace(/_/g, ' ')) || null;
+    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx);
     const chapterRecap = resolveUnitRecap(chapter, chapterWrap);
 
     const chapterSessions = sessions
-      .filter(s => chapterMatchesSession(chapter, s))
+      .filter(s => chapterOwnsSession(chapter, s))
       .sort((a, b) => (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0)
         || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0)));
 
     const sessionUnits = [];
     for (const s of chapterSessions) {
-      const recap = resolveUnitRecap(s, idx.bySession.get(s.title));
+      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx));
       if (!recap) continue;
       const id = slugify(s.title);
       sessionUnits.push({
@@ -140,4 +173,4 @@ function buildStorySpine(pages) {
   return units;
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, buildStorySpine, unitRefs };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, unitRefs };

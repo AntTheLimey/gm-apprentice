@@ -104,6 +104,31 @@ describe('buildStorySpine', () => {
   });
 });
 
+describe('buildStorySpine folder-proximity pairing', () => {
+  it('pairs a chapter wrap-up by folder even when its chapter ref is a free-form display title', () => {
+    const pages = [
+      { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — London', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
+      { title: 'Chapter_1_Wrap_Up', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter_1_Wrap_Up.md', frontmatter: { type: 'session_wrap', chapter: 'Chapter 1 — London: The Orphean Society' }, markdown: '## Narrative Recap\nLondon happened.' },
+    ];
+    const spine = require('../../lib/story-spine').buildStorySpine(pages);
+    assert.strictEqual(spine.length, 1);
+    assert.strictEqual(spine[0].kind, 'chapter');
+    assert.match(spine[0].recapHtml, /London happened/);
+  });
+
+  it('owns a session by folder containment and pairs its wrap-up by subfolder, even with display-title refs', () => {
+    const pages = [
+      { title: 'Chapter 4 Overview', displayTitle: 'Chapter 4 — Calcutta', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Chapter 4 Overview.md', frontmatter: { type: 'chapter', sort_order: 4 }, markdown: '## Overview\nx' },
+      { title: 'Session 01', displayTitle: 'Session 01', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session 01.md', frontmatter: { type: 'session', session_number: 1, chapter: 'Chapter 4 — Calcutta' }, markdown: '## Overview\nx' },
+      { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After', chapter: 'Chapter 4 — Calcutta' }, markdown: '## Narrative Recap\nCalcutta session one.' },
+    ];
+    const spine = require('../../lib/story-spine').buildStorySpine(pages);
+    assert.strictEqual(spine.length, 1);
+    assert.strictEqual(spine[0].kind, 'session');
+    assert.match(spine[0].recapHtml, /Calcutta session one/);
+  });
+});
+
 describe('unitRefs', () => {
   it('collects participants and location from the source page frontmatter', () => {
     const unit = { sourcePage: { frontmatter: { participants: ['[[Adrien_de_Montferrand]]'], location: '[[Vienna]]' } } };
