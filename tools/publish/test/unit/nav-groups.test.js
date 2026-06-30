@@ -81,6 +81,8 @@ describe('generateNav', () => {
     const html = navFor('index.html', { siteTitle: 'T' });
     assert.match(html, /href="story\.html"/);
     assert.match(html, />Story</);
+    // mobile entry reuses the shared overlay li>a styling hook (not a bespoke class)
+    assert.match(html, /<li><a href="story\.html">Story<\/a><\/li>/);
   });
 
   it('does not add a duplicate Story entry when a Story group already exists', () => {

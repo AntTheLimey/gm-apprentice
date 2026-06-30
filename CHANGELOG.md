@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.0] — 2026-06-30
+## [1.7.10] — 2026-06-30
 
 ### Added
 
@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `gm-apprentice-publish` bumped to 1.4.0.
+- `gm-apprentice-publish` bumped to 1.3.2.
 
 ---
 

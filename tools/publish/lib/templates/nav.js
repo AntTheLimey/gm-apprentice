@@ -97,8 +97,10 @@ ${linksHtml}
     return `  <h3>${escapeHtml(group.name)}</h3>\n  <ul>\n${links}\n  </ul>`;
   }).join('\n');
 
+  // Reuse the shared `.mobile-nav-overlay li a` structure (display:block, 44px tap target)
+  // rather than a bespoke class with no stylesheet rule.
   const standaloneMobile = standaloneStory
-    ? `  <a href="${storyHref}" class="mobile-nav-link">Story</a>`
+    ? `  <ul>\n    <li><a href="${storyHref}">Story</a></li>\n  </ul>`
     : '';
 
   const mobileLinksHtml = standaloneStory
