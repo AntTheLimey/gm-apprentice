@@ -10,6 +10,12 @@ function fourOhFourTemplate(config) {
   }
   const href = p => `${basePath}${p}`;
 
+  // Match the rest of the site: load the genre theme overlay when one is configured,
+  // otherwise the 404 falls back to the default (e.g. blue) accents.
+  const genreLinkTag = config.genrePreset
+    ? `\n  <link rel="stylesheet" href="${href(`css/themes/${config.genrePreset}.css`)}">`
+    : '';
+
   const imageHtml = campaignImage
     ? `<img src="${href(escapeHtml(campaignImage))}" alt="${siteTitle}" class="four-oh-four-image">`
     : '';
@@ -21,7 +27,7 @@ function fourOhFourTemplate(config) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Not Found — ${siteTitle}</title>
   <link rel="stylesheet" href="${href('css/style.css')}">
-  <link rel="stylesheet" href="${href('css/theme.css')}">
+  <link rel="stylesheet" href="${href('css/theme.css')}">${genreLinkTag}
   <style>
     .four-oh-four-hero {
       text-align: center;

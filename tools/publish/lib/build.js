@@ -106,6 +106,7 @@ function build(options = {}) {
       siteUrl: config.siteUrl,
       four_oh_four: publishConfig.four_oh_four,
       theme: publishConfig.theme,
+      genrePreset: publishConfig._genrePreset,
     });
     fs.writeFileSync(path.join(outputDir, '404.html'), html);
     console.log('  wrote 404.html');
