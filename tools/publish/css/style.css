@@ -670,6 +670,7 @@ h3 {
 /* ===== STORY PROSE ===== */
 .story-prose {
   max-width: 42rem;
+  margin: 0 auto;
 }
 .story-prose h3 {
   font-size: 1.15rem;
@@ -692,8 +693,8 @@ h3 {
 .story-prose a:hover {
   border-bottom-style: solid;
 }
-/* Standalone Story pages: centre the reading column and label/cross-link chrome. */
-.story-prose { margin: 0 auto; }
+/* Standalone Story pages: label/cross-link chrome (the centred reading column is
+   handled by the .story-prose rule above). */
 .story-eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;

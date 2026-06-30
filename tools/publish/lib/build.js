@@ -592,7 +592,7 @@ function build(options = {}) {
     return { spine, characterStories, hasStory: !!(spine.length || characterStories.length) };
   }
 
-  const storyResult = buildStory();
+  buildStory();
 
   // Landing page
   const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);
