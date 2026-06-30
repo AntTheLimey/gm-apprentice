@@ -692,6 +692,57 @@ h3 {
 .story-prose a:hover {
   border-bottom-style: solid;
 }
+/* Standalone Story pages: centre the reading column and label/cross-link chrome. */
+.story-prose { margin: 0 auto; }
+.story-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: var(--muted, #888);
+  margin: 0 0 0.25rem;
+}
+.story-sheet-link, .story-read-link {
+  display: inline-block;
+  margin: 0.5rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+.story-refs {
+  max-width: 42rem;
+  margin: 2.5rem auto 0;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+.story-refs h2 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #888);
+  margin: 0 0 0.5rem;
+  border: 0;
+}
+.story-refs ul { margin: 0; padding-left: 1.1rem; }
+
+/* Story landing */
+.story-branch { max-width: 46rem; margin: 0 auto 2.5rem; }
+.story-begin {
+  display: inline-block;
+  padding: 0.6rem 1.25rem;
+  background: var(--accent);
+  color: var(--white, #fff);
+  border-radius: 0.375rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.story-begin:hover { opacity: 0.9; }
+.story-toc { line-height: 1.9; }
+.story-branch h3 {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #888);
+  margin: 1.5rem 0 0.5rem;
+}
 
 /* ===== TABLES ===== */
 table {

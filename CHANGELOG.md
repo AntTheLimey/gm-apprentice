@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.0] — 2026-06-30
+
+### Added
+
+- **Published sites now have a "Story" section** — a curated, prose-first
+  reading layer over the narrative that already lives in a vault, alongside
+  the unchanged reference Wiki. A `/story.html` landing presents two
+  branches:
+  - **The Campaign Saga** — dedicated story pages built from each unit's
+    `Narrative Recap`, walked in order with prev/next (cover to cover). The
+    spine is *adaptive*: a chapter contributes one page, or one page per
+    session, depending on where its recaps live. Chapters/sessions with no
+    recap are omitted (no dead pages).
+  - **Character Stories** — a dedicated prose page per PC built from
+    `*_Story.md`, grouped Current / Retired / Fallen; the PC stat-sheet's
+    Story tab now links to it.
+  - The recap is found by heading wherever it lives — a separate wrap-up
+    file or embedded in the session/chapter file — and matched even when
+    decorated (e.g. `What Happened — Narrative Recap`). Units are paired by
+    folder proximity (robust to free-form title refs). Story pages are built
+    only from the published view (gm-only/excluded sections stripped), so no
+    spoilers leak, and a vault with no narrative gets no Story section at all.
+  - New modules: `lib/story-spine.js` (pure spine builder),
+    `lib/templates/story.js`, `lib/templates/story-landing.js`. The "Story"
+    nav points at the landing when a Story section exists.
+
+### Changed
+
+- `gm-apprentice-publish` bumped to 1.4.0.
+
+---
+
 ## [1.7.9] — 2026-06-30
 
 ### Fixed
