@@ -62,10 +62,17 @@ function loadBuild() {
   try {
     return require('../lib/build');
   } catch (err) {
+    // MODULE_NOT_FOUND also fires for a broken relative/absolute import inside the tool
+    // (a real code bug). Only a missing *package* (a bare specifier) means absent deps —
+    // rewrite those to the friendly message and let everything else surface as itself.
     if (err && err.code === 'MODULE_NOT_FOUND') {
       const m = /Cannot find module '([^']+)'/.exec(err.message || '');
-      console.error(missingDepsMessage(m ? `'${m[1]}'` : ''));
-      process.exit(1);
+      const name = m && m[1];
+      const isBareSpecifier = name && !name.startsWith('.') && !path.isAbsolute(name);
+      if (isBareSpecifier) {
+        console.error(missingDepsMessage(`'${name}'`));
+        process.exit(1);
+      }
     }
     throw err;
   }

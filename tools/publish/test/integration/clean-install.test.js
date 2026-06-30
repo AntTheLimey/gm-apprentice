@@ -62,7 +62,13 @@ describe('clean install build (Bug 1 guardrail)', () => {
       const site = path.join(work, 'site');
       const siteModules = path.join(site, 'node_modules');
       fs.mkdirSync(siteModules, { recursive: true });
-      fs.symlinkSync(cacheToolDir, path.join(siteModules, 'gm-apprentice-publish'), 'dir');
+      // 'junction' on Windows: directory symlinks there often need elevated privileges,
+      // whereas junctions do not — keeps the test runnable on the Windows CI matrix.
+      fs.symlinkSync(
+        cacheToolDir,
+        path.join(siteModules, 'gm-apprentice-publish'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
 
       // Use the known-good committed fixture vault (it ships inside the cache copy).
       const vault = path.join(cacheToolDir, 'test', 'fixtures', 'minimal');

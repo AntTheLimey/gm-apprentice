@@ -65,7 +65,11 @@ function detectVersionDrift(fromDir = __dirname) {
   }
 
   const drift = cmpSemver(parseSemver(pinned), parseSemver(latest)) < 0;
-  const suggestedPath = drift ? path.join(versionsRoot, latest, 'tools', 'publish') : null;
+  // Forward slashes so the suggested value is a safe, copy-pasteable package.json `file:`
+  // spec on Windows too (path.join would emit backslashes there).
+  const suggestedPath = drift
+    ? path.join(versionsRoot, latest, 'tools', 'publish').split(path.sep).join('/')
+    : null;
 
   let message;
   if (drift) {
