@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativePath, humanizeName } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -8,7 +8,9 @@ function parseParticipant(raw) {
   const wikiMatch = str.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]\s*(?:\((.+)\))?$/);
   if (wikiMatch) {
     const target = wikiMatch[1].trim();
-    const display = (wikiMatch[2] || wikiMatch[1]).trim();
+    // Keep an explicit |alias verbatim; otherwise humanize the slug so participant links
+    // don't show raw underscores (Adrien_de_Montferrand → Adrien de Montferrand).
+    const display = wikiMatch[2] ? wikiMatch[2].trim() : humanizeName(wikiMatch[1].trim());
     const annotation = wikiMatch[3] ? wikiMatch[3].trim() : '';
     return { target, display, annotation, isLink: true };
   }
@@ -42,7 +44,8 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     const locRaw = String(fm.location).trim();
     const locMatch = locRaw.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
     const locTarget = locMatch ? locMatch[1].trim() : locRaw.replace(/\[\[|\]\]/g, '').trim();
-    const locDisplay = locMatch ? (locMatch[2] || locMatch[1]).trim() : locTarget;
+    // Humanize the slug unless an explicit |alias was given (Sealed_Anatomical_Theatre → …).
+    const locDisplay = locMatch && locMatch[2] ? locMatch[2].trim() : humanizeName(locTarget);
     const locPath = linkMap?.[locTarget];
     if (locPath) {
       const href = relativePath(currentDir, locPath);

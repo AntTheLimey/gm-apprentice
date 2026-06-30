@@ -116,8 +116,8 @@ describe('rootPath', () => {
 describe('parseParticipant', () => {
   it('parses [[Entity]] (annotation)', () => {
     const result = parseParticipant('[[Anna_Lindqvist]] (rescued)');
-    assert.strictEqual(result.target, 'Anna_Lindqvist');
-    assert.strictEqual(result.display, 'Anna_Lindqvist');
+    assert.strictEqual(result.target, 'Anna_Lindqvist'); // raw target preserved for lookup
+    assert.strictEqual(result.display, 'Anna Lindqvist'); // display humanized (no underscores)
     assert.strictEqual(result.annotation, 'rescued');
     assert.strictEqual(result.isLink, true);
   });
@@ -133,7 +133,7 @@ describe('parseParticipant', () => {
   it('parses [[Entity]] without annotation', () => {
     const result = parseParticipant('[[Emma_Wentworth]]');
     assert.strictEqual(result.target, 'Emma_Wentworth');
-    assert.strictEqual(result.display, 'Emma_Wentworth');
+    assert.strictEqual(result.display, 'Emma Wentworth');
     assert.strictEqual(result.annotation, '');
     assert.strictEqual(result.isLink, true);
   });
@@ -167,6 +167,49 @@ describe('parseParticipant', () => {
     assert.strictEqual(result.display, 'Hero');
     assert.strictEqual(result.annotation, 'led the assault');
     assert.strictEqual(result.isLink, true);
+  });
+
+  it('keeps an explicit alias verbatim (does not over-humanize)', () => {
+    const result = parseParticipant('[[Anna_Lindqvist|Madame A_B]]');
+    assert.strictEqual(result.display, 'Madame A_B', 'explicit alias preserved as written');
+  });
+});
+
+describe('location parent breadcrumb relative href (B-batch2)', () => {
+  const { locationTemplate } = require('../../lib/templates/location');
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('makes the parent_location breadcrumb relative to the page (no doubled dir)', () => {
+    const page = {
+      title: 'British_Museum', displayTitle: 'British Museum',
+      outputPath: 'locations/british-museum.html',
+      frontmatter: { type: 'location', parent_location: '[[London]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const context = { pages: [], linkMap: { London: 'locations/london.html' }, publishConfig: {} };
+    const html = locationTemplate(page, processed, mockNavFor, mockConfig, {}, context);
+    assert.ok(html.includes('href="london.html"'), 'parent crumb should be relative to locations/');
+    assert.ok(!html.includes('href="locations/london.html"'), 'must not use the root-relative path as a same-dir href');
+  });
+});
+
+describe('item template holder/origin humanization (B-batch2)', () => {
+  const { itemTemplate } = require('../../lib/templates/item');
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('humanizes the current_holder link text but keeps the link resolved', () => {
+    const page = {
+      title: 'Cursed_Locket', displayTitle: 'Cursed Locket', outputPath: 'items/cursed-locket.html',
+      frontmatter: { type: 'item', current_holder: '[[Lord_Percival_Harcourt]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const linkMap = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
+    assert.ok(html.includes('>Lord Percival Harcourt</a>'), 'holder display humanized');
+    assert.ok(!html.includes('>Lord_Percival_Harcourt<'), 'no raw slug in holder text');
+    assert.ok(html.includes('lord-percival-harcourt.html'), 'link still resolves');
   });
 });
 

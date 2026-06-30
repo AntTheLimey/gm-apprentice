@@ -43,9 +43,11 @@ function generateBreadcrumbs(outputPath, options = {}) {
     const label = DIR_LABELS[dir] || titleFromSlug(dir);
     const isLastDir = i === dirs.length - 1;
 
-    if (isLastDir && isIndex) {
-      crumbs.push({ label, href: null });
-    } else if (isLastDir && !isIndex) {
+    // Only the known top-level directories get a generated index.html (see DIR_LABELS,
+    // which build.js iterates to write indexes). Nested folders like a chapter subdirectory
+    // have no index, so linking their segment to "index.html" dead-links — keep them plain.
+    const dirHasIndex = Object.prototype.hasOwnProperty.call(DIR_LABELS, dir);
+    if (isLastDir && !isIndex && dirHasIndex) {
       crumbs.push({ label, href: 'index.html' });
     } else {
       crumbs.push({ label, href: null });

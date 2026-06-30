@@ -22,9 +22,13 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   const fm = page.frontmatter;
   const backlinks = ((publishConfig || {})._backlinks || {})[page.title] || [];
 
+  const parentKey = fm.parent_location ? String(fm.parent_location).replace(/\[\[|\]\]/g, '').trim() : null;
+  const parentTarget = parentKey && linkMap ? linkMap[parentKey] : null;
   const crumbs = generateBreadcrumbs(page.outputPath, fm.parent_location ? {
     parentLocation: String(fm.parent_location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' '),
-    parentLocationHref: linkMap ? (linkMap[String(fm.parent_location).replace(/\[\[|\]\]/g, '').trim()] || null) : null,
+    // Breadcrumb hrefs are relative to the current page; linkMap holds the root-relative
+    // output path, so make it relative or it resolves under the current dir and 404s.
+    parentLocationHref: parentTarget ? relativeHref(page.outputPath, parentTarget) : null,
   } : {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
