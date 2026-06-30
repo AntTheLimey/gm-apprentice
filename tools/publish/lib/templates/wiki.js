@@ -82,8 +82,13 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;
 
+  // A sparse sidebar (≤1 section) shouldn't reserve the full 18rem column and squeeze the
+  // article into a narrow left strip with an empty right gutter. Flag it so the CSS can
+  // collapse to a single, comfortably-wide column (B2). Each sidebar section is an <h3>.
+  const sidebarSections = sidebar ? (sidebar.match(/<h3[\s>]/g) || []).length : 0;
+  const sparseClass = sidebar && sidebarSections <= 1 ? ' content-sidebar-sparse' : '';
   const contentHtml = sidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
+    ? `<div class="content-with-sidebar${sparseClass}"><div class="main">${mainContent}</div>${sidebar}</div>`
     : mainContent;
 
   return baseShell({

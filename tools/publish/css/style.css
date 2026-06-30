@@ -286,6 +286,13 @@ img {
   .content-with-sidebar {
     grid-template-columns: 1fr 18rem;
   }
+  /* Sparse sidebar (≤1 section): don't reserve the 18rem column and squeeze the article
+     into a narrow strip with an empty right gutter. Use one comfortably-wide centred
+     column; the lone sidebar box flows beneath the prose. */
+  .content-with-sidebar.content-sidebar-sparse {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 60rem;
+  }
 }
 
 /* ===== CONTEXT SIDEBAR ===== */
