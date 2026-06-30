@@ -1,11 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks, relativeHref, escapeHtml } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
+const { buildStorySpine, unitRefs } = require('./story-spine');
+const { storyPage: renderStoryUnit } = require('./templates/story');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -524,6 +526,37 @@ function build(options = {}) {
 
     publishConfig._timelineStrip = renderTimelineStrip(timelineData, { maxEvents: 15 });
   }
+
+  function renderRefsHtml(unit) {
+    const refs = unitRefs(unit);
+    const items = [];
+    for (const p of refs.participants) {
+      const out = linkMap[p.target];
+      items.push(out ? `<li><a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(p.label)}</a></li>`
+                     : `<li>${escapeHtml(p.label)}</li>`);
+    }
+    if (refs.location) {
+      const out = linkMap[refs.location.target];
+      items.push(out ? `<li>Location: <a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(refs.location.label)}</a></li>`
+                     : `<li>Location: ${escapeHtml(refs.location.label)}</li>`);
+    }
+    return items.length ? `<ul>${items.join('')}</ul>` : '';
+  }
+
+  function buildStory() {
+    const spine = buildStorySpine(pages);
+    for (const unit of spine) {
+      unit.refsHtml = renderRefsHtml(unit);
+      const html = renderStoryUnit(unit, config, publishConfig, navFor);
+      const outPath = path.join(outputDir, unit.outputPath);
+      ensureDir(outPath);
+      fs.writeFileSync(outPath, html);
+      console.log(`  wrote ${unit.outputPath}`);
+    }
+    return spine;
+  }
+
+  const storySpine = buildStory();
 
   // Landing page
   const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);

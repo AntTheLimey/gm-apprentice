@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine, unitRefs } = require('../../lib/story-spine');
 
 describe('findRecap', () => {
   it('extracts the Narrative Recap H2 section as HTML', () => {
@@ -101,5 +101,14 @@ describe('buildStorySpine', () => {
     assert.strictEqual(spine[0].nextHref, spine[1].outputPath);
     assert.strictEqual(spine[1].prevHref, spine[0].outputPath);
     assert.strictEqual(spine[1].nextHref, null);
+  });
+});
+
+describe('unitRefs', () => {
+  it('collects participants and location from the source page frontmatter', () => {
+    const unit = { sourcePage: { frontmatter: { participants: ['[[Adrien_de_Montferrand]]'], location: '[[Vienna]]' } } };
+    const refs = unitRefs(unit);
+    assert.deepStrictEqual(refs.participants.map(r => r.label), ['Adrien de Montferrand']);
+    assert.strictEqual(refs.location.target, 'Vienna');
   });
 });

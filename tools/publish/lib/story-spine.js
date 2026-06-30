@@ -1,4 +1,4 @@
-const { extractSections } = require('./processor');
+const { extractSections, parseWikiRef } = require('./processor');
 const { slugify } = require('./scanner');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
@@ -68,6 +68,17 @@ function chapterMatchesSession(chapterPage, sessionPage) {
 
 function unitOutputPath(id) { return `story/${id}.html`; }
 
+function asList(v) { return Array.isArray(v) ? v : (v == null ? [] : [v]); }
+
+// Reference metadata for a unit, parsed from its source page frontmatter.
+function unitRefs(unit) {
+  const fm = (unit.sourcePage && unit.sourcePage.frontmatter) || {};
+  return {
+    participants: asList(fm.participants).map(parseWikiRef).filter(r => r.target),
+    location: fm.location ? parseWikiRef(fm.location) : null,
+  };
+}
+
 function buildStorySpine(pages) {
   const chapters = pages
     .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
@@ -129,4 +140,4 @@ function buildStorySpine(pages) {
   return units;
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, buildStorySpine };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, buildStorySpine, unitRefs };
