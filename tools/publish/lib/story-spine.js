@@ -179,4 +179,12 @@ function buildStorySpine(pages) {
   return units;
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, unitRefs };
+const FALLEN_STATUSES = new Set(['dead', 'deceased', 'kia', 'missing', 'unknown']);
+function characterStoryGroup(frontmatter) {
+  const s = String((frontmatter || {}).status || '').toLowerCase();
+  if (s === 'retired') return 'retired';
+  if (FALLEN_STATUSES.has(s)) return 'fallen';
+  return 'current';
+}
+
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, unitRefs, characterStoryGroup };

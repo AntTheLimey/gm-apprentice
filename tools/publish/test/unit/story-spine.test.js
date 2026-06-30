@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine, unitRefs } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
 
 describe('findRecap', () => {
   it('extracts the Narrative Recap H2 section as HTML', () => {
@@ -165,5 +165,16 @@ describe('unitRefs', () => {
     const refs = unitRefs(unit);
     assert.deepStrictEqual(refs.participants.map(r => r.label), ['Adrien de Montferrand']);
     assert.strictEqual(refs.location.target, 'Vienna');
+  });
+});
+
+describe('characterStoryGroup', () => {
+  it('maps status to current/retired/fallen', () => {
+    assert.strictEqual(characterStoryGroup({ status: 'active' }), 'current');
+    assert.strictEqual(characterStoryGroup({}), 'current');
+    assert.strictEqual(characterStoryGroup({ status: 'Retired' }), 'retired');
+    assert.strictEqual(characterStoryGroup({ status: 'dead' }), 'fallen');
+    assert.strictEqual(characterStoryGroup({ status: 'MIA' }), 'current'); // not in fallen set
+    assert.strictEqual(characterStoryGroup({ status: 'missing' }), 'fallen');
   });
 });
