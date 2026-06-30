@@ -33,6 +33,27 @@ const PUBLISH_DEFAULTS = {
   },
 };
 
+// Union exclude lists from both config sources (vault-config.md and vault.config.json),
+// case-insensitively de-duplicated, preserving first-seen casing/order. Falls back to
+// `defaults` only when NEITHER source provides a list. A spoiler filter must never strip
+// LESS than either source asked for, so the sources merge rather than shadow each other.
+function unionExcludeList(primary, fallback, defaults) {
+  const sources = [primary, fallback].filter(Array.isArray);
+  if (sources.length === 0) return [...defaults];
+  const seen = new Set();
+  const out = [];
+  for (const list of sources) {
+    for (const item of list) {
+      const key = String(item).toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    }
+  }
+  return out;
+}
+
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
@@ -53,15 +74,17 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
     system: publish.system || null,
     exclude_drafts: publish.exclude_drafts ?? PUBLISH_DEFAULTS.exclude_drafts,
-    exclude_sections: publish.exclude_sections
-      || (jsonConfigFallback.excludeSections
-        ? [...jsonConfigFallback.excludeSections]
-        : [...PUBLISH_DEFAULTS.exclude_sections]),
+    exclude_sections: unionExcludeList(
+      publish.exclude_sections,
+      jsonConfigFallback.excludeSections,
+      PUBLISH_DEFAULTS.exclude_sections,
+    ),
     exclude_fields: publish.exclude_fields || [...PUBLISH_DEFAULTS.exclude_fields],
-    exclude_dirs: publish.exclude_dirs
-      || (jsonConfigFallback.excludeDirs
-        ? [...jsonConfigFallback.excludeDirs]
-        : [...PUBLISH_DEFAULTS.exclude_dirs]),
+    exclude_dirs: unionExcludeList(
+      publish.exclude_dirs,
+      jsonConfigFallback.excludeDirs,
+      PUBLISH_DEFAULTS.exclude_dirs,
+    ),
     theme: {
       ...PUBLISH_DEFAULTS.theme,
       ...publish.theme,

@@ -85,15 +85,38 @@ describe('loadPublishConfig', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('vault-config.md values take precedence over vault.config.json fallback', () => {
+  it('unions vault-config.md and vault.config.json exclude lists (neither shadows the other)', () => {
+    // Regression for the spoiler-filter gap: a section listed only in vault.config.json
+    // used to be silently ignored whenever vault-config.md defined exclude_sections.
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    const yaml = '---\npublish:\n  exclude_sections:\n    - "Spoilers"\n---\n';
+    const yaml = '---\npublish:\n  exclude_sections:\n    - "GM Notes"\n  exclude_dirs:\n    - "_meta"\n---\n';
     fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
-    const fallback = { excludeSections: ['DM Notes'] };
+    const fallback = {
+      excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
+      excludeDirs: ['_meta', '_QA'],
+    };
     const result = loadPublishConfig(tmpDir, fallback);
-    assert.deepStrictEqual(result.exclude_sections, ['Spoilers']);
+    for (const s of ['GM Notes', 'DM Notes', 'Player Notes', 'Source References']) {
+      assert.ok(result.exclude_sections.includes(s), `expected '${s}' to be excluded`);
+    }
+    assert.ok(result.exclude_dirs.includes('_QA'), 'exclude_dirs should union too');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('dedupes the unioned exclude_sections case-insensitively', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_sections:\n    - "GM Notes"\n---\n',
+    );
+    const result = loadPublishConfig(tmpDir, { excludeSections: ['gm notes', 'Secrets'] });
+    const gmCount = result.exclude_sections.filter((s) => s.toLowerCase() === 'gm notes').length;
+    assert.strictEqual(gmCount, 1, 'case-insensitive duplicate should collapse to one');
+    assert.ok(result.exclude_sections.includes('Secrets'));
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
