@@ -128,6 +128,9 @@ function buildStorySpine(pages) {
   for (const chapter of chapters) {
     const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx);
     const chapterRecap = resolveUnitRecap(chapter, chapterWrap);
+    // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
+    // in two chapters) can't collide on the same story/<id>.html output path.
+    const chSlug = slugify(chapter.displayTitle || chapter.title);
 
     const chapterSessions = sessions
       .filter(s => chapterOwnsSession(chapter, s))
@@ -138,7 +141,7 @@ function buildStorySpine(pages) {
     for (const s of chapterSessions) {
       const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx));
       if (!recap) continue;
-      const id = slugify(s.title);
+      const id = `${chSlug}-${slugify(s.title)}`;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
         title: s.displayTitle || s.title.replace(/_/g, ' '),
@@ -149,7 +152,7 @@ function buildStorySpine(pages) {
 
     if (sessionUnits.length > 0) {
       if (chapterRecap) {
-        const id = slugify(chapter.title) + '-intro';
+        const id = `${chSlug}-intro`;
         units.push({
           kind: 'chapter-intro', id, outputPath: unitOutputPath(id),
           title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
@@ -159,7 +162,7 @@ function buildStorySpine(pages) {
       }
       units.push(...sessionUnits);
     } else if (chapterRecap) {
-      const id = slugify(chapter.title);
+      const id = chSlug;
       units.push({
         kind: 'chapter', id, outputPath: unitOutputPath(id),
         title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),

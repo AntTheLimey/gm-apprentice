@@ -112,6 +112,28 @@ describe('buildStorySpine', () => {
   });
 });
 
+describe('buildStorySpine output-path namespacing', () => {
+  it('gives distinct output paths to same-titled sessions in different chapters', () => {
+    const mk = (cTitle, sort, cFolder) => ({
+      title: `${cTitle} Overview`, displayTitle: cTitle,
+      sourcePath: `/v/Chapters/${cFolder}/${cTitle} Overview.md`,
+      frontmatter: { type: 'chapter', sort_order: sort }, markdown: '## Overview\nx',
+    });
+    const se = (cFolder, recap) => ({
+      title: 'Session 1', displayTitle: 'Session 1',
+      sourcePath: `/v/Chapters/${cFolder}/Session 1/Session 1.md`,
+      frontmatter: { type: 'session', session_number: 1 }, markdown: `## Narrative Recap\n${recap}`,
+    });
+    const pages = [
+      mk('Chapter A', 1, 'A'), se('A', 'A one'),
+      mk('Chapter B', 2, 'B'), se('B', 'B one'),
+    ];
+    const spine = require('../../lib/story-spine').buildStorySpine(pages);
+    const paths = spine.map(u => u.outputPath);
+    assert.strictEqual(new Set(paths).size, paths.length, `output paths must be unique: ${paths}`);
+  });
+});
+
 describe('buildStorySpine folder-proximity pairing', () => {
   it('pairs a chapter wrap-up by folder even when its chapter ref is a free-form display title', () => {
     const pages = [
