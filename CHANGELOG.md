@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.8] — 2026-06-29
+
+### Fixed
+
+- **Publish build no longer fails on a clean install with "Cannot find
+  module 'gray-matter'".** The `gm-apprentice-publish` tool is distributed
+  by git-copying the repo into the plugin cache; a site pins it with a
+  `file:` dependency, which npm satisfies by symlinking the cached copy.
+  Node then resolves the tool's `require()`s from the cache, where
+  `npm install` never runs — so its runtime deps were absent. The tool now
+  **vendors** its production dependencies (`gray-matter`, `lunr`,
+  `markdown-it` + transitive) as committed files, so a fresh install builds
+  with no manual steps and offline. A root `.gitignore` negation tracks the
+  subtree; `tools/publish/README.md` documents re-vendoring.
+- **Stale build-tool version pins no longer fail silently.** A bare
+  `/plugin` update drops a new version into the cache but leaves existing
+  sites pinned to the old one, so builds kept using the old renderer (e.g.
+  the new Phoenix GURPS sheet didn't appear). The build CLI now detects this
+  drift at startup — comparing the version it runs as against the newest
+  installed in the cache — and prints a loud warning naming the exact `file:`
+  path to switch to. The publish-site routine-update flow (capability 2) and
+  troubleshooting guide were tightened to repoint reliably and verify the
+  repoint took effect.
+
+### Added
+
+- `tools/publish/lib/version-check.js` — `detectVersionDrift()`, with unit
+  coverage for semver comparison, no-drift, dev-checkout, and non-semver
+  sibling cases.
+- Build CLI preflight that reports missing runtime dependencies with
+  actionable remediation instead of a raw stack trace.
+- `clean-install` integration test (mirrors a git-copy cache + symlinked
+  site, fully offline) and a `runtime-deps` test that fails if any declared
+  dependency is not both requireable and git-tracked.
+
+### Changed
+
+- **Committed fully to the plugin-cache distribution model for the publish
+  tool.** The build tool ships inside the plugin and is driven from the
+  plugin cache, never the npm registry (which lagged at 1.2.1 and risked
+  version skew between the renderer and the skill). `init` now auto-pins a
+  new site's `package.json` to the exact cache version it ran from — the
+  scaffold default changed from `"latest"` to a self-referential `file:`
+  pin — so a new site needs no manual repoint and no registry round-trip.
+  The publish-site SKILL, setup wizard, and tool README were updated to
+  drive `init` from the cache and to stop pointing users at npm.
+- `gm-apprentice-publish` bumped to 1.3.0; lockfile version realigned to
+  1.3.0 (it was stale at 1.2.1, two patches behind the previous
+  `package.json` value of 1.2.3).
+
+---
+
 ## [1.7.7] — 2026-06-29
 
 ### Added

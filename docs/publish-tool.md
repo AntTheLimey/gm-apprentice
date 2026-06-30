@@ -72,13 +72,14 @@ To trigger it, say something like:
 
 ## Technical details
 
-For installation instructions, the configuration file reference, CLI
-commands, and the library API, see the
-[npm package README](../tools/publish/README.md).
+For the configuration file reference, CLI commands, and the library API,
+see the [tool README](../tools/publish/README.md).
 
-The tool requires Node 22 or later. It is published to npm as
-`gm-apprentice-publish` and can be run with `npx gm-apprentice-publish`
-without a separate install step.
+The tool requires Node 22 or later. It **ships inside the gm-apprentice
+plugin** — it is not installed from the npm registry. The publish-site
+skill drives it from the plugin cache and scaffolds sites that pin it
+with a `file:` path into that cache, so every build uses the exact
+version matching your installed plugin.
 
 ## Copyright note
 

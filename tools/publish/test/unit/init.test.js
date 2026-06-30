@@ -166,6 +166,32 @@ describe('init', () => {
       const content = await fs.readFile(path.join(tmpDir, 'vault.config.json'), 'utf8');
       assert.ok(!content.includes('{{SITE_URL}}'), 'raw placeholder left in vault.config.json');
     });
+
+    it('auto-pins the build tool to its own location, not the npm registry', async () => {
+      const content = await fs.readFile(path.join(tmpDir, 'package.json'), 'utf8');
+      const pkg = JSON.parse(content);
+      const dep = pkg.dependencies['gm-apprentice-publish'];
+      assert.ok(!content.includes('{{TOOL_DEP}}'), 'raw placeholder left in package.json');
+      assert.notStrictEqual(dep, 'latest', 'must not fall back to the npm registry');
+      assert.match(dep, /^file:/, 'should be a file: pin into the running tool');
+      // The pinned path is the directory that ships lib/init.js (the tool root).
+      const toolRoot = path.resolve(__dirname, '..', '..').split(path.sep).join('/');
+      assert.strictEqual(dep, `file:${toolRoot}`);
+    });
+
+    it('honors an explicit toolDep override', async () => {
+      const dir = await makeTmpDir();
+      try {
+        await init(dir, { toolDep: 'file:/some/cache/1.2.3/tools/publish' });
+        const pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8'));
+        assert.strictEqual(
+          pkg.dependencies['gm-apprentice-publish'],
+          'file:/some/cache/1.2.3/tools/publish',
+        );
+      } finally {
+        await removeTmpDir(dir);
+      }
+    });
   });
 
   describe('custom siteTitle', () => {

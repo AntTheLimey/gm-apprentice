@@ -24,19 +24,36 @@ proceeding. Resume after migration completes. Skip this check
 if `_meta/` doesn't exist (that's first-time setup, not
 migration).
 
-## npm Package
+## The build tool
 
-All build logic is handled by the `gm-apprentice-publish` package.
-You drive it via `npx gm-apprentice-publish ...` commands.
-You never replicate or rewrite its logic.
+All build logic is handled by the `gm-apprentice-publish` tool, which
+**ships inside this plugin** — it is not installed from the npm registry.
+The copy to use lives in the plugin cache at:
 
-**CLI commands:**
+```text
+<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish
+```
+
+Using the cache copy (not npm) is what keeps the renderer in lockstep
+with this skill: both come from the same plugin install. Determine
+`<plugin-version>` from `.claude-plugin/plugin.json` (or infer it from
+this skill's own cache path). You never replicate or rewrite its logic.
+
+**Scaffolding / one-off commands — run the tool from the cache:**
 
 ```bash
-npx gm-apprentice-publish init <target-dir>   # scaffold a new site
-npx gm-apprentice-publish build               # generate docs/ from vault
-npx gm-apprentice-publish --version
-npx gm-apprentice-publish --help
+TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
+node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
+node "$TOOL" --version
+node "$TOOL" --help
+```
+
+**Inside a scaffolded site — build with npm** (it resolves the tool from
+the `file:` pin the scaffold wrote, so no registry and no network):
+
+```bash
+npm install      # links the pinned build tool (deps ship vendored)
+npm run build    # generate docs/ from the vault
 ```
 
 Node 22 or later is required. If the GM hits a version error,
@@ -63,7 +80,13 @@ Workflow:
    set, ask for the absolute path to the site repo directory and
    offer to save it to vault-config for future sessions.
 2. **Check publish tool version.** Make sure the site repo is
-   using the current version of the build tool:
+   using the current version of the build tool. This matters
+   because a bare `/plugin` update drops a new version folder in
+   the plugin cache but never repoints existing sites, so builds
+   keep silently using the old renderer. (The build tool now also
+   prints a loud version-drift warning at the start of every
+   build as a backstop — but repoint it here so the GM never
+   sees that warning.)
    a. Read the plugin version from `.claude-plugin/plugin.json`
       in the gm-apprentice plugin directory (or infer it from the
       skill's own cache path). This is the **expected version**.
@@ -77,7 +100,13 @@ Workflow:
       version differs from the expected version:
       - Update the `file:` dependency in the site repo's
         `package.json` to point at the current cache path.
-      - Run `npm install` in the site repo directory.
+      - Run `npm install` in the site repo directory. The build
+        tool ships its runtime dependencies vendored, so this
+        only needs to re-link the package — it does not download
+        anything and works offline.
+      - Confirm the repoint took effect: re-read
+        `node_modules/gm-apprentice-publish/package.json` and
+        verify the version now matches expected.
       - Tell the GM: "Updated gm-apprentice-publish from
         {old version} to {new version}."
    d. If everything matches, continue silently.

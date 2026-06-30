@@ -290,6 +290,12 @@ This can also happen if the dependency was set to `"latest"` —
 npm resolves that to whatever version is already installed locally,
 which may be outdated.
 
+The build tool detects this itself: at the start of a build it
+compares the version it is running as against the newest version
+installed in the plugin cache, and prints a **version-drift
+warning** naming the exact `file:` path to switch to. If you see
+that warning, this is the failure — follow the fix below.
+
 ### Diagnosis steps
 
 1. Open the site repo's `package.json`. Find the
@@ -319,6 +325,38 @@ To fix manually:
 2. Run `npm install` in the site repo directory to pull in the
    updated package.
 3. Rebuild with `npm run build`.
+
+---
+
+## Failure 8: "Cannot find module" / missing runtime dependencies
+
+### Symptom
+
+`npm run build` fails immediately with either:
+
+- `Error: Cannot find module 'gray-matter'` (or `lunr`,
+  `markdown-it`), or
+- `Error: gm-apprentice-publish is missing runtime dependencies:
+  ...` followed by reinstall guidance.
+
+### Cause
+
+The build tool resolves its own dependencies from wherever the
+plugin cache placed it (a site's `file:` pin symlinks the tool out
+of the cache). The tool ships those dependencies **vendored**
+(committed alongside its code) so they always travel with it. If
+they are missing, the plugin copy in the cache is incomplete —
+usually a broken or interrupted plugin install/update.
+
+### Fix
+
+1. Update or reinstall the gm-apprentice plugin with `/plugin`.
+2. Ask the publish-site skill to "update my site" — capability 2
+   repoints the `file:` dependency at the freshly-installed cache
+   version and re-runs `npm install` (which only re-links the
+   package; the vendored deps need no download).
+3. As a manual fallback, run `npm install` inside the cache's
+   `.../tools/publish` directory the site points at, then rebuild.
 
 ---
 
