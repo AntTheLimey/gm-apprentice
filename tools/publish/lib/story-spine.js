@@ -1,4 +1,5 @@
 const { extractSections } = require('./processor');
+const { slugify } = require('./scanner');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -56,4 +57,76 @@ function resolveUnitRecap(unitPage, wrapUpPage) {
   return null;
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap };
+function chapterMatchesSession(chapterPage, sessionPage) {
+  const ref = refTarget(sessionPage.frontmatter.chapter);
+  if (!ref) return false;
+  if (ref === chapterPage.title) return true;
+  if (ref === chapterPage.title.replace(/_/g, ' ')) return true;
+  const norm = String(chapterPage.displayTitle || chapterPage.title).toLowerCase();
+  return norm.length > 0 && ref.toLowerCase().includes(norm);
+}
+
+function unitOutputPath(id) { return `story/${id}.html`; }
+
+function buildStorySpine(pages) {
+  const chapters = pages
+    .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
+    .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
+      || String(a.title).localeCompare(String(b.title)));
+  const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
+  const idx = buildWrapUpIndex(pages);
+
+  const units = [];
+  for (const chapter of chapters) {
+    const chapterWrap = idx.byChapter.get(chapter.title)
+      || idx.byChapter.get(chapter.title.replace(/_/g, ' ')) || null;
+    const chapterRecap = resolveUnitRecap(chapter, chapterWrap);
+
+    const chapterSessions = sessions
+      .filter(s => chapterMatchesSession(chapter, s))
+      .sort((a, b) => (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0)
+        || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0)));
+
+    const sessionUnits = [];
+    for (const s of chapterSessions) {
+      const recap = resolveUnitRecap(s, idx.bySession.get(s.title));
+      if (!recap) continue;
+      const id = slugify(s.title);
+      sessionUnits.push({
+        kind: 'session', id, outputPath: unitOutputPath(id),
+        title: s.displayTitle || s.title.replace(/_/g, ' '),
+        chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
+        recapHtml: recap.html, sourcePage: recap.sourcePage,
+      });
+    }
+
+    if (sessionUnits.length > 0) {
+      if (chapterRecap) {
+        const id = slugify(chapter.title) + '-intro';
+        units.push({
+          kind: 'chapter-intro', id, outputPath: unitOutputPath(id),
+          title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
+          chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
+          recapHtml: chapterRecap.html, sourcePage: chapterRecap.sourcePage,
+        });
+      }
+      units.push(...sessionUnits);
+    } else if (chapterRecap) {
+      const id = slugify(chapter.title);
+      units.push({
+        kind: 'chapter', id, outputPath: unitOutputPath(id),
+        title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
+        chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
+        recapHtml: chapterRecap.html, sourcePage: chapterRecap.sourcePage,
+      });
+    }
+  }
+
+  for (let i = 0; i < units.length; i++) {
+    units[i].prevHref = i > 0 ? units[i - 1].outputPath : null;
+    units[i].nextHref = i < units.length - 1 ? units[i + 1].outputPath : null;
+  }
+  return units;
+}
+
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, buildStorySpine };

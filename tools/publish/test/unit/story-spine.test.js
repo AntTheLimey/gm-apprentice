@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine } = require('../../lib/story-spine');
 
 describe('findRecap', () => {
   it('extracts the Narrative Recap H2 section as HTML', () => {
@@ -62,5 +62,44 @@ describe('resolveUnitRecap', () => {
   it('returns null when neither has a recap', () => {
     const bare = { title: 'X', frontmatter: {}, markdown: '## Overview\nx' };
     assert.strictEqual(resolveUnitRecap(bare, null), null);
+  });
+});
+
+function ch(title, sort) { return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'chapter', sort_order: sort } }; }
+function sess(title, chapterRef, n, recap) {
+  return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'session', chapter: `[[${chapterRef}]]`, session_number: n }, markdown: recap ? `## Narrative Recap\n${recap}` : '## Overview\nx' };
+}
+
+describe('buildStorySpine', () => {
+  it('is adaptive: chapter-only, per-session, and both→intro+sessions; omits no-recap', () => {
+    const pages = [
+      ch('Chapter_1', 1),
+      { title: 'Chapter_1_Wrap_Up', frontmatter: { type: 'session-wrap-up', chapter: '[[Chapter_1]]' }, markdown: '## Narrative Recap\nCh1 whole' },
+      ch('Chapter_2', 2),
+      { title: 'Chapter_2_Wrap_Up', frontmatter: { type: 'session-wrap-up', chapter: '[[Chapter_2]]' }, markdown: '## Narrative Recap\nCh2 intro' },
+      sess('Chapter_2_S1', 'Chapter_2', 1, 'C2S1 recap'),
+      sess('Chapter_2_S2', 'Chapter_2', 2, 'C2S2 recap'),
+      ch('Chapter_3', 3),
+      sess('Chapter_3_S1', 'Chapter_3', 1, null),
+    ];
+    const spine = buildStorySpine(pages);
+    assert.deepStrictEqual(
+      spine.map(u => u.kind + ':' + u.title),
+      ['chapter:Chapter 1', 'chapter-intro:Chapter 2', 'session:Chapter 2 S1', 'session:Chapter 2 S2'],
+    );
+  });
+
+  it('chains prev/next across the whole spine', () => {
+    const pages = [
+      ch('Chapter_1', 1),
+      { title: 'C1WU', frontmatter: { type: 'session-wrap-up', chapter: '[[Chapter_1]]' }, markdown: '## Recap\na' },
+      ch('Chapter_2', 2),
+      { title: 'C2WU', frontmatter: { type: 'session-wrap-up', chapter: '[[Chapter_2]]' }, markdown: '## Recap\nb' },
+    ];
+    const spine = buildStorySpine(pages);
+    assert.strictEqual(spine[0].prevHref, null);
+    assert.strictEqual(spine[0].nextHref, spine[1].outputPath);
+    assert.strictEqual(spine[1].prevHref, spine[0].outputPath);
+    assert.strictEqual(spine[1].nextHref, null);
   });
 });
