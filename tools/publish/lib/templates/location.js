@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -69,7 +69,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let subLocationsHtml = '';
   if (childLocations.length > 0) {
     const cards = childLocations.map(child => {
-      const href = relativePath(page.outputPath, child.outputPath);
+      const href = relativeHref(page.outputPath, child.outputPath);
       const excerpt = extractFirstSentence(child.markdown || '').replace(/<[^>]+>/g, '');
       return `<a class="entity-card" href="${href}">
   <h4>${escapeHtml(child.displayTitle)}</h4>
@@ -90,7 +90,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let whosHereHtml = '';
   if (locNPCs.length > 0) {
     const npcCards = locNPCs.map(npc => {
-      const href = relativePath(page.outputPath, npc.outputPath);
+      const href = relativeHref(page.outputPath, npc.outputPath);
       const initials = getInitials(npc.displayTitle);
       const role = npc.frontmatter.occupation || '';
       return `<a class="npc-card" href="${href}">
@@ -115,7 +115,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let timelineHtml = '';
   if (locEvents.length > 0) {
     const nodes = locEvents.map(ev => {
-      const href = relativePath(page.outputPath, ev.outputPath);
+      const href = relativeHref(page.outputPath, ev.outputPath);
       const date = ev.frontmatter.in_game_date || ev.frontmatter.date || '';
       const outcome = ev.frontmatter.outcome || '';
       return `<div class="timeline-node">

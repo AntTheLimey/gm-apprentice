@@ -22,6 +22,15 @@ function relativePath(fromDir, toPath) {
   return result || toPath;
 }
 
+// Relative href between two OUTPUT FILE paths. relativePath() expects a directory as its
+// base, so callers that have a page's file path must strip the filename first — passing the
+// file directly counts the filename as a directory level and emits one extra `../` (B3).
+function relativeHref(fromOutputPath, toOutputPath) {
+  const i = String(fromOutputPath).lastIndexOf('/');
+  const fromDir = i === -1 ? '' : fromOutputPath.slice(0, i);
+  return relativePath(fromDir, toOutputPath);
+}
+
 function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   return markdown.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, displayText) => {
     // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
@@ -248,4 +257,4 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, escapeHtml, resolveImageEmbeds, filterFields };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, relativeHref, escapeHtml, resolveImageEmbeds, filterFields };

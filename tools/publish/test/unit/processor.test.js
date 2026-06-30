@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -32,6 +32,25 @@ describe('relativePath', () => {
 
   it('handles same directory', () => {
     assert.strictEqual(relativePath('characters/pcs', 'characters/pcs/jane.html'), 'jane.html');
+  });
+});
+
+describe('relativeHref (file → file)', () => {
+  it('does not drop intermediate dirs across sibling subtrees (B3)', () => {
+    // Regression: passing the page FILE as fromDir added an extra ../, dropping `chapters/`.
+    assert.strictEqual(
+      relativeHref('chapters/chapter-1-london/chapter-1-overview.html',
+        'chapters/chapter-2-vienna/chapter-2-overview.html'),
+      '../chapter-2-vienna/chapter-2-overview.html',
+    );
+  });
+
+  it('links from a root-level file into a subtree', () => {
+    assert.strictEqual(relativeHref('index.html', 'chapters/c1/c1.html'), 'chapters/c1/c1.html');
+  });
+
+  it('links within the same directory', () => {
+    assert.strictEqual(relativeHref('a/b/c.html', 'a/b/d.html'), 'd.html');
   });
 });
 
