@@ -18,4 +18,30 @@ function findRecap(page) {
   return null;
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES };
+const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
+
+function refTarget(value) {
+  if (!value) return '';
+  return String(value).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+}
+
+// Index wrap-up pages: bySession (keyed on the session ref target) and byChapter
+// (keyed on the chapter ref target, for wrap-ups with no session ref).
+function buildWrapUpIndex(pages) {
+  const bySession = new Map();
+  const byChapter = new Map();
+  for (const w of pages) {
+    const t = (w.frontmatter || {}).type;
+    if (!WRAP_UP_TYPES.has(t)) continue;
+    const sessionRef = refTarget(w.frontmatter.session);
+    if (sessionRef) {
+      if (!bySession.has(sessionRef)) bySession.set(sessionRef, w);
+      continue;
+    }
+    const chapterRef = refTarget(w.frontmatter.chapter);
+    if (chapterRef && !byChapter.has(chapterRef)) byChapter.set(chapterRef, w);
+  }
+  return { bySession, byChapter };
+}
+
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES };
