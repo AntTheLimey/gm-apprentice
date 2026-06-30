@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath, humanizeName } = require('../processor');
+const { escapeHtml, relativePath, parseWikiRef } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -35,10 +35,9 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
   // Current holder link
   let holderHtml = '';
   if (fm.current_holder) {
-    const holderName = String(fm.current_holder).replace(/\[\[|\]\]/g, '').trim();
+    const { target: holderName, label: holderLabel } = parseWikiRef(fm.current_holder);
     const holderPath = linkMap?.[holderName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    const holderLabel = humanizeName(holderName);
     if (holderPath) {
       const href = relativePath(currentDir, holderPath);
       holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> <a href="${href}">${escapeHtml(holderLabel)}</a></p>`;
@@ -50,10 +49,9 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
   // Origin link (similar pattern)
   let originHtml = '';
   if (fm.origin) {
-    const originName = String(fm.origin).replace(/\[\[|\]\]/g, '').trim();
+    const { target: originName, label: originLabel } = parseWikiRef(fm.origin);
     const originPath = linkMap?.[originName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    const originLabel = humanizeName(originName);
     if (originPath) {
       const href = relativePath(currentDir, originPath);
       originHtml = `<p class="item-origin"><strong>Origin:</strong> <a href="${href}">${escapeHtml(originLabel)}</a></p>`;

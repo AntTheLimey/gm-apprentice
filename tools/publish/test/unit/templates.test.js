@@ -192,6 +192,20 @@ describe('location parent breadcrumb relative href (B-batch2)', () => {
     assert.ok(html.includes('href="london.html"'), 'parent crumb should be relative to locations/');
     assert.ok(!html.includes('href="locations/london.html"'), 'must not use the root-relative path as a same-dir href');
   });
+
+  it('parses an aliased parent_location (resolves link, labels with the alias)', () => {
+    const page = {
+      title: 'Reading_Room', displayTitle: 'Reading Room',
+      outputPath: 'locations/reading-room.html',
+      frontmatter: { type: 'location', parent_location: '[[British_Museum|the Museum]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const context = { pages: [], linkMap: { British_Museum: 'locations/british-museum.html' }, publishConfig: {} };
+    const html = locationTemplate(page, processed, mockNavFor, mockConfig, {}, context);
+    assert.ok(html.includes('href="british-museum.html"'), 'aliased parent ref still resolves');
+    assert.ok(html.includes('the Museum'), 'alias used as label');
+    assert.ok(!html.includes('British_Museum|'), 'pipe/target not rendered as text');
+  });
 });
 
 describe('item template holder/origin humanization (B-batch2)', () => {
@@ -210,6 +224,19 @@ describe('item template holder/origin humanization (B-batch2)', () => {
     assert.ok(html.includes('>Lord Percival Harcourt</a>'), 'holder display humanized');
     assert.ok(!html.includes('>Lord_Percival_Harcourt<'), 'no raw slug in holder text');
     assert.ok(html.includes('lord-percival-harcourt.html'), 'link still resolves');
+  });
+
+  it('parses an aliased holder ref (target for lookup, alias for display)', () => {
+    const page = {
+      title: 'Locket', displayTitle: 'Locket', outputPath: 'items/locket.html',
+      frontmatter: { type: 'item', current_holder: '[[Lord_Percival_Harcourt|Lord Percival]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const linkMap = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
+    assert.ok(html.includes('>Lord Percival</a>'), 'explicit alias used as label');
+    assert.ok(html.includes('lord-percival-harcourt.html'), 'aliased ref still resolves the link');
+    assert.ok(!html.includes('Harcourt|Lord'), 'pipe/target+alias not rendered as text');
   });
 });
 

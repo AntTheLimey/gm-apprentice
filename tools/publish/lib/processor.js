@@ -15,6 +15,17 @@ function humanizeName(s) {
   return String(s == null ? '' : s).replace(/_/g, ' ');
 }
 
+// Parse a wiki ref (`[[Target]]` or `[[Target|Alias]]`, brackets optional) into the raw
+// lookup target and a display label. The target keeps its underscores so it still matches
+// linkMap keys; the label is the explicit alias if given, otherwise the humanized target.
+function parseWikiRef(raw) {
+  const inner = String(raw == null ? '' : raw).replace(/\[\[|\]\]/g, '').trim();
+  if (!inner) return { target: '', label: '' };
+  const pipe = inner.indexOf('|');
+  if (pipe === -1) return { target: inner, label: humanizeName(inner) };
+  return { target: inner.slice(0, pipe).trim(), label: inner.slice(pipe + 1).trim() };
+}
+
 function relativePath(fromDir, toPath) {
   if (!fromDir) return toPath;
   const fromParts = fromDir.split('/').filter(Boolean);
@@ -263,4 +274,4 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, escapeHtml, resolveImageEmbeds, filterFields };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, filterFields };

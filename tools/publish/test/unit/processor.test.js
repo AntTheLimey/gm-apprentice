@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -32,6 +32,26 @@ describe('relativePath', () => {
 
   it('handles same directory', () => {
     assert.strictEqual(relativePath('characters/pcs', 'characters/pcs/jane.html'), 'jane.html');
+  });
+});
+
+describe('parseWikiRef', () => {
+  it('splits target and alias, keeping the target raw for lookups', () => {
+    assert.deepStrictEqual(
+      parseWikiRef('[[Lord_Percival_Harcourt|Lord Percival]]'),
+      { target: 'Lord_Percival_Harcourt', label: 'Lord Percival' },
+    );
+  });
+  it('humanizes the target as the label when there is no alias', () => {
+    assert.deepStrictEqual(
+      parseWikiRef('[[Lord_Percival_Harcourt]]'),
+      { target: 'Lord_Percival_Harcourt', label: 'Lord Percival Harcourt' },
+    );
+  });
+  it('handles bare (bracketless) refs and empties', () => {
+    assert.deepStrictEqual(parseWikiRef('Upper_City'), { target: 'Upper_City', label: 'Upper City' });
+    assert.deepStrictEqual(parseWikiRef(''), { target: '', label: '' });
+    assert.deepStrictEqual(parseWikiRef(null), { target: '', label: '' });
   });
 });
 
