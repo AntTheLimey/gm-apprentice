@@ -53,7 +53,7 @@ function generateNavGroups(pages) {
     .filter(Boolean);
 }
 
-function renderTopNav(pages, currentOutputPath, config) {
+function renderTopNav(pages, currentOutputPath, config, options = {}) {
   const groups = generateNavGroups(pages);
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
 
@@ -63,8 +63,12 @@ function renderTopNav(pages, currentOutputPath, config) {
       return `        <a href="${href}">${escapeHtml(link.label)}</a>`;
     }).join('\n');
 
+    const toggle = options.hasStory && group.name === 'Story'
+      ? `<a class="nav-group-toggle" href="${relativePath(currentDir, 'story.html')}">${escapeHtml(group.name)}</a>`
+      : `<button class="nav-group-toggle">${escapeHtml(group.name)}</button>`;
+
     return `      <div class="nav-group">
-        <button class="nav-group-toggle">${escapeHtml(group.name)}</button>
+        ${toggle}
         <div class="nav-dropdown">
 ${linksHtml}
         </div>
@@ -95,9 +99,9 @@ ${mobileLinksHtml}
 </div>`;
 }
 
-function generateNav(pages) {
+function generateNav(pages, options = {}) {
   return function navFor(currentOutputPath, config) {
-    return renderTopNav(pages, currentOutputPath, config || { siteTitle: '' });
+    return renderTopNav(pages, currentOutputPath, config || { siteTitle: '' }, options);
   };
 }
 

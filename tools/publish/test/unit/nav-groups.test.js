@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { generateNavGroups } = require('../../lib/templates/nav');
+const { generateNavGroups, generateNav } = require('../../lib/templates/nav');
 
 describe('generateNavGroups', () => {
   const pages = [
@@ -63,5 +63,14 @@ describe('generateNavGroups', () => {
     assert.ok(chars);
     const story = groups.find(g => g.name === 'Story');
     assert.ok(!story);
+  });
+});
+
+describe('generateNav', () => {
+  it('links the Story group at story.html when hasStory is set', () => {
+    const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
+    const navFor = generateNav(pages, { hasStory: true });
+    const html = navFor('index.html', { siteTitle: 'T' });
+    assert.match(html, /href="story\.html"/);
   });
 });

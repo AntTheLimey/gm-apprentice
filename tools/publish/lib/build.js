@@ -8,6 +8,7 @@ const { loadManifest } = require('./manifest');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
+const { storyLanding } = require('./templates/story-landing');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -213,6 +214,12 @@ function build(options = {}) {
     page.publishedMarkdown = filterSections(text, excludeSections);
   }
 
+  // Whether a Story section will exist. Computed early (pure function of pages) so the
+  // top nav — threaded into every page, including story pages built later — can point
+  // the Story group at story.html. Must match what buildStory() emits below.
+  const hasStory = buildStorySpine(pages).length > 0
+    || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
+
   // Build-time data pipeline
   const backlinks = buildBacklinks(pages);
   console.log(`Built backlinks for ${Object.keys(backlinks).length} entities`);
@@ -323,7 +330,7 @@ function build(options = {}) {
 
   write404();
 
-  const navFor = generateNav(pages);
+  const navFor = generateNav(pages, { hasStory });
 
   // Render each page
   const usedImages = new Set();
@@ -575,7 +582,14 @@ function build(options = {}) {
       console.log(`  wrote ${unit.outputPath}`);
     }
     const characterStories = buildCharacterStories();
-    return { spine, characterStories };
+    if (spine.length || characterStories.length) {
+      const landing = storyLanding(spine, characterStories, config, publishConfig, navFor);
+      const lp = path.join(outputDir, 'story.html');
+      ensureDir(lp);
+      fs.writeFileSync(lp, landing);
+      console.log('  wrote story.html');
+    }
+    return { spine, characterStories, hasStory: !!(spine.length || characterStories.length) };
   }
 
   const storyResult = buildStory();
