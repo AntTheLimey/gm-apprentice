@@ -11,10 +11,13 @@ function publishedOf(page) {
 }
 
 // Find the recap section of a page. Returns { title, html } or null.
+// Heading match is a case-insensitive CONTAINS, because real vaults decorate the title
+// (e.g. "What Happened — Narrative Recap"). "narrative recap" is tried before the looser
+// "recap" so the more specific heading wins when both are present.
 function findRecap(page) {
   const sections = extractSections(publishedOf(page));
   for (const wanted of RECAP_TITLES) {
-    const hit = sections.find(s => s.title.trim().toLowerCase() === wanted);
+    const hit = sections.find(s => s.title.trim().toLowerCase().includes(wanted));
     if (hit && hit.html && hit.html.trim()) return { title: hit.title, html: hit.html };
   }
   return null;

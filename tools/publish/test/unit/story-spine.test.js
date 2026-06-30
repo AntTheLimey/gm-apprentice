@@ -17,6 +17,14 @@ describe('findRecap', () => {
     assert.match(findRecap(page).html, /Short recap text/);
   });
 
+  it('matches a decorated recap heading (real vaults: "What Happened — Narrative Recap")', () => {
+    const page = { markdown: '## What Happened — Narrative Recap\nThe session unfolded.\n\n## PC Carry-Forward\nstuff' };
+    const r = findRecap(page);
+    assert.ok(r, 'decorated heading should match');
+    assert.match(r.html, /The session unfolded/);
+    assert.ok(!/Carry-Forward/.test(r.html), 'must not bleed into the next section');
+  });
+
   it('returns null when there is no recap section', () => {
     assert.strictEqual(findRecap({ markdown: '## Overview\nno recap here' }), null);
   });
