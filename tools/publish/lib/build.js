@@ -106,6 +106,7 @@ function build(options = {}) {
       siteUrl: config.siteUrl,
       four_oh_four: publishConfig.four_oh_four,
       theme: publishConfig.theme,
+      genrePreset: publishConfig._genrePreset,
     });
     fs.writeFileSync(path.join(outputDir, '404.html'), html);
     console.log('  wrote 404.html');
@@ -200,6 +201,15 @@ function build(options = {}) {
   const { buildBacklinks } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
+
+  // Compute each page's "published view" — markdown with gm-only blocks and excluded
+  // sections removed — once, so derived widgets (backlinks, recency, the relationship
+  // graph) never surface names that only appear in unpublished content (B6 spoiler leak).
+  for (const page of pages) {
+    const stripped = stripGmOnly(page.markdown || '');
+    const text = typeof stripped === 'string' ? stripped : stripped.text;
+    page.publishedMarkdown = filterSections(text, excludeSections);
+  }
 
   // Build-time data pipeline
   const backlinks = buildBacklinks(pages);

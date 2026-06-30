@@ -18,6 +18,23 @@ describe('fourOhFourTemplate', () => {
     assert.ok(html.includes('The stars are not yet right...'));
   });
 
+  it('includes the genre theme stylesheet when a preset is set', () => {
+    const html = fourOhFourTemplate({
+      ...baseConfig,
+      siteUrl: 'https://example.github.io/my-campaign',
+      genrePreset: 'cosmic-horror',
+    });
+    assert.ok(
+      html.includes('href="/my-campaign/css/themes/cosmic-horror.css"'),
+      'genre theme link should be present so the 404 matches site theming',
+    );
+  });
+
+  it('omits the genre theme link when no preset', () => {
+    const html = fourOhFourTemplate(baseConfig);
+    assert.ok(!html.includes('css/themes/'), 'no genre link without a preset');
+  });
+
   it('includes the site title', () => {
     const html = fourOhFourTemplate(baseConfig);
     assert.ok(html.includes('Test Campaign'));

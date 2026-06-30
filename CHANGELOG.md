@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.9] — 2026-06-30
+
+### Fixed
+
+- **Excluded sections no longer leak when both config sources are set
+  (B8).** `_meta/vault-config.md`'s `exclude_sections`/`exclude_dirs`
+  silently shadowed `vault.config.json`'s lists (an `A || B`), so a section
+  listed only in the JSON — e.g. `Source References` — was never stripped.
+  The two sources are now unioned (case-insensitive dedupe), falling back to
+  defaults only when neither is set.
+- **Derived widgets no longer leak GM-only names (B6).** "NPCs in Play"
+  (recency) and the relationship graph (via backlinks) scanned raw page
+  markdown, surfacing entities mentioned only in `<!-- gm-only -->` blocks or
+  excluded sections. Each page's "published view" (those stripped) is now
+  computed once and used by backlinks and recency; graph edges derive from
+  backlinks, so they are covered too.
+- **Cross-subtree links no longer 404 (B3).** `wiki.js`, `location.js`, and
+  `npc.js` passed a page's file path where `relativePath` expects a
+  directory, adding an extra `../` that dropped a path segment (e.g. cross-
+  chapter links lost `chapters/`). Added a `relativeHref(fromFile, toFile)`
+  helper and routed all file-to-file links through it.
+- **Wikilinks no longer render as raw underscore slugs (B1).** Body links
+  showed `Lord_Percival_Harcourt`; display text is now humanized (underscores
+  to spaces) for resolved and unresolved links, leaving explicit aliases
+  untouched.
+- **The 404 page is themed (B4).** It loaded `style.css` + `theme.css` but
+  not `css/themes/<genre>.css`, so it fell back to default accents; the genre
+  overlay link is now emitted.
+- **Breadcrumb dead-links removed.** Breadcrumbs linked every last directory
+  segment to `index.html`, but only top-level dirs get one — chapter
+  subfolders 404'd; those segments are now plain text. The `parent_location`
+  breadcrumb also used the root-relative output path as a same-dir href
+  (resolving to `locations/locations/…`); it is now made relative.
+- **More raw-slug surfaces humanized.** Beyond body wikilinks (B1), event
+  participant/location links and item holder/origin links showed raw
+  underscore slugs; all now humanize via a shared `humanizeName` helper,
+  preserving explicit aliases. Against the Canticle vault this drives broken
+  links from 586 (pre-fix) to 15 and raw-slug links from 2043 to 0 (the
+  remaining 14 broken are relationship-graph SVG node paths, tracked
+  separately).
+- **Sparse sidebars no longer squeeze the article (B2).** A page with a
+  single small sidebar box still reserved the full 18rem column; sidebars
+  with ≤1 section now collapse to a single comfortably-wide column.
+
+### Changed
+
+- `gm-apprentice-publish` bumped to 1.3.1.
+
+---
+
 ## [1.7.8] — 2026-06-29
 
 ### Fixed

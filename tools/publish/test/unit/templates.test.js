@@ -116,8 +116,8 @@ describe('rootPath', () => {
 describe('parseParticipant', () => {
   it('parses [[Entity]] (annotation)', () => {
     const result = parseParticipant('[[Anna_Lindqvist]] (rescued)');
-    assert.strictEqual(result.target, 'Anna_Lindqvist');
-    assert.strictEqual(result.display, 'Anna_Lindqvist');
+    assert.strictEqual(result.target, 'Anna_Lindqvist'); // raw target preserved for lookup
+    assert.strictEqual(result.display, 'Anna Lindqvist'); // display humanized (no underscores)
     assert.strictEqual(result.annotation, 'rescued');
     assert.strictEqual(result.isLink, true);
   });
@@ -133,7 +133,7 @@ describe('parseParticipant', () => {
   it('parses [[Entity]] without annotation', () => {
     const result = parseParticipant('[[Emma_Wentworth]]');
     assert.strictEqual(result.target, 'Emma_Wentworth');
-    assert.strictEqual(result.display, 'Emma_Wentworth');
+    assert.strictEqual(result.display, 'Emma Wentworth');
     assert.strictEqual(result.annotation, '');
     assert.strictEqual(result.isLink, true);
   });
@@ -167,6 +167,76 @@ describe('parseParticipant', () => {
     assert.strictEqual(result.display, 'Hero');
     assert.strictEqual(result.annotation, 'led the assault');
     assert.strictEqual(result.isLink, true);
+  });
+
+  it('keeps an explicit alias verbatim (does not over-humanize)', () => {
+    const result = parseParticipant('[[Anna_Lindqvist|Madame A_B]]');
+    assert.strictEqual(result.display, 'Madame A_B', 'explicit alias preserved as written');
+  });
+});
+
+describe('location parent breadcrumb relative href (B-batch2)', () => {
+  const { locationTemplate } = require('../../lib/templates/location');
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('makes the parent_location breadcrumb relative to the page (no doubled dir)', () => {
+    const page = {
+      title: 'British_Museum', displayTitle: 'British Museum',
+      outputPath: 'locations/british-museum.html',
+      frontmatter: { type: 'location', parent_location: '[[London]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const context = { pages: [], linkMap: { London: 'locations/london.html' }, publishConfig: {} };
+    const html = locationTemplate(page, processed, mockNavFor, mockConfig, {}, context);
+    assert.ok(html.includes('href="london.html"'), 'parent crumb should be relative to locations/');
+    assert.ok(!html.includes('href="locations/london.html"'), 'must not use the root-relative path as a same-dir href');
+  });
+
+  it('parses an aliased parent_location (resolves link, labels with the alias)', () => {
+    const page = {
+      title: 'Reading_Room', displayTitle: 'Reading Room',
+      outputPath: 'locations/reading-room.html',
+      frontmatter: { type: 'location', parent_location: '[[British_Museum|the Museum]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const context = { pages: [], linkMap: { British_Museum: 'locations/british-museum.html' }, publishConfig: {} };
+    const html = locationTemplate(page, processed, mockNavFor, mockConfig, {}, context);
+    assert.ok(html.includes('href="british-museum.html"'), 'aliased parent ref still resolves');
+    assert.ok(html.includes('the Museum'), 'alias used as label');
+    assert.ok(!html.includes('British_Museum|'), 'pipe/target not rendered as text');
+  });
+});
+
+describe('item template holder/origin humanization (B-batch2)', () => {
+  const { itemTemplate } = require('../../lib/templates/item');
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  it('humanizes the current_holder link text but keeps the link resolved', () => {
+    const page = {
+      title: 'Cursed_Locket', displayTitle: 'Cursed Locket', outputPath: 'items/cursed-locket.html',
+      frontmatter: { type: 'item', current_holder: '[[Lord_Percival_Harcourt]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const linkMap = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
+    assert.ok(html.includes('>Lord Percival Harcourt</a>'), 'holder display humanized');
+    assert.ok(!html.includes('>Lord_Percival_Harcourt<'), 'no raw slug in holder text');
+    assert.ok(html.includes('lord-percival-harcourt.html'), 'link still resolves');
+  });
+
+  it('parses an aliased holder ref (target for lookup, alias for display)', () => {
+    const page = {
+      title: 'Locket', displayTitle: 'Locket', outputPath: 'items/locket.html',
+      frontmatter: { type: 'item', current_holder: '[[Lord_Percival_Harcourt|Lord Percival]]' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const linkMap = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
+    assert.ok(html.includes('>Lord Percival</a>'), 'explicit alias used as label');
+    assert.ok(html.includes('lord-percival-harcourt.html'), 'aliased ref still resolves the link');
+    assert.ok(!html.includes('Harcourt|Lord'), 'pipe/target+alias not rendered as text');
   });
 });
 
@@ -289,6 +359,40 @@ describe('displayTitle usage', () => {
     const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {});
     assert.ok(html.includes('Old Fortress'), 'Should use displayTitle');
     assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
+  });
+
+  it('flags a sparse sidebar (≤1 section) for single-column layout (B2)', () => {
+    const page = {
+      title: 'Spot', displayTitle: 'Spot', outputPath: 'locations/spot.html',
+      frontmatter: { type: 'location' },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const context = {
+      publishConfig: { _backlinks: { Spot: [
+        { title: 'S1', displayTitle: 'Session 1', outputPath: 'sessions/s1.html', type: 'session' },
+      ] } },
+      linkMap: {}, pages: [],
+    };
+    const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {}, context);
+    assert.ok(html.includes('content-with-sidebar'), 'should render the sidebar layout');
+    assert.ok(html.includes('content-sidebar-sparse'), 'a one-section sidebar should be flagged sparse');
+  });
+
+  it('does not flag a rich sidebar (≥2 sections)', () => {
+    const page = {
+      title: 'Spot', displayTitle: 'Spot', outputPath: 'locations/spot.html',
+      frontmatter: { type: 'location', relationships: { ally: ['[[Bob]]'] } },
+    };
+    const processed = { html: '<p>x</p>', relationships: '' };
+    const context = {
+      publishConfig: { _backlinks: { Spot: [
+        { title: 'S1', displayTitle: 'Session 1', outputPath: 'sessions/s1.html', type: 'session' },
+      ] } },
+      linkMap: { Bob: 'characters/npcs/bob.html' }, pages: [],
+    };
+    const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {}, context);
+    assert.ok(html.includes('content-with-sidebar'), 'should render the sidebar layout');
+    assert.ok(!html.includes('content-sidebar-sparse'), 'two sections should not be flagged sparse');
   });
 });
 

@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativePath, parseWikiRef } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -35,28 +35,28 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
   // Current holder link
   let holderHtml = '';
   if (fm.current_holder) {
-    const holderName = String(fm.current_holder).replace(/\[\[|\]\]/g, '').trim();
+    const { target: holderName, label: holderLabel } = parseWikiRef(fm.current_holder);
     const holderPath = linkMap?.[holderName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     if (holderPath) {
       const href = relativePath(currentDir, holderPath);
-      holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> <a href="${href}">${escapeHtml(holderName)}</a></p>`;
+      holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> <a href="${href}">${escapeHtml(holderLabel)}</a></p>`;
     } else {
-      holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> ${escapeHtml(holderName)}</p>`;
+      holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> ${escapeHtml(holderLabel)}</p>`;
     }
   }
 
   // Origin link (similar pattern)
   let originHtml = '';
   if (fm.origin) {
-    const originName = String(fm.origin).replace(/\[\[|\]\]/g, '').trim();
+    const { target: originName, label: originLabel } = parseWikiRef(fm.origin);
     const originPath = linkMap?.[originName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     if (originPath) {
       const href = relativePath(currentDir, originPath);
-      originHtml = `<p class="item-origin"><strong>Origin:</strong> <a href="${href}">${escapeHtml(originName)}</a></p>`;
+      originHtml = `<p class="item-origin"><strong>Origin:</strong> <a href="${href}">${escapeHtml(originLabel)}</a></p>`;
     } else {
-      originHtml = `<p class="item-origin"><strong>Origin:</strong> ${escapeHtml(originName)}</p>`;
+      originHtml = `<p class="item-origin"><strong>Origin:</strong> ${escapeHtml(originLabel)}</p>`;
     }
   }
 

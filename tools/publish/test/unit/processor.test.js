@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -35,6 +35,45 @@ describe('relativePath', () => {
   });
 });
 
+describe('parseWikiRef', () => {
+  it('splits target and alias, keeping the target raw for lookups', () => {
+    assert.deepStrictEqual(
+      parseWikiRef('[[Lord_Percival_Harcourt|Lord Percival]]'),
+      { target: 'Lord_Percival_Harcourt', label: 'Lord Percival' },
+    );
+  });
+  it('humanizes the target as the label when there is no alias', () => {
+    assert.deepStrictEqual(
+      parseWikiRef('[[Lord_Percival_Harcourt]]'),
+      { target: 'Lord_Percival_Harcourt', label: 'Lord Percival Harcourt' },
+    );
+  });
+  it('handles bare (bracketless) refs and empties', () => {
+    assert.deepStrictEqual(parseWikiRef('Upper_City'), { target: 'Upper_City', label: 'Upper City' });
+    assert.deepStrictEqual(parseWikiRef(''), { target: '', label: '' });
+    assert.deepStrictEqual(parseWikiRef(null), { target: '', label: '' });
+  });
+});
+
+describe('relativeHref (file → file)', () => {
+  it('does not drop intermediate dirs across sibling subtrees (B3)', () => {
+    // Regression: passing the page FILE as fromDir added an extra ../, dropping `chapters/`.
+    assert.strictEqual(
+      relativeHref('chapters/chapter-1-london/chapter-1-overview.html',
+        'chapters/chapter-2-vienna/chapter-2-overview.html'),
+      '../chapter-2-vienna/chapter-2-overview.html',
+    );
+  });
+
+  it('links from a root-level file into a subtree', () => {
+    assert.strictEqual(relativeHref('index.html', 'chapters/c1/c1.html'), 'chapters/c1/c1.html');
+  });
+
+  it('links within the same directory', () => {
+    assert.strictEqual(relativeHref('a/b/c.html', 'a/b/d.html'), 'd.html');
+  });
+});
+
 describe('resolveWikiLinks', () => {
   const linkMap = { 'John Doe': 'characters/pcs/john-doe.html' };
 
@@ -51,6 +90,23 @@ describe('resolveWikiLinks', () => {
   it('returns display text only for unknown links', () => {
     const result = resolveWikiLinks('See [[Unknown]]', linkMap, 'index.html');
     assert.strictEqual(result, 'See Unknown');
+  });
+
+  it('humanizes underscore slugs in resolved link text (no raw slug)', () => {
+    const map = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const result = resolveWikiLinks('Meet [[Lord_Percival_Harcourt]]', map, 'index.html');
+    assert.strictEqual(result, 'Meet [Lord Percival Harcourt](characters/npcs/lord-percival-harcourt.html)');
+  });
+
+  it('humanizes underscore slugs for unresolved links (plain text, not a dead anchor)', () => {
+    const result = resolveWikiLinks('Meet [[Yog_Sothoth]]', {}, 'index.html');
+    assert.strictEqual(result, 'Meet Yog Sothoth');
+  });
+
+  it('still honors an explicit alias verbatim', () => {
+    const map = { 'Lord_Percival_Harcourt': 'x.html' };
+    const result = resolveWikiLinks('[[Lord_Percival_Harcourt|His Lordship]]', map, 'index.html');
+    assert.strictEqual(result, '[His Lordship](x.html)');
   });
 });
 

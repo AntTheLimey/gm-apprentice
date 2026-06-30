@@ -9,6 +9,23 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+// Turn a wiki-link slug/target into human-readable display text (underscores → spaces).
+// Used wherever a raw entity name would otherwise show, e.g. Lord_Percival_Harcourt.
+function humanizeName(s) {
+  return String(s == null ? '' : s).replace(/_/g, ' ');
+}
+
+// Parse a wiki ref (`[[Target]]` or `[[Target|Alias]]`, brackets optional) into the raw
+// lookup target and a display label. The target keeps its underscores so it still matches
+// linkMap keys; the label is the explicit alias if given, otherwise the humanized target.
+function parseWikiRef(raw) {
+  const inner = String(raw == null ? '' : raw).replace(/\[\[|\]\]/g, '').trim();
+  if (!inner) return { target: '', label: '' };
+  const pipe = inner.indexOf('|');
+  if (pipe === -1) return { target: inner, label: humanizeName(inner) };
+  return { target: inner.slice(0, pipe).trim(), label: inner.slice(pipe + 1).trim() };
+}
+
 function relativePath(fromDir, toPath) {
   if (!fromDir) return toPath;
   const fromParts = fromDir.split('/').filter(Boolean);
@@ -22,9 +39,20 @@ function relativePath(fromDir, toPath) {
   return result || toPath;
 }
 
+// Relative href between two OUTPUT FILE paths. relativePath() expects a directory as its
+// base, so callers that have a page's file path must strip the filename first — passing the
+// file directly counts the filename as a directory level and emits one extra `../` (B3).
+function relativeHref(fromOutputPath, toOutputPath) {
+  const i = String(fromOutputPath).lastIndexOf('/');
+  const fromDir = i === -1 ? '' : fromOutputPath.slice(0, i);
+  return relativePath(fromDir, toOutputPath);
+}
+
 function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   return markdown.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, displayText) => {
-    const display = displayText || target;
+    // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
+    // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
+    const display = displayText || humanizeName(target);
     const targetPath = linkMap[target];
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
@@ -246,4 +274,4 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, escapeHtml, resolveImageEmbeds, filterFields };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, filterFields };

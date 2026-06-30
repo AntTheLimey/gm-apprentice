@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -64,7 +64,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     const locDisplay = locTitle.replace(/_/g, ' ');
     const locPath = linkMap ? linkMap[locTitle] : null;
     if (locPath) {
-      const href = relativePath(page.outputPath, locPath);
+      const href = relativeHref(page.outputPath, locPath);
       locationCardHtml = `<a class="npc-location-card" href="${href}">
   <div><span class="loc-label">Location</span><br><strong>${escapeHtml(locDisplay)}</strong></div>
 </a>`;
@@ -84,7 +84,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
       const display = target.replace(/_/g, ' ');
       const relType = (r.type || '').replace(/_/g, ' ');
       const targetPath = linkMap ? linkMap[target] : null;
-      const href = targetPath ? relativePath(page.outputPath, targetPath) : null;
+      const href = targetPath ? relativeHref(page.outputPath, targetPath) : null;
       const tag = href ? 'a' : 'div';
       const hrefAttr = href ? ` href="${href}"` : '';
       return `<${tag} class="rel-card"${hrefAttr}>
@@ -109,7 +109,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   let arcTimelineHtml = '';
   if (sessionBacklinks.length > 0) {
     const nodes = sessionBacklinks.map(b => {
-      const href = relativePath(page.outputPath, b.outputPath);
+      const href = relativeHref(page.outputPath, b.outputPath);
       return `<div class="timeline-node">
   <a href="${href}">${escapeHtml(b.displayTitle)}</a>
 </div>`;

@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativeHref, parseWikiRef } = require('../processor');
 const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -22,9 +22,15 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   const fm = page.frontmatter;
   const backlinks = ((publishConfig || {})._backlinks || {})[page.title] || [];
 
-  const crumbs = generateBreadcrumbs(page.outputPath, fm.parent_location ? {
-    parentLocation: String(fm.parent_location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' '),
-    parentLocationHref: linkMap ? (linkMap[String(fm.parent_location).replace(/\[\[|\]\]/g, '').trim()] || null) : null,
+  // Parse `[[Target|Alias]]` once: target keeps underscores for the linkMap lookup, label
+  // is the alias or the humanized target. Reused by the breadcrumb and the sidebar below.
+  const parent = fm.parent_location ? parseWikiRef(fm.parent_location) : null;
+  const parentTarget = parent && linkMap ? linkMap[parent.target] : null;
+  const crumbs = generateBreadcrumbs(page.outputPath, parent ? {
+    parentLocation: parent.label,
+    // Breadcrumb hrefs are relative to the current page; linkMap holds the root-relative
+    // output path, so make it relative or it resolves under the current dir and 404s.
+    parentLocationHref: parentTarget ? relativeHref(page.outputPath, parentTarget) : null,
   } : {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
@@ -69,7 +75,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let subLocationsHtml = '';
   if (childLocations.length > 0) {
     const cards = childLocations.map(child => {
-      const href = relativePath(page.outputPath, child.outputPath);
+      const href = relativeHref(page.outputPath, child.outputPath);
       const excerpt = extractFirstSentence(child.markdown || '').replace(/<[^>]+>/g, '');
       return `<a class="entity-card" href="${href}">
   <h4>${escapeHtml(child.displayTitle)}</h4>
@@ -90,7 +96,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let whosHereHtml = '';
   if (locNPCs.length > 0) {
     const npcCards = locNPCs.map(npc => {
-      const href = relativePath(page.outputPath, npc.outputPath);
+      const href = relativeHref(page.outputPath, npc.outputPath);
       const initials = getInitials(npc.displayTitle);
       const role = npc.frontmatter.occupation || '';
       return `<a class="npc-card" href="${href}">
@@ -115,7 +121,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let timelineHtml = '';
   if (locEvents.length > 0) {
     const nodes = locEvents.map(ev => {
-      const href = relativePath(page.outputPath, ev.outputPath);
+      const href = relativeHref(page.outputPath, ev.outputPath);
       const date = ev.frontmatter.in_game_date || ev.frontmatter.date || '';
       const outcome = ev.frontmatter.outcome || '';
       return `<div class="timeline-node">
@@ -133,9 +139,9 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   // --- Context Sidebar ---
   const sidebar = renderContextSidebar({
     backlinks,
-    parentEntity: fm.parent_location ? {
-      name: String(fm.parent_location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' '),
-      path: linkMap ? linkMap[String(fm.parent_location).replace(/\[\[|\]\]/g, '').trim()] : null,
+    parentEntity: parent ? {
+      name: parent.label,
+      path: parentTarget,
     } : null,
     relationships: normalizeRelationships(fm.relationships, linkMap),
     currentOutputPath: page.outputPath,
