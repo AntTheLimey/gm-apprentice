@@ -29,6 +29,18 @@ describe('scoreByRecency', () => {
     assert.strictEqual(scored[0].page.title, 'NPC_A');
   });
 
+  it('ignores mentions stripped from the published view (B6 spoiler leak)', () => {
+    // NPC_A is only mentioned in the raw markdown; the published view (gm-only/excluded
+    // sections removed) does not mention it, so it must not surface as "in play".
+    const gmOnlySessions = [
+      { title: 'S3', frontmatter: { type: 'session', status: 'played', session_number: 3 },
+        markdown: 'Met [[NPC_A]] in secret.', publishedMarkdown: 'Nothing public here.' },
+    ];
+    const scored = scoreByRecency(entities, gmOnlySessions, [], { window: 3, max: 10, type: 'npc' });
+    assert.ok(!scored.map(s => s.page.title).includes('NPC_A'),
+      'an NPC mentioned only in stripped content must not be scored as recent');
+  });
+
   it('excludes dead/destroyed entities', () => {
     const scored = scoreByRecency(entities, sessions, [chapter], { window: 3, max: 10, type: 'npc' });
     const titles = scored.map(s => s.page.title);

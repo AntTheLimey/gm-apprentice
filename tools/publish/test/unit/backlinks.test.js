@@ -2,6 +2,22 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { buildBacklinks } = require('../../lib/backlinks');
 
+describe('buildBacklinks published view (B6)', () => {
+  it('uses publishedMarkdown when present, so gm-only/excluded mentions do not backlink', () => {
+    const pages = [{
+      title: 'Session_1',
+      displayTitle: 'Session 1',
+      outputPath: 'sessions/session-1.html',
+      frontmatter: { type: 'session' },
+      markdown: 'Public [[Alice]]. Secret [[Mole]].',
+      publishedMarkdown: 'Public [[Alice]].',
+    }];
+    const bl = buildBacklinks(pages);
+    assert.ok(bl['Alice'], 'published mention should backlink');
+    assert.ok(!bl['Mole'], 'mention only in stripped content must not backlink (spoiler leak)');
+  });
+});
+
 describe('buildBacklinks', () => {
   const pages = [
     {

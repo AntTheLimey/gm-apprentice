@@ -4,7 +4,9 @@ function buildBacklinks(pages) {
   const backlinks = Object.create(null);
 
   for (const page of pages) {
-    const md = page.markdown || '';
+    // Prefer the published view (gm-only blocks + excluded sections stripped) so a mention
+    // that only appears in non-published content never creates a public backlink (B6).
+    const md = page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
     const seen = new Set();
     let match;
     WIKI_LINK_RE.lastIndex = 0;

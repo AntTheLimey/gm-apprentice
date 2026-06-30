@@ -4,6 +4,13 @@ const TERMINAL_STATUSES = new Set(['dead', 'deceased', 'destroyed', 'kia', 'diss
 // `wrap-up` state — so a freshly wrapped session still drives "recent" before it's reviewed.
 const PLAYED_STATUSES = new Set(['played', 'reviewed', 'wrap-up']);
 
+// Mentions/recency must reflect only what readers can see, so prefer each page's published
+// view (gm-only + excluded sections stripped) over its raw markdown when available (B6).
+function publishedText(page) {
+  if (!page) return '';
+  return page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
+}
+
 function extractMentions(markdown) {
   const mentions = new Set();
   let match;
@@ -18,7 +25,7 @@ function extractMentions(markdown) {
 // and — because the narrative recap lives in the wrap-up, not the thin index stub — the body of
 // its paired wrap-up.
 function sessionMentions(session, wrapUpByTitle) {
-  const names = extractMentions(session.markdown || '');
+  const names = extractMentions(publishedText(session));
   const fm = session.frontmatter || {};
   if (Array.isArray(fm.participants)) {
     for (const p of fm.participants) {
@@ -32,7 +39,7 @@ function sessionMentions(session, wrapUpByTitle) {
   }
   const wu = wrapUpByTitle.get(session.title);
   if (wu) {
-    for (const n of extractMentions(wu.markdown || '')) names.add(n);
+    for (const n of extractMentions(publishedText(wu))) names.add(n);
   }
   return names;
 }
@@ -77,7 +84,7 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
   const currentChapter = chapters
     .filter(c => c.frontmatter.type === 'chapter')
     .sort((a, b) => (b.frontmatter.sort_order || 0) - (a.frontmatter.sort_order || 0))[0];
-  const chapterMentions = currentChapter ? extractMentions(currentChapter.markdown || '') : new Set();
+  const chapterMentions = currentChapter ? extractMentions(publishedText(currentChapter)) : new Set();
 
   const scored = entities.map(entity => {
     if (type && entity.frontmatter.type !== type) return null;
