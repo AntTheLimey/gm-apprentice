@@ -272,7 +272,7 @@ function build(options = {}) {
   console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
   publishConfig._entityGraphs = entityGraphs;
 
-  // Apply field filtering after link map is built (aliases/canon_status needed for resolution)
+  // Apply field filtering after link map is built (aliases/canon_status needed for redirect resolution)
   for (const page of pages) {
     const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
     const overridesForFile = fieldOverrides[vaultRelPath] || {};

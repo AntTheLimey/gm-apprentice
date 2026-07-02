@@ -92,7 +92,9 @@ document.addEventListener('click', function(e) {
 }
 
 function getConfidence(frontmatter) {
-  return frontmatter.source_confidence || frontmatter.canon_status || null;
+  // canon_status is canonical; source_confidence and confidence are legacy
+  // names still honored at read time for vaults that haven't migrated (1.8.0)
+  return frontmatter.canon_status || frontmatter.source_confidence || frontmatter.confidence || null;
 }
 
 function confidenceBadge(frontmatter) {

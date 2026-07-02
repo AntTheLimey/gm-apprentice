@@ -95,6 +95,25 @@ describe('buildLinkMap', () => {
     assert.strictEqual(map['Old Name'], 'new.html');
   });
 
+  it('redirects superseded entities via legacy bare confidence field', () => {
+    const pages = [
+      { title: 'New Name', outputPath: 'new.html', frontmatter: {} },
+      { title: 'Old Name', outputPath: 'old.html', frontmatter: { confidence: 'SUPERSEDED', superseded_by: '[[New Name]]' } },
+    ];
+    const map = buildLinkMap(pages);
+    assert.strictEqual(map['Old Name'], 'new.html');
+  });
+
+  it('excludes pages marked SUPERSEDED via legacy bare confidence from publish set', () => {
+    const pages = [
+      { title: 'Live NPC', outputPath: 'live.html', frontmatter: { canon_status: 'AUTHORITATIVE' } },
+      { title: 'Retired NPC', outputPath: 'retired.html', frontmatter: { confidence: 'SUPERSEDED', superseded_by: '[[Live NPC]]' } },
+    ];
+    const published = pages.filter(p => getConfidence(p.frontmatter) !== 'SUPERSEDED');
+    assert.strictEqual(published.length, 1);
+    assert.strictEqual(published[0].title, 'Live NPC');
+  });
+
   it('excludes DRAFT pages using getConfidence filter (same predicate as build.js)', () => {
     const pages = [
       { title: 'Active NPC', outputPath: 'npc.html', frontmatter: { source_confidence: 'AUTHORITATIVE' } },

@@ -1,7 +1,7 @@
 const MarkdownIt = require('markdown-it');
 const mdRenderer = new MarkdownIt({ html: false, typographer: true });
 const { escapeHtml, relativePath, resolveWikiLinks } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getConfidence } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function relHref(page, indexDir) {
@@ -345,7 +345,7 @@ function renderFactions(pages, indexDir) {
     const leadership = fm.leadership ? String(fm.leadership).replace(/\[\[|\]\]/g, '').trim() : '';
     const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, 3) : [];
     const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, 4) : [];
-    const canon = fm.canon_status || '';
+    const canon = getConfidence(fm) || '';
 
     const leaderHtml = leadership
       ? `<div class="intel-leadership">Led by <strong>${escapeHtml(leadership)}</strong></div>`
@@ -524,7 +524,7 @@ function renderArmory(pages, indexDir) {
     const holder = fm.current_holder ? String(fm.current_holder).replace(/\[\[|\]\]/g, '').trim() : '';
     const origin = fm.origin ? String(fm.origin).replace(/\[\[|\]\]/g, '').trim() : '';
     const tl = fm.tl ? String(fm.tl) : '';
-    const confidence = (fm.confidence || fm.canon_status || '').toUpperCase();
+    const confidence = (getConfidence(fm) || '').toUpperCase();
     const isDraft = confidence === 'DRAFT' || confidence === 'STUB';
 
     const metaParts = [];
@@ -599,7 +599,7 @@ function renderNPCTable(pages, dir) {
     const status = fm.status || '';
     const firstApp = cleanRef(fm.first_appearance || '');
     const lastSession = cleanRef(fm.asOfSession || fm.lastUpdated || '');
-    const confidence = fm.confidence || fm.canon_status || '';
+    const confidence = getConfidence(fm) || '';
 
     return `<tr data-entity-type="npc" data-entity-name="${escapeHtml(p.displayTitle)}" data-entity-status="${escapeHtml(status)}" data-session="${escapeHtml(lastSession)}">
   <td><a href="${escapeHtml(relHref(p, dir))}">${escapeHtml(p.displayTitle)}</a></td>

@@ -22,15 +22,23 @@ describe('formatDate', () => {
 });
 
 describe('getConfidence', () => {
-  it('prefers source_confidence over canon_status', () => {
-    assert.strictEqual(getConfidence({ source_confidence: 'DRAFT', canon_status: 'STUB' }), 'DRAFT');
-  });
-
-  it('falls back to canon_status', () => {
+  it('reads the canonical canon_status field', () => {
     assert.strictEqual(getConfidence({ canon_status: 'STUB' }), 'STUB');
   });
 
-  it('returns null when neither present', () => {
+  it('prefers canon_status over legacy fields', () => {
+    assert.strictEqual(getConfidence({ canon_status: 'AUTHORITATIVE', source_confidence: 'DRAFT', confidence: 'STUB' }), 'AUTHORITATIVE');
+  });
+
+  it('falls back to legacy source_confidence', () => {
+    assert.strictEqual(getConfidence({ source_confidence: 'DRAFT' }), 'DRAFT');
+  });
+
+  it('falls back to legacy bare confidence', () => {
+    assert.strictEqual(getConfidence({ confidence: 'DRAFT' }), 'DRAFT');
+  });
+
+  it('returns null when no canon field present', () => {
     assert.strictEqual(getConfidence({}), null);
   });
 });
