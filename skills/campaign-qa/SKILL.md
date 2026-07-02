@@ -238,6 +238,9 @@ for the full procedure.
 - Stale STUB entities that need fleshing out
 - Frontmatter schema violations (missing required fields,
   wrong types)
+- Legacy canon field names (`source_confidence:`,
+  `confidence:`) — always repaired to `canon_status`, never
+  leaving duplicate keys (see § Legacy Canon Field Repair)
 - Session document chain validation: sessions with Play Notes
   but no Wrap-Up (suggests wrap-up was skipped), sessions stuck
   at `wrap-up` status for multiple prep cycles (review was
@@ -284,9 +287,10 @@ entries. Skip undefined domains — no false positives.
 **Trigger phrases:** "full QA", "audit everything",
 "full check", "campaign health check"
 
-Runs all six modes in order: Canon Audit → Timeline
+Runs all modes in order: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
-Health → World Consistency (if `_World/` exists).
+Health → Legacy Canon Field Repair → World Consistency
+(if `_World/` exists).
 Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 

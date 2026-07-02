@@ -17,6 +17,7 @@ perform each check systematically.
 4. [Clue Redundancy](#clue-redundancy)
 5. [Graph Health](#graph-health)
 6. [Stale DRAFT Detection](#stale-draft-detection)
+7. [Legacy Canon Field Repair](#legacy-canon-field-repair)
 
 ---
 
@@ -463,3 +464,51 @@ that should have been deleted.
 normal and expected (Info level at most). Prep content
 (session-plan type) is always DRAFT and is exempt from this
 check.
+
+---
+
+## Legacy Canon Field Repair
+
+**Severity:** ERROR (auto-repairable)
+**Trigger:** Any file's frontmatter contains the legacy field
+keys `source_confidence:` or `confidence:`. The canonical field
+is `canon_status` (since plugin 1.8.0). Run this check on every
+full QA pass — it keeps vaults converged after the 1.8.0
+migration.
+
+**Procedure:**
+
+1. Scan every `.md` file in the vault (including `_Templates/`
+   and `_meta/`) for frontmatter keys `source_confidence:` and
+   `confidence:`
+2. For each hit, determine the repair. **Never blind-rename a
+   key — check for an existing `canon_status` first, or the file
+   ends up with duplicate `canon_status` lines:**
+   - Legacy key only, no `canon_status` → rename the key to
+     `canon_status`, keep the value
+   - Legacy key(s) AND `canon_status`, all values equal →
+     delete the legacy key line(s); keep the single existing
+     `canon_status`
+   - Legacy key(s) AND `canon_status`, values disagree → keep
+     the `canon_status` value, delete the legacy line(s), and
+     flag the file to the GM with both values so they can
+     confirm or correct
+3. After repair, verify no file contains more than one
+   `canon_status:` line
+
+**Messages:**
+
+- Rename: "Renamed legacy `{field}` → `canon_status` ({value})"
+- Collapse: "Removed duplicate legacy `{field}` (agreed with
+  canon_status: {value})"
+- Conflict: "CONFLICT: kept `canon_status: {value}`, removed
+  `{field}: {other}` — confirm this is the right status for
+  [[{Entity}]]"
+
+**Rationale:** Three field names for canon status accumulated
+across plugin versions (`canon_status`, `source_confidence`,
+`confidence`). The 1.8.0 migration sweeps vaults once, but
+files restored from backups, copied from old campaigns, or
+written by outdated tooling can reintroduce legacy names. This
+check makes campaign-qa the permanent enforcement point:
+always repair to `canon_status`.
