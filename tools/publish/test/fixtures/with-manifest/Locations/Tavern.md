@@ -2,7 +2,7 @@
 type: location
 location_type: Building
 atmosphere: Warm
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 ---

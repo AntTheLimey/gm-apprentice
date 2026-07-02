@@ -1,7 +1,7 @@
 ---
 type: campaign_overview
 campaign: "Test Campaign"
-source_confidence: DRAFT
+canon_status: DRAFT
 ---
 
 # Test Campaign
