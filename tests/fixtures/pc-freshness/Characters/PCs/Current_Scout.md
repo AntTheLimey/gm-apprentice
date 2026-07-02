@@ -1,6 +1,6 @@
 ---
 type: pc
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 player_name: "Mira"
 status: alive
 asOfSession: "Chapter 2, Session 4"

@@ -52,7 +52,7 @@ Table-ready — usable immediately without editing.
 After generating: **"Want me to save this to the vault?"**
 GM may defer (e.g., 3 options where players haven't chosen).
 Unsaved content flagged for wrap-up. If GM confirms, create
-vault file with `source_confidence: DRAFT`.
+vault file with `canon_status: DRAFT`.
 
 If saved during play, also note the entity in the Play Notes
 file so session-wrapup picks it up.

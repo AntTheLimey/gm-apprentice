@@ -1,7 +1,7 @@
 ---
 name: ""
 type: faction
-source_confidence: DRAFT
+canon_status: DRAFT
 source: ""
 createdSession: ""
 asOfSession: ""

@@ -1,7 +1,7 @@
 ---
 name: Human
 type: heritage
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 source: play
 createdSession: "1"
 asOfSession: "2"

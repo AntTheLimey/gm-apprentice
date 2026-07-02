@@ -3,7 +3,7 @@ type: location
 createdSession: "Session 1"
 lastUpdated: "Session 1"
 asOfSession: "Session 2"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases:
   - "The Study"
   - "Ashford's Study"

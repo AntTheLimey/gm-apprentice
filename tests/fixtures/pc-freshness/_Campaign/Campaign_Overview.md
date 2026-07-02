@@ -1,6 +1,6 @@
 ---
 type: campaign_overview
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 status: in_progress
 scope: campaign
 current_game_date: "March 12, 1888"

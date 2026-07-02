@@ -2,7 +2,7 @@
 type: world_domain
 domain: index
 status: stub
-source_confidence: DRAFT
+canon_status: DRAFT
 lastUpdated: ""
 asOfSession: ""
 summary: ""

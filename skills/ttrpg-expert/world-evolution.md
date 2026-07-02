@@ -5,7 +5,7 @@ advance plans, consequences ripen, rumours spread, and the
 calendar turns. Run this procedure after every session.
 
 **Invocation:** This procedure normally runs as reconcile
-step 5.5 — offered to the GM after session confidence is
+step 5.5 — offered to the GM after session canon status is
 promoted. It can also be invoked standalone via ttrpg-expert
 ("update the world" / "post-session update").
 

@@ -4,7 +4,7 @@ Validate campaign entity frontmatter against the schema defined in entity-schema
 
 Checks:
 - Required fields exist per entity type
-- Enum values are valid (source_confidence, status, scene_type, etc.)
+- Enum values are valid (canon_status, status, scene_type, etc.)
 - Universal temporal fields are present where expected
 
 Usage:
@@ -19,7 +19,7 @@ from collections import namedtuple
 from pathlib import Path
 
 # Valid enum values
-SOURCE_CONFIDENCE = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
+CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = {"planned", "prepped", "played", "wrap-up", "reviewed"}
 SCENE_STATUS = {"planned", "ready", "played", "cut", "skipped", "modified"}
 SCENE_TYPES = {
@@ -42,45 +42,52 @@ WORLD_DOMAIN_STATUS = {"active", "stub", "inactive"}
 PLAN_TYPES = {"arc", "scene", "investigation", "timeline"}
 
 # Required fields per entity type
-# All entities need: type, source_confidence
+# All entities need: type, canon_status
 REQUIRED_FIELDS = {
-    "npc": ["type", "source_confidence"],
-    "pc": ["type", "source_confidence"],
-    "location": ["type", "source_confidence"],
-    "faction": ["type", "source_confidence"],
-    "organization": ["type", "source_confidence"],
-    "item": ["type", "source_confidence"],
-    "creature": ["type", "source_confidence"],
-    "clue": ["type", "source_confidence"],
-    "event": ["type", "source_confidence"],
-    "document": ["type", "source_confidence"],
-    "adventure-brief": ["type", "source_confidence", "scope"],
+    "npc": ["type", "canon_status"],
+    "pc": ["type", "canon_status"],
+    "location": ["type", "canon_status"],
+    "faction": ["type", "canon_status"],
+    "organization": ["type", "canon_status"],
+    "item": ["type", "canon_status"],
+    "creature": ["type", "canon_status"],
+    "clue": ["type", "canon_status"],
+    "event": ["type", "canon_status"],
+    "document": ["type", "canon_status"],
+    "adventure-brief": ["type", "canon_status", "scope"],
     "session": ["type", "session_number", "status", "documents"],
-    "session-plan": ["type", "source_confidence", "session"],
-    "session-play-notes": ["type", "source_confidence", "session"],
-    "session-wrap-up": ["type", "source_confidence", "session"],
-    "session_wrap": ["type", "source_confidence", "session"],
-    "scene": ["type", "source_confidence", "scene_type", "status"],
+    "session-plan": ["type", "canon_status", "session"],
+    "session-play-notes": ["type", "canon_status", "session"],
+    "session-wrap-up": ["type", "canon_status", "session"],
+    "session_wrap": ["type", "canon_status", "session"],
+    "scene": ["type", "canon_status", "scene_type", "status"],
     "chapter": ["type"],
     "meta": ["type"],
     "timeline": ["type"],
     "player-characters": ["type"],
-    "character-story": ["type", "source_confidence"],
-    "campaign_overview": ["type", "source_confidence"],
-    "heritage": ["type", "source_confidence"],
-    "plan": ["type", "source_confidence", "plan_type", "chapter"],
-    "world_domain": ["type", "domain", "status"],
+    "character-story": ["type", "canon_status"],
+    "campaign_overview": ["type", "canon_status"],
+    "heritage": ["type", "canon_status"],
+    "plan": ["type", "canon_status", "plan_type", "chapter"],
+    "world_domain": ["type", "canon_status", "domain", "status"],
     "world_flags": ["type"],
 }
 
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature", "campaign_overview", "heritage"}
 
-# Valid optional fields per entity type (used for deprecation warnings)
-DEPRECATED_FIELDS: dict[str, list[tuple[str, str]]] = {
-    # (old_field, replacement_field)
-    "event": [("date", "in_game_date")],
-    "session": [("planned_date", "play_date"), ("actual_date", "play_date")],
+# Deprecated field renames, keyed by entity type; "*" applies to all types
+DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
+    # (old_field, replacement_field, migration_version)
+    "*": [
+        ("source_confidence", "canon_status", "1.8.0"),
+        ("confidence", "canon_status", "1.8.0"),
+    ],
+    "event": [("date", "in_game_date", "1.4.22")],
+    "session": [
+        ("planned_date", "play_date", "1.4.22"),
+        ("actual_date", "play_date", "1.4.22"),
+    ],
 }
 
 
@@ -156,15 +163,15 @@ def validate_file(filepath: Path) -> list[str]:
         if field not in frontmatter:
             errors.append(f"Missing required field '{field}' for type '{entity_type}'")
 
-    # Validate source_confidence enum
-    if "source_confidence" in frontmatter:
-        value = frontmatter["source_confidence"]
+    # Validate canon_status enum
+    if "canon_status" in frontmatter:
+        value = frontmatter["canon_status"]
         if not isinstance(value, str):
-            errors.append("Field 'source_confidence' must be a string")
-        elif value not in SOURCE_CONFIDENCE:
+            errors.append("Field 'canon_status' must be a string")
+        elif value not in CANON_STATUS_VALUES:
             errors.append(
-                f"Invalid source_confidence '{value}' — "
-                f"must be one of: {', '.join(sorted(SOURCE_CONFIDENCE))}"
+                f"Invalid canon_status '{value}' — "
+                f"must be one of: {', '.join(sorted(CANON_STATUS_VALUES))}"
             )
         elif value == "SUPERSEDED":
             superseded_by = frontmatter.get("superseded_by", "")
@@ -306,14 +313,14 @@ def validate_file(filepath: Path) -> list[str]:
                 f"must start with '_attachments/'"
             )
 
-    # Deprecation warnings for renamed date fields
-    if entity_type in DEPRECATED_FIELDS:
-        for old_field, new_field in DEPRECATED_FIELDS[entity_type]:
-            if old_field in frontmatter:
-                errors.append(
-                    f"Deprecated field '{old_field}' — "
-                    f"rename to '{new_field}' (run migration 1.4.22)"
-                )
+    # Deprecation errors for renamed fields (universal "*" + per-type)
+    deprecated = DEPRECATED_FIELDS.get("*", []) + DEPRECATED_FIELDS.get(entity_type, [])
+    for old_field, new_field, migration in deprecated:
+        if old_field in frontmatter:
+            errors.append(
+                f"Deprecated field '{old_field}' — "
+                f"rename to '{new_field}' (run migration {migration})"
+            )
 
     return errors
 

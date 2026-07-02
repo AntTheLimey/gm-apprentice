@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function worldDomainTemplate(page, processedContent, navFor, config, context) {
@@ -20,7 +20,7 @@ function worldDomainTemplate(page, processedContent, navFor, config, context) {
     ? `<p class="world-domain-summary">${escapeHtml(fm.summary)}</p>`
     : '';
 
-  const headerHtml = `<h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>${summaryHtml}`;
+  const headerHtml = `<h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>${summaryHtml}`;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);

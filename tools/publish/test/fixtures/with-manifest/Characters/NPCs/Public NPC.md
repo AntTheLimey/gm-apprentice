@@ -2,7 +2,7 @@
 type: npc
 occupation: Barkeep
 secrets: "Actually a spy"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 ---

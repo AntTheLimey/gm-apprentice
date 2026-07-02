@@ -1,7 +1,7 @@
 # Reconcile
 
 Shared procedure for reviewing vault content with the GM and
-promoting canon confidence. Any skill can invoke this.
+promoting canon status. Any skill can invoke this.
 
 ## When to Call
 
@@ -39,7 +39,7 @@ If all three pass, offer the fast path:
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
 On GM confirmation:
-- Set Wrap-Up `source_confidence` to `AUTHORITATIVE`
+- Set Wrap-Up `canon_status` to `AUTHORITATIVE`
 - Promote all DRAFT entities from this session to AUTHORITATIVE
 - Update session index `status` to `reviewed`
 - Skip to step 5.5 (world evolution offer)
@@ -62,7 +62,7 @@ Surface everything that needs GM attention:
 - Reconstruction notes (`> [!info] Reconstruction Note`)
 - DRAFT entities created during wrap-up
 - Timeline entries with uncertain dates or ordering
-- Any `source_confidence: DRAFT` content tied to this session
+- Any `canon_status: DRAFT` content tied to this session
 
 Present as a short inventory, not a wall of text.
 
@@ -118,12 +118,12 @@ For each unplayed element, ask the GM:
 Flag `must-still-happen` items prominently — these carry
 forward into the next session's prep.
 
-### 5. Promote confidence
+### 5. Promote canon status
 
 On GM approval:
-1. Set Wrap-Up `source_confidence` to `AUTHORITATIVE`
+1. Set Wrap-Up `canon_status` to `AUTHORITATIVE`
 2. Update session index `status` to `reviewed`
-3. Promote related entity `source_confidence` from DRAFT
+3. Promote related entity `canon_status` from DRAFT
    to AUTHORITATIVE where GM confirmed content
    3b. Before finalizing each entity promotion, check the entity
        against active `_World/` rules (if `_World/` exists).
@@ -210,7 +210,7 @@ file is the canonical location.
 
 ## Companion References
 
-- `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/
+- `shared/canon-status.md` — DRAFT/AUTHORITATIVE/
   SUPERSEDED states and promotion rules
 - `shared/session-document-chain.md` — Document types,
   status transitions, skill ownership

@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.0] — 2026-07-02
+
+### Changed
+
+- **`canon_status` is now the single canonical field name** for canon
+  status (DRAFT / AUTHORITATIVE / SUPERSEDED / STUB). Three names for
+  the same field had accumulated since the first release —
+  `canon_status`, `source_confidence`, and a bare `confidence` row in
+  the entity-schema Universal Fields table — and vaults collected
+  whichever name was current when each file was written. All templates,
+  skill references, the validator, and CI now write and require
+  `canon_status` exclusively; "confidence" naming is gone from code
+  identifiers, UI labels, and prose (`shared/canon-confidence.md` is now
+  `shared/canon-status.md`, publish tool exports `getCanonStatus` /
+  `canonStatusBadge`, NPC index column reads "Canon Status").
+- **Migration 1.7.10 → 1.8.0 sweeps the whole vault** on the next skill
+  invocation after updating: legacy keys are renamed to `canon_status`,
+  duplicate fields collapse to one (never leaving two `canon_status:`
+  lines in a file), and value conflicts are kept on the `canon_status`
+  value and reported for GM review. campaign-qa gains a permanent
+  Legacy Canon Field Repair check so reintroduced legacy names are
+  caught on every full QA pass.
+- Publish tool bumped to 1.4.0: reads `canon_status` first, with the
+  legacy names still honored at read time so unmigrated vaults publish
+  correctly.
+
+### Fixed
+
+- **SUPERSEDED leak:** a file whose only canon field was the legacy bare
+  `confidence: SUPERSEDED` was published as a live page instead of being
+  filtered and redirected to its successor.
+- **Missing draft badges:** items/NPC index pages read only
+  `confidence`/`canon_status` and ignored `source_confidence`, so files
+  written by the current schema never showed their Draft/Stub badge.
+- Schema validator now rejects legacy field names with a pointer to the
+  1.8.0 migration instead of silently accepting them.
+
 ## [1.7.10] — 2026-06-30
 
 ### Added

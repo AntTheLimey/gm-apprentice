@@ -22,7 +22,7 @@ Minor events stay as inline timeline entries.
 ```yaml
 ---
 type: event
-source_confidence: DRAFT
+canon_status: DRAFT
 aliases: []
 tags: []
 source_document: ""

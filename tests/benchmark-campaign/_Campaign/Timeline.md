@@ -1,7 +1,7 @@
 ---
 type: timeline
 campaign: "The Ashford Case"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 asOfSession: "Session 2"
 ---
 

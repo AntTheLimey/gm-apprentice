@@ -68,12 +68,12 @@ campaign folder path.
 - `shared/vault-structure.md` — Folder layout, naming.
 - `shared/entity-schema.md` — Entity types, frontmatter,
   temporal fields, relationships.
-- `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/
+- `shared/canon-status.md` — DRAFT/AUTHORITATIVE/
   SUPERSEDED states and promotion rules.
 - `shared/session-document-chain.md` — Document chain
   standard: Plan, Play Notes, Wrap-Up as separate files.
 - `shared/reconcile.md` — Shared review procedure for
-  promoting Wrap-Up confidence.
+  promoting Wrap-Up canon status.
 
 **Session document chain:** Read `shared/session-document-chain.md`
 for the full standard. Sessions use separate files for Plan,
@@ -124,12 +124,12 @@ Entity creation is automatic during wrap-up. Don't ask — do it.
 ```text
 Play: entity mentioned → noted in play notes
 Wrap-up: entity found → campaign-organizer
-  → vault file (source_confidence: DRAFT)
+  → vault file (canon_status: DRAFT)
   → wiki-linked into session note and related entities
 ```
 
 GM promotes DRAFT → AUTHORITATIVE at their own pace.
-See `shared/canon-confidence.md`.
+See `shared/canon-status.md`.
 
 ## Reconcile Fast Path
 

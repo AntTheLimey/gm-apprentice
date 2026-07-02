@@ -74,7 +74,7 @@ type: session-plan
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-source_confidence: DRAFT
+canon_status: DRAFT
 created_by: session-prep
 tags: []
 ---
@@ -92,7 +92,7 @@ type: session-play-notes
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 created_by: session-play    # or: vault-ingest | manual
 tags: []
 ---
@@ -115,7 +115,7 @@ type: session_wrap
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-source_confidence: DRAFT
+canon_status: DRAFT
 created_by: session-wrapup
 tags: []
 ---
@@ -137,7 +137,7 @@ Reconstruction Note callout at the top of the document:
 | session-prep | Previous wrap-ups, vault | Plan file, session index | planned → prepped |
 | session-play | Plan file | Play Notes file, session index | prepped → played |
 | session-wrapup | Play Notes file | Wrap-Up file, entities, session index | played → wrap-up |
-| reconcile | Wrap-Up file | Promotes confidence, session index | wrap-up → reviewed |
+| reconcile | Wrap-Up file | Promotes canon status, session index | wrap-up → reviewed |
 | vault-ingest | Old source material | Play Notes (reconstructed), session index | Then chains to wrapup → reconcile |
 
 ## Rules
@@ -168,6 +168,6 @@ Chapters/Chapter N - Title/Sessions/
 ## Companion References
 
 - `shared/session-principles.md` — Shared session rules
-- `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
+- `shared/canon-status.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
 - `shared/entity-schema.md` — Entity frontmatter schemas
 - `shared/vault-structure.md` — Folder layout and naming

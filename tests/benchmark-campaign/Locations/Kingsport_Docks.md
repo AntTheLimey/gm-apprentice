@@ -3,7 +3,7 @@ type: location
 createdSession: "Session 2"
 lastUpdated: "Session 2"
 asOfSession: "Session 2"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases:
   - "The Docks"
   - "Kingsport Waterfront"

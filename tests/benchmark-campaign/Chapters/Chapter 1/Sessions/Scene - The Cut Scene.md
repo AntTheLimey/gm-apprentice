@@ -1,6 +1,6 @@
 ---
 type: scene
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 scene_type: combat
 status: cut
 session: 2

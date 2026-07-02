@@ -67,7 +67,7 @@ publish:
   exclude_drafts: false
 ```
 
-When `true`, entities with `source_confidence: DRAFT` are
+When `true`, entities with `canon_status: DRAFT` are
 excluded entirely from the published site — they won't appear
 in navigation, index pages, or as individual pages. Wiki-links
 to excluded DRAFT entities will not resolve.

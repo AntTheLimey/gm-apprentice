@@ -105,8 +105,8 @@ for the full format, voice, and append protocol.
    character's perspective, not a session recap
 4. Append as `## Session {N} — {Session Title}` at the bottom
 5. Update frontmatter: `lastUpdated` and `asOfSession` to
-   current session; `source_confidence` mirrors the Wrap-Up
-   file's confidence
+   current session; `canon_status` mirrors the Wrap-Up
+   file's canon status
 
 **Input:** Narrative Recap (Step 2) and PC Carry-Forward
 (Step 3). No new source gathering.
@@ -187,7 +187,7 @@ content, flag the entity as CONFLICT for GM review. Use the
 `## Scenes` section as the primary source for identifying
 events that meet the decomposition threshold. All standard
 rules below still apply: read templates before creating,
-`source_confidence: DRAFT` for new entities, receipt
+`canon_status: DRAFT` for new entities, receipt
 lifecycle, wiki-links.
 
 **Personal reference files:**
@@ -199,7 +199,7 @@ locations, and NPC relationships.
 - **New entities** (improvised NPCs, locations, items):
   Read `_Templates/_Template_{Type}.md` first, then create
   the vault file using that template as the structure.
-  Don't ask — do it. `source_confidence: DRAFT`. If
+  Don't ask — do it. `canon_status: DRAFT`. If
   session-play already saved provisional content, incorporate
   it verbatim rather than recreate — preserve the wording the
   notes already have; the template supplies structure, not
@@ -328,7 +328,7 @@ what to adjust. Write into Wrap-Up file.
 
 Invoke `shared/reconcile.md` to walk the GM through reviewing
 the Wrap-Up. On approval, reconcile promotes session status to
-`reviewed` and Wrap-Up confidence to AUTHORITATIVE.
+`reviewed` and Wrap-Up canon status to AUTHORITATIVE.
 
 If the GM defers review ("I'll look at it later"), leave status
 at `wrap-up`. Session-prep will invoke reconcile as a fallback

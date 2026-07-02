@@ -270,17 +270,18 @@ These fields are read by all templates if present:
 | Field | Description |
 |-------|-------------|
 | `aliases` | List of alternate names used for wiki-link resolution |
-| `source_confidence` | DRAFT / AUTHORITATIVE / SUPERSEDED / STUB — renders a confidence badge (see below) |
-| `canon_status` | Legacy name for `source_confidence` — still works as fallback |
+| `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED / STUB — renders a canon status badge (see below) |
+| `source_confidence`, `confidence` | Legacy names for `canon_status` — honored at read time for unmigrated vaults, never written |
 | `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
 | `relationships` | List of `{ target, type, description }` objects rendered as a Relationships section |
 | `tags` | Used for NPC importance scoring on the landing page; not rendered on entity pages |
 
-### Confidence Badges
+### Canon Status Badges
 
-The publish tool reads `source_confidence` from entity frontmatter
-(falls back to `canon_status` for backwards compatibility) and
-renders a badge next to the page title:
+The publish tool reads `canon_status` from entity frontmatter
+(falling back to the legacy `source_confidence`, then
+`confidence`, for vaults that haven't run the 1.8.0 migration)
+and renders a badge next to the page title:
 
 | Value | Badge | Appearance |
 |-------|-------|-----------|

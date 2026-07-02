@@ -14,7 +14,7 @@ current_arc: ""
 arcs_planned: 0
 current_chapter: ""
 chapters_planned: 0
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 portrait: ""

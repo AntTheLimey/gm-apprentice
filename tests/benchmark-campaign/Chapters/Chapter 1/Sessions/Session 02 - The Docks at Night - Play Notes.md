@@ -3,7 +3,7 @@ type: session-play-notes
 session: "[[Session 02 - The Docks at Night]]"
 chapter: "[[Chapter 1 - The Ashford Case]]"
 campaign: "The Ashford Case"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 created_by: session-play
 tags: []
 ---

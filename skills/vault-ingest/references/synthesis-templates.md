@@ -18,7 +18,7 @@ type: session-play-notes
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: "Campaign Name"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 created_by: vault-ingest
 ---
 ```
@@ -125,7 +125,7 @@ Frontmatter:
 type: character-story
 character: "[[{Name}]]"
 campaign: "Campaign Name"
-source_confidence: DRAFT
+canon_status: DRAFT
 lastUpdated: "{last ingested session}"
 asOfSession: "{last ingested session}"
 createdSession: "{first ingested session}"

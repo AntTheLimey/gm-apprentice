@@ -1,7 +1,7 @@
 ---
 name: ""
 type: plan
-source_confidence: DRAFT
+canon_status: DRAFT
 source: prep
 createdSession: ""
 asOfSession: ""

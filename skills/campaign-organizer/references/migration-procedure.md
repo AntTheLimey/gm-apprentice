@@ -48,6 +48,10 @@ already satisfied:
 - **Story file already exists for PC** → skip
 - **`_meta/` file already exists** → skip
 - **npm package already at expected version** → skip
+- **Frontmatter field rename/sweep** → grep the vault for the
+  legacy key(s); no file contains them → skip. Otherwise the
+  sweep is pending, with the matching file count shown in the
+  preview
 
 Only unsatisfied steps appear in the preview.
 
@@ -100,13 +104,18 @@ Apply all confirmed changes in this order:
 1. Write vault-config field updates (structural)
 2. Create missing `_meta/` files (structural)
 3. Create missing folders (structural)
-4. Copy selected templates to `_Templates/` (content)
-5. Overwrite selected templates in `_Templates/` (content)
-6. Create selected story files using
+4. Run frontmatter field sweeps (structural) — apply the
+   repair algorithm the migration entry names (for canon
+   status: `shared/canon-status.md` § Repairing Legacy Keys).
+   A file must never end up with duplicate keys. Collect any
+   value conflicts for the Step 8 report
+5. Copy selected templates to `_Templates/` (content)
+6. Overwrite selected templates in `_Templates/` (content)
+7. Create selected story files using
    `shared/templates/character-story.md` as the base, filling
    in the PC name and campaign from the PC file's frontmatter
    (content)
-7. Run `npm update gm-apprentice-publish` in site directory if
+8. Run `npm update gm-apprentice-publish` in site directory if
    selected (tooling)
 
 ## Step 7: Stamp version
@@ -127,6 +136,11 @@ Summarize what was changed:
 > - [list of structural changes]
 > - [list of accepted content changes]
 > - [list of accepted tooling changes]"
+
+If a field sweep found value conflicts (legacy key disagreed
+with the kept value), list each conflicted file with both
+values and ask the GM to confirm or correct them before
+closing out.
 
 Return control to the calling skill, or proceed with the
 user's original request if campaign-organizer was the skill

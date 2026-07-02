@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.7.5"
+current_version: "1.8.0"
 ---
 
 # Vault Migration Registry
@@ -256,3 +256,40 @@ Standardizes date field names across session and event entities.
   removed — so the published character page no longer drifts behind
   the Story file and campaign overview. No vault changes are
   required; the refresh happens during normal wrap-up.
+
+## Migration: 1.7.10 → 1.8.0
+
+Standardizes the canon-status field name to `canon_status`
+across the entire vault. Three names for the same field
+accumulated across plugin versions (`canon_status`,
+`source_confidence`, `confidence`); `canon_status` is now the
+only correct name. Skills and the publish tool write and
+require `canon_status` exclusively.
+
+### Structural
+
+- **Vault-wide frontmatter sweep** — every `.md` file in the
+  vault, including `_Templates/` and `_meta/`. For each file
+  whose frontmatter contains `source_confidence:` or
+  `confidence:`, apply the repair algorithm in
+  `shared/canon-status.md` § Repairing Legacy Keys. **Never
+  blind-rename a key** — many files carry BOTH a legacy key
+  and `canon_status`; the algorithm collapses duplicates and
+  keeps the `canon_status` value on conflicts, listing each
+  conflicted file in the migration report with both values for
+  GM review. After the sweep, verify no file contains more
+  than one `canon_status:` line
+- **`_meta/entity-types.md`:** if the registry documents the
+  canon field under a legacy name, update the field name to
+  `canon_status` (values unchanged)
+- **`_Templates/` key rename:** covered by the sweep above —
+  the field key is renamed in place, so local template
+  customizations are preserved
+
+### Tooling
+
+- **Publish tool:** `gm-apprentice-publish` ≥ 1.4.0 treats
+  `canon_status` as canonical (legacy names still honored at
+  read time, so an unmigrated vault publishes correctly). If
+  `publish.site_dir` is set in vault-config, offer to run
+  `npm update gm-apprentice-publish` in the site directory.

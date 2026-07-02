@@ -2,7 +2,7 @@
 type: location
 location_type: Underground
 atmosphere: Dark
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 ---

@@ -2,7 +2,7 @@
 type: location
 location_type: Outdoor
 atmosphere: Busy
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 ---

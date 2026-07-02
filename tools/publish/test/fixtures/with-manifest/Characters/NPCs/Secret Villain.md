@@ -1,7 +1,7 @@
 ---
 type: npc
 occupation: Cultist
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 ---

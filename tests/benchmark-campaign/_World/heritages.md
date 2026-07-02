@@ -2,7 +2,7 @@
 type: world_domain
 domain: heritages
 status: active
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 lastUpdated: "2"
 asOfSession: "2"
 summary: "Human-only world; non-human entities are Mythos horrors"

@@ -1,5 +1,5 @@
 const { escapeHtml, relativeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, metadataBadgesFor, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
@@ -79,7 +79,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
   const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
 
-  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
+  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;
 
   // A sparse sidebar (≤1 section) shouldn't reserve the full 18rem column and squeeze the

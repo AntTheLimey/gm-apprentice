@@ -140,9 +140,9 @@ function build(options = {}) {
 
   // Exclude DRAFT entities when configured (after pairing so story files resolve)
   if (publishConfig.exclude_drafts) {
-    const { getConfidence } = require('./templates/base');
+    const { getCanonStatus } = require('./templates/base');
     const before = pages.length;
-    pages = pages.filter(p => getConfidence(p.frontmatter) !== 'DRAFT');
+    pages = pages.filter(p => getCanonStatus(p.frontmatter) !== 'DRAFT');
     const excluded = before - pages.length;
     if (excluded > 0) console.log(`Excluded ${excluded} DRAFT entity/entities`);
   }
@@ -272,7 +272,7 @@ function build(options = {}) {
   console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
   publishConfig._entityGraphs = entityGraphs;
 
-  // Apply field filtering after link map is built (aliases/canon_status needed for resolution)
+  // Apply field filtering after link map is built (aliases/canon_status needed for redirect resolution)
   for (const page of pages) {
     const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
     const overridesForFile = fieldOverrides[vaultRelPath] || {};

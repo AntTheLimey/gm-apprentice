@@ -266,7 +266,7 @@ SRD/ORC files don't cover. Subdirectories like
 
 Generated content starts as DRAFT → GM confirms as
 AUTHORITATIVE → superseded by newer info = SUPERSEDED.
-See `canon-management.md` and `shared/canon-confidence.md`.
+See `canon-management.md` and `shared/canon-status.md`.
 On conflicts, ask — never assume.
 
 All content must be mechanically correct and narratively

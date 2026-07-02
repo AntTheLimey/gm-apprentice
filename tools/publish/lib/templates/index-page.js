@@ -1,7 +1,7 @@
 const MarkdownIt = require('markdown-it');
 const mdRenderer = new MarkdownIt({ html: false, typographer: true });
 const { escapeHtml, relativePath, resolveWikiLinks } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function relHref(page, indexDir) {
@@ -345,7 +345,7 @@ function renderFactions(pages, indexDir) {
     const leadership = fm.leadership ? String(fm.leadership).replace(/\[\[|\]\]/g, '').trim() : '';
     const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, 3) : [];
     const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, 4) : [];
-    const canon = fm.canon_status || '';
+    const canon = getCanonStatus(fm) || '';
 
     const leaderHtml = leadership
       ? `<div class="intel-leadership">Led by <strong>${escapeHtml(leadership)}</strong></div>`
@@ -524,8 +524,8 @@ function renderArmory(pages, indexDir) {
     const holder = fm.current_holder ? String(fm.current_holder).replace(/\[\[|\]\]/g, '').trim() : '';
     const origin = fm.origin ? String(fm.origin).replace(/\[\[|\]\]/g, '').trim() : '';
     const tl = fm.tl ? String(fm.tl) : '';
-    const confidence = (fm.confidence || fm.canon_status || '').toUpperCase();
-    const isDraft = confidence === 'DRAFT' || confidence === 'STUB';
+    const canonStatus = (getCanonStatus(fm) || '').toUpperCase();
+    const isDraft = canonStatus === 'DRAFT' || canonStatus === 'STUB';
 
     const metaParts = [];
     if (holder) metaParts.push(`<span><span class="armory-meta-label">Holder:</span> ${escapeHtml(holder)}</span>`);
@@ -599,7 +599,7 @@ function renderNPCTable(pages, dir) {
     const status = fm.status || '';
     const firstApp = cleanRef(fm.first_appearance || '');
     const lastSession = cleanRef(fm.asOfSession || fm.lastUpdated || '');
-    const confidence = fm.confidence || fm.canon_status || '';
+    const canonStatus = getCanonStatus(fm) || '';
 
     return `<tr data-entity-type="npc" data-entity-name="${escapeHtml(p.displayTitle)}" data-entity-status="${escapeHtml(status)}" data-session="${escapeHtml(lastSession)}">
   <td><a href="${escapeHtml(relHref(p, dir))}">${escapeHtml(p.displayTitle)}</a></td>
@@ -607,7 +607,7 @@ function renderNPCTable(pages, dir) {
   <td><span class="status-badge status-${escapeHtml(status.replace(/\s+/g, '-').toLowerCase())}">${escapeHtml(status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}</span></td>
   <td>${escapeHtml(firstApp)}</td>
   <td data-sort="${sessionSortKey(lastSession)}">${escapeHtml(lastSession)}</td>
-  <td><span class="sidebar-badge">${escapeHtml(confidence)}</span></td>
+  <td><span class="sidebar-badge">${escapeHtml(canonStatus)}</span></td>
 </tr>`;
   }).join('\n');
 
@@ -621,7 +621,7 @@ function renderNPCTable(pages, dir) {
   <th data-sort-col="status">Status</th>
   <th data-sort-col="first">First Appearance</th>
   <th data-sort-col="session">Last Updated</th>
-  <th data-sort-col="confidence">Confidence</th>
+  <th data-sort-col="canon">Canon Status</th>
 </tr>
 </thead>
 <tbody>

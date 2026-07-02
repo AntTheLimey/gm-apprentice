@@ -43,7 +43,7 @@ type: session-plan
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-source_confidence: DRAFT
+canon_status: DRAFT
 created_by: session-prep
 tags: []
 ---
@@ -170,7 +170,7 @@ type: session-play-notes
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 created_by: session-play
 tags: []
 ---
@@ -201,7 +201,7 @@ type: session_wrap
 session: "[[Session NN - Title]]"
 chapter: "[[Chapter N - Title]]"
 campaign: ""
-source_confidence: DRAFT
+canon_status: DRAFT
 created_by: session-wrapup
 tags: []
 ---
@@ -249,7 +249,7 @@ postures, ticking clocks. Reflects post-session reality.]
 - [ ] Scene notes updated with played/skipped status
 - [ ] Session index status updated to wrap-up
 - [ ] Carry-forward threads verified against play notes
-- [ ] Source confidence set correctly on all new files
+- [ ] Canon status set correctly on all new files
 
 ## Quality Notes
 
@@ -279,7 +279,7 @@ entities:
   - "[[Graf von Sternberg]]"
 connections:
   - "[[Scene - The Invitation]]"
-source_confidence: DRAFT
+canon_status: DRAFT
 tags: []
 ---
 

@@ -81,3 +81,33 @@ describe('indexTemplate — campaign index', () => {
     assert.ok(html.includes('GURPS Special Forces'), 'header still shows the campaign name (site-title fallback)');
   });
 });
+
+describe('indexTemplate — canon_status field on index pages', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test Campaign' };
+  const publishConfig = { theme: {} };
+
+  it('marks items draft via canonical canon_status', () => {
+    const pages = [
+      { frontmatter: { type: 'item', canon_status: 'DRAFT' }, title: 'Mystery Blade', displayTitle: 'Mystery Blade', outputPath: 'items/mystery-blade.html' },
+    ];
+    const html = indexTemplate('items', 'Items', pages, navFor, config, publishConfig);
+    assert.ok(html.includes('armory-item-draft'), 'canon_status DRAFT must mark the item as draft');
+  });
+
+  it('marks items draft via legacy source_confidence', () => {
+    const pages = [
+      { frontmatter: { type: 'item', source_confidence: 'DRAFT' }, title: 'Old Blade', displayTitle: 'Old Blade', outputPath: 'items/old-blade.html' },
+    ];
+    const html = indexTemplate('items', 'Items', pages, navFor, config, publishConfig);
+    assert.ok(html.includes('armory-item-draft'), 'source_confidence DRAFT must mark the item as draft');
+  });
+
+  it('shows the canon_status value in the NPC table Canon Status column', () => {
+    const pages = [
+      { frontmatter: { type: 'npc', canon_status: 'DRAFT', status: 'alive' }, title: 'New NPC', displayTitle: 'New NPC', outputPath: 'characters/npcs/new-npc.html' },
+    ];
+    const html = indexTemplate('characters/npcs', 'NPCs', pages, navFor, config, publishConfig);
+    assert.ok(html.includes('DRAFT'), 'canon_status value must appear in the Canon Status column');
+  });
+});

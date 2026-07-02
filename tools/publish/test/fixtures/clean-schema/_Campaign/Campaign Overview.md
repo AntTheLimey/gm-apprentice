@@ -14,7 +14,7 @@ current_arc: "The Whisperer in the Walls"
 arcs_planned: 3
 current_chapter: "[[Chapter 2 — The Inner Circle]]"
 chapters_planned: 4
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases: []
 tags: []
 portrait: ""

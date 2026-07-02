@@ -288,7 +288,7 @@ three-state responses (canon / ignore / defer).
    entity files — the template is canonical.
    (rationale: `shared/content-fidelity.md`)
 5. **Stub** — Read `_Templates/_Template_{Type}.md`, create with
-   that structure, set `source_confidence: STUB`. Leave template
+   that structure, set `canon_status: STUB`. Leave template
    sections empty. Include `## Needs` section.
 6. **Update index** — Add new entries to `_meta/index.md`.
 7. **Report** — Extracted, stubbed, needs attention.
@@ -300,7 +300,7 @@ three-state responses (canon / ignore / defer).
 1. **Initialize schema** — Read `_meta/`.
 2. **Scan** — Index all entity names, aliases, relationships.
 3. **Discover** — Find missing links in body text.
-4. **Propose** — Group by confidence: Explicit, Inferred, Possible.
+4. **Propose** — Group by certainty: Explicit, Inferred, Possible.
 5. **Apply** — After confirmation, update frontmatter and links
    only — Weave never rewrites body prose. Read
    `references/graph-hygiene.md` for link conventions.
@@ -333,8 +333,8 @@ Follow `references/world-validation.md`.
 with both names in `aliases`, flag for user confirmation.
 
 **Conflicts:** Don't pick a winner. Note one version, add
-`## Canon Conflicts`, set `source_confidence: DRAFT`.
-  See `shared/canon-confidence.md` for the full confidence
+`## Canon Conflicts`, set `canon_status: DRAFT`.
+  See `shared/canon-status.md` for the full canon status
   state definitions.
 
 **Uncertain extractions:** Err toward creating a stub. A deleted

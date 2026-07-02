@@ -1,6 +1,6 @@
 ---
 type: pc
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 player_name: "Reza"
 status: alive
 asOfSession: "Session 2"

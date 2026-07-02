@@ -375,7 +375,7 @@ For each approved plan:
 **Self-check after each promoted entity or plan:**
 1. Re-read the file just created
 2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
-3. Verify: `type` matches, `source_confidence: DRAFT` is set, all required fields present
+3. Verify: `type` matches, `canon_status: DRAFT` is set, all required fields present
 4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
 5. Fix any issues before promoting the next item
 
@@ -435,7 +435,7 @@ brief before committing to prep work.
 ```yaml
 ---
 type: adventure-brief
-source_confidence: DRAFT
+canon_status: DRAFT
 title: "[title]"
 system: "[system or undecided]"
 scope: "[campaign | one-shot | few-shot]"

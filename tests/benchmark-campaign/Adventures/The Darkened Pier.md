@@ -1,6 +1,6 @@
 ---
 type: adventure-brief
-source_confidence: DRAFT
+canon_status: DRAFT
 title: "The Darkened Pier"
 system: coc-7e
 scope: few-shot

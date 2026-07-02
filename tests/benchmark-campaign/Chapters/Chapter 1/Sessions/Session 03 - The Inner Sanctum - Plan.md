@@ -3,7 +3,7 @@ type: session-plan
 session: "[[Session 03 - The Inner Sanctum]]"
 chapter: "[[Chapter 1 - The Ashford Case]]"
 campaign: "The Ashford Case"
-source_confidence: DRAFT
+canon_status: DRAFT
 created_by: session-prep
 tags: []
 ---
