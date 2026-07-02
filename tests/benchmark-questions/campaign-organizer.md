@@ -25,7 +25,7 @@ layout look like, and what goes in each session file?
 
 ### Q4 — Source confidence lifecycle
 
-An entity has source_confidence: DRAFT. When should I promote it
+An entity has canon_status: DRAFT. When should I promote it
 to AUTHORITATIVE, and what does SUPERSEDED mean?
 
 ### Q5 — Filesystem mode without Obsidian
@@ -56,7 +56,7 @@ he's saying. Include proper frontmatter.
 Q3: My campaign has Chapter 1 with 3 sessions. What should the
 folder layout look like, and what goes in each session file?
 
-Q4: An entity has source_confidence: DRAFT. When should I promote
+Q4: An entity has canon_status: DRAFT. When should I promote
 it to AUTHORITATIVE, and what does SUPERSEDED mean?
 
 Q5: I don't have Obsidian installed. Can I still organise my
@@ -87,7 +87,7 @@ he's saying. Include proper frontmatter.
 Q3: My campaign has Chapter 1 with 3 sessions. What should the
 folder layout look like, and what goes in each session file?
 
-Q4: An entity has source_confidence: DRAFT. When should I promote
+Q4: An entity has canon_status: DRAFT. When should I promote
 it to AUTHORITATIVE, and what does SUPERSEDED mean?
 
 Q5: I don't have Obsidian installed. Can I still organise my

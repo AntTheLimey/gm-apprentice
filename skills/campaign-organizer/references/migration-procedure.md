@@ -104,12 +104,11 @@ Apply all confirmed changes in this order:
 1. Write vault-config field updates (structural)
 2. Create missing `_meta/` files (structural)
 3. Create missing folders (structural)
-4. Run frontmatter field sweeps (structural) — follow the
-   migration entry's repair rules exactly. When a file carries
-   both a legacy key and the new key, the legacy line is
-   deleted, never renamed — a file must never end up with
-   duplicate keys. Collect any value conflicts for the Step 8
-   report
+4. Run frontmatter field sweeps (structural) — apply the
+   repair algorithm the migration entry names (for canon
+   status: `shared/canon-status.md` § Repairing Legacy Keys).
+   A file must never end up with duplicate keys. Collect any
+   value conflicts for the Step 8 report
 5. Copy selected templates to `_Templates/` (content)
 6. Overwrite selected templates in `_Templates/` (content)
 7. Create selected story files using

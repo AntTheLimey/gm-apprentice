@@ -481,18 +481,9 @@ migration.
 1. Scan every `.md` file in the vault (including `_Templates/`
    and `_meta/`) for frontmatter keys `source_confidence:` and
    `confidence:`
-2. For each hit, determine the repair. **Never blind-rename a
-   key — check for an existing `canon_status` first, or the file
-   ends up with duplicate `canon_status` lines:**
-   - Legacy key only, no `canon_status` → rename the key to
-     `canon_status`, keep the value
-   - Legacy key(s) AND `canon_status`, all values equal →
-     delete the legacy key line(s); keep the single existing
-     `canon_status`
-   - Legacy key(s) AND `canon_status`, values disagree → keep
-     the `canon_status` value, delete the legacy line(s), and
-     flag the file to the GM with both values so they can
-     confirm or correct
+2. Repair each hit using the authoritative algorithm in
+   `shared/canon-status.md` § Repairing Legacy Keys (rename /
+   collapse / keep-and-flag — never a blind key rename)
 3. After repair, verify no file contains more than one
    `canon_status:` line
 

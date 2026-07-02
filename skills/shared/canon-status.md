@@ -32,8 +32,29 @@ canon_status: DRAFT    # AUTHORITATIVE | SUPERSEDED | STUB
 `canon_status` is the only correct field name. Two legacy names
 (`source_confidence` and `confidence`) may appear in vaults that
 haven't run the 1.8.0 migration — read them as equivalent, but
-never write them. When you touch a file carrying a legacy name,
-rename the key to `canon_status` as part of the edit.
+never write them.
+
+## Repairing Legacy Keys
+
+This is the single authoritative repair algorithm. The 1.8.0
+migration sweep, campaign-qa's Legacy Canon Field Repair check,
+and any skill touching a file with a legacy key all apply it.
+
+**Never blind-rename a key** — many files carry BOTH a legacy
+key and `canon_status`, and a rename would leave duplicate
+`canon_status:` lines (YAML parsers then silently keep one,
+which can flip the entity's status). Apply exactly one case:
+
+1. Legacy key only, no `canon_status` → rename the key to
+   `canon_status`, value unchanged
+2. Legacy key(s) AND `canon_status`, values all agree → delete
+   the legacy line(s), keeping the single existing `canon_status`
+3. Legacy key(s) AND `canon_status`, values disagree → keep the
+   `canon_status` value, delete the legacy line(s), and surface
+   the file to the GM with both values to confirm or correct
+
+After repairing, the file must contain exactly one
+`canon_status:` line.
 
 ## Companion Reference
 

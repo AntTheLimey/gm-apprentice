@@ -271,22 +271,14 @@ require `canon_status` exclusively.
 - **Vault-wide frontmatter sweep** — every `.md` file in the
   vault, including `_Templates/` and `_meta/`. For each file
   whose frontmatter contains `source_confidence:` or
-  `confidence:`, apply exactly one of these repairs. **Never
-  blind-rename a key: many files carry BOTH a legacy key and
-  `canon_status`, and a rename would leave duplicate
-  `canon_status:` lines. Always check for an existing
-  `canon_status` first:**
-  - Legacy key only, no `canon_status` present → rename the
-    key to `canon_status`, value unchanged
-  - Legacy key(s) AND `canon_status` present, values all agree
-    → delete the legacy key line(s), keeping the single
-    existing `canon_status`
-  - Legacy key(s) AND `canon_status` present, values disagree
-    → keep the `canon_status` value, delete the legacy
-    line(s), and list the file in the migration report with
-    both values for GM review
-  - After the sweep, verify no file contains more than one
-    `canon_status:` line
+  `confidence:`, apply the repair algorithm in
+  `shared/canon-status.md` § Repairing Legacy Keys. **Never
+  blind-rename a key** — many files carry BOTH a legacy key
+  and `canon_status`; the algorithm collapses duplicates and
+  keeps the `canon_status` value on conflicts, listing each
+  conflicted file in the migration report with both values for
+  GM review. After the sweep, verify no file contains more
+  than one `canon_status:` line
 - **`_meta/entity-types.md`:** if the registry documents the
   canon field under a legacy name, update the field name to
   `canon_status` (values unchanged)

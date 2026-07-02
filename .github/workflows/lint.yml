@@ -37,11 +37,10 @@ jobs:
 
       - name: Schema field naming consistency
         run: |
-          if git ls-files skills tests \
-            | grep -vE '^tests/(proof-runs|benchmark-results|benchmark-content-fidelity/results)/' \
-            | tr '\n' '\0' \
-            | xargs -0 grep -nE '^(source_confidence|confidence):' 2>/dev/null \
-            | grep -v 'skills/shared/canon-status.md'; then
+          if git grep -nE '^[[:space:]]*(source_confidence|confidence):' -- \
+            skills tests tools/publish/test/fixtures \
+            ':!tests/proof-runs' ':!tests/benchmark-results' \
+            ':!tests/benchmark-content-fidelity/results'; then
             echo "::error::Found legacy canon-status field — use 'canon_status:' instead"
             exit 1
           fi

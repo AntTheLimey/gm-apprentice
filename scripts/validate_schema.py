@@ -76,11 +76,18 @@ REQUIRED_FIELDS = {
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {"npc", "pc", "location", "faction", "organization", "item", "creature", "campaign_overview", "heritage"}
 
-# Valid optional fields per entity type (used for deprecation warnings)
-DEPRECATED_FIELDS: dict[str, list[tuple[str, str]]] = {
-    # (old_field, replacement_field)
-    "event": [("date", "in_game_date")],
-    "session": [("planned_date", "play_date"), ("actual_date", "play_date")],
+# Deprecated field renames, keyed by entity type; "*" applies to all types
+DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
+    # (old_field, replacement_field, migration_version)
+    "*": [
+        ("source_confidence", "canon_status", "1.8.0"),
+        ("confidence", "canon_status", "1.8.0"),
+    ],
+    "event": [("date", "in_game_date", "1.4.22")],
+    "session": [
+        ("planned_date", "play_date", "1.4.22"),
+        ("actual_date", "play_date", "1.4.22"),
+    ],
 }
 
 
@@ -155,14 +162,6 @@ def validate_file(filepath: Path) -> list[str]:
     for field in required:
         if field not in frontmatter:
             errors.append(f"Missing required field '{field}' for type '{entity_type}'")
-
-    # Legacy canon-status field names — canon_status is canonical since 1.8.0
-    for legacy_field in ("source_confidence", "confidence"):
-        if legacy_field in frontmatter:
-            errors.append(
-                f"Legacy field '{legacy_field}' — "
-                f"rename to 'canon_status' (run migration 1.8.0)"
-            )
 
     # Validate canon_status enum
     if "canon_status" in frontmatter:
@@ -314,14 +313,14 @@ def validate_file(filepath: Path) -> list[str]:
                 f"must start with '_attachments/'"
             )
 
-    # Deprecation warnings for renamed date fields
-    if entity_type in DEPRECATED_FIELDS:
-        for old_field, new_field in DEPRECATED_FIELDS[entity_type]:
-            if old_field in frontmatter:
-                errors.append(
-                    f"Deprecated field '{old_field}' — "
-                    f"rename to '{new_field}' (run migration 1.4.22)"
-                )
+    # Deprecation errors for renamed fields (universal "*" + per-type)
+    deprecated = DEPRECATED_FIELDS.get("*", []) + DEPRECATED_FIELDS.get(entity_type, [])
+    for old_field, new_field, migration in deprecated:
+        if old_field in frontmatter:
+            errors.append(
+                f"Deprecated field '{old_field}' — "
+                f"rename to '{new_field}' (run migration {migration})"
+            )
 
     return errors
 
