@@ -193,3 +193,40 @@ describe('characterStoryGroup', () => {
     assert.strictEqual(characterStoryGroup({ status: 'missing' }), 'fallen');
   });
 });
+
+describe('wiki-link resolution in story recaps', () => {
+  const pages = [
+    { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — The Hungry God', sourcePath: '/v/Chapters/Chapter 1/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Narrative Recap\nIt began at [[Voss_Campus]].' },
+    { title: 'Session 04 - Fallen Stars', displayTitle: 'Session 04 - Fallen Stars', sourcePath: '/v/Chapters/Chapter 1/Sessions/Session 04 - Fallen Stars.md', frontmatter: { type: 'session', session_number: 4 }, markdown: '## Narrative Recap\nThe team hit [[Voss_Campus]] with [[Ronnie_Vint|Ronnie]] and met [[Nobody_Known]].' },
+  ];
+  const linkMap = {
+    Voss_Campus: 'locations/voss-campus.html',
+    Ronnie_Vint: 'characters/pcs/ronnie-vint.html',
+  };
+
+  it('resolves [[wiki-links]] in session recap HTML against the link map', () => {
+    const spine = buildStorySpine(pages, linkMap);
+    const u = spine.find(x => x.kind === 'session');
+    assert.match(u.recapHtml, /<a href="\.\.\/locations\/voss-campus\.html">Voss Campus<\/a>/);
+    assert.match(u.recapHtml, /<a href="\.\.\/characters\/pcs\/ronnie-vint\.html">Ronnie<\/a>/);
+    assert.ok(!u.recapHtml.includes('[['), 'no raw wiki-link syntax may remain');
+  });
+
+  it('renders unresolvable links as humanized plain text', () => {
+    const spine = buildStorySpine(pages, linkMap);
+    const u = spine.find(x => x.kind === 'session');
+    assert.match(u.recapHtml, /Nobody Known/);
+    assert.ok(!/Nobody_Known/.test(u.recapHtml));
+  });
+
+  it('resolves links in chapter-intro recaps too', () => {
+    const spine = buildStorySpine(pages, linkMap);
+    const intro = spine.find(x => x.kind === 'chapter-intro');
+    assert.match(intro.recapHtml, /<a href="\.\.\/locations\/voss-campus\.html">Voss Campus<\/a>/);
+  });
+
+  it('leaves recaps unresolved-but-intact when no link map is given (hasStory probe)', () => {
+    const spine = buildStorySpine(pages);
+    assert.ok(spine.length > 0);
+  });
+});
