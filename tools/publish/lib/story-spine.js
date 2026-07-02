@@ -88,19 +88,22 @@ function chapterOwnsSession(chapter, session) {
   return chapterMatchesSession(chapter, session);
 }
 
-// The wrap-up for a unit (chapter or session): a wrap-up page in the SAME folder
-// as the unit's own page (chapter wrap-up sits in the chapter folder; a session
-// wrap-up sits in the session's subfolder). Falls back to the ref index.
+// The wrap-up for a unit (chapter or session). An explicit session:/chapter: ref
+// match always wins. The same-folder fallback (chapter wrap-up in the chapter folder;
+// session wrap-up in the session's subfolder) only applies when that folder holds
+// exactly ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and
+// a first-match grab there would hand the same wrap-up to every session.
 function wrapUpForUnit(unitPage, wrapUps, idx) {
+  const byRef = idx.bySession.get(unitPage.title)
+    || idx.byChapter.get(unitPage.title)
+    || idx.byChapter.get(unitPage.title.replace(/_/g, ' '));
+  if (byRef) return byRef;
   const dir = folderOf(unitPage);
   if (dir) {
-    const sameFolder = wrapUps.find(w => folderOf(w) === dir);
-    if (sameFolder) return sameFolder;
+    const sameFolder = wrapUps.filter(w => folderOf(w) === dir);
+    if (sameFolder.length === 1) return sameFolder[0];
   }
-  return idx.bySession.get(unitPage.title)
-    || idx.byChapter.get(unitPage.title)
-    || idx.byChapter.get(unitPage.title.replace(/_/g, ' '))
-    || null;
+  return null;
 }
 
 function unitOutputPath(id) { return `story/${id}.html`; }
