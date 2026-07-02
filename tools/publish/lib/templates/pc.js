@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativePath, relativeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -226,7 +226,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const equipmentContent = systemEquipmentHtml || extractEquipment(fm, sections);
 
   // --- Story Tab ---
-  const storyContent = storyHtml || '<p class="text-muted">No story content available.</p>';
+  const opts = context || {};
+  const storyContent = opts.storyHref
+    ? `<a class="story-read-link" href="${relativeHref(page.outputPath, opts.storyHref)}">Read ${escapeHtml(page.displayTitle)}'s story &rarr;</a>`
+    : (storyHtml || '<p class="text-muted">No story content available.</p>');
 
   // --- Journey Tab ---
   const routeMap = buildRouteMap(page, pages);

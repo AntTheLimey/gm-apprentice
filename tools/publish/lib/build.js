@@ -1,11 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks, relativeHref, escapeHtml } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
+const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
+const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
+const { storyLanding } = require('./templates/story-landing');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -211,6 +214,12 @@ function build(options = {}) {
     page.publishedMarkdown = filterSections(text, excludeSections);
   }
 
+  // Whether a Story section will exist. Computed early (pure function of pages) so the
+  // top nav — threaded into every page, including story pages built later — can point
+  // the Story group at story.html. Must match what buildStory() emits below.
+  const hasStory = buildStorySpine(pages).length > 0
+    || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
+
   // Build-time data pipeline
   const backlinks = buildBacklinks(pages);
   console.log(`Built backlinks for ${Object.keys(backlinks).length} entities`);
@@ -321,7 +330,7 @@ function build(options = {}) {
 
   write404();
 
-  const navFor = generateNav(pages);
+  const navFor = generateNav(pages, { hasStory });
 
   // Render each page
   const usedImages = new Set();
@@ -369,6 +378,7 @@ function build(options = {}) {
             systemSheetHtml: systemOut.sheetHtml || null,
             systemCombatHtml: systemOut.combatHtml || null,
             systemEquipmentHtml: systemOut.equipmentHtml || null,
+            storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
         }
@@ -524,6 +534,65 @@ function build(options = {}) {
 
     publishConfig._timelineStrip = renderTimelineStrip(timelineData, { maxEvents: 15 });
   }
+
+  function renderRefsHtml(unit) {
+    const refs = unitRefs(unit);
+    const items = [];
+    for (const p of refs.participants) {
+      const out = linkMap[p.target];
+      items.push(out ? `<li><a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(p.label)}</a></li>`
+                     : `<li>${escapeHtml(p.label)}</li>`);
+    }
+    if (refs.location) {
+      const out = linkMap[refs.location.target];
+      items.push(out ? `<li>Location: <a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(refs.location.label)}</a></li>`
+                     : `<li>Location: ${escapeHtml(refs.location.label)}</li>`);
+    }
+    return items.length ? `<ul>${items.join('')}</ul>` : '';
+  }
+
+  function buildCharacterStories() {
+    const { slugify } = require('./scanner');
+    const stories = [];
+    for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
+      const outputPath = `story/characters/${slugify(pc.title)}.html`;
+      const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
+      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages });
+      const story = {
+        title: pc.displayTitle, outputPath, html: processed.html,
+        sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
+      };
+      const full = path.join(outputDir, outputPath);
+      ensureDir(full);
+      fs.writeFileSync(full, characterStoryPage(story, config, publishConfig, navFor));
+      console.log(`  wrote ${outputPath}`);
+      stories.push(story);
+    }
+    return stories;
+  }
+
+  function buildStory() {
+    const spine = buildStorySpine(pages);
+    for (const unit of spine) {
+      unit.refsHtml = renderRefsHtml(unit);
+      const html = renderStoryUnit(unit, config, publishConfig, navFor);
+      const outPath = path.join(outputDir, unit.outputPath);
+      ensureDir(outPath);
+      fs.writeFileSync(outPath, html);
+      console.log(`  wrote ${unit.outputPath}`);
+    }
+    const characterStories = buildCharacterStories();
+    if (spine.length || characterStories.length) {
+      const landing = storyLanding(spine, characterStories, config, publishConfig, navFor);
+      const lp = path.join(outputDir, 'story.html');
+      ensureDir(lp);
+      fs.writeFileSync(lp, landing);
+      console.log('  wrote story.html');
+    }
+    return { spine, characterStories, hasStory: !!(spine.length || characterStories.length) };
+  }
+
+  buildStory();
 
   // Landing page
   const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);

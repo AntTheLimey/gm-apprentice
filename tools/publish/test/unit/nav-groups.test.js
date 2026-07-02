@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { generateNavGroups } = require('../../lib/templates/nav');
+const { generateNavGroups, generateNav } = require('../../lib/templates/nav');
 
 describe('generateNavGroups', () => {
   const pages = [
@@ -63,5 +63,40 @@ describe('generateNavGroups', () => {
     assert.ok(chars);
     const story = groups.find(g => g.name === 'Story');
     assert.ok(!story);
+  });
+});
+
+describe('generateNav', () => {
+  it('links the Story group at story.html when hasStory is set', () => {
+    const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
+    const navFor = generateNav(pages, { hasStory: true });
+    const html = navFor('index.html', { siteTitle: 'T' });
+    assert.match(html, /href="story\.html"/);
+  });
+
+  it('shows a standalone Story nav link when hasStory but no chapters/sessions/events exist', () => {
+    // New campaign: PC backstories published, no sessions played yet.
+    const pages = [{ outputPath: 'characters/pcs/hero.html', outputDir: 'characters/pcs', frontmatter: { type: 'pc' } }];
+    const navFor = generateNav(pages, { hasStory: true });
+    const html = navFor('index.html', { siteTitle: 'T' });
+    assert.match(html, /href="story\.html"/);
+    assert.match(html, />Story</);
+    // mobile entry reuses the shared overlay li>a styling hook (not a bespoke class)
+    assert.match(html, /<li><a href="story\.html">Story<\/a><\/li>/);
+  });
+
+  it('links the Story landing in the mobile nav when a Story group exists', () => {
+    const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
+    const html = generateNav(pages, { hasStory: true })('index.html', { siteTitle: 'T' });
+    assert.match(html, /<h3><a href="story\.html">Story<\/a><\/h3>/);
+  });
+
+  it('does not add a duplicate Story entry when a Story group already exists', () => {
+    const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
+    const navFor = generateNav(pages, { hasStory: true });
+    const html = navFor('index.html', { siteTitle: 'T' });
+    // exactly one desktop story.html link in the top nav-groups (not two)
+    const desktopMatches = (html.match(/class="nav-group-toggle"[^>]*href="story\.html"/g) || []).length;
+    assert.strictEqual(desktopMatches, 1);
   });
 });

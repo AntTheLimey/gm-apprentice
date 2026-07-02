@@ -470,6 +470,15 @@ describe('PC template tabbed layout', () => {
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, storyHtml);
     assert.ok(html.includes('story-prose'), 'Should have prose flow container');
   });
+
+  it('Story tab links to the dedicated story page when one exists', () => {
+    const page = { title: 'Hero', displayTitle: 'Hero', outputPath: 'characters/pcs/hero.html', frontmatter: { type: 'pc', player_name: 'A', status: 'active' } };
+    const processed = { html: '', relationships: '' };
+    const sections = [];
+    const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {}, '<p>inline</p>', { storyHref: 'story/characters/hero.html' });
+    assert.match(html, /href="\.\.\/\.\.\/story\/characters\/hero\.html"/);
+    assert.ok(!html.includes('<p>inline</p>'), 'prose is no longer inlined when a story page exists');
+  });
 });
 
 describe('PC renderer registry', () => {

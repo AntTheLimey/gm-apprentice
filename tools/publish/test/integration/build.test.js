@@ -1038,12 +1038,17 @@ describe('build integration', () => {
       assert.ok(html.includes('Story'), 'Should have Story tab');
     });
 
-    it('renders story content in story tab', () => {
+    it('Story tab links to dedicated story page when one exists', () => {
       const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'lord-blackwood.html');
-      const html = fs.readFileSync(pcPath, 'utf-8');
-      assert.ok(html.includes('The Whitby Letter'), 'Should contain session 1 title');
-      assert.ok(html.includes('The Hastings Séance'), 'Should contain session 2 title');
-      assert.ok(html.includes('story-prose'), 'Should have prose container');
+      const pcHtml = fs.readFileSync(pcPath, 'utf-8');
+      assert.ok(pcHtml.includes('story-read-link'), 'Should have a link to the dedicated story page');
+      assert.ok(pcHtml.includes('story/characters/lord-blackwood.html'), 'Should reference the story page path');
+      assert.ok(pcHtml.includes('story-prose'), 'Should still have prose container');
+      const storyPath = path.join(outputDir, 'docs', 'story', 'characters', 'lord-blackwood.html');
+      assert.ok(fs.existsSync(storyPath), 'Dedicated story page should exist');
+      const storyHtml = fs.readFileSync(storyPath, 'utf-8');
+      assert.ok(storyHtml.includes('The Whitby Letter'), 'Dedicated story page should contain session 1 title');
+      assert.ok(storyHtml.includes('The Hastings Séance'), 'Dedicated story page should contain session 2 title');
     });
 
     it('strips GM Notes from story content', () => {

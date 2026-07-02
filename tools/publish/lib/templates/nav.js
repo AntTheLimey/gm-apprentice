@@ -53,33 +53,64 @@ function generateNavGroups(pages) {
     .filter(Boolean);
 }
 
-function renderTopNav(pages, currentOutputPath, config) {
+function renderTopNav(pages, currentOutputPath, config, options = {}) {
   const groups = generateNavGroups(pages);
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
 
-  const groupsHtml = groups.map(group => {
+  const hasStoryGroup = groups.some(g => g.name === 'Story');
+  const standaloneStory = options.hasStory && !hasStoryGroup;
+  const storyHref = relativePath(currentDir, 'story.html');
+
+  const desktopGroupsHtml = groups.map(group => {
     const linksHtml = group.links.map(link => {
       const href = relativePath(currentDir, link.href);
       return `        <a href="${href}">${escapeHtml(link.label)}</a>`;
     }).join('\n');
 
+    const toggle = options.hasStory && group.name === 'Story'
+      ? `<a class="nav-group-toggle" href="${relativePath(currentDir, 'story.html')}">${escapeHtml(group.name)}</a>`
+      : `<button class="nav-group-toggle">${escapeHtml(group.name)}</button>`;
+
     return `      <div class="nav-group">
-        <button class="nav-group-toggle">${escapeHtml(group.name)}</button>
+        ${toggle}
         <div class="nav-dropdown">
 ${linksHtml}
         </div>
       </div>`;
   }).join('\n');
 
+  const standaloneDesktop = standaloneStory
+    ? `      <div class="nav-group"><a class="nav-group-toggle" href="${storyHref}">Story</a></div>`
+    : '';
+
+  const groupsHtml = standaloneStory
+    ? [standaloneDesktop, desktopGroupsHtml].filter(Boolean).join('\n')
+    : desktopGroupsHtml;
+
   const rootHref = relativePath(currentDir, 'index.html') || './index.html';
 
-  const mobileLinksHtml = groups.map(group => {
+  const mobileGroupsHtml = groups.map(group => {
     const links = group.links.map(link => {
       const href = relativePath(currentDir, link.href);
       return `    <li><a href="${href}">${escapeHtml(link.label)}</a></li>`;
     }).join('\n');
-    return `  <h3>${escapeHtml(group.name)}</h3>\n  <ul>\n${links}\n  </ul>`;
+    // Mirror the desktop behavior: when a Story section exists, the Story heading links to
+    // the landing (desktop makes the group toggle a link; give mobile the same reach).
+    const heading = options.hasStory && group.name === 'Story'
+      ? `<h3><a href="${storyHref}">${escapeHtml(group.name)}</a></h3>`
+      : `<h3>${escapeHtml(group.name)}</h3>`;
+    return `  ${heading}\n  <ul>\n${links}\n  </ul>`;
   }).join('\n');
+
+  // Reuse the shared `.mobile-nav-overlay li a` structure (display:block, 44px tap target)
+  // rather than a bespoke class with no stylesheet rule.
+  const standaloneMobile = standaloneStory
+    ? `  <ul>\n    <li><a href="${storyHref}">Story</a></li>\n  </ul>`
+    : '';
+
+  const mobileLinksHtml = standaloneStory
+    ? [standaloneMobile, mobileGroupsHtml].filter(Boolean).join('\n')
+    : mobileGroupsHtml;
 
   return `<header class="top-nav">
   <a href="${rootHref}" class="nav-brand">${escapeHtml(config.siteTitle)}</a>
@@ -95,9 +126,9 @@ ${mobileLinksHtml}
 </div>`;
 }
 
-function generateNav(pages) {
+function generateNav(pages, options = {}) {
   return function navFor(currentOutputPath, config) {
-    return renderTopNav(pages, currentOutputPath, config || { siteTitle: '' });
+    return renderTopNav(pages, currentOutputPath, config || { siteTitle: '' }, options);
   };
 }
 
