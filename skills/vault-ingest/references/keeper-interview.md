@@ -56,11 +56,11 @@ If the GM says "I don't remember," flag the item as unresolved
 and move on. Don't push, don't invent, don't suggest what
 might have happened. Some details are lost to time.
 
-### 6. Distinguish Confidence
+### 6. Distinguish Certainty
 
 Not all GM answers carry equal weight:
 
-| GM Response | Confidence | Treatment |
+| GM Response | Canon Status | Treatment |
 |---|---|---|
 | "Definitely happened" / specific details | AUTHORITATIVE | Full canon |
 | "I think so" / "sounds right" | AUTHORITATIVE + UNVERIFIED marker | `<!-- UNVERIFIED: [claim] -->` |

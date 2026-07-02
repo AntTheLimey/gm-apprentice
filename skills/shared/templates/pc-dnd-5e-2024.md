@@ -1,6 +1,6 @@
 ---
 type: pc
-source_confidence: DRAFT
+canon_status: DRAFT
 aliases: []
 tags: []
 source_document: ""

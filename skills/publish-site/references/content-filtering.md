@@ -33,7 +33,7 @@ All campaign content falls into three categories:
 
 - Files with no `type` field
 - Files in non-standard directories
-- Entities with `source_confidence: SUPERSEDED` that have
+- Entities with `canon_status: SUPERSEDED` that have
   no `superseded_by` reference
 
 ## Configuration

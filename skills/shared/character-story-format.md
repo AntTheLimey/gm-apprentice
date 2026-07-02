@@ -18,7 +18,7 @@ Discovered by naming convention, not frontmatter pointer.
 type: character-story
 character: "[[{Name}]]"
 campaign: ""
-source_confidence: DRAFT
+canon_status: DRAFT
 lastUpdated: ""
 asOfSession: ""
 createdSession: ""

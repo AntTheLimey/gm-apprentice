@@ -12,7 +12,7 @@ All systems share these baseline entity attributes:
 - Tags
 - GM notes (GM-only)
 - Source document
-- Source confidence
+- Canon status
 
 ## Validation Rules
 

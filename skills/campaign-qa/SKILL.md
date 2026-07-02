@@ -89,7 +89,7 @@ to your environment's tools per `shared/filesystem-mode.md`.
   vault entities.
 
 **Shared references** (read as needed for schema definitions):
-- `shared/canon-confidence.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
+- `shared/canon-status.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
   state definitions and rules.
 - `shared/entity-schema.md` — Entity type hierarchy, frontmatter
   schemas, relationship types, required relationships.
@@ -125,7 +125,7 @@ on first use.
   - **Info** — Housekeeping issue (stale DRAFT status, minor
     naming inconsistency, orphaned entity).
 
-  See `shared/canon-confidence.md` for the full confidence
+  See `shared/canon-status.md` for the full canon status
   state definitions.
 
 - **Wiki-link everything.** Every entity reference in QA

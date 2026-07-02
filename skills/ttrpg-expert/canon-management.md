@@ -19,7 +19,7 @@ AI and automated systems detect conflicts; humans resolve them.
 Every piece of information should track where it came from.
 This enables conflict detection and audit trails.
 
-## Source Confidence Levels
+## Canon Status Levels
 
 ### DRAFT
 
@@ -170,8 +170,8 @@ if len(existing) > 0 {
     return PotentialDuplicate(existing)
 }
 
-// Set initial confidence
-entity.SourceConfidence = "DRAFT"
+// Set initial canon status
+entity.CanonStatus = "DRAFT"
 entity.SourceDocument = importSource
 ```
 
@@ -179,7 +179,7 @@ entity.SourceDocument = importSource
 
 ```go
 // Check if changing AUTHORITATIVE data
-if entity.SourceConfidence == "AUTHORITATIVE" {
+if entity.CanonStatus == "AUTHORITATIVE" {
     // Create conflict for review
     if valueChanged(existing, updated) {
         CreateConflict(entity, existing, updated)
@@ -195,7 +195,7 @@ if entity.SourceConfidence == "AUTHORITATIVE" {
 entity.SourceDocument = importFile
 
 // Default to DRAFT
-entity.SourceConfidence = "DRAFT"
+entity.CanonStatus = "DRAFT"
 
 // Check for existing
 existing := FindByName(entity.Name)

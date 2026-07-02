@@ -67,7 +67,7 @@ Runs when most recent session has status `wrap-up` (not yet
 `reviewed`). Skip for first sessions or when already `reviewed`.
 
 **Invoke `shared/reconcile.md`.** Reconcile walks the GM through
-reviewing the Wrap-Up, promotes confidence, and handles
+reviewing the Wrap-Up, promotes canon status, and handles
 salvageable prep triage. See the shared procedure for the full
 workflow.
 

@@ -23,7 +23,7 @@ Apply to **every** entity type. Enable temporal queries
 | asOfSession | string | Session when current state was confirmed accurate |
 | createdSession | string | Session when first introduced |
 | source | string | How it entered canon: "play", "prep", "backstory", or "world-evolution" |
-| confidence | string | Canon confidence: DRAFT / AUTHORITATIVE / SUPERSEDED |
+| canon_status | string | Canon status: DRAFT / AUTHORITATIVE / SUPERSEDED / STUB |
 | era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"). Assumed campaign present if absent. |
 
 Always set `lastUpdated` and `asOfSession` to current session
@@ -106,7 +106,7 @@ used for constraint inheritance in the relationship ontology.
 ```yaml
 ---
 type: npc              # From the type hierarchy
-source_confidence: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
+canon_status: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
 aliases: []
 tags: []
 source_document: ""
@@ -408,7 +408,7 @@ entities:                  # Entities that participate in this scene
   - "[[Location Name]]"
   - "[[Item Name]]"
 connections: []            # Links to scenes this leads to/from
-source_confidence: DRAFT
+canon_status: DRAFT
 tags: []
 ---
 ```

@@ -429,7 +429,7 @@ For each issue:
 ## Stale DRAFT Detection
 
 **Severity:** WARNING
-**Trigger:** Entity has `source_confidence: DRAFT` and has been
+**Trigger:** Entity has `canon_status: DRAFT` and has been
 DRAFT for 3 or more sessions.
 
 **Procedure:**
@@ -437,7 +437,7 @@ DRAFT for 3 or more sessions.
 1. Determine the current session number — the highest
    `session_number` value across all session-index entities in
    the vault
-2. For each entity with `source_confidence: DRAFT`:
+2. For each entity with `canon_status: DRAFT`:
    - Extract the session number from `createdSession` (e.g.
      "Session 1" → 1)
    - Calculate age: `current_session - created_session`

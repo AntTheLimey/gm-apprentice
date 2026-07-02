@@ -110,7 +110,7 @@ term internally while preserving original language in output.
 | event | Historical occurrence |
 | document | In-game text or record |
 
-## Canon Confidence Levels
+## Canon Status Levels
 
 | Level | Meaning |
 |-------|---------|

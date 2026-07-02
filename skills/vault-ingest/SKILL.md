@@ -113,7 +113,7 @@ Group classified items by chapter/session/time period.
 - GM context from Phase 1 confirmation
 
 **Each bucket gets:** working label, classified items,
-confidence level (certain / probable / needs-GM-input).
+certainty level (certain / probable / needs-GM-input).
 
 Ambiguous items go to "unsorted" bucket — resolved at the
 start of Phase 4 before play-event interview begins.
@@ -155,7 +155,7 @@ The skill's exclusive value. Read
 3. Follow the thread — each answer is a door
 4. Record as you go — log every answer immediately
 5. Know when to stop — "I don't remember" → flag and move on
-6. Distinguish confidence — "definitely" vs "I think so"
+6. Distinguish certainty — "definitely" vs "I think so"
 
 First resolve any unsorted items from Phase 2 before starting
 the play-event interview.
@@ -195,7 +195,7 @@ Read `references/synthesis-templates.md` for the output format.
 **Self-check after each entity:**
 1. Re-read the entity file just written
 2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
-3. Verify: `type` matches, `source_confidence` is set, all required fields present
+3. Verify: `type` matches, `canon_status` is set, all required fields present
 4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
 5. Verify: `play_date` is `YYYY-MM-DD`; `in_game_date` uses a real-date form (ISO, month-name, or seasonal with a 4-digit year) or the campaign's own non-Earth calendar — never a fabricated Gregorian date, and no narrative time-of-day in the field (see `shared/session-document-chain.md`)
 6. Fix any issues before proceeding to the next entity
@@ -215,7 +215,7 @@ Set `plan_type` to the closest match: `arc`, `scene`,
 
 Invoke `shared/reconcile.md` to walk the GM through reviewing
 the wrap-up. On approval, promotes to `reviewed` status and
-AUTHORITATIVE confidence.
+AUTHORITATIVE canon status.
 
 ## Post-Ingestion
 
