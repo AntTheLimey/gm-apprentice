@@ -134,6 +134,21 @@ describe('buildStorySpine output-path namespacing', () => {
   });
 });
 
+describe('buildStorySpine ref-metadata source', () => {
+  it('uses the unit page (not the wrap-up) as sourcePage, so refs read the right frontmatter', () => {
+    const chapter = { title: 'Ch', displayTitle: 'Ch', sourcePath: '/v/Ch/Ch.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' };
+    const session = { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch/S1/S1.md', frontmatter: { type: 'session', session_number: 1, participants: ['[[Alice]]'], location: '[[Vienna]]' }, markdown: '## Overview\nno recap here' };
+    const wrap = { title: 'S1 Wrap Up', sourcePath: '/v/Ch/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' }, markdown: '## Narrative Recap\nRecap prose from the wrap-up.' };
+    const spine = require('../../lib/story-spine').buildStorySpine([chapter, session, wrap]);
+    const u = spine.find(x => x.kind === 'session');
+    assert.ok(u, 'session unit exists');
+    assert.match(u.recapHtml, /Recap prose from the wrap-up/); // text still from the wrap-up
+    assert.strictEqual(u.sourcePage, session, 'sourcePage is the session page, not the wrap-up');
+    assert.deepStrictEqual(unitRefs(u).participants.map(r => r.label), ['Alice']);
+    assert.strictEqual(unitRefs(u).location.target, 'Vienna');
+  });
+});
+
 describe('buildStorySpine folder-proximity pairing', () => {
   it('pairs a chapter wrap-up by folder even when its chapter ref is a free-form display title', () => {
     const pages = [

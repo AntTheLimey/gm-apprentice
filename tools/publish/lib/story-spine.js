@@ -146,7 +146,9 @@ function buildStorySpine(pages) {
         kind: 'session', id, outputPath: unitOutputPath(id),
         title: s.displayTitle || s.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
-        recapHtml: recap.html, sourcePage: recap.sourcePage,
+        // recap TEXT can come from a wrap-up, but ref metadata (participants/location) is
+        // read from the unit's OWN page — the wrap-up typically doesn't carry those fields.
+        recapHtml: recap.html, sourcePage: s,
       });
     }
 
@@ -157,7 +159,7 @@ function buildStorySpine(pages) {
           kind: 'chapter-intro', id, outputPath: unitOutputPath(id),
           title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
-          recapHtml: chapterRecap.html, sourcePage: chapterRecap.sourcePage,
+          recapHtml: chapterRecap.html, sourcePage: chapter,
         });
       }
       units.push(...sessionUnits);
@@ -167,7 +169,7 @@ function buildStorySpine(pages) {
         kind: 'chapter', id, outputPath: unitOutputPath(id),
         title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
-        recapHtml: chapterRecap.html, sourcePage: chapterRecap.sourcePage,
+        recapHtml: chapterRecap.html, sourcePage: chapter,
       });
     }
   }

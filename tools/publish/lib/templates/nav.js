@@ -94,7 +94,12 @@ ${linksHtml}
       const href = relativePath(currentDir, link.href);
       return `    <li><a href="${href}">${escapeHtml(link.label)}</a></li>`;
     }).join('\n');
-    return `  <h3>${escapeHtml(group.name)}</h3>\n  <ul>\n${links}\n  </ul>`;
+    // Mirror the desktop behavior: when a Story section exists, the Story heading links to
+    // the landing (desktop makes the group toggle a link; give mobile the same reach).
+    const heading = options.hasStory && group.name === 'Story'
+      ? `<h3><a href="${storyHref}">${escapeHtml(group.name)}</a></h3>`
+      : `<h3>${escapeHtml(group.name)}</h3>`;
+    return `  ${heading}\n  <ul>\n${links}\n  </ul>`;
   }).join('\n');
 
   // Reuse the shared `.mobile-nav-overlay li a` structure (display:block, 44px tap target)

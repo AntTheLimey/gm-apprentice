@@ -85,6 +85,12 @@ describe('generateNav', () => {
     assert.match(html, /<li><a href="story\.html">Story<\/a><\/li>/);
   });
 
+  it('links the Story landing in the mobile nav when a Story group exists', () => {
+    const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
+    const html = generateNav(pages, { hasStory: true })('index.html', { siteTitle: 'T' });
+    assert.match(html, /<h3><a href="story\.html">Story<\/a><\/h3>/);
+  });
+
   it('does not add a duplicate Story entry when a Story group already exists', () => {
     const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
     const navFor = generateNav(pages, { hasStory: true });
