@@ -193,3 +193,74 @@ describe('characterStoryGroup', () => {
     assert.strictEqual(characterStoryGroup({ status: 'missing' }), 'fallen');
   });
 });
+
+describe('wiki-link resolution in story recaps', () => {
+  const pages = [
+    { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — The Hungry God', sourcePath: '/v/Chapters/Chapter 1/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Narrative Recap\nIt began at [[Voss_Campus]].' },
+    { title: 'Session 04 - Fallen Stars', displayTitle: 'Session 04 - Fallen Stars', sourcePath: '/v/Chapters/Chapter 1/Sessions/Session 04 - Fallen Stars.md', frontmatter: { type: 'session', session_number: 4 }, markdown: '## Narrative Recap\nThe team hit [[Voss_Campus]] with [[Ronnie_Vint|Ronnie]] and met [[Nobody_Known]].' },
+  ];
+  const linkMap = {
+    Voss_Campus: 'locations/voss-campus.html',
+    Ronnie_Vint: 'characters/pcs/ronnie-vint.html',
+  };
+
+  it('resolves [[wiki-links]] in session recap HTML against the link map', () => {
+    const spine = buildStorySpine(pages, linkMap);
+    const u = spine.find(x => x.kind === 'session');
+    assert.match(u.recapHtml, /<a href="\.\.\/locations\/voss-campus\.html">Voss Campus<\/a>/);
+    assert.match(u.recapHtml, /<a href="\.\.\/characters\/pcs\/ronnie-vint\.html">Ronnie<\/a>/);
+    assert.ok(!u.recapHtml.includes('[['), 'no raw wiki-link syntax may remain');
+  });
+
+  it('renders unresolvable links as humanized plain text', () => {
+    const spine = buildStorySpine(pages, linkMap);
+    const u = spine.find(x => x.kind === 'session');
+    assert.match(u.recapHtml, /Nobody Known/);
+    assert.ok(!/Nobody_Known/.test(u.recapHtml));
+  });
+
+  it('resolves links in chapter-intro recaps too', () => {
+    const spine = buildStorySpine(pages, linkMap);
+    const intro = spine.find(x => x.kind === 'chapter-intro');
+    assert.match(intro.recapHtml, /<a href="\.\.\/locations\/voss-campus\.html">Voss Campus<\/a>/);
+  });
+
+  it('leaves recaps unresolved-but-intact when no link map is given (hasStory probe)', () => {
+    const spine = buildStorySpine(pages);
+    assert.ok(spine.length > 0);
+  });
+});
+
+describe('wrap-up matching in a flat Sessions/ folder', () => {
+  // Real vaults often keep every session AND every wrap-up in one shared Sessions/
+  // folder. The same-folder heuristic must not shotgun the first wrap-up onto every
+  // session — the explicit session: ref has to win.
+  const pages = [
+    { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1', sourcePath: '/v/Chapters/Ch1/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
+    { title: 'Session 01 - Alpha', sourcePath: '/v/Chapters/Ch1/Sessions/Session 01 - Alpha.md', frontmatter: { type: 'session', session_number: 1 }, markdown: '## Overview\nx' },
+    { title: 'Session 02 - Bravo', sourcePath: '/v/Chapters/Ch1/Sessions/Session 02 - Bravo.md', frontmatter: { type: 'session', session_number: 2 }, markdown: '## Overview\nx' },
+    { title: 'Session 01 - Alpha - Wrap-Up', sourcePath: '/v/Chapters/Ch1/Sessions/Session 01 - Alpha - Wrap-Up.md', frontmatter: { type: 'session_wrap', session: '[[Session 01 - Alpha]]' }, markdown: '## Narrative Recap\nALPHA RECAP' },
+    { title: 'Session 02 - Bravo - Wrap-Up', sourcePath: '/v/Chapters/Ch1/Sessions/Session 02 - Bravo - Wrap-Up.md', frontmatter: { type: 'session_wrap', session: '[[Session 02 - Bravo]]' }, markdown: '## Narrative Recap\nBRAVO RECAP' },
+  ];
+
+  it('gives each session its OWN wrap-up recap, not the first wrap-up in the folder', () => {
+    const spine = buildStorySpine(pages);
+    const s1 = spine.find(u => u.title.includes('Alpha'));
+    const s2 = spine.find(u => u.title.includes('Bravo'));
+    assert.match(s1.recapHtml, /ALPHA RECAP/);
+    assert.ok(!/BRAVO/.test(s1.recapHtml), 'session 1 must not get session 2 content');
+    assert.match(s2.recapHtml, /BRAVO RECAP/);
+    assert.ok(!/ALPHA/.test(s2.recapHtml), 'session 2 must not get session 1 content');
+  });
+
+  it('still uses the same-folder heuristic when it is unambiguous (per-session subfolders)', () => {
+    const nested = [
+      { title: 'Chapter 4 Overview', displayTitle: 'Chapter 4', sourcePath: '/v/Chapters/Ch4/Chapter 4 Overview.md', frontmatter: { type: 'chapter', sort_order: 4 }, markdown: '## Overview\nx' },
+      { title: 'Session 01', sourcePath: '/v/Chapters/Ch4/Sessions/Session 01/Session 01.md', frontmatter: { type: 'session', session_number: 1 }, markdown: '## Overview\nx' },
+      { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Ch4/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After' }, markdown: '## Narrative Recap\nSubfolder recap.' },
+    ];
+    const spine = buildStorySpine(nested);
+    assert.strictEqual(spine.length, 1);
+    assert.match(spine[0].recapHtml, /Subfolder recap/);
+  });
+});

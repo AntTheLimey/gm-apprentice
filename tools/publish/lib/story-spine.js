@@ -1,5 +1,5 @@
 const path = require('path');
-const { extractSections, parseWikiRef } = require('./processor');
+const { extractSections, parseWikiRef, resolveWikiLinks } = require('./processor');
 const { slugify } = require('./scanner');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
@@ -14,8 +14,9 @@ function publishedOf(page) {
 // Heading match is a case-insensitive CONTAINS, because real vaults decorate the title
 // (e.g. "What Happened — Narrative Recap"). "narrative recap" is tried before the looser
 // "recap" so the more specific heading wins when both are present.
-function findRecap(page) {
-  const sections = extractSections(publishedOf(page));
+function findRecap(page, resolve) {
+  const text = publishedOf(page);
+  const sections = extractSections(resolve ? resolve(text) : text);
   for (const wanted of RECAP_TITLES) {
     const hit = sections.find(s => s.title.trim().toLowerCase().includes(wanted));
     if (hit && hit.html && hit.html.trim()) return { title: hit.title, html: hit.html };
@@ -51,12 +52,12 @@ function buildWrapUpIndex(pages) {
 
 // Recap for a unit: try its wrap-up first (the deliberate post-session/chapter recap),
 // then the unit's own file. Returns { title, html, sourcePage } or null.
-function resolveUnitRecap(unitPage, wrapUpPage) {
+function resolveUnitRecap(unitPage, wrapUpPage, resolve) {
   if (wrapUpPage) {
-    const r = findRecap(wrapUpPage);
+    const r = findRecap(wrapUpPage, resolve);
     if (r) return { ...r, sourcePage: wrapUpPage };
   }
-  const own = findRecap(unitPage);
+  const own = findRecap(unitPage, resolve);
   if (own) return { ...own, sourcePage: unitPage };
   return null;
 }
@@ -87,19 +88,22 @@ function chapterOwnsSession(chapter, session) {
   return chapterMatchesSession(chapter, session);
 }
 
-// The wrap-up for a unit (chapter or session): a wrap-up page in the SAME folder
-// as the unit's own page (chapter wrap-up sits in the chapter folder; a session
-// wrap-up sits in the session's subfolder). Falls back to the ref index.
+// The wrap-up for a unit (chapter or session). An explicit session:/chapter: ref
+// match always wins. The same-folder fallback (chapter wrap-up in the chapter folder;
+// session wrap-up in the session's subfolder) only applies when that folder holds
+// exactly ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and
+// a first-match grab there would hand the same wrap-up to every session.
 function wrapUpForUnit(unitPage, wrapUps, idx) {
+  const byRef = idx.bySession.get(unitPage.title)
+    || idx.byChapter.get(unitPage.title)
+    || idx.byChapter.get(unitPage.title.replace(/_/g, ' '));
+  if (byRef) return byRef;
   const dir = folderOf(unitPage);
   if (dir) {
-    const sameFolder = wrapUps.find(w => folderOf(w) === dir);
-    if (sameFolder) return sameFolder;
+    const sameFolder = wrapUps.filter(w => folderOf(w) === dir);
+    if (sameFolder.length === 1) return sameFolder[0];
   }
-  return idx.bySession.get(unitPage.title)
-    || idx.byChapter.get(unitPage.title)
-    || idx.byChapter.get(unitPage.title.replace(/_/g, ' '))
-    || null;
+  return null;
 }
 
 function unitOutputPath(id) { return `story/${id}.html`; }
@@ -115,7 +119,13 @@ function unitRefs(unit) {
   };
 }
 
-function buildStorySpine(pages) {
+function buildStorySpine(pages, linkMap) {
+  // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
+  // downstream has no markdown left to work with. Resolution is relative to the unit's
+  // own output path under story/. Without a linkMap (the hasStory probe), skip it.
+  const resolverFor = linkMap
+    ? (outputPath) => (md) => resolveWikiLinks(md, linkMap, outputPath)
+    : () => undefined;
   const chapters = pages
     .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
     .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
@@ -126,11 +136,13 @@ function buildStorySpine(pages) {
 
   const units = [];
   for (const chapter of chapters) {
-    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx);
-    const chapterRecap = resolveUnitRecap(chapter, chapterWrap);
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
     const chSlug = slugify(chapter.displayTitle || chapter.title);
+    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx);
+    // The chapter recap lands on either story/<chSlug>-intro.html or story/<chSlug>.html;
+    // both live in story/, so either path yields the same relative link resolution.
+    const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)));
 
     const chapterSessions = sessions
       .filter(s => chapterOwnsSession(chapter, s))
@@ -139,9 +151,9 @@ function buildStorySpine(pages) {
 
     const sessionUnits = [];
     for (const s of chapterSessions) {
-      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx));
-      if (!recap) continue;
       const id = `${chSlug}-${slugify(s.title)}`;
+      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx), resolverFor(unitOutputPath(id)));
+      if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
         title: s.displayTitle || s.title.replace(/_/g, ' '),

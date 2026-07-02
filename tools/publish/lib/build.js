@@ -572,7 +572,7 @@ function build(options = {}) {
   }
 
   function buildStory() {
-    const spine = buildStorySpine(pages);
+    const spine = buildStorySpine(pages, linkMap);
     for (const unit of spine) {
       unit.refsHtml = renderRefsHtml(unit);
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
