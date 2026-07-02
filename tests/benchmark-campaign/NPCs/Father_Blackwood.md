@@ -2,7 +2,7 @@
 type: npc
 createdSession: "Session 4"
 lastUpdated: "Session 4"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 status: "missing"
 aliases:
   - "Blackwood"

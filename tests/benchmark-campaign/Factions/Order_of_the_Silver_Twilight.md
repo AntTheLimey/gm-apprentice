@@ -3,7 +3,7 @@ type: faction
 createdSession: "Session 1"
 lastUpdated: "Session 2"
 asOfSession: "Session 2"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 aliases:
   - "Silver Twilight"
   - "The Order"

@@ -2,7 +2,7 @@
 type: npc
 createdSession: "Session 1"
 lastUpdated: "Session 3"
-source_confidence: SUPERSEDED
+canon_status: SUPERSEDED
 superseded_by: "[[Father Blackwood]]"
 status: "alive"
 aliases: []

@@ -3,7 +3,7 @@ type: session-wrap-up
 session: "[[Session 04 - The Reckoning]]"
 chapter: "[[Chapter 1 - The Ashford Case]]"
 campaign: "The Ashford Case"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 created_by: session-wrapup
 tags: []
 ---

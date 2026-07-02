@@ -1,6 +1,6 @@
 ---
 type: pc
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 player_name: "Tomas"
 status: dead
 asOfSession: "Chapter 1, Session 1"

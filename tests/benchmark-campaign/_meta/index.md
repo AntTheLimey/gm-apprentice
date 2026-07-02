@@ -8,7 +8,7 @@ sessions_planned: 1
 total_sessions: 3
 created: "2024-01-15"
 last_updated: "2024-02-12"
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 ---
 
 # The Ashford Case — Campaign Index

@@ -3,7 +3,7 @@ type: location
 createdSession: "Session 2"
 lastUpdated: "Session 2"
 asOfSession: "Session 2"
-source_confidence: DRAFT
+canon_status: DRAFT
 aliases:
   - "St Anselm's"
   - "St. Anselm's Church"

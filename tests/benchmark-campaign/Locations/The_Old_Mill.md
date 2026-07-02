@@ -2,7 +2,7 @@
 type: location
 createdSession: "Session 2"
 lastUpdated: "Session 4"
-source_confidence: DRAFT
+canon_status: DRAFT
 aliases:
   - "Old Mill"
   - "The Mill"

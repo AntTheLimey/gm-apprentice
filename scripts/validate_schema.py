@@ -4,7 +4,7 @@ Validate campaign entity frontmatter against the schema defined in entity-schema
 
 Checks:
 - Required fields exist per entity type
-- Enum values are valid (source_confidence, status, scene_type, etc.)
+- Enum values are valid (canon_status, status, scene_type, etc.)
 - Universal temporal fields are present where expected
 
 Usage:
@@ -19,7 +19,7 @@ from collections import namedtuple
 from pathlib import Path
 
 # Valid enum values
-SOURCE_CONFIDENCE = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
+CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = {"planned", "prepped", "played", "wrap-up", "reviewed"}
 SCENE_STATUS = {"planned", "ready", "played", "cut", "skipped", "modified"}
 SCENE_TYPES = {
@@ -42,33 +42,33 @@ WORLD_DOMAIN_STATUS = {"active", "stub", "inactive"}
 PLAN_TYPES = {"arc", "scene", "investigation", "timeline"}
 
 # Required fields per entity type
-# All entities need: type, source_confidence
+# All entities need: type, canon_status
 REQUIRED_FIELDS = {
-    "npc": ["type", "source_confidence"],
-    "pc": ["type", "source_confidence"],
-    "location": ["type", "source_confidence"],
-    "faction": ["type", "source_confidence"],
-    "organization": ["type", "source_confidence"],
-    "item": ["type", "source_confidence"],
-    "creature": ["type", "source_confidence"],
-    "clue": ["type", "source_confidence"],
-    "event": ["type", "source_confidence"],
-    "document": ["type", "source_confidence"],
-    "adventure-brief": ["type", "source_confidence", "scope"],
+    "npc": ["type", "canon_status"],
+    "pc": ["type", "canon_status"],
+    "location": ["type", "canon_status"],
+    "faction": ["type", "canon_status"],
+    "organization": ["type", "canon_status"],
+    "item": ["type", "canon_status"],
+    "creature": ["type", "canon_status"],
+    "clue": ["type", "canon_status"],
+    "event": ["type", "canon_status"],
+    "document": ["type", "canon_status"],
+    "adventure-brief": ["type", "canon_status", "scope"],
     "session": ["type", "session_number", "status", "documents"],
-    "session-plan": ["type", "source_confidence", "session"],
-    "session-play-notes": ["type", "source_confidence", "session"],
-    "session-wrap-up": ["type", "source_confidence", "session"],
-    "session_wrap": ["type", "source_confidence", "session"],
-    "scene": ["type", "source_confidence", "scene_type", "status"],
+    "session-plan": ["type", "canon_status", "session"],
+    "session-play-notes": ["type", "canon_status", "session"],
+    "session-wrap-up": ["type", "canon_status", "session"],
+    "session_wrap": ["type", "canon_status", "session"],
+    "scene": ["type", "canon_status", "scene_type", "status"],
     "chapter": ["type"],
     "meta": ["type"],
     "timeline": ["type"],
     "player-characters": ["type"],
-    "character-story": ["type", "source_confidence"],
-    "campaign_overview": ["type", "source_confidence"],
-    "heritage": ["type", "source_confidence"],
-    "plan": ["type", "source_confidence", "plan_type", "chapter"],
+    "character-story": ["type", "canon_status"],
+    "campaign_overview": ["type", "canon_status"],
+    "heritage": ["type", "canon_status"],
+    "plan": ["type", "canon_status", "plan_type", "chapter"],
     "world_domain": ["type", "domain", "status"],
     "world_flags": ["type"],
 }
@@ -156,15 +156,23 @@ def validate_file(filepath: Path) -> list[str]:
         if field not in frontmatter:
             errors.append(f"Missing required field '{field}' for type '{entity_type}'")
 
-    # Validate source_confidence enum
-    if "source_confidence" in frontmatter:
-        value = frontmatter["source_confidence"]
-        if not isinstance(value, str):
-            errors.append("Field 'source_confidence' must be a string")
-        elif value not in SOURCE_CONFIDENCE:
+    # Legacy canon-status field names — canon_status is canonical since 1.8.0
+    for legacy_field in ("source_confidence", "confidence"):
+        if legacy_field in frontmatter:
             errors.append(
-                f"Invalid source_confidence '{value}' — "
-                f"must be one of: {', '.join(sorted(SOURCE_CONFIDENCE))}"
+                f"Legacy field '{legacy_field}' — "
+                f"rename to 'canon_status' (run migration 1.8.0)"
+            )
+
+    # Validate canon_status enum
+    if "canon_status" in frontmatter:
+        value = frontmatter["canon_status"]
+        if not isinstance(value, str):
+            errors.append("Field 'canon_status' must be a string")
+        elif value not in CANON_STATUS_VALUES:
+            errors.append(
+                f"Invalid canon_status '{value}' — "
+                f"must be one of: {', '.join(sorted(CANON_STATUS_VALUES))}"
             )
         elif value == "SUPERSEDED":
             superseded_by = frontmatter.get("superseded_by", "")

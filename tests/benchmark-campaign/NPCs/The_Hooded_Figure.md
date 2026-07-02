@@ -2,7 +2,7 @@
 type: npc
 createdSession: "Session 1"
 lastUpdated: "Session 1"
-source_confidence: DRAFT
+canon_status: DRAFT
 status: "alive"
 aliases:
   - "Hooded Figure"

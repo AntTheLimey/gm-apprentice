@@ -4,7 +4,7 @@ title: "The Ashford Case"
 chapter_number: 1
 sessions: 3
 status: in-progress
-source_confidence: AUTHORITATIVE
+canon_status: AUTHORITATIVE
 asOfSession: "Session 2"
 ---
 
