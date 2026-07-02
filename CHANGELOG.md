@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.1] — 2026-07-02
+
+### Fixed
+
+- **Story spine wiki-links:** `buildStorySpine` rendered recap markdown
+  to HTML without running `resolveWikiLinks`, so story unit pages
+  showed raw `[[wiki-link]]` text. Recaps now resolve against their
+  unit's `story/` output path before rendering, matching the PC-page
+  flow.
+- **Wrap-up matching in flat `Sessions/` folders:** `wrapUpForUnit`
+  tried the same-folder heuristic before the ref index, so vaults where
+  every session and wrap-up shares one `Sessions/` folder had every
+  story unit pull the first wrap-up's recap. Exact `session:`/`chapter:`
+  ref matches now win; the folder heuristic only applies when the
+  folder contains exactly one wrap-up.
+
 ## [1.8.0] — 2026-07-02
 
 ### Changed
