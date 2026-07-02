@@ -37,8 +37,12 @@ jobs:
 
       - name: Schema field naming consistency
         run: |
-          if grep -rn 'canon_status:' skills/ tests/ 2>/dev/null; then
-            echo "::error::Found 'canon_status:' — use 'source_confidence:' instead"
+          if git ls-files skills tests \
+            | grep -vE '^tests/(proof-runs|benchmark-results|benchmark-content-fidelity/results)/' \
+            | tr '\n' '\0' \
+            | xargs -0 grep -nE '^(source_confidence|confidence):' 2>/dev/null \
+            | grep -v 'skills/shared/canon-status.md'; then
+            echo "::error::Found legacy canon-status field — use 'canon_status:' instead"
             exit 1
           fi
 
