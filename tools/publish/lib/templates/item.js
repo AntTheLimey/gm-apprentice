@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath, parseWikiRef } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, confidenceBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
@@ -63,7 +63,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
   const headerCard = `
 <div class="char-header">
   ${portrait}
-  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
 </div>`;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});

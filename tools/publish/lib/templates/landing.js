@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, confidenceBadge, clientScripts } = require('./base');
+const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
 const {
   getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,

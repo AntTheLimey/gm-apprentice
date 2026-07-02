@@ -1,5 +1,5 @@
 const { escapeHtml, relativeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
+const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
@@ -36,7 +36,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     heroBanner = `<div class="hero-banner">
   <img class="hero-banner-img" src="${imgUrl}" alt="${escapeHtml(page.displayTitle)}">
   <div class="hero-banner-overlay">
-    <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
+    <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
     <div class="meta">${metaHtml}</div>
   </div>
 </div>`;
@@ -44,7 +44,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     const initials = getInitials(page.displayTitle);
     heroBanner = `<div class="hero-banner hero-banner-no-img">
   <div class="pc-portrait" style="width:4rem;height:4rem;font-size:1.5rem;margin-bottom:0.75rem">${escapeHtml(initials)}</div>
-  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
   <div class="meta">${metaHtml}</div>
 </div>`;
   }

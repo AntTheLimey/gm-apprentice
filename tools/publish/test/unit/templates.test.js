@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { confidenceBadge, getConfidence, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
+const { canonStatusBadge, getCanonStatus, metadataBadgesFor, cssPath, rootPath } = require('../../lib/templates/base');
 const { parseParticipant } = require('../../lib/templates/event');
 const { formatDate } = require('../../lib/templates/landing');
 
@@ -21,58 +21,58 @@ describe('formatDate', () => {
   });
 });
 
-describe('getConfidence', () => {
+describe('getCanonStatus', () => {
   it('reads the canonical canon_status field', () => {
-    assert.strictEqual(getConfidence({ canon_status: 'STUB' }), 'STUB');
+    assert.strictEqual(getCanonStatus({ canon_status: 'STUB' }), 'STUB');
   });
 
   it('prefers canon_status over legacy fields', () => {
-    assert.strictEqual(getConfidence({ canon_status: 'AUTHORITATIVE', source_confidence: 'DRAFT', confidence: 'STUB' }), 'AUTHORITATIVE');
+    assert.strictEqual(getCanonStatus({ canon_status: 'AUTHORITATIVE', source_confidence: 'DRAFT', confidence: 'STUB' }), 'AUTHORITATIVE');
   });
 
   it('falls back to legacy source_confidence', () => {
-    assert.strictEqual(getConfidence({ source_confidence: 'DRAFT' }), 'DRAFT');
+    assert.strictEqual(getCanonStatus({ source_confidence: 'DRAFT' }), 'DRAFT');
   });
 
   it('falls back to legacy bare confidence', () => {
-    assert.strictEqual(getConfidence({ confidence: 'DRAFT' }), 'DRAFT');
+    assert.strictEqual(getCanonStatus({ confidence: 'DRAFT' }), 'DRAFT');
   });
 
   it('returns null when no canon field present', () => {
-    assert.strictEqual(getConfidence({}), null);
+    assert.strictEqual(getCanonStatus({}), null);
   });
 });
 
-describe('confidenceBadge', () => {
+describe('canonStatusBadge', () => {
   it('returns badge for STUB via source_confidence', () => {
-    const result = confidenceBadge({ source_confidence: 'STUB' });
+    const result = canonStatusBadge({ source_confidence: 'STUB' });
     assert.ok(result.includes('badge-stub'));
     assert.ok(result.includes('Stub'));
   });
 
   it('returns badge for STUB via canon_status fallback', () => {
-    const result = confidenceBadge({ canon_status: 'STUB' });
+    const result = canonStatusBadge({ canon_status: 'STUB' });
     assert.ok(result.includes('badge-stub'));
   });
 
   it('returns badge for DRAFT', () => {
-    const result = confidenceBadge({ source_confidence: 'DRAFT' });
+    const result = canonStatusBadge({ source_confidence: 'DRAFT' });
     assert.ok(result.includes('badge-draft'));
     assert.ok(result.includes('Draft'));
   });
 
   it('returns badge for SUPERSEDED', () => {
-    const result = confidenceBadge({ source_confidence: 'SUPERSEDED' });
+    const result = canonStatusBadge({ source_confidence: 'SUPERSEDED' });
     assert.ok(result.includes('badge-superseded'));
     assert.ok(result.includes('Superseded'));
   });
 
   it('returns empty string for AUTHORITATIVE', () => {
-    assert.strictEqual(confidenceBadge({ source_confidence: 'AUTHORITATIVE' }), '');
+    assert.strictEqual(canonStatusBadge({ source_confidence: 'AUTHORITATIVE' }), '');
   });
 
-  it('returns empty string when no confidence field', () => {
-    assert.strictEqual(confidenceBadge({}), '');
+  it('returns empty string when no canon-status field', () => {
+    assert.strictEqual(canonStatusBadge({}), '');
   });
 });
 

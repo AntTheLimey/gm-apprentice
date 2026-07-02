@@ -1,5 +1,5 @@
 const { escapeHtml, relativeHref, parseWikiRef } = require('../processor');
-const { baseShell, cssPath, rootPath, confidenceBadge, portraitImg, clientScripts } = require('./base');
+const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
@@ -49,13 +49,13 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
     heroBanner = `<div class="hero-banner">
   <img class="hero-banner-img" src="${imgUrl}" alt="${escapeHtml(page.displayTitle)}">
   <div class="hero-banner-overlay">
-    <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
+    <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
     <div class="meta">${badgeHtml}</div>
   </div>
 </div>`;
   } else {
     heroBanner = `<div class="hero-banner hero-banner-no-img">
-  <h1>${escapeHtml(page.displayTitle)}${confidenceBadge(fm)}</h1>
+  <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
   <div class="meta">${badgeHtml}</div>
 </div>`;
   }

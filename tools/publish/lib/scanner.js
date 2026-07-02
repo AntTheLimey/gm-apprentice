@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
-const { getConfidence } = require('./templates/base');
+const { getCanonStatus } = require('./templates/base');
 
 function slugify(name) {
   const slug = name
@@ -87,14 +87,14 @@ function buildLinkMap(pages) {
 
   // Pass 1: add all canonical titles (non-superseded first so they claim their own names)
   for (const page of pages) {
-    if (getConfidence(page.frontmatter) !== 'SUPERSEDED') {
+    if (getCanonStatus(page.frontmatter) !== 'SUPERSEDED') {
       map[page.title] = page.outputPath;
     }
   }
 
   // Pass 2: add superseded titles, redirecting to their superseded_by target if possible
   for (const page of pages) {
-    if (getConfidence(page.frontmatter) === 'SUPERSEDED') {
+    if (getCanonStatus(page.frontmatter) === 'SUPERSEDED') {
       if (page.title in map) continue;
       const supersededBy = page.frontmatter.superseded_by;
       if (supersededBy) {

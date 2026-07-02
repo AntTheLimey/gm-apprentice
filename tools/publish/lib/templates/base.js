@@ -91,15 +91,15 @@ document.addEventListener('click', function(e) {
 </html>`;
 }
 
-function getConfidence(frontmatter) {
+function getCanonStatus(frontmatter) {
   // canon_status is canonical; source_confidence and confidence are legacy
   // names still honored at read time for vaults that haven't migrated (1.8.0)
   return frontmatter.canon_status || frontmatter.source_confidence || frontmatter.confidence || null;
 }
 
-function confidenceBadge(frontmatter) {
-  const confidence = getConfidence(frontmatter);
-  switch (confidence) {
+function canonStatusBadge(frontmatter) {
+  const canonStatus = getCanonStatus(frontmatter);
+  switch (canonStatus) {
     case 'STUB':
       return ' <span class="badge badge-stub">Stub</span>';
     case 'DRAFT':
@@ -174,8 +174,8 @@ module.exports = {
   rootPath,
   clientScripts,
   baseShell,
-  getConfidence,
-  confidenceBadge,
+  getCanonStatus,
+  canonStatusBadge,
   TYPE_BADGE_FIELDS,
   metadataBadgesFor,
   portraitImg,

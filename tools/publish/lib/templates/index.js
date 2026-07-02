@@ -1,4 +1,4 @@
-const { DIR_LABELS, cssPath, rootPath, baseShell, confidenceBadge, TYPE_BADGE_FIELDS, metadataBadgesFor, portraitImg } = require('./base');
+const { DIR_LABELS, cssPath, rootPath, baseShell, canonStatusBadge, TYPE_BADGE_FIELDS, metadataBadgesFor, portraitImg } = require('./base');
 const { generateNav } = require('./nav');
 const { pcTemplate } = require('./pc');
 const { npcTemplate } = require('./npc');
@@ -20,7 +20,7 @@ module.exports = {
   cssPath,
   rootPath,
   baseShell,
-  confidenceBadge,
+  canonStatusBadge,
   TYPE_BADGE_FIELDS,
   metadataBadgesFor,
   portraitImg,

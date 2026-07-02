@@ -103,11 +103,11 @@ describe('indexTemplate — canon_status field on index pages', () => {
     assert.ok(html.includes('armory-item-draft'), 'source_confidence DRAFT must mark the item as draft');
   });
 
-  it('shows the canon_status value in the NPC table confidence column', () => {
+  it('shows the canon_status value in the NPC table Canon Status column', () => {
     const pages = [
       { frontmatter: { type: 'npc', canon_status: 'DRAFT', status: 'alive' }, title: 'New NPC', displayTitle: 'New NPC', outputPath: 'characters/npcs/new-npc.html' },
     ];
     const html = indexTemplate('characters/npcs', 'NPCs', pages, navFor, config, publishConfig);
-    assert.ok(html.includes('DRAFT'), 'canon_status value must appear in the confidence column');
+    assert.ok(html.includes('DRAFT'), 'canon_status value must appear in the Canon Status column');
   });
 });

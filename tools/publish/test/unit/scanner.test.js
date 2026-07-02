@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
 const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles } = require('../../lib/scanner');
-const { getConfidence } = require('../../lib/templates/base');
+const { getCanonStatus } = require('../../lib/templates/base');
 
 describe('slugify', () => {
   it('converts to lowercase', () => {
@@ -109,18 +109,18 @@ describe('buildLinkMap', () => {
       { title: 'Live NPC', outputPath: 'live.html', frontmatter: { canon_status: 'AUTHORITATIVE' } },
       { title: 'Retired NPC', outputPath: 'retired.html', frontmatter: { confidence: 'SUPERSEDED', superseded_by: '[[Live NPC]]' } },
     ];
-    const published = pages.filter(p => getConfidence(p.frontmatter) !== 'SUPERSEDED');
+    const published = pages.filter(p => getCanonStatus(p.frontmatter) !== 'SUPERSEDED');
     assert.strictEqual(published.length, 1);
     assert.strictEqual(published[0].title, 'Live NPC');
   });
 
-  it('excludes DRAFT pages using getConfidence filter (same predicate as build.js)', () => {
+  it('excludes DRAFT pages using getCanonStatus filter (same predicate as build.js)', () => {
     const pages = [
       { title: 'Active NPC', outputPath: 'npc.html', frontmatter: { source_confidence: 'AUTHORITATIVE' } },
       { title: 'Draft NPC', outputPath: 'draft.html', frontmatter: { source_confidence: 'DRAFT' } },
       { title: 'Legacy Draft', outputPath: 'legacy.html', frontmatter: { canon_status: 'DRAFT' } },
     ];
-    const filtered = pages.filter(p => getConfidence(p.frontmatter) !== 'DRAFT');
+    const filtered = pages.filter(p => getCanonStatus(p.frontmatter) !== 'DRAFT');
     const map = buildLinkMap(filtered);
     assert.ok('Active NPC' in map);
     assert.ok(!('Draft NPC' in map));
