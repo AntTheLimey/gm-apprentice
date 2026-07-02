@@ -69,7 +69,7 @@ REQUIRED_FIELDS = {
     "campaign_overview": ["type", "canon_status"],
     "heritage": ["type", "canon_status"],
     "plan": ["type", "canon_status", "plan_type", "chapter"],
-    "world_domain": ["type", "domain", "status"],
+    "world_domain": ["type", "canon_status", "domain", "status"],
     "world_flags": ["type"],
 }
 
