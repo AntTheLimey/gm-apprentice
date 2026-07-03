@@ -336,11 +336,15 @@ campaign, but that nothing was ever checking.
   Rename every existing Wrap-Up file to the new pattern (chapter
   number read from the session index's `chapter:` field) and
   rewrite every reference to it vault-wide: each session index's
-  `documents.wrap_up` field, and any other bare
+  `documents.wrap_up` field (unambiguous — sourced from that
+  index's own chapter), and any other bare
   `[[Session_NN_Wrap_Up]]` link found in body text or
-  frontmatter. This is a pure rename + relink — file contents are
-  untouched, so it applies automatically after preview
-  confirmation like other structural changes.
+  frontmatter (resolved by the containing file's own
+  chapter/session context; if undeterminable under a live
+  collision, list it for GM review rather than guessing). This is
+  a pure rename + relink — file contents are otherwise untouched,
+  so it applies automatically after preview confirmation like
+  other structural changes.
 
 ### Content
 

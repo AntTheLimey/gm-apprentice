@@ -70,7 +70,10 @@ already satisfied:
   still uses the old `Session_NN_Wrap_Up.md` pattern** → pending,
   listing the affected files and flagging any basename collisions
   already live in the vault (two or more files that would
-  resolve to the same wikilink target)
+  resolve to the same wikilink target). This check always runs
+  too, for the same reason as the entity-types.md check above —
+  an old-pattern file can reappear from any skill that still
+  emits the old link, not just from a pending versioned migration
 
 Only unsatisfied steps appear in the preview.
 
@@ -136,10 +139,18 @@ Apply all confirmed changes in this order:
    status: `shared/canon-status.md` § Repairing Legacy Keys).
    A file must never end up with duplicate keys. Collect any
    value conflicts for the Step 8 report
-5. Rename Wrap-Up files to the chapter-disambiguated pattern and
-   repair every reference to a renamed file — each session
-   index's `documents.wrap_up` field and any other bare
-   `[[Session_NN_Wrap_Up]]` link found vault-wide (structural)
+5. Rename Wrap-Up files to the chapter-disambiguated pattern
+   (chapter number for each file comes from its own session
+   index's `chapter:` field — see the migration entry) and
+   repair every reference to a renamed file. Session index
+   `documents.wrap_up` fields are unambiguous — each index's own
+   chapter determines which renamed file it means. For any other
+   bare `[[Session_NN_Wrap_Up]]` link found vault-wide, resolve it
+   by the containing file's own chapter/session context; if a
+   link's intended target can't be determined that way (e.g. it
+   sits outside any chapter context and more than one renamed
+   file could be the referent), list it in the Step 8 report for
+   the GM to resolve by hand rather than guessing (structural)
 6. Copy selected templates to `_Templates/` (content)
 7. Overwrite selected templates in `_Templates/` (content)
 8. Update or add selected `_meta/entity-types.md`
