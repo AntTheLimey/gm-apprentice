@@ -11,9 +11,11 @@ and compares it to `gm_apprentice_version` in the vault's
 absent, campaign-organizer's migration workflow runs before the
 skill proceeds.
 
-When adding a new migration entry: bump `current_version` in
-the frontmatter to match, and add the entry in ascending version
-order at the end of this file.
+When adding a new migration entry: bump `version` in
+`.claude-plugin/plugin.json` and add the entry in ascending
+version order at the end of this file. `current_version` in the
+frontmatter above is stamped automatically from `plugin.json` by
+`build-skill-zips.sh` at build time — do not edit it by hand.
 
 ## How migrations work
 
@@ -30,6 +32,28 @@ The migration procedure diff-checks each step against the vault's
 current state. Steps already satisfied are skipped. See
 `campaign-organizer/references/migration-procedure.md` for the
 full workflow.
+
+### Schema Mirror Sync (runs on every pass)
+
+`_meta/entity-types.md` mirrors `shared/entity-schema.md`'s
+Type-Specific Fields section into each vault, so entities can be
+authored and validated without reading plugin source. Unlike
+`_Templates/` — which every migration re-diffs against
+`shared/templates/` — this file's type-specific content had no
+recurring check: a migration could rename or add a field (the
+Event `date` → `in_game_date` rename in 1.4.22 is the known
+example) and the vault's own copy of the schema documentation
+would drift out of sync with the data it describes, forever,
+because no later migration ever revisited it.
+
+Every migration pass now diffs the vault's `_meta/entity-types.md`
+Type-Specific Fields entries against the canonical ones in
+`shared/entity-schema.md`, for every built-in type — regardless of
+which versioned migration entries are pending. Missing or stale
+entries are offered as opt-in Content items, the same way stale
+templates are. Vault-only entries (custom/evolved types from
+Schema Evolution) are never touched. See
+`migration-procedure.md` Step 3 for the mechanics.
 
 ## Migration: Baseline (pre-versioning → 1.4.9)
 
