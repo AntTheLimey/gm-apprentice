@@ -25,13 +25,18 @@ Session-wrapup reads the Play Notes file and writes the Wrap-Up
 file. It also creates/updates entity files and timeline entries.
 
 **Wrap-Up file conventions:**
-- Filename: `Session_NN_Wrap_Up.md` (zero-padded, underscores,
-  no session title). Example: `Session_07_Wrap_Up.md`.
+- Filename: `Chapter_CC_Session_NN_Wrap_Up.md` (zero-padded
+  chapter and session numbers, underscores, no session title).
+  Example: `Chapter_03_Session_07_Wrap_Up.md`. The chapter number
+  is required, not optional — session numbers repeat across
+  chapters, and Obsidian resolves wikilinks by basename, so a
+  bare `Session_07_Wrap_Up.md` collides the instant a second
+  chapter reaches session 7.
 - Location: the session's own directory, e.g.,
-  `Chapters/Chapter 3 - Vienna/Sessions/Session 07/Session_07_Wrap_Up.md`
+  `Chapters/Chapter 3 - Vienna/Sessions/Session 07/Chapter_03_Session_07_Wrap_Up.md`
 - Frontmatter type: `type: session_wrap`
 - Session index `documents.wrap_up` link:
-  `"[[Session_NN_Wrap_Up]]"`
+  `"[[Chapter_03_Session_07_Wrap_Up]]"`
 
 **Session index fields:** The session index uses `play_date:`
 (real-world date played) and `in_game_date:` (fictional date).
