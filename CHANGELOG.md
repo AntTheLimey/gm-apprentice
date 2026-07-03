@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.0] — 2026-07-03
+
+### Added
+
+- **Schema Mirror Sync** — every vault migration pass now diffs
+  `_meta/entity-types.md`'s Type-Specific Fields entries against
+  the canonical ones in `shared/entity-schema.md`, for every
+  built-in type, regardless of which versioned migration entries
+  are pending. Missing or stale entries are offered as opt-in
+  Content items, the same way stale `_Templates/` files already
+  are.
+- **campaign-qa: Ambiguous Links check** — Graph Health now flags
+  bare wikilinks whose basename matches more than one file in the
+  vault, not just links pointing at nothing. Obsidian resolves
+  these silently and unpredictably; this catches them before they
+  cause a GM to read the wrong session's recap.
+- Migration `1.8.0 → 1.9.0` backfills two known drift points:
+  the Event field rename from 1.4.22 (`date` → `in_game_date`)
+  never reached `_meta/entity-types.md`, and no migration ever
+  added a `character-story` entry to it. It also renames every
+  Session Wrap-Up file to a chapter-disambiguated filename
+  (`Chapter_CC_Session_NN_Wrap_Up.md`) and repairs every
+  reference to it — the old chapter-free filename guaranteed a
+  basename collision the first time any campaign ran a second
+  chapter with per-session wrap-ups.
+
+### Fixed
+
+- `shared/entity-schema.md`'s Type-Specific Fields summary was
+  missing compact entries for `character-story`, `plan`,
+  `heritage`, `world_domain`, and `world_flags` — types that
+  already have real templates and are in active use, but were
+  never added to the summary section that vaults mirror.
+- `campaign-qa`'s Story file recency check and `vault-ingest`'s
+  classification heuristic both still referenced the pre-1.4.22
+  wrap-up type name `session-wrap-up` instead of the current
+  `session_wrap`, silently failing against every vault using the
+  current (correct) type.
+
 ## [1.8.1] — 2026-07-02
 
 ### Fixed
