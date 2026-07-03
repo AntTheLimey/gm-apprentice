@@ -388,7 +388,7 @@ exists at `Characters/PCs/{Name}_Story.md`.
 **Story file recency:** For every story file that exists,
 read its `asOfSession` frontmatter field. Compare to the
 latest wrap-up's session number (from the session index or
-most recent `type: session-wrap-up` file).
+most recent `type: session_wrap` file).
 
 - If the story file is more than 1 session behind, flag it
 - Severity: **Warning**
