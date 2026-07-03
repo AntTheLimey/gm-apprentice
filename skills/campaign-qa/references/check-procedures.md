@@ -356,6 +356,17 @@ probably forgotten.
 exist. Search for `[[...]]` patterns across all files, then
 verify each linked target file exists.
 
+**Ambiguous links:** Wiki-links using a bare basename that
+matches more than one file in the vault. Obsidian resolves these
+silently to one of the matches — which one is unspecified and
+can change as files are added — so this is not a broken link,
+it's a wrong one waiting to happen. Build a basename → file-list
+index across the whole vault, then flag every bare `[[...]]`
+target whose basename maps to more than one file. Most common
+cause: Session Wrap-Up files still on the pre-migration
+`Session_NN_Wrap_Up.md` pattern (no chapter number) after a
+second chapter reused a session number.
+
 **Bidirectional consistency:** If entity A's frontmatter says
 `ally_of: "[[B]]"`, does entity B's frontmatter acknowledge
 entity A? Flag one-way relationships that should be mutual.
@@ -415,13 +426,19 @@ relationship.
 
 For each issue:
 1. Note the entity/entities and files involved
-2. Assess severity (Critical for broken links that affect
-   active content; Warning for orphans and schema violations;
-   Info for quality improvements)
+2. Assess severity (Critical for broken or ambiguous links that
+   affect active content; Warning for orphans and schema
+   violations; Info for quality improvements)
 3. Propose a fix:
    - For orphans: suggest connections or mark for retirement
    - For broken links: suggest the correct target or flag
      for creation
+   - For ambiguous links: identify which file the GM meant from
+     context, then either fix that one link, or — if the
+     collision is structural (e.g., unmigrated Wrap-Up
+     filenames) — point to campaign-organizer's migration
+     workflow to rename the colliding files and repair every
+     reference vault-wide
    - For schema violations: suggest the missing fields
    - For quality issues: suggest specific improvements
 
