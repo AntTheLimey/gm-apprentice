@@ -11,9 +11,11 @@ and compares it to `gm_apprentice_version` in the vault's
 absent, campaign-organizer's migration workflow runs before the
 skill proceeds.
 
-When adding a new migration entry: bump `current_version` in
-the frontmatter to match, and add the entry in ascending version
-order at the end of this file.
+When adding a new migration entry: bump `version` in
+`.claude-plugin/plugin.json` and add the entry in ascending
+version order at the end of this file. `current_version` in the
+frontmatter above is stamped automatically from `plugin.json` by
+`build-skill-zips.sh` at build time — do not edit it by hand.
 
 ## How migrations work
 
@@ -30,6 +32,28 @@ The migration procedure diff-checks each step against the vault's
 current state. Steps already satisfied are skipped. See
 `campaign-organizer/references/migration-procedure.md` for the
 full workflow.
+
+### Schema Mirror Sync (runs on every pass)
+
+`_meta/entity-types.md` mirrors `shared/entity-schema.md`'s
+Type-Specific Fields section into each vault, so entities can be
+authored and validated without reading plugin source. Unlike
+`_Templates/` — which every migration re-diffs against
+`shared/templates/` — this file's type-specific content had no
+recurring check: a migration could rename or add a field (the
+Event `date` → `in_game_date` rename in 1.4.22 is the known
+example) and the vault's own copy of the schema documentation
+would drift out of sync with the data it describes, forever,
+because no later migration ever revisited it.
+
+Every migration pass now diffs the vault's `_meta/entity-types.md`
+Type-Specific Fields entries against the canonical ones in
+`shared/entity-schema.md`, for every built-in type — regardless of
+which versioned migration entries are pending. Missing or stale
+entries are offered as opt-in Content items, the same way stale
+templates are. Vault-only entries (custom/evolved types from
+Schema Evolution) are never touched. See
+`migration-procedure.md` Step 3 for the mechanics.
 
 ## Migration: Baseline (pre-versioning → 1.4.9)
 
@@ -293,3 +317,53 @@ require `canon_status` exclusively.
   read time, so an unmigrated vault publishes correctly). If
   `publish.site_dir` is set in vault-config, offer to run
   `npm update gm-apprentice-publish` in the site directory.
+
+## Migration: 1.8.0 → 1.8.2
+
+Two fixes to the same underlying gap: things in a vault that
+should stay in sync with each other, or unique across a growing
+campaign, but that nothing was ever checking.
+
+### Structural
+
+- **Wrap-Up filename disambiguation** — Session Wrap-Up
+  filenames change from `Session_NN_Wrap_Up.md` to
+  `Chapter_CC_Session_NN_Wrap_Up.md`. The old pattern has no
+  chapter marker, so two chapters reaching the same session
+  number produce identically-named files — Obsidian resolves
+  bare wikilinks by basename, so every `[[Session_NN_Wrap_Up]]`
+  link in the vault becomes ambiguous the moment that happens.
+  Rename every existing Wrap-Up file to the new pattern (chapter
+  number read from the session index's `chapter:` field) and
+  rewrite every reference to it vault-wide: each session index's
+  `documents.wrap_up` field (unambiguous — sourced from that
+  index's own chapter), and any other bare
+  `[[Session_NN_Wrap_Up]]` link found in body text or
+  frontmatter (resolved by the containing file's own
+  chapter/session context; if undeterminable under a live
+  collision, list it for GM review rather than guessing). This is
+  a pure rename + relink — file contents are otherwise untouched,
+  so it applies automatically after preview confirmation like
+  other structural changes.
+
+### Content
+
+- **Event field rename backfill** — vaults that went through the
+  1.4.22 migration had the Event entity field renamed
+  (`date:` → `in_game_date:`) on every entity file, but
+  `_meta/entity-types.md`'s Event entry was never updated to
+  match and may still show the old field name. Offered via
+  Schema Mirror Sync.
+- **`character-story` field block backfill** — `character-story`
+  has been a fully specified type since the Story Companion
+  Convention was introduced, but no migration ever added its
+  entry to `_meta/entity-types.md`. Vaults with PC Story files
+  are missing it from their schema mirror. Offered via Schema
+  Mirror Sync.
+- **`plan` / `heritage` / `world_domain` / `world_flags` field
+  block backfill** — these types have templates and are in
+  active use, but `shared/entity-schema.md`'s Type-Specific
+  Fields summary itself never carried compact entries for them
+  until this release. Vaults predating each type's introduction
+  are missing the corresponding entry. Offered via Schema Mirror
+  Sync.

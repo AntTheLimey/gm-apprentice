@@ -506,6 +506,10 @@ companion story file at `Characters/PCs/{Name}_Story.md`.
 - See `shared/character-story-format.md` for narrative voice,
   genre matching, and append protocol
 
+**Character Story:** `character` (wiki-link to the PC), plus
+universal fields — no other type-specific attributes. Body is
+append-only session sections; see Story Companion Convention above.
+
 **Location:** `location_type`, `parent_location` (wiki-link),
 `atmosphere`, `portrait` (optional)
 
@@ -522,6 +526,10 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 **Clue:** `clue_type` (physical, testimonial, documentary),
 `found_at` (wiki-link), `found_by`, `leads_to`, `reliability`
 
+**Plan:** `plan_type` (arc/scene/investigation/timeline),
+`chapter` (wiki-link), `participants` (wiki-links),
+`locations` (wiki-links)
+
 **Adventure Brief:** `scope` (campaign/one-shot/few-shot),
 `sessions_estimated`, `continuation_type` (new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
 `adventure_shape` (linear/branching/hub-and-spoke/open-node/sandbox),
@@ -534,6 +542,14 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 
 **Creature:** `creature_type` (beast, undead, aberration, etc.),
 `location` (wiki-link), `abilities`, `weaknesses`, `portrait` (optional)
+
+**Heritage:** `lifespan_range` (min/max age array), `maturity_age`,
+`average_height`, `notable_traits`, `portrait` (optional)
+
+**World Domain:** `domain`, `status` (active/stub/inactive),
+`summary`, `rules` (array of machine-checkable world rules)
+
+**World Flags:** `last_reviewed`
 
 ## Relationship Types
 

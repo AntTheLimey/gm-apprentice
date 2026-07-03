@@ -22,7 +22,7 @@ status: planned
 documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
-  wrap_up: "[[Session_NN_Wrap_Up]]"
+  wrap_up: "[[Chapter_CC_Session_NN_Wrap_Up]]"
 scenes:
   - "[[Scene Title]]"
 world_evolved: null
@@ -98,16 +98,23 @@ tags: []
 ---
 ```
 
-### 4. Session Wrap-Up (`Session_NN_Wrap_Up.md`)
+### 4. Session Wrap-Up (`Chapter_CC_Session_NN_Wrap_Up.md`)
 
 Canonical record: narrative recap, quick bullets, PC
 carry-forward, world state changes, keeper checklist.
 Starts DRAFT, promoted to AUTHORITATIVE via reconcile.
 
-Filename uses zero-padded session number with underscores:
-`Session_07_Wrap_Up.md`, `Session_12_Wrap_Up.md`. No session
-title in the filename. The file lives in the session's own
-directory (e.g., `Sessions/Session 07/Session_07_Wrap_Up.md`).
+Filename uses zero-padded chapter and session numbers with
+underscores: `Chapter_03_Session_07_Wrap_Up.md`. No session
+title in the filename. The chapter number is load-bearing, not
+decorative — session numbers are unique only within a chapter,
+and Obsidian wikilinks resolve by basename, so a title-free,
+chapter-free `Session_07_Wrap_Up.md` collides the moment a
+second chapter reaches its own session 7. The chapter number
+guarantees the basename stays unique vault-wide regardless of
+how session numbering itself is scoped. The file lives in the
+session's own directory (e.g.,
+`Sessions/Session 07/Chapter_03_Session_07_Wrap_Up.md`).
 
 ```yaml
 ---
@@ -157,12 +164,12 @@ Each session has its own directory inside the chapter's
 Sessions/ folder:
 
 ```text
-Chapters/Chapter N - Title/Sessions/
+Chapters/Chapter 1 - Title/Sessions/
 └── Session 01/
     ├── Session 01 - The Arrival.md           (index)
     ├── Session 01 - The Arrival - Plan.md
     ├── Session 01 - The Arrival - Play Notes.md
-    └── Session_01_Wrap_Up.md
+    └── Chapter_01_Session_01_Wrap_Up.md
 ```
 
 ## Companion References

@@ -19,9 +19,14 @@ Read the following:
   (absent = "pre-versioning")
 - `current_version` from `shared/migrations.md`
 - List files in `_meta/` — which of the four schema files exist?
+- If `_meta/entity-types.md` exists, read its
+  `## Type-Specific Fields` section
 - List files in `_Templates/` — which templates are present?
 - List all PC files (`type: pc`) and check for
   `{Name}_Story.md` companions in the same directory
+- List all Session Wrap-Up files in the vault and note which
+  filename pattern each uses: old (`Session_NN_Wrap_Up.md`) or
+  current (`Chapter_CC_Session_NN_Wrap_Up.md`)
 - If `publish.site_dir` exists in vault-config, read the
   installed npm version from
   `{site_dir}/node_modules/gm-apprentice-publish/package.json`
@@ -52,6 +57,23 @@ already satisfied:
   legacy key(s); no file contains them → skip. Otherwise the
   sweep is pending, with the matching file count shown in the
   preview
+- **`_meta/entity-types.md` Type-Specific Fields entry for a
+  built-in type matches `shared/entity-schema.md`'s entry for
+  that type** → skip. **Entry is missing or differs** → pending.
+  This check always runs, independent of which versioned
+  migrations are being applied — it exists to surface schema-doc
+  drift accumulated from any past migration that changed a
+  canonical field or type without ever updating this file.
+  Vault-only entries (custom/evolved types) are never flagged.
+- **All Session Wrap-Up files already use the
+  `Chapter_CC_Session_NN_Wrap_Up.md` pattern** → skip. **Any file
+  still uses the old `Session_NN_Wrap_Up.md` pattern** → pending,
+  listing the affected files and flagging any basename collisions
+  already live in the vault (two or more files that would
+  resolve to the same wikilink target). This check always runs
+  too, for the same reason as the entity-types.md check above —
+  an old-pattern file can reappear from any skill that still
+  emits the old link, not just from a pending versioned migration
 
 Only unsatisfied steps appear in the preview.
 
@@ -65,6 +87,10 @@ List each structural change as a bullet. Example:
 > - Add `gm_apprentice_version: "1.4.9"` to vault-config
 > - Add `publish.system: "coc-7e"` to vault-config
 > - Create missing `_meta/entity-types.md`
+> - Rename 4 Wrap-Up files to the chapter-disambiguated pattern
+>   (`Chapter_03_Session_01_Wrap_Up.md`, ...) — 2 basename
+>   collisions found live in the vault; repair 33 wiki-links
+>   pointing at the old ambiguous names
 
 **Content (choose which to apply):**
 List each content change as a checkbox. Example:
@@ -72,6 +98,10 @@ List each content change as a checkbox. Example:
 > - [ ] Overwrite `pc-generic.md` in `_Templates/` (local
 >       version differs from plugin version)
 > - [ ] Create `Lord_Blackwood_Story.md` companion file
+> - [ ] Update `entity-types.md` — Event field list is stale
+>       (has `date` (in-game); canonical is `in_game_date` (in-game))
+> - [ ] Add `entity-types.md` — `character-story` field block
+>       (missing from vault schema mirror)
 
 **Tooling (choose which to apply):**
 List each tooling change as a checkbox. Example:
@@ -109,14 +139,32 @@ Apply all confirmed changes in this order:
    status: `shared/canon-status.md` § Repairing Legacy Keys).
    A file must never end up with duplicate keys. Collect any
    value conflicts for the Step 8 report
-5. Copy selected templates to `_Templates/` (content)
-6. Overwrite selected templates in `_Templates/` (content)
-7. Create selected story files using
+5. Rename Wrap-Up files to the chapter-disambiguated pattern
+   (chapter number for each file comes from its own session
+   index's `chapter:` field — see the migration entry) and
+   repair every reference to a renamed file. Session index
+   `documents.wrap_up` fields are unambiguous — each index's own
+   chapter determines which renamed file it means. For any other
+   bare `[[Session_NN_Wrap_Up]]` link found vault-wide, resolve it
+   by the containing file's own chapter/session context; if a
+   link's intended target can't be determined that way (e.g. it
+   sits outside any chapter context and more than one renamed
+   file could be the referent), list it in the Step 8 report for
+   the GM to resolve by hand rather than guessing (structural)
+6. Copy selected templates to `_Templates/` (content)
+7. Overwrite selected templates in `_Templates/` (content)
+8. Update or add selected `_meta/entity-types.md`
+   Type-Specific Fields entries — replace the stale line in
+   place for an update, or insert the new line in the same
+   relative position it holds in `shared/entity-schema.md` for
+   an addition. Never touch vault-only (custom/evolved) entries
+   (content)
+9. Create selected story files using
    `shared/templates/character-story.md` as the base, filling
    in the PC name and campaign from the PC file's frontmatter
    (content)
-8. Run `npm update gm-apprentice-publish` in site directory if
-   selected (tooling)
+10. Run `npm update gm-apprentice-publish` in site directory if
+    selected (tooling)
 
 ## Step 7: Stamp version
 

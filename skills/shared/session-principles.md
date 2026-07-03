@@ -90,7 +90,7 @@ status: planned | prepped | played | wrap-up | reviewed
 documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
-  wrap_up: "[[Session NN - Title - Wrap-Up]]"
+  wrap_up: "[[Chapter_CC_Session_NN_Wrap_Up]]"
 ---
 ```
 

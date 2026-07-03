@@ -96,7 +96,7 @@ Sessions/
   Session {NN} - {Title}.md              (index hub)
   Session {NN} - {Title} - Plan.md       (prep output)
   Session {NN} - {Title} - Play Notes.md (play record)
-  Session {NN} - {Title} - Wrap-Up.md    (canonical wrap-up)
+  Chapter_CC_Session_NN_Wrap_Up.md       (canonical wrap-up)
 ```
 
 ## Inbox
