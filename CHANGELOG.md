@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9.0] — 2026-07-03
+## [1.8.2] — 2026-07-03
 
 ### Added
 
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vault, not just links pointing at nothing. Obsidian resolves
   these silently and unpredictably; this catches them before they
   cause a GM to read the wrong session's recap.
-- Migration `1.8.0 → 1.9.0` backfills two known drift points:
+- Migration `1.8.0 → 1.8.2` backfills two known drift points:
   the Event field rename from 1.4.22 (`date` → `in_game_date`)
   never reached `_meta/entity-types.md`, and no migration ever
   added a `character-story` entry to it. It also renames every

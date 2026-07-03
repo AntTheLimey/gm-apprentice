@@ -318,7 +318,7 @@ require `canon_status` exclusively.
   `publish.site_dir` is set in vault-config, offer to run
   `npm update gm-apprentice-publish` in the site directory.
 
-## Migration: 1.8.0 → 1.9.0
+## Migration: 1.8.0 → 1.8.2
 
 Two fixes to the same underlying gap: things in a vault that
 should stay in sync with each other, or unique across a growing
