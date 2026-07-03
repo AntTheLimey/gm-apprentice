@@ -317,3 +317,49 @@ require `canon_status` exclusively.
   read time, so an unmigrated vault publishes correctly). If
   `publish.site_dir` is set in vault-config, offer to run
   `npm update gm-apprentice-publish` in the site directory.
+
+## Migration: 1.8.0 → 1.9.0
+
+Two fixes to the same underlying gap: things in a vault that
+should stay in sync with each other, or unique across a growing
+campaign, but that nothing was ever checking.
+
+### Structural
+
+- **Wrap-Up filename disambiguation** — Session Wrap-Up
+  filenames change from `Session_NN_Wrap_Up.md` to
+  `Chapter_CC_Session_NN_Wrap_Up.md`. The old pattern has no
+  chapter marker, so two chapters reaching the same session
+  number produce identically-named files — Obsidian resolves
+  bare wikilinks by basename, so every `[[Session_NN_Wrap_Up]]`
+  link in the vault becomes ambiguous the moment that happens.
+  Rename every existing Wrap-Up file to the new pattern (chapter
+  number read from the session index's `chapter:` field) and
+  rewrite every reference to it vault-wide: each session index's
+  `documents.wrap_up` field, and any other bare
+  `[[Session_NN_Wrap_Up]]` link found in body text or
+  frontmatter. This is a pure rename + relink — file contents are
+  untouched, so it applies automatically after preview
+  confirmation like other structural changes.
+
+### Content
+
+- **Event field rename backfill** — vaults that went through the
+  1.4.22 migration had the Event entity field renamed
+  (`date:` → `in_game_date:`) on every entity file, but
+  `_meta/entity-types.md`'s Event entry was never updated to
+  match and may still show the old field name. Offered via
+  Schema Mirror Sync.
+- **`character-story` field block backfill** — `character-story`
+  has been a fully specified type since the Story Companion
+  Convention was introduced, but no migration ever added its
+  entry to `_meta/entity-types.md`. Vaults with PC Story files
+  are missing it from their schema mirror. Offered via Schema
+  Mirror Sync.
+- **`plan` / `heritage` / `world_domain` / `world_flags` field
+  block backfill** — these types have templates and are in
+  active use, but `shared/entity-schema.md`'s Type-Specific
+  Fields summary itself never carried compact entries for them
+  until this release. Vaults predating each type's introduction
+  are missing the corresponding entry. Offered via Schema Mirror
+  Sync.
