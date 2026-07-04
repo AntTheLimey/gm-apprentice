@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, filterFields, renderRelationships } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -186,6 +186,39 @@ describe('stripGmOnly', () => {
     const md = 'Public\n<!--  gm-only  -->\nSecret\n<!--  /gm-only  -->\nMore';
     const result = stripGmOnly(md);
     assert.strictEqual(result, 'Public\n\nMore');
+  });
+});
+
+describe('stripSpoiler', () => {
+  it('removes content between spoiler markers', () => {
+    const md = 'Public text\n<!-- spoiler -->\nSecret stuff\n<!-- /spoiler -->\nMore public';
+    const result = stripSpoiler(md);
+    assert.strictEqual(result, 'Public text\n\nMore public');
+  });
+
+  it('handles multiple spoiler blocks', () => {
+    const md = 'A\n<!-- spoiler -->\nB\n<!-- /spoiler -->\nC\n<!-- spoiler -->\nD\n<!-- /spoiler -->\nE';
+    const result = stripSpoiler(md);
+    assert.strictEqual(result, 'A\n\nC\n\nE');
+  });
+
+  it('warns on an unclosed spoiler marker', () => {
+    const md = 'Public\n<!-- spoiler -->\nSecret to end';
+    const { text, warnings } = stripSpoiler(md);
+    assert.strictEqual(text, 'Public\n');
+    assert.ok(warnings[0].includes('spoiler'));
+  });
+
+  it('treats a spoiler marker inside a code fence as literal', () => {
+    const md = 'Text\n```\n<!-- spoiler -->\ncode\n<!-- /spoiler -->\n```\nAfter';
+    const result = stripSpoiler(md);
+    assert.strictEqual(result, md);
+  });
+
+  it('does not strip gm-only markers, and stripGmOnly does not strip spoiler markers', () => {
+    const md = '<!-- gm-only -->\nA\n<!-- /gm-only -->\n<!-- spoiler -->\nB\n<!-- /spoiler -->';
+    assert.strictEqual(stripSpoiler(md), '<!-- gm-only -->\nA\n<!-- /gm-only -->\n');
+    assert.strictEqual(stripGmOnly(md), '\n<!-- spoiler -->\nB\n<!-- /spoiler -->');
   });
 });
 
