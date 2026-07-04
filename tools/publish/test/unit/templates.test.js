@@ -356,6 +356,24 @@ describe('displayTitle usage', () => {
     assert.ok(!html.includes('<h1>Captain_James'), 'Should not use raw title in h1');
   });
 
+  it('npc template with a portrait uses the cinematic card, not the cropped banner (B-portrait)', () => {
+    // Regression: NPC portraits (portrait-orientation) rendered as a cropped
+    // hero-banner background — only a thin band around 25% height survived.
+    // The cinematic layout shows the full portrait beside the name instead.
+    const page = {
+      title: 'Thomas_Wyndham',
+      displayTitle: 'Thomas Wyndham',
+      outputPath: 'characters/npcs/thomas-wyndham.html',
+      frontmatter: { type: 'npc', portrait: '_attachments/characters/thomas-wyndham.png' },
+    };
+    const processed = { html: '<p>Content</p>', relationships: '' };
+    const imageMap = { 'thomas-wyndham.png': true };
+    const html = npcTemplate(page, processed, mockNavFor, mockConfig, imageMap);
+    assert.ok(html.includes('class="hero-cinematic"'), 'Should use hero-cinematic, not hero-banner, when a portrait exists');
+    assert.ok(html.includes('class="hero-cinematic-img"'), 'Portrait image should use the cinematic (not banner) class');
+    assert.ok(!html.includes('hero-banner-img'), 'Should not use the banner crop class when a portrait exists');
+  });
+
   it('wiki template uses displayTitle in heading', () => {
     const page = {
       title: 'Old_Fortress',

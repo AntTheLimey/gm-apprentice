@@ -33,9 +33,9 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     const imgTag = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
     const imgMatch = (imgTag || '').match(/src="([^"]+)"/);
     const imgUrl = imgMatch ? imgMatch[1] : '';
-    heroBanner = `<div class="hero-banner">
-  <img class="hero-banner-img" src="${imgUrl}" alt="${escapeHtml(page.displayTitle)}">
-  <div class="hero-banner-overlay">
+    heroBanner = `<div class="hero-cinematic">
+  <img class="hero-cinematic-img" src="${imgUrl}" alt="${escapeHtml(page.displayTitle)}">
+  <div class="hero-cinematic-overlay">
     <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
     <div class="meta">${metaHtml}</div>
   </div>
