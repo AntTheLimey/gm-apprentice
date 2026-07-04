@@ -966,6 +966,7 @@ describe('build integration', () => {
         excludeSections: [],
         folderMap: {
           'Locations': 'locations',
+          'Characters/PCs': 'characters/pcs',
         },
       };
 
@@ -975,6 +976,26 @@ describe('build integration', () => {
 
     after(() => {
       fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('strips spoiler blocks from market page', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'market.html'), 'utf-8');
+      assert.ok(!html.includes('Carcosa'));
+    });
+
+    it('strips gm-only and spoiler blocks from PC page', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'pcs', 'test-pc.html'), 'utf-8');
+      assert.ok(!html.includes('Zalgorath'));
+      assert.ok(!html.includes('Ithaqua'));
+    });
+
+    it('excludes spoiler and gm-only content from search-index.json', () => {
+      // lunr lowercases and stems indexed tokens, so check case-insensitively for
+      // the raw distinctive words rather than exact phrases.
+      const indexJson = fs.readFileSync(path.join(outputDir, 'docs', 'search-index.json'), 'utf-8').toLowerCase();
+      assert.ok(!indexJson.includes('carcosa'));
+      assert.ok(!indexJson.includes('zalgorath'));
+      assert.ok(!indexJson.includes('ithaqua'));
     });
 
     it('strips gm-only blocks from market page', () => {

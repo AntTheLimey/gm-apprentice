@@ -15,6 +15,13 @@ function getSubtitle(fm) {
   return fm.occupation || fm.location_type || fm.faction_type || fm.event_type || fm.type || '';
 }
 
+// Search results must reflect only what readers can see, so prefer each page's published
+// view (gm-only + spoiler content stripped) over its raw markdown when available.
+function publishedText(page) {
+  if (!page) return '';
+  return page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
+}
+
 function buildSearchIndex(pages) {
   const documents = {};
 
@@ -43,7 +50,7 @@ function buildSearchIndex(pages) {
         title: page.displayTitle,
         aliases: Array.isArray(fm.aliases) ? fm.aliases.join(' ') : '',
         type: fm.type || '',
-        body: stripMarkdown(page.markdown).slice(0, 500),
+        body: stripMarkdown(publishedText(page)).slice(0, 500),
       });
     }
   });
