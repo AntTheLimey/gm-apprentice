@@ -296,8 +296,8 @@ facts (heritage references, deity names, new place names):
    suppress), `_World/` domain files (already encoded →
    suppress), and existing entity files (already exists →
    suppress)
-3. Stage findings in the Wrap-Up file under
-   `## World Fact Findings`
+3. Stage findings in the Wrap-Up file's `## GM Notes` section,
+   as a `### World Fact Findings` subsection
 
 **Do not present three-state prompts.** Findings are staged
 for the reconcile procedure (step 2.5) to present during
