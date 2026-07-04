@@ -137,7 +137,8 @@ List each content change as a checkbox. Example:
 >       Notes` subsection under `## GM Notes`
 > - [ ] Move `> [!info] Keeper Only` callout in
 >       `Creatures/Harmonische_Wachter.md` (currently unprotected)
->       under `## GM Notes`
+>       under `## GM Notes` (or wrap in `<!-- spoiler -->` if this
+>       is a time-locked reveal, not a permanent secret)
 
 **Tooling (choose which to apply):**
 List each tooling change as a checkbox. Example:
@@ -193,8 +194,9 @@ Apply all confirmed changes in this order:
    appending under an existing one otherwise), demoting the
    moved heading and any of its own sub-headings by the amount
    needed to sit one level below `## GM Notes`. Once every
-   entry has been re-nested somewhere, collapse the vault's own
-   `exclude_sections` list down to `["GM Notes"]` (structural)
+   entry that had at least one matching heading has been
+   re-nested, collapse the vault's own `exclude_sections` list
+   down to `["GM Notes"]` (structural)
 7. Copy selected templates to `_Templates/` (content)
 8. Overwrite selected templates in `_Templates/` (content)
 9. Update or add selected `_meta/entity-types.md`
@@ -206,7 +208,9 @@ Apply all confirmed changes in this order:
 10. Apply selected bold-wrapped-heading, bold-paragraph, and
     callout-only conversions from the judgment batch — each one
     the GM checked in the Content preview becomes a `###`
-    subsection under `## GM Notes` in its file (content)
+    subsection under `## GM Notes`, or is wrapped in
+    `<!-- spoiler -->` fence markers instead, per which
+    destination the GM chose for that item (content)
 11. Create selected story files using
     `shared/templates/character-story.md` as the base, filling
     in the PC name and campaign from the PC file's frontmatter
