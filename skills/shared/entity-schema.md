@@ -440,16 +440,33 @@ same skeleton.
 ## [System Sections]   — varies by system (see per-system template)
 ## Equipment           — gear, possessions, wealth/encumbrance
 ## Current Status      — player-facing present-state snapshot (maintained by session-wrapup)
-## Notes               — player-facing (protected: skills never modify)
-## GM Notes            — keeper-only (protected: skills never modify)
+## Notes               — player-facing, protected, published
+## GM Notes            — keeper-only, protected, excluded from publish
 ```
 
 Templates may omit inapplicable sections (e.g., FitD crews
 have no `## Equipment` — gear is handled through Quality).
 
-`## Notes` and `## GM Notes` are **protected sections** — only
-the GM edits them directly. Automated skills must preserve
-their content unchanged.
+`## Notes` and `## GM Notes` are both **protected sections** —
+only the GM edits them directly; automated skills must preserve
+their content unchanged. That's the only thing they share.
+**Protected (edit-safety) and excluded-from-publish (visibility)
+are two different, independent properties** — `## Notes` is
+protected *and published*; `## GM Notes` is protected *and
+excluded*. `## GM Notes` is the single canonical heading for
+whole-section GM-only content: any content that used to get its
+own top-level heading (Keeper Checklist, World State, Source
+References, tactical notes, "Optional Keeper Hooks," etc.)
+belongs as a freeform subsection nested under `## GM Notes`
+instead of inventing a new top-level heading — the publish
+tool's section filter is heading-level-aware, so anything nested
+under an excluded `## GM Notes` stays excluded regardless of its
+own subsection name. For a single spoiler-free aside embedded in
+otherwise-public prose, use an inline `<!-- gm-only -->` fence
+instead of a whole subsection. For narrative content that's only
+hidden until it's revealed in play (not permanently secret), use
+`<!-- spoiler -->` instead of `<!-- gm-only -->` — see
+`shared/reconcile.md` for how spoilers get revealed.
 
 `## Current Status` is the inverse: a **skill-maintained**,
 player-facing block holding the PC's **cumulative living state** —
@@ -483,8 +500,9 @@ carries unresolved items forward across sessions, gains items as they
 arise, and loses them only when resolved. NPC-relationship shifts fold
 into Open threads rather than a separate field.
 
-The block **must** sit outside any `<!-- gm-only -->` fence (it
-publishes) and before the protected `## Notes`/`## GM Notes` sections.
+The block **must** sit outside any `<!-- gm-only -->` or
+`<!-- spoiler -->` fence (it publishes) and before the protected
+`## Notes`/`## GM Notes` sections.
 The GM may also edit it directly; the next wrap-up reconciles it either
 way.
 
