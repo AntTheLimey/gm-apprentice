@@ -367,3 +367,46 @@ campaign, but that nothing was ever checking.
   until this release. Vaults predating each type's introduction
   are missing the corresponding entry. Offered via Schema Mirror
   Sync.
+
+## Migration: {last version} → {next version}
+
+Standardizes GM-only content hiding onto two primitives — a single
+`## GM Notes` container heading and the existing `<!-- gm-only -->`
+inline fence — replacing the exact-heading-string-list approach that
+can't generalize past whatever's already been manually added to it.
+Also introduces `<!-- spoiler -->` for narrative content that's only
+hidden until revealed in play, not permanently secret.
+
+### Structural
+
+- **GM-only heading re-nesting** — every heading in the vault's own
+  `_meta/vault-config.md` `exclude_sections` list gets re-nested as a
+  `###` subsection under one `## GM Notes` heading per file (creating
+  it where absent), and the vault's `exclude_sections` list collapses
+  down to `["GM Notes"]` once everything's been moved. This is a pure
+  structural move — no content is added, removed, or reworded, only
+  relocated and demoted a heading level — so it applies automatically
+  after preview confirmation like other structural changes.
+
+### Content
+
+- **Bold-wrapped and bold-paragraph GM-only content** — headings like
+  `### **Keeper Notes**` and bold-paragraph lines like `**Keeper
+  Notes:**` with no heading marker at all defeat exact-string
+  matching against the vault's `exclude_sections` list even though
+  they're clearly meant to be hidden. Offered as opt-in Content items
+  since converting a bold-paragraph line into a real heading needs a
+  GM to confirm where the section actually ends.
+- **Callout-only-marked content** — an Obsidian callout (`>
+  [!info] Keeper Only`, etc.) with no heading or fence protection at
+  all. Offered as opt-in Content items — there's no automatic signal
+  for whether it should become `## GM Notes` or a time-locked
+  `<!-- spoiler -->`, so the GM decides per item.
+
+### Tooling
+
+- **Publish tool:** `gm-apprentice-publish` gains `<!-- spoiler -->`
+  support and the `exclude_fields` union-merge fix (previously
+  `exclude_sections`/`exclude_dirs` only). If `publish.site_dir` is
+  set in vault-config, offer to run `npm update gm-apprentice-publish`
+  in the site directory.
