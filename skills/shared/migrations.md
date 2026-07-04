@@ -368,7 +368,7 @@ campaign, but that nothing was ever checking.
   are missing the corresponding entry. Offered via Schema Mirror
   Sync.
 
-## Migration: 1.8.2 → 1.9.0
+## Migration: 1.8.2 → 1.8.3
 
 Standardizes GM-only content hiding onto two primitives — a single
 `## GM Notes` container heading and the existing `<!-- gm-only -->`
