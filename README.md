@@ -11,11 +11,12 @@ generation to campaign management and session lifecycle support.
 | Skill | Description | Obsidian Required |
 |-------|-------------|-------------------|
 | **ttrpg-expert** | Rules engine, content generation, canon management, continuity checking, session planning, encounter design, scenario writing | Optional |
+| **the-midwife** | Guided adventure creation through creative conversation -- develops campaign concepts, one-shots, and arcs from a vague idea or nothing at all, producing an adventure brief and vault scaffold for Session 0. | Optional |
 | **campaign-organizer** | Campaign architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata. Works with Obsidian or plain filesystem. | Recommended |
 | **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks. Works with Obsidian or plain filesystem. | Recommended |
 | **session-prep** | Between-session preparation — reconciles last session's results, reviews PC arcs, scans threads, flags gaps, builds prep package. Works with Obsidian or plain filesystem. | Recommended |
 | **session-play** | At-the-table GM support — fast lookups, rules assist, on-the-fly NPC/location generation, note capture. Speed-optimised for live play. | Optional |
-| **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward identification. Works with Obsidian or plain filesystem. | Recommended |
+| **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward identification. Accepts raw play notes or [GM-Assistant](https://gmassistant.app) session exports. Works with Obsidian or plain filesystem. | Recommended |
 | **vault-ingest** | Ingest old campaign materials (notes, character sheets, images, transcripts) into a structured vault. Interviews the GM to recover what actually happened. | Recommended |
 | **publish-site** | Publish your campaign vault as a static website on GitHub Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
 
@@ -106,8 +107,12 @@ Install via the CLI method instead:
 
 - [Quickstart Guide](docs/quickstart.md) -- set up your first
   campaign from scratch
+- [Campaign Lifecycle](docs/campaign-lifecycle.md) -- how the
+  nine skills work together across the life of a campaign
 - [ttrpg-expert](docs/ttrpg-expert.md) -- rules, content
   generation, and GM assistance
+- [the-midwife](docs/the-midwife.md) -- guided adventure
+  creation from vague idea to Session 0
 - [campaign-organizer](docs/campaign-organizer.md) -- vault
   structure and knowledge graphs
 - [campaign-qa](docs/campaign-qa.md) -- campaign quality
@@ -117,7 +122,10 @@ Install via the CLI method instead:
 - [session-play](docs/session-play.md) -- at-the-table GM
   support
 - [session-wrapup](docs/session-wrapup.md) -- post-session
-  processing and recaps
+  processing and recaps, including
+  [GM-Assistant](https://gmassistant.app) export support
+- [vault-ingest](docs/vault-ingest.md) -- importing old
+  campaign materials into a structured vault
 - [publish-tool](docs/publish-tool.md) -- publishing your vault
   as a static website
 - [Personal reference files](docs/personal-reference-files.md)
@@ -142,7 +150,9 @@ ttrpg-expert, the-midwife, and publish-site skills work standalone.
 | session-play | Functional (filesystem mode) | Read-only lookups | Full play support |
 | session-wrapup | Functional (filesystem mode) | Read-only analysis | Full wrap-up workflow |
 | campaign-organizer | Functional (filesystem mode) | Manual vault management | Full automation |
+| vault-ingest | Functional (filesystem mode) | Read-only analysis | Full ingestion workflow |
 | the-midwife | Fully functional | Enhanced (reads existing vault) | Best experience |
+| publish-site | Fully functional | Fully functional | Fully functional (reads vault files directly) |
 
 ### Required Obsidian Community Plugins
 
@@ -189,7 +199,8 @@ query your Obsidian vault and return results.
 
 ## Using Without Obsidian
 
-Two skills work without Obsidian:
+Every skill works without Obsidian — three are fully
+functional standalone, the rest fall back to filesystem mode.
 
 **ttrpg-expert** is fully functional and provides:
 
@@ -201,16 +212,24 @@ Two skills work without Obsidian:
 - Continuity checking (from conversation context)
 - General GM support across all four game systems
 
+**the-midwife** is fully functional standalone — adventure
+conception happens in conversation and its workspace is plain
+markdown. With an existing vault it additionally mines your
+canon for creative opportunities.
+
+**publish-site** reads vault files directly from disk to build
+the static site; Obsidian is never part of the pipeline.
+
 **campaign-organizer** works in filesystem mode — it creates
 the same structured markdown files, folder hierarchy, YAML
 frontmatter, and wiki-links, just without Obsidian's graph
 visualization and semantic search. Open the folder in Obsidian
 later for the full experience.
 
-**campaign-qa**, **session-prep**, **session-play**, and
-**session-wrapup** also work in filesystem mode — same
-audit procedures and lifecycle workflows, using
-Glob/Grep/Read instead of MCP tools.
+**campaign-qa**, **session-prep**, **session-play**,
+**session-wrapup**, and **vault-ingest** also work in
+filesystem mode — same audit procedures and lifecycle
+workflows, using Glob/Grep/Read instead of MCP tools.
 Obsidian adds faster search and graph visualization but
 is not required.
 

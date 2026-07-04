@@ -1,6 +1,6 @@
 {
   "name": "gm-apprentice",
-  "description": "TTRPG Game Master skills for Claude -- rules validation, content generation, campaign organization, quality auditing, session prep, at-the-table play support, post-session wrap-up, vault ingestion of old campaign materials, and guided adventure creation",
+  "description": "TTRPG Game Master skills for Claude -- rules validation, content generation, guided adventure creation, campaign organization, quality auditing, session prep, at-the-table play support, post-session wrap-up, vault ingestion of old campaign materials, and campaign site publishing",
   "version": "1.8.3",
   "license": "CC-BY-SA-4.0 AND MIT",
   "author": {
