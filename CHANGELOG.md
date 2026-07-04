@@ -54,6 +54,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Portrait-less entity hero banners rendered their initials avatar as
   a clipped sliver overlapping the entity name instead of stacking
   above it.
+- NPC portraits rendered as a cropped hero-banner background — showing
+  only a thin band around the image's 25%-height line, with no way to
+  view the full portrait — because the with-portrait branch used the
+  same landscape-oriented layout as location art instead of the
+  portrait-shaped card PC pages already use. Also, hero images
+  (portraits included) weren't wired into the site's click-to-enlarge
+  lightbox at all, since the binding only looked inside `.content`.
 
 ### Removed
 
