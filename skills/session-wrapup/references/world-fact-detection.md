@@ -48,11 +48,11 @@ Before staging a finding:
 
 ## Output Format
 
-Stage findings in the Wrap-Up file under
-`## World Fact Findings`:
+Stage findings in the Wrap-Up file's `## GM Notes` section,
+as a `### World Fact Findings` subsection:
 
 ```markdown
-## World Fact Findings
+### World Fact Findings
 
 - **Dwarf heritage** — Torga described as "a dwarf merchant"
   (first mention). No heritage definition exists.

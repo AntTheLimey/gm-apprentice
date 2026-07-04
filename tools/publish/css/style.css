@@ -402,9 +402,16 @@ h3 {
 .hero-banner-no-img {
   background: linear-gradient(135deg, var(--bg-hero) 0%, var(--bg-card) 100%);
   padding: 2.5rem 1.5rem 1.5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
 }
 .hero-banner-no-img h1 {
   color: var(--text);
+}
+.hero-banner-no-img .pc-portrait {
+  flex-shrink: 0;
+  margin: 0 0 0.75rem;
 }
 
 /* Cinematic banner (PCs) */

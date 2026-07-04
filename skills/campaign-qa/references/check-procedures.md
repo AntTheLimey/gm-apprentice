@@ -18,6 +18,7 @@ perform each check systematically.
 5. [Graph Health](#graph-health)
 6. [Stale DRAFT Detection](#stale-draft-detection)
 7. [Legacy Canon Field Repair](#legacy-canon-field-repair)
+8. [Open Spoilers](#open-spoilers)
 
 ---
 
@@ -376,6 +377,24 @@ relationships (more than 2 standard deviations above the mean
 for their type). These are often over-linked — some
 connections are implied by traversal rather than direct.
 
+**Un-fenced GM-only content:** Search every file for headings
+(any level) and bold-paragraph lines (`**Text:**` with no `#`)
+whose text contains one of: "keeper", "secret", "tactic",
+"confidential", "gm-only", "dm notes" — case-insensitive. For
+each match, check whether it sits inside a `## GM Notes` section
+or a `<!-- gm-only -->`/`<!-- spoiler -->` fence. If it doesn't,
+flag it — this is exactly the shape of content that silently
+leaks to the published site (an NPC's tactical notes under a
+bold-wrapped `### **Keeper Notes**` heading defeat exact-string
+matching the same way a genuinely un-fenced heading does).
+Skip files the publish pipeline would already exclude wholesale
+(Session Plans and prep-status files, anything under
+`exclude_dirs`, and — when the vault has `exclude_drafts`
+configured — draft entities), so this check only flags content
+that would actually reach the site.
+Severity: Critical if the vault has `publish.site_dir`
+configured (it's actually publishing); Warning otherwise.
+
 ### Step 3: Schema Compliance
 
 Read `_meta/entity-types.md` for the type hierarchy and
@@ -525,3 +544,30 @@ files restored from backups, copied from old campaigns, or
 written by outdated tooling can reintroduce legacy names. This
 check makes campaign-qa the permanent enforcement point:
 always repair to `canon_status`.
+
+---
+
+## Open Spoilers
+
+Not gated behind any trigger — run this section during any full QA
+pass, since spoilers carry no timestamp and there's no way to compute
+staleness for them.
+
+**Procedure:** search the whole vault for `<!-- spoiler -->` markers.
+For each one found, list:
+- The file it's in
+- The first ~15 words of the spoiler text (enough to identify it, not
+  the whole spoiler)
+- Whether the file's `lastUpdated`/`asOfSession` suggests it's from an
+  old session (informational only — not a hard staleness rule, since
+  there's no per-spoiler timestamp)
+
+Present as a single list for GM review: "Here are your N open
+spoilers — anything here that got revealed in play and just never got
+unwrapped? Anything that's dead because the plot moved on and should
+just be deleted rather than left pending forever?"
+
+- Severity: **Info** (this is a review prompt, not a defect)
+- No automated fix — the GM decides per spoiler whether to leave it,
+  manually strip the markers (revealed), or delete the content
+  (dropped plot thread)

@@ -16,15 +16,19 @@ function getLatestSession(pages) {
 
 function stripWikiLinks(text) {
   return text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
-    .replace(/\[\[([^\]]+)\]\]/g, '$1');
+    .replace(/\[\[([^\]]+)\]\]/g, (m, target) => target.replace(/_/g, ' '));
 }
 
 function extractRecap(page) {
   if (!page) return null;
-  const md = page.markdown;
+  // Prefer the published view (gm-only blocks + excluded sections stripped) so the
+  // landing recap can never quote Keeper-only content.
+  const md = page.publishedMarkdown || page.markdown;
   if (!md) return null;
 
-  const recapMatch = md.match(/^## Narrative Recap\s*$/m);
+  // Wrap-ups title this section in variants — "Narrative Recap", "What Happened —
+  // Narrative Recap", numbered forms — so match any H2 containing the phrase.
+  const recapMatch = md.match(/^##\s+.*Narrative Recap.*$/m);
   let paragraph;
 
   if (recapMatch) {
@@ -32,11 +36,13 @@ function extractRecap(page) {
     const nextHeading = after.search(/^## /m);
     const section = nextHeading === -1 ? after : after.slice(0, nextHeading);
     const paragraphs = section.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
-    paragraph = paragraphs[0] || null;
+    paragraph = paragraphs.find(p => !/^#{1,6}\s/.test(p) && !p.startsWith('>')) || null;
   } else {
-    const withoutH1 = md.replace(/^# .+\n+/, '');
+    // Tolerate blank lines before the H1, and never surface a bare heading or a
+    // blockquote as "the recap" — take the first real prose paragraph.
+    const withoutH1 = md.replace(/^\s*# .+\n+/, '');
     const paragraphs = withoutH1.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
-    paragraph = paragraphs[0] || null;
+    paragraph = paragraphs.find(p => !/^#{1,6}\s/.test(p) && !p.startsWith('>')) || null;
   }
 
   if (!paragraph) return null;
@@ -198,6 +204,20 @@ function getLatestWrapUp(pages, session) {
   if (!session) return null;
   const wrapTypes = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
   const wrapUps = pages.filter(p => wrapTypes.has(p.frontmatter.type));
+
+  // Chapters restart session numbering, so a bare session_number match can return
+  // ANOTHER chapter's wrap-up (Vienna Session 4 shadowing Calcutta Session 4). A
+  // wrap-up lives in the same session folder as its index file — prefer that match
+  // before falling back to session_number.
+  const sessionDir = session.sourcePath
+    ? String(session.sourcePath).replace(/[^\\/]+$/, '')
+    : null;
+  if (sessionDir) {
+    for (const wu of wrapUps) {
+      if (wu.sourcePath && String(wu.sourcePath).startsWith(sessionDir)) return wu;
+    }
+  }
+
   const num = session.frontmatter.session_number;
   if (num != null) {
     for (const wu of wrapUps) {

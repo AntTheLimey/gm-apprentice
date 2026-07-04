@@ -98,7 +98,13 @@ function stripDataview(markdown) {
   return markdown.replace(/```dataview[\s\S]*?```/g, '');
 }
 
-function stripGmOnly(markdown) {
+// Strip content between a named HTML-comment marker pair (e.g. "gm-only" for
+// <!-- gm-only -->...<!-- /gm-only -->). Shared implementation behind
+// stripGmOnly and stripSpoiler — same stripping behavior, different marker
+// name, so a marker of one name never strips a block of the other name.
+function stripMarkedBlocks(markdown, markerName) {
+  const openRe = new RegExp(`^<!--\\s*${markerName}\\s*-->`);
+  const closeRe = new RegExp(`^<!--\\s*/${markerName}\\s*-->`);
   const lines = markdown.split('\n');
   const result = [];
   const warnings = [];
@@ -117,13 +123,13 @@ function stripGmOnly(markdown) {
       continue;
     }
 
-    if (/^<!--\s*gm-only\s*-->/.test(line.trim())) {
+    if (openRe.test(line.trim())) {
       excluding = true;
       result.push('');
       continue;
     }
 
-    if (/^<!--\s*\/gm-only\s*-->/.test(line.trim())) {
+    if (closeRe.test(line.trim())) {
       excluding = false;
       continue;
     }
@@ -134,11 +140,19 @@ function stripGmOnly(markdown) {
   }
 
   if (excluding) {
-    warnings.push('unclosed <!-- gm-only --> marker — content stripped to end of file');
+    warnings.push(`unclosed <!-- ${markerName} --> marker — content stripped to end of file`);
   }
 
   const text = result.join('\n');
   return warnings.length > 0 ? { text, warnings } : text;
+}
+
+function stripGmOnly(markdown) {
+  return stripMarkedBlocks(markdown, 'gm-only');
+}
+
+function stripSpoiler(markdown) {
+  return stripMarkedBlocks(markdown, 'spoiler');
 }
 
 // Strip a single leading H1 from the markdown body. Templates inject their own H1
@@ -230,6 +244,13 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   } else {
     markdown = gmResult;
   }
+  const spoilerResult = stripSpoiler(markdown);
+  if (spoilerResult.warnings) {
+    warnings.push(...spoilerResult.warnings);
+    markdown = spoilerResult.text;
+  } else {
+    markdown = spoilerResult;
+  }
   markdown = stripLeadingH1(markdown);
   markdown = filterSections(markdown, excludeSections);
   markdown = separateBoldLabelLines(markdown);
@@ -274,4 +295,4 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, filterFields };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, filterFields };

@@ -5,7 +5,7 @@ advance plans, consequences ripen, rumours spread, and the
 calendar turns. Run this procedure after every session.
 
 **Invocation:** This procedure normally runs as reconcile
-step 5.5 — offered to the GM after session canon status is
+step 6.5 — offered to the GM after session canon status is
 promoted. It can also be invoked standalone via ttrpg-expert
 ("update the world" / "post-session update").
 
@@ -136,7 +136,7 @@ After filing: "Updates filed. Run campaign-qa to validate,
 or proceed to session prep?"
 
 **When invoked from reconcile:** skip this prompt — results
-flow into reconcile step 6's `## Reconciliation Context`
+flow into reconcile step 7's `## Reconciliation Context`
 under `### World Evolution`. Set `world_evolved` on the
 session index to the current session reference.
 

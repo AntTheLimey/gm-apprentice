@@ -290,7 +290,7 @@ entries. Skip undefined domains — no false positives.
 Runs all modes in order: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
 Health → Legacy Canon Field Repair → World Consistency
-(if `_World/` exists).
+(if `_World/` exists) → Open Spoilers.
 Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 

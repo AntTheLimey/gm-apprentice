@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.3] — 2026-07-04
+
+### Added
+
+- **`## GM Notes` is now the single canonical heading for whole-section
+  GM-only content**, replacing the exact-heading-string-list approach
+  (`exclude_sections`) that couldn't generalize — a production vault
+  had grown that list to 47 one-off entries and was still leaking.
+  Anything that used to get its own top-level heading (Keeper
+  Checklist, World State, Source References, tactical notes, etc.)
+  becomes a subsection nested under `## GM Notes` instead; the publish
+  tool's heading filter is already level-aware, so this needed no
+  filtering-code changes.
+- **`<!-- spoiler -->` marker** for narrative content that's hidden
+  only until it's revealed in play, distinct from permanently-hidden
+  `<!-- gm-only -->` content. `reconcile` gains a step asking the GM,
+  per session, whether any spoilers in entities touched that session
+  were revealed — if so, the fence is stripped and the content becomes
+  permanently public prose.
+- **campaign-qa: two new checks** — un-fenced GM-only content
+  (headings or bold-paragraph lines that look GM-only but sit outside
+  any hiding mechanism) and an open-spoilers audit listing every
+  currently-pending `<!-- spoiler -->` block for GM review.
+- Migration entry backfilling existing vaults: re-nests every heading
+  already in a vault's `exclude_sections` list under `## GM Notes`,
+  with a GM-confirmed batch for bold-wrapped headings, bold-paragraph
+  pseudo-headings, and callout-only-marked content that exact-string
+  matching can't catch.
+
+### Fixed
+
+- `exclude_fields` had the same config-shadowing bug already fixed for
+  `exclude_sections`/`exclude_dirs` in previous work — a field named
+  only in `vault.config.json` was silently never stripped. Now unions
+  both sources like its siblings. Defaults gain `gm_notes` and
+  `prep_notes` (real, populated fields that were never excluded);
+  `secrets`/`current_plan`/`plan_progress` stay in the list even
+  though unused, since removing them could strip less than some vault
+  depends on.
+- Landing page session recap extraction read raw markdown instead of
+  the publish-filtered view, so it could quote GM-only content; also
+  fixed matching the wrong chapter's wrap-up when two chapters share a
+  session number, and wikilink targets rendering with literal
+  underscores instead of spaces.
+- Portrait-less entity hero banners rendered their initials avatar as
+  a clipped sliver overlapping the entity name instead of stacking
+  above it.
+- NPC portraits rendered as a cropped hero-banner background — showing
+  only a thin band around the image's 25%-height line, with no way to
+  view the full portrait — because the with-portrait branch used the
+  same landscape-oriented layout as location art instead of the
+  portrait-shaped card PC pages already use. Also, hero images
+  (portraits included) weren't wired into the site's click-to-enlarge
+  lightbox at all, since the binding only looked inside `.content`.
+
+### Removed
+
+- `PUBLISH_SITE_BUGS_SPEC.md` — verified against current code that
+  every item in it (a narrative-IA redesign and eight defects) already
+  shipped in previous releases.
+
 ## [1.8.2] — 2026-07-03
 
 ### Added

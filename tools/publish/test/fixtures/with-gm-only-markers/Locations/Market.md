@@ -27,3 +27,8 @@ The blacksmith is also a fence for stolen goods.
 <!-- /gm-only -->
 
 The apothecary sells herbs and tonics.
+
+<!-- spoiler -->
+The market square is a fading dream of Carcosa, waiting to be
+revealed once the players find the Yellow Sign.
+<!-- /spoiler -->

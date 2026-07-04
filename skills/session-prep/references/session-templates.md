@@ -211,39 +211,41 @@ tags: []
 [3-5 paragraphs of dramatic prose capturing the session's events.
 Written for players to read or for campaign journaling.]
 
-## Quick Bullets
+## GM Notes
+
+### Quick Bullets
 
 - [One-line summary of each major event]
 - [Key decisions made]
 - [Important discoveries]
 - [Significant mechanical outcomes]
 
-## PC Carry-Forward
+### PC Carry-Forward
 
 | PC | Arc Update | Open Threads | Next Beat |
 |----|-----------|--------------|-----------|
 | [[Name]] | What changed for this PC | Unresolved threads | What comes next |
 
-## What Carries Forward
+### What Carries Forward
 
-### Active Threads
+#### Active Threads
 [Threads still in play, updated with this session's events]
 
-### New Clues & Hooks
+#### New Clues & Hooks
 [Information or hooks introduced this session]
 
-### Pending Consequences
+#### Pending Consequences
 [Decisions made this session that will have future effects]
 
-### Next Session Seeds
+#### Next Session Seeds
 [Concrete starting points for the next session's prep]
 
-## World State
+### World State
 
 [Updated in-game date, location, active threats, faction
 postures, ticking clocks. Reflects post-session reality.]
 
-## Keeper Checklist
+### Keeper Checklist
 
 - [ ] Entity files created/updated for all new and changed entities
 - [ ] Scene notes updated with played/skipped status
@@ -251,7 +253,7 @@ postures, ticking clocks. Reflects post-session reality.]
 - [ ] Carry-forward threads verified against play notes
 - [ ] Canon status set correctly on all new files
 
-## Quality Notes
+### Quality Notes
 
 [Self-assessment of the session: pacing, spotlight balance,
 player engagement, what worked, what to improve.]

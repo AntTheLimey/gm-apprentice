@@ -74,6 +74,29 @@ already satisfied:
   too, for the same reason as the entity-types.md check above —
   an old-pattern file can reappear from any skill that still
   emits the old link, not just from a pending versioned migration
+- **GM-only heading vocabulary matches the canonical single
+  heading** — read the vault's own `_meta/vault-config.md`
+  `exclude_sections` list. If it's exactly `["GM Notes"]` (or a
+  subset of it), skip. Otherwise, for each other entry, search the
+  vault for real markdown headings (any level) matching that text
+  exactly — pending, listed as a mechanical re-nesting item. This
+  check always runs, for the same reason as the two checks above —
+  drift accumulates one new heading name at a time, from any skill
+  invocation, not from a single migration event
+- **Bold-wrapped or bold-paragraph GM-only content** — for each
+  entry in the vault's `exclude_sections` list, also search for
+  that text appearing inside a bold-wrapped heading
+  (`### **{text}**`) or as a bold-paragraph line with no heading
+  marker at all (`**{text}:**`). Any match → pending, listed as a
+  judgment item requiring GM confirmation (not safe to auto-convert
+  — a bold-paragraph line isn't a real heading, and converting it
+  needs the GM to confirm the boundary of what should move)
+- **Callout-only-marked content** — any Obsidian callout (`> [!info]`,
+  `> [!warning]`, etc.) whose title contains "keeper" or "gm" and
+  which is NOT already inside an excluded heading or a
+  `<!-- gm-only -->`/`<!-- spoiler -->` fence → pending, listed as a
+  judgment item (no automatic signal for what it should become —
+  the GM decides whether it's `## GM Notes` or a spoiler)
 
 Only unsatisfied steps appear in the preview.
 
@@ -91,6 +114,9 @@ List each structural change as a bullet. Example:
 >   (`Chapter_03_Session_01_Wrap_Up.md`, ...) — 2 basename
 >   collisions found live in the vault; repair 33 wiki-links
 >   pointing at the old ambiguous names
+> - Re-nest 47 headings (Keeper Checklist, World State, Quality
+>   Notes, ...) under `## GM Notes` across 62 files; collapse
+>   `exclude_sections` from 47 entries down to `["GM Notes"]`
 
 **Content (choose which to apply):**
 List each content change as a checkbox. Example:
@@ -102,6 +128,17 @@ List each content change as a checkbox. Example:
 >       (has `date` (in-game); canonical is `in_game_date` (in-game))
 > - [ ] Add `entity-types.md` — `character-story` field block
 >       (missing from vault schema mirror)
+> - [ ] Convert `### **Keeper Notes**` (bold-wrapped heading) in
+>       `Characters/NPCs/Doctor_Carreau.md` to a plain `### Keeper
+>       Notes` subsection under `## GM Notes`
+> - [ ] Convert `**Keeper Notes – Reactions to Rescue:**`
+>       (bold-paragraph, no heading) in
+>       `Locations/Orphean_Society_Building.md` to a `### Keeper
+>       Notes` subsection under `## GM Notes`
+> - [ ] Move `> [!info] Keeper Only` callout in
+>       `Creatures/Harmonische_Wachter.md` (currently unprotected)
+>       under `## GM Notes` (or wrap in `<!-- spoiler -->` if this
+>       is a time-locked reveal, not a permanent secret)
 
 **Tooling (choose which to apply):**
 List each tooling change as a checkbox. Example:
@@ -151,19 +188,34 @@ Apply all confirmed changes in this order:
    sits outside any chapter context and more than one renamed
    file could be the referent), list it in the Step 8 report for
    the GM to resolve by hand rather than guessing (structural)
-6. Copy selected templates to `_Templates/` (content)
-7. Overwrite selected templates in `_Templates/` (content)
-8. Update or add selected `_meta/entity-types.md`
+6. Re-nest every mechanically-matched heading from the vault's
+   `exclude_sections` list as a `###` subsection under `##
+   GM Notes` in its file (creating `## GM Notes` if absent,
+   appending under an existing one otherwise), demoting the
+   moved heading and any of its own sub-headings by the amount
+   needed to sit one level below `## GM Notes`. Once every
+   entry that had at least one matching heading has been
+   re-nested, collapse the vault's own `exclude_sections` list
+   down to `["GM Notes"]` (structural)
+7. Copy selected templates to `_Templates/` (content)
+8. Overwrite selected templates in `_Templates/` (content)
+9. Update or add selected `_meta/entity-types.md`
    Type-Specific Fields entries — replace the stale line in
    place for an update, or insert the new line in the same
    relative position it holds in `shared/entity-schema.md` for
    an addition. Never touch vault-only (custom/evolved) entries
    (content)
-9. Create selected story files using
-   `shared/templates/character-story.md` as the base, filling
-   in the PC name and campaign from the PC file's frontmatter
-   (content)
-10. Run `npm update gm-apprentice-publish` in site directory if
+10. Apply selected bold-wrapped-heading, bold-paragraph, and
+    callout-only conversions from the judgment batch — each one
+    the GM checked in the Content preview becomes a `###`
+    subsection under `## GM Notes`, or is wrapped in
+    `<!-- spoiler -->` fence markers instead, per which
+    destination the GM chose for that item (content)
+11. Create selected story files using
+    `shared/templates/character-story.md` as the base, filling
+    in the PC name and campaign from the PC file's frontmatter
+    (content)
+12. Run `npm update gm-apprentice-publish` in site directory if
     selected (tooling)
 
 ## Step 7: Stamp version

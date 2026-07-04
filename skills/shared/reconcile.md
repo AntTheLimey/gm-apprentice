@@ -42,7 +42,7 @@ On GM confirmation:
 - Set Wrap-Up `canon_status` to `AUTHORITATIVE`
 - Promote all DRAFT entities from this session to AUTHORITATIVE
 - Update session index `status` to `reviewed`
-- Skip to step 5.5 (world evolution offer)
+- Skip to step 6.5 (world evolution offer)
 
 If any condition fails → proceed with the full 6-step procedure
 below.
@@ -68,8 +68,9 @@ Present as a short inventory, not a wall of text.
 
 ### 2.5. World fact review
 
-If the Wrap-Up file contains a `## World Fact Findings` section
-(staged by session-wrapup), review each finding with the GM.
+If the Wrap-Up file's `## GM Notes` section contains a
+`### World Fact Findings` subsection (staged by session-wrapup),
+review each finding with the GM.
 
 For each finding, present the three-state prompt:
 
@@ -90,7 +91,7 @@ For each finding, present the three-state prompt:
 
 One finding at a time. Wait for GM decision before continuing.
 Record each resolution in the `## Reconciliation Context`
-section (step 6).
+section (step 7).
 
 ### 3. Walk through conflicts
 
@@ -104,7 +105,28 @@ One conflict at a time. For each:
 Each answer shapes the next question. This is a conversation,
 not a report.
 
-### 4. Salvageable prep triage
+### 3.5. Spoiler reveal check
+
+For every entity this session's Wrap-Up actually touched (created or
+updated — the same bounded set session-wrapup already produced in its
+receipt), check for open `<!-- spoiler -->` blocks. For each one
+found, ask:
+
+> "[[{Entity}]] has a pending spoiler: '{first ~10 words of the
+> spoiler text}...' — was this revealed to the players this session?
+> (y/n)"
+
+On yes: remove the `<!-- spoiler -->` / `<!-- /spoiler -->` markers
+from that entity's file, leaving the content as plain published
+prose. On no: leave it untouched — it stays hidden and gets asked
+about again next time this entity is touched, or caught by
+campaign-qa's full-vault audit if it never comes up again (see
+`publish-site/references/content-filtering.md`).
+
+Skip this step entirely if none of this session's touched entities
+contain a `<!-- spoiler -->` block — no empty prompt.
+
+### 5. Salvageable prep triage
 
 If a Plan file exists for this session, scan unplayed content.
 For each unplayed element, ask the GM:
@@ -118,7 +140,7 @@ For each unplayed element, ask the GM:
 Flag `must-still-happen` items prominently — these carry
 forward into the next session's prep.
 
-### 5. Promote canon status
+### 6. Promote canon status
 
 On GM approval:
 1. Set Wrap-Up `canon_status` to `AUTHORITATIVE`
@@ -141,7 +163,7 @@ Do the bookkeeping immediately — don't leave a list for
 the GM. Hand off to campaign-organizer if entity filing
 is needed.
 
-### 5.5. World evolution (conditional)
+### 6.5. World evolution (conditional)
 
 **Gate:** Only offer when reconciling the **most recent**
 session. Check the session index for a `world_evolved` field
@@ -151,7 +173,7 @@ session. Check the session index for a `world_evolved` field
 > turns, consequence surfacing, foreshadowing review? This
 > updates how the world responds to what just happened. (y/n)"
 
-If the GM declines → skip to step 6.
+If the GM declines → skip to step 7.
 
 If the GM accepts → read and follow
 `ttrpg-expert/world-evolution.md`, skipping the Storage
@@ -167,7 +189,7 @@ conversational style as the rest of reconcile.
 - Entity files created or updated use
   `source: "world-evolution"`, with `lastUpdated` and
   `asOfSession` set to the current session
-- Results feed into step 6's `## Reconciliation Context`
+- Results feed into step 7's `## Reconciliation Context`
   under `### World Evolution`, containing:
   - Faction turn summaries (one line per faction: action,
     impact level, what's visible to PCs)
@@ -176,7 +198,7 @@ conversational style as the rest of reconcile.
   - Discovery state changes (per-PC knowledge shifts)
   - World state changes (calendar, environment, politics)
 
-### 6. Record decisions
+### 7. Record decisions
 
 Write a `## Reconciliation Context` section capturing:
 - **Consequences** — forward-looking summary of what this
@@ -184,7 +206,7 @@ Write a `## Reconciliation Context` section capturing:
   play notes, no invention)
 - **Salvageable prep** — disposition of each unplayed item
 - **GM decisions** — each conflict resolution with rationale
-- **World evolution** — if step 5.5 ran, include a
+- **World evolution** — if step 6.5 ran, include a
   `### World Evolution` sub-section with faction turn
   summaries, surfaced consequences, foreshadowing and
   discovery state changes, and world state updates

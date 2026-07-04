@@ -159,8 +159,10 @@ and any who were off-screen this session):
    section is absent, create it; place it before `## Notes`, outside
    any `<!-- gm-only -->` fence. See `shared/entity-schema.md` for the
    field spec.
-4. Leave `## Notes`, `## GM Notes`, and all gm-only content
-   untouched (protected sections).
+4. Leave `## Notes`, `## GM Notes`, and all gm-only/spoiler
+   content untouched (protected sections — see
+   `shared/entity-schema.md`'s PC Body Structure for the
+   protected-vs-excluded distinction).
 
 **Input:** the prior `## Current Status` block + this session's PC
 Carry-Forward (Step 3) and Narrative Recap (Step 2). No new source
@@ -294,8 +296,8 @@ facts (heritage references, deity names, new place names):
    suppress), `_World/` domain files (already encoded →
    suppress), and existing entity files (already exists →
    suppress)
-3. Stage findings in the Wrap-Up file under
-   `## World Fact Findings`
+3. Stage findings in the Wrap-Up file's `## GM Notes` section,
+   as a `### World Fact Findings` subsection
 
 **Do not present three-state prompts.** Findings are staged
 for the reconcile procedure (step 2.5) to present during
@@ -306,7 +308,8 @@ this step entirely — no empty section.
 
 ### 5. What Carries Forward
 
-Write into Wrap-Up file:
+Write under the Wrap-Up file's `## GM Notes` section, as
+`### What Carries Forward`:
 - Unresolved cliffhangers
 - Player-stated intentions
 - Unrealised consequences
@@ -316,18 +319,19 @@ Write into Wrap-Up file:
 ### 6. World State
 
 In-game date, location, active threats, faction postures,
-ticking clocks. Brief. Write into Wrap-Up file.
+ticking clocks. Brief. Write under `## GM Notes` as
+`### World State`.
 
 ### 7. Keeper Checklist
 
-Concrete tasks for next prep. Write into Wrap-Up file:
-scenes to write, GM decisions needed, rules to review,
-handouts to prepare.
+Concrete tasks for next prep. Write under `## GM Notes` as
+`### Keeper Checklist`: scenes to write, GM decisions needed,
+rules to review, handouts to prepare.
 
 ### 8. Quality Notes
 
 Brief, honest: what worked in prep, what was missing,
-what to adjust. Write into Wrap-Up file.
+what to adjust. Write under `## GM Notes` as `### Quality Notes`.
 
 ### 9. Review (Reconcile)
 
@@ -347,12 +351,13 @@ Wrap-up **must** produce all sections so prep reads one file:
 | Section | Required | Written to |
 |---------|----------|------------|
 | Narrative Recap | Yes | Wrap-Up file |
-| Quick Bullets | Standard path only | Wrap-Up file |
-| PC Carry-Forward | Yes | Wrap-Up file |
-| What Carries Forward | Yes | Wrap-Up file |
-| World State | Yes | Wrap-Up file |
-| Keeper Checklist | Yes | Wrap-Up file |
-| World Fact Findings | If findings exist | Wrap-Up file |
+| GM Notes → Quick Bullets | Standard path only | Wrap-Up file |
+| GM Notes → PC Carry-Forward | Yes | Wrap-Up file |
+| GM Notes → What Carries Forward | Yes | Wrap-Up file |
+| GM Notes → World State | Yes | Wrap-Up file |
+| GM Notes → Keeper Checklist | Yes | Wrap-Up file |
+| GM Notes → Quality Notes | Yes | Wrap-Up file |
+| GM Notes → World Fact Findings | If findings exist | Wrap-Up file |
 
 Entity files and timeline are updated separately (Step 4).
 Character story files are updated separately (Step 3b).

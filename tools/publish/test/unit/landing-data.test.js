@@ -113,6 +113,30 @@ describe('getLatestWrapUp', () => {
       assert.ok(result, `should match type "${type}"`);
     }
   });
+
+  it('prefers the wrap-up in the same session folder when chapters restart numbering', () => {
+    // Regression: Vienna S4 and Calcutta S4 both have session_number 4 — a bare
+    // number match returned Vienna's wrap-up for Calcutta's session.
+    const pages = [
+      {
+        frontmatter: { type: 'session_wrap', session_number: 4 },
+        title: 'Chapter_03_Session_04_Wrap_Up',
+        sourcePath: '/vault/Chapters/Chapter 3 - Vienna/Session 4/Chapter_03_Session_04_Wrap_Up.md',
+      },
+      {
+        frontmatter: { type: 'session_wrap', session_number: 4 },
+        title: 'Chapter_04_Session_04_Wrap_Up',
+        sourcePath: '/vault/Chapters/Chapter 4 - Calcutta/Sessions/Session 04/Chapter_04_Session_04_Wrap_Up.md',
+      },
+    ];
+    const calcuttaSession = {
+      title: 'Session 04 - The Road to Cairo',
+      frontmatter: { type: 'session', session_number: 4 },
+      sourcePath: '/vault/Chapters/Chapter 4 - Calcutta/Sessions/Session 04/Session 04 - The Road to Cairo.md',
+    };
+    const result = getLatestWrapUp(pages, calcuttaSession);
+    assert.strictEqual(result.title, 'Chapter_04_Session_04_Wrap_Up');
+  });
 });
 
 describe('extractRecap', () => {
@@ -132,12 +156,47 @@ describe('extractRecap', () => {
     assert.strictEqual(result, 'John Smith met Jane Doe at the Tavern.');
   });
 
+  it('humanizes underscored wiki-link targets in recap text', () => {
+    const page = {
+      markdown: '# S1\n\n## Narrative Recap\n\nBreakfast at the [[Locanda_del_Leone]].\n\n## Next',
+    };
+    const result = extractRecap(page);
+    assert.strictEqual(result, 'Breakfast at the Locanda del Leone.');
+  });
+
   it('falls back to first body paragraph when no Narrative Recap heading', () => {
     const page = {
       markdown: '# Session 1\n\nThe group gathered at dawn.\n\nThey set off.\n',
     };
     const result = extractRecap(page);
     assert.strictEqual(result, 'The group gathered at dawn.');
+  });
+
+  it('matches heading variants like "What Happened — Narrative Recap"', () => {
+    const page = {
+      markdown: '# S4\n\n## Session Metadata\n\nStuff.\n\n## What Happened — Narrative Recap\n\nThe party rode for Cairo at dawn.\n\n## World State\n\nSecret.',
+    };
+    const result = extractRecap(page);
+    assert.strictEqual(result, 'The party rode for Cairo at dawn.');
+  });
+
+  it('never returns a bare heading as the recap', () => {
+    // Regression: a body whose H1 sits after a blank line, followed by more headings,
+    // rendered a raw "# Session 4 — ..." line on the landing page.
+    const page = {
+      markdown: '\n# Session 4 — The Hofburg Reception\n\n## Session Metadata\n\n- **Date:** August 5\n',
+    };
+    const result = extractRecap(page);
+    assert.ok(result === null || !result.startsWith('#'), `got: ${result}`);
+  });
+
+  it('prefers publishedMarkdown over raw markdown when present', () => {
+    const page = {
+      markdown: '# S1\n\n## Narrative Recap\n\nKeeper secret draft.\n',
+      publishedMarkdown: '# S1\n\n## Narrative Recap\n\nThe players saw this.\n',
+    };
+    const result = extractRecap(page);
+    assert.strictEqual(result, 'The players saw this.');
   });
 
   it('truncates to ~500 chars at word boundary', () => {

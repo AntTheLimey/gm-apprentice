@@ -13,7 +13,7 @@ All campaign content falls into three categories:
 - H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - Frontmatter fields in `exclude_fields` (default:
-  `["secrets", "current_plan", "plan_progress"]`)
+  `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`)
 
 ### Always included
 
@@ -69,6 +69,42 @@ within a section.
 **Edge cases:**
 - Unclosed marker: content stripped to end of file (safe default)
 - Marker inside a code block: ignored (treated as literal)
+
+## Inline Spoiler Markers
+
+For narrative content that's hidden only because the story hasn't
+reached it yet — not permanently secret — use `<!-- spoiler -->` /
+`<!-- /spoiler -->` instead of `<!-- gm-only -->`. Mechanically
+identical (same open/close-pair rules: own lines, body text only, can
+span paragraphs, code-fence-literal), but semantically and
+operationally different:
+
+~~~markdown
+The innkeeper seems friendly enough.
+
+<!-- spoiler -->
+He's secretly reporting the party's movements to the cult.
+<!-- /spoiler -->
+~~~
+
+**`<!-- gm-only -->` never converts** — it's meta content (tactics,
+design notes) that's never meant to be player-facing, regardless of
+story progress.
+
+**`<!-- spoiler -->` is lifecycle-managed.** There's no pre-declared
+reveal date — a GM doesn't know which session will reveal a given
+secret until play gets there. Instead, `reconcile` (run every session)
+checks entities the session actually touched for open `<!-- spoiler -->`
+blocks and asks the GM whether each was revealed in play. On yes, the
+fence markers are stripped — a plain text edit, so the content is
+permanently public prose from then on with no new state to track. See
+`shared/reconcile.md` for the exact step.
+
+Because a spoiler can be revealed in an entity that reconcile didn't
+happen to check that session (the reveal happened in dialogue that
+never made it into the wrap-up notes, or the entity wasn't obviously
+"touched"), campaign-qa also runs a full-vault open-spoilers audit on
+demand — see `campaign-qa/references/check-procedures.md`.
 
 ## Publish Manifest
 

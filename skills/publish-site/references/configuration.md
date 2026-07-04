@@ -13,7 +13,7 @@ any equivalent in `vault.config.json`.
 |---------|----------|-------------|
 | Publish mode | `publish.mode` | `player` or `full` |
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes"]`) |
-| Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress"]`) |
+| Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`) |
 | Campaign image | `publish.theme.campaign_image` | Vault-relative path to hero image |
 | Theme palette | `publish.theme.palette` | Colour scheme (primary, accent, background, text) |

@@ -28,7 +28,7 @@
     if (e.key === 'Escape' && overlay.classList.contains('open')) close();
   });
 
-  document.querySelectorAll('.content img').forEach(function(el) {
+  document.querySelectorAll('.content img, .hero-banner-img, .hero-cinematic-img').forEach(function(el) {
     el.style.cursor = 'pointer';
     el.addEventListener('click', function() {
       open(el.src, el.alt);
