@@ -18,11 +18,22 @@ Reach for session-wrapup when you need to:
 
 **Obsidian:** Recommended. session-wrapup creates and updates vault files directly during wrap-up. Works with Obsidian MCP tools or plain markdown folders. Use campaign-organizer afterward for additional filing or normalization when needed.
 
+## GM-Assistant (gmassistant.app) Exports
+
+session-wrapup natively supports [gmassistant.app](https://gmassistant.app) session exports as play notes. Detection is automatic — if your notes contain a `## Memorable Moments` heading, they're treated as a GM-Assistant export and wrap-up switches to a passthrough path:
+
+- The export's `## Summary` is adopted as the narrative recap verbatim — no rewriting, no condensing, no tone changes. Wiki-links are added to entity references, nothing else is touched.
+- The structured `## NPCs`, `## Locations`, and `## Items` sections drive entity creation and updates directly, instead of extracting entities from raw notes. Each entry is compared against your existing vault to decide new vs. update; if an export description conflicts with existing vault content, the entity is flagged CONFLICT for your review.
+- The `## Scenes` breakdown serves as the session's scene-by-scene record, so quick bullets aren't regenerated.
+
+Everything else works as normal: new entities are created as DRAFT, templates are respected, and the wrap-up file remains the single source of truth that session-prep reads later.
+
 ## Example Prompts
 
 ### Full Wrap-Up
 
 - "Session's over — here are my notes"
+- "Here's my GM-Assistant export from tonight's session"
 - "Process these play notes into a recap"
 - "We just finished session 5, wrap it up"
 - "Here's what happened today — [paste raw notes]"
