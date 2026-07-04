@@ -462,8 +462,9 @@ instead of inventing a new top-level heading — the publish
 tool's section filter is heading-level-aware, so anything nested
 under an excluded `## GM Notes` stays excluded regardless of its
 own subsection name. For a single spoiler-free aside embedded in
-otherwise-public prose, use an inline `<!-- gm-only -->` fence
-instead of a whole subsection. For narrative content that's only
+otherwise-public prose, use a standalone `<!-- gm-only -->` block
+(on its own lines) instead of a whole subsection. For narrative
+content that's only
 hidden until it's revealed in play (not permanently secret), use
 `<!-- spoiler -->` instead of `<!-- gm-only -->` — see
 `shared/reconcile.md` for how spoilers get revealed.

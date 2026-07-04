@@ -488,8 +488,9 @@ source_document: ""
 **CATS Pitch and Session 0 Agenda are meant to be shared with
 players** — don't hide the whole section. If a specific line reveals
 a twist players haven't discovered yet (e.g. the true nature of a
-central horror), wrap only that sentence in an inline
-`<!-- gm-only -->` or `<!-- spoiler -->` fence, not the section.
+central horror), wrap only that sentence in a standalone
+`<!-- gm-only -->` or `<!-- spoiler -->` block on its own lines, not
+the section.
 
 ## Worldbuilding Mode
 
