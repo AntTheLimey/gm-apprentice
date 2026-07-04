@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, filterFields, resolveImageEmbeds, resolveWikiLinks, relativeHref, escapeHtml } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, filterFields, resolveImageEmbeds, resolveWikiLinks, relativeHref, escapeHtml } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -205,12 +205,17 @@ function build(options = {}) {
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
 
-  // Compute each page's "published view" — markdown with gm-only blocks and excluded
-  // sections removed — once, so derived widgets (backlinks, recency, the relationship
-  // graph) never surface names that only appear in unpublished content (B6 spoiler leak).
+  // Compute each page's "published view" — markdown with gm-only/spoiler blocks and
+  // excluded sections removed — once, so derived widgets (backlinks, recency, the
+  // relationship graph) never surface names that only appear in unpublished content
+  // (B6 spoiler leak). Spoiler blocks are unrevealed narrative content, not permanent
+  // secrets, but they're just as unpublished until reconcile's reveal step strips the
+  // fence — until then they must never surface in a derived widget either.
   for (const page of pages) {
-    const stripped = stripGmOnly(page.markdown || '');
-    const text = typeof stripped === 'string' ? stripped : stripped.text;
+    const gmStripped = stripGmOnly(page.markdown || '');
+    const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
+    const spoilerStripped = stripSpoiler(afterGm);
+    const text = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
     page.publishedMarkdown = filterSections(text, excludeSections);
   }
 
@@ -350,6 +355,8 @@ function build(options = {}) {
           let filtered = stripDataview(page.markdown.replace(/\r/g, ''));
           const gmResult = stripGmOnly(filtered);
           filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
+          const spoilerResult = stripSpoiler(filtered);
+          filtered = typeof spoilerResult === 'string' ? spoilerResult : spoilerResult.text;
           filtered = filterSections(filtered, excludeSections);
           filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages);
