@@ -6,7 +6,7 @@ const PUBLISH_DEFAULTS = {
   mode: 'player',
   exclude_drafts: false,
   exclude_sections: ['GM Notes'],
-  exclude_fields: ['secrets', 'current_plan', 'plan_progress'],
+  exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes'],
   exclude_dirs: ['_meta', '_Templates'],
   theme: {
     genre: null,
@@ -79,7 +79,11 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       jsonConfigFallback.excludeSections,
       PUBLISH_DEFAULTS.exclude_sections,
     ),
-    exclude_fields: publish.exclude_fields || [...PUBLISH_DEFAULTS.exclude_fields],
+    exclude_fields: unionExcludeList(
+      publish.exclude_fields,
+      jsonConfigFallback.excludeFields,
+      PUBLISH_DEFAULTS.exclude_fields,
+    ),
     exclude_dirs: unionExcludeList(
       publish.exclude_dirs,
       jsonConfigFallback.excludeDirs,

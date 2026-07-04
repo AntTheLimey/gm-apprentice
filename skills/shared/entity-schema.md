@@ -661,7 +661,7 @@ skills.
 | `site_dir` | string | Absolute path to the site repo directory. Read by publish-site skill instead of asking each session. Optional — omit if vault doesn't use the publish tool. |
 | `mode` | string | `"player"` or `"full"` — controls GM-only content visibility |
 | `exclude_sections` | array | H2 heading names to strip from published output (default: `["GM Notes"]`) |
-| `exclude_fields` | array | Frontmatter field names to strip (default: `["secrets", "current_plan", "plan_progress"]`) |
+| `exclude_fields` | array | Frontmatter field names to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
 | `exclude_dirs` | array | Vault folders to exclude from publishing (default: `["_meta", "_Templates"]`) |
 | `theme` | object | Theme configuration: `genre`, `palette`, `fonts`, `campaign_image` |
 | `four_oh_four` | object | Custom 404 page: `style`, `message` |

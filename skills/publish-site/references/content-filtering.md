@@ -13,7 +13,7 @@ All campaign content falls into three categories:
 - H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - Frontmatter fields in `exclude_fields` (default:
-  `["secrets", "current_plan", "plan_progress"]`)
+  `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`)
 
 ### Always included
 
