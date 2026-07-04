@@ -68,8 +68,9 @@ Present as a short inventory, not a wall of text.
 
 ### 2.5. World fact review
 
-If the Wrap-Up file contains a `## World Fact Findings` section
-(staged by session-wrapup), review each finding with the GM.
+If the Wrap-Up file's `## GM Notes` section contains a
+`### World Fact Findings` subsection (staged by session-wrapup),
+review each finding with the GM.
 
 For each finding, present the three-state prompt:
 
