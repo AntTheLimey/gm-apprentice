@@ -406,7 +406,9 @@ If yes:
    - Key Themes section: from tone and genre conversation
    - Key Factions section: from driving forces in the brief
    - Current Arc section: "Not yet begun."
-   - GM Notes section: empty
+   - GM Notes section: empty (a bare `## GM Notes` heading — the
+     canonical single heading for whole-section GM-only content,
+     see `shared/entity-schema.md`)
 
 2. **Hand off** to campaign-organizer with the adventure
    brief as context. campaign-organizer builds the vault
@@ -451,25 +453,43 @@ source_document: ""
 
 ### Required Sections
 
-| Section | Content |
-|---------|---------|
-| Premise | One paragraph elevator pitch |
-| Tone & Genre | Sensory and emotional descriptors |
-| Adventure Shape | Structure type and rationale |
-| Core Tension | Central conflict or mystery |
-| Driving Forces | Per-faction: goal, victory state, plan, timeline, resources |
-| Key NPCs | Per-NPC: role, motivation, connection, first appearance |
-| Locations | Per-location: atmosphere, significance, connections |
-| Entry Points | ≥3 hooks (Three Clue Rule at adventure scale) |
-| Escalation | How pressure increases |
-| If They Do Nothing | Antagonist plan runs to completion |
-| Open Questions | Things the GM still needs to decide |
-| CATS Pitch | Concept/Aim/Tone/Subject for Session 0 |
-| Session 0 Agenda | Checklist items for player buy-in |
-| Vault Notes | Existing entities, updates implied (vault only) |
+| Section | Content | Visibility |
+|---------|---------|------------|
+| Premise | One paragraph elevator pitch | Public |
+| Tone & Genre | Sensory and emotional descriptors | Public |
+| Adventure Shape | Structure type and rationale | Public |
+| Core Tension | Central conflict or mystery | Public |
+| Key NPCs | Per-NPC: role, motivation, connection, first appearance | Public |
+| Locations | Per-location: atmosphere, significance, connections | Public |
+| Entry Points | ≥3 hooks (Three Clue Rule at adventure scale) | Public |
+| Escalation | How pressure increases | Public |
+| CATS Pitch | Concept/Aim/Tone/Subject for Session 0 | Public — see note below |
+| Session 0 Agenda | Checklist items for player buy-in | Public — see note below |
+| Driving Forces | Per-faction: goal, victory state, plan, timeline, resources | GM Notes |
+| If They Do Nothing | Antagonist plan runs to completion | GM Notes |
+| Vault Notes | Existing entities, updates implied (vault only) | GM Notes |
+| Open Questions | Things the GM still needs to decide | Spoiler |
 
 "If They Do Nothing" is required. Open Questions are preserved
 — never invent answers for things the GM was undecided on.
+
+**Visibility column meaning:**
+- **Public** — plain section, no fence, publishes as written.
+- **GM Notes** — write as a `###` subsection under one `## GM Notes`
+  heading in the brief, not its own top-level section (see
+  `shared/entity-schema.md`'s PC Body Structure).
+- **Spoiler** — Open Questions get resolved into canon as play
+  reaches them (`reconcile`'s spoiler-reveal step, see
+  `shared/reconcile.md`); wrap the whole section in
+  `<!-- spoiler -->` / `<!-- /spoiler -->` rather than `## GM Notes`,
+  since it's meant to eventually publish once resolved, not stay
+  permanently hidden.
+
+**CATS Pitch and Session 0 Agenda are meant to be shared with
+players** — don't hide the whole section. If a specific line reveals
+a twist players haven't discovered yet (e.g. the true nature of a
+central horror), wrap only that sentence in an inline
+`<!-- gm-only -->` or `<!-- spoiler -->` fence, not the section.
 
 ## Worldbuilding Mode
 
