@@ -56,7 +56,7 @@ appears on its own entity page.
 | wrap-up | Wrap-Up file exists |
 | reviewed | GM has reviewed and confirmed the Wrap-Up |
 
-**`world_evolved`:** Set by reconcile step 5.5 after the
+**`world_evolved`:** Set by reconcile step 6.5 after the
 world-evolution procedure completes. Value is the session
 reference (e.g., `"Session_07"`). Null until world-evolution
 runs. Prevents reconcile from re-offering world-evolution
