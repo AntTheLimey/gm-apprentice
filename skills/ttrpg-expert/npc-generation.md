@@ -175,7 +175,9 @@ Relationships:
 - [Entity]: [Type + description]
 
 Stat Block: [System-specific]
-GM Notes: [Running context]
+
+## GM Notes
+[Running context]
 ```
 
 ## Generation from Constraints

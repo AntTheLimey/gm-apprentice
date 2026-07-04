@@ -164,7 +164,9 @@ Behaviour:
 Lair: [If relevant]
 Hooks: [How PCs encounter; foreshadowing clues]
 Stat Block: [System-specific]
-GM Notes: [Running tips, atmosphere]
+
+## GM Notes
+[Running tips, atmosphere]
 ```
 
 ## Document Template
@@ -174,9 +176,11 @@ GM Notes: [Running tips, atmosphere]
 Type: [Letter / Diary / Newspaper / Map / Record / Tome]
 Author:  Date:  Physical Description:
 Content: [In-character text per type format]
-What It Reveals: [GM-only: clues contained]
 Discovery Method: [How PCs find it]
 System Notes: [Checks to read/translate, SAN costs]
+
+## GM Notes
+What It Reveals: [clues contained]
 ```
 
 For detailed handout guidance: `handouts-and-props.md`.
@@ -189,7 +193,6 @@ Limit to 3-5 handouts per session. Every handout must contain
 ## [Scenario Title]
 System:  Premise: [2-3 sentences]
 Hook(s): [≥3 hooks drawing PCs in]
-The Truth: [GM-only: what's actually happening]
 
 Key NPCs:
 - [NPC]: [Role, goal, connection to truth]
@@ -202,6 +205,9 @@ Timeline: [What happens without PC intervention]
 Climax: [Confrontation/revelation scenario builds toward]
 Resolution: [Possible endings and consequences]
 Sequel Hooks: [Future adventures enabled]
+
+## GM Notes
+The Truth: [what's actually happening]
 ```
 
 Design: state truth first (GM must know everything); ≥3 hooks;
