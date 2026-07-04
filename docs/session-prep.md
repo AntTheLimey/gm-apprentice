@@ -16,7 +16,7 @@ Reach for session-prep when you need to:
 
 ## What You Need
 
-**Obsidian:** Recommended. session-prep works with Obsidian MCP tools or plain markdown folders. See `shared/filesystem-mode.md` for details.
+**Obsidian:** Recommended. session-prep works on plain markdown folders; the Obsidian CLI is used for search when available. See `shared/filesystem-mode.md` for details.
 
 ## Example Prompts
 

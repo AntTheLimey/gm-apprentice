@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.4] — 2026-07-04
+
+### Changed
+
+- **Vault access no longer uses the Obsidian MCP server stack.**
+  `shared/filesystem-mode.md` is rewritten as the Vault Access
+  Reference: filesystem tools are the default and always work; the
+  official Obsidian CLI (Obsidian 1.12.7+) is an optional enhancement
+  for ranked search and graph queries (backlinks, orphans, unresolved
+  links). Writes always use Write/Edit tools in both modes. Every CLI
+  call must pin its target with `vault="<name>"` — the CLI otherwise
+  defaults to the most recently focused vault, which may be unrelated.
+- Environment detection across campaign-organizer, campaign-qa, and
+  the shared session principles now probes for the `obsidian` binary
+  instead of MCP tools.
+- README setup instructions replace the MCP server / Local REST API
+  configuration with a short "Enabling the Obsidian CLI" section and
+  recommend kepano/obsidian-skills as the canonical CLI reference.
+
+### Removed
+
+- All references to the archived Obsidian MCP server, MCP Tools
+  plugin, and Local REST API plugin across skills, docs, README, and
+  ROADMAP. Neither plugin is required or recommended any longer.
+
 ## [1.8.3] — 2026-07-04
 
 ### Added

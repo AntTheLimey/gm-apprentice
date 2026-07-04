@@ -53,9 +53,10 @@ Prep builds new potential on established reality.
 Reads and writes to the campaign vault (Obsidian or plain
 folder). All persistent state lives in the vault.
 
-**First invocation:** Check for Obsidian MCP tools per
+**First invocation:** Check for the Obsidian CLI per
 `shared/filesystem-mode.md`. Announce mode, confirm
-campaign folder path.
+campaign folder path (and resolve the vault name there
+if using the CLI).
 
 **Key vault locations:**
 - `_meta/index.md` — Master registry. Read first.

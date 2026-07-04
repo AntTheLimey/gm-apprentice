@@ -19,9 +19,9 @@ Reach for campaign-qa when you need to:
 
 ## What You Need
 
-**Obsidian:** Recommended. campaign-qa works with Obsidian MCP tools or plain markdown folders. Without Obsidian, it uses Glob/Grep/Read tools for the same audits — same procedures, different tools. See `shared/filesystem-mode.md` for details.
+**Obsidian:** Recommended. campaign-qa works on plain markdown folders using Glob/Grep/Read tools for its audits — same procedures, different tools. See `shared/filesystem-mode.md` for details.
 
-**Obsidian plugins (optional):** Smart Connections, Templater, Local REST API, and MCP Tools provide faster vault search. See the [README](../README.md) for setup instructions.
+**Obsidian plugins (optional):** Smart Connections adds in-app semantic search; Templater automates note creation. The Obsidian CLI gives the skills ranked search and graph queries. See the [README](../README.md) for setup instructions.
 
 ## Example Prompts
 

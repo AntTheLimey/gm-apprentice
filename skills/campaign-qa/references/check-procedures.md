@@ -3,7 +3,7 @@
 **Tool note:** These procedures use generic operation names —
 "enumerate files," "search for [pattern]," "read [file]." See
 `shared/filesystem-mode.md` for which specific tool to use in
-your environment (Obsidian MCP tools or filesystem Glob/Grep/Read).
+your environment (Obsidian CLI or filesystem Glob/Grep/Read).
 
 Detailed step-by-step procedures for each QA mode. The SKILL.md
 describes what each mode checks; this file describes how to

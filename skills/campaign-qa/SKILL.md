@@ -53,8 +53,9 @@ state lives in the vault — never in memory or skill-internal
 storage.
 
 **Environment detection:** On first invocation, check for
-Obsidian MCP tools (`search_vault`, `list_vault_files`,
-`get_vault_file`). See `shared/filesystem-mode.md` for the
+the Obsidian CLI (ranked search, `backlinks`/`orphans`/
+`unresolved` graph queries) or fall back to filesystem
+Glob/Grep/Read. See `shared/filesystem-mode.md` for the
 full tool mapping and environment detection procedure.
 
 **Version check:** After environment detection, read

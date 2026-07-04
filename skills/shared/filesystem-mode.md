@@ -1,29 +1,74 @@
-# Filesystem Mode Reference
+# Vault Access Reference
 
-Read this file when operating in filesystem mode (no Obsidian
-MCP tools detected).
+Read this file to determine how to access the campaign vault.
+Filesystem tools are the default and always work; the official
+Obsidian CLI is an optional enhancement for search and graph
+queries.
 
 ## Environment Detection
 
-On first invocation, check for Obsidian MCP tools
-(`search_vault`, `list_vault_files`, `get_vault_file`).
+On first invocation, run `command -v obsidian`.
 
-- **Tools present** → Obsidian mode. Announce: "Connected to
-  Obsidian vault. Using MCP tools."
-- **Tools absent** → Filesystem mode. Announce: "Working in
+- **Binary present** → Obsidian CLI tier available (requires
+  the Obsidian app; a command auto-launches it if closed).
+  Announce: "Obsidian CLI detected — using it for vault
+  search and graph queries."
+- **Binary absent** → Filesystem mode. Announce: "Working in
   filesystem mode. Files will be Obsidian-compatible."
 - **User override** → If user says "use filesystem mode",
-  respect it even if MCP tools exist. Announce: "Obsidian MCP
+  respect it even if the CLI exists. Announce: "Obsidian CLI
   available but using filesystem mode as requested."
+
+The CLI ships with Obsidian 1.12.7+ and is enabled via
+Settings → General → "Command line interface". Full command
+list: `obsidian help`. Docs: https://obsidian.md/help/cli
+
+Detection notes:
+
+- Probe once per session; reuse the result across skills.
+- Binary present ≠ CLI working. If a CLI call errors or
+  times out (CLI setting disabled in Obsidian, vault not
+  registered, app cannot launch), say so and fall back to
+  filesystem mode for the rest of the session.
+- A user override binds the whole session — never select
+  CLI commands later. CLI commands launch the Obsidian app
+  if closed; in filesystem mode, never invoke the CLI.
 
 ## Tool Mapping
 
-| Operation | Obsidian (MCP) | Filesystem |
-|-----------|----------------|------------|
-| Search for entities | `search_vault`, `search_vault_smart` | Grep/Glob |
-| Read files | `get_vault_file` | Read tool |
-| List files | `list_vault_files` | Glob tool |
-| Write/edit files | MCP tools or Edit | Write/Edit tools |
+Reads, listing, writes, and frontmatter edits always use the
+native Read/Glob/Write/Edit tools in both modes — they are
+safer and permission-tracked. Exact-term search is Grep in
+both modes: benchmarked at equal result quality and ~20%
+fewer tokens than CLI search. The CLI earns its keep on:
+
+| Operation | Obsidian CLI | Filesystem fallback |
+|-----------|--------------|---------------------|
+| Ranked/prose search | `search query=".." limit=N` (`search:context` for snippets) | Grep is literal — try synonyms |
+| Backlinks to a note | `backlinks file=".."` | Grep for `[[Name]]` variants |
+| Vault-wide graph health | `orphans`, `unresolved`, `deadends` (benchmarked 2.4× faster) | Build a link map with Grep |
+| Base views | `base:query file=".." view=".." format=json` | Read the `.base` YAML only |
+
+`backlinks` with the `total` flag counts link instances, not
+distinct linking notes — parse the list when you need a note
+count.
+
+## Vault Targeting — Mandatory
+
+CLI commands default to the *most recently focused* vault,
+which may be a completely unrelated vault. Every invocation
+must pin the vault explicitly, as the first parameter:
+
+```bash
+obsidian vault="My Campaign" search query="cult" limit=10
+```
+
+The campaign folder path is not the vault name. Resolve the
+name once — run `obsidian vaults` and match it to the
+confirmed folder path — then reuse it for the session. Quote
+values containing spaces. `file=` resolves like a wikilink
+(name only, underscores as registered); `path=` is exact
+from the vault root.
 
 ## File Format
 
@@ -40,10 +85,20 @@ migration.
 
 ## What Is Lost in Filesystem Mode
 
-- **Juggl graph visualization** — metadata is written but
-  not visualizable until opened in Obsidian.
-- **Smart Connections semantic search** — Weave mode's link
-  discovery is limited to text/name matching.
-- **Templater auto-application** — templates exist as files
-  but don't auto-apply on note creation.
-- **Dataview queries** — query syntax appears as plain text.
+- **Graph queries** — backlinks, orphans, and unresolved
+  links fall back to ripgrep approximations over
+  `[[wiki-links]]`.
+- **Ranked search** — Grep is literal matching; Obsidian's
+  search ranks results across prose.
+- **Juggl graph visualization**, **Templater
+  auto-application**, and **Dataview queries** are
+  Obsidian-UI-only in any mode — metadata is written but
+  only renders inside the app.
+
+## Canonical CLI Reference
+
+If the kepano/obsidian-skills plugin is installed, its
+`obsidian-cli` skill offers fuller command coverage than the
+essentials above — which are sufficient for vault work.
+Install commands live in the README under "Enabling the
+Obsidian CLI".

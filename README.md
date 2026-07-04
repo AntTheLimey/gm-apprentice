@@ -142,60 +142,67 @@ ttrpg-expert, the-midwife, and publish-site skills work standalone.
 
 ### Dependency Tiers
 
-| Skill | No Obsidian | Obsidian (no MCP) | Full Setup (Obsidian + MCP) |
-|-------|-------------|-------------------|----------------------------|
-| ttrpg-expert | Fully functional | Enhanced continuity checks | Best experience |
-| campaign-qa | Functional (filesystem mode) | Partial (file reads only) | Full QA auditing |
-| session-prep | Functional (filesystem mode) | Read-only analysis | Full prep workflow |
-| session-play | Functional (filesystem mode) | Read-only lookups | Full play support |
-| session-wrapup | Functional (filesystem mode) | Read-only analysis | Full wrap-up workflow |
-| campaign-organizer | Functional (filesystem mode) | Manual vault management | Full automation |
-| vault-ingest | Functional (filesystem mode) | Read-only analysis | Full ingestion workflow |
-| the-midwife | Fully functional | Enhanced (reads existing vault) | Best experience |
-| publish-site | Fully functional | Fully functional | Fully functional (reads vault files directly) |
+All skills are fully functional on a plain folder of markdown
+files. Opening that folder in Obsidian adds the app's own
+features (graph view, community plugins); enabling the
+Obsidian CLI additionally gives skills ranked search and
+native graph queries.
 
-### Required Obsidian Community Plugins
+| Skill | No Obsidian | Obsidian | Obsidian + CLI |
+|-------|-------------|----------|----------------|
+| campaign-qa | Full audits (grep-based graph checks) | Adds in-app graph view | Native orphan/backlink/unresolved queries |
+| session-prep | Full prep workflow | Adds vault UI for review | Ranked search for canon lookups |
+| session-play | Full play support | Adds vault UI at the table | Faster ranked lookups |
+| session-wrapup | Full wrap-up workflow | Adds vault UI for review | Ranked search for entity matching |
+| campaign-organizer | Full structuring and linking | Adds graph visualization | Native graph and property queries |
+| vault-ingest | Full ingestion workflow | Adds vault UI for review | Ranked search during synthesis |
+| the-midwife | Fully functional | Adds vault UI for canon browsing | Ranked search over existing canon |
+
+ttrpg-expert and publish-site are fully functional in every
+tier — ttrpg-expert has no vault dependency, and publish-site
+reads vault files directly from disk.
+
+### Recommended Obsidian Community Plugins
 
 Install these from Settings > Community Plugins > Browse:
 
-1. **Smart Connections** -- Semantic search of vault content.
-   Powers context-aware entity and relationship discovery.
+1. **Smart Connections** -- Semantic search inside the
+   Obsidian app for browsing your vault. Skills do not invoke
+   it; skill-side search comes from the Obsidian CLI below.
 
 2. **Templater** -- Template engine for entity and session file
    creation from structured templates.
 
-3. **Local REST API** -- Exposes an HTTP API for reading and
-   writing vault files programmatically.
+### Enabling the Obsidian CLI (optional)
 
-4. **MCP Tools** -- Exposes vault operations as MCP tools for
-   Claude. Provides search, file listing, and file retrieval
-   capabilities.
+Obsidian 1.12.7+ ships a command-line interface that gives
+skills ranked vault search and native graph queries
+(backlinks, orphans, unresolved links). To enable it:
 
-### Configuring the MCP Server
+1. Update Obsidian to 1.12.7 or later.
+2. Open Settings > General and enable
+   **Command line interface**.
+3. Verify from a terminal: `obsidian vaults` should list
+   your vaults.
 
-After installing MCP Tools:
+Skills detect the CLI automatically and fall back to plain
+filesystem tools when it's absent. Commands need the Obsidian
+app -- running one launches it if closed.
 
-1. Open Obsidian Settings > MCP Tools.
-2. Enable the MCP Server.
-3. Note the port number and any authentication settings.
-4. Add the MCP server to your Claude configuration so Claude
-   can access your vault through the MCP tools.
+As a companion, the [obsidian-skills](https://github.com/kepano/obsidian-skills)
+plugin (MIT, by Obsidian's CEO) is the authoritative CLI and
+syntax reference:
 
-### Connecting Claude to Obsidian
+```bash
+claude plugin marketplace add kepano/obsidian-skills
+claude plugin install obsidian@obsidian-skills
+```
 
-Add the Obsidian MCP server to your Claude MCP configuration
-(`.mcp.json` in your project or Claude Desktop settings) so that
-Claude can use tools like `search_vault`, `search_vault_simple`,
-`search_vault_smart`, `list_vault_files`, and `get_vault_file`.
-
-### Verify the Connection
-
-Ask Claude to search your vault:
-
-> "Search my vault for any NPCs"
-
-If the connection is working, Claude will use the MCP tools to
-query your Obsidian vault and return results.
+**Migrating from the old MCP setup:** earlier versions
+recommended the MCP Tools and Local REST API plugins with an
+`obsidian` server entry in `.mcp.json`. That stack is
+retired: uninstall both plugins from Settings > Community
+Plugins and delete the `obsidian` entry from any `.mcp.json`.
 
 ## Using Without Obsidian
 
@@ -229,9 +236,9 @@ later for the full experience.
 **campaign-qa**, **session-prep**, **session-play**,
 **session-wrapup**, and **vault-ingest** also work in
 filesystem mode — same audit procedures and lifecycle
-workflows, using Glob/Grep/Read instead of MCP tools.
-Obsidian adds faster search and graph visualization but
-is not required.
+workflows, reading and searching the vault folder directly.
+The Obsidian CLI adds ranked search and native graph
+queries but is not required.
 
 ## License
 

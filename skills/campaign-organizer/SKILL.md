@@ -42,20 +42,10 @@ live at `skills/shared/` (sibling directory to this skill folder).
 
 ## Environment Detection
 
-On first invocation, check which tools are available:
-
-**Obsidian Mode:** If MCP tools are available (`search_vault`,
-`list_vault_files`, `get_vault_file`), announce:
-
-> "I have access to your Obsidian vault via MCP tools.
-> Running in full mode."
-
-**Filesystem Mode:** If no MCP tools are detected, announce:
-
-> "I don't see Obsidian MCP tools, so I'll work directly
-> with the filesystem. Your campaign files will be
-> Obsidian-compatible — you can open this folder in Obsidian
-> anytime for the full experience."
+On first invocation, detect the environment per
+`shared/filesystem-mode.md` — it owns the CLI probe, the
+announce lines, the user override, the tool mapping, and the
+mandatory `vault="<name>"` pinning rule for any CLI call.
 
 Then **always** ask the user to confirm the working path:
 
@@ -67,9 +57,6 @@ the user to provide a path before writing any files. This
 prevents accidentally creating campaign structure in an
 existing project directory. Once confirmed, use that path
 for the rest of the session without re-asking.
-
-For the full tool mapping and what is lost in filesystem mode,
-read `shared/filesystem-mode.md`.
 
 ## The Vault Schema Layer: `_meta/`
 

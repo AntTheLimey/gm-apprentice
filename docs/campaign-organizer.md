@@ -22,7 +22,7 @@ Reach for campaign-organizer when you need to:
 
 **Obsidian:** Recommended but not required. With Obsidian and its plugins, you get the full experience — clickable wiki-links, graph visualization, semantic search, and template auto-application. Without Obsidian, the skill works directly on the filesystem, producing Obsidian-compatible files you can open in Obsidian later.
 
-**For the full Obsidian experience:** Install Smart Connections, Templater, Local REST API, and MCP Tools. See the [README](../README.md) for setup instructions.
+**For the full Obsidian experience:** Install Smart Connections and Templater, and enable the Obsidian CLI. See the [README](../README.md) for setup instructions.
 
 ## Example Prompts
 
