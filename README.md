@@ -140,27 +140,16 @@ session-prep, session-play, session-wrapup, vault-ingest) work
 with an Obsidian vault to manage campaign content. The
 ttrpg-expert, the-midwife, and publish-site skills work standalone.
 
-### Dependency Tiers
+### Dependencies
 
-All skills are fully functional on a plain folder of markdown
-files. Opening that folder in Obsidian adds the app's own
-features (graph view, community plugins); enabling the
-Obsidian CLI additionally gives skills ranked search and
-native graph queries.
-
-| Skill | No Obsidian | Obsidian | Obsidian + CLI |
-|-------|-------------|----------|----------------|
-| campaign-qa | Full audits (grep-based graph checks) | Adds in-app graph view | Native orphan/backlink/unresolved queries |
-| session-prep | Full prep workflow | Adds vault UI for review | Ranked search for canon lookups |
-| session-play | Full play support | Adds vault UI at the table | Faster ranked lookups |
-| session-wrapup | Full wrap-up workflow | Adds vault UI for review | Ranked search for entity matching |
-| campaign-organizer | Full structuring and linking | Adds graph visualization | Native graph and property queries |
-| vault-ingest | Full ingestion workflow | Adds vault UI for review | Ranked search during synthesis |
-| the-midwife | Fully functional | Adds vault UI for canon browsing | Ranked search over existing canon |
-
-ttrpg-expert and publish-site are fully functional in every
-tier — ttrpg-expert has no vault dependency, and publish-site
-reads vault files directly from disk.
+Every skill is fully functional on a plain folder of markdown
+files — there are no servers, plugins, or app dependencies.
+Two bundled utilities (stdlib-only Python 3, shipped with the
+plugin) give all vault skills ranked search and native graph
+queries; if `python3` is missing they fall back to plain
+search. Opening the folder in Obsidian adds the app's own
+features on top: graph view, community plugins, and a vault
+UI for review at the table.
 
 ### Recommended Obsidian Community Plugins
 
@@ -168,35 +157,29 @@ Install these from Settings > Community Plugins > Browse:
 
 1. **Smart Connections** -- Semantic search inside the
    Obsidian app for browsing your vault. Skills do not invoke
-   it; skill-side search comes from the Obsidian CLI below.
+   it; skill-side search comes from the bundled utilities
+   below.
 
 2. **Templater** -- Template engine for entity and session file
    creation from structured templates.
 
-### Enabling the Obsidian CLI (optional)
+### Bundled Vault Utilities
 
-Obsidian 1.12.7+ ships a command-line interface that gives
-skills ranked vault search and native graph queries
-(backlinks, orphans, unresolved links). To enable it:
+Two scripts ship with the plugin under
+`skills/shared/scripts/` (Python 3 standard library only, no
+install step):
 
-1. Update Obsidian to 1.12.7 or later.
-2. Open Settings > General and enable
-   **Command line interface**.
-3. Verify from a terminal: `obsidian vaults` should list
-   your vaults.
+- **`graph_check.py`** -- orphans, unresolved links, dead
+  ends, and backlinks in one deterministic pass over the
+  vault. Skills use it for graph-health audits and
+  relationship checks.
+- **`vault_search.py`** -- index-free BM25 ranked search
+  with context snippets, for prose queries where relevance
+  ranking beats literal matching.
 
-Skills detect the CLI automatically and fall back to plain
-filesystem tools when it's absent. Commands need the Obsidian
-app -- running one launches it if closed.
-
-As a companion, the [obsidian-skills](https://github.com/kepano/obsidian-skills)
-plugin (MIT, by Obsidian's CEO) is the authoritative CLI and
-syntax reference:
-
-```bash
-claude plugin marketplace add kepano/obsidian-skills
-claude plugin install obsidian@obsidian-skills
-```
+Skills invoke these automatically when `python3` is on your
+PATH (macOS and most Linux distributions ship it) and fall
+back to plain search when it isn't.
 
 **Migrating from the old MCP setup:** earlier versions
 recommended the MCP Tools and Local REST API plugins with an
@@ -207,7 +190,8 @@ Plugins and delete the `obsidian` entry from any `.mcp.json`.
 ## Using Without Obsidian
 
 Every skill works without Obsidian — three are fully
-functional standalone, the rest fall back to filesystem mode.
+functional standalone, the rest work directly on the vault
+folder with the bundled utilities.
 
 **ttrpg-expert** is fully functional and provides:
 
@@ -227,18 +211,18 @@ canon for creative opportunities.
 **publish-site** reads vault files directly from disk to build
 the static site; Obsidian is never part of the pipeline.
 
-**campaign-organizer** works in filesystem mode — it creates
+**campaign-organizer** works without Obsidian — it creates
 the same structured markdown files, folder hierarchy, YAML
 frontmatter, and wiki-links, just without Obsidian's graph
 visualization and semantic search. Open the folder in Obsidian
 later for the full experience.
 
 **campaign-qa**, **session-prep**, **session-play**,
-**session-wrapup**, and **vault-ingest** also work in
-filesystem mode — same audit procedures and lifecycle
-workflows, reading and searching the vault folder directly.
-The Obsidian CLI adds ranked search and native graph
-queries but is not required.
+**session-wrapup**, and **vault-ingest** also work without
+Obsidian — same audit procedures and lifecycle workflows,
+reading and searching the vault folder directly, with the
+bundled utilities providing ranked search and graph queries
+everywhere.
 
 ## License
 

@@ -114,6 +114,9 @@ jobs:
       - name: PC Current Status consumer regression
         run: python tests/test_current_status_consumers.py
 
+      - name: Vault utility regression
+        run: python tests/test_vault_utilities.py
+
   pr-discipline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

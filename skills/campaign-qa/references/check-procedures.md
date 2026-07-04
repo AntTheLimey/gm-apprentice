@@ -2,8 +2,8 @@
 
 **Tool note:** These procedures use generic operation names —
 "enumerate files," "search for [pattern]," "read [file]." See
-`shared/filesystem-mode.md` for which specific tool to use in
-your environment (Obsidian CLI or filesystem Glob/Grep/Read).
+`shared/filesystem-mode.md` for the tool mapping (Glob/Grep/
+Read plus the bundled graph and search utilities).
 
 Detailed step-by-step procedures for each QA mode. The SKILL.md
 describes what each mode checks; this file describes how to
@@ -338,6 +338,19 @@ For each issue:
 
 The graph health check examines the structural integrity of
 the entity relationship graph in the vault.
+
+**Preferred procedure:** run the bundled graph utility once
+and work from its output instead of hand-building a link map:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
+  <vault-path> all
+```
+
+It reports orphans, unresolved links, and dead ends in one
+pass (see `shared/filesystem-mode.md` for options such as
+`--folder` and `--exclude`). Use the manual steps below only
+if Python is unavailable, and flag that fallback in results.
 
 ### Step 1: Enumerate Entities and Links
 

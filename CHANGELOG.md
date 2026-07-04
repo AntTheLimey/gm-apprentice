@@ -9,22 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.4] — 2026-07-04
 
+### Added
+
+- **Two bundled vault utilities** under `skills/shared/scripts/`
+  (Python 3 standard library only, shipped in every skill zip):
+  `graph_check.py` reports orphans, unresolved links, dead ends,
+  and backlinks in one deterministic pass — handling aliases,
+  `[[Name|alias]]`, anchors, embeds, quoted frontmatter links, and
+  space/underscore/case variants; `vault_search.py` is index-free
+  BM25 ranked search with context snippets for prose queries.
+  Benchmarked on a 705-note vault: identical results to per-query
+  LLM approaches in under a second and a few hundred tokens,
+  versus 50–125 seconds and ~40–56k tokens.
+- Fixture-based regression tests for both utilities
+  (`tests/test_vault_utilities.py`, `tests/fixtures/mini-vault/`),
+  wired into CI.
+
 ### Changed
 
 - **Vault access no longer uses the Obsidian MCP server stack.**
   `shared/filesystem-mode.md` is rewritten as the Vault Access
-  Reference: filesystem tools are the default and always work; the
-  official Obsidian CLI (Obsidian 1.12.7+) is an optional enhancement
-  for ranked search and graph queries (backlinks, orphans, unresolved
-  links). Writes always use Write/Edit tools in both modes. Every CLI
-  call must pin its target with `vault="<name>"` — the CLI otherwise
-  defaults to the most recently focused vault, which may be unrelated.
-- Environment detection across campaign-organizer, campaign-qa, and
-  the shared session principles now probes for the `obsidian` binary
-  instead of MCP tools.
+  Reference: plain filesystem tools plus the bundled utilities —
+  no server, no app dependency, no mode split. Obsidian is a
+  viewer, never a requirement. campaign-organizer, campaign-qa,
+  the shared session principles, and the QA check procedures now
+  point at the shared reference instead of restating detection.
+- campaign-qa's Graph Health procedure prefers one `graph_check.py`
+  pass over hand-building a link map with Grep.
 - README setup instructions replace the MCP server / Local REST API
-  configuration with a short "Enabling the Obsidian CLI" section and
-  recommend kepano/obsidian-skills as the canonical CLI reference.
+  configuration with the bundled-utilities section and a migration
+  note for users carrying the old MCP plugins and `.mcp.json` entry.
 
 ### Removed
 

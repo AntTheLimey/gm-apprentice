@@ -40,14 +40,14 @@ live at `skills/shared/` (sibling directory to this skill folder).
   foreshadowing tracking, ttrpg-expert's continuity-engine.md
   handles the narrative state.
 
-## Environment Detection
+## Vault Access and Working Path
 
-On first invocation, detect the environment per
-`shared/filesystem-mode.md` — it owns the CLI probe, the
-announce lines, the user override, the tool mapping, and the
-mandatory `vault="<name>"` pinning rule for any CLI call.
+Vault access is plain filesystem tools plus the bundled
+search and graph utilities — read `shared/filesystem-mode.md`
+for the tool mapping and utility usage.
 
-Then **always** ask the user to confirm the working path:
+On first invocation, **always** ask the user to confirm the
+working path:
 
 > "Where should I work? Give me the path to your campaign
 > folder, or tell me where to create a new one."
