@@ -15,7 +15,8 @@ and Obsidian is a viewer the user may or may not have open.
 | Write/edit files, frontmatter | Write/Edit tools |
 | Exact-term search (names, dates, markers) | Grep |
 | Ranked/prose search | `vault_search.py` |
-| Backlinks, orphans, unresolved links, dead ends | `graph_check.py` |
+| Backlinks, orphans, unresolved/ambiguous links, dead ends | `graph_check.py` |
+| Entity schema validation, name similarity, index drift, stale drafts | `vault_check.py` |
 
 Grep is the right tool when you know the term (an entity
 name, a date, a marker like `<!-- spoiler -->`). The
@@ -42,22 +43,44 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_search.py" \
 ```
 
 `graph_check.py` commands: `orphans`, `unresolved`,
-`deadends`, `backlinks NAME`, `all`; options `--folder SUB`
-and repeatable `--exclude GLOB`. Output is a `# count: N`
-header then one vault-relative path per line. It handles
-aliases, `[[Name|alias]]`, `[[Name#heading]]`, embeds,
-quoted frontmatter links, and space/underscore/case variants.
+`deadends`, `backlinks NAME`, `ambiguous`, `all`; options
+`--folder SUB` and repeatable `--exclude GLOB`. Output is a
+`# count: N` header then one vault-relative path per line.
+It handles aliases, `[[Name|alias]]`, `[[Name#heading]]`,
+embeds, quoted frontmatter links, and space/underscore/case
+variants.
 
 `vault_search.py` is index-free BM25 — no index to build or
 go stale. `--context` prints the best-matching line per hit.
 Use it for prose queries; plain Grep is cheaper for exact
 terms.
 
-If `python3` is unavailable, say so and fall back to Grep:
-literal search with synonyms for prose queries, and
-`[[Name]]`-variant matching for backlinks. Flag the fallback
-in any graph-health results — Grep approximations can
-miscount.
+`vault_check.py` commands: `frontmatter` (schema validation:
+required fields, enums, legacy fields, unquoted frontmatter
+links), `names` (duplicate and confusable entity names and
+aliases), `index` (`_meta/index.md` drift, both directions),
+`stale-drafts`, `all`. Findings are
+`LEVEL<TAB>path<TAB>message`; fix every ERROR, triage
+WARNINGs with the GM, treat INFO as context.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> frontmatter --folder Characters
+```
+
+**After creating or updating entity files** (session-wrapup,
+vault-ingest, campaign-organizer), run
+`vault_check.py frontmatter --folder <dir>` on what you
+touched and fix ERRORs before moving on — one deterministic
+call replaces re-reading files to self-check.
+
+If `python3` is not on PATH, try `python` (common on
+Windows; install from python.org or `winget install python`
+— the utilities are standard-library only). If neither
+exists, say so and fall back to Grep: literal search with
+synonyms for prose queries, `[[Name]]`-variant matching for
+backlinks, and manual schema checks. Flag the fallback in
+any audit results — Grep approximations can miscount.
 
 ## File Format
 

@@ -9,6 +9,7 @@ Usage:
   graph_check.py VAULT unresolved [--exclude GLOB]...
   graph_check.py VAULT deadends [--folder SUB] [--exclude GLOB]...
   graph_check.py VAULT backlinks NAME [--exclude GLOB]...
+  graph_check.py VAULT ambiguous [--exclude GLOB]...
   graph_check.py VAULT all [--exclude GLOB]...
 
 Output: a `# count: N` header line, then one vault-relative path (or
@@ -122,7 +123,7 @@ def main() -> int:
     ap.add_argument("vault", type=Path)
     ap.add_argument("command",
                     choices=["orphans", "unresolved", "deadends",
-                             "backlinks", "all"])
+                             "backlinks", "ambiguous", "all"])
     ap.add_argument("name", nargs="?",
                     help="target note name (backlinks only)")
     ap.add_argument("--folder", help="restrict results to this subfolder")
@@ -164,6 +165,15 @@ def main() -> int:
         dsts = names.get(target, set())
         return sorted({src for dst in dsts for src in inbound[dst]})
 
+    def ambiguous():
+        # A bare [[link]] whose name matches more than one file resolves
+        # unpredictably in Obsidian — a wrong link waiting to happen.
+        linked = {t for targets in outbound.values() for t in targets}
+        return sorted(
+            f"{name}  -> {', '.join(sorted(paths))}"
+            for name, paths in names.items()
+            if len(paths) > 1 and name in linked)
+
     if args.command == "orphans":
         emit(orphans())
     elif args.command == "unresolved":
@@ -172,10 +182,13 @@ def main() -> int:
         emit(deadends())
     elif args.command == "backlinks":
         emit(backlinks())
+    elif args.command == "ambiguous":
+        emit(ambiguous())
     else:
         emit(orphans(), "orphans")
         emit(unresolved(), "unresolved")
         emit(deadends(), "deadends")
+        emit(ambiguous(), "ambiguous")
     return 0
 
 

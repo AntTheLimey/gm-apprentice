@@ -203,6 +203,21 @@ For each violation:
 The name similarity check identifies entity names that are
 duplicates, near-duplicates, or confusingly similar.
 
+**Preferred procedure:** run the bundled utility and triage
+its output with the GM:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> names
+```
+
+It covers exact duplicates, alias collisions, and fuzzy
+matches (structural documents and document-chain families are
+already filtered out). Your judgment still decides which
+pairs are intentional (married couples, senior/junior) versus
+confusing. Use the manual steps below only if Python is
+unavailable.
+
 ### Step 1: Collect All Names
 
 Build a complete list of entity names and aliases from the
@@ -347,10 +362,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
   <vault-path> all
 ```
 
-It reports orphans, unresolved links, and dead ends in one
-pass (see `shared/filesystem-mode.md` for options such as
-`--folder` and `--exclude`). Use the manual steps below only
-if Python is unavailable, and flag that fallback in results.
+It reports orphans, unresolved links, dead ends, and
+ambiguous bare links in one pass (see
+`shared/filesystem-mode.md` for options such as `--folder`
+and `--exclude`). Use the manual steps below only if Python
+is unavailable, and flag that fallback in results.
 
 ### Step 1: Enumerate Entities and Links
 
@@ -481,6 +497,11 @@ For each issue:
 **Severity:** WARNING
 **Trigger:** Entity has `canon_status: DRAFT` and has been
 DRAFT for 3 or more sessions.
+
+**Preferred procedure:** `vault_check.py stale-drafts`
+implements the steps below deterministically (session-plan
+exemption included); run it and report its findings. Manual
+procedure as fallback:
 
 **Procedure:**
 

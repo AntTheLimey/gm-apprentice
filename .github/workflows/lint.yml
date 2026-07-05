@@ -40,7 +40,8 @@ jobs:
           if git grep -nE '^[[:space:]]*(source_confidence|confidence):' -- \
             skills tests tools/publish/test/fixtures \
             ':!tests/proof-runs' ':!tests/benchmark-results' \
-            ':!tests/benchmark-content-fidelity/results'; then
+            ':!tests/benchmark-content-fidelity/results' \
+            ':!tests/fixtures/mini-vault-schema'; then
             echo "::error::Found legacy canon-status field — use 'canon_status:' instead"
             exit 1
           fi

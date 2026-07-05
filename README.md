@@ -169,17 +169,23 @@ Two scripts ship with the plugin under
 `skills/shared/scripts/` (Python 3 standard library only, no
 install step):
 
-- **`graph_check.py`** -- orphans, unresolved links, dead
-  ends, and backlinks in one deterministic pass over the
-  vault. Skills use it for graph-health audits and
+- **`graph_check.py`** -- orphans, unresolved and ambiguous
+  links, dead ends, and backlinks in one deterministic pass
+  over the vault. Skills use it for graph-health audits and
   relationship checks.
 - **`vault_search.py`** -- index-free BM25 ranked search
   with context snippets, for prose queries where relevance
   ranking beats literal matching.
+- **`vault_check.py`** -- entity schema validation (required
+  fields, enums, legacy fields), duplicate/confusable name
+  detection, `_meta/index.md` drift, and stale-DRAFT sweeps.
+  Skills run it after creating entities and during audits.
 
-Skills invoke these automatically when `python3` is on your
-PATH (macOS and most Linux distributions ship it) and fall
-back to plain search when it isn't.
+Skills invoke these automatically when Python 3 is on your
+PATH and fall back to plain search when it isn't. macOS and
+most Linux distributions ship it; on Windows, install from
+python.org or `winget install python` (the utilities need
+no packages beyond the standard library).
 
 **Migrating from the old MCP setup:** earlier versions
 recommended the MCP Tools and Local REST API plugins with an

@@ -11,19 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Two bundled vault utilities** under `skills/shared/scripts/`
+- **Three bundled vault utilities** under `skills/shared/scripts/`
   (Python 3 standard library only, shipped in every skill zip):
-  `graph_check.py` reports orphans, unresolved links, dead ends,
-  and backlinks in one deterministic pass — handling aliases,
-  `[[Name|alias]]`, anchors, embeds, quoted frontmatter links, and
-  space/underscore/case variants; `vault_search.py` is index-free
-  BM25 ranked search with context snippets for prose queries.
-  Benchmarked on a 705-note vault: identical results to per-query
-  LLM approaches in under a second and a few hundred tokens,
-  versus 50–125 seconds and ~40–56k tokens.
-- Fixture-based regression tests for both utilities
-  (`tests/test_vault_utilities.py`, `tests/fixtures/mini-vault/`),
-  wired into CI.
+  `graph_check.py` reports orphans, unresolved and ambiguous
+  links, dead ends, and backlinks in one deterministic pass —
+  handling aliases, `[[Name|alias]]`, anchors, embeds, quoted
+  frontmatter links, and space/underscore/case variants;
+  `vault_search.py` is index-free BM25 ranked search with context
+  snippets for prose queries; `vault_check.py` covers entity
+  schema validation (required fields, enums, legacy fields,
+  unquoted frontmatter links), duplicate/confusable name and
+  alias detection (document-chain and numbered-structural
+  families filtered), `_meta/index.md` drift in both directions,
+  and stale-DRAFT sweeps. Benchmarked on a 705-note vault:
+  identical results to per-query LLM approaches in under a
+  second, versus 50–125 seconds and ~40–56k tokens.
+- **Validation loops for entity creation** (top roadmap item):
+  session-wrapup, vault-ingest, and campaign-organizer now run
+  `vault_check.py frontmatter` on folders they touch and fix
+  ERRORs before presenting results; campaign-qa's name-similarity
+  and stale-DRAFT procedures and campaign-organizer's Validate
+  mode prefer the utilities over manual passes.
+- Schema rules and the frontmatter parser extracted to
+  `skills/shared/scripts/schema_rules.py` — single source of
+  truth shared by `scripts/validate_schema.py` and the bundled
+  utilities.
+- Fixture-based regression tests for all utilities
+  (`tests/test_vault_utilities.py`, `tests/fixtures/mini-vault/`,
+  `tests/fixtures/mini-vault-schema/`), wired into CI.
 
 ### Changed
 

@@ -89,6 +89,8 @@ Obsidian gives you the best experience — clickable wiki-links, graph visualiza
 
 **To skip Obsidian for now:** Continue to Step 4. Claude will ask you for a folder path and work with the filesystem directly. You can switch to Obsidian anytime by opening that folder as a vault.
 
+**One-time check — Python 3:** the plugin bundles small vault utilities (search ranking, link-graph audits, schema validation) that need Python 3 on your PATH. macOS and most Linux systems already have it; verify with `python3 --version` (or `python --version` on Windows). If it's missing, install from [python.org](https://www.python.org/downloads/) or `winget install python` — no extra packages needed. Everything still works without it, just with slower plain-text search.
+
 ## Step 4: Scaffold Your Campaign
 
 Ask Claude to create your campaign structure:

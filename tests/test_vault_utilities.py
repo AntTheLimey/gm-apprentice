@@ -15,13 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 VAULT = ROOT / "tests" / "fixtures" / "mini-vault"
+SCHEMA_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-schema"
 
 FAILURES = []
 
 
-def run(script, *args):
+def run(script, *args, vault=None):
     result = subprocess.run(
-        [sys.executable, str(SCRIPTS / script), str(VAULT), *args],
+        [sys.executable, str(SCRIPTS / script),
+         str(vault or VAULT), *args],
         capture_output=True, text=True, timeout=60,
     )
     if result.returncode != 0:
@@ -88,6 +90,54 @@ check("search matches underscore-compound mentions",
 lines = run("vault_search.py", "dragon", "--limit", "1")
 check("search --limit truncates results not count",
       [lines[0], len(lines) - 1], ["# matched: 3", 1])
+
+# --- graph_check.py: ambiguous ---
+
+check("ambiguous bare-link targets",
+      run("graph_check.py", "ambiguous", vault=SCHEMA_VAULT),
+      ["# count: 1", "dupe  -> A/Dupe.md, B/Dupe.md"])
+
+# --- vault_check.py ---
+
+lines = run("vault_check.py", "frontmatter", vault=SCHEMA_VAULT)
+check("frontmatter finding count", lines[:2], ["## frontmatter", "# count: 5"])
+findings = "\n".join(lines)
+for expect, label in [
+    ("canon_status: 'PENDING'", "invalid canon_status enum"),
+    ("status: 'undead'", "invalid npc status enum"),
+    ("legacy field 'source_confidence'", "legacy field detection"),
+    ("unquoted wikilink in frontmatter", "unquoted frontmatter link"),
+    ("missing 'type' field", "missing type"),
+]:
+    check(f"frontmatter: {label}",
+          [expect in findings], [True])
+
+check("names: duplicates, fuzzy, alias collisions",
+      run("vault_check.py", "names", vault=SCHEMA_VAULT),
+      ["## names", "# count: 3",
+       "WARNING\tA/Dupe.md <> B/Dupe.md\tname 'Dupe' duplicates "
+       "name 'Dupe'",
+       "WARNING\tNPCs/John_Smith.md <> NPCs/Jon_Smith.md\t"
+       "'John_Smith' ~ 'Jon_Smith' (similarity 0.95)",
+       "WARNING\tNPCs/John_Smith.md <> NPCs/Unquoted.md\t"
+       "alias 'Doc' duplicates alias 'Doc'"])
+
+lines = run("vault_check.py", "index", vault=SCHEMA_VAULT)
+check("index: phantom link detected",
+      ["index links '[[ghost]]' but no such file exists"
+       in "\n".join(lines)], [True])
+check("index: unreferenced files counted",
+      lines[1:2], ["# count: 12"])
+
+check("stale-drafts: stale, missing-createdSession, fresh exempt",
+      run("vault_check.py", "stale-drafts", vault=SCHEMA_VAULT),
+      ["## stale-drafts", "# count: 3",
+       "WARNING\tNPCs/Legacy.md\tstale DRAFT (created session 1, "
+       "now session 5) — promote to AUTHORITATIVE or delete",
+       "WARNING\tNPCs/NoCreated.md\tDRAFT missing createdSession — "
+       "cannot determine staleness; add it or promote",
+       "WARNING\tNoType.md\tDRAFT missing createdSession — "
+       "cannot determine staleness; add it or promote"])
 
 # --- verdict ---
 
