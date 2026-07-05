@@ -50,7 +50,7 @@ On start, before any creative conversation:
 
 **Version check:** Read `gm_apprentice_version` from
 `_meta/vault-config.md` and `current_version` from
-`shared/migrations.md`. If vault version is lower or absent,
+`shared/migrations.md` (frontmatter only — Read with `limit: 10`). If vault version is lower or absent,
 hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`).
 Skip if no `_meta/`.

@@ -12,7 +12,7 @@ first invocation.
 
 **Version check:** On first invocation, read
 `gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md`. If the vault
+`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
 version is lower or absent, announce the mismatch and hand off
 to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
