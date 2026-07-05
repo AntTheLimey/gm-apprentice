@@ -235,6 +235,38 @@ check("both parry mismatches flagged",
 check("broadsword computed 10", "10" in dfd[0][2], True)
 check("punch computed 9", "9" in dfd[1][2], True)
 
+# Active Defenses table: dodge mismatch is INFO (sheets often list the
+# encumbered value), block mismatch is WARNING, non-numeric rows skipped.
+# Hand-computed: Speed 6.0, no CR -> unencumbered Dodge 9; Shield 15 ->
+# Block 3 + 15//2 = 10.
+_ACTIVE = _KARLISH + """
+## Skills
+
+| Name | Difficulty | Points | Effective |
+|------|-----------|--------|-----------|
+| Shield | DX/E | [4] | 15 |
+
+## Active Defenses
+
+| Defense | Score | Notes |
+|---------|-------|-------|
+| Dodge | 8 | current |
+| Block | 11 | with medium shield |
+| Parry (sword) | — | see melee |
+"""
+
+adf = gk.check_defenses(gk.Sheet(_ACTIVE))
+check("active defenses: one dodge INFO + one block WARNING, nothing else",
+      [(f[0], f[1]) for f in adf],
+      [("INFO", "defenses/dodge"), ("WARNING", "defenses/block")])
+check("dodge message shows computed 9", "9" in adf[0][2], True)
+check("block message shows computed 10", "10" in adf[1][2], True)
+
+blk_ok = gk.check_defenses(gk.Sheet(_ACTIVE.replace(
+    "| Block | 11 |", "| Block | 10 |")))
+check("matching block produces no block finding",
+      [f[1] for f in blk_ok], ["defenses/dodge"])
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
