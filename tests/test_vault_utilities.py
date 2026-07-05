@@ -253,6 +253,20 @@ try:
     check("stamp: path traversal outside vault refused",
           ["escapes the vault" in traversal
            and not (tmp / "escape.md").exists()], [True])
+
+    rerun = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                          "--session", "3", "--date", "2026-07-05",
+                          "--retag", "chapter-1=chapter-2", vault=work))
+    check("stamp: dry-run count excludes UNCHANGED files",
+          ["# dry-run would stamp: 0 files" in rerun
+           and "UNCHANGED" in rerun], [True])
+
+    run("stamp_entities.py", "Characters/PCs/Hero.md", "--session",
+        "3", "--date", "2026-07-05", "--retag", "chapter-2=",
+        vault=work, expect_rc=2)
+    check("stamp: empty retag NEW side rejected",
+          ["chapter-2" in (work / "Characters/PCs/Hero.md").read_text()],
+          [True])
 finally:
     shutil.rmtree(tmp)
 

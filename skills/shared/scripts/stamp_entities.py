@@ -107,13 +107,15 @@ def main() -> int:
         return 2
     tag_old = tag_new = None
     if args.retag:
-        if "=" not in args.retag:
-            print("error: --retag needs OLD=NEW", file=sys.stderr)
+        tag_old, sep, tag_new = args.retag.partition("=")
+        if not sep or not tag_old.strip() or not tag_new.strip():
+            print("error: --retag needs OLD=NEW with both sides "
+                  "non-empty", file=sys.stderr)
             return 2
-        tag_old, tag_new = args.retag.split("=", 1)
 
     errors = 0
     stamped = 0
+    would = 0
     vault_root = args.vault.resolve()
     for rel in args.files:
         path = (args.vault / rel).resolve()
@@ -153,12 +155,14 @@ def main() -> int:
         mode = "STAMPED" if (args.write and changed) else \
             ("WOULD-STAMP" if changed else "UNCHANGED")
         print(f"{mode}\t{rel}\t{'; '.join(actions)}")
-        if args.write and changed:
-            with path.open("w", encoding="utf-8", newline="") as f:
-                f.write(new_text)
-            stamped += 1
-    print(f"# {'stamped' if args.write else 'dry-run'}: "
-          f"{stamped if args.write else len(args.files) - errors} files, "
+        if changed:
+            would += 1
+            if args.write:
+                with path.open("w", encoding="utf-8", newline="") as f:
+                    f.write(new_text)
+                stamped += 1
+    print(f"# {'stamped' if args.write else 'dry-run would stamp'}: "
+          f"{stamped if args.write else would} files, "
           f"{errors} errors")
     return 1 if errors else 0
 
