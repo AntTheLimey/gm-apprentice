@@ -267,6 +267,38 @@ blk_ok = gk.check_defenses(gk.Sheet(_ACTIVE.replace(
 check("matching block produces no block finding",
       [f[1] for f in blk_ok], ["defenses/dodge"])
 
+_POINTS = _KARLISH + """
+## Advantages & Perks
+
+| Name | Cost | Notes |
+|------|------|-------|
+| Combat Reflexes | 15 | |
+
+## Skills
+
+| Name | Difficulty | Points | Effective |
+|------|-----------|--------|-----------|
+| Broadsword | DX/A | [8] | 15 |
+| Shield | DX/E | [4] | 15 |
+
+## Points Summary
+
+| Category | Points |
+|----------|--------|
+| Attributes | 120 |
+| Advantages & Perks | 15 |
+| Skills | 14 |
+| **Total** | **149** |
+"""
+
+psheet = gk.Sheet(_POINTS)
+pts = gk.check_points(psheet)
+check("skills category mismatch flagged (12 summed vs 14 declared)",
+      any(f[0] == "WARNING" and "Skills" in f[1] and "12" in f[2]
+          for f in pts), True)
+check("attributes category matches (120), not flagged",
+      any("Attributes" in f[1] and f[0] == "WARNING" for f in pts), False)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)

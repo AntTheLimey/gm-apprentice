@@ -329,3 +329,73 @@ def check_defenses(sheet):
                         f"Block {declared}, computed {computed} from "
                         f"Shield {shield}{' +1 CR' if cr else ''}"))
     return findings
+
+
+_POINT_SOURCES = [
+    ("Attributes", ("Primary Attributes", "Secondary Characteristics")),
+    ("Advantages & Perks", ("Advantages & Perks", "Advantages")),
+    ("Disadvantages & Quirks", ("Disadvantages & Quirks", "Disadvantages")),
+    ("Skills", ("Skills",)),
+    ("Techniques", ("Techniques",)),
+    ("Spells", ("Spells",)),
+]
+
+
+def _sum_costs(sheet, titles):
+    total, found = 0, False
+    for title in titles:
+        rows = sheet.table(title)
+        if len(rows) < 2:
+            continue
+        i_cost = col(rows[0], "cost", "point")
+        if i_cost < 0:
+            continue
+        for row in rows[1:]:
+            if not row or "total" in row[0].lower():
+                continue
+            c = parse_cost(_cell(row, i_cost))
+            if c is not None:
+                total += c
+                found = True
+    return (total, True) if found else (0, False)
+
+
+def check_points(sheet):
+    findings = []
+    computed, missing = {}, []
+    for label, titles in _POINT_SOURCES:
+        total, found = _sum_costs(sheet, titles)
+        if found:
+            computed[label] = total
+        else:
+            missing.append(label)
+    summary_rows = sheet.table("Points Summary")
+    declared, declared_total = {}, None
+    for row in summary_rows[1:]:
+        if len(row) < 2 or not row[0]:
+            continue
+        label = re.sub(r"\*+", "", row[0]).strip()
+        val = parse_cost(_cell(row, 1))
+        if val is None:
+            continue
+        if label.lower() == "total":
+            declared_total = val
+        else:
+            declared[label] = val
+    for label, val in declared.items():
+        if label in computed and computed[label] != val:
+            findings.append(("WARNING", f"points/{label}",
+                             f"summary says {val}, section costs sum to "
+                             f"{computed[label]}"))
+    grand = sum(computed.values()) if computed else None
+    fm_total = parse_cost(sheet.fm.get("point_total"))
+    for name, total in (("Points Summary Total", declared_total),
+                        ("frontmatter point_total", fm_total)):
+        if total is not None and grand is not None and total != grand:
+            findings.append(("WARNING", "points/total",
+                             f"{name} {total}, summed section costs {grand}"))
+    if missing and (declared or fm_total is not None):
+        findings.append(("INFO", "points",
+                         "no cost data found for: " + ", ".join(missing) +
+                         " — sums are partial"))
+    return findings
