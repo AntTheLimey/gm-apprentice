@@ -243,7 +243,7 @@ locations, and NPC relationships.
 
 **Validation loop:** After writing entity files, run the
 bundled `vault_check.py frontmatter --folder <dir>` on the
-folders you touched (see `shared/filesystem-mode.md`) and fix
+folders you touched (see `shared/vault-access.md`) and fix
 every ERROR before presenting receipts. Deterministic, one
 call — do not re-read files to self-check instead.
 

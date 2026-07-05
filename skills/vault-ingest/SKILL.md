@@ -72,7 +72,7 @@ setup, not migration).
 3. **Never modify external source files** — Read-only access. The GM's originals are their backup and legal proof of ownership.
 4. **Process buckets chronologically, earliest first** — Later buckets reference entities created by earlier ones. Out-of-order processing creates dangling wiki-links and duplicate entities.
 5. **Move processed `_inbox/` files to `_inbox/_processed/` with date stamp, never delete** — Source provenance. The GM may need to re-ingest if errors are found, and the original file is the audit trail.
-6. **Validate each bucket's entities before the next bucket** — run the bundled `vault_check.py frontmatter` (see `shared/filesystem-mode.md`) on folders you wrote; fix every ERROR first. Later buckets build on earlier files, so schema drift compounds.
+6. **Validate each bucket's entities before the next bucket** — run the bundled `vault_check.py frontmatter` (see `shared/vault-access.md`) on folders you wrote; fix every ERROR first. Later buckets build on earlier files, so schema drift compounds.
 
 ## The Pipeline
 

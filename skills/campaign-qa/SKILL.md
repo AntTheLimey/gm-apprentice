@@ -55,7 +55,7 @@ storage.
 **Vault access:** plain filesystem tools plus the bundled
 utilities — `graph_check.py` for orphan/unresolved/backlink
 queries and `vault_search.py` for ranked search. See
-`shared/filesystem-mode.md` for the tool mapping and
+`shared/vault-access.md` for the tool mapping and
 utility usage.
 
 **Version check:** On first invocation, read
@@ -72,7 +72,7 @@ Audits run the same procedures on any vault folder — only
 the tools differ. The procedures in
 `references/check-procedures.md` use generic operation names
 (enumerate files, search for pattern, read file). Map these
-to your environment's tools per `shared/filesystem-mode.md`.
+to your environment's tools per `shared/vault-access.md`.
 
 **Key vault locations:**
 - `_meta/index.md` — Master registry. Read first to orient.

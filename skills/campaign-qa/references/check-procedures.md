@@ -2,7 +2,7 @@
 
 **Tool note:** These procedures use generic operation names —
 "enumerate files," "search for [pattern]," "read [file]." See
-`shared/filesystem-mode.md` for the tool mapping (Glob/Grep/
+`shared/vault-access.md` for the tool mapping (Glob/Grep/
 Read plus the bundled graph and search utilities).
 
 Detailed step-by-step procedures for each QA mode. The SKILL.md
@@ -364,7 +364,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
 
 It reports orphans, unresolved links, dead ends, and
 ambiguous bare links in one pass (see
-`shared/filesystem-mode.md` for options such as `--folder`
+`shared/vault-access.md` for options such as `--folder`
 and `--exclude`). Use the manual steps below only if Python
 is unavailable, and flag that fallback in results.
 

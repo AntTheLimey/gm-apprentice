@@ -19,7 +19,7 @@ Reach for campaign-qa when you need to:
 
 ## What You Need
 
-**Obsidian:** Recommended. campaign-qa works on plain markdown folders using Glob/Grep/Read tools for its audits — same procedures, different tools. See `shared/filesystem-mode.md` for details.
+**Obsidian:** Recommended. campaign-qa works on plain markdown folders using Glob/Grep/Read tools for its audits — same procedures, different tools. See `shared/vault-access.md` for details.
 
 **Obsidian plugins (optional):** Smart Connections adds in-app semantic search; Templater automates note creation. The bundled utilities give the skills ranked search and graph queries everywhere. See the [README](../README.md) for setup instructions.
 

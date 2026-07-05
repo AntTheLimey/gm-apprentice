@@ -43,7 +43,7 @@ live at `skills/shared/` (sibling directory to this skill folder).
 ## Vault Access and Working Path
 
 Vault access is plain filesystem tools plus the bundled
-search and graph utilities — read `shared/filesystem-mode.md`
+search and graph utilities — read `shared/vault-access.md`
 for the tool mapping and utility usage.
 
 On first invocation, **always** ask the user to confirm the
@@ -305,7 +305,7 @@ Follow `references/world-validation.md`.
 
 1. **Structural checks:** run the bundled utilities first —
    `graph_check.py all` and `vault_check.py all` (see
-   `shared/filesystem-mode.md`) — then interpret: type pair
+   `shared/vault-access.md`) — then interpret: type pair
    violations, missing required relationships, bidirectional
    consistency on top of their orphan/ambiguity/schema output.
 2. **Semantic checks:** redundant edges, implied traversal edges,

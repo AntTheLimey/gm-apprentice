@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Vault access no longer uses the Obsidian MCP server stack.**
-  `shared/filesystem-mode.md` is rewritten as the Vault Access
-  Reference: plain filesystem tools plus the bundled utilities —
+  `shared/filesystem-mode.md` is rewritten and renamed to
+  `shared/vault-access.md`, the Vault Access Reference: plain filesystem tools plus the bundled utilities —
   no server, no app dependency, no mode split. Obsidian is a
   viewer, never a requirement. campaign-organizer, campaign-qa,
   the shared session principles, and the QA check procedures now
