@@ -185,6 +185,14 @@ check("enc flags BL-22 table rows (2 weight warnings)",
 check("enc warning names computed BL",
       "BL 24" in enc_findings[0][2], True)
 
+# Ragged row: recognized level with fewer cells than the header must not
+# raise; its weight warning still fires.
+_RAGGED = _KARLISH.replace("| Light (1) | 44 lb | 4 | 8 |",
+                           "| Light (1) | 44 lb |")
+ragged_findings = gk.check_encumbrance(gk.Sheet(_RAGGED))
+check("enc tolerates ragged row (2 weight warnings, no exception)",
+      [f[0] for f in ragged_findings], ["WARNING", "WARNING"])
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)

@@ -170,6 +170,10 @@ def _close(actual, expected):
     return abs(actual - expected) <= max(1.0, expected * 0.02)
 
 
+def _cell(row, i):
+    return row[i] if 0 <= i < len(row) else None
+
+
 def check_encumbrance(sheet):
     findings = []
     attrs = read_attributes(sheet)
@@ -196,20 +200,20 @@ def check_encumbrance(sheet):
             continue
         level, maxwt = expected[name]
         if i_wt >= 0:
-            declared = parse_weight(row[i_wt])
+            declared = parse_weight(_cell(row, i_wt))
             if declared is not None and not _close(declared, maxwt):
                 findings.append(("WARNING", f"encumbrance/{row[0]}",
                                  f"max {declared:g} lb, computed {maxwt:g} lb "
                                  f"(BL {bl:g})"))
         if i_mv >= 0 and bm is not None:
-            declared = parse_cost(row[i_mv])
+            declared = parse_cost(_cell(row, i_mv))
             computed = gc.enc_move(bm, level)
             if declared is not None and declared != computed:
                 findings.append(("WARNING", f"encumbrance/{row[0]}",
                                  f"Move {declared}, computed {computed} "
                                  f"(BM {bm})"))
         if i_dg >= 0 and speed is not None:
-            declared = parse_cost(row[i_dg])
+            declared = parse_cost(_cell(row, i_dg))
             computed = gc.enc_dodge(speed, level, cr)
             if declared is not None and declared != computed:
                 findings.append(("WARNING", f"encumbrance/{row[0]}",
