@@ -4,13 +4,6 @@ The Midwife's standalone worldbuilding procedure. Extracted
 from SKILL.md (which keeps the mode trigger). File paths are
 relative to the skill root, as in SKILL.md.
 
-## Worldbuilding Mode
-
-Triggered when the GM asks to work on world-level content
-rather than an adventure: "help me flesh out my world's
-economics," "I want to define my heritages," "let's do some
-worldbuilding."
-
 ### Standalone Worldbuilding Conversation
 
 1. **Read the target domain file** in `_World/` (or create a

@@ -6,10 +6,6 @@ plus the Adventure Brief Template. Extracted from SKILL.md
 (which keeps the phase trigger). File paths are relative to
 the skill root, as in SKILL.md.
 
-## Phase 4: Scaffold & Handoff
-
-**Goal:** Adventure brief written, vault ready for Session 0.
-
 ### Step 1: Synthesize Adventure Brief
 
 Read `shared/entity-schema.md` for adventure-brief type.
@@ -97,6 +93,22 @@ For each approved plan:
 3. Verify: `type` matches, `canon_status: DRAFT` is set, all required fields present
 4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
 5. Fix any issues before promoting the next item
+
+**2c. World fact flush** — Write the world facts accumulated
+through Woven Worldbuilding (Phases 1-3) to their `_World/`
+domain files. These were confirmed at capture time — one
+question per trigger — so file them without re-asking:
+
+1. If `_World/` doesn't exist, create it with `world-index.md`
+   and `_flags.md` stubs first (greenfield: campaign-organizer
+   wraps the vault around `_World/` just as it does
+   `Adventures/`)
+2. Write each fact to its domain file, creating a stub from
+   `shared/templates/world-domain.md` when the domain is new
+3. Unresolved three-state flags (deferred heritage prompts and
+   the like) go to `_World/_flags.md`
+
+Skip this step only when no world facts emerged.
 
 Content left in `_midwife/` after promotion (seeds, unused
 sketches, half-formed ideas) stays as creative archive.

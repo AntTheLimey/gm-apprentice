@@ -292,9 +292,10 @@ questions to ask based on the domain being touched.
 **Goal:** Adventure brief written, vault ready for Session 0.
 
 When the GM is ready to scaffold — brief synthesis, entity and
-plan promotion, vault setup (greenfield), Session 0 handoff —
-read `references/scaffold-handoff.md` and follow its five steps.
-It contains the adventure brief template and required sections.
+plan promotion, world-fact flush, vault setup (greenfield),
+Session 0 handoff — read `references/scaffold-handoff.md` and
+follow its five steps. It contains the adventure brief template
+and required sections.
 
 ## Worldbuilding Mode
 
