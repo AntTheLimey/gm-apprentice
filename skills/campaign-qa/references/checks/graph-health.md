@@ -27,9 +27,9 @@ Read all entity files in scope. For each, extract:
 
 ### Step 2: Structural Checks
 
-**Orphaned entities:** Entities with zero inbound or outbound
-relationships. These are disconnected from the graph and
-probably forgotten.
+**Orphaned entities:** Entities with zero inbound relationships
+(what `graph_check.py orphans` reports). These are disconnected
+from the graph and probably forgotten.
 
 **Broken links:** Wiki-links that point to files that don't
 exist. Search for `[[...]]` patterns across all files, then

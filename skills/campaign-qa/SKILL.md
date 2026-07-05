@@ -293,9 +293,9 @@ entries. Skip undefined domains — no false positives.
 Runs all modes in order, reading each check file from
 `references/checks/` as it goes: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
-Health → Legacy Canon Field Repair → World Consistency
-(`references/world-audit-criteria.md`, if `_World/` exists)
-→ Open Spoilers.
+Health → Legacy Canon Field Repair → Stale DRAFT Detection →
+World Consistency (`references/world-audit-criteria.md`, if
+`_World/` exists) → Open Spoilers.
 Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 

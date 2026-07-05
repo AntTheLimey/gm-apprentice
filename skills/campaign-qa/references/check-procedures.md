@@ -39,6 +39,7 @@ Each check now lives in its own file under `references/checks/`:
 **Full Audit** runs the checks in this order, reading each file
 as it goes: Canon Audit → Timeline Validation → Name Similarity
 → Clue Redundancy → Graph Health → Legacy Canon Field Repair →
-World Consistency (`references/world-audit-criteria.md`, if
-`_World/` exists) → Open Spoilers. Deduplicate findings that
-appear in multiple checks and produce a unified report.
+Stale DRAFT Detection → World Consistency
+(`references/world-audit-criteria.md`, if `_World/` exists) →
+Open Spoilers. Deduplicate findings that appear in multiple
+checks and produce a unified report.

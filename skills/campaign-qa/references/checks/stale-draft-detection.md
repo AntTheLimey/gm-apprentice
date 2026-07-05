@@ -17,6 +17,8 @@ procedure as fallback:
 2. For each entity with `canon_status: DRAFT`:
    - Extract the session number from `createdSession` (e.g.
      "Session 1" → 1)
+   - If `createdSession` is greater than the current session,
+     flag as WARNING (createdSession exceeds current session)
    - Calculate age: `current_session - created_session`
    - If age >= 3: flag as WARNING
 3. Entities without `createdSession` that are DRAFT: flag as
@@ -29,6 +31,8 @@ procedure as fallback:
   unconfirmed for 3+ sessions."
 - Without createdSession: "DRAFT entity missing createdSession —
   cannot determine staleness. Add createdSession or promote."
+- Future session: "createdSession (N) exceeds current session
+  (M) — check the value."
 
 **Rationale:** DRAFT entities are meant to be temporary — they
 represent unconfirmed content awaiting GM review. After 3

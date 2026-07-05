@@ -170,9 +170,9 @@ and any who were off-screen this session):
 
    Use the labelled-field format (present tense, player-facing),
    **not** the retrospective narrative of the Story file. If the
-   section is absent, create it; place it before `## Notes`, outside
-   any `<!-- gm-only -->` fence. See `shared/pc-body-structure.md`
-   for the field spec.
+   section is absent, create it; place it before `## Notes`/`## GM
+   Notes`, outside any `<!-- gm-only -->` or `<!-- spoiler -->` fence.
+   See `shared/pc-body-structure.md` for the field spec.
 4. Leave `## Notes`, `## GM Notes`, and all gm-only/spoiler
    content untouched (protected sections — see
    `shared/pc-body-structure.md` for the
