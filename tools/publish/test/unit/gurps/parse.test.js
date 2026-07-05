@@ -285,3 +285,54 @@ describe('parseGurps — current encumbrance row', () => {
     assert.strictEqual(model.encumbrance[0].current, false);
   });
 });
+
+// Review fixes: single-current invariant on every source, stacked markers,
+// numeric status fallback, fm-array fallback opt-in.
+describe('parseGurps — current encumbrance row (review hardening)', () => {
+  function encSection(levels) {
+    const rows = levels.map(l =>
+      `<tr><td>${l[0]}</td><td>${l[1]}</td><td>${l[2]}</td><td>${l[3]}</td></tr>`).join('');
+    return { title: 'Encumbrance', id: 'encumbrance',
+      html: '<table><tr><th>Level</th><th>Max Weight</th><th>Move</th><th>Dodge</th></tr>' + rows + '</table>' };
+  }
+
+  it('stacked markers are stripped completely', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1) ← *', '44 lb', '4', '8'],
+    ])]);
+    assert.strictEqual(model.encumbrance[1].current, true);
+    assert.strictEqual(model.encumbrance[1].level, 'Light (1)');
+  });
+
+  it('frontmatter array with two current entries keeps only the first', () => {
+    const fm = { encumbrance: [
+      { level: 'None (0)', current: true },
+      { level: 'Light (1)', current: true },
+    ] };
+    const model = parseGurps(fm, []);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
+  });
+
+  it('frontmatter array without current is flagged by a matching status Enc', () => {
+    const fm = { encumbrance: [
+      { level: 'None (0)' },
+      { level: 'Light (1)' },
+    ] };
+    const status = { title: 'Current Status', id: 'current-status',
+      html: '<p><strong>Enc:</strong> Light (1)</p>' };
+    const model = parseGurps(fm, [status]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, true]);
+  });
+
+  it('a bare numeric status Enc matches the row parenthetical', () => {
+    const status = { title: 'Current Status', id: 'current-status',
+      html: '<p><strong>Enc:</strong> 2</p>' };
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+      ['Medium (2)', '66 lb', '3', '7'],
+    ]), status]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, false, true]);
+  });
+});

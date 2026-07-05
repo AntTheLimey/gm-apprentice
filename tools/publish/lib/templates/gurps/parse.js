@@ -236,9 +236,9 @@ function parseDefenses(model, sections, fm) {
 }
 
 // Opt-in "this is my current level" marker on a table row's Level cell:
-// trailing `*` (canonical), `←`, or `(current)`. Bold can't be used — table
-// cells have HTML tags stripped before they get here.
-const ENC_CURRENT_MARKER = /\s*(?:\*|←|\(current\))\s*$/i;
+// trailing `*` (canonical), `←`, or `(current)`, repeated forms included.
+// Bold can't be used — table cells have HTML tags stripped before they get here.
+const ENC_CURRENT_MARKER = /(?:\s*(?:\*|←|\(current\)))+\s*$/i;
 
 function encumbranceRow(row) {
   let level = row[0];
@@ -274,13 +274,6 @@ function parseEncumbrance(model, sections, fm) {
   for (const row of rows) {
     if (row[0]) model.encumbrance.push(encumbranceRow(row));
   }
-  let seen = false;
-  for (const e of model.encumbrance) {
-    if (e.current) {
-      if (seen) e.current = false;
-      seen = true;
-    }
-  }
 }
 
 function normalizeEncLevel(s) {
@@ -288,14 +281,26 @@ function normalizeEncLevel(s) {
   return String(s).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-// Runs after parseStatus: when no row is explicitly marked current, match the
-// Current Status Enc: value against the level names.
-function applyCurrentEncumbranceFallback(model) {
-  const enc = model.encumbrance || [];
-  if (enc.length === 0 || enc.some(e => e.current)) return;
-  const target = normalizeEncLevel(model.status && model.status.enc);
+// Runs after parseStatus, on every encumbrance source: enforces the
+// at-most-one-current invariant (first flagged row wins), then, when no row
+// is flagged, matches the Current Status Enc: value against the level names —
+// or, for a bare number, against the row's parenthetical level number.
+function resolveCurrentEncumbrance(model) {
+  const enc = model.encumbrance;
+  let seen = false;
+  for (const e of enc) {
+    if (e.current) {
+      if (seen) e.current = false;
+      seen = true;
+    }
+  }
+  if (seen || enc.length === 0) return;
+  const target = normalizeEncLevel(model.status.enc);
   if (!target) return;
-  const match = enc.find(e => normalizeEncLevel(e.level) === target);
+  let match = enc.find(e => normalizeEncLevel(e.level) === target);
+  if (!match && /^\d+$/.test(target)) {
+    match = enc.find(e => (String(e.level).match(/\((\d+)\)/) || [])[1] === target);
+  }
   if (match) match.current = true;
 }
 
@@ -782,7 +787,7 @@ function parseGurps(frontmatter, sections) {
   parseRanged(model, secs, fm);
   parseGrimoire(model, secs, fm);
   parseStatus(model, secs, fm);
-  applyCurrentEncumbranceFallback(model);
+  resolveCurrentEncumbrance(model);
   parseChains(model, secs, fm);
   parseEquipment(model, secs, fm);
   crossReferenceSkillDefenses(model);

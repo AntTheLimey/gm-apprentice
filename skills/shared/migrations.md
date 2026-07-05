@@ -410,3 +410,26 @@ hidden until revealed in play, not permanently secret.
   `exclude_sections`/`exclude_dirs` only). If `publish.site_dir` is
   set in vault-config, offer to run `npm update gm-apprentice-publish`
   in the site directory.
+
+## Migration: 1.8.3 → 1.8.9
+
+### Content
+
+- **GURPS Current Status gains an optional `**Enc:**` field** —
+  the GURPS PC template's `## Current Status` block adds
+  `**Enc:** {level}` (e.g. `Light (1)`), and the publish tool
+  (1.5.1) uses it to highlight the current row of the sheet's
+  Encumbrance table. Alternatively a trailing `*` on the table's
+  Level cell marks the row explicitly. Opt-in per PC: sheets that
+  already carry an `Enc:` line light up on the next site build
+  with no edit; others gain the line at the GM's discretion or at
+  the next wrap-up refresh. No other vault changes.
+
+### Tooling
+
+- **Publish tool:** `gm-apprentice-publish` 1.5.1 flags the
+  current encumbrance row from plain markdown tables (explicit
+  Level-cell marker, else the Current Status `Enc:` value matched
+  by level name or number). If `publish.site_dir` is set in
+  vault-config, repoint the site's `file:` pin to the plugin-cache
+  copy at ≥1.8.9 (tool ≥1.5.1) and rebuild.
