@@ -22,7 +22,7 @@ Reach for campaign-organizer when you need to:
 
 **Obsidian:** Recommended but not required. With Obsidian and its plugins, you get the full experience — clickable wiki-links, graph visualization, semantic search, and template auto-application. Without Obsidian, the skill works directly on the filesystem, producing Obsidian-compatible files you can open in Obsidian later.
 
-**For the full Obsidian experience:** Install Smart Connections, Templater, Local REST API, and MCP Tools. See the [README](../README.md) for setup instructions.
+**For the full Obsidian experience:** Install Smart Connections and Templater. See the [README](../README.md) for setup instructions.
 
 ## Example Prompts
 
@@ -74,16 +74,16 @@ Claude will ask before making changes to existing files. New entities start as D
 - Don't worry about perfect organization upfront. You can always run the "weave" workflow later to enrich links.
 - If you have entities that don't fit the standard types (NPCs, locations, factions, etc.), tell Claude. It can create custom entity types.
 
-## Filesystem Mode
+## Working Without Obsidian
 
-If Obsidian isn't set up, campaign-organizer works directly
-with the filesystem. On first use, Claude will ask you to
-confirm a folder path before writing anything.
+campaign-organizer works directly on the vault folder —
+Obsidian is never required. On first use, Claude will ask
+you to confirm a folder path before writing anything.
 
 ### What Works
 
 All four modes — Organize, Dissect, Weave, and Validate —
-work in filesystem mode. You get the same folder structure,
+work without Obsidian. You get the same folder structure,
 YAML frontmatter, wiki-links, and relationship metadata.
 
 ### What's Different

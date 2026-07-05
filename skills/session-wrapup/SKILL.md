@@ -241,6 +241,12 @@ locations, and NPC relationships.
   Gregorian date to satisfy the parser; it simply won't auto-sort if it
   lacks a 4-digit year. See `shared/session-document-chain.md`.
 
+**Validation loop:** After writing entity files, run the
+bundled `vault_check.py frontmatter --folder <dir>` on the
+folders you touched (see `shared/vault-access.md`) and fix
+every ERROR before presenting receipts. Deterministic, one
+call — do not re-read files to self-check instead.
+
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and
 `## Updated Entities`. This is the review artifact. Do **NOT**

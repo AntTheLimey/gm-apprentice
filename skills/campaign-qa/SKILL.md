@@ -52,12 +52,13 @@ This skill reads the campaign vault (Obsidian or plain folder). All persistent
 state lives in the vault — never in memory or skill-internal
 storage.
 
-**Environment detection:** On first invocation, check for
-Obsidian MCP tools (`search_vault`, `list_vault_files`,
-`get_vault_file`). See `shared/filesystem-mode.md` for the
-full tool mapping and environment detection procedure.
+**Vault access:** plain filesystem tools plus the bundled
+utilities — `graph_check.py` for orphan/unresolved/backlink
+queries and `vault_search.py` for ranked search. See
+`shared/vault-access.md` for the tool mapping and
+utility usage.
 
-**Version check:** After environment detection, read
+**Version check:** On first invocation, read
 `gm_apprentice_version` from `_meta/vault-config.md` and
 `current_version` from `shared/migrations.md`. If the vault
 version is lower or absent, announce the mismatch and hand off
@@ -67,11 +68,11 @@ running any audits. Resume after migration completes. Skip this
 check if `_meta/` doesn't exist (that's first-time setup, not
 migration).
 
-Both Obsidian mode and filesystem mode run the same audit
-procedures — only the tools differ. The procedures in
+Audits run the same procedures on any vault folder — only
+the tools differ. The procedures in
 `references/check-procedures.md` use generic operation names
 (enumerate files, search for pattern, read file). Map these
-to your environment's tools per `shared/filesystem-mode.md`.
+to your environment's tools per `shared/vault-access.md`.
 
 **Key vault locations:**
 - `_meta/index.md` — Master registry. Read first to orient.

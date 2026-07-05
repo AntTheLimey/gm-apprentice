@@ -2,8 +2,8 @@
 
 **Tool note:** These procedures use generic operation names —
 "enumerate files," "search for [pattern]," "read [file]." See
-`shared/filesystem-mode.md` for which specific tool to use in
-your environment (Obsidian MCP tools or filesystem Glob/Grep/Read).
+`shared/vault-access.md` for the tool mapping (Glob/Grep/
+Read plus the bundled graph and search utilities).
 
 Detailed step-by-step procedures for each QA mode. The SKILL.md
 describes what each mode checks; this file describes how to
@@ -203,6 +203,21 @@ For each violation:
 The name similarity check identifies entity names that are
 duplicates, near-duplicates, or confusingly similar.
 
+**Preferred procedure:** run the bundled utility and triage
+its output with the GM:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> names
+```
+
+It covers exact duplicates, alias collisions, and fuzzy
+matches (structural documents and document-chain families are
+already filtered out). Your judgment still decides which
+pairs are intentional (married couples, senior/junior) versus
+confusing. Use the manual steps below only if Python is
+unavailable.
+
 ### Step 1: Collect All Names
 
 Build a complete list of entity names and aliases from the
@@ -339,6 +354,20 @@ For each issue:
 The graph health check examines the structural integrity of
 the entity relationship graph in the vault.
 
+**Preferred procedure:** run the bundled graph utility once
+and work from its output instead of hand-building a link map:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
+  <vault-path> all
+```
+
+It reports orphans, unresolved links, dead ends, and
+ambiguous bare links in one pass (see
+`shared/vault-access.md` for options such as `--folder`
+and `--exclude`). Use the manual steps below only if Python
+is unavailable, and flag that fallback in results.
+
 ### Step 1: Enumerate Entities and Links
 
 Read all entity files in scope. For each, extract:
@@ -468,6 +497,11 @@ For each issue:
 **Severity:** WARNING
 **Trigger:** Entity has `canon_status: DRAFT` and has been
 DRAFT for 3 or more sessions.
+
+**Preferred procedure:** `vault_check.py stale-drafts`
+implements the steps below deterministically (session-plan
+exemption included); run it and report its findings. Manual
+procedure as fallback:
 
 **Procedure:**
 

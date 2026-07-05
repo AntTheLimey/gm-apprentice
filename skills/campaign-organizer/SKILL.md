@@ -40,24 +40,14 @@ live at `skills/shared/` (sibling directory to this skill folder).
   foreshadowing tracking, ttrpg-expert's continuity-engine.md
   handles the narrative state.
 
-## Environment Detection
+## Vault Access and Working Path
 
-On first invocation, check which tools are available:
+Vault access is plain filesystem tools plus the bundled
+search and graph utilities — read `shared/vault-access.md`
+for the tool mapping and utility usage.
 
-**Obsidian Mode:** If MCP tools are available (`search_vault`,
-`list_vault_files`, `get_vault_file`), announce:
-
-> "I have access to your Obsidian vault via MCP tools.
-> Running in full mode."
-
-**Filesystem Mode:** If no MCP tools are detected, announce:
-
-> "I don't see Obsidian MCP tools, so I'll work directly
-> with the filesystem. Your campaign files will be
-> Obsidian-compatible — you can open this folder in Obsidian
-> anytime for the full experience."
-
-Then **always** ask the user to confirm the working path:
+On first invocation, **always** ask the user to confirm the
+working path:
 
 > "Where should I work? Give me the path to your campaign
 > folder, or tell me where to create a new one."
@@ -67,9 +57,6 @@ the user to provide a path before writing any files. This
 prevents accidentally creating campaign structure in an
 existing project directory. Once confirmed, use that path
 for the rest of the session without re-asking.
-
-For the full tool mapping and what is lost in filesystem mode,
-read `shared/filesystem-mode.md`.
 
 ## The Vault Schema Layer: `_meta/`
 
@@ -316,8 +303,11 @@ Follow `references/world-validation.md`.
 
 **Use when:** Check graph quality without adding content.
 
-1. **Structural checks:** orphans, type pair violations, missing
-   required relationships, bidirectional consistency.
+1. **Structural checks:** run the bundled utilities first —
+   `graph_check.py all` and `vault_check.py all` (see
+   `shared/vault-access.md`) — then interpret: type pair
+   violations, missing required relationships, bidirectional
+   consistency on top of their orphan/ambiguity/schema output.
 2. **Semantic checks:** redundant edges, implied traversal edges,
    hub overload, generic type usage (`associated_with` etc.).
    Read `references/graph-hygiene.md` for anti-patterns.

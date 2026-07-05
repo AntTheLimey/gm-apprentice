@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.4] — 2026-07-04
+
+### Added
+
+- **Three bundled vault utilities** under `skills/shared/scripts/`
+  (Python 3 standard library only, shipped in every skill zip):
+  `graph_check.py` reports orphans, unresolved and ambiguous
+  links, dead ends, and backlinks in one deterministic pass —
+  handling aliases, `[[Name|alias]]`, anchors, embeds, quoted
+  frontmatter links, and space/underscore/case variants;
+  `vault_search.py` is index-free BM25 ranked search with context
+  snippets for prose queries; `vault_check.py` covers entity
+  schema validation (required fields, enums, legacy fields,
+  unquoted frontmatter links), duplicate/confusable name and
+  alias detection (document-chain and numbered-structural
+  families filtered), `_meta/index.md` drift in both directions,
+  and stale-DRAFT sweeps. Benchmarked on a 705-note vault:
+  identical results to per-query LLM approaches in under a
+  second, versus 50–125 seconds and ~40–56k tokens.
+- **Validation loops for entity creation** (top roadmap item):
+  session-wrapup, vault-ingest, and campaign-organizer now run
+  `vault_check.py frontmatter` on folders they touch and fix
+  ERRORs before presenting results; campaign-qa's name-similarity
+  and stale-DRAFT procedures and campaign-organizer's Validate
+  mode prefer the utilities over manual passes.
+- Schema rules and the frontmatter parser extracted to
+  `skills/shared/scripts/schema_rules.py` — single source of
+  truth shared by `scripts/validate_schema.py` and the bundled
+  utilities.
+- Fixture-based regression tests for all utilities
+  (`tests/test_vault_utilities.py`, `tests/fixtures/mini-vault/`,
+  `tests/fixtures/mini-vault-schema/`), wired into CI.
+
+### Changed
+
+- **Vault access no longer uses the Obsidian MCP server stack.**
+  `shared/filesystem-mode.md` is rewritten and renamed to
+  `shared/vault-access.md`, the Vault Access Reference: plain filesystem tools plus the bundled utilities —
+  no server, no app dependency, no mode split. Obsidian is a
+  viewer, never a requirement. campaign-organizer, campaign-qa,
+  the shared session principles, and the QA check procedures now
+  point at the shared reference instead of restating detection.
+- campaign-qa's Graph Health procedure prefers one `graph_check.py`
+  pass over hand-building a link map with Grep.
+- README setup instructions replace the MCP server / Local REST API
+  configuration with the bundled-utilities section and a migration
+  note for users carrying the old MCP plugins and `.mcp.json` entry.
+
+### Removed
+
+- All references to the archived Obsidian MCP server, MCP Tools
+  plugin, and Local REST API plugin across skills, docs, README, and
+  ROADMAP. Neither plugin is required or recommended any longer.
+
 ## [1.8.3] — 2026-07-04
 
 ### Added

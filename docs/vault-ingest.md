@@ -21,7 +21,7 @@ Reach for vault-ingest when you need to:
 
 **An existing vault:** vault-ingest needs a campaign vault to write into. If you don't have one yet, it will offer to hand off to campaign-organizer to create one first.
 
-**Obsidian:** Recommended but not required. Works with Obsidian MCP tools or plain markdown folders.
+**Obsidian:** Recommended but not required. Works on plain markdown folders; bundled utilities provide ranked search when needed.
 
 **Source material:** Your old files. These can come from three places:
 - **Staging folder** — drop files into `_inbox/` in your vault
