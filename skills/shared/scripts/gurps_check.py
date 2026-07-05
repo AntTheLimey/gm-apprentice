@@ -109,3 +109,110 @@ def norm_level(s):
     base = re.sub(r"[*←]|\(current\)", "", base, flags=re.I)
     base = re.sub(r"\s+", " ", base).strip().lower()
     return LEVEL_ALIASES.get(base, base)
+
+
+_ATTR_KEYS = {"st": "st", "dx": "dx", "iq": "iq", "ht": "ht",
+              "hp": "hp", "will": "will", "per": "per", "fp": "fp",
+              "basic speed": "speed", "basic move": "move"}
+
+
+def read_attributes(sheet):
+    out = {}
+    for title in ("Primary Attributes", "Secondary Characteristics",
+                  "Stat Sheet"):
+        for row in sheet.table(title)[1:]:
+            if len(row) < 2 or not row[0]:
+                continue
+            key = _ATTR_KEYS.get(row[0].strip().lower())
+            if key is None or key in out:
+                continue
+            m = re.search(r"\d+(?:\.\d+)?", row[1])
+            if m:
+                val = float(m.group(0))
+                out[key] = val if key == "speed" else int(val)
+    return out if "st" in out else None
+
+
+def has_combat_reflexes(sheet):
+    for title in ("Advantages & Perks", "Advantages", "Traits"):
+        for row in sheet.table(title)[1:]:
+            if row and "combat reflexes" in row[0].lower():
+                return True
+    return False
+
+
+def check_attributes(sheet):
+    findings = []
+    attrs = read_attributes(sheet)
+    if attrs is None:
+        return [("INFO", "attributes", "no Stat Sheet attributes found; "
+                 "attribute checks skipped")]
+    if not all(k in attrs for k in ("st", "dx", "iq", "ht")):
+        return [("INFO", "attributes", "missing one of ST/DX/IQ/HT; "
+                 "secondary checks skipped")]
+    base = gc.secondaries(attrs["st"], attrs["dx"], attrs["iq"], attrs["ht"])
+    source = {"hp": "ST", "will": "IQ", "per": "IQ", "fp": "HT",
+              "speed": "(DX+HT)/4", "move": "floor(Speed)"}
+    for key in ("hp", "will", "per", "fp", "speed", "move"):
+        if key not in attrs:
+            continue
+        declared, computed = attrs[key], base[key]
+        mismatch = (abs(declared - computed) > 0.01 if key == "speed"
+                    else declared != computed)
+        if mismatch:
+            findings.append(("INFO", f"attributes/{key}",
+                             f"{key.upper()} {declared} vs base {computed} "
+                             f"({source[key]}) — bought adjustment or error"))
+    return findings
+
+
+def _close(actual, expected):
+    return abs(actual - expected) <= max(1.0, expected * 0.02)
+
+
+def check_encumbrance(sheet):
+    findings = []
+    attrs = read_attributes(sheet)
+    if attrs is None:
+        return [("INFO", "encumbrance", "no attributes; check skipped")]
+    rows = sheet.table("Encumbrance")
+    if len(rows) < 2:
+        return [("INFO", "encumbrance", "no Encumbrance table found")]
+    bl = gc.basic_lift(attrs["st"])
+    expected = {name.lower(): (level, maxwt)
+                for name, level, maxwt in gc.enc_max_weights(bl)}
+    headers = rows[0]
+    i_wt, i_mv, i_dg = (col(headers, "weight", "max"),
+                        col(headers, "move"), col(headers, "dodge"))
+    cr = has_combat_reflexes(sheet)
+    bm, speed = attrs.get("move"), attrs.get("speed")
+    for row in rows[1:]:
+        if not row or not row[0]:
+            continue
+        name = norm_level(row[0])
+        if name not in expected:
+            findings.append(("INFO", f"encumbrance/{row[0]}",
+                             "unrecognized level name; row skipped"))
+            continue
+        level, maxwt = expected[name]
+        if i_wt >= 0:
+            declared = parse_weight(row[i_wt])
+            if declared is not None and not _close(declared, maxwt):
+                findings.append(("WARNING", f"encumbrance/{row[0]}",
+                                 f"max {declared:g} lb, computed {maxwt:g} lb "
+                                 f"(BL {bl:g})"))
+        if i_mv >= 0 and bm is not None:
+            declared = parse_cost(row[i_mv])
+            computed = gc.enc_move(bm, level)
+            if declared is not None and declared != computed:
+                findings.append(("WARNING", f"encumbrance/{row[0]}",
+                                 f"Move {declared}, computed {computed} "
+                                 f"(BM {bm})"))
+        if i_dg >= 0 and speed is not None:
+            declared = parse_cost(row[i_dg])
+            computed = gc.enc_dodge(speed, level, cr)
+            if declared is not None and declared != computed:
+                findings.append(("WARNING", f"encumbrance/{row[0]}",
+                                 f"Dodge {declared}, computed {computed}"
+                                 f"{' (with Combat Reflexes)' if cr else ''}"))
+    return findings

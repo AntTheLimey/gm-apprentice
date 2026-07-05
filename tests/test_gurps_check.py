@@ -135,6 +135,56 @@ check("col finds header", gk.col(["Level", "Max Weight", "Move"], "weight"), 1)
 check("norm_level strips marker+paren", gk.norm_level("Light (1) ←"), "light")
 check("norm_level extra-heavy alias", gk.norm_level("Extra-Heavy (4)"), "x-heavy")
 
+_KARLISH = """---
+type: pc
+---
+
+# K
+
+## Stat Sheet
+
+### Primary Attributes
+
+| Attribute | Score | Cost |
+|-----------|-------|------|
+| ST | 11 | [10] |
+| DX | 13 | [60] |
+| IQ | 12 | [40] |
+| HT | 11 | [10] |
+
+### Secondary Characteristics
+
+| Characteristic | Value |
+|----------------|-------|
+| HP | 11 |
+| Will | 12 |
+| Per | 12 |
+| FP | 11 |
+| Basic Speed | 6.0 |
+| Basic Move | 6 |
+
+## Equipment
+
+### Encumbrance
+
+| Level | Max Weight | Move | Dodge |
+|-------|-----------|------|-------|
+| None (0) | 22 lb | 6 | 9 |
+| Light (1) | 44 lb | 4 | 8 |
+"""
+
+ksheet = gk.Sheet(_KARLISH)
+attrs = gk.read_attributes(ksheet)
+check("read ST", attrs["st"], 11)
+check("read speed", attrs["speed"], 6.0)
+check("no CR", gk.has_combat_reflexes(ksheet), False)
+check("attributes clean when bases match", gk.check_attributes(ksheet), [])
+enc_findings = gk.check_encumbrance(ksheet)
+check("enc flags BL-22 table rows (2 weight warnings)",
+      [f[0] for f in enc_findings], ["WARNING", "WARNING"])
+check("enc warning names computed BL",
+      "BL 24" in enc_findings[0][2], True)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
