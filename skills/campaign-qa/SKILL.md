@@ -69,10 +69,11 @@ check if `_meta/` doesn't exist (that's first-time setup, not
 migration).
 
 Audits run the same procedures on any vault folder — only
-the tools differ. The procedures in
-`references/check-procedures.md` use generic operation names
-(enumerate files, search for pattern, read file). Map these
-to your environment's tools per `shared/vault-access.md`.
+the tools differ. The procedures in `references/checks/`
+use generic operation names (enumerate files, search for
+pattern, read file); `references/check-procedures.md` is the
+index of them. Map these to your environment's tools per
+`shared/vault-access.md`.
 
 **Key vault locations:**
 - `_meta/index.md` — Master registry. Read first to orient.
@@ -144,7 +145,7 @@ on first use.
 **Trigger phrases:** "canon check", "find contradictions",
 "audit entities", "are there any conflicts"
 
-Read `references/check-procedures.md` § Canon Audit for the
+Read `references/checks/canon-audit.md` for the
 full procedure.
 
 **What it checks:**
@@ -170,7 +171,7 @@ full procedure.
 **Trigger phrases:** "timeline check", "check dates",
 "chronological order", "when did X happen"
 
-Read `references/check-procedures.md` § Timeline Validation
+Read `references/checks/timeline-validation.md`
 for the full procedure.
 
 **What it checks:**
@@ -189,7 +190,7 @@ for the full procedure.
 **Trigger phrases:** "find duplicates", "similar names",
 "name check", "duplicate entities"
 
-Read `references/check-procedures.md` § Name Similarity
+Read `references/checks/name-similarity.md`
 for the full procedure.
 
 **What it checks:**
@@ -206,7 +207,7 @@ for the full procedure.
 **Trigger phrases:** "clue check", "three clue rule",
 "clue coverage", "are there enough clues"
 
-Read `references/check-procedures.md` § Clue Redundancy
+Read `references/checks/clue-redundancy.md`
 for the full procedure.
 
 **What it checks:**
@@ -225,7 +226,7 @@ graph.
 **Trigger phrases:** "graph check", "orphan check",
 "relationship audit", "vault health"
 
-Read `references/check-procedures.md` § Graph Health
+Read `references/checks/graph-health.md`
 for the full procedure.
 
 **What it checks:**
@@ -241,7 +242,8 @@ for the full procedure.
   wrong types)
 - Legacy canon field names (`source_confidence:`,
   `confidence:`) — always repaired to `canon_status`, never
-  leaving duplicate keys (see § Legacy Canon Field Repair)
+  leaving duplicate keys (see
+  `references/checks/legacy-canon-field-repair.md`)
 - Session document chain validation: sessions with Play Notes
   but no Wrap-Up (suggests wrap-up was skipped), sessions stuck
   at `wrap-up` status for multiple prep cycles (review was
@@ -288,10 +290,12 @@ entries. Skip undefined domains — no false positives.
 **Trigger phrases:** "full QA", "audit everything",
 "full check", "campaign health check"
 
-Runs all modes in order: Canon Audit → Timeline
+Runs all modes in order, reading each check file from
+`references/checks/` as it goes: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
 Health → Legacy Canon Field Repair → World Consistency
-(if `_World/` exists) → Open Spoilers.
+(`references/world-audit-criteria.md`, if `_World/` exists)
+→ Open Spoilers.
 Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 

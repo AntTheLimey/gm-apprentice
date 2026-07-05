@@ -477,7 +477,7 @@ source_document: ""
 - **Public** — plain section, no fence, publishes as written.
 - **GM Notes** — write as a `###` subsection under one `## GM Notes`
   heading in the brief, not its own top-level section (see
-  `shared/entity-schema.md`'s PC Body Structure).
+  `shared/pc-body-structure.md`).
 - **Spoiler** — Open Questions get resolved into canon as play
   reaches them (`reconcile`'s spoiler-reveal step, see
   `shared/reconcile.md`); wrap the whole section in

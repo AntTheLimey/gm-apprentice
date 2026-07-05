@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.7] — 2026-07-05
+
+### Changed
+
+- **Split `campaign-qa/references/check-procedures.md` into eight
+  per-check files** under `references/checks/` (canon-audit,
+  timeline-validation, name-similarity, clue-redundancy,
+  graph-health, stale-draft-detection, legacy-canon-field-repair,
+  open-spoilers). `check-procedures.md` is now a thin index. A
+  single-mode audit reads only its one check file (~1–6 KB) instead
+  of the whole 22.9 KB reference; `campaign-qa/SKILL.md` routing and
+  Full Audit updated to read the per-check files. Content is
+  byte-identical to the prior sections.
+- **Extracted the PC body-structure block into
+  `shared/pc-body-structure.md`** — the PC body-heading hierarchy,
+  the `## Current Status` block spec, and the Story Companion
+  Convention (~4.9 KB) move out of `shared/entity-schema.md`
+  (24.8 KB → 20.5 KB, −17%). Entity work that doesn't touch PC files
+  no longer loads the PC-body content. `entity-schema.md` keeps a
+  breadcrumb; consumers re-pointed (session-wrapup, the-midwife, all
+  six `pc-*` templates). Content preserved verbatim across the split.
+
 ## [1.8.6] — 2026-07-05
 
 ### Changed

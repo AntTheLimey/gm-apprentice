@@ -171,11 +171,11 @@ and any who were off-screen this session):
    Use the labelled-field format (present tense, player-facing),
    **not** the retrospective narrative of the Story file. If the
    section is absent, create it; place it before `## Notes`, outside
-   any `<!-- gm-only -->` fence. See `shared/entity-schema.md` for the
-   field spec.
+   any `<!-- gm-only -->` fence. See `shared/pc-body-structure.md`
+   for the field spec.
 4. Leave `## Notes`, `## GM Notes`, and all gm-only/spoiler
    content untouched (protected sections — see
-   `shared/entity-schema.md`'s PC Body Structure for the
+   `shared/pc-body-structure.md` for the
    protected-vs-excluded distinction).
 
 **Input:** the prior `## Current Status` block + this session's PC
