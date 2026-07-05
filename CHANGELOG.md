@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.8] — 2026-07-05
+
+### Changed
+
+- **Extracted the-midwife's conditional sections into reference
+  files** — Phase 4 (Scaffold & Handoff) plus the Adventure Brief
+  Template (~8.2 KB) move to `references/scaffold-handoff.md`, and
+  Worldbuilding Mode (~1.8 KB) moves to
+  `references/worldbuilding-mode.md`. `SKILL.md` (22.3 KB → 13.0 KB,
+  −42%) keeps the phase goal and mode trigger as routing stubs, so
+  Discover/Shape/Structure conversations — the majority of midwife
+  turns — no longer load scaffold or worldbuilding procedure.
+  Content is byte-identical to the prior sections (verified by
+  reconstruction diff).
+- **Closed the "extract remaining conditional reference chunks"
+  roadmap item** — the reconcile world-evolution step and
+  session-prep world-threads/narrative-plans chunks were measured
+  and skipped: the reconcile 6.5 offer runs on every reconcile
+  (only the acceptance body is conditional, and splitting it risks
+  missed `world_evolved` bookkeeping), and the session-prep steps
+  (0.8/1.0 KB behind different guards) net under ~160 tokens each.
+
 ## [1.8.7] — 2026-07-05
 
 ### Changed
