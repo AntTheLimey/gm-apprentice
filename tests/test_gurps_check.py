@@ -219,6 +219,22 @@ nl = gk.check_load(gk.Sheet(_LOADED.replace("**Enc:** Medium (2)\n", "")))
 check("load INFO when no declared level",
       (nl[0][0], "Light" in nl[0][2]), ("INFO", True))
 
+_MELEE = _KARLISH + """
+## Melee Weapons
+
+| Weapon | Skill | Damage | Reach | Parry |
+|--------|-------|--------|-------|-------|
+| Broadsword | Broadsword 15 | 2d cut | 1 | 11 |
+| Punch | DX 13 | 1d-2 cr | C | 8 |
+"""
+
+msheet = gk.Sheet(_MELEE)
+dfd = gk.check_defenses(msheet)
+check("both parry mismatches flagged",
+      [f[0] for f in dfd], ["WARNING", "WARNING"])
+check("broadsword computed 10", "10" in dfd[0][2], True)
+check("punch computed 9", "9" in dfd[1][2], True)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)

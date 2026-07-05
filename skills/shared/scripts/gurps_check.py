@@ -270,3 +270,62 @@ def check_load(sheet):
                  f"Current Status says Enc {declared} but carried+worn "
                  f"{total:g} lb computes to {computed_name} (BL {bl:g})")]
     return []
+
+
+TRAILING_INT_RE = re.compile(r"(\d+)\s*$")
+
+
+def check_defenses(sheet):
+    findings = []
+    attrs = read_attributes(sheet) or {}
+    cr = has_combat_reflexes(sheet)
+    rows = sheet.table("Melee Weapons")
+    if len(rows) >= 2:
+        headers = rows[0]
+        i_skill, i_parry = col(headers, "skill"), col(headers, "parry")
+        if i_skill >= 0 and i_parry >= 0:
+            for row in rows[1:]:
+                if len(row) <= max(i_skill, i_parry) or not row[0]:
+                    continue
+                sm = TRAILING_INT_RE.search(row[i_skill])
+                pm = re.fullmatch(r"\d+", row[i_parry].strip())
+                if not (sm and pm):
+                    continue
+                computed = gc.parry(int(sm.group(1)), cr)
+                declared = int(pm.group(0))
+                if declared != computed:
+                    findings.append((
+                        "WARNING", f"defenses/parry/{row[0]}",
+                        f"Parry {declared}, computed {computed} from skill "
+                        f"{sm.group(1)}{' +1 CR' if cr else ''} — weapon or "
+                        f"style bonus may explain"))
+    for row in sheet.table("Active Defenses")[1:]:
+        if len(row) < 2 or not row[0]:
+            continue
+        label = row[0].lower()
+        dm = re.match(r"\d+", row[1].strip())
+        if not dm:
+            continue
+        declared = int(dm.group(0))
+        if "dodge" in label and attrs.get("speed") is not None:
+            computed = gc.enc_dodge(attrs["speed"], 0, cr)
+            if declared != computed:
+                findings.append((
+                    "INFO", "defenses/dodge",
+                    f"Dodge {declared}, unencumbered computed {computed} — "
+                    "may reflect current encumbrance"))
+        elif "block" in label:
+            shield = None
+            for srow in sheet.table("Skills")[1:]:
+                if srow and "shield" in srow[0].lower():
+                    m = TRAILING_INT_RE.search(srow[-1])
+                    if m:
+                        shield = int(m.group(1))
+            if shield is not None:
+                computed = gc.block(shield, cr)
+                if declared != computed:
+                    findings.append((
+                        "WARNING", "defenses/block",
+                        f"Block {declared}, computed {computed} from "
+                        f"Shield {shield}{' +1 CR' if cr else ''}"))
+    return findings
