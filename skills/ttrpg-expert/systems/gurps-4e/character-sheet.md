@@ -241,3 +241,20 @@ common ranges, defensive options, and tactical notes.*
 | **TOTAL** | **0** |
 | **Budget** | |
 | **Unspent** | |
+
+## Sheet Verification
+
+*After filling in or editing this sheet, run the bundled checker
+to confirm the arithmetic:*
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_check.py" "path/to/this-sheet.md"
+```
+
+*It verifies Basic Lift, the encumbrance table, carried load
+against the recorded encumbrance line, Move/Dodge, secondary
+characteristics, Parry/Block, the point total, and thrust/swing
+damage (B15–B17, B269, B375–B376). Findings are advisory —
+WARNINGs are deltas to explain (a Talent or weapon bonus is a
+fine reason), not automatic errors. Fix real arithmetic errors
+before finalizing.*
