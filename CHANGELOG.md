@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.8] — 2026-07-05
+
+### Changed
+
+- **Extracted the-midwife's conditional sections into reference
+  files** — Phase 4 (Scaffold & Handoff) plus the Adventure Brief
+  Template (~8.2 KB) move to `references/scaffold-handoff.md`, and
+  Worldbuilding Mode (~1.8 KB) moves to
+  `references/worldbuilding-mode.md`. `SKILL.md` (22.3 KB → 13.0 KB,
+  −42%) keeps the phase goal and mode trigger as routing stubs, so
+  Discover/Shape/Structure conversations — the majority of midwife
+  turns — no longer load scaffold or worldbuilding procedure.
+  Moved content is unchanged from the prior sections apart from
+  the fix below and de-duplicated trigger/goal lines that now
+  live only in the SKILL.md stubs.
+- **Closed the "extract remaining conditional reference chunks"
+  roadmap item** — the reconcile world-evolution step and
+  session-prep world-threads/narrative-plans chunks were measured
+  and skipped: the reconcile 6.5 offer runs on every reconcile
+  (only the acceptance body is conditional, and splitting it risks
+  missed `world_evolved` bookkeeping), and the session-prep steps
+  (0.8/1.0 KB behind different guards) net under ~160 tokens each.
+
+### Fixed
+
+- **Phase 4 now delivers the world facts Woven Worldbuilding
+  promises** — the Woven Worldbuilding section has always said
+  accumulated world facts "are written to `_World/` domain files
+  during the Scaffold phase," but no Phase 4 step actually did
+  it. New Step 2c in `references/scaffold-handoff.md` flushes
+  captured facts to `_World/` domain files and deferred flags to
+  `_World/_flags.md`, creating stubs per the campaign-organizer
+  conventions when needed.
+
 ## [1.8.7] — 2026-07-05
 
 ### Changed
