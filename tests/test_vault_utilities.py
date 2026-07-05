@@ -228,6 +228,7 @@ tmp = Path(tempfile.mkdtemp())
 try:
     work = tmp / "vault"
     shutil.copytree(PREP_VAULT, work)
+    original = (work / "Characters/PCs/Hero.md").read_text()
     out = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
                         "--session", "3", "--date", "2026-07-05",
                         "--retag", "chapter-1=chapter-2", "--write",
@@ -240,9 +241,18 @@ try:
     check("stamp: write swaps chapter tag",
           ["- chapter-2" in stamped and "- chapter-1" not in stamped],
           [True])
+    # Everything after the closing frontmatter delimiter must be
+    # byte-identical, not merely contain the same phrases.
     check("stamp: body preserved byte-for-byte",
-          ["Secretly cursed" in stamped
-           and "The Salty Dog inn" in stamped], [True])
+          [stamped.split("---\n", 2)[2] == original.split("---\n", 2)[2]],
+          [True])
+
+    traversal = "\n".join(run("stamp_entities.py", "../escape.md",
+                              "--session", "3", "--date", "2026-07-05",
+                              "--write", vault=work, expect_rc=1))
+    check("stamp: path traversal outside vault refused",
+          ["escapes the vault" in traversal
+           and not (tmp / "escape.md").exists()], [True])
 finally:
     shutil.rmtree(tmp)
 

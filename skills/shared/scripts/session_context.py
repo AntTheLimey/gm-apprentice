@@ -11,9 +11,11 @@ it needs to.
 Usage:
   session_context.py VAULT [--session N]
 
---session N treats N as the just-played session (default: highest
-`session_number` among session entities). Each section is headed
-with its source path; missing pieces are reported, not fatal.
+--session N treats N as the just-played session. The default is
+the highest `session_number` whose status is played/wrap-up/
+reviewed — pre-created `planned`/`prepped` indexes for the next
+session are ignored. Each section is headed with its source
+path; missing pieces are reported, not fatal.
 """
 
 import argparse
@@ -77,7 +79,7 @@ def main() -> int:
     # bundle forward a session.
     PLAYED = {"played", "wrap-up", "reviewed"}
     sessions, played = {}, {}
-    for rel, text, fm in files:
+    for rel, _text, fm in files:
         if fm.get("type") == "session":
             n = parse_session_number(fm.get("session_number"))
             if n is not None:
@@ -127,7 +129,7 @@ def main() -> int:
          body_of(wrap[1]) if wrap else None)
 
     # --- active PCs: frontmatter line + Current Status block ---
-    print(f"\n===== Active PCs =====")
+    print("\n===== Active PCs =====")
     found_pc = False
     for rel, text, fm in files:
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):

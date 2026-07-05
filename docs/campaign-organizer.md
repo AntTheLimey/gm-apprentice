@@ -101,6 +101,7 @@ YAML frontmatter, wiki-links, and relationship metadata.
 
 Open your campaign folder in Obsidian. That's it. All the
 files, frontmatter, wiki-links, and folder structure are
-already Obsidian-compatible. Install the recommended plugins
-to unlock graph visualization and in-app semantic search
-for your own browsing.
+already Obsidian-compatible, and Obsidian's built-in graph
+view works immediately. Install the recommended plugins for
+in-app semantic search and template automation (Juggl adds
+the richer relationship-typed graph).

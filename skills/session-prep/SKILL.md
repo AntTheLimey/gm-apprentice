@@ -57,11 +57,15 @@ It emits the last Wrap-Up, every active PC's `## Current
 Status` block, the upcoming session's existing Plan, deferred
 world flags, and the campaign overview — replacing a dozen-plus
 separate reads (see `shared/vault-access.md`). If Python is
-unavailable, fall back to the manual read pattern:
+unavailable, fall back to the manual read pattern — it must
+cover the same set:
 
 1. Last session's Wrap-Up file — primary context
 2. PC roster — always, including each active PC's `## Current Status`
    block (Location, Condition, Carrying, Open threads, Knows (exclusive))
+3. The upcoming session's Plan file, if one exists
+4. `_World/_flags.md` — Deferred section
+5. The campaign overview (current game date, campaign state)
 
 **After the bundle either way:** vault dives are targeted
 reads only, proportional to upcoming session complexity, not

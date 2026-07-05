@@ -70,6 +70,8 @@ def retag(fm: list[str], old: str, new: str) -> str | None:
             in_tags = True
             continue
         if in_tags:
+            if not line.strip():
+                continue  # blank lines inside the list don't end it
             m = re.match(rf"^(\s*-\s*){re.escape(old)}\s*$", line)
             if m:
                 fm[i] = raw.replace(f"{m.group(1)}{old}",
@@ -112,15 +114,26 @@ def main() -> int:
 
     errors = 0
     stamped = 0
+    vault_root = args.vault.resolve()
     for rel in args.files:
-        path = args.vault / rel
+        path = (args.vault / rel).resolve()
+        if not path.is_relative_to(vault_root):
+            print(f"ERROR\t{rel}\tescapes the vault — refused")
+            errors += 1
+            continue
         if not path.is_file():
             print(f"ERROR\t{rel}\tfile not found")
             errors += 1
             continue
         # newline='' preserves the file's own line endings exactly.
-        with path.open("r", encoding="utf-8", newline="") as f:
-            text = f.read()
+        try:
+            with path.open("r", encoding="utf-8", newline="") as f:
+                text = f.read()
+        except (UnicodeDecodeError, OSError) as e:
+            print(f"ERROR\t{rel}\tunreadable ({e.__class__.__name__}) "
+                  f"— not stamped")
+            errors += 1
+            continue
         lines = text.splitlines(keepends=True)
         close, err = frontmatter_span(lines)
         if err:
