@@ -166,12 +166,18 @@ def main() -> int:
         return sorted({src for dst in dsts for src in inbound[dst]})
 
     def ambiguous():
-        # A bare [[link]] whose name matches more than one file resolves
+        # A bare [[link]] whose name matches more than one FILE resolves
         # unpredictably in Obsidian — a wrong link waiting to happen.
+        # Filename collisions only: Obsidian resolves bare links by
+        # filename, so an alias shadowing another note's name does not
+        # compete with it.
+        stems = {}
+        for rel, base in notes.items():
+            stems.setdefault(base, set()).add(rel)
         linked = {t for targets in outbound.values() for t in targets}
         return sorted(
             f"{name}  -> {', '.join(sorted(paths))}"
-            for name, paths in names.items()
+            for name, paths in stems.items()
             if len(paths) > 1 and name in linked)
 
     if args.command == "orphans":

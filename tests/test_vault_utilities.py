@@ -93,7 +93,9 @@ check("search --limit truncates results not count",
 
 # --- graph_check.py: ambiguous ---
 
-check("ambiguous bare-link targets",
+# Alias shadowing (alias 'Doc' on two files, [[Doc]] linked, no
+# Doc.md) must NOT count — bare links resolve by filename only.
+check("ambiguous: filename collisions only, alias shadow excluded",
       run("graph_check.py", "ambiguous", vault=SCHEMA_VAULT),
       ["# count: 1", "dupe  -> A/Dupe.md, B/Dupe.md"])
 
@@ -102,6 +104,8 @@ check("ambiguous bare-link targets",
 lines = run("vault_check.py", "frontmatter", vault=SCHEMA_VAULT)
 check("frontmatter finding count", lines[:2], ["## frontmatter", "# count: 5"])
 findings = "\n".join(lines)
+check("frontmatter: inline YAML comment not a false enum error",
+      ["CommentVal" in findings], [False])
 for expect, label in [
     ("canon_status: 'PENDING'", "invalid canon_status enum"),
     ("status: 'undead'", "invalid npc status enum"),
@@ -123,15 +127,27 @@ check("names: duplicates, fuzzy, alias collisions",
        "alias 'Doc' duplicates alias 'Doc'"])
 
 lines = run("vault_check.py", "index", vault=SCHEMA_VAULT)
+index_text = "\n".join(lines)
 check("index: phantom link detected",
       ["index links '[[ghost]]' but no such file exists"
-       in "\n".join(lines)], [True])
+       in index_text], [True])
 check("index: unreferenced files counted",
       lines[1:2], ["# count: 12"])
+check("index: path-form link resolves (no false positive)",
+      ["NPCs/BadEnum.md\tnot referenced" in index_text], [False])
+check("index: .md-suffix link resolves (no false positive)",
+      ["NPCs/Legacy.md\tnot referenced" in index_text], [False])
+check("index: attachment embed ignored (no phantom)",
+      ["banner" in index_text], [False])
 
-check("stale-drafts: stale, missing-createdSession, fresh exempt",
+check("stale-drafts: stale, missing, future, comment-stripped, fresh exempt",
       run("vault_check.py", "stale-drafts", vault=SCHEMA_VAULT),
-      ["## stale-drafts", "# count: 3",
+      ["## stale-drafts", "# count: 5",
+       "WARNING\tNPCs/CommentVal.md\tstale DRAFT (created session 1, "
+       "now session 5) — promote to AUTHORITATIVE or delete",
+       "WARNING\tNPCs/FutureDraft.md\tcreatedSession (9) exceeds "
+       "current session (5) — check the value (dates don't belong "
+       "in this field)",
        "WARNING\tNPCs/Legacy.md\tstale DRAFT (created session 1, "
        "now session 5) — promote to AUTHORITATIVE or delete",
        "WARNING\tNPCs/NoCreated.md\tDRAFT missing createdSession — "

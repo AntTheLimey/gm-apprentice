@@ -6,3 +6,6 @@ type: meta
 
 - [[Good]]
 - [[Ghost]]
+- [[NPCs/BadEnum]]
+- [[Legacy.md]]
+- ![[banner.png]]

@@ -116,11 +116,25 @@ def extract_frontmatter(content: str) -> dict | None:
         if ":" in line and not line.startswith(" ") and not line.startswith("\t"):
             key, _, value = line.partition(":")
             key = key.strip()
-            value = value.strip().strip('"').strip("'")
+            value = value.strip()
+
+            # Quoted value: take the quoted content, drop anything after
+            # (including trailing YAML comments).
+            m = re.match(r"""^(['"])(.*?)\1""", value)
+            if m:
+                value = m.group(2)
+            else:
+                # Unquoted: a ' #' starts a YAML comment.
+                value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
 
             # Handle empty value (might be start of array)
             if value == "" or value == "[]":
                 frontmatter[key] = []
+            elif value.startswith("[") and value.endswith("]"):
+                # Inline array: aliases: [Doc, "The Colonel"]
+                frontmatter[key] = [
+                    v.strip().strip('"').strip("'")
+                    for v in value[1:-1].split(",") if v.strip()]
             else:
                 frontmatter[key] = value
             current_key = key

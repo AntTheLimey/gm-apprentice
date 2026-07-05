@@ -26,6 +26,7 @@ import sys
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from graph_check import link_target
 from schema_rules import (
     CANON_STATUS_VALUES,
     DEPRECATED_FIELDS,
@@ -190,10 +191,8 @@ def check_names(vault: Path, threshold: float) -> list[str]:
                     and normalize(name_a) != normalize(name_b):
                 continue  # same document-chain family
             na, nb = normalize(name_a), normalize(name_b)
-            # Numbered structural families (Chapter_2_Overview vs
-            # Chapter_4_Overview) are similar by design, not confusing.
-            if na != nb and DIGITS_RE.sub("#", na) == DIGITS_RE.sub("#", nb):
-                continue
+            numbered_family = (na != nb and
+                               DIGITS_RE.sub("#", na) == DIGITS_RE.sub("#", nb))
             if na == nb:
                 key = (pair, "exact")
                 if key not in seen_pairs:
@@ -209,12 +208,24 @@ def check_names(vault: Path, threshold: float) -> list[str]:
             ratio = matcher.ratio()
             if ratio >= threshold:
                 key = (pair, "fuzzy")
-                if key not in seen_pairs:
-                    seen_pairs.add(key)
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+                if numbered_family:
+                    # Names differing only in digits are usually an
+                    # intentional sequence — but can hide transposed
+                    # numbers, so surface as INFO, not WARNING.
+                    rows.append(f"INFO\t{rel_a} <> {rel_b}\t"
+                                f"numbered pair '{name_a}' ~ "
+                                f"'{name_b}' — verify intentional")
+                else:
                     rows.append(f"WARNING\t{rel_a} <> {rel_b}\t"
                                 f"'{name_a}' ~ '{name_b}' "
                                 f"(similarity {ratio:.2f})")
     return sorted(rows)
+
+
+ATTACHMENT_RE = re.compile(r"\.(?!md$)[A-Za-z0-9]{1,6}$")
 
 
 def check_index(vault: Path) -> list[str]:
@@ -222,21 +233,36 @@ def check_index(vault: Path) -> list[str]:
     if not index_path.is_file():
         return ["INFO\t_meta/index.md\tno index file — skipping check"]
     index_text = index_path.read_text(encoding="utf-8", errors="replace")
-    indexed = {normalize(re.split(r"[#^|]", t, maxsplit=1)[0])
-               for t in LINK_RE.findall(index_text)}
+    # Resolve like graph_check does: strip alias/anchor/path/.md, skip
+    # attachment embeds (images, PDFs) — they are not note references.
+    indexed = set()
+    for raw in LINK_RE.findall(index_text):
+        target = re.split(r"[#^|]", raw, maxsplit=1)[0].strip()
+        if ATTACHMENT_RE.search(target.rsplit("/", 1)[-1]):
+            continue
+        indexed.add(link_target(raw))
 
-    names = {}
+    names = set()
+    referenced_by = {}  # rel -> set of names that count as references
     content_files = []
     for rel, text in vault_files(vault):
-        top = rel.split("/")[0]
-        names.setdefault(normalize(Path(rel).stem), []).append(rel)
+        fm = extract_frontmatter(text) or {}
+        stem = normalize(Path(rel).stem)
+        names.add(stem)
+        refs = {stem}
+        aliases = fm.get("aliases")
+        if isinstance(aliases, list):
+            for a in aliases:
+                names.add(normalize(a))
+                refs.add(normalize(a))
+        referenced_by[rel] = refs
         # Underscore dirs are infrastructure, not indexable content.
-        if not top.startswith("_"):
+        if not rel.split("/")[0].startswith("_"):
             content_files.append(rel)
 
     rows = []
     for rel in content_files:
-        if normalize(Path(rel).stem) not in indexed:
+        if not referenced_by[rel] & indexed:
             rows.append(f"WARNING\t{rel}\tnot referenced from "
                         f"_meta/index.md")
     for target in sorted(indexed):
@@ -269,6 +295,10 @@ def check_stale_drafts(vault: Path) -> list[str]:
         if created is None:
             rows.append(f"WARNING\t{rel}\tDRAFT missing createdSession — "
                         f"cannot determine staleness; add it or promote")
+        elif created > current:
+            rows.append(f"WARNING\t{rel}\tcreatedSession ({created}) "
+                        f"exceeds current session ({current}) — check "
+                        f"the value (dates don't belong in this field)")
         elif current - created >= 3:
             rows.append(f"WARNING\t{rel}\tstale DRAFT (created session "
                         f"{created}, now session {current}) — promote "
