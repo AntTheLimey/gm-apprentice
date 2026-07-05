@@ -143,7 +143,8 @@ If yes:
 
 2. **Hand off** to campaign-organizer with the adventure
    brief as context. campaign-organizer builds the vault
-   around the existing `Adventures/` and `_Campaign/` folders.
+   around the existing `Adventures/`, `_Campaign/`, and (when
+   world facts emerged in Step 2c) `_World/` folders.
 
 ### Step 4: Update Status
 
