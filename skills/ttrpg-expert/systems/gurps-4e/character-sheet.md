@@ -241,3 +241,24 @@ common ranges, defensive options, and tactical notes.*
 | **TOTAL** | **0** |
 | **Budget** | |
 | **Unspent** | |
+
+## Sheet Verification
+
+*Once the character lives in the vault as a PC entity file (the
+`pc-gurps-4e.md` template), verify its arithmetic with the
+bundled checker:*
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_check.py" "path/to/PC.md"
+```
+
+*The checker parses the vault format — bare headings like "Melee
+Weapons" and "Points Summary", and a "Current Status" block with
+an Enc: line — not this reference sheet's layout, so run it
+against the PC's vault file. It verifies Basic Lift, the
+encumbrance table, carried load, Move/Dodge, secondary
+characteristics, Parry/Block, the point total, and thrust/swing
+damage (B15–B17, B269, B375–B376). Findings are advisory —
+WARNINGs are deltas to explain (a Talent or weapon bonus is a
+fine reason), not automatic errors. Fix real arithmetic errors
+before finalizing.*

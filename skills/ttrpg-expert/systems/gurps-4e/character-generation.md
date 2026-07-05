@@ -339,6 +339,23 @@ Dodge. Always calculate this for combat characters.
 - [ ] Character has GM hooks (enemies, duties, secrets)
 - [ ] Character has reasons to work with the party
 
+**Arithmetic Verification:**
+
+Once the sheet is built, run the bundled checker to confirm the
+math holds:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_check.py" "path/to/PC.md"
+```
+
+It re-derives Basic Lift, the encumbrance table, carried load
+against the Current Status Enc line, Move/Dodge, secondary
+characteristics, Parry/Block, the point budget, and thrust/swing
+damage (B15–B17, B269, B375–B376). Findings are advisory — a
+WARNING is a delta to explain (a Talent or weapon bonus is a
+perfectly good reason), not an automatic error. Fix any genuine
+arithmetic mistake before presenting the sheet.
+
 ## Character Sheet Output Format
 
 ```text
