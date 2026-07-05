@@ -453,3 +453,42 @@ def check_damage(sheet):
                              f"{fm_m.group(0).strip()} resolves to "
                              f"{gc.fmt_dice(dice, adds)} at ST {st}"))
     return findings
+
+
+CHECKS = [
+    ("attributes", check_attributes),
+    ("encumbrance", check_encumbrance),
+    ("load", check_load),
+    ("defenses", check_defenses),
+    ("points", check_points),
+    ("damage", check_damage),
+]
+
+
+def emit(section, findings):
+    print(f"[{section}]")
+    print(f"# count: {len(findings)}")
+    for level, locus, message in findings:
+        print(f"{level}\t{locus}\t{message}")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("sheet", type=Path)
+    ap.add_argument("command", nargs="?", default="all",
+                    choices=[name for name, _fn in CHECKS] + ["all"])
+    args = ap.parse_args()
+    try:
+        text = args.sheet.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        print(f"error: cannot read {args.sheet}: {e}", file=sys.stderr)
+        return 2
+    sheet = Sheet(text)
+    for name, fn in CHECKS:
+        if args.command in (name, "all"):
+            emit(name, fn(sheet))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

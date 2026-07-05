@@ -118,6 +118,9 @@ jobs:
       - name: Vault utility regression
         run: python tests/test_vault_utilities.py
 
+      - name: gurps-check tests
+        run: python tests/test_gurps_check.py
+
   pr-discipline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

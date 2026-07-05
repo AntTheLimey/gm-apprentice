@@ -345,6 +345,39 @@ check("bare sw resolves as formula-only INFO at ST 11",
       any(f[0] == "INFO" and "Whip" in f[1] and "1d+1" in f[2]
           for f in dmg2), True)
 
+# --- CLI against committed fixtures ---
+def run_check(fixture, *args):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "gurps_check.py"),
+         str(FIXTURES / fixture), *args],
+        capture_output=True, text=True, timeout=60)
+    if result.returncode != 0:
+        FAILURES.append(f"gurps_check {fixture}: rc={result.returncode} "
+                        f"stderr={result.stderr.strip()}")
+        return []
+    return result.stdout.strip().splitlines()
+
+
+clean_out = run_check("clean.md")
+clean_counts = [l for l in clean_out if l.startswith("# count:")]
+check("clean sheet: six sections emitted", len(clean_counts), 6)
+check("clean sheet: no WARNING or ERROR",
+      [l for l in clean_out if l.startswith(("WARNING", "ERROR"))], [])
+
+flawed_out = run_check("flawed.md")
+check("flawed: encumbrance weight warnings fire",
+      sum(1 for l in flawed_out
+          if l.startswith("WARNING\tencumbrance/")) >= 5, True)
+check("flawed: parry warnings fire",
+      sum(1 for l in flawed_out
+          if l.startswith("WARNING\tdefenses/parry/")), 2)
+check("flawed: load computes Light with no declared Enc",
+      any(l.startswith("INFO\tload") and "Light" in l for l in flawed_out),
+      True)
+check("single-section run emits one section",
+      [l for l in run_check("clean.md", "load") if l.startswith("[")],
+      ["[load]"])
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
