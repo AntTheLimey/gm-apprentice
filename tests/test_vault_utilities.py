@@ -23,14 +23,15 @@ PREP_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-prep"
 FAILURES = []
 
 
-def run(script, *args, vault=None):
+def run(script, *args, vault=None, expect_rc=0):
     result = subprocess.run(
         [sys.executable, str(SCRIPTS / script),
          str(vault or VAULT), *args],
         capture_output=True, text=True, timeout=60,
     )
-    if result.returncode != 0:
+    if result.returncode != expect_rc:
         FAILURES.append(f"{script} {args}: rc={result.returncode} "
+                        f"(expected {expect_rc}) "
                         f"stderr={result.stderr.strip()}")
         return []
     return result.stdout.strip().splitlines()
@@ -275,14 +276,17 @@ try:
     bad = "---\ntype: pc\n--- \nBody text.\n\n---\n\nMore body.\n"
     (v / "Bad.md").write_text(bad)
     lines = run("stamp_entities.py", "Bad.md", "--session", "3",
-                "--date", "2026-07-05", "--write", vault=v)
+                "--date", "2026-07-05", "--write", vault=v,
+                expect_rc=1)
+    check("stamp: malformed delimiter refused with error finding",
+          ["malformed frontmatter delimiter" in "\n".join(lines)], [True])
     check("stamp: malformed closing delimiter refused",
           [(v / "Bad.md").read_text() == bad], [True])
 
     hr = "---\nJust a horizontal rule opener.\n\n---\n\nEssay text.\n"
     (v / "Hr.md").write_text(hr)
     run("stamp_entities.py", "Hr.md", "--session", "3",
-        "--date", "2026-07-05", "--write", vault=v)
+        "--date", "2026-07-05", "--write", vault=v, expect_rc=1)
     check("stamp: non-YAML region between rules refused",
           [(v / "Hr.md").read_text() == hr], [True])
 finally:
