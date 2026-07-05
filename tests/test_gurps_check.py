@@ -321,6 +321,30 @@ check("thr-1 vs 1d-2 passes (both 2 adds)",
 check("affliction line skipped",
       any("Zapper" in f[1] for f in dmg), False)
 
+# Word-boundary guard: "Thrown"/"Sword" must not match as thr/sw, while
+# bare "sw" (formula, no adds, no dice) still resolves as an INFO.
+_DMG2 = _KARLISH + """
+## Melee Weapons
+
+| Weapon | Skill | Damage | Reach | Parry |
+|--------|-------|--------|-------|-------|
+| Broadsword | Broadsword 15 | sw+1 cut (2d cut) | 1 | 10 |
+| Javelin | Spear 13 | Thrown weapon, 1d cut | 1 | 9 |
+| Gladius | Shortsword 14 | Special, see Short Sword skill | 1 | 10 |
+| Whip | Whip 12 | sw cut | 1,2 | 8 |
+"""
+
+dmg2 = gk.check_damage(gk.Sheet(_DMG2))
+check("Thrown weapon row produces no finding",
+      any("Javelin" in f[1] for f in dmg2), False)
+check("Short Sword prose row produces no finding",
+      any("Gladius" in f[1] for f in dmg2), False)
+check("sw+1 vs 2d still flagged after boundary fix",
+      any(f[0] == "WARNING" and "Broadsword" in f[1] for f in dmg2), True)
+check("bare sw resolves as formula-only INFO at ST 11",
+      any(f[0] == "INFO" and "Whip" in f[1] and "1d+1" in f[2]
+          for f in dmg2), True)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)

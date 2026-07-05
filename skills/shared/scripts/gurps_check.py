@@ -401,7 +401,7 @@ def check_points(sheet):
     return findings
 
 
-FORMULA_RE = re.compile(r"\b(sw|thr)\s*(?:([+\-−])\s*(\d+))?", re.I)
+FORMULA_RE = re.compile(r"\b(sw|thr)\b\s*(?:([+\-−])\s*(\d+))?", re.I)
 DICE_IN_TEXT_RE = re.compile(r"\b(\d+)\s*d\s*(?:([+\-−])\s*(\d+))?")
 
 
