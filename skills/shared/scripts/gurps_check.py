@@ -220,3 +220,53 @@ def check_encumbrance(sheet):
                                  f"Dodge {declared}, computed {computed}"
                                  f"{' (with Combat Reflexes)' if cr else ''}"))
     return findings
+
+
+ENC_LINE_RE = re.compile(r"\bEnc(?:umbrance)?\*{0,2}\s*:\s*\*{0,2}\s*([^\n]+)",
+                         re.I)
+
+
+def declared_enc(sheet):
+    body = sheet.section("Current Status")
+    if not body:
+        return None
+    m = ENC_LINE_RE.search(body)
+    return m.group(1).strip() if m else None
+
+
+def check_load(sheet):
+    attrs = read_attributes(sheet)
+    if attrs is None:
+        return [("INFO", "load", "no attributes; check skipped")]
+    rows = sheet.table("Equipment")
+    if len(rows) < 2:
+        return [("INFO", "load", "no Equipment table found; check skipped")]
+    headers = rows[0]
+    i_wt, i_loc = col(headers, "weight"), col(headers, "location")
+    if i_wt < 0:
+        return [("INFO", "load", "Equipment table has no Weight column")]
+    total = 0.0
+    for row in rows[1:]:
+        if i_loc >= 0:
+            loc = _cell(row, i_loc)
+            if loc is not None and loc.strip().lower() not in ("carried", "worn"):
+                continue
+        w = parse_weight(_cell(row, i_wt))
+        if w is not None:
+            total += w
+    bl = gc.basic_lift(attrs["st"])
+    computed_name = gc.ENC_LEVELS[-1][0]
+    for name, _level, maxwt in gc.enc_max_weights(bl):
+        if total <= maxwt:
+            computed_name = name
+            break
+    declared = declared_enc(sheet)
+    if declared is None:
+        return [("INFO", "load",
+                 f"carried+worn {total:g} lb -> {computed_name} (BL {bl:g}); "
+                 "no Enc: line in Current Status to compare")]
+    if norm_level(declared) != computed_name.lower():
+        return [("WARNING", "load",
+                 f"Current Status says Enc {declared} but carried+worn "
+                 f"{total:g} lb computes to {computed_name} (BL {bl:g})")]
+    return []

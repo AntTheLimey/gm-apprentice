@@ -193,6 +193,32 @@ ragged_findings = gk.check_encumbrance(gk.Sheet(_RAGGED))
 check("enc tolerates ragged row (2 weight warnings, no exception)",
       [f[0] for f in ragged_findings], ["WARNING", "WARNING"])
 
+_LOADED = _KARLISH.replace(
+    "## Equipment\n",
+    "## Equipment\n\n"
+    "| Item | Weight | Cost | Location |\n"
+    "|------|--------|------|----------|\n"
+    "| Sword | 3 lb | $600 | Carried |\n"
+    "| Shield | 15 lb | $90 | Carried |\n"
+    "| Mail | 25 lb | $230 | Worn |\n"
+    "| Mule pack | 90 lb | $30 | Mule |\n",
+).replace(
+    "## Stat Sheet",
+    "## Current Status\n\n**Enc:** Medium (2)\n\n## Stat Sheet",
+)
+
+lsheet = gk.Sheet(_LOADED)
+load = gk.check_load(lsheet)
+check("load flags declared vs computed",
+      [f[0] for f in load], ["WARNING"])
+check("load message shows both levels and lbs",
+      "43" in load[0][2] and "Light" in load[0][2] and "Medium" in load[0][2],
+      True)
+
+nl = gk.check_load(gk.Sheet(_LOADED.replace("**Enc:** Medium (2)\n", "")))
+check("load INFO when no declared level",
+      (nl[0][0], "Light" in nl[0][2]), ("INFO", True))
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
