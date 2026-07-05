@@ -16,7 +16,9 @@ and Obsidian is a viewer the user may or may not have open.
 | Exact-term search (names, dates, markers) | Grep |
 | Ranked/prose search | `vault_search.py` |
 | Backlinks, orphans, unresolved/ambiguous links, dead ends | `graph_check.py` |
-| Entity schema validation, name similarity, index drift, stale drafts | `vault_check.py` |
+| Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `vault_check.py` |
+| Session-prep context bundle (one call) | `session_context.py` |
+| Batch frontmatter stamping (wrap-up PC refresh) | `stamp_entities.py` |
 
 Grep is the right tool when you know the term (an entity
 name, a date, a marker like `<!-- spoiler -->`). The
@@ -59,9 +61,24 @@ terms.
 required fields, enums, legacy fields, unquoted frontmatter
 links), `names` (duplicate and confusable entity names and
 aliases), `index` (`_meta/index.md` drift, both directions),
-`stale-drafts`, `all`. Findings are
-`LEVEL<TAB>path<TAB>message`; fix every ERROR, triage
-WARNINGs with the GM, treat INFO as context.
+`stale-drafts`, `changed --since N` (entities touched at or
+after session N — the incremental-audit scope), `all`.
+Findings are `LEVEL<TAB>path<TAB>message`; fix every ERROR,
+triage WARNINGs with the GM, treat INFO as context.
+
+`session_context.py <vault>` emits the session-prep read-set
+in one call: latest Wrap-Up, active PC `## Current Status`
+blocks, the upcoming session's Plan, deferred world flags,
+campaign overview — each section tagged with its source path.
+Drill into individual files only where the digest shows the
+need.
+
+`stamp_entities.py <vault> FILE... --session N --date
+YYYY-MM-DD [--retag OLD=NEW]` batch-stamps `asOfSession`,
+`lastUpdated`, and a chapter-tag swap across files. Dry-run
+by default — review the plan, then re-run with `--write`. It
+touches only those frontmatter lines; everything else is
+preserved byte-for-byte.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \

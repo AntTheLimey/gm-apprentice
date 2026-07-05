@@ -90,9 +90,9 @@ YAML frontmatter, wiki-links, and relationship metadata.
 
 - **No graph visualization** — relationship data is written
   to frontmatter but you can't see the graph until you open
-  the folder in Obsidian with Juggl.
-- **No semantic search** — link discovery in Weave mode uses
-  text matching instead of Smart Connections.
+  the folder in Obsidian with Juggl. (Link discovery in Weave
+  mode is unaffected either way — it uses the bundled search
+  and graph utilities.)
 - **No template auto-application** — templates are created as
   reference files, not auto-applied by Templater.
 - **No Dataview** — query syntax appears as plain text.
@@ -101,5 +101,7 @@ YAML frontmatter, wiki-links, and relationship metadata.
 
 Open your campaign folder in Obsidian. That's it. All the
 files, frontmatter, wiki-links, and folder structure are
-already Obsidian-compatible. Install the recommended plugins
-to unlock graph visualization and semantic search.
+already Obsidian-compatible, and Obsidian's built-in graph
+view works immediately. Install the recommended plugins for
+in-app semantic search and template automation (Juggl adds
+the richer relationship-typed graph).

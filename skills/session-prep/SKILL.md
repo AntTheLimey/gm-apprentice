@@ -46,12 +46,30 @@ persistent artifact — conversation is ephemeral.
 
 ## Context Source
 
-**Read pattern:**
+**Gather the standard read-set in ONE call** before any
+individual reads:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path>
+```
+
+It emits the last Wrap-Up, every active PC's `## Current
+Status` block, the upcoming session's existing Plan, deferred
+world flags, and the campaign overview — replacing a dozen-plus
+separate reads (see `shared/vault-access.md`). If Python is
+unavailable, fall back to the manual read pattern — it must
+cover the same set:
+
 1. Last session's Wrap-Up file — primary context
 2. PC roster — always, including each active PC's `## Current Status`
    block (Location, Condition, Carrying, Open threads, Knows (exclusive))
-3. Vault dives — targeted reads only, proportional to
-   upcoming session complexity, not campaign size
+3. The upcoming session's Plan file, if one exists
+4. `_World/_flags.md` — Deferred section
+5. The campaign overview (current game date, campaign state)
+
+**After the bundle either way:** vault dives are targeted
+reads only, proportional to upcoming session complexity, not
+campaign size.
 
 ### Personal Reference Files
 

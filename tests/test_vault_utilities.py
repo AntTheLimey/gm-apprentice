@@ -8,26 +8,30 @@ links, space/underscore/case variants, an orphan, an unresolved
 target, and dead ends.
 """
 
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 VAULT = ROOT / "tests" / "fixtures" / "mini-vault"
 SCHEMA_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-schema"
+PREP_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-prep"
 
 FAILURES = []
 
 
-def run(script, *args, vault=None):
+def run(script, *args, vault=None, expect_rc=0):
     result = subprocess.run(
         [sys.executable, str(SCRIPTS / script),
          str(vault or VAULT), *args],
         capture_output=True, text=True, timeout=60,
     )
-    if result.returncode != 0:
+    if result.returncode != expect_rc:
         FAILURES.append(f"{script} {args}: rc={result.returncode} "
+                        f"(expected {expect_rc}) "
                         f"stderr={result.stderr.strip()}")
         return []
     return result.stdout.strip().splitlines()
@@ -154,6 +158,163 @@ check("stale-drafts: stale, missing, future, comment-stripped, fresh exempt",
        "cannot determine staleness; add it or promote",
        "WARNING\tNoType.md\tDRAFT missing createdSession — "
        "cannot determine staleness; add it or promote"])
+
+# --- session_context.py ---
+
+ctx = "\n".join(run("session_context.py", vault=PREP_VAULT))
+for expect, present, label in [
+    ("Just played: session 2", True,
+     "planned session 3 index does not shift 'just played'"),
+    ("Preparing: session 3", True, "computes upcoming session"),
+    ("ignored for 'just played'", True,
+     "unplayed indexes surfaced as a note"),
+    ("lighthouse keeper vanished", True, "includes wrap-up body"),
+    ("The Salty Dog inn", True, "includes PC Current Status"),
+    ("Secretly cursed", False, "PC GM Notes not in status block"),
+    ("Fallen", False, "dead PC excluded"),
+    ("Search the lighthouse at dawn", True, "includes upcoming plan"),
+    ("The Drowned Court", True, "includes deferred flags"),
+    ("Giant crabs", False, "ignored flags excluded"),
+    ("Fogport, 1923", True, "includes campaign overview"),
+]:
+    check(f"session_context: {label}", [expect in ctx], [present])
+
+# --- vault_check.py changed ---
+
+check("changed --since lists session-touched entities",
+      run("vault_check.py", "changed", "--since", "2", vault=PREP_VAULT),
+      ["## changed", "# count: 5",
+       "INFO\tChapters/Chapter 1/Sessions/Chapter_01_Session_02_"
+       "Wrap_Up.md\tcreatedSession=2, session=2",
+       "INFO\tChapters/Chapter 1/Sessions/Session 02.md\t"
+       "session_number=2",
+       "INFO\tChapters/Chapter 1/Sessions/Session 03.md\t"
+       "session_number=3",
+       "INFO\tChapters/Chapter 1/Sessions/Session_03_Plan.md\t"
+       "session=3",
+       "INFO\tCharacters/PCs/Hero.md\tasOfSession=2"])
+
+# --- schema_rules.parse_session_number on real-vault values ---
+
+sys.path.insert(0, str(SCRIPTS))
+from schema_rules import parse_session_number  # noqa: E402
+
+for value, expected, label in [
+    ("Chapter 3 — Vienna, Session 7 (character retired)", 7,
+     "compound reference keys on Session, not chapter"),
+    ("Reconstructed 2026-07-04 from notes", None,
+     "date-bearing prose is unknown, not session 2026"),
+    ("2026-03-01", None, "bare date is unknown"),
+    ("Session 3", 3, "plain session string"),
+    (14, 14, "plain int"),
+    (0, 0, "session zero is valid"),
+]:
+    check(f"parse_session_number: {label}",
+          [parse_session_number(value)], [expected])
+
+# --- stamp_entities.py ---
+
+dry = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                    "--session", "3", "--date", "2026-07-05",
+                    "--retag", "chapter-1=chapter-2",
+                    vault=PREP_VAULT))
+check("stamp: dry run plans without writing",
+      ["WOULD-STAMP" in dry and "# dry-run" in dry], [True])
+check("stamp: fixture untouched after dry run",
+      ["asOfSession: 2" in (PREP_VAULT / "Characters/PCs/Hero.md"
+                            ).read_text()], [True])
+
+tmp = Path(tempfile.mkdtemp())
+try:
+    work = tmp / "vault"
+    shutil.copytree(PREP_VAULT, work)
+    original = (work / "Characters/PCs/Hero.md").read_text()
+    out = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                        "--session", "3", "--date", "2026-07-05",
+                        "--retag", "chapter-1=chapter-2", "--write",
+                        vault=work))
+    stamped = (work / "Characters/PCs/Hero.md").read_text()
+    check("stamp: write applies asOfSession",
+          ["asOfSession: 3" in stamped], [True])
+    check("stamp: write adds lastUpdated",
+          ['lastUpdated: "2026-07-05"' in stamped], [True])
+    check("stamp: write swaps chapter tag",
+          ["- chapter-2" in stamped and "- chapter-1" not in stamped],
+          [True])
+    # Everything after the closing frontmatter delimiter must be
+    # byte-identical, not merely contain the same phrases.
+    check("stamp: body preserved byte-for-byte",
+          [stamped.split("---\n", 2)[2] == original.split("---\n", 2)[2]],
+          [True])
+
+    traversal = "\n".join(run("stamp_entities.py", "../escape.md",
+                              "--session", "3", "--date", "2026-07-05",
+                              "--write", vault=work, expect_rc=1))
+    check("stamp: path traversal outside vault refused",
+          ["escapes the vault" in traversal
+           and not (tmp / "escape.md").exists()], [True])
+
+    rerun = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                          "--session", "3", "--date", "2026-07-05",
+                          "--retag", "chapter-1=chapter-2", vault=work))
+    check("stamp: dry-run count excludes UNCHANGED files",
+          ["# dry-run would stamp: 0 files" in rerun
+           and "UNCHANGED" in rerun], [True])
+
+    run("stamp_entities.py", "Characters/PCs/Hero.md", "--session",
+        "3", "--date", "2026-07-05", "--retag", "chapter-2=",
+        vault=work, expect_rc=2)
+    check("stamp: empty retag NEW side rejected",
+          ["chapter-2" in (work / "Characters/PCs/Hero.md").read_text()],
+          [True])
+finally:
+    shutil.rmtree(tmp)
+
+# --- stamp_entities.py safety properties (review findings) ---
+
+tmp = Path(tempfile.mkdtemp())
+try:
+    v = tmp / "v"
+    v.mkdir()
+    (v / "Arcs.md").write_text(
+        "---\ntype: pc\ncanon_status: AUTHORITATIVE\narcs:\n"
+        "  - chapter-1\ntags:\n  - chapter-1\n---\n\n# Arcs\n")
+    run("stamp_entities.py", "Arcs.md", "--session", "3",
+        "--date", "2026-07-05", "--retag", "chapter-1=chapter-2",
+        "--write", vault=v)
+    arcs = (v / "Arcs.md").read_text()
+    check("stamp: retag scoped to tags list, arcs untouched",
+          ["arcs:\n  - chapter-1" in arcs
+           and "tags:\n  - chapter-2" in arcs], [True])
+
+    crlf = ("---\r\ntype: pc\r\ncanon_status: AUTHORITATIVE\r\n"
+            "asOfSession: 2\r\n---\r\n\r\n# CRLF body\r\n")
+    (v / "Crlf.md").write_bytes(crlf.encode())
+    run("stamp_entities.py", "Crlf.md", "--session", "3",
+        "--date", "2026-07-05", "--write", vault=v)
+    out_bytes = (v / "Crlf.md").read_bytes()
+    check("stamp: CRLF line endings preserved",
+          [out_bytes.count(b"\r\n") >= 7 and b"asOfSession: 3" in
+           out_bytes and b"# CRLF body" in out_bytes], [True])
+
+    bad = "---\ntype: pc\n--- \nBody text.\n\n---\n\nMore body.\n"
+    (v / "Bad.md").write_text(bad)
+    lines = run("stamp_entities.py", "Bad.md", "--session", "3",
+                "--date", "2026-07-05", "--write", vault=v,
+                expect_rc=1)
+    check("stamp: malformed delimiter refused with error finding",
+          ["malformed frontmatter delimiter" in "\n".join(lines)], [True])
+    check("stamp: malformed closing delimiter refused",
+          [(v / "Bad.md").read_text() == bad], [True])
+
+    hr = "---\nJust a horizontal rule opener.\n\n---\n\nEssay text.\n"
+    (v / "Hr.md").write_text(hr)
+    run("stamp_entities.py", "Hr.md", "--session", "3",
+        "--date", "2026-07-05", "--write", vault=v, expect_rc=1)
+    check("stamp: non-YAML region between rules refused",
+          [(v / "Hr.md").read_text() == hr], [True])
+finally:
+    shutil.rmtree(tmp)
 
 # --- verdict ---
 

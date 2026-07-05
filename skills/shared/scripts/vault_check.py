@@ -10,6 +10,7 @@ Usage:
   vault_check.py VAULT names [--threshold 0.85]
   vault_check.py VAULT index
   vault_check.py VAULT stale-drafts
+  vault_check.py VAULT changed --since N
   vault_check.py VAULT all
 
 Skips hidden directories, `_Templates/`, and `_inbox/` (staging).
@@ -306,19 +307,45 @@ def check_stale_drafts(vault: Path) -> list[str]:
     return rows
 
 
+def check_changed(vault: Path, since: int) -> list[str]:
+    """Entities touched at or after session N — the incremental-audit
+    scope. Keys off session-anchored fields (asOfSession,
+    createdSession, session, session_number), not calendar dates."""
+    rows = []
+    for rel, text in vault_files(vault):
+        fm = extract_frontmatter(text) or {}
+        reasons = []
+        for field in ("asOfSession", "createdSession", "session",
+                      "session_number"):
+            n = parse_session_number(fm.get(field))
+            if n is not None and n >= since:
+                reasons.append(f"{field}={n}")
+        if reasons:
+            rows.append(f"INFO\t{rel}\t{', '.join(reasons)}")
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", choices=["frontmatter", "names", "index",
-                                        "stale-drafts", "all"])
+                                        "stale-drafts", "changed", "all"])
     ap.add_argument("--folder", help="restrict frontmatter check to subfolder")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
+    ap.add_argument("--since", type=int,
+                    help="session number for the changed command")
     args = ap.parse_args()
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
+    if args.command == "changed":
+        if args.since is None:
+            print("error: changed requires --since N", file=sys.stderr)
+            return 2
+        emit("changed", check_changed(args.vault, args.since))
+        return 0
 
     if args.command in ("frontmatter", "all"):
         emit("frontmatter", check_frontmatter(args.vault, args.folder))

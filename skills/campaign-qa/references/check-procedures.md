@@ -28,6 +28,23 @@ The canon audit detects factual contradictions between vault
 files. A contradiction is two or more files asserting
 incompatible facts about the same entity or event.
 
+**Incremental mode (recommended between full sweeps):** when
+the last audit's session number is known, scope the audit to
+what changed plus its graph neighborhood instead of the whole
+vault:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> changed --since <last-audit-session + 1>
+```
+
+Audit the listed files, plus each one's backlinks
+(`graph_check.py backlinks`) — contradictions live where
+changes happened. Record the audited session number in the QA
+report so the next run knows its starting point. Run the full
+vault sweep periodically (e.g. every few chapters) or when no
+prior audit point exists.
+
 ### Step 1: Build the Entity Index
 
 Read `_meta/index.md` (or scan the vault if no index exists)

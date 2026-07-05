@@ -178,8 +178,14 @@ install step):
   ranking beats literal matching.
 - **`vault_check.py`** -- entity schema validation (required
   fields, enums, legacy fields), duplicate/confusable name
-  detection, `_meta/index.md` drift, and stale-DRAFT sweeps.
+  detection, `_meta/index.md` drift, stale-DRAFT sweeps, and
+  changed-since-session listing for incremental audits.
   Skills run it after creating entities and during audits.
+- **`session_context.py`** -- the whole session-prep read-set
+  (last wrap-up, PC statuses, upcoming plan, world flags,
+  overview) in one call instead of a dozen-plus file reads.
+- **`stamp_entities.py`** -- batch frontmatter stamping for
+  the post-session PC refresh; dry-run by default.
 
 Skills invoke these automatically when Python 3 is on your
 PATH and fall back to plain search when it isn't. macOS and
