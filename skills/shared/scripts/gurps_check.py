@@ -399,3 +399,57 @@ def check_points(sheet):
                          "no cost data found for: " + ", ".join(missing) +
                          " — sums are partial"))
     return findings
+
+
+FORMULA_RE = re.compile(r"\b(sw|thr)\s*(?:([+\-−])\s*(\d+))?", re.I)
+DICE_IN_TEXT_RE = re.compile(r"\b(\d+)\s*d\s*(?:([+\-−])\s*(\d+))?")
+
+
+def _resolve_formula(st, kind, sign, num):
+    dice, adds = (gc.swing(st) if kind.lower() == "sw" else gc.thrust(st))
+    if num:
+        n = int(num)
+        adds += -n if sign in ("-", "−") else n
+    return dice, adds
+
+
+def check_damage(sheet):
+    attrs = read_attributes(sheet)
+    if attrs is None:
+        return [("INFO", "damage", "no attributes; check skipped")]
+    st = attrs["st"]
+    thr, sw = gc.thrust(st), gc.swing(st)
+    findings = [("INFO", "damage",
+                 f"ST {st}: thr {gc.fmt_dice(*thr)}, sw {gc.fmt_dice(*sw)} "
+                 "(B16)")]
+    rows = sheet.table("Melee Weapons")
+    if len(rows) < 2:
+        return findings
+    i_dmg = col(rows[0], "damage")
+    if i_dmg < 0:
+        return findings
+    for row in rows[1:]:
+        if len(row) <= i_dmg or not row[0]:
+            continue
+        cell = _cell(row, i_dmg)
+        fm_m = FORMULA_RE.search(cell)
+        if not fm_m:
+            continue
+        dice, adds = _resolve_formula(st, *fm_m.groups())
+        d_m = DICE_IN_TEXT_RE.search(cell)
+        locus = f"damage/{row[0]}"
+        if d_m:
+            d_adds = int(d_m.group(3) or 0)
+            if d_m.group(2) in ("-", "−"):
+                d_adds = -d_adds
+            if (gc.dice_adds(int(d_m.group(1)), d_adds)
+                    != gc.dice_adds(dice, adds)):
+                findings.append(("WARNING", locus,
+                                 f"lists {d_m.group(0).strip()}, "
+                                 f"{fm_m.group(0).strip()} resolves to "
+                                 f"{gc.fmt_dice(dice, adds)} at ST {st}"))
+        else:
+            findings.append(("INFO", locus,
+                             f"{fm_m.group(0).strip()} resolves to "
+                             f"{gc.fmt_dice(dice, adds)} at ST {st}"))
+    return findings

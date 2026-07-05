@@ -299,6 +299,28 @@ check("skills category mismatch flagged (12 summed vs 14 declared)",
 check("attributes category matches (120), not flagged",
       any("Attributes" in f[1] and f[0] == "WARNING" for f in pts), False)
 
+_DMG = _KARLISH + """
+## Melee Weapons
+
+| Weapon | Skill | Damage | Reach | Parry |
+|--------|-------|--------|-------|-------|
+| Broadsword | Broadsword 15 | sw+1 cut (2d cut) | 1 | 10 |
+| Knife | Knife 13 | thr-1 imp (1d-2 imp) | C | 9 |
+| Zapper | Beam 14 | HT-3 aff | 8 | No |
+"""
+
+dsheet = gk.Sheet(_DMG)
+dmg = gk.check_damage(dsheet)
+check("damage INFO announces thr/sw for ST 11",
+      ("1d-1" in dmg[0][2] and "1d+1" in dmg[0][2], dmg[0][0]),
+      (True, "INFO"))
+check("sw+1 vs 2d flagged (1d+2 != 2d in adds-space)",
+      any(f[0] == "WARNING" and "Broadsword" in f[1] for f in dmg), True)
+check("thr-1 vs 1d-2 passes (both 2 adds)",
+      any("Knife" in f[1] and f[0] == "WARNING" for f in dmg), False)
+check("affliction line skipped",
+      any("Zapper" in f[1] for f in dmg), False)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
