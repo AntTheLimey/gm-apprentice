@@ -175,3 +175,113 @@ describe('renderGURPSSheet — defensive sort on missing name', () => {
     });
   });
 });
+
+// Current-encumbrance-row detection: explicit marker in the Level cell, or
+// fallback match against the Current Status Enc: value.
+describe('parseGurps — current encumbrance row', () => {
+  function encSection(levels) {
+    const rows = levels.map(l =>
+      `<tr><td>${l[0]}</td><td>${l[1]}</td><td>${l[2]}</td><td>${l[3]}</td></tr>`).join('');
+    return { title: 'Encumbrance', id: 'encumbrance',
+      html: '<table><tr><th>Level</th><th>Max Weight</th><th>Move</th><th>Dodge</th></tr>' + rows + '</table>' };
+  }
+  const statusSection = { title: 'Current Status', id: 'current-status',
+    html: '<p><strong>Enc:</strong> Light (1)</p>' };
+
+  it('trailing * marker flags that row and is stripped from the level', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1) *', '44 lb', '4', '8'],
+      ['Medium (2)', '66 lb', '3', '7'],
+    ])]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, true, false]);
+    assert.strictEqual(model.encumbrance[1].level, 'Light (1)');
+  });
+
+  it('(current) and ← markers also flag the row', () => {
+    const m1 = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1) (current)', '44 lb', '4', '8'],
+    ])]);
+    assert.strictEqual(m1.encumbrance[1].current, true);
+    assert.strictEqual(m1.encumbrance[1].level, 'Light (1)');
+    const m2 = parseGurps({}, [encSection([
+      ['None (0) ←', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ])]);
+    assert.strictEqual(m2.encumbrance[0].current, true);
+    assert.strictEqual(m2.encumbrance[0].level, 'None (0)');
+  });
+
+  it('marker works in the Equipment ### Encumbrance subsection path', () => {
+    const equip = { title: 'Equipment', id: 'equipment',
+      html: '<h3>Encumbrance</h3><table>' +
+        '<tr><th>Level</th><th>Max Weight</th><th>Move</th><th>Dodge</th></tr>' +
+        '<tr><td>None (0)</td><td>22 lb</td><td>6</td><td>9</td></tr>' +
+        '<tr><td>Light (1) *</td><td>44 lb</td><td>4</td><td>8</td></tr></table>' };
+    const model = parseGurps({}, [equip]);
+    assert.strictEqual(model.encumbrance[1].current, true);
+    assert.strictEqual(model.encumbrance[1].level, 'Light (1)');
+  });
+
+  it('only the first marked row is flagged when several carry markers', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0) *', '22 lb', '6', '9'],
+      ['Light (1) *', '44 lb', '4', '8'],
+    ])]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
+  });
+
+  it('with no marker, Current Status Enc: flags the matching row', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+      ['Medium (2)', '66 lb', '3', '7'],
+    ]), statusSection]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, true, false]);
+  });
+
+  it('status fallback matches level names case-insensitively, ignoring parentheticals', () => {
+    const status = { title: 'Current Status', id: 'current-status',
+      html: '<p><strong>Enc:</strong> LIGHT</p>' };
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ]), status]);
+    assert.strictEqual(model.encumbrance[1].current, true);
+  });
+
+  it('no marker and no matching status leaves every row unflagged', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ])]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, false]);
+  });
+
+  it('an explicit marker wins over a conflicting status value', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0) *', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ]), statusSection]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
+  });
+
+  it('frontmatter encumbrance with current: true is untouched by the fallback', () => {
+    const fm = { encumbrance: [
+      { level: 'None (0)', weight: '22 lb', move: '6', dodge: '9', current: true },
+      { level: 'Light (1)', weight: '44 lb', move: '4', dodge: '8' },
+    ] };
+    const model = parseGurps(fm, [statusSection]);
+    assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
+  });
+
+  it('a lone * level cell is not treated as a marker', () => {
+    const model = parseGurps({}, [encSection([
+      ['*', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ])]);
+    assert.strictEqual(model.encumbrance[0].level, '*');
+    assert.strictEqual(model.encumbrance[0].current, false);
+  });
+});

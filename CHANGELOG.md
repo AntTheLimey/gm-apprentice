@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.8] — 2026-07-05
+## [1.8.9] — 2026-07-05
+
+### Added
+
+- **Current-encumbrance-row highlighting from markdown tables**
+  (publish tool 1.5.1) — the GURPS sheet's Encumbrance block now
+  flags the character's current level when the sheet is written as
+  a plain markdown table, not just from a frontmatter
+  `encumbrance:` array. Two detection paths, in priority order: an
+  explicit marker on the Level cell (trailing `*` — canonical —
+  `←`, or `(current)`), stripped from the displayed text; otherwise
+  the `**Enc:**` value in `## Current Status` is matched against
+  the level names (case-insensitive, parentheticals like `(1)`
+  ignored). At most one row is ever flagged; frontmatter arrays
+  and unmarked tables without a status match render unchanged.
+  The GURPS PC template documents the marker and gains an
+  `**Enc:**` line in its Current Status block. Sites pinned to an
+  earlier published tool need to move to ≥1.5.1 to pick this up.
+
+
 
 ### Changed
 
