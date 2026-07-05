@@ -83,6 +83,58 @@ check("B269: 2d+5 equiv 3d+1",
 check("B269: 1d+2 not equiv 2d",
       gc.dice_adds(1, 2) == gc.dice_adds(2, 0), False)
 
+import gurps_check as gk  # noqa: E402
+
+_SHEET_MD = """---
+type: pc
+point_total: 100
+---
+
+# Test
+
+## Stat Sheet
+
+### Primary Attributes
+
+| Attribute | Score | Cost |
+|-----------|-------|------|
+| ST | 12 | [20] |
+| DX | 12 | [40] |
+
+## Equipment
+
+| Item | Weight | Location |
+|------|--------|----------|
+| Sword | 2 lb | Carried |
+
+### Encumbrance
+
+| Level | Max Weight | Move | Dodge |
+|-------|-----------|------|-------|
+| None (0) | ≤29 lbs | 5 | 9 |
+
+## Current Status
+
+**Enc:** None (0)
+"""
+
+sheet = gk.Sheet(_SHEET_MD)
+check("fm point_total", sheet.fm.get("point_total"), "100")
+check("section lookup case-insensitive",
+      sheet.section("current status") is not None, True)
+check("stat table rows", sheet.table("Primary Attributes"),
+      [["Attribute", "Score", "Cost"], ["ST", "12", "[20]"], ["DX", "12", "[40]"]])
+check("enc subsection table first row",
+      sheet.table("Encumbrance")[1][0], "None (0)")
+check("parse_weight le-symbol", gk.parse_weight("≤29 lbs"), 29.0)
+check("parse_weight plain", gk.parse_weight("2 lb"), 2.0)
+check("parse_weight none", gk.parse_weight("—"), None)
+check("parse_cost bracket", gk.parse_cost("[20]"), 20)
+check("parse_cost unicode minus", gk.parse_cost("−25"), -25)
+check("col finds header", gk.col(["Level", "Max Weight", "Move"], "weight"), 1)
+check("norm_level strips marker+paren", gk.norm_level("Light (1) ←"), "light")
+check("norm_level extra-heavy alias", gk.norm_level("Extra-Heavy (4)"), "x-heavy")
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
