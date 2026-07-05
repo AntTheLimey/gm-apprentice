@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.10] — 2026-07-05
+
+### Added
+
+- **GURPS sheet arithmetic checker** — new bundled utility
+  `skills/shared/scripts/gurps_check.py` (with pure-formula core
+  `gurps_calc.py`) verifies a GURPS PC markdown sheet against Basic
+  Set arithmetic and reports advisory deltas: Basic Lift and the
+  encumbrance table (B15/B17), carried load vs the Current Status
+  `Enc:` line, Move/Dodge per level, secondary characteristics,
+  Parry/Block (B375–B376), a point-budget audit, and the
+  thrust/swing damage chain via closed-form B16 formulas with B269
+  dice-equivalence (so `2d+5` and `3d+1` compare equal). Read-only
+  and stdlib-only; wired into ttrpg-expert's GURPS chargen and
+  character-sheet references. The parser also accepts parenthetical
+  attribute labels like `ST (Strength)`. Damage formulas validated
+  against a GCS-derived oracle at development time — GCS is not a
+  dependency.
+
+---
+
 ## [1.8.9] — 2026-07-05
 
 ### Added
