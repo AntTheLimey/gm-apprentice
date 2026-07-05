@@ -249,8 +249,10 @@ def check_load(sheet):
     total = 0.0
     for row in rows[1:]:
         if i_loc >= 0:
-            loc = _cell(row, i_loc)
-            if loc is not None and loc.strip().lower() not in ("carried", "worn"):
+            # blank/missing Location means unset -> counted, same as having
+            # no Location column at all
+            loc = (_cell(row, i_loc) or "").strip().lower()
+            if loc and loc not in ("carried", "worn"):
                 continue
         w = parse_weight(_cell(row, i_wt))
         if w is not None:

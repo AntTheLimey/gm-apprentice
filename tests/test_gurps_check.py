@@ -416,6 +416,20 @@ check("single-section run emits one section",
       [l for l in run_check("clean.md", "load") if l.startswith("[")],
       ["[load]"])
 
+# Blank Location cells count as carried (CodeRabbit PR #74 finding)
+_BLANKLOC = _KARLISH.replace(
+    "## Equipment\n",
+    "## Equipment\n\n"
+    "| Item | Weight | Cost | Location |\n"
+    "|------|--------|------|----------|\n"
+    "| Sword | 3 lb | $600 | Carried |\n"
+    "| Pack | 20 lb | $10 | |\n"
+    "| Mule pack | 90 lb | $30 | Mule |\n",
+)
+blf = gk.check_load(gk.Sheet(_BLANKLOC))
+check("blank Location counts toward load (3+20=23, mule excluded)",
+      (blf[0][0], "23" in blf[0][2]), ("INFO", True))
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
