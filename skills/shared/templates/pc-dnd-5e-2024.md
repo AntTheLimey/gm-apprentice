@@ -193,7 +193,7 @@ createdSession: ""
 
 {Player-facing; sits outside any gm-only fence. Maintained cumulatively
 by session-wrapup (Step 3c): carries unresolved Open threads forward,
-adds new, removes resolved. See shared/entity-schema.md.}
+adds new, removes resolved. See shared/pc-body-structure.md.}
 
 ## Notes
 

@@ -36,10 +36,14 @@ class SpineTests(unittest.TestCase):
         self.assertIn("Open threads", text)
         self.assertIn("thread-decay", text)
 
-    def test_entity_schema_consumed_by_pointer(self):
-        text = read("shared/entity-schema.md")
+    def test_pc_body_structure_consumed_by_pointer(self):
+        # The Current Status spec (incl. the Consumed-by contract) lives in
+        # shared/pc-body-structure.md, extracted from entity-schema.md.
+        text = read("shared/pc-body-structure.md")
         self.assertIn("**Consumed by:**", text)
         self.assertIn("campaign-qa", text)
+        # entity-schema.md keeps a breadcrumb to the extracted file.
+        self.assertIn("pc-body-structure.md", read("shared/entity-schema.md"))
 
 
 class ConsumerTests(unittest.TestCase):
@@ -64,7 +68,9 @@ class ConsumerTests(unittest.TestCase):
 
     def test_campaign_qa_has_current_status_check(self):
         skill = read("campaign-qa/SKILL.md")
-        proc = read("campaign-qa/references/check-procedures.md")
+        # The Current Status consistency check lives in the Canon Audit
+        # procedure, now split into references/checks/canon-audit.md.
+        proc = read("campaign-qa/references/checks/canon-audit.md")
         self.assertIn("## Current Status", skill)
         self.assertIn("Current Status", proc)
         self.assertIn("Open threads", proc)
