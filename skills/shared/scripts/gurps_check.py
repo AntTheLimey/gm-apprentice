@@ -123,7 +123,8 @@ def read_attributes(sheet):
         for row in sheet.table(title)[1:]:
             if len(row) < 2 or not row[0]:
                 continue
-            key = _ATTR_KEYS.get(row[0].strip().lower())
+            label = re.sub(r"\s*\([^)]*\)\s*$", "", row[0]).strip().lower()
+            key = _ATTR_KEYS.get(label)
             if key is None or key in out:
                 continue
             m = re.search(r"\d+(?:\.\d+)?", row[1])

@@ -345,6 +345,44 @@ check("bare sw resolves as formula-only INFO at ST 11",
       any(f[0] == "INFO" and "Whip" in f[1] and "1d+1" in f[2]
           for f in dmg2), True)
 
+# Parenthetical label qualifiers: the reference sheet template writes
+# "ST (Strength)", "HP (Hit Points)" etc. — these must resolve to the
+# bare attribute keys.
+_PAREN = """---
+type: pc
+---
+
+# P
+
+## Stat Sheet
+
+### Primary Attributes
+
+| Attribute | Score | Cost |
+|-----------|-------|------|
+| ST (Strength) | 12 | [20] |
+| DX (Dexterity) | 13 | [60] |
+| IQ (Intelligence) | 11 | [20] |
+| HT (Health) | 12 | [20] |
+
+### Secondary Characteristics
+
+| Characteristic | Score |
+|----------------|-------|
+| HP (Hit Points) | 12 |
+| Basic Speed | 6.25 |
+"""
+
+pattrs = gk.read_attributes(gk.Sheet(_PAREN))
+check("parenthetical labels parse", pattrs is not None, True)
+if pattrs is not None:
+    check("paren ST", pattrs["st"], 12)
+    check("paren DX", pattrs["dx"], 13)
+    check("paren IQ", pattrs["iq"], 11)
+    check("paren HT", pattrs["ht"], 12)
+    check("paren HP", pattrs["hp"], 12)
+    check("paren speed", pattrs["speed"], 6.25)
+
 # --- CLI against committed fixtures ---
 def run_check(fixture, *args):
     result = subprocess.run(
