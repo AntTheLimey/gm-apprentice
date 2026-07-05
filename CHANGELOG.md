@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.6] — 2026-07-05
+
+### Changed
+
+- **Version check reads `shared/migrations.md` frontmatter only**
+  (Read with a 10-line limit) in all eight consuming skills — the
+  file is 16 KB of append-only migration history, and the check
+  needs one frontmatter field. Saves roughly 4k tokens on nearly
+  every skill invocation. Compaction plan Phase 0.
+
 ## [1.8.5] — 2026-07-04
 
 ### Added

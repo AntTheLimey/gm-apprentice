@@ -96,7 +96,7 @@ version before proceeding with any user request:
 
 1. Read `gm_apprentice_version` from `_meta/vault-config.md`
    frontmatter
-2. Read `current_version` from `shared/migrations.md` frontmatter
+2. Read `current_version` from `shared/migrations.md` frontmatter (Read with `limit: 10` — the rest is migration history, not needed here)
 3. If versions match or vault is higher — proceed normally
 4. If vault version is lower or absent — run the migration
    workflow from `references/migration-procedure.md` before
@@ -109,7 +109,7 @@ version as part of setup).
 
 When initialization creates a new vault, set
 `gm_apprentice_version` in vault-config to the
-`current_version` from `shared/migrations.md`.
+`current_version` from `shared/migrations.md` frontmatter.
 
 ### Schema Evolution
 
