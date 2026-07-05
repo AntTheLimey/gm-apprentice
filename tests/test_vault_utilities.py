@@ -8,14 +8,17 @@ links, space/underscore/case variants, an orphan, an unresolved
 target, and dead ends.
 """
 
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 VAULT = ROOT / "tests" / "fixtures" / "mini-vault"
 SCHEMA_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-schema"
+PREP_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-prep"
 
 FAILURES = []
 
@@ -154,6 +157,70 @@ check("stale-drafts: stale, missing, future, comment-stripped, fresh exempt",
        "cannot determine staleness; add it or promote",
        "WARNING\tNoType.md\tDRAFT missing createdSession — "
        "cannot determine staleness; add it or promote"])
+
+# --- session_context.py ---
+
+ctx = "\n".join(run("session_context.py", vault=PREP_VAULT))
+for expect, present, label in [
+    ("Just played: session 2", True, "detects latest session"),
+    ("Preparing: session 3", True, "computes upcoming session"),
+    ("lighthouse keeper vanished", True, "includes wrap-up body"),
+    ("The Salty Dog inn", True, "includes PC Current Status"),
+    ("Secretly cursed", False, "PC GM Notes not in status block"),
+    ("Fallen", False, "dead PC excluded"),
+    ("Search the lighthouse at dawn", True, "includes upcoming plan"),
+    ("The Drowned Court", True, "includes deferred flags"),
+    ("Giant crabs", False, "ignored flags excluded"),
+    ("Fogport, 1923", True, "includes campaign overview"),
+]:
+    check(f"session_context: {label}", [expect in ctx], [present])
+
+# --- vault_check.py changed ---
+
+check("changed --since lists session-touched entities",
+      run("vault_check.py", "changed", "--since", "2", vault=PREP_VAULT),
+      ["## changed", "# count: 4",
+       "INFO\tChapters/Chapter 1/Sessions/Chapter_01_Session_02_"
+       "Wrap_Up.md\tcreatedSession=2, session=2",
+       "INFO\tChapters/Chapter 1/Sessions/Session 02.md\t"
+       "session_number=2",
+       "INFO\tChapters/Chapter 1/Sessions/Session_03_Plan.md\t"
+       "session=3",
+       "INFO\tCharacters/PCs/Hero.md\tasOfSession=2"])
+
+# --- stamp_entities.py ---
+
+dry = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                    "--session", "3", "--date", "2026-07-05",
+                    "--retag", "chapter-1=chapter-2",
+                    vault=PREP_VAULT))
+check("stamp: dry run plans without writing",
+      ["WOULD-STAMP" in dry and "# dry-run" in dry], [True])
+check("stamp: fixture untouched after dry run",
+      ["asOfSession: 2" in (PREP_VAULT / "Characters/PCs/Hero.md"
+                            ).read_text()], [True])
+
+tmp = Path(tempfile.mkdtemp())
+try:
+    work = tmp / "vault"
+    shutil.copytree(PREP_VAULT, work)
+    out = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                        "--session", "3", "--date", "2026-07-05",
+                        "--retag", "chapter-1=chapter-2", "--write",
+                        vault=work))
+    stamped = (work / "Characters/PCs/Hero.md").read_text()
+    check("stamp: write applies asOfSession",
+          ["asOfSession: 3" in stamped], [True])
+    check("stamp: write adds lastUpdated",
+          ['lastUpdated: "2026-07-05"' in stamped], [True])
+    check("stamp: write swaps chapter tag",
+          ["- chapter-2" in stamped and "- chapter-1" not in stamped],
+          [True])
+    check("stamp: body preserved byte-for-byte",
+          ["Secretly cursed" in stamped
+           and "The Salty Dog inn" in stamped], [True])
+finally:
+    shutil.rmtree(tmp)
 
 # --- verdict ---
 

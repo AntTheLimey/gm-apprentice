@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.5] — 2026-07-04
+
+### Added
+
+- **Two more bundled vault utilities** targeting the weekly session
+  loop (the largest recurring token/time cost):
+  `session_context.py` emits session-prep's entire standard
+  read-set in one call — latest Wrap-Up, active PC `## Current
+  Status` blocks, the upcoming session's Plan, deferred world
+  flags, and the campaign overview — replacing a dozen-plus
+  separate reads per prep (verified on a real 15-session vault in
+  0.3s); `stamp_entities.py` batch-stamps `asOfSession`,
+  `lastUpdated`, and the chapter-tag swap across all active PC
+  sheets for session-wrapup Step 3c, dry-run by default and
+  surgical (only the targeted frontmatter lines change).
+- **Incremental audits**: `vault_check.py changed --since N` lists
+  entities touched at or after session N via session-anchored
+  fields; campaign-qa's Canon Audit gains a documented incremental
+  mode (audit the delta plus its backlink neighborhood) so audit
+  cost scales with what changed, not vault size.
+- Regression coverage: new `tests/fixtures/mini-vault-prep/`
+  fixture and 17 new checks (context bundle content and
+  exclusions, changed-since listing, stamper dry-run/write/body
+  preservation).
+
+### Fixed
+
+- docs/campaign-organizer.md no longer claims Weave-mode link
+  discovery uses Smart Connections — link discovery uses the
+  bundled utilities in every environment.
+
 ## [1.8.4] — 2026-07-04
 
 ### Added
