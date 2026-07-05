@@ -59,6 +59,30 @@ check("parry skill 16 CR", gc.parry(16, combat_reflexes=True), 12)
 check("parry skill 15", gc.parry(15), 10)
 check("block skill 15 CR", gc.block(15, combat_reflexes=True), 11)
 
+# --- thrust/swing (B16 closed form; oracle = printed table / GCS) ---
+B16_ORACLE = {
+    1: ("1d-6", "1d-5"), 5: ("1d-4", "1d-3"), 8: ("1d-3", "1d-2"),
+    9: ("1d-2", "1d-1"), 10: ("1d-2", "1d"), 11: ("1d-1", "1d+1"),
+    12: ("1d-1", "1d+2"), 13: ("1d", "2d-1"), 14: ("1d", "2d"),
+    15: ("1d+1", "2d+1"), 17: ("1d+2", "3d-1"), 19: ("2d-1", "3d+1"),
+    20: ("2d-1", "3d+2"), 25: ("2d+2", "5d-1"), 27: ("3d-1", "5d+1"),
+    30: ("3d", "5d+2"),
+}
+for st, (thr_s, sw_s) in B16_ORACLE.items():
+    check(f"thrust ST {st}", gc.fmt_dice(*gc.thrust(st)), thr_s)
+    check(f"swing ST {st}", gc.fmt_dice(*gc.swing(st)), sw_s)
+
+# --- dice helpers / B269 equivalence ---
+check("parse 2d+1", gc.parse_dice("2d+1"), (2, 1))
+check("parse 3d-1", gc.parse_dice("3d-1"), (3, -1))
+check("parse 1d", gc.parse_dice("1d"), (1, 0))
+check("parse unicode minus", gc.parse_dice("3d−1"), (3, -1))
+check("parse garbage", gc.parse_dice("HT-3 aff"), None)
+check("B269: 2d+5 equiv 3d+1",
+      gc.dice_adds(2, 5) == gc.dice_adds(3, 1), True)
+check("B269: 1d+2 not equiv 2d",
+      gc.dice_adds(1, 2) == gc.dice_adds(2, 0), False)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
