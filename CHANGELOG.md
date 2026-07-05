@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs/campaign-organizer.md no longer claims Weave-mode link
   discovery uses Smart Connections — link discovery uses the
   bundled utilities in every environment.
+- Session-number parsing hardened against real-vault free text:
+  compound references ("Chapter 3, Session 7") key on the session
+  number, and date-bearing values ("Reconstructed 2026-07-04")
+  parse as unknown instead of session 2026 — affecting
+  stale-DRAFT and changed-since semantics.
 
 ## [1.8.4] — 2026-07-04
 

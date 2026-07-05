@@ -71,24 +71,43 @@ def main() -> int:
     files = list(vault_files(args.vault))
 
     # --- current session from session indexes ---
-    sessions = {}
+    # "Just played" means a session that actually happened: prep for
+    # the NEXT session creates its index early with status `planned`
+    # or `prepped`, and that pre-created index must not shift the
+    # bundle forward a session.
+    PLAYED = {"played", "wrap-up", "reviewed"}
+    sessions, played = {}, {}
     for rel, text, fm in files:
         if fm.get("type") == "session":
             n = parse_session_number(fm.get("session_number"))
-            if n:
+            if n is not None:
                 sessions[n] = (rel, fm)
-    current = args.session or (max(sessions) if sessions else 0)
-    upcoming = current + 1 if current else 1
-    if current and current in sessions:
+                if str(fm.get("status", "")).casefold() in PLAYED:
+                    played[n] = (rel, fm)
+    if args.session is not None:
+        current = args.session
+    elif played:
+        current = max(played)
+    elif sessions:
+        current = max(sessions)
+    else:
+        current = 0
+    upcoming = current + 1
+    if current in sessions:
         rel, fm = sessions[current]
         status = fm.get("status", "?")
+        note = ""
+        pending = [n for n in sessions if n > current]
+        if pending:
+            note = (f"\nNote: session index(es) {sorted(pending)} exist "
+                    f"with unplayed status — ignored for 'just played'.")
         print(f"===== Session Context =====\n"
               f"Just played: session {current} ({rel}, status: {status})\n"
-              f"Preparing: session {upcoming}")
+              f"Preparing: session {upcoming}{note}")
     else:
         print(f"===== Session Context =====\n"
               f"No session indexes found"
-              f"{f'; using --session {current}' if args.session else ''}. "
+              f"{f'; using --session {current}' if args.session is not None else ''}. "
               f"Preparing session {upcoming}.")
 
     # --- latest wrap-up ---

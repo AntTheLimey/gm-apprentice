@@ -148,16 +148,18 @@ and any who were off-screen this session):
    Preserve all non-chapter tags (archetype, system, status).
 
    Do steps 1–2 for ALL active PCs in one call with the bundled
-   stamper (dry-run first, review its plan, then `--write`):
+   stamper. It dry-runs by default — review its plan, then
+   re-run the same command with `--write` appended:
 
    ```bash
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
      <vault> Characters/PCs/A.md Characters/PCs/B.md \
-     --session N --date YYYY-MM-DD --retag old-tag=new-tag --write
+     --session N --date YYYY-MM-DD --retag old-tag=new-tag
    ```
 
-   It touches only those frontmatter lines; body content is
-   preserved. Steps 3–4 remain manual editing work.
+   It touches only those frontmatter lines; body content and
+   line endings are preserved. Steps 3–4 remain manual editing
+   work.
 3. `## Current Status`: **reconcile** the block — don't just
    overwrite it. Read the PC's *prior* block, then update it
    against this session's PC Carry-Forward (Step 3) and Recap:

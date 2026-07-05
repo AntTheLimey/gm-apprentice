@@ -142,9 +142,26 @@ def extract_frontmatter(content: str) -> dict | None:
     return frontmatter
 
 
+# Session numbers above this are implausible — a larger value is a
+# year or date fragment that leaked into a session field.
+MAX_PLAUSIBLE_SESSION = 500
+
+
 def parse_session_number(value) -> int | None:
-    """Parse a session reference like '3', 'Session 3', or 'session-03'."""
+    """Parse a session reference like '3', 'Session 3', or 'session-03'.
+
+    Real vaults hold free-text values: compound references
+    ("Chapter 3, Session 7") must key on the session, not the first
+    number, and date-bearing prose ("Reconstructed 2026-07-04") must
+    parse as unknown rather than as session 2026.
+    """
     if value is None or isinstance(value, list):
         return None
-    m = re.search(r"(\d+)", str(value))
-    return int(m.group(1)) if m else None
+    text = str(value)
+    m = re.search(r"session\D{0,3}(\d+)", text, re.IGNORECASE)
+    if not m:
+        m = re.search(r"(\d+)", text)
+    if not m:
+        return None
+    n = int(m.group(1))
+    return n if n <= MAX_PLAUSIBLE_SESSION else None
