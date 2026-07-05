@@ -189,12 +189,18 @@ Top 5 multi-step combat sequences for quick reference.
 | Heavy (3) | | | |
 | X-Heavy (4) | | | |
 
+{To highlight the current level on the published sheet, add a
+trailing `*` to its Level cell (e.g. `Light (1) *`). Without a
+marker, the published sheet falls back to the `**Enc:**` line in
+Current Status, matched by level name.}
+
 ## Current Status
 
 {Optional one-line present-tense lede for the published page.}
 
 **Location:** {where the PC is now}
 **Condition:** {injuries, HP/FP, conditions}
+**Enc:** {current encumbrance level, e.g. Light (1)}
 **Carrying:** {narratively-significant items in hand}
 **Open threads:**
 - {unresolved, forward-looking item}

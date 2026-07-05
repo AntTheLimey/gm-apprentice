@@ -235,6 +235,22 @@ function parseDefenses(model, sections, fm) {
   }
 }
 
+// Opt-in "this is my current level" marker on a table row's Level cell:
+// trailing `*` (canonical), `←`, or `(current)`, repeated forms included.
+// Bold can't be used — table cells have HTML tags stripped before they get here.
+const ENC_CURRENT_MARKER = /(?:\s*(?:\*|←|\(current\)))+\s*$/i;
+
+function encumbranceRow(row) {
+  let level = row[0];
+  let current = false;
+  const stripped = level.replace(ENC_CURRENT_MARKER, '').trim();
+  if (stripped && stripped !== level) {
+    level = stripped;
+    current = true;
+  }
+  return { level, weight: row[1] || '', move: row[2] || '', dodge: row[3] || '', current };
+}
+
 function parseEncumbrance(model, sections, fm) {
   if (Array.isArray(fm.encumbrance)) {
     model.encumbrance = fm.encumbrance.map(e => ({
@@ -244,21 +260,48 @@ function parseEncumbrance(model, sections, fm) {
     return;
   }
   const sec = findSectionByTitle(sections, 'encumbrance');
-  if (!sec) {
+  let rows;
+  if (sec) {
+    rows = parseTableRows(sec.html).slice(1);
+  } else {
     // also check Equipment section for ### Encumbrance subsection
     const equip = findSectionByTitle(sections, 'equipment');
     if (!equip) return;
     const subHtml = extractSubsectionHtml(equip.html, 'Encumbrance');
     if (!subHtml) return;
-    const rows = parseTableRows(subHtml).slice(1);
-    for (const row of rows) {
-      if (row[0]) model.encumbrance.push({ level: row[0], weight: row[1] || '', move: row[2] || '', dodge: row[3] || '', current: false });
+    rows = parseTableRows(subHtml).slice(1);
+  }
+  for (const row of rows) {
+    if (row[0]) model.encumbrance.push(encumbranceRow(row));
+  }
+}
+
+function normalizeEncLevel(s) {
+  if (s == null) return '';
+  return String(s).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Runs after parseStatus, on every encumbrance source: enforces the
+// at-most-one-current invariant (first flagged row wins), then, when no row
+// is flagged, matches the Current Status Enc: value against the level names —
+// or, for a bare number, against the row's parenthetical level number.
+function resolveCurrentEncumbrance(model) {
+  const enc = model.encumbrance;
+  let seen = false;
+  for (const e of enc) {
+    if (e.current) {
+      if (seen) e.current = false;
+      seen = true;
     }
-    return;
   }
-  for (const row of parseTableRows(sec.html).slice(1)) {
-    if (row[0]) model.encumbrance.push({ level: row[0], weight: row[1] || '', move: row[2] || '', dodge: row[3] || '', current: false });
+  if (seen || enc.length === 0) return;
+  const target = normalizeEncLevel(model.status.enc);
+  if (!target) return;
+  let match = enc.find(e => normalizeEncLevel(e.level) === target);
+  if (!match && /^\d+$/.test(target)) {
+    match = enc.find(e => (String(e.level).match(/\((\d+)\)/) || [])[1] === target);
   }
+  if (match) match.current = true;
 }
 
 function parseReactions(model, sections, fm) {
@@ -744,6 +787,7 @@ function parseGurps(frontmatter, sections) {
   parseRanged(model, secs, fm);
   parseGrimoire(model, secs, fm);
   parseStatus(model, secs, fm);
+  resolveCurrentEncumbrance(model);
   parseChains(model, secs, fm);
   parseEquipment(model, secs, fm);
   crossReferenceSkillDefenses(model);

@@ -79,6 +79,12 @@ carries unresolved items forward across sessions, gains items as they
 arise, and loses them only when resolved. NPC-relationship shifts fold
 into Open threads rather than a separate field.
 
+System templates may add system-specific labelled fields to the block;
+wrap-up preserves and reconciles any labelled field it finds, not just
+the canonical five. GURPS adds **Enc:** (current encumbrance level,
+e.g. `Light (1)`) — the publish tool matches it against the sheet's
+Encumbrance table to highlight the current row.
+
 The block **must** sit outside any `<!-- gm-only -->` or
 `<!-- spoiler -->` fence (it publishes) and before the protected
 `## Notes`/`## GM Notes` sections.
