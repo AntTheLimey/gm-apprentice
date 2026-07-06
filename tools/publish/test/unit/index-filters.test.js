@@ -243,4 +243,26 @@ describe('indexTemplate — grouping fallbacks', () => {
     const html = indexTemplate('locations', 'Locations', [page], navFor, config, publishConfig);
     assert.ok(html.includes('loc-region-title">Other'));
   });
+
+  it('treats whitespace-only location_type as unset and groups under Other', () => {
+    const page = {
+      title: 'Blank Zone', displayTitle: 'Blank Zone',
+      outputPath: 'locations/blank-zone.html',
+      frontmatter: { type: 'location', location_type: '   ' }, markdown: '',
+    };
+    const html = indexTemplate('locations', 'Locations', [page], navFor, config, publishConfig);
+    assert.ok(html.includes('loc-region-title">Other'));
+    assert.ok(!html.includes('loc-region-title"></h2>'));
+  });
+
+  it('prefers snake_case faction_type over camelCase factionType when both are set', () => {
+    const page = {
+      title: 'Iron Watch', displayTitle: 'Iron Watch',
+      outputPath: 'factions/iron-watch.html',
+      frontmatter: { type: 'faction', faction_type: 'military', factionType: 'corporation' }, markdown: '',
+    };
+    const html = indexTemplate('factions', 'Factions & Organizations', [page], navFor, config, publishConfig);
+    assert.ok(html.includes('Military Units'));
+    assert.ok(!html.includes('intel-section-title">Corporations'));
+  });
 });

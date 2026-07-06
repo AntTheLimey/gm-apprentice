@@ -110,9 +110,10 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_
   for (const p of pages) {
     if (childOf.has(p.title)) continue;
     const parentRef = p.frontmatter.parent_location;
+    const locType = String(p.frontmatter.location_type || '').trim();
     const region = parentRef
       ? String(parentRef).replace(/\[\[|\]\]/g, '').trim()
-      : (p.frontmatter.location_type ? String(p.frontmatter.location_type).trim() : 'Other');
+      : (locType || 'Other');
     if (!byRegion[region]) byRegion[region] = [];
     byRegion[region].push(p);
   }
