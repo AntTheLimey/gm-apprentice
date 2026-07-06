@@ -183,4 +183,26 @@ describe('indexTemplate — listing thumbnails', () => {
     assert.ok(html.includes('intel-card-thumb'));
     assert.ok(html.includes('images/ring.png'));
   });
+
+  it('resolves the generic character-card portrait through the imageMap', () => {
+    // dir 'characters' hits the generic card branch (only 'characters/npcs' routes to the NPC table)
+    const page = {
+      title: 'Mira Voss', displayTitle: 'Mira Voss',
+      outputPath: 'characters/mira-voss.html',
+      frontmatter: { type: 'npc', portrait: '_attachments/ring.png' }, markdown: '',
+    };
+    const html = indexTemplate('characters', 'Characters', [page], navFor, config, publishConfig, imageMap);
+    assert.ok(/<div class="npc-icon"[^>]*>[^]*?images\/ring\.png/.test(html),
+      'resolved images/ring.png src must render inside an npc-icon div');
+  });
+
+  it('omits the npc-icon div when the generic-card portrait is unresolvable', () => {
+    const page = {
+      title: 'Ghost Entry', displayTitle: 'Ghost Entry',
+      outputPath: 'characters/ghost-entry.html',
+      frontmatter: { type: 'npc', portrait: '_attachments/missing.png' }, markdown: '',
+    };
+    const html = indexTemplate('characters', 'Characters', [page], navFor, config, publishConfig, imageMap);
+    assert.ok(!html.includes('npc-icon'));
+  });
 });

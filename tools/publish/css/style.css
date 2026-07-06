@@ -2335,6 +2335,9 @@ tr:nth-child(even) {
 .intel-card-header h2 {
   font-size: 1.1rem;
   margin: 0;
+  /* Absorb space-between free space when a thumb precedes the title,
+     keeping the title snug against its thumbnail and the badge pinned right. */
+  margin-right: auto;
 }
 .intel-card-header h2 a {
   color: var(--text);

@@ -718,7 +718,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       const fm = p.frontmatter;
       const entityType = isLocations ? (fm.location_type || fm.type) : fm.type;
       const avatarShape = (fm.type === 'pc') ? 'border-radius:0.375rem' : 'border-radius:50%';
-      const cardImg = fm.portrait ? portraitImg(fm, outputPath, imageMap, attachmentsDir) : '';
+      const cardImg = portraitImg(fm, outputPath, imageMap, attachmentsDir);
       const portraitHtml = isCharacters && cardImg
         ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';
