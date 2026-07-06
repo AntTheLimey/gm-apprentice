@@ -360,6 +360,47 @@ usually a broken or interrupted plugin install/update.
 
 ---
 
+## Failure 9: Session recap and Story page are empty
+
+### Symptom
+
+The build succeeds, but the landing "Latest Session" recap, the Story
+page's Campaign Saga, and the "NPCs/Locations in Play" widgets are all
+empty — even though `session-wrapup` ran and wrap-up files exist.
+
+### Cause
+
+Recap surfacing keys off *published* `type: session` and `type: chapter`
+pages. The wrap-up (`type: session_wrap`) supplies the recap text, but it
+only surfaces when its paired session index — and for the Campaign Saga,
+a chapter page — are published too. Two common breakdowns:
+
+1. The vault's `Chapters/` folder is missing from `folderMap` in
+   `vault.config.json`, so every chapter, session, scene, and wrap-up
+   file is skipped. Builds from tool 1.6.0 print a
+   `scanner: skipping "<dir>" — not in folderMap` warning; older builds
+   skip silently. (Scaffolds from 1.6.0 include the mapping by default.)
+2. The session index or chapter page exists but is unpublished — held
+   back by the manifest, `DRAFT` status, or player-mode auto-exclusion.
+
+### Diagnosis steps
+
+1. Run the build and check for `not in folderMap` scanner warnings.
+2. Confirm `folderMap` maps the folder holding chapters/sessions
+   (default vault layout: `"Chapters": "chapters"`).
+3. Confirm a `type: session` page for the played session and a
+   `type: chapter` page are in the published set (check the manifest
+   and canon status).
+
+### Fix
+
+Add the missing `folderMap` entry, publish the session index and a
+player-safe chapter page alongside the wrap-up, and rebuild. To show a
+recap, all three must publish: the session index (`type: session`), its
+chapter (`type: chapter`), and the wrap-up (`type: session_wrap`).
+
+---
+
 ## Getting more information from the build
 
 If none of the above explains the problem, run the build and

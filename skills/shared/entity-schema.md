@@ -439,11 +439,13 @@ append-only session sections; see the Story Companion Convention in
 `shared/pc-body-structure.md`.
 
 **Location:** `location_type`, `parent_location` (wiki-link),
-`atmosphere`, `portrait` (optional)
+`atmosphere`, `portrait` (optional). `parent_location` groups the
+published Locations listing (fallback: `location_type`).
 
 **Faction/Organization:** `faction_type` (cult, guild, military,
 etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
-`portrait` (optional)
+`portrait` (optional). `faction_type` groups the published Factions
+listing.
 
 **Item:** `item_type` (weapon, armor, relic, etc.),
 `current_holder` (wiki-link), `origin`, `portrait` (optional)

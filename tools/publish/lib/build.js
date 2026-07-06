@@ -519,7 +519,12 @@ function build(options = {}) {
         dirPages = dirPages.concat(pageDirPages);
       }
     }
-    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config, publishConfig);
+    const authoredIndex = dirPages.find(p => p.outputPath === dir + '/index.html');
+    if (authoredIndex) {
+      console.log(`  skipped ${dir}/index.html (authored index page)`);
+      continue;
+    }
+    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap);
     const outPath = path.join(outputDir, dir, 'index.html');
     ensureDir(outPath);
     fs.writeFileSync(outPath, indexHtml);

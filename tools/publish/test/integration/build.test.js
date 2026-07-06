@@ -1246,4 +1246,42 @@ describe('build integration', () => {
       assert.ok(html.includes('js/search.js'));
     });
   });
+
+  describe('authored-index fixture', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-authored-index-'));
+      configPath = path.join(outputDir, 'config.json');
+
+      const config = {
+        vaultPath: path.join(fixturesDir, 'authored-index'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Authored Index Test',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: [],
+        folderMap: {
+          '_World': 'world',
+          'Locations': 'locations',
+        },
+      };
+
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('keeps the authored World index instead of the generated section index', () => {
+      const indexPath = path.join(outputDir, 'docs', 'world', 'index.html');
+      assert.ok(fs.existsSync(indexPath));
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      assert.ok(html.includes('AUTHORED_WORLD_INDEX_MARKER_9f3c'));
+      assert.ok(!html.includes('class="card-grid"'));
+    });
+  });
 });

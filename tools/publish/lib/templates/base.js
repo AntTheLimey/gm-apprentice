@@ -12,6 +12,8 @@ const DIR_LABELS = {
   'clues': 'Clues',
   'chapters': 'Chapters',
   'creatures': 'Creatures',
+  'heritages': 'Heritages',
+  'world': 'World',
 };
 
 function cssPath(outputPath) {

@@ -2107,6 +2107,18 @@ tr:nth-child(even) {
   gap: 0.5rem;
   align-items: center;
 }
+.loc-card-thumb {
+  float: right;
+  margin: 0 0 0.5rem 0.75rem;
+}
+.loc-card-thumb img.portrait,
+.intel-card-thumb img.portrait {
+  width: 3.5rem;
+  height: 3.5rem;
+  object-fit: cover;
+  border-radius: 0.375rem;
+  display: block;
+}
 .loc-type-badge {
   font-size: 0.7rem;
   padding: 0.15rem 0.4rem;
@@ -2323,6 +2335,9 @@ tr:nth-child(even) {
 .intel-card-header h2 {
   font-size: 1.1rem;
   margin: 0;
+  /* Absorb space-between free space when a thumb precedes the title,
+     keeping the title snug against its thumbnail and the badge pinned right. */
+  margin-right: auto;
 }
 .intel-card-header h2 a {
   color: var(--text);

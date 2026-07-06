@@ -4,6 +4,31 @@ const { escapeHtml, relativePath, resolveWikiLinks } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
+const GENRE_SECTION_TITLES = {
+  military: {
+    locations: 'Theater of Operations',
+    factions: 'Intelligence Briefing',
+    items: 'Armory & Acquisitions',
+    creatures: 'Bestiary',
+  },
+  fantasy: { creatures: 'Bestiary' },
+  horror: { creatures: 'Bestiary' },
+};
+
+const DEFAULT_SECTION_TITLES = {
+  locations: 'Locations',
+  factions: 'Factions & Organizations',
+  items: 'Items & Artifacts',
+  creatures: 'Creatures',
+};
+
+function sectionTitle(key, publishConfig) {
+  const overrides = (publishConfig && publishConfig.section_titles) || {};
+  const genre = (publishConfig && publishConfig._genrePreset) || null;
+  const genreTitles = (genre && GENRE_SECTION_TITLES[genre]) || {};
+  return overrides[key] || genreTitles[key] || DEFAULT_SECTION_TITLES[key];
+}
+
 function relHref(page, indexDir) {
   const out = page.outputPath;
   const prefix = indexDir + '/';
@@ -67,7 +92,7 @@ function renderLocationTreeHTML(nodes, depth, indexDir) {
   return items;
 }
 
-function renderLocationsPage(pages, indexDir) {
+function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
   const byRegion = {};
   const childOf = new Set();
 
@@ -85,9 +110,10 @@ function renderLocationsPage(pages, indexDir) {
   for (const p of pages) {
     if (childOf.has(p.title)) continue;
     const parentRef = p.frontmatter.parent_location;
+    const locType = String(p.frontmatter.location_type || '').trim();
     const region = parentRef
       ? String(parentRef).replace(/\[\[|\]\]/g, '').trim()
-      : 'Other';
+      : (locType || 'Other');
     if (!byRegion[region]) byRegion[region] = [];
     byRegion[region].push(p);
   }
@@ -132,7 +158,10 @@ function renderLocationsPage(pages, indexDir) {
         }).join('\n')}</div>`
       : '';
 
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+
     return `<div class="loc-card">
+  ${thumb ? `<div class="loc-card-thumb">${thumb}</div>` : ''}
   <div class="loc-card-main">
     <h3><a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a></h3>
     <div class="loc-card-meta">
@@ -308,7 +337,7 @@ function renderBestiary(pages, indexDir) {
   return `<div class="bestiary">${cards}</div>`;
 }
 
-function renderFactions(pages, indexDir) {
+function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
   const factions = pages
     .filter(p => p.frontmatter.type === 'faction' || p.frontmatter.type === 'organization')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -323,7 +352,7 @@ function renderFactions(pages, indexDir) {
 
   const byType = {};
   for (const p of factions) {
-    const ft = (p.frontmatter.faction_type || 'other').toLowerCase();
+    const ft = String(p.frontmatter.faction_type || p.frontmatter.factionType || 'other').toLowerCase();
     if (!byType[ft]) byType[ft] = [];
     byType[ft].push(p);
   }
@@ -341,7 +370,7 @@ function renderFactions(pages, indexDir) {
 
   function renderCard(p) {
     const fm = p.frontmatter;
-    const ft = (fm.faction_type || 'other').toLowerCase();
+    const ft = String(fm.faction_type || fm.factionType || 'other').toLowerCase();
     const leadership = fm.leadership ? String(fm.leadership).replace(/\[\[|\]\]/g, '').trim() : '';
     const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, 3) : [];
     const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, 4) : [];
@@ -367,8 +396,11 @@ function renderFactions(pages, indexDir) {
       ? `<span class="intel-canon-badge">${escapeHtml(canon)}</span>`
       : '';
 
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+
     return `<article class="intel-card">
   <div class="intel-card-header">
+    ${thumb ? `<div class="intel-card-thumb">${thumb}</div>` : ''}
     <h2><a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a></h2>
     <span class="intel-type-badge ${typeBadgeClass(ft)}">${escapeHtml(ft)}</span>
   </div>
@@ -631,8 +663,9 @@ ${rows}
 </div>`;
 }
 
-function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
+function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}) {
   const outputPath = dir + '/index.html';
+  const attachmentsDir = config.attachmentsDir || '_attachments';
   const crumbs = generateBreadcrumbs(outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
   const total = pages.length;
@@ -670,9 +703,9 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
   } else if (isCreatures) {
     bodyContent = renderBestiary(pages, dir);
   } else if (isLocations) {
-    bodyContent = renderLocationsPage(pages, dir);
+    bodyContent = renderLocationsPage(pages, dir, imageMap, attachmentsDir);
   } else if (isFactions) {
-    bodyContent = renderFactions(pages, dir);
+    bodyContent = renderFactions(pages, dir, imageMap, attachmentsDir);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
   } else if (isCampaign && pages.some(p => p.frontmatter.type === 'campaign_overview')) {
@@ -686,10 +719,11 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
       const fm = p.frontmatter;
       const entityType = isLocations ? (fm.location_type || fm.type) : fm.type;
       const avatarShape = (fm.type === 'pc') ? 'border-radius:0.375rem' : 'border-radius:50%';
-      const portraitHtml = isCharacters && fm.portrait
-        ? `<div class="npc-icon" style="${avatarShape}"><img src="${escapeHtml(fm.portrait)}" alt=""></div>`
+      const cardImg = portraitImg(fm, outputPath, imageMap, attachmentsDir);
+      const portraitHtml = isCharacters && cardImg
+        ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';
-      const subtitle = fm.occupation || fm.location_type || fm.faction_type || '';
+      const subtitle = fm.occupation || fm.location_type || fm.faction_type || fm.factionType || '';
       return `<a class="entity-card" href="${escapeHtml(relHref(p, dir))}"
   data-entity-type="${escapeHtml(entityType || '')}"
   data-entity-name="${escapeHtml(p.displayTitle)}"
@@ -714,28 +748,28 @@ ${bodyContent}`;
   } else if (isCreatures) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Bestiary</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('creatures', publishConfig))}</h1>
   <span class="index-count">${total} creature${total !== 1 ? 's' : ''} encountered</span>
 </div>
 ${bodyContent}`;
   } else if (isLocations) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Theater of Operations</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('locations', publishConfig))}</h1>
   <span class="index-count">${total} locations</span>
 </div>
 ${bodyContent}`;
   } else if (isFactions) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Intelligence Briefing</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('factions', publishConfig))}</h1>
   <span class="index-count">${total} organizations</span>
 </div>
 ${bodyContent}`;
   } else if (isItems) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Armory & Acquisitions</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('items', publishConfig))}</h1>
   <span class="index-count">${total} items catalogued</span>
 </div>
 ${bodyContent}`;

@@ -31,6 +31,7 @@ const PUBLISH_DEFAULTS = {
     include: [],
     fields: {},
   },
+  section_titles: {},
 };
 
 // Union exclude lists from both config sources (vault-config.md and vault.config.json),
@@ -108,6 +109,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ...PUBLISH_DEFAULTS.overrides,
       ...publish.overrides,
     },
+    section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
     setting_year: settingYear,
   };
 

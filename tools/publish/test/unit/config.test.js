@@ -183,6 +183,32 @@ describe('system field', () => {
   });
 });
 
+describe('section_titles passthrough', () => {
+  it('defaults to an empty object', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(result.section_titles, {});
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('survives the merge from vault-config.md publish.section_titles', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    const yaml = [
+      '---',
+      'publish:',
+      '  section_titles:',
+      '    locations: "Star Charts"',
+      '---',
+    ].join('\n');
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(result.section_titles, { locations: 'Star Charts' });
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
 describe('exclude_fields union merge', () => {
   it('unions vault-config.md and vault.config.json exclude_fields (neither shadows the other)', () => {
     // Regression: exclude_fields still had the A || B shadowing bug after

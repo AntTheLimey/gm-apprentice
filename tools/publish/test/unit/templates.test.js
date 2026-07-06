@@ -522,3 +522,11 @@ describe('PC renderer registry', () => {
     assert.strictEqual(getRenderer(undefined), null);
   });
 });
+
+describe('DIR_LABELS section coverage', () => {
+  const { DIR_LABELS } = require('../../lib/templates/base');
+  it('includes heritages and world so their index pages generate (nav already links them)', () => {
+    assert.strictEqual(DIR_LABELS['heritages'], 'Heritages');
+    assert.strictEqual(DIR_LABELS['world'], 'World');
+  });
+});

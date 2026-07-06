@@ -12,7 +12,7 @@ function stripMarkdown(md) {
 }
 
 function getSubtitle(fm) {
-  return fm.occupation || fm.location_type || fm.faction_type || fm.event_type || fm.type || '';
+  return fm.occupation || fm.location_type || fm.faction_type || fm.factionType || fm.event_type || fm.type || '';
 }
 
 // Search results must reflect only what readers can see, so prefer each page's published

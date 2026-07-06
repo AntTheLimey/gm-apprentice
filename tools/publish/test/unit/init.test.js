@@ -1,5 +1,6 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
+const { readFileSync } = require('fs');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -237,6 +238,15 @@ describe('init', () => {
       const content = await fs.readFile(path.join(dir, 'package.json'), 'utf8');
       const pkg = JSON.parse(content);
       assert.strictEqual(pkg.name, 'my-campaign');
+    });
+  });
+
+  describe('vault.config.json.tmpl folderMap', () => {
+    it('maps Chapters so sessions and wrap-ups publish out of the box', () => {
+      const tmplPath = path.join(__dirname, '..', '..', 'templates-scaffold', 'vault.config.json.tmpl');
+      const raw = readFileSync(tmplPath, 'utf-8').replace(/\{\{\w+\}\}/g, 'x');
+      const config = JSON.parse(raw);
+      assert.strictEqual(config.folderMap['Chapters'], 'chapters');
     });
   });
 });

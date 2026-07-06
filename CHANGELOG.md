@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.11] — 2026-07-06
+
+### Added
+
+- **Portrait thumbnails on listing cards** (publish tool 1.6.0) — the
+  Locations and Factions index pages now render a thumbnail when an
+  entity has a `portrait:`, with text-only fallback; the generic
+  character card's portrait now resolves through the image map instead
+  of emitting an unresolvable vault-relative path.
+- **Genre-aware section titles** — section index h1s ("Theater of
+  Operations", "Intelligence Briefing", "Armory & Acquisitions",
+  "Bestiary") are now driven by the theme genre preset with neutral
+  defaults, overridable via `publish.section_titles` in
+  `_meta/vault-config.md`.
+- **Heritages and World index pages** — `DIR_LABELS` gained both
+  sections, so their nav links (already present) stop pointing at
+  missing index pages.
+- **Scanner warning for unmapped directories** — typed pages in a
+  directory missing from `folderMap` now produce a one-per-directory
+  warning instead of being silently skipped.
+
+### Changed
+
+- The setup scaffold's default `folderMap` now maps `Chapters` →
+  `chapters`, so sessions, chapters, and wrap-ups publish out of the
+  box.
+- Faction listings honor the legacy camelCase `factionType` field, and
+  parentless locations group by `location_type` instead of dumping
+  into "Other".
+- Documented the recap-surfacing rule (session index + chapter +
+  wrap-up must all publish) in publish-site troubleshooting, and the
+  listing grouping keys in the schema reference.
+- **Authored section index pages now win** — a vault page that slugs
+  to a section index (e.g. `_World/index.md` → `world/index.html`)
+  is kept as-is instead of being silently overwritten by the
+  auto-generated section index.
+
+---
+
 ## [1.8.10] — 2026-07-05
 
 ### Added
