@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented the recap-surfacing rule (session index + chapter +
   wrap-up must all publish) in publish-site troubleshooting, and the
   listing grouping keys in the schema reference.
+- **Authored section index pages now win** — a vault page that slugs
+  to a section index (e.g. `_World/index.md` → `world/index.html`)
+  is kept as-is instead of being silently overwritten by the
+  auto-generated section index.
 
 ---
 
