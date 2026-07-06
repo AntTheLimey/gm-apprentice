@@ -206,3 +206,41 @@ describe('indexTemplate — listing thumbnails', () => {
     assert.ok(!html.includes('npc-icon'));
   });
 });
+
+describe('indexTemplate — grouping fallbacks', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test' };
+  const publishConfig = { theme: {} };
+
+  it('groups factions by camelCase factionType when snake_case is absent', () => {
+    const page = {
+      title: 'Helix Combine', displayTitle: 'Helix Combine',
+      outputPath: 'factions/helix-combine.html',
+      frontmatter: { type: 'faction', factionType: 'corporation' }, markdown: '',
+    };
+    const html = indexTemplate('factions', 'Factions & Organizations', [page], navFor, config, publishConfig);
+    assert.ok(html.includes('Corporations'));
+    assert.ok(!html.includes('intel-section-title">Other'));
+  });
+
+  it('groups parentless locations by location_type instead of Other', () => {
+    const page = {
+      title: 'Relay Station', displayTitle: 'Relay Station',
+      outputPath: 'locations/relay-station.html',
+      frontmatter: { type: 'location', location_type: 'Station' }, markdown: '',
+    };
+    const html = indexTemplate('locations', 'Locations', [page], navFor, config, publishConfig);
+    assert.ok(html.includes('loc-region-title">Station'));
+    assert.ok(!html.includes('loc-region-title">Other'));
+  });
+
+  it('still uses Other when neither parent_location nor location_type is set', () => {
+    const page = {
+      title: 'Nowhere', displayTitle: 'Nowhere',
+      outputPath: 'locations/nowhere.html',
+      frontmatter: { type: 'location' }, markdown: '',
+    };
+    const html = indexTemplate('locations', 'Locations', [page], navFor, config, publishConfig);
+    assert.ok(html.includes('loc-region-title">Other'));
+  });
+});

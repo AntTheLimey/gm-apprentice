@@ -112,7 +112,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_
     const parentRef = p.frontmatter.parent_location;
     const region = parentRef
       ? String(parentRef).replace(/\[\[|\]\]/g, '').trim()
-      : 'Other';
+      : (p.frontmatter.location_type ? String(p.frontmatter.location_type).trim() : 'Other');
     if (!byRegion[region]) byRegion[region] = [];
     byRegion[region].push(p);
   }
@@ -351,7 +351,7 @@ function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attac
 
   const byType = {};
   for (const p of factions) {
-    const ft = (p.frontmatter.faction_type || 'other').toLowerCase();
+    const ft = String(p.frontmatter.faction_type || p.frontmatter.factionType || 'other').toLowerCase();
     if (!byType[ft]) byType[ft] = [];
     byType[ft].push(p);
   }
@@ -369,7 +369,7 @@ function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attac
 
   function renderCard(p) {
     const fm = p.frontmatter;
-    const ft = (fm.faction_type || 'other').toLowerCase();
+    const ft = String(fm.faction_type || fm.factionType || 'other').toLowerCase();
     const leadership = fm.leadership ? String(fm.leadership).replace(/\[\[|\]\]/g, '').trim() : '';
     const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, 3) : [];
     const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, 4) : [];
@@ -722,7 +722,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       const portraitHtml = isCharacters && cardImg
         ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';
-      const subtitle = fm.occupation || fm.location_type || fm.faction_type || '';
+      const subtitle = fm.occupation || fm.location_type || fm.faction_type || fm.factionType || '';
       return `<a class="entity-card" href="${escapeHtml(relHref(p, dir))}"
   data-entity-type="${escapeHtml(entityType || '')}"
   data-entity-name="${escapeHtml(p.displayTitle)}"
