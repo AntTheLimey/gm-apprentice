@@ -21,6 +21,7 @@ any equivalent in `vault.config.json`.
 | Theme genre | `publish.theme.genre` | Genre tag for theming hints |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
 | Overrides | `publish.overrides` | Per-file include/exclude/field overrides |
+| Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
@@ -32,6 +33,23 @@ any equivalent in `vault.config.json`.
 > still resolves) and is read from the full vault corpus, so it applies even
 > though the overview is normally excluded from publishing. `setting_year` and
 > `total_sessions` remain as fallbacks when those fields are absent.
+
+### Section index titles
+
+Section index pages (Locations, Factions, Items, Creatures) use neutral
+titles by default. The `military` genre preset restyles them ("Theater of
+Operations", "Intelligence Briefing", "Armory & Acquisitions", "Bestiary");
+`fantasy` and `horror` use "Bestiary" for creatures. Override any of them
+in `_meta/vault-config.md`:
+
+```yaml
+publish:
+  section_titles:
+    locations: "Star Charts"
+    factions: "Powers & Syndicates"
+```
+
+Valid keys: `locations`, `factions`, `items`, `creatures`.
 
 ## `vault.config.json` (in the site repo)
 

@@ -4,6 +4,31 @@ const { escapeHtml, relativePath, resolveWikiLinks } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
+const GENRE_SECTION_TITLES = {
+  military: {
+    locations: 'Theater of Operations',
+    factions: 'Intelligence Briefing',
+    items: 'Armory & Acquisitions',
+    creatures: 'Bestiary',
+  },
+  fantasy: { creatures: 'Bestiary' },
+  horror: { creatures: 'Bestiary' },
+};
+
+const DEFAULT_SECTION_TITLES = {
+  locations: 'Locations',
+  factions: 'Factions & Organizations',
+  items: 'Items & Artifacts',
+  creatures: 'Creatures',
+};
+
+function sectionTitle(key, publishConfig) {
+  const overrides = (publishConfig && publishConfig.section_titles) || {};
+  const genre = (publishConfig && publishConfig._genrePreset) || null;
+  const genreTitles = (genre && GENRE_SECTION_TITLES[genre]) || {};
+  return overrides[key] || genreTitles[key] || DEFAULT_SECTION_TITLES[key];
+}
+
 function relHref(page, indexDir) {
   const out = page.outputPath;
   const prefix = indexDir + '/';
@@ -714,28 +739,28 @@ ${bodyContent}`;
   } else if (isCreatures) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Bestiary</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('creatures', publishConfig))}</h1>
   <span class="index-count">${total} creature${total !== 1 ? 's' : ''} encountered</span>
 </div>
 ${bodyContent}`;
   } else if (isLocations) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Theater of Operations</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('locations', publishConfig))}</h1>
   <span class="index-count">${total} locations</span>
 </div>
 ${bodyContent}`;
   } else if (isFactions) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Intelligence Briefing</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('factions', publishConfig))}</h1>
   <span class="index-count">${total} organizations</span>
 </div>
 ${bodyContent}`;
   } else if (isItems) {
     content = `
 <div class="index-header">
-  <h1 class="page-title">Armory & Acquisitions</h1>
+  <h1 class="page-title">${escapeHtml(sectionTitle('items', publishConfig))}</h1>
   <span class="index-count">${total} items catalogued</span>
 </div>
 ${bodyContent}`;

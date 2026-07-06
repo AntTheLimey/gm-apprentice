@@ -82,6 +82,40 @@ describe('indexTemplate — campaign index', () => {
   });
 });
 
+describe('indexTemplate — section titles', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test' };
+  const locPage = {
+    title: 'Docking Ring', displayTitle: 'Docking Ring',
+    outputPath: 'locations/docking-ring.html',
+    frontmatter: { type: 'location' }, markdown: '',
+  };
+
+  it('uses neutral titles when no genre preset is set', () => {
+    const html = indexTemplate('locations', 'Locations', [locPage], navFor, config, { theme: {} });
+    assert.ok(html.includes('<h1 class="page-title">Locations</h1>'));
+    assert.ok(!html.includes('Theater of Operations'));
+  });
+
+  it('keeps military flavor titles under the military preset', () => {
+    const html = indexTemplate('locations', 'Locations', [locPage], navFor, config, { theme: {}, _genrePreset: 'military' });
+    assert.ok(html.includes('Theater of Operations'));
+  });
+
+  it('neutral factions title without genre', () => {
+    const html = indexTemplate('factions', 'Factions & Organizations', [], navFor, config, { theme: {} });
+    assert.ok(html.includes('<h1 class="page-title">Factions &amp; Organizations</h1>'));
+    assert.ok(!html.includes('Intelligence Briefing'));
+  });
+
+  it('honors explicit section_titles overrides above genre', () => {
+    const html = indexTemplate('locations', 'Locations', [locPage], navFor, config,
+      { theme: {}, _genrePreset: 'military', section_titles: { locations: 'Star Charts' } });
+    assert.ok(html.includes('Star Charts'));
+    assert.ok(!html.includes('Theater of Operations'));
+  });
+});
+
 describe('indexTemplate — canon_status field on index pages', () => {
   const navFor = () => '<nav></nav>';
   const config = { siteTitle: 'Test Campaign' };
