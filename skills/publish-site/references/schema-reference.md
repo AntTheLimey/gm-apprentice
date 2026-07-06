@@ -77,7 +77,7 @@ section in the body is excluded from the public site by default
 | Field | Status | Description |
 |-------|--------|-------------|
 | `location_type` | Optional | Type label (e.g. "City", "Building", "Wilderness") |
-| `parent_location` | Optional | `[[wiki-link]]` to the containing location |
+| `parent_location` | Optional | `[[wiki-link]]` to the containing location — also the grouping key for the Locations listing page; entries without it group by `location_type`, else under "Other" |
 | `security_level` | Optional | Security descriptor (rendered as badge) |
 | `atmosphere` | Optional | Tone or mood of the location (rendered as badge) |
 | `portrait` | Optional | Path relative to vault root |
@@ -142,7 +142,7 @@ Both factions and organizations use the same template.
 
 | Field | Status | Description |
 |-------|--------|-------------|
-| `faction_type` | Optional | Type label (rendered as badge) |
+| `faction_type` | Optional | Type label (rendered as badge; groups the Factions listing — military, corporation, government get curated headings; legacy camelCase factionType is honored) |
 | `alignment` | Optional | Faction alignment (rendered as badge) |
 | `goals` | Optional | List of faction goals |
 | `leadership` | Optional | `[[wiki-link]]` to leader entity |
@@ -248,12 +248,22 @@ Badges rendered: `document_type`, `author`, `classification`,
 
 Badges rendered: `sort_order`
 
+A published chapter page is required for the Story page's Campaign
+Saga: a recap surfaces only when its session, its chapter, and the
+wrap-up (`type: session_wrap`) all publish.
+
 ### Session
 
 `type: session`
 
 Badges rendered: `session_number`, `play_date`, `status`,
 `stage`
+
+A published session page drives the landing "Latest Session" recap
+and the "NPCs/Locations in Play" widgets. The wrap-up
+(`type: session_wrap`) supplies the recap text, but nothing surfaces
+unless the session — and, for the Campaign Saga, its chapter — publish
+too.
 
 ### Scene
 
