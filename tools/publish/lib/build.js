@@ -519,7 +519,7 @@ function build(options = {}) {
         dirPages = dirPages.concat(pageDirPages);
       }
     }
-    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config, publishConfig);
+    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap);
     const outPath = path.join(outputDir, dir, 'index.html');
     ensureDir(outPath);
     fs.writeFileSync(outPath, indexHtml);

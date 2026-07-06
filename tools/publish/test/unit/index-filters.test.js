@@ -145,3 +145,42 @@ describe('indexTemplate — canon_status field on index pages', () => {
     assert.ok(html.includes('DRAFT'), 'canon_status value must appear in the Canon Status column');
   });
 });
+
+describe('indexTemplate — listing thumbnails', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+  const publishConfig = { theme: {} };
+  const imageMap = { 'ring.png': { relPath: 'ring.png', sourcePath: '/x/ring.png' } };
+
+  it('renders a location thumbnail when portrait resolves', () => {
+    const page = {
+      title: 'Docking Ring', displayTitle: 'Docking Ring',
+      outputPath: 'locations/docking-ring.html',
+      frontmatter: { type: 'location', portrait: '_attachments/ring.png' }, markdown: '',
+    };
+    const html = indexTemplate('locations', 'Locations', [page], navFor, config, publishConfig, imageMap);
+    assert.ok(html.includes('loc-card-thumb'));
+    assert.ok(html.includes('images/ring.png'));
+  });
+
+  it('falls back to text-only when the portrait is not in the imageMap', () => {
+    const page = {
+      title: 'Void Bar', displayTitle: 'Void Bar',
+      outputPath: 'locations/void-bar.html',
+      frontmatter: { type: 'location', portrait: '_attachments/missing.png' }, markdown: '',
+    };
+    const html = indexTemplate('locations', 'Locations', [page], navFor, config, publishConfig, imageMap);
+    assert.ok(!html.includes('loc-card-thumb'));
+  });
+
+  it('renders a faction thumbnail when portrait resolves', () => {
+    const page = {
+      title: 'Redline Cartel', displayTitle: 'Redline Cartel',
+      outputPath: 'factions/redline-cartel.html',
+      frontmatter: { type: 'faction', portrait: '_attachments/ring.png' }, markdown: '',
+    };
+    const html = indexTemplate('factions', 'Factions & Organizations', [page], navFor, config, publishConfig, imageMap);
+    assert.ok(html.includes('intel-card-thumb'));
+    assert.ok(html.includes('images/ring.png'));
+  });
+});

@@ -92,7 +92,7 @@ function renderLocationTreeHTML(nodes, depth, indexDir) {
   return items;
 }
 
-function renderLocationsPage(pages, indexDir) {
+function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
   const byRegion = {};
   const childOf = new Set();
 
@@ -157,7 +157,10 @@ function renderLocationsPage(pages, indexDir) {
         }).join('\n')}</div>`
       : '';
 
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+
     return `<div class="loc-card">
+  ${thumb ? `<div class="loc-card-thumb">${thumb}</div>` : ''}
   <div class="loc-card-main">
     <h3><a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a></h3>
     <div class="loc-card-meta">
@@ -333,7 +336,7 @@ function renderBestiary(pages, indexDir) {
   return `<div class="bestiary">${cards}</div>`;
 }
 
-function renderFactions(pages, indexDir) {
+function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
   const factions = pages
     .filter(p => p.frontmatter.type === 'faction' || p.frontmatter.type === 'organization')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -392,8 +395,11 @@ function renderFactions(pages, indexDir) {
       ? `<span class="intel-canon-badge">${escapeHtml(canon)}</span>`
       : '';
 
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+
     return `<article class="intel-card">
   <div class="intel-card-header">
+    ${thumb ? `<div class="intel-card-thumb">${thumb}</div>` : ''}
     <h2><a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a></h2>
     <span class="intel-type-badge ${typeBadgeClass(ft)}">${escapeHtml(ft)}</span>
   </div>
@@ -656,8 +662,9 @@ ${rows}
 </div>`;
 }
 
-function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
+function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}) {
   const outputPath = dir + '/index.html';
+  const attachmentsDir = config.attachmentsDir || '_attachments';
   const crumbs = generateBreadcrumbs(outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
   const total = pages.length;
@@ -695,9 +702,9 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
   } else if (isCreatures) {
     bodyContent = renderBestiary(pages, dir);
   } else if (isLocations) {
-    bodyContent = renderLocationsPage(pages, dir);
+    bodyContent = renderLocationsPage(pages, dir, imageMap, attachmentsDir);
   } else if (isFactions) {
-    bodyContent = renderFactions(pages, dir);
+    bodyContent = renderFactions(pages, dir, imageMap, attachmentsDir);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
   } else if (isCampaign && pages.some(p => p.frontmatter.type === 'campaign_overview')) {
@@ -711,8 +718,9 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig) {
       const fm = p.frontmatter;
       const entityType = isLocations ? (fm.location_type || fm.type) : fm.type;
       const avatarShape = (fm.type === 'pc') ? 'border-radius:0.375rem' : 'border-radius:50%';
-      const portraitHtml = isCharacters && fm.portrait
-        ? `<div class="npc-icon" style="${avatarShape}"><img src="${escapeHtml(fm.portrait)}" alt=""></div>`
+      const cardImg = fm.portrait ? portraitImg(fm, outputPath, imageMap, attachmentsDir) : '';
+      const portraitHtml = isCharacters && cardImg
+        ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';
       const subtitle = fm.occupation || fm.location_type || fm.faction_type || '';
       return `<a class="entity-card" href="${escapeHtml(relHref(p, dir))}"
