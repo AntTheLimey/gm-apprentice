@@ -31,6 +31,7 @@ function mapFolder(vaultRelPath, folderMap) {
 function scanVault(config) {
   const { vaultPath, excludeDirs, folderMap } = config;
   const pages = [];
+  const warnedDirs = new Set();
 
   function walk(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -55,7 +56,14 @@ function scanVault(config) {
 
         const dirRel = path.relative(vaultPath, dir);
         const outputDir = mapFolder(dirRel, folderMap);
-        if (!outputDir && dirRel !== '') continue; // skip unmapped directories
+        if (!outputDir && dirRel !== '') {
+          const dirKey = toPosix(dirRel);
+          if (!warnedDirs.has(dirKey)) {
+            warnedDirs.add(dirKey);
+            console.warn(`scanner: skipping "${dirKey}" — not in folderMap; typed pages inside will not publish. Add it to folderMap to publish, or to excludeDirs to silence this warning.`);
+          }
+          continue;
+        }
 
         const baseName = path.basename(entry.name, '.md');
         const displayTitle = frontmatter.title || baseName.replace(/_/g, ' ');

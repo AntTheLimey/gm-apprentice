@@ -215,3 +215,46 @@ describe('pairStoryFiles', () => {
     assert.strictEqual(storyPage, undefined, 'Wrong-type story file should still be removed from pages');
   });
 });
+
+describe('scanVault unmapped-directory warning', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures', 'minimal');
+
+  function captureWarns(fn) {
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try { fn(); } finally { console.warn = orig; }
+    return warns;
+  }
+
+  it('warns once per unmapped directory holding typed pages', () => {
+    const config = {
+      vaultPath: fixturesDir,
+      excludeDirs: ['_meta', '_Templates'],
+      folderMap: {
+        '_Campaign': 'campaign',
+        'Characters/PCs': 'characters/pcs',
+        'Characters/NPCs': 'characters/npcs',
+        // Locations intentionally unmapped
+      },
+    };
+    const warns = captureWarns(() => scanVault(config));
+    const locWarns = warns.filter(w => w.includes('Locations') && w.includes('folderMap'));
+    assert.strictEqual(locWarns.length, 1);
+  });
+
+  it('does not warn when every typed dir is mapped', () => {
+    const config = {
+      vaultPath: fixturesDir,
+      excludeDirs: ['_meta', '_Templates'],
+      folderMap: {
+        '_Campaign': 'campaign',
+        'Characters/PCs': 'characters/pcs',
+        'Characters/NPCs': 'characters/npcs',
+        'Locations': 'locations',
+      },
+    };
+    const warns = captureWarns(() => scanVault(config));
+    assert.strictEqual(warns.filter(w => w.includes('folderMap')).length, 0);
+  });
+});
