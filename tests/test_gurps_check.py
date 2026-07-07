@@ -398,7 +398,7 @@ def run_check(fixture, *args):
 
 clean_out = run_check("clean.md")
 clean_counts = [l for l in clean_out if l.startswith("# count:")]
-check("clean sheet: six sections emitted", len(clean_counts), 6)
+check("clean sheet: seven sections emitted", len(clean_counts), 7)
 check("clean sheet: no WARNING or ERROR",
       [l for l in clean_out if l.startswith(("WARNING", "ERROR"))], [])
 
@@ -451,6 +451,59 @@ check("B170 lowercase vh accepted", gc.skill_relative_level(1, "vh"), -3)
 check("enc-penalized list",
       gc.ENC_PENALIZED_SKILLS,
       ("climbing", "stealth", "swimming", "judo", "karate"))
+
+# --- skills check (SP2) ---
+_SKILLS_TBL = """## Skills
+
+| Name | Difficulty | Relative Level | Points | Base | Current |
+|------|-----------|----------------|--------|------|---------|
+| Broadsword | DX/A | DX+2 | [8] | 15 | 15 |
+| Climbing | DX/A | DX-1 | [1] | 12 | 10 |
+| Diplomacy | IQ/H | IQ+1 | [8] | 14 | 14 |
+| Gunner! | DX/A | DX+0 | [12] | 13 | 13 |
+| Intimidation | Will/A | Will+0 | [2] | 12 | 12 |
+| Judo | DX/H | DX+0 | [4] | 13 | 12 |
+| Stealth | DX/A | DX+1 | [2] | 14 | 12 |
+| **Total** | | | **[29]** | | |
+
+## Equipment
+"""
+_SKILLED = _KARLISH.replace("## Equipment\n", _SKILLS_TBL).replace(
+    "## Stat Sheet",
+    "## Current Status\n\n**Enc:** Medium (2)\n\n## Stat Sheet",
+)
+sk = gk.check_skills(gk.Sheet(_SKILLED))
+check("skills: finding levels in row order",
+      [f[0] for f in sk], ["INFO", "INFO", "INFO", "WARNING"])
+check("skills: Diplomacy base residual mentions computed 13",
+      ("Diplomacy" in sk[0][1], "13" in sk[0][2]), (True, True))
+check("skills: wildcard row skipped with INFO",
+      ("Gunner" in sk[1][1], "wildcard" in sk[1][2]), (True, True))
+check("skills: Judo current hints Armor Familiarity",
+      ("Judo" in sk[2][1], "Armor Familiarity" in sk[2][2]), (True, True))
+check("skills: Stealth RL mismatch cites B170",
+      ("Stealth" in sk[3][1], "B170" in sk[3][2]), (True, True))
+
+# no Enc: line -> current-level checks skipped with exactly one INFO
+nsk = gk.check_skills(gk.Sheet(_KARLISH.replace("## Equipment\n", _SKILLS_TBL)))
+check("skills: no-Enc emits single skip INFO",
+      sum(1 for f in nsk if "current-level checks skipped" in f[2]), 1)
+
+# non-listed skill with Current != Base
+_ODD = _KARLISH.replace("## Equipment\n", """## Skills
+
+| Name | Difficulty | Relative Level | Points | Base | Current |
+|------|-----------|----------------|--------|------|---------|
+| Tactics | IQ/H | IQ+0 | [4] | 12 | 10 |
+
+## Equipment
+""").replace(
+    "## Stat Sheet",
+    "## Current Status\n\n**Enc:** Light (1)\n\n## Stat Sheet",
+)
+osk = gk.check_skills(gk.Sheet(_ODD))
+check("skills: unlisted skill Current != Base flagged INFO",
+      (osk[0][0], "verify source" in osk[0][2]), ("INFO", True))
 
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
