@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.12] — 2026-07-06
+
+### Added
+
+- **GURPS skill-level verification** — `gurps_check.py` gains a
+  `skills` check: point cost + difficulty → relative level via the
+  B170 closed form (WARNING on mismatch), attribute + relative level
+  → Base (INFO residual — a Talent may explain), and a naive Current
+  tripwire (Base − enc level for Climbing/Stealth/Swimming/Judo/
+  Karate, INFO with an Armor Familiarity MA49 hint). The script
+  computes closed-form arithmetic only; perk and Talent
+  reconciliation belongs to the model's verification pass.
+- **Skills table Base/Current columns** (migration 1.8.11 → 1.8.12)
+  — the GURPS PC template's Skills table renames `Effective` →
+  `Base` and appends `Current` (what you roll now under the declared
+  `Enc:`). Old-format sheets keep working in both the checker and
+  the publish tool.
+- **Publish tool 1.6.1** — renders `Current` as the displayed skill
+  level with `base N` alongside when they differ.
+
+### Changed
+
+- GURPS character-generation and character-sheet references extend
+  the verification loop with a reconciliation pass: resolve `skills`
+  residuals against the sheet's Advantages & Perks and Talents
+  before escalating to the GM.
+
 ## [1.8.11] — 2026-07-06
 
 ### Added
