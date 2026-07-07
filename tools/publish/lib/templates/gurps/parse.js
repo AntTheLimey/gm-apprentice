@@ -119,9 +119,12 @@ function parseSkillFootnotes(sectionHtml) {
 function parseSkills(model, sections, fm) {
   if (Array.isArray(fm.skills)) {
     model.skills = fm.skills.map(s => ({
-      name: String(s.name ?? ''), level: String(s.level ?? ''), relative: s.relative || '',
+      name: String(s.name ?? ''), level: String(s.current ?? s.level ?? ''),
+      relative: s.relative || '',
       points: String(s.points ?? ''), parry: s.parry != null ? String(s.parry) : null,
-      block: s.block != null ? String(s.block) : null, markers: [], source: s.source || null,
+      block: s.block != null ? String(s.block) : null,
+      base: s.base != null ? String(s.base) : null,
+      markers: [], source: s.source || null,
     }));
     return;
   }
@@ -135,11 +138,18 @@ function parseSkills(model, sections, fm) {
     ? header.findIndex(h => h.includes('name')) : 0;
   // 'effective' takes priority over 'level'; 'relative level' must not match 'effective'
   const iEffective = header.findIndex(h => h.includes('effective'));
-  // 'relative level' matches 'relative', not 'effective'
+  // 'current' and 'base' are the 1.8.12+ vault columns (Base = unencumbered,
+  // Current = with encumbrance); pre-1.8.12 sheets have 'effective' only
+  const iCurrent = header.findIndex(h => h.includes('current'));
+  const iBase = header.findIndex(h => h.includes('base'));
+  // 'relative level' matches 'relative', not 'effective'/'base'/'current'
   const iRel = header.findIndex(h => h.includes('relative'));
-  // Use 'effective' as level if found; otherwise fall back to a plain 'level' col
+  // Fall back to a plain 'level' col ('relative level' must not match)
   const iLevelFallback = header.findIndex(h => h.includes('level') && !h.includes('relative'));
-  const iLevel = iEffective >= 0 ? iEffective : iLevelFallback;
+  // Displayed level priority: current > effective > base > plain 'level'
+  const iLevel = iCurrent >= 0 ? iCurrent
+    : iEffective >= 0 ? iEffective
+      : iBase >= 0 ? iBase : iLevelFallback;
   const iPts = header.findIndex(h => h.includes('point'));
   for (const row of rows.slice(1)) {
     if (!row[iName]) continue;
@@ -149,9 +159,11 @@ function parseSkills(model, sections, fm) {
     const { name, source } = splitCitation(nameClean);
     const lv = splitMarkers(iLevel >= 0 ? row[iLevel] : '');
     const pts = stripCost(iPts >= 0 ? row[iPts] : '');
+    const base = (iBase >= 0 && iBase !== iLevel)
+      ? splitMarkers(row[iBase] || '').value : null;
     model.skills.push({
       name, level: lv.value, relative: iRel >= 0 ? row[iRel] : '',
-      points: pts.value, parry: null, block: null,
+      points: pts.value, parry: null, block: null, base,
       markers: [...nameMarkers, ...lv.markers], source,
     });
   }

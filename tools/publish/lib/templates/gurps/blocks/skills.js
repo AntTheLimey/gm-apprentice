@@ -23,8 +23,10 @@ function renderSkills(model) {
     const cite = s.source ? ` <span class="cite">{p. ${escapeHtml(s.source)}}</span>` : '';
     const def = s.parry ? `<div class="subline">Parry: ${escapeHtml(s.parry)}</div>`
       : s.block ? `<div class="subline">Block: ${escapeHtml(s.block)}</div>` : '';
+    const baseNote = (s.base && s.base !== s.level)
+      ? `<div class="subline">base ${escapeHtml(s.base)}</div>` : '';
     return `<tr><td class="nm">${escapeHtml(s.name)}${cite}${def}</td>` +
-      `<td class="num">${escapeHtml(s.level)}${marks}</td>` +
+      `<td class="num">${escapeHtml(s.level)}${marks}${baseNote}</td>` +
       `<td class="num rel">${escapeHtml(s.relative || '')}</td>` +
       `<td class="num">${cost(s.points)}</td></tr>`;
   }).join('\n');

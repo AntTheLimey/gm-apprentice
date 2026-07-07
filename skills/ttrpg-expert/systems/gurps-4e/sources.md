@@ -12,13 +12,13 @@
 | Code | Book | Date |
 |------|------|------|
 | B | Basic Set: Characters | 2026-04-05 |
+| MA | Martial Arts (perk names + page refs only, SJG Online Policy) | 2026-07-06 |
 
 ## Integration Targets
 
 | Code | Book | Status |
 |------|------|--------|
 | BX | Basic Set: Campaigns | Planned |
-| MA | Martial Arts | Planned |
 | M | Magic | Planned |
 | HT | High-Tech | Planned |
 | LT | Low-Tech | Planned |
@@ -186,7 +186,7 @@ Complete list from [GCS standard](https://gurpscharactersheet.com/page_reference
 | LTO | Locations: Tower of Octavius | — |
 | LW | Locations: Worminghall | — |
 | M | Magic | Planned |
-| MA | Martial Arts | Planned |
+| MA | Martial Arts | Integrated (perk names + page refs only) |
 | MAFCCS | Martial Arts: Fairbairn Close Combat Systems | — |
 | MAG | Martial Arts: Gladiators | — |
 | MAS | Magic: Artillery Spells | — |

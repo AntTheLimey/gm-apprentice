@@ -86,11 +86,17 @@ motivations, and description.}
 
 ## Skills
 
-<!-- Always a single alphabetized table. No category sub-headings. -->
+<!-- Always a single alphabetized table. No category sub-headings.
+     Base = unencumbered level (attribute + relative level, plus any
+     Talent). Current = what you roll now: Base minus the encumbrance
+     level for Climbing, Stealth, Swimming, Judo, and Karate (B17,
+     B203) unless a perk such as Armor Familiarity (MA49) offsets it;
+     equal to Base for everything else. Refresh Current at wrap-up
+     whenever encumbrance changes. -->
 
-| Name | Difficulty | Relative Level | Points | Effective |
-|------|-----------|----------------|--------|-----------|
-| | | | | |
+| Name | Difficulty | Relative Level | Points | Base | Current |
+|------|-----------|----------------|--------|------|---------|
+| | | | | | |
 
 ## Techniques
 

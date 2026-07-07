@@ -114,3 +114,35 @@ def dice_adds(dice: int, adds: int) -> int:
     """B269 equivalence key: any +4 becomes 1d, so 4*dice + adds
     identifies a damage roll up to legal rewrites (2d+5 == 3d+1)."""
     return 4 * dice + adds
+
+
+# --- skill point costs (B170) ---
+
+DIFFICULTY_OFFSETS = {"E": 0, "A": 1, "H": 2, "VH": 3}
+
+# Skills whose rolls take -enc level: B17 (Climbing, Stealth, Swimming)
+# and the Judo/Karate skill descriptions (B203). Perks such as Armor
+# Familiarity (Martial Arts p. 49) can offset these -- that judgement
+# belongs to the reconciliation pass, never to this module.
+ENC_PENALIZED_SKILLS = ("climbing", "stealth", "swimming", "judo", "karate")
+
+
+def skill_relative_level(points: int, difficulty: str):
+    """B170 closed form: points spent -> level relative to attribute.
+
+    Above-attribute progression: 1 pt -> +0, 2-3 pt -> +1, then
+    2 + (points - 4) // 4 for 4+ pt (cost-is-the-difference means
+    intermediate totals hold the lower level). The difficulty offset
+    (E/A/H/VH = 0/1/2/3) shifts the result down. Returns None for an
+    unknown difficulty code or points < 1.
+    """
+    d = DIFFICULTY_OFFSETS.get(str(difficulty).strip().upper())
+    if d is None or points is None or points < 1:
+        return None
+    if points < 2:
+        r = 0
+    elif points < 4:
+        r = 1
+    else:
+        r = 2 + (points - 4) // 4
+    return r - d

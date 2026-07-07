@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """GURPS 4e sheet arithmetic checks: lift, encumbrance, load, defenses,
-points, damage.
+points, skills, damage.
 
 Read-only companion to vault_check.py for a single PC markdown sheet.
 Verifies the sheet's own numbers against Basic Set formulas and reports
@@ -8,7 +8,7 @@ deltas; interpretation stays with the GM (Talents and bespoke perks
 legitimately shift values, so findings are advisory). Stdlib only.
 
 Usage:
-  gurps_check.py SHEET.md [attributes|encumbrance|load|defenses|points|damage|all]
+  gurps_check.py SHEET.md [attributes|encumbrance|load|defenses|points|skills|damage|all]
 
 Output: labelled sections, `# count: N` headers, one finding per line
 as `LEVEL<TAB>locus<TAB>message`.
@@ -404,6 +404,126 @@ def check_points(sheet):
     return findings
 
 
+DIFF_CELL_RE = re.compile(
+    r"\b(ST|DX|IQ|HT|Will|Per|HP|FP)\s*/\s*(VH|E|A|H)\b", re.I)
+REL_OFFSET_RE = re.compile(r"([+\-])\s*(\d+)\s*$")
+
+
+def _declared_enc_level(sheet):
+    """Current Status Enc: line -> level number 0-4, or None."""
+    declared = declared_enc(sheet)
+    if declared is None:
+        return None
+    name = norm_level(declared)
+    for lv_name, lv_num, _mult in gc.ENC_LEVELS:
+        if lv_name.lower() == name:
+            return lv_num
+    m = re.search(r"\((\d)\)", declared)
+    return int(m.group(1)) if m else None
+
+
+def check_skills(sheet):
+    attrs = read_attributes(sheet)
+    if attrs is None:
+        return [("INFO", "skills", "no attributes; check skipped")]
+    rows = sheet.table("Skills")
+    if len(rows) < 2:
+        return [("INFO", "skills", "no Skills table found; check skipped")]
+    headers = rows[0]
+    i_diff = col(headers, "difficulty")
+    if i_diff < 0:
+        return [("INFO", "skills",
+                 "Skills table has no Difficulty column; check skipped")]
+    i_rel = col(headers, "relative")
+    i_pts = col(headers, "point", "cost")
+    i_base = col(headers, "base")
+    if i_base < 0:
+        i_base = col(headers, "effective")   # pre-1.8.12 sheets
+    i_cur = col(headers, "current")
+    enc_level = _declared_enc_level(sheet)
+    findings = []
+    enc_skip_noted = False
+    for row in rows[1:]:
+        name = re.sub(r"\*+", "", row[0] if row else "").strip()
+        if not name or "total" in name.lower():
+            continue
+        locus = f"skills/{name}"
+        if name.rstrip("*†‡§¶ ").endswith("!"):
+            findings.append(("INFO", locus,
+                             "wildcard skill (x3 cost) not verified"))
+            continue
+        dm = DIFF_CELL_RE.search(_cell(row, i_diff) or "")
+        if not dm:
+            findings.append(("INFO", locus,
+                             "no parseable Difficulty (e.g. DX/A); "
+                             "row skipped"))
+            continue
+        attr_name, diff = dm.group(1), dm.group(2).upper()
+        attr_val = attrs.get(attr_name.lower())
+        points = parse_cost(_cell(row, i_pts)) if i_pts >= 0 else None
+        computed_rl = (gc.skill_relative_level(points, diff)
+                       if points is not None else None)
+        declared_rl = None
+        rel_cell = _cell(row, i_rel) if i_rel >= 0 else None
+        if rel_cell:
+            rm = REL_OFFSET_RE.search(str(rel_cell).replace("−", "-"))
+            if rm:
+                declared_rl = int(rm.group(2))
+                if rm.group(1) == "-":
+                    declared_rl = -declared_rl
+        if (declared_rl is not None and computed_rl is not None
+                and declared_rl != computed_rl):
+            findings.append(("WARNING", locus,
+                             f"Relative Level {attr_name}{declared_rl:+d}, "
+                             f"{points} points in {diff} computes "
+                             f"{attr_name}{computed_rl:+d} (B170)"))
+        rl = declared_rl if declared_rl is not None else computed_rl
+        base = None
+        base_cell = _cell(row, i_base) if i_base >= 0 else None
+        if base_cell:
+            bm = re.search(r"\d+", base_cell)
+            base = int(bm.group(0)) if bm else None
+        if base is not None and attr_val is not None and rl is not None:
+            expected = int(attr_val) + rl
+            if base != expected:
+                findings.append(("INFO", locus,
+                                 f"Base {base} vs computed {expected} "
+                                 f"({attr_name} {int(attr_val)} {rl:+d}) — "
+                                 "a Talent or optional specialty may "
+                                 "explain"))
+        cur_cell = _cell(row, i_cur) if i_cur >= 0 else None
+        cm = re.search(r"\d+", cur_cell) if cur_cell else None
+        if not cm:
+            continue
+        current = int(cm.group(0))
+        if enc_level is None:
+            if not enc_skip_noted:
+                findings.append(("INFO", "skills",
+                                 "Current column present but no Enc: line "
+                                 "in Current Status; current-level checks "
+                                 "skipped"))
+                enc_skip_noted = True
+            continue
+        if base is None:
+            continue
+        plain = re.sub(r"\s*\([^)]*\)\s*$", "", name).strip().lower()
+        if plain in gc.ENC_PENALIZED_SKILLS:
+            naive = base - enc_level
+            if current != naive:
+                findings.append(("INFO", locus,
+                                 f"Current {current}, naive "
+                                 f"Base-{enc_level} = {naive} — a perk "
+                                 "(e.g. Armor Familiarity, MA49) or "
+                                 "Talent may explain; reconcile against "
+                                 "Advantages & Perks"))
+        elif current != base:
+            findings.append(("INFO", locus,
+                             f"Current {current} differs from Base "
+                             f"{base}; no standard enc penalty applies "
+                             "— verify source"))
+    return findings
+
+
 FORMULA_RE = re.compile(r"\b(sw|thr)\b\s*(?:([+\-−])\s*(\d+))?", re.I)
 DICE_IN_TEXT_RE = re.compile(r"\b(\d+)\s*d\s*(?:([+\-−])\s*(\d+))?")
 
@@ -464,6 +584,7 @@ CHECKS = [
     ("load", check_load),
     ("defenses", check_defenses),
     ("points", check_points),
+    ("skills", check_skills),
     ("damage", check_damage),
 ]
 

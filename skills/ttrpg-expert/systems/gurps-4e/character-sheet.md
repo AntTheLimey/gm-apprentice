@@ -92,19 +92,24 @@
 
 ## Skills
 
-| Name | Difficulty | Relative Level | Points | Effective Level |
-|------|-----------|---------------|--------|----------------|
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| | | | | |
-| **Total** | | | **0** | |
+| Name | Difficulty | Relative Level | Points | Base | Current |
+|------|-----------|----------------|--------|------|---------|
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| **Total** | | | **0** | | |
+
+*Base is the unencumbered level. Current is what you roll now — Base
+minus the encumbrance level for Climbing, Stealth, Swimming, Judo, and
+Karate (B17, B203) unless a perk such as Armor Familiarity (MA49)
+offsets it, and equal to Base for everything else.*
 
 ## Languages
 
@@ -258,7 +263,10 @@ an Enc: line — not this reference sheet's layout, so run it
 against the PC's vault file. It verifies Basic Lift, the
 encumbrance table, carried load, Move/Dodge, secondary
 characteristics, Parry/Block, the point total, and thrust/swing
-damage (B15–B17, B269, B375–B376). Findings are advisory —
-WARNINGs are deltas to explain (a Talent or weapon bonus is a
-fine reason), not automatic errors. Fix real arithmetic errors
-before finalizing.*
+damage (B15–B17, B269, B375–B376), and skill levels from points
+and difficulty (B170). Findings are advisory — WARNINGs are deltas
+to explain (a Talent or weapon bonus is a fine reason), not
+automatic errors. Reconcile every `skills` residual against the
+sheet's Advantages & Perks and Talents before escalating — Armor
+Familiarity (MA49) negating Judo/Karate encumbrance penalties is
+the canonical case. Fix real arithmetic errors before finalizing.*

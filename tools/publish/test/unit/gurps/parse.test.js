@@ -91,6 +91,30 @@ describe('parseGurps', () => {
     assert.strictEqual(c.attributes.secondary.FP.value, '12');
     assert.strictEqual(c.attributes.secondary['Basic Move'].value, '6');
   });
+
+  it('reads Base/Current skills columns: level = Current, base captured', () => {
+    const c = parseGurps({}, [{
+      title: 'Skills', id: 'skills',
+      html: '<table><tr><th>Name</th><th>Difficulty</th><th>Relative Level</th>' +
+            '<th>Points</th><th>Base</th><th>Current</th></tr>' +
+            '<tr><td>Climbing</td><td>DX/A</td><td>DX-1</td><td>[1]</td><td>12</td><td>10</td></tr>' +
+            '<tr><td>Broadsword</td><td>DX/A</td><td>DX+2</td><td>[8]</td><td>15</td><td>15</td></tr></table>',
+    }]);
+    const climbing = c.skills.find(s => s.name === 'Climbing');
+    assert.strictEqual(climbing.level, '10');
+    assert.strictEqual(climbing.base, '12');
+    assert.strictEqual(climbing.relative, 'DX-1');
+  });
+
+  it('uses Base as the level when there is no Current column', () => {
+    const c = parseGurps({}, [{
+      title: 'Skills', id: 'skills',
+      html: '<table><tr><th>Name</th><th>Difficulty</th><th>Points</th><th>Base</th></tr>' +
+            '<tr><td>Shortsword</td><td>DX/A</td><td>[8]</td><td>14</td></tr></table>',
+    }]);
+    assert.strictEqual(c.skills[0].level, '14');
+    assert.strictEqual(c.skills[0].base, null);
+  });
 });
 
 // Fix 1: Equipment parser must not include subsection rows from ### Encumbrance

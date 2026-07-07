@@ -24,4 +24,13 @@ describe('renderSkills', () => {
   it('returns null when no skills', () => {
     assert.strictEqual(renderSkills({ skills: [] }), null);
   });
+  it('shows a base sub-line only when Current differs from Base', () => {
+    const model = { skills: [
+      { name: 'Climbing', level: '10', base: '12', relative: 'DX-1', points: '1', markers: [] },
+      { name: 'Broadsword', level: '15', base: '15', relative: 'DX+2', points: '8', markers: [] },
+    ] };
+    const html = renderSkills(model);
+    assert.ok(html.includes('base 12'), 'differing base is shown');
+    assert.strictEqual(html.includes('base 15'), false, 'equal base is not repeated');
+  });
 });
