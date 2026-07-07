@@ -41,7 +41,7 @@ status: active
 |------|-----------|----------------|--------|-----------|
 | Broadsword | DX/A | DX+2 | [8] | 15 |
 | Shield | DX/E | DX+2 | [4] | 15 |
-| Stealth | DX/A | DX+0 | [2] | 13 |
+| Stealth | DX/A | DX+1 | [2] | 13 |
 | Tactics | IQ/H | IQ+0 | [4] | 12 |
 
 ---

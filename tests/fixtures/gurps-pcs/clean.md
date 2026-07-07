@@ -36,9 +36,9 @@ status: active
 
 ## Skills
 
-| Name | Difficulty | Points | Effective |
-|------|-----------|--------|-----------|
-| Shortsword | DX/A | [8] | 14 |
+| Name | Difficulty | Points | Base | Current |
+|------|-----------|--------|------|---------|
+| Shortsword | DX/A | [8] | 14 | 14 |
 
 ## Melee Weapons
 

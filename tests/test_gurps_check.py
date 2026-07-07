@@ -505,6 +505,19 @@ osk = gk.check_skills(gk.Sheet(_ODD))
 check("skills: unlisted skill Current != Base flagged INFO",
       (osk[0][0], "verify source" in osk[0][2]), ("INFO", True))
 
+# --- skills CLI runs against fixtures (SP2) ---
+check("clean: skills section has zero findings",
+      run_check("clean.md", "skills"), ["[skills]", "# count: 0"])
+flawed_skills = run_check("flawed.md", "skills")
+check("flawed: Stealth RL mismatch is a WARNING citing B170",
+      any(l.startswith("WARNING\tskills/Stealth") and "B170" in l
+          for l in flawed_skills), True)
+check("flawed: Stealth base residual INFO via effective fallback",
+      any(l.startswith("INFO\tskills/Stealth") and "14" in l
+          for l in flawed_skills), True)
+check("flawed: no current-level findings without a Current column",
+      any("Current" in l for l in flawed_skills), False)
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
