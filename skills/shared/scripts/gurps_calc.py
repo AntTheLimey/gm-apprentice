@@ -127,7 +127,7 @@ DIFFICULTY_OFFSETS = {"E": 0, "A": 1, "H": 2, "VH": 3}
 ENC_PENALIZED_SKILLS = ("climbing", "stealth", "swimming", "judo", "karate")
 
 
-def skill_relative_level(points, difficulty):
+def skill_relative_level(points: int, difficulty: str):
     """B170 closed form: points spent -> level relative to attribute.
 
     Above-attribute progression: 1 pt -> +0, 2-3 pt -> +1, then

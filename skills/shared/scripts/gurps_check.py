@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """GURPS 4e sheet arithmetic checks: lift, encumbrance, load, defenses,
-points, damage.
+points, skills, damage.
 
 Read-only companion to vault_check.py for a single PC markdown sheet.
 Verifies the sheet's own numbers against Basic Set formulas and reports
