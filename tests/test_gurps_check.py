@@ -430,6 +430,28 @@ blf = gk.check_load(gk.Sheet(_BLANKLOC))
 check("blank Location counts toward load (3+20=23, mule excluded)",
       (blf[0][0], "23" in blf[0][2]), ("INFO", True))
 
+# --- skill relative level (B170 closed form) ---
+B170_ORACLE = [
+    (1, "E", 0), (2, "E", 1), (4, "E", 2), (8, "E", 3), (12, "E", 4),
+    (16, "E", 5), (20, "E", 6),
+    (1, "A", -1), (2, "A", 0), (4, "A", 1), (8, "A", 2), (12, "A", 3),
+    (1, "H", -2), (2, "H", -1), (4, "H", 0), (8, "H", 1),
+    (1, "VH", -3), (2, "VH", -2), (4, "VH", -1), (8, "VH", 0),
+    (12, "VH", 1),
+]
+for pts, diff, rl in B170_ORACLE:
+    check(f"B170 {diff} {pts}pt", gc.skill_relative_level(pts, diff), rl)
+check("B170 intermediate 3pt A holds lower level",
+      gc.skill_relative_level(3, "A"), 0)
+check("B170 intermediate 6pt E holds lower level",
+      gc.skill_relative_level(6, "E"), 2)
+check("B170 zero points", gc.skill_relative_level(0, "E"), None)
+check("B170 unknown difficulty", gc.skill_relative_level(4, "X"), None)
+check("B170 lowercase vh accepted", gc.skill_relative_level(1, "vh"), -3)
+check("enc-penalized list",
+      gc.ENC_PENALIZED_SKILLS,
+      ("climbing", "stealth", "swimming", "judo", "karate"))
+
 if FAILURES:
     print("\n".join(["", "FAILURES:"] + FAILURES))
     sys.exit(1)
