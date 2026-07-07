@@ -350,11 +350,15 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_check.py" "path/to/PC
 
 It re-derives Basic Lift, the encumbrance table, carried load
 against the Current Status Enc line, Move/Dodge, secondary
-characteristics, Parry/Block, the point budget, and thrust/swing
-damage (B15–B17, B269, B375–B376). Findings are advisory — a
-WARNING is a delta to explain (a Talent or weapon bonus is a
-perfectly good reason), not an automatic error. Fix any genuine
-arithmetic mistake before presenting the sheet.
+characteristics, Parry/Block, the point budget, skill levels from
+points and difficulty (B170), and thrust/swing damage (B15–B17,
+B269, B375–B376). Findings are advisory — a WARNING is a delta to
+explain (a Talent or weapon bonus is a perfectly good reason), not
+an automatic error. Reconcile every `skills` residual against the
+sheet's Advantages & Perks and Talents before escalating — Armor
+Familiarity (MA49) negating Judo/Karate encumbrance penalties is
+the canonical case. Fix any genuine arithmetic mistake before
+presenting the sheet.
 
 ## Character Sheet Output Format
 

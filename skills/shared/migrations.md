@@ -433,3 +433,27 @@ hidden until revealed in play, not permanently secret.
   by level name or number). If `publish.site_dir` is set in
   vault-config, repoint the site's `file:` pin to the plugin-cache
   copy at ≥1.8.9 (tool ≥1.5.1) and rebuild.
+
+## Migration: 1.8.11 → 1.8.12
+
+### Structural
+
+- **GURPS PC Skills table: `Effective` → `Base`, new `Current`
+  column** — the Skills table header becomes
+  `| Name | Difficulty | Relative Level | Points | Base | Current |`.
+  `Base` is the old `Effective` value renamed (unencumbered level).
+  `Current` is appended and initialized to `Base`, then reconciled
+  during the migration pass: for Climbing, Stealth, Swimming, Judo,
+  and Karate (B17, B203), subtract the sheet's declared `Enc:`
+  level unless a perk such as Armor Familiarity (MA49) offsets it —
+  the model applies perk/Talent context; the checker never does.
+  Old-format sheets keep working unmigrated: `gurps_check.py` reads
+  `Effective` as Base, and the publish tool falls back the same way.
+
+### Tooling
+
+- **Publish tool:** `gm-apprentice-publish` 1.6.1 renders `Current`
+  as the displayed skill level with `base N` alongside when they
+  differ, and renders old-format sheets unchanged. If
+  `publish.site_dir` is set in vault-config, offer to run
+  `npm update gm-apprentice-publish` in the site directory.

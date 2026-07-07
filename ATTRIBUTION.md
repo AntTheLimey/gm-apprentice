@@ -55,8 +55,10 @@ granted in the
 The GURPS skill files in this project contain trait names,
 point costs, page references, and short mechanical notes as
 permitted by the SJG Online Policy. Content is curated from
-the GURPS Basic Set (Characters and Campaigns) and organized
-into topic-based reference files and archetype chargen kits.
+the GURPS Basic Set (Characters and Campaigns) and GURPS
+Martial Arts (perk names and page references only), and
+organized into topic-based reference files and archetype
+chargen kits.
 See `skills/ttrpg-expert/systems/gurps-4e/sources.md` for
 book coverage status.
 
