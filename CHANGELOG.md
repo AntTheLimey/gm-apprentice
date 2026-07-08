@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.13] — 2026-07-07
+
+### Added
+
+- **`scifi` theme preset** (publish tool 1.7.0) — worn space-noir:
+  rust-black background, K-star amber accent, terminal cyan secondary,
+  condensed technical headings, with a light "station work order"
+  variant. Aliases: `sci-fi`, `science-fiction`, `space`,
+  `space-opera`, `space-noir`. Section titles: "Star Charts" /
+  "Powers & Interests" / "Hardware & Equipment" / "Xenofauna".
+- **Theme showcase** — `scripts/build-theme-showcase.mjs` builds the
+  benchmark campaign once per preset; a new Pages workflow publishes
+  the gallery on pushes to main.
+- **NPC table avatars** — the NPC listing's Name column shows portrait
+  thumbnails with an initials fallback; sorting is unaffected.
+
+### Fixed
+
+- **Location card excerpts** no longer render raw markdown and can
+  never surface excluded-section (GM Notes) content — all card
+  excerpts and pull-quotes route through one shared helper that also
+  truncates cleanly at word boundaries with an ellipsis.
+- **Locations index renders the full hierarchy** — deep trees (depth
+  ≥ 2) now appear recursively inside their root cards instead of being
+  silently dropped; children of unpublished parents still float up as
+  roots, and empty region headings are gone.
+- **Relationship graphs exclude index pages** — authored section
+  indexes (e.g. `_World/index.md`) no longer wire every entity into
+  one hub.
+
 ## [1.8.12] — 2026-07-06
 
 ### Added
