@@ -73,4 +73,25 @@ describe('generateThemeCSS', () => {
     const css = generateThemeCSS({ genre: 'horror' });
     assert.ok(!css.includes('#1a1410'));
   });
+
+  it('does not let default generic fonts clobber a genre preset', () => {
+    const css = generateThemeCSS({
+      fonts: { heading: 'system-ui', body: 'system-ui' },
+      genre: 'scifi',
+      palette: null,
+    });
+    assert.strictEqual(css, '/* Genre preset active — no overrides */\n');
+  });
+
+  it('lets an explicit non-generic font override a genre preset, per-property', () => {
+    const css = generateThemeCSS({
+      fonts: { heading: 'Cinzel', body: 'system-ui' },
+      genre: 'fantasy',
+      palette: null,
+    });
+    assert.ok(css.includes("--font-heading: 'Cinzel', serif"));
+    assert.ok(css.includes('fonts.googleapis.com'));
+    assert.ok(css.includes('Cinzel'));
+    assert.ok(!css.includes('--font-body'));
+  });
 });

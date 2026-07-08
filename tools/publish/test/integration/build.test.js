@@ -715,10 +715,13 @@ describe('build integration', () => {
     });
 
     it('generates theme.css', () => {
+      // This fixture's vault-config sets theme.genre: horror with no explicit
+      // fonts, so the preset CSS owns colors and fonts — theme.css should
+      // carry no overrides rather than clobbering the preset with defaults.
       const themePath = path.join(outputDir, 'docs', 'css', 'theme.css');
       assert.ok(fs.existsSync(themePath));
       const css = fs.readFileSync(themePath, 'utf-8');
-      assert.ok(css.includes(':root'));
+      assert.strictEqual(css, '/* Genre preset active — no overrides */\n');
     });
   });
 

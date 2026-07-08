@@ -82,11 +82,12 @@ function generateThemeCSS(config) {
   const fonts = config.fonts || {};
 
   // When a genre preset is active and no custom palette was provided,
-  // emit only font overrides — the preset CSS handles colors.
+  // preset CSS owns colors AND fonts; only explicitly-chosen (non-generic)
+  // fonts override the preset.
   if (!palette && config.genre && resolveGenrePreset(config.genre)) {
     const fontVars = [];
-    if (fonts.heading) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
-    if (fonts.body) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
+    if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
+    if (fonts.body && !GENERIC_FAMILIES.has(fonts.body)) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
     if (fontVars.length === 0) return '/* Genre preset active — no overrides */\n';
     const fontsImport = googleFontsImport(fonts);
     return `${fontsImport}:root {\n${fontVars.join('\n')}\n}\n`;
