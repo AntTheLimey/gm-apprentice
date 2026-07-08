@@ -332,3 +332,36 @@ describe('renderLocationsPage deep hierarchies', () => {
     assert.strictEqual(tree[0].children.length, 1);
   });
 });
+
+describe('NPC table avatars', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test' };
+  const publishConfig = { theme: {} };
+
+  const npc = (title, portrait) => ({
+    title, displayTitle: title.replace(/_/g, ' '),
+    outputPath: `characters/npcs/${title.toLowerCase()}.html`,
+    frontmatter: { type: 'npc', ...(portrait ? { portrait } : {}) },
+    markdown: '',
+  });
+  const imageMap = { 'kessler.png': { relPath: 'kessler.png' } };
+
+  it('renders a portrait thumbnail in the Name cell when available', () => {
+    const html = indexTemplate('characters/npcs', 'NPCs',
+      [npc('Kessler', '_attachments/kessler.png')], navFor, config, publishConfig, imageMap);
+    assert.ok(/npc-row-avatar[^]*?images\/kessler\.png/.test(html));
+  });
+
+  it('falls back to initials when no portrait', () => {
+    const html = indexTemplate('characters/npcs', 'NPCs',
+      [npc('Karl_Brenner')], navFor, config, publishConfig, imageMap);
+    assert.ok(html.includes('npc-row-initials'));
+    assert.ok(html.includes('>KB<'));
+  });
+
+  it('name cell carries a data-sort key so avatars do not break sorting', () => {
+    const html = indexTemplate('characters/npcs', 'NPCs',
+      [npc('Karl_Brenner')], navFor, config, publishConfig, imageMap);
+    assert.ok(html.includes('data-sort="karl brenner"'));
+  });
+});

@@ -3,6 +3,7 @@ const mdRenderer = new MarkdownIt({ html: false, typographer: true });
 const { escapeHtml, relativePath, resolveWikiLinks } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
+const { getInitials } = require('./landing-data');
 
 const GENRE_SECTION_TITLES = {
   military: {
@@ -566,7 +567,7 @@ function sessionSortKey(str) {
   return m ? Number(m[1]) : 0;
 }
 
-function renderNPCTable(pages, dir) {
+function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachments') {
   const sorted = pages
     .filter(p => p.frontmatter.type === 'npc')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -606,9 +607,13 @@ function renderNPCTable(pages, dir) {
     const firstApp = cleanRef(fm.first_appearance || '');
     const lastSession = cleanRef(fm.asOfSession || fm.lastUpdated || '');
     const canonStatus = getCanonStatus(fm) || '';
+    const avatar = portraitImg(fm, dir + '/index.html', imageMap, attachmentsDir);
+    const avatarHtml = avatar
+      ? `<span class="npc-row-avatar">${avatar}</span>`
+      : `<span class="npc-row-avatar npc-row-initials" aria-hidden="true">${escapeHtml(getInitials(p.displayTitle))}</span>`;
 
     return `<tr data-entity-type="npc" data-entity-name="${escapeHtml(p.displayTitle)}" data-entity-status="${escapeHtml(status)}" data-session="${escapeHtml(lastSession)}">
-  <td><a href="${escapeHtml(relHref(p, dir))}">${escapeHtml(p.displayTitle)}</a></td>
+  <td data-sort="${escapeHtml(p.displayTitle.toLowerCase())}"><a class="npc-row-link" href="${escapeHtml(relHref(p, dir))}">${avatarHtml}${escapeHtml(p.displayTitle)}</a></td>
   <td>${escapeHtml(occupation)}</td>
   <td><span class="status-badge status-${escapeHtml(status.replace(/\s+/g, '-').toLowerCase())}">${escapeHtml(status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}</span></td>
   <td>${escapeHtml(firstApp)}</td>
@@ -671,7 +676,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
 
   let bodyContent;
   if (isNPCs) {
-    bodyContent = renderNPCTable(pages, dir);
+    bodyContent = renderNPCTable(pages, dir, imageMap, attachmentsDir);
   } else if (isChapters) {
     bodyContent = renderChapterList(pages, dir);
   } else if (isCreatures) {

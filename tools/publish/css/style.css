@@ -3285,3 +3285,13 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   .cat-points { --gc-points-bg: #eef1f5; }
   .cat-def    { --gc-def-bg:    #fdecec; }
 }
+
+/* NPC table row avatars */
+.npc-row-link { display: inline-flex; align-items: center; gap: 0.5rem; }
+.npc-row-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  overflow: hidden; flex-shrink: 0; background: var(--accent-dim);
+}
+.npc-row-avatar img.portrait { width: 100%; height: 100%; object-fit: cover; }
+.npc-row-initials { font-size: 0.65rem; font-weight: 700; color: var(--accent); }
