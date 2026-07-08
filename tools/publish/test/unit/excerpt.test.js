@@ -57,4 +57,46 @@ describe('excerptFromMarkdown', () => {
     const md = '| a | b |\n|---|---|\n\n---\n\nReal prose starts here. And continues.\n';
     assert.strictEqual(excerptFromMarkdown(md), 'Real prose starts here.');
   });
+
+  it('matches an excluded heading with closing-hash decoration', () => {
+    const md = '## GM Notes ##\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+    assert.ok(!out.includes('##'), 'must not leak the literal heading markup');
+  });
+
+  it('matches an excluded heading with a heading-id anchor', () => {
+    const md = '## GM Notes {#gm-notes}\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+  });
+
+  it('matches an excluded heading with a trailing colon', () => {
+    const md = '## GM Notes:\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+  });
+
+  it('matches an excluded heading with emphasized heading text', () => {
+    const md = '## **GM Notes**\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+  });
+
+  it('recognizes indented and tab-indented headings as headings', () => {
+    const spaceIndented = '  ## GM Notes\n\nThe director is secretly a construct built by the syndicate.\n';
+    const tabIndented = '\t## GM Notes\n\nThe director is secretly a construct built by the syndicate.\n';
+    const outSpace = excerptFromMarkdown(spaceIndented, { excludeSections: ['GM Notes'] });
+    const outTab = excerptFromMarkdown(tabIndented, { excludeSections: ['GM Notes'] });
+    assert.ok(!outSpace.includes('construct'), 'must not leak excluded content (space-indented)');
+    assert.ok(!outSpace.includes('#'), 'must not leak the literal heading markup (space-indented)');
+    assert.ok(!outTab.includes('construct'), 'must not leak excluded content (tab-indented)');
+    assert.ok(!outTab.includes('#'), 'must not leak the literal heading markup (tab-indented)');
+  });
+
+  it('trims excludeSections entries before matching', () => {
+    const md = '## GM Notes\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: [' GM Notes '] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+  });
 });

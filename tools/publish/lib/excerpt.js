@@ -3,16 +3,33 @@
 // BEFORE any other processing so an excerpt can never surface GM-only
 // content, even on sparse entities whose only prose is secret.
 
-const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
+// Leading whitespace is intentionally unbounded (not just CommonMark's 3-space
+// limit) so tab-indented headings from pasted text are still recognized as
+// headings and stripped from the excerpt, never leaked as literal "##" prose.
+const HEADING_RE = /^\s*(#{1,6})\s+(.+?)\s*$/;
+
+// Normalizes a captured heading's text before comparing it against
+// excludeSections, so decorations that don't change the heading's identity
+// (closing-hash, {#anchor}, emphasis markers, trailing colon) can't defeat
+// the exclusion match.
+function normalizeHeadingText(text) {
+  return text
+    .replace(/\s*\{#[^}]*\}\s*$/, '')  // heading-id anchor, e.g. {#gm-notes}
+    .replace(/\s*#+\s*$/, '')          // closing-hash decoration, e.g. "## Title ##"
+    .replace(/:\s*$/, '')              // trailing colon
+    .replace(/[*_`]+/g, '')            // emphasis / code markers
+    .trim()
+    .toLowerCase();
+}
 
 function excerptFromMarkdown(source, opts = {}) {
-  const excludeSections = (opts.excludeSections || []).map(s => String(s).toLowerCase());
+  const excludeSections = (opts.excludeSections || []).map(s => String(s).trim().toLowerCase());
   const limit = opts.limit || 200;
 
   const kept = [];
   for (const line of String(source || '').split('\n')) {
     const h = line.match(HEADING_RE);
-    if (h && excludeSections.includes(h[2].trim().toLowerCase())) break;
+    if (h && excludeSections.includes(normalizeHeadingText(h[2]))) break;
     if (h) continue;                                   // drop heading lines
     const t = line.trim();
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) continue;    // horizontal rules
