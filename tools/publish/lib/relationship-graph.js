@@ -10,7 +10,15 @@ const SHAPE_MAP = {
   item: 'diamond',
 };
 
+// Section-index pages (source file index.md -> scanner title 'index')
+// link to everything by design; including them wires the whole vault
+// into one hub, so graphs exclude them as nodes, sources, and targets.
+function isIndexTitle(title) {
+  return String(title).toLowerCase() === 'index';
+}
+
 function buildRelationshipGraph(centerTitle, pages, backlinks) {
+  if (isIndexTitle(centerTitle)) return { nodes: [], edges: [] };
   const pageMap = {};
   for (const p of pages) {
     pageMap[p.title] = p;
@@ -56,11 +64,12 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
     }
     const bl = backlinks[title] || [];
     for (const b of bl) {
+      if (isIndexTitle(b.title)) continue;
       if (!rels.some(r => r.target === b.title)) {
         rels.push({ target: b.title, type: 'mentioned_in' });
       }
     }
-    return rels;
+    return rels.filter(r => !isIndexTitle(r.target));
   }
 
   addNode(centerTitle, 0);

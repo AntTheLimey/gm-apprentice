@@ -453,4 +453,10 @@ describe('getExploreDescriptions', () => {
     const result = getExploreDescriptions(null, {});
     assert.ok(result.characters);
   });
+
+  it('scifi genre supplies explore descriptions', () => {
+    const d = getExploreDescriptions('scifi', {});
+    assert.ok(d.locations.includes('Stations'));
+    assert.ok(d.factions.includes('Corporations'));
+  });
 });

@@ -2,6 +2,7 @@ const { escapeHtml, relativePath, relativeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
+const { excerptFromMarkdown } = require('../excerpt');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -17,12 +18,6 @@ function renderMetaSpans(fm) {
     .filter(field => fm[field] != null && fm[field] !== '')
     .map(field => `<span><span class="label">${escapeHtml(formatLabel(field))}</span> ${escapeHtml(String(fm[field]))}</span>`)
     .join('\n    ');
-}
-
-function extractFirstSentence(html) {
-  const stripped = (html || '').replace(/<[^>]+>/g, '').trim();
-  const match = stripped.match(/^(.+?[.!?])\s/);
-  return match ? match[1] : stripped.slice(0, 200);
 }
 
 const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
@@ -177,7 +172,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const traitsText = Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits);
     epithet = `<div class="pull-quote">${escapeHtml(traitsText)}</div>`;
   } else if (processedContent.html) {
-    epithet = `<div class="pull-quote">${extractFirstSentence(processedContent.html)}</div>`;
+    epithet = `<div class="pull-quote">${excerptFromMarkdown(processedContent.html)}</div>`;
   }
 
   // Read system HTML before filtering so the filter can react to what was actually rendered.

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { indexTemplate, buildPillFilters, buildLocationTree } = require('../../lib/templates/index-page');
+const { indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage } = require('../../lib/templates/index-page');
 
 describe('buildPillFilters', () => {
   it('returns pills for unique sub-types', () => {
@@ -113,6 +113,21 @@ describe('indexTemplate — section titles', () => {
       { theme: {}, _genrePreset: 'military', section_titles: { locations: 'Star Charts' } });
     assert.ok(html.includes('Star Charts'));
     assert.ok(!html.includes('Theater of Operations'));
+  });
+
+  it('scifi genre preset drives section titles', () => {
+    const scifiConfig = { theme: {}, _genrePreset: 'scifi' };
+    const locHtml = indexTemplate('locations', 'Locations', [locPage], navFor, config, scifiConfig);
+    assert.ok(locHtml.includes('Star Charts'));
+
+    const factionsHtml = indexTemplate('factions', 'Factions & Organizations', [], navFor, config, scifiConfig);
+    assert.ok(factionsHtml.includes('Powers &amp; Interests'));
+
+    const itemsHtml = indexTemplate('items', 'Items & Artifacts', [], navFor, config, scifiConfig);
+    assert.ok(itemsHtml.includes('Hardware &amp; Equipment'));
+
+    const creaturesHtml = indexTemplate('creatures', 'Creatures', [], navFor, config, scifiConfig);
+    assert.ok(creaturesHtml.includes('Xenofauna'));
   });
 });
 
@@ -264,5 +279,104 @@ describe('indexTemplate — grouping fallbacks', () => {
     const html = indexTemplate('factions', 'Factions & Organizations', [page], navFor, config, publishConfig);
     assert.ok(html.includes('Military Units'));
     assert.ok(!html.includes('intel-section-title">Corporations'));
+  });
+});
+
+describe('renderLocationsPage deep hierarchies', () => {
+  function loc(title, parent, type) {
+    return {
+      title, displayTitle: title.replace(/_/g, ' '),
+      outputPath: `locations/${title.toLowerCase().replace(/_/g, '-')}.html`,
+      frontmatter: { type: 'location',
+        ...(parent ? { parent_location: `[[${parent}]]` } : {}),
+        ...(type ? { location_type: type } : {}) },
+      markdown: '',
+    };
+  }
+  const deep = [
+    loc('Republic', null, 'polity'),
+    loc('Sector_7G', 'Republic', 'sector'),
+    loc('Thides_System', 'Sector_7G', 'system'),
+    loc('Station_IV', 'Thides_System', 'station'),
+    loc('Entertainment_District', 'Station_IV', 'district'),
+    loc('Nova_Nexus', 'Entertainment_District', 'venue'),
+  ];
+
+  it('every published location appears exactly once at any depth', () => {
+    const html = renderLocationsPage(deep, 'locations');
+    for (const p of deep) {
+      const hits = html.split(`>${p.displayTitle}</a>`).length - 1;
+      assert.strictEqual(hits, 1, `${p.displayTitle} should appear exactly once`);
+    }
+  });
+
+  it('depth >= 2 renders nested inside the root card', () => {
+    const html = renderLocationsPage(deep, 'locations');
+    assert.ok(html.includes('location-tree-children'), 'recursive nesting present');
+    assert.ok(html.indexOf('Nova Nexus') > html.indexOf('Republic'));
+  });
+
+  it('children of an unpublished parent float up as roots', () => {
+    const orphans = [
+      loc('Thides_System', 'Secret_Sector', 'system'),
+      loc('Station_IV', 'Thides_System', 'station'),
+    ];
+    const html = renderLocationsPage(orphans, 'locations');
+    assert.strictEqual(html.split('loc-card').length - 1 >= 1, true);
+    assert.ok(html.includes('Thides System'));
+    assert.ok(html.includes('Station IV'));
+  });
+
+  it('no empty region sections are emitted', () => {
+    const html = renderLocationsPage(deep, 'locations');
+    assert.ok(!/loc-region-grid"><\/div>/.test(html), 'no empty region grids');
+  });
+
+  it('parent_location matching works via displayTitle too', () => {
+    const pages = [
+      { title: 'Eris_System', displayTitle: 'Eris System',
+        outputPath: 'locations/eris-system.html',
+        frontmatter: { type: 'location' }, markdown: '' },
+      { title: 'Eris_IV', displayTitle: 'Eris IV',
+        outputPath: 'locations/eris-iv.html',
+        frontmatter: { type: 'location', parent_location: '[[Eris System]]' },
+        markdown: '' },
+    ];
+    const tree = buildLocationTree(pages);
+    assert.strictEqual(tree.length, 1);
+    assert.strictEqual(tree[0].children.length, 1);
+  });
+});
+
+describe('NPC table avatars', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test' };
+  const publishConfig = { theme: {} };
+
+  const npc = (title, portrait) => ({
+    title, displayTitle: title.replace(/_/g, ' '),
+    outputPath: `characters/npcs/${title.toLowerCase()}.html`,
+    frontmatter: { type: 'npc', ...(portrait ? { portrait } : {}) },
+    markdown: '',
+  });
+  const imageMap = { 'kessler.png': { relPath: 'kessler.png' } };
+
+  it('renders a portrait thumbnail in the Name cell when available', () => {
+    const html = indexTemplate('characters/npcs', 'NPCs',
+      [npc('Kessler', '_attachments/kessler.png')], navFor, config, publishConfig, imageMap);
+    assert.ok(/npc-row-avatar[^]*?images\/kessler\.png/.test(html));
+  });
+
+  it('falls back to initials when no portrait', () => {
+    const html = indexTemplate('characters/npcs', 'NPCs',
+      [npc('Karl_Brenner')], navFor, config, publishConfig, imageMap);
+    assert.ok(html.includes('npc-row-initials'));
+    assert.ok(html.includes('>KB<'));
+  });
+
+  it('name cell carries a data-sort key so avatars do not break sorting', () => {
+    const html = indexTemplate('characters/npcs', 'NPCs',
+      [npc('Karl_Brenner')], navFor, config, publishConfig, imageMap);
+    assert.ok(html.includes('data-sort="karl brenner"'));
   });
 });

@@ -172,6 +172,15 @@ const EXPLORE_DESCRIPTIONS = {
     creatures: 'Unknown threats and anomalies.',
     events: 'Operations, engagements, and incidents.',
   },
+  scifi: {
+    characters: 'Crews, fixers, and the corporate machines they answer to.',
+    locations: 'Stations, systems, and the lanes between them.',
+    story: 'The job, the truth, and the fallout, session by session.',
+    factions: 'Corporations, syndicates, and powers in the dark.',
+    items: 'Hardware, ships, and tech best kept off the manifest.',
+    creatures: 'What the void holds — known and otherwise.',
+    events: 'Contacts, incidents, and points of no return.',
+  },
 };
 
 const DEFAULT_DESCRIPTIONS = {

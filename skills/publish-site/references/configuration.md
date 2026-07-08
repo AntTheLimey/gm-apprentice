@@ -37,10 +37,12 @@ any equivalent in `vault.config.json`.
 ### Section index titles
 
 Section index pages (Locations, Factions, Items, Creatures) use neutral
-titles by default. The `military` genre preset restyles them ("Theater of
-Operations", "Intelligence Briefing", "Armory & Acquisitions", "Bestiary");
-`fantasy` and `horror` use "Bestiary" for creatures. Override any of them
-in `_meta/vault-config.md`:
+titles by default. Genre presets restyle them: `military` gives "Theater
+of Operations", "Intelligence Briefing", "Armory & Acquisitions",
+"Bestiary"; `scifi` gives "Star Charts", "Powers & Interests",
+"Hardware & Equipment", "Xenofauna"; `fantasy` and `horror` use
+"Bestiary" for creatures. Override any of them in
+`_meta/vault-config.md`:
 
 ```yaml
 publish:
@@ -50,6 +52,16 @@ publish:
 ```
 
 Valid keys: `locations`, `factions`, `items`, `creatures`.
+
+### Theme genre presets
+
+`publish.theme.genre` accepts: `fantasy` (aliases: `adventure`),
+`horror` (`gothic`, `cthulhu`), `noir` (`industrial`, `heist`),
+`military` (`tactical`, `modern`), and `scifi` (`sci-fi`,
+`science-fiction`, `space`, `space-opera`, `space-noir`). A preset
+supplies the palette and fonts; a custom `publish.theme.palette`
+overrides the preset colors. A live gallery of all presets built over
+the same campaign is published from the repo's theme-showcase workflow.
 
 ## `vault.config.json` (in the site repo)
 
