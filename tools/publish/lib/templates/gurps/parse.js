@@ -116,10 +116,38 @@ function parseSkillFootnotes(sectionHtml) {
   return map;
 }
 
+// Shared level-column resolution for Skills and Techniques tables.
+// 'current' and 'base' are the 1.8.12+ vault columns (Base = unencumbered,
+// Current = with encumbrance); pre-1.8.12 sheets have 'effective' only.
+// Displayed level priority: current > effective > base > plain 'level'
+// ('relative level' must not match the plain-'level' fallback).
+function resolveLevelColumns(header) {
+  const iEffective = header.findIndex(h => h.includes('effective'));
+  const iCurrent = header.findIndex(h => h.includes('current'));
+  const iBase = header.findIndex(h => h.includes('base'));
+  const iLevelFallback = header.findIndex(h => h.includes('level') && !h.includes('relative'));
+  const iLevel = iCurrent >= 0 ? iCurrent
+    : iEffective >= 0 ? iEffective
+      : iBase >= 0 ? iBase : iLevelFallback;
+  return { iLevel, iBase };
+}
+
+// Frontmatter counterpart of resolveLevelColumns, shared by the skills,
+// techniques, and spells fm paths. Explicit `current`/`level` keys win over
+// the legacy `effective`/`base` fallbacks; blank values fall through instead
+// of rendering an empty level.
+function resolveFmLevel(o) {
+  for (const k of ['current', 'level', 'effective', 'base']) {
+    const v = o[k];
+    if (v != null && String(v).trim() !== '') return String(v);
+  }
+  return '';
+}
+
 function parseSkills(model, sections, fm) {
   if (Array.isArray(fm.skills)) {
     model.skills = fm.skills.map(s => ({
-      name: String(s.name ?? ''), level: String(s.current ?? s.level ?? ''),
+      name: String(s.name ?? ''), level: resolveFmLevel(s),
       relative: s.relative || '',
       points: String(s.points ?? ''), parry: s.parry != null ? String(s.parry) : null,
       block: s.block != null ? String(s.block) : null,
@@ -132,24 +160,10 @@ function parseSkills(model, sections, fm) {
   if (!sec) return;
   const rows = parseTableRows(sec.html);
   const header = (rows[0] || []).map(h => h.toLowerCase());
-  // Detect columns explicitly by header substring.
-  // 'effective' must be checked before generic 'level' to avoid hitting 'relative level'.
   const iName = header.findIndex(h => h.includes('name')) >= 0
     ? header.findIndex(h => h.includes('name')) : 0;
-  // 'effective' takes priority over 'level'; 'relative level' must not match 'effective'
-  const iEffective = header.findIndex(h => h.includes('effective'));
-  // 'current' and 'base' are the 1.8.12+ vault columns (Base = unencumbered,
-  // Current = with encumbrance); pre-1.8.12 sheets have 'effective' only
-  const iCurrent = header.findIndex(h => h.includes('current'));
-  const iBase = header.findIndex(h => h.includes('base'));
-  // 'relative level' matches 'relative', not 'effective'/'base'/'current'
+  const { iLevel, iBase } = resolveLevelColumns(header);
   const iRel = header.findIndex(h => h.includes('relative'));
-  // Fall back to a plain 'level' col ('relative level' must not match)
-  const iLevelFallback = header.findIndex(h => h.includes('level') && !h.includes('relative'));
-  // Displayed level priority: current > effective > base > plain 'level'
-  const iLevel = iCurrent >= 0 ? iCurrent
-    : iEffective >= 0 ? iEffective
-      : iBase >= 0 ? iBase : iLevelFallback;
   const iPts = header.findIndex(h => h.includes('point'));
   for (const row of rows.slice(1)) {
     if (!row[iName]) continue;
@@ -366,7 +380,7 @@ function parseSocial(model, sections, fm) {
 function parseSpells(model, sections, fm) {
   if (Array.isArray(fm.spells)) {
     model.spells = fm.spells.map(s => ({
-      name: String(s.name ?? ''), level: String(s.level ?? ''), points: String(s.points ?? '0'),
+      name: String(s.name ?? ''), level: resolveFmLevel(s), points: String(s.points ?? '0'),
       markers: [], source: s.source || null,
     }));
     return;
@@ -376,7 +390,7 @@ function parseSpells(model, sections, fm) {
   const rows = parseTableRows(sec.html);
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = Math.max(0, header.findIndex(h => h.includes('name')));
-  const iLevel = header.findIndex(h => h.includes('level') || h.includes('effective'));
+  const { iLevel } = resolveLevelColumns(header);
   const iPts = header.findIndex(h => h.includes('point'));
   for (const row of rows.slice(1)) {
     if (!row[iName]) continue;
@@ -546,7 +560,7 @@ function parseTechniques(model, sections, fm) {
   if (Array.isArray(fm.techniques)) {
     model.techniques = fm.techniques.map(t => ({
       name: String(t.name ?? ''), def: t.default || t.def || '',
-      points: String(t.points ?? ''), level: String(t.level ?? t.effective ?? ''),
+      points: String(t.points ?? ''), level: resolveFmLevel(t),
       markers: [],
     }));
     return;
@@ -559,17 +573,17 @@ function parseTechniques(model, sections, fm) {
     ? header.findIndex(h => h.includes('name')) : 0;
   const iDef = header.findIndex(h => h.includes('default'));
   const iPts = header.findIndex(h => h.includes('point'));
-  const iEff = header.findIndex(h => h.includes('effective'));
+  const { iLevel } = resolveLevelColumns(header);
   for (const row of rows.slice(1)) {
     if (!row[iName]) continue;
     const { value: nameClean, markers: nameMarkers } = splitMarkers(row[iName]);
     const { name, source } = splitCitation(nameClean);
     const pts = stripCost(iPts >= 0 ? row[iPts] : '');
-    const eff = splitMarkers(iEff >= 0 ? row[iEff] : '');
+    const lv = splitMarkers(iLevel >= 0 ? row[iLevel] : '');
     model.techniques.push({
       name, def: iDef >= 0 ? row[iDef] : '',
-      points: pts.value, level: eff.value,
-      markers: [...nameMarkers, ...pts.markers, ...eff.markers], source: source || null,
+      points: pts.value, level: lv.value,
+      markers: [...nameMarkers, ...pts.markers, ...lv.markers], source: source || null,
     });
   }
 }

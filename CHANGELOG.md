@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.14] — 2026-07-08
+
+### Fixed
+
+- **GURPS Techniques level renders from `Base`/`Current` columns**
+  (publish tool 1.7.1) — the Techniques table parser now resolves the
+  displayed level with the same column priority as Skills
+  (`Current` > `Effective` > `Base` > `Level`), so sheets using the
+  1.8.12-style header no longer publish a blank `Lvl` cell. The
+  Skills, Techniques, and Spells table parsers now share one
+  column-resolution helper so they can't drift apart, and the
+  frontmatter paths for all three share a matching level fallback
+  (`current` > `level` > `effective` > `base`, skipping blank
+  values). Legacy `Effective`/`Skill Level` sheets are unaffected.
+  (#78)
+
+---
+
 ## [1.8.13] — 2026-07-07
 
 ### Added
