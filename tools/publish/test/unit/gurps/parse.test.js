@@ -117,6 +117,94 @@ describe('parseGurps', () => {
   });
 });
 
+describe('parseGurps — Techniques level columns', () => {
+  it('reads Base/Current techniques columns: level = Current', () => {
+    const c = parseGurps({}, [{
+      title: 'Techniques', id: 'techniques',
+      html: '<table><tr><th>Name</th><th>Default</th><th>Points</th>' +
+            '<th>Base</th><th>Current</th></tr>' +
+            '<tr><td>Choke Hold</td><td>Judo-2</td><td>[3]</td><td>14</td><td>13</td></tr>' +
+            '<tr><td>Kicking</td><td>Karate-2</td><td>[3]</td><td>15</td><td>15</td></tr></table>',
+    }]);
+    const choke = c.techniques.find(t => t.name === 'Choke Hold');
+    assert.strictEqual(choke.level, '13');
+    assert.strictEqual(choke.def, 'Judo-2');
+    assert.strictEqual(choke.points, '3');
+  });
+
+  it('uses Base as the technique level when there is no Current column', () => {
+    const c = parseGurps({}, [{
+      title: 'Techniques', id: 'techniques',
+      html: '<table><tr><th>Name</th><th>Default</th><th>Points</th><th>Base</th></tr>' +
+            '<tr><td>Disarming</td><td>Broadsword</td><td>[2]</td><td>16</td></tr></table>',
+    }]);
+    assert.strictEqual(c.techniques[0].level, '16');
+  });
+
+  it('still reads the legacy Effective column', () => {
+    const c = parseGurps({}, [{
+      title: 'Techniques', id: 'techniques',
+      html: '<table><tr><th>Name</th><th>Default</th><th>Points</th><th>Effective</th></tr>' +
+            '<tr><td>Choke Hold</td><td>Judo-2</td><td>[3]</td><td>14</td></tr></table>',
+    }]);
+    assert.strictEqual(c.techniques[0].level, '14');
+  });
+
+  it('frontmatter techniques prefer current over level/effective', () => {
+    const c = parseGurps({ techniques: [
+      { name: 'Choke Hold', default: 'Judo-2', points: 3, current: 13, level: 14 },
+      { name: 'Kicking', default: 'Karate-2', points: 3, effective: 15 },
+    ] }, []);
+    assert.strictEqual(c.techniques[0].level, '13');
+    assert.strictEqual(c.techniques[1].level, '15');
+  });
+
+  it('blank frontmatter current falls through to the next level key', () => {
+    const c = parseGurps({ techniques: [
+      { name: 'Kicking', default: 'Karate-2', points: 3, current: '', level: 14 },
+    ] }, []);
+    assert.strictEqual(c.techniques[0].level, '14');
+  });
+});
+
+describe('parseGurps — Spells and frontmatter level fallbacks', () => {
+  it('reads Base/Current spells columns: level = Current', () => {
+    const c = parseGurps({}, [{
+      title: 'Spells', id: 'spells',
+      html: '<table><tr><th>Name</th><th>College</th><th>Points</th>' +
+            '<th>Base</th><th>Current</th></tr>' +
+            '<tr><td>Fireball</td><td>Fire</td><td>4</td><td>15</td><td>14</td></tr></table>',
+    }]);
+    assert.strictEqual(c.spells[0].level, '14');
+  });
+
+  it('still reads the legacy Skill Level spells column', () => {
+    const c = parseGurps({}, [{
+      title: 'Spells', id: 'spells',
+      html: '<table><tr><th>Name</th><th>College</th><th>Skill Level</th><th>Points</th></tr>' +
+            '<tr><td>Fireball</td><td>Fire</td><td>15</td><td>4</td></tr></table>',
+    }]);
+    assert.strictEqual(c.spells[0].level, '15');
+  });
+
+  it('frontmatter skills fall back to effective/base when current/level are absent', () => {
+    const c = parseGurps({ skills: [
+      { name: 'Broadsword', points: 4, effective: 14 },
+      { name: 'Judo', points: 4, base: 12 },
+    ] }, []);
+    assert.strictEqual(c.skills[0].level, '14');
+    assert.strictEqual(c.skills[1].level, '12');
+  });
+
+  it('frontmatter skills keep level over base, preserving the base subline', () => {
+    const c = parseGurps({ skills: [
+      { name: 'Climbing', points: 1, level: 10, base: 12 },
+    ] }, []);
+    assert.strictEqual(c.skills[0].level, '10');
+    assert.strictEqual(c.skills[0].base, '12');
+  });
+});
+
 // Fix 1: Equipment parser must not include subsection rows from ### Encumbrance
 describe('parseGurps — Equipment section', () => {
   const equipHtml =
