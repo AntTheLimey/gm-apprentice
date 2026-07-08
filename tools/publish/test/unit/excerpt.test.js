@@ -99,4 +99,16 @@ describe('excerptFromMarkdown', () => {
     const out = excerptFromMarkdown(md, { excludeSections: [' GM Notes '] });
     assert.ok(!out.includes('construct'), 'must not leak excluded content');
   });
+
+  it('matches an excluded heading with composed anchor and closing-hash decorations', () => {
+    const md = '## GM Notes {#gm-notes} ##\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+  });
+
+  it('matches an excluded heading with an em-dash suffix', () => {
+    const md = '## GM Notes —\n\nThe director is secretly a construct built by the syndicate.\n';
+    const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+  });
 });

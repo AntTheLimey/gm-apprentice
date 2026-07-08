@@ -10,16 +10,27 @@ const HEADING_RE = /^\s*(#{1,6})\s+(.+?)\s*$/;
 
 // Normalizes a captured heading's text before comparing it against
 // excludeSections, so decorations that don't change the heading's identity
-// (closing-hash, {#anchor}, emphasis markers, trailing colon) can't defeat
-// the exclusion match.
+// (closing-hash, {#anchor}, emphasis markers, trailing colon/dashes) can't defeat
+// the exclusion match. Strips iteratively to handle composed decorations in any order.
 function normalizeHeadingText(text) {
-  return text
-    .replace(/\s*\{#[^}]*\}\s*$/, '')  // heading-id anchor, e.g. {#gm-notes}
-    .replace(/\s*#+\s*$/, '')          // closing-hash decoration, e.g. "## Title ##"
-    .replace(/:\s*$/, '')              // trailing colon
-    .replace(/[*_`]+/g, '')            // emphasis / code markers
-    .trim()
-    .toLowerCase();
+  let normalized = text;
+  let changed = true;
+  let iterations = 0;
+  const maxIterations = 10;
+
+  while (changed && iterations < maxIterations) {
+    const before = normalized;
+    normalized = normalized
+      .replace(/\s*\{#[^}]*\}\s*$/, '')   // heading-id anchor, e.g. {#gm-notes}
+      .replace(/\s*#+\s*$/, '')           // closing-hash decoration, e.g. "## Title ##"
+      .replace(/[:–—-]\s*$/, '')          // trailing colon, en-dash, em-dash, or hyphen
+      .replace(/[*_`]+/g, '')             // emphasis / code markers
+      .trim();
+    changed = before !== normalized;
+    iterations++;
+  }
+
+  return normalized.toLowerCase();
 }
 
 function excerptFromMarkdown(source, opts = {}) {
