@@ -114,6 +114,21 @@ describe('indexTemplate — section titles', () => {
     assert.ok(html.includes('Star Charts'));
     assert.ok(!html.includes('Theater of Operations'));
   });
+
+  it('scifi genre preset drives section titles', () => {
+    const scifiConfig = { theme: {}, _genrePreset: 'scifi' };
+    const locHtml = indexTemplate('locations', 'Locations', [locPage], navFor, config, scifiConfig);
+    assert.ok(locHtml.includes('Star Charts'));
+
+    const factionsHtml = indexTemplate('factions', 'Factions & Organizations', [], navFor, config, scifiConfig);
+    assert.ok(factionsHtml.includes('Powers &amp; Interests'));
+
+    const itemsHtml = indexTemplate('items', 'Items & Artifacts', [], navFor, config, scifiConfig);
+    assert.ok(itemsHtml.includes('Hardware &amp; Equipment'));
+
+    const creaturesHtml = indexTemplate('creatures', 'Creatures', [], navFor, config, scifiConfig);
+    assert.ok(creaturesHtml.includes('Xenofauna'));
+  });
 });
 
 describe('indexTemplate — canon_status field on index pages', () => {

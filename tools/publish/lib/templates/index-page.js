@@ -14,6 +14,12 @@ const GENRE_SECTION_TITLES = {
   },
   fantasy: { creatures: 'Bestiary' },
   horror: { creatures: 'Bestiary' },
+  scifi: {
+    locations: 'Star Charts',
+    factions: 'Powers & Interests',
+    items: 'Hardware & Equipment',
+    creatures: 'Xenofauna',
+  },
 };
 
 const DEFAULT_SECTION_TITLES = {

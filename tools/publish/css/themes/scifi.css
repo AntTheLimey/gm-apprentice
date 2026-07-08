@@ -1,0 +1,37 @@
+/* Sci-fi / Space preset — worn space-noir
+   For: GURPS Space, Traveller-style hard SF, space-noir, station crawls
+   Rajdhani import is deliberate: the approved look uses it, and no
+   system stack reproduces a condensed technical face cross-platform. */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap');
+
+:root {
+  --bg: #0d0b0a;
+  --bg-card: #171310;
+  --bg-header: #070605;
+  --bg-hero: #070605;
+  --text: #e6ddd2;
+  --text-muted: #8a8175;
+  --accent: #f0a23a;
+  --accent-dim: rgba(240, 162, 58, 0.12);
+  --border: #2e2620;
+  --danger: #ef4444;
+  --warning: #eab308;
+  --success: #3fd0d8;
+  --font-heading: "Rajdhani", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+  --font-body: system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5efe4;
+    --bg-card: #fffaf0;
+    --bg-header: #14100c;
+    --bg-hero: #14100c;
+    --text: #241c14;
+    --text-muted: #6b5f4e;
+    --accent: #b06d10;
+    --accent-dim: rgba(176, 109, 16, 0.08);
+    --border: #d8cbb4;
+    --success: #0e7c85;
+  }
+}

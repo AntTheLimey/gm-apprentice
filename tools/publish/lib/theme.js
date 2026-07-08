@@ -10,9 +10,15 @@ const GENRE_ALIASES = {
   military: 'military',
   tactical: 'military',
   modern: 'military',
+  scifi: 'scifi',
+  'sci-fi': 'scifi',
+  'science-fiction': 'scifi',
+  space: 'scifi',
+  'space-opera': 'scifi',
+  'space-noir': 'scifi',
 };
 
-const VALID_PRESETS = new Set(['horror', 'fantasy', 'noir', 'military']);
+const VALID_PRESETS = new Set(['horror', 'fantasy', 'noir', 'military', 'scifi']);
 
 const GENERIC_FAMILIES = new Set([
   'system-ui', 'sans-serif', 'serif', 'monospace', 'cursive', 'fantasy',

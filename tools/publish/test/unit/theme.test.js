@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES } = require('../../lib/theme');
+const { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS } = require('../../lib/theme');
 
 describe('resolveGenrePreset', () => {
   it('returns preset filename for exact genre match', () => {
@@ -24,6 +24,21 @@ describe('resolveGenrePreset', () => {
     assert.strictEqual(resolveGenrePreset('steampunk'), null);
     assert.strictEqual(resolveGenrePreset(null), null);
     assert.strictEqual(resolveGenrePreset(undefined), null);
+  });
+
+  it('resolves scifi aliases', () => {
+    for (const alias of ['scifi', 'sci-fi', 'science-fiction', 'space', 'space-opera', 'space-noir']) {
+      assert.strictEqual(resolveGenrePreset(alias), 'scifi', alias);
+    }
+  });
+
+  it('scifi is a valid preset with a css file', () => {
+    const fs = require('fs');
+    const path = require('path');
+    assert.ok(VALID_PRESETS.has('scifi'));
+    const css = fs.readFileSync(path.join(__dirname, '../../css/themes/scifi.css'), 'utf-8');
+    assert.ok(css.includes('--accent: #f0a23a'), 'K-star amber accent');
+    assert.ok(css.includes('prefers-color-scheme: light'), 'light variant present');
   });
 });
 
