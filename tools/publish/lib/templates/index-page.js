@@ -59,27 +59,33 @@ function buildPillFilters(pages, dir) {
 }
 
 function buildLocationTree(pages) {
-  const byTitle = {};
-  for (const p of pages) byTitle[p.title] = { page: p, children: [] };
-
+  const nodes = pages.map(p => ({ page: p, children: [] }));
+  const lookup = {};
+  for (const n of nodes) lookup[n.page.title] = n;
+  for (const n of nodes) {
+    if (!(n.page.displayTitle in lookup)) lookup[n.page.displayTitle] = n;
+  }
   const roots = [];
-  for (const p of pages) {
-    const parentRef = p.frontmatter.parent_location;
+  for (const n of nodes) {
+    const parentRef = n.page.frontmatter.parent_location;
     if (parentRef) {
       const parentTitle = String(parentRef).replace(/\[\[|\]\]/g, '').trim();
-      if (byTitle[parentTitle]) {
-        byTitle[parentTitle].children.push(byTitle[p.title]);
+      const parentNode = lookup[parentTitle];
+      if (parentNode && parentNode !== n) {
+        parentNode.children.push(n);
         continue;
       }
     }
-    roots.push(byTitle[p.title]);
+    roots.push(n);
   }
   return roots;
 }
 
 function renderLocationTreeHTML(nodes, depth, indexDir) {
   if (nodes.length === 0) return '';
-  const items = nodes.map(node => {
+  const items = nodes.slice()
+    .sort((a, b) => a.page.displayTitle.localeCompare(b.page.displayTitle))
+    .map(node => {
     const p = node.page;
     const childrenHtml = node.children.length > 0
       ? `<div class="location-tree-children">${renderLocationTreeHTML(node.children, depth + 1, indexDir)}</div>`
@@ -93,43 +99,21 @@ function renderLocationTreeHTML(nodes, depth, indexDir) {
 }
 
 function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
+  const roots = buildLocationTree(pages);
+
+  // Group ROOT cards: by the (unpublished) parent name if one was
+  // declared, else by location_type, else "Other" — same region
+  // semantics as before, but only true roots get cards now.
   const byRegion = {};
-  const childOf = new Set();
-
-  for (const p of pages) {
-    const parentRef = p.frontmatter.parent_location;
-    if (parentRef) {
-      const parentTitle = String(parentRef).replace(/\[\[|\]\]/g, '').trim();
-      const parentPage = pages.find(pg => pg.title === parentTitle || pg.displayTitle === parentTitle);
-      if (parentPage) {
-        childOf.add(p.title);
-      }
-    }
-  }
-
-  for (const p of pages) {
-    if (childOf.has(p.title)) continue;
+  for (const node of roots) {
+    const p = node.page;
     const parentRef = p.frontmatter.parent_location;
     const locType = String(p.frontmatter.location_type || '').trim();
     const region = parentRef
       ? String(parentRef).replace(/\[\[|\]\]/g, '').trim()
       : (locType || 'Other');
     if (!byRegion[region]) byRegion[region] = [];
-    byRegion[region].push(p);
-  }
-
-  for (const p of pages) {
-    if (!childOf.has(p.title)) continue;
-    const parentRef = p.frontmatter.parent_location;
-    const parentTitle = String(parentRef).replace(/\[\[|\]\]/g, '').trim();
-    const parentPage = pages.find(pg => pg.title === parentTitle || pg.displayTitle === parentTitle);
-    if (parentPage) {
-      const parentRegionRef = parentPage.frontmatter.parent_location;
-      const parentRegion = parentRegionRef
-        ? String(parentRegionRef).replace(/\[\[|\]\]/g, '').trim()
-        : 'Other';
-      if (!byRegion[parentRegion]) byRegion[parentRegion] = [];
-    }
+    byRegion[region].push(node);
   }
 
   const regionOrder = Object.keys(byRegion).sort((a, b) => {
@@ -138,24 +122,15 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_
     return byRegion[b].length - byRegion[a].length;
   });
 
-  function getChildren(parentTitle) {
-    return pages.filter(p => {
-      const ref = String(p.frontmatter.parent_location || '').replace(/\[\[|\]\]/g, '').trim();
-      return ref === parentTitle;
-    });
-  }
-
-  function renderLocationCard(p, children) {
+  function renderLocationCard(node) {
+    const p = node.page;
     const fm = p.frontmatter;
     const locType = fm.location_type || '';
     const firstSeen = fm.first_appearance || fm.createdSession || '';
     const firstSeenClean = String(firstSeen).replace(/\[\[|\]\]/g, '').trim();
 
-    const childrenHtml = children.length > 0
-      ? `<div class="loc-children">${children.map(c => {
-          const cType = c.frontmatter.location_type || '';
-          return `<a href="${escapeHtml(relHref(c, indexDir))}" class="loc-child"><span class="loc-child-name">${escapeHtml(c.displayTitle)}</span>${cType ? `<span class="loc-child-type">${escapeHtml(cType)}</span>` : ''}</a>`;
-        }).join('\n')}</div>`
+    const childrenHtml = node.children.length > 0
+      ? `<div class="loc-children">${renderLocationTreeHTML(node.children, 0, indexDir)}</div>`
       : '';
 
     const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
@@ -174,10 +149,9 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_
   }
 
   const sections = regionOrder.map(region => {
-    const regionPages = byRegion[region];
-    const cards = regionPages
-      .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle))
-      .map(p => renderLocationCard(p, getChildren(p.title)))
+    const cards = byRegion[region]
+      .sort((a, b) => a.page.displayTitle.localeCompare(b.page.displayTitle))
+      .map(node => renderLocationCard(node))
       .join('\n');
 
     return `<section class="loc-region">
@@ -808,4 +782,4 @@ ${bodyContent}`;
   });
 }
 
-module.exports = { indexTemplate, buildPillFilters, buildLocationTree };
+module.exports = { indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage };

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { indexTemplate, buildPillFilters, buildLocationTree } = require('../../lib/templates/index-page');
+const { indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage } = require('../../lib/templates/index-page');
 
 describe('buildPillFilters', () => {
   it('returns pills for unique sub-types', () => {
@@ -264,5 +264,71 @@ describe('indexTemplate — grouping fallbacks', () => {
     const html = indexTemplate('factions', 'Factions & Organizations', [page], navFor, config, publishConfig);
     assert.ok(html.includes('Military Units'));
     assert.ok(!html.includes('intel-section-title">Corporations'));
+  });
+});
+
+describe('renderLocationsPage deep hierarchies', () => {
+  function loc(title, parent, type) {
+    return {
+      title, displayTitle: title.replace(/_/g, ' '),
+      outputPath: `locations/${title.toLowerCase().replace(/_/g, '-')}.html`,
+      frontmatter: { type: 'location',
+        ...(parent ? { parent_location: `[[${parent}]]` } : {}),
+        ...(type ? { location_type: type } : {}) },
+      markdown: '',
+    };
+  }
+  const deep = [
+    loc('Republic', null, 'polity'),
+    loc('Sector_7G', 'Republic', 'sector'),
+    loc('Thides_System', 'Sector_7G', 'system'),
+    loc('Station_IV', 'Thides_System', 'station'),
+    loc('Entertainment_District', 'Station_IV', 'district'),
+    loc('Nova_Nexus', 'Entertainment_District', 'venue'),
+  ];
+
+  it('every published location appears exactly once at any depth', () => {
+    const html = renderLocationsPage(deep, 'locations');
+    for (const p of deep) {
+      const hits = html.split(`>${p.displayTitle}</a>`).length - 1;
+      assert.strictEqual(hits, 1, `${p.displayTitle} should appear exactly once`);
+    }
+  });
+
+  it('depth >= 2 renders nested inside the root card', () => {
+    const html = renderLocationsPage(deep, 'locations');
+    assert.ok(html.includes('location-tree-children'), 'recursive nesting present');
+    assert.ok(html.indexOf('Nova Nexus') > html.indexOf('Republic'));
+  });
+
+  it('children of an unpublished parent float up as roots', () => {
+    const orphans = [
+      loc('Thides_System', 'Secret_Sector', 'system'),
+      loc('Station_IV', 'Thides_System', 'station'),
+    ];
+    const html = renderLocationsPage(orphans, 'locations');
+    assert.strictEqual(html.split('loc-card').length - 1 >= 1, true);
+    assert.ok(html.includes('Thides System'));
+    assert.ok(html.includes('Station IV'));
+  });
+
+  it('no empty region sections are emitted', () => {
+    const html = renderLocationsPage(deep, 'locations');
+    assert.ok(!/loc-region-grid"><\/div>/.test(html), 'no empty region grids');
+  });
+
+  it('parent_location matching works via displayTitle too', () => {
+    const pages = [
+      { title: 'Eris_System', displayTitle: 'Eris System',
+        outputPath: 'locations/eris-system.html',
+        frontmatter: { type: 'location' }, markdown: '' },
+      { title: 'Eris_IV', displayTitle: 'Eris IV',
+        outputPath: 'locations/eris-iv.html',
+        frontmatter: { type: 'location', parent_location: '[[Eris System]]' },
+        markdown: '' },
+    ];
+    const tree = buildLocationTree(pages);
+    assert.strictEqual(tree.length, 1);
+    assert.strictEqual(tree[0].children.length, 1);
   });
 });
