@@ -3,12 +3,7 @@ const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScrip
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
-
-function extractFirstSentence(html) {
-  const stripped = (html || '').replace(/<[^>]+>/g, '').trim();
-  const match = stripped.match(/^(.+?[.!?])\s/);
-  return match ? match[1] : stripped.slice(0, 200);
-}
+const { excerptFromMarkdown } = require('../excerpt');
 
 function npcTemplate(page, processedContent, navFor, config, imageMap, context) {
   const { pages, linkMap, publishConfig } = context || {};
@@ -51,7 +46,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
 
   // --- Zone 2: First impression quote ---
   const pullQuote = processedContent.html
-    ? `<div class="pull-quote">${extractFirstSentence(processedContent.html)}</div>`
+    ? `<div class="pull-quote">${excerptFromMarkdown(processedContent.html)}</div>`
     : '';
 
   // --- Zone 3: Body content ---

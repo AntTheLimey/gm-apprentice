@@ -3,12 +3,7 @@ const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScrip
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
-
-function extractFirstSentence(html) {
-  const stripped = (html || '').replace(/<[^>]+>/g, '').trim();
-  const match = stripped.match(/^(.+?[.!?])\s/);
-  return match ? match[1] : stripped.slice(0, 200);
-}
+const { excerptFromMarkdown } = require('../excerpt');
 
 function matchesRef(refValue, title) {
   if (!refValue) return false;
@@ -62,7 +57,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   // --- Zone 2: Atmosphere pull-quote ---
   const pullQuote = processedContent.html
-    ? `<div class="pull-quote">${escapeHtml(extractFirstSentence(processedContent.html))}</div>`
+    ? `<div class="pull-quote">${escapeHtml(excerptFromMarkdown(processedContent.html))}</div>`
     : '';
 
   // --- Zone 3: Body content ---
@@ -76,7 +71,9 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   if (childLocations.length > 0) {
     const cards = childLocations.map(child => {
       const href = relativeHref(page.outputPath, child.outputPath);
-      const excerpt = extractFirstSentence(child.markdown || '').replace(/<[^>]+>/g, '');
+      const excerpt = excerptFromMarkdown(
+        child.publishedMarkdown != null ? child.publishedMarkdown : (child.markdown || ''),
+        { excludeSections: (publishConfig && publishConfig.exclude_sections) || [] });
       return `<a class="entity-card" href="${href}">
   <h4>${escapeHtml(child.displayTitle)}</h4>
   ${excerpt ? `<div class="card-excerpt">${escapeHtml(excerpt)}</div>` : ''}

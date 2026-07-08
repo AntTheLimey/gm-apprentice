@@ -530,3 +530,42 @@ describe('DIR_LABELS section coverage', () => {
     assert.strictEqual(DIR_LABELS['world'], 'World');
   });
 });
+
+describe('location sub-location card excerpts (shared helper)', () => {
+  const { locationTemplate } = require('../../lib/templates/location');
+  const mockNavFor = () => '';
+  const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+
+  const parent = {
+    title: 'Sector_7G', displayTitle: 'Sector 7-G',
+    outputPath: 'locations/sector-7g.html',
+    frontmatter: { type: 'location' }, markdown: '',
+  };
+  const sparseChild = {
+    title: 'Nova_Nexus', displayTitle: 'Nova Nexus',
+    outputPath: 'locations/nova-nexus.html',
+    frontmatter: { type: 'location', parent_location: '[[Sector_7G]]' },
+    markdown: '## Overview\n\n## GM Notes\n\nThe owner launders syndicate money through the bar.\n',
+  };
+  const proseChild = {
+    title: 'Docking_Ring', displayTitle: 'Docking Ring',
+    outputPath: 'locations/docking-ring.html',
+    frontmatter: { type: 'location', parent_location: '[[Sector_7G]]' },
+    markdown: '## Overview\n\nCargo moves at all hours here. Nobody asks questions.\n',
+  };
+  const ctx = { pages: [parent, sparseChild, proseChild], linkMap: {},
+    publishConfig: { exclude_sections: ['GM Notes'], _backlinks: {} } };
+
+  it('renders a clean prose excerpt without markdown markers', () => {
+    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' },
+      mockNavFor, mockConfig, {}, ctx);
+    assert.ok(html.includes('Cargo moves at all hours here.'));
+    assert.ok(!html.includes('## Overview'), 'no raw heading in excerpt');
+  });
+
+  it('sparse child with only GM-Notes prose leaks nothing', () => {
+    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' },
+      mockNavFor, mockConfig, {}, ctx);
+    assert.ok(!html.includes('launders'), 'GM-only content must not surface');
+  });
+});
