@@ -45,3 +45,44 @@ describe('buildRelationshipGraph', () => {
     assert.strictEqual(tower.shape, 'rounded-square');
   });
 });
+
+describe('index-page exclusion', () => {
+  const pages = [
+    { title: 'Hero', displayTitle: 'Hero', outputPath: 'pcs/hero.html',
+      frontmatter: { type: 'pc', relationships: [{ target: '[[Villain]]', type: 'nemesis' }] } },
+    { title: 'Villain', displayTitle: 'Villain', outputPath: 'npcs/villain.html',
+      frontmatter: { type: 'npc' } },
+    { title: 'index', displayTitle: 'World Index', outputPath: 'world/index.html',
+      frontmatter: { type: 'wiki' } },
+  ];
+  // the index page mentions everyone -> backlink entries from 'index'
+  const backlinks = {
+    Hero: [{ title: 'index', displayTitle: 'World Index', outputPath: 'world/index.html', type: 'wiki' }],
+    Villain: [{ title: 'index', displayTitle: 'World Index', outputPath: 'world/index.html', type: 'wiki' }],
+  };
+
+  it('backlinks from an index page create no edges or nodes', () => {
+    const graph = buildRelationshipGraph('Hero', pages, backlinks);
+    assert.ok(!graph.nodes.some(n => n.id === 'index'));
+    assert.ok(!graph.edges.some(e => e.from === 'index' || e.to === 'index'));
+  });
+
+  it('frontmatter relationships targeting an index page are dropped', () => {
+    const withRel = pages.map(p => p.title === 'Hero'
+      ? { ...p, frontmatter: { ...p.frontmatter,
+          relationships: [{ target: '[[Villain]]', type: 'nemesis' }, { target: '[[index]]', type: 'listed_in' }] } }
+      : p);
+    const graph = buildRelationshipGraph('Hero', withRel, {});
+    assert.ok(!graph.nodes.some(n => n.id === 'index'));
+  });
+
+  it('an index page as center yields an empty graph', () => {
+    const graph = buildRelationshipGraph('index', pages, backlinks);
+    assert.deepStrictEqual(graph, { nodes: [], edges: [] });
+  });
+
+  it('normal entity edges are unaffected', () => {
+    const graph = buildRelationshipGraph('Hero', pages, backlinks);
+    assert.ok(graph.edges.some(e => e.from === 'Hero' && e.to === 'Villain'));
+  });
+});
