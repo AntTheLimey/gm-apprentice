@@ -57,7 +57,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   // --- Zone 2: Atmosphere pull-quote ---
   const pullQuote = processedContent.html
-    ? `<div class="pull-quote">${escapeHtml(excerptFromMarkdown(processedContent.html))}</div>`
+    ? `<div class="pull-quote">${excerptFromMarkdown(processedContent.html)}</div>`
     : '';
 
   // --- Zone 3: Body content ---

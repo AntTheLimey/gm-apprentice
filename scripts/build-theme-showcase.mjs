@@ -24,6 +24,9 @@ const outArgIdx = process.argv.indexOf('--out');
 const outDir = path.resolve(outArgIdx >= 0 ? process.argv[outArgIdx + 1] : 'showcase');
 const sourceVault = path.join(repoRoot, 'tests/benchmark-campaign');
 
+if (outDir === path.parse(outDir).root) {
+  throw new Error(`Refusing to clean filesystem root: ${outDir}`);
+}
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
