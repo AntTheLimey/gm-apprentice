@@ -26,9 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Location card excerpts** no longer render raw markdown and can
-  never surface excluded-section (GM Notes) content — all card
-  excerpts and pull-quotes route through one shared helper that also
-  truncates cleanly at word boundaries with an ellipsis.
+  never surface excluded-section (GM Notes) content — location
+  sub-location cards and the location/NPC/PC pull-quotes route
+  through one shared helper that also truncates cleanly at word
+  boundaries with an ellipsis.
 - **Locations index renders the full hierarchy** — deep trees (depth
   ≥ 2) now appear recursively inside their root cards instead of being
   silently dropped; children of unpublished parents still float up as
