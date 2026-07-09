@@ -2,7 +2,7 @@
 
 ## System Overview
 
-d20-based heroic fantasy by Paizo. Every uncertain act is a check: roll d20, add your total modifier, compare to a DC. The engine is unified -- attack rolls, saves, skill checks, and Perception all share the same math and the same four-tier outcome scale. Play runs in three modes: encounter (6-second rounds, three actions each), exploration (minutes to hours), and downtime (days). Characters are built from ancestry, background, and class and advance from level 1 to 20.
+d20-based heroic fantasy by Paizo. Every uncertain act is a check: roll d20, add your total modifier, compare to a DC. The engine is unified -- attack rolls, saves, skill checks, and Perception share the same math and four-tier outcome scale. Three play modes: encounter (6-second rounds, three actions each), exploration (minutes to hours), downtime (days). Characters are built from ancestry, background, and class, advancing from level 1 to 20.
 
 See `character-generation.md` for build steps, `classes.md`, `ancestries.md`, `feats.md`, `spells.md`, `equipment.md`, `monsters.md`, `conditions-rules.md`, and `session-procedures.md` for the rest.
 

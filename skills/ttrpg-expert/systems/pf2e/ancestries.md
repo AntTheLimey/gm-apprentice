@@ -19,7 +19,7 @@ At level 1 you also choose a **heritage** from your ancestry, which layers on an
 
 ## All ancestries — master table
 
-Stat values below reflect the standard published ORC statistics for each ancestry; consult the cited sourcebook for the full ancestry entry. The 16 common and Player Core 2 ancestries are detailed after the table. The 15 supplement ancestries are listed with their rarity and source — see the Coverage note for where the rest live in the dataset.
+Stats below are the standard published ORC statistics. The 16 common and Player Core 2 ancestries are detailed after the table; the 15 supplement ancestries are listed with rarity and source only — see the Coverage note for where the rest live in the dataset.
 
 | Ancestry | HP | Size | Speed | Boosts | Flaw | Rarity | Source |
 |----------|----|------|-------|--------|------|--------|--------|
@@ -57,7 +57,7 @@ Stat values below reflect the standard published ORC statistics for each ancestr
 
 ## Detailed ancestries
 
-Each block lists the standard stat line, signature senses, the ancestry's heritage options (one line each, paraphrased), and a note on typical builds.
+Each block: stat line, signature senses, heritage options (one line each), and typical builds.
 
 ### Dwarf
 

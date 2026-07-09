@@ -61,11 +61,10 @@ Ammunition is cheap: bolts, arrows, and sling bullets run about 1 sp per 10
 
 ## Martial Melee Weapons
 
-Coverage: a curated set of the standard common Player Core martial weapons,
-at least one per weapon group. Niche polearms and daggers (guisarme,
-ranseur, main-gauche, sap, etc.) and all ancestry, uncommon, and advanced
-weapons (dwarven waraxe, elven curve blade, katana, etc.) are omitted; look
-them up by name in the equipment data when needed.
+Coverage: standard common Player Core martial weapons, at least one per
+group. Niche polearms/daggers (guisarme, ranseur, main-gauche, sap) and all
+ancestry, uncommon, and advanced weapons (dwarven waraxe, elven curve blade,
+katana) are omitted — look them up by name in the equipment data.
 
 | Weapon | Price | Damage | Bulk | Hands | Group | Traits |
 |--------|-------|--------|------|-------|-------|--------|

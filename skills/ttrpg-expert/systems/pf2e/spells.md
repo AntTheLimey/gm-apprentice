@@ -20,14 +20,13 @@ routing to detail shards.
 
 ## Focus spells & rituals (concept only)
 
-**Focus spells** are class- and subclass-granted magic fueled by a small pool of
-Focus Points rather than spell slots; you refill that pool by Refocusing during
-rest. They are always cast at your highest spell rank and are not listed here —
-they belong to specific class and archetype features. **Rituals** are collaborative,
-long-form ceremonies any character can attempt with the right skills, used for
-grand effects like raising the dead, planar travel, or binding spirits; they cost
-time and materials rather than slots. Both categories exist in the source dataset
-but are out of scope for this slot-spell index.
+**Focus spells** are class/subclass magic fueled by Focus Points rather than
+slots, refilled by Refocusing during rest; always cast at your highest spell
+rank. They belong to specific class and archetype features, not this index.
+**Rituals** are collaborative long-form ceremonies any character can attempt
+with the right skills — grand effects like raising the dead, planar travel, or
+binding spirits — costing time and materials rather than slots. Both exist in
+the dataset but are out of scope for this slot-spell index.
 
 ## Response Templates
 

@@ -125,7 +125,7 @@ Prefer spending added budget on more creatures rather than one tougher foe — e
 
 ## Treasure
 
-Give roughly a full level's worth of treasure over the course of each level, spread across the adventure rather than hoarded. The table below is for four PCs; add the last column per extra PC. Each level lists permanent items and consumables by item level, plus loose currency.
+Give roughly a full level's worth of treasure over the course of each level, spread across the adventure rather than hoarded. The table below is for four PCs; add the last column per extra PC.
 
 | Level | Total Value | Permanent Items | Consumables | Currency | Per Extra PC |
 |-------|-------------|-----------------|-------------|----------|--------------|

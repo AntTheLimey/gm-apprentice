@@ -4,15 +4,15 @@ Routing index for the feat category shards. Read the shard that
 matches the feat slot being filled.
 
 **Coverage:** curated Player Core + Player Core 2 selections
-(~325 of the dataset's ~1,800 Player Core-family feats). The
-coverage note at the top of each shard states what was curated;
-everything else lives in the source books and the ORC dataset.
+(~325 of the dataset's ~1,800 Player Core-family feats). Each
+shard's top notes what it curated; the rest lives in the source
+books and the ORC dataset.
 
 ## How Feat Slots Work
 
-Every character accumulates feats on a fixed cadence. Each slot
-type only accepts feats of its category (a feat's category is
-its trait: ancestry, class, skill, general, or archetype).
+Feats accrue on a fixed cadence. Each slot accepts only its
+category (a feat's category is its trait: ancestry, class,
+skill, general, or archetype).
 
 | Slot | Levels | Notes |
 |------|--------|-------|

@@ -5,9 +5,8 @@ rules. Attributes are **modifiers** (starting at +0), not scores.
 
 ## Published Site Defaults
 
-When creating a PC entity file, set `display_meta` to control which fields
-appear in the character's header on a published campaign site. Recommended
-for PF2e:
+Set `display_meta` on the PC entity file to control which header fields
+show on a published campaign site. Recommended for PF2e:
 
 ```yaml
 display_meta: [class, level, ancestry]

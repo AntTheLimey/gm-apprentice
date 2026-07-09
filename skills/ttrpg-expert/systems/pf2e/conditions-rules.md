@@ -63,8 +63,7 @@ use the higher value rather than adding them together.
 
 ## Detection & Senses
 
-How well creatures can perceive one another. These form a ladder from fully
-seen to completely unaware.
+A ladder from fully seen to completely unaware.
 
 - **Observed** — In plain view and precisely perceived (by sight or another
   precise sense). The default when nothing hides a creature.

@@ -1,10 +1,9 @@
 # Pathfinder 2e (Remaster) — Classes
 
-24 ORC-remastered classes. Per class: key attribute, HP/level (add Con
-modifier each level), spellcasting where relevant, a proficiency summary,
-signature level-1 features with the defining mechanic, and the subclass
-choice with its options. HP/level and progressions are game facts; all
-descriptive text is paraphrased.
+24 ORC-remastered classes. Each entry: key attribute, HP/level (add Con
+modifier each level), tradition/spellcasting, proficiency summary, signature
+level-1 features, and the subclass choice with its options. HP/level and
+progressions are game facts; descriptive text is paraphrased.
 
 **Coverage note:** Magus, Summoner, and Kineticist have not yet received an
 ORC-remastered release and are out of scope for this reference.

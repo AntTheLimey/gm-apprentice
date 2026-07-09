@@ -5,13 +5,12 @@ Effects are paraphrased summaries — consult the source books for full rules
 text, degrees of success, and edge cases.
 
 **General feats** are taken at general-feat levels (odd levels for most
-classes) and are open to any character who meets the prerequisites.
-**Skill feats** are a subset of general feats (they carry the `skill` trait);
-each hangs off a governing skill and normally requires proficiency in that
-skill. Below, skill feats are grouped by their governing skill. The Prereq
-column lists the required proficiency rank plus any extra requirement; ranks
-follow the standard level gates (L1 trained, L7 master, L15 legendary), and
-some L2 feats need expert — verify the exact rank in Player Core.
+classes), open to anyone meeting the prerequisites. **Skill feats** are a
+subset carrying the `skill` trait; each hangs off a governing skill and
+normally needs proficiency in it. Skill feats below are grouped by governing
+skill. The Prereq column lists the required proficiency rank plus any extra
+requirement; ranks follow the standard gates (L1 trained, L7 master, L15
+legendary), and some L2 feats need expert — verify in Player Core.
 
 ## General Feats
 
@@ -53,10 +52,9 @@ All 31 general feats from Player Core and Player Core 2.
 
 ## Skill Feats
 
-Coverage note: this table curates ~105 of the 153 Player Core / Player Core 2
-skill feats — favoring the common, table-frequent staples and iconic
-higher-level picks, and dropping the narrowest corner cases. The remainder
-live in the dataset. Grouped by governing skill.
+Coverage note: ~105 of the 153 Player Core / Player Core 2 skill feats — the
+common table-frequent staples and iconic higher-level picks, dropping the
+narrowest corner cases. The rest live in the dataset. Grouped by governing skill.
 
 ### Acrobatics
 
