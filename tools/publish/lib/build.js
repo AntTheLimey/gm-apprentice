@@ -115,6 +115,15 @@ function build(options = {}) {
     console.log('  wrote 404.html');
   }
 
+  // An unclosed <!-- comment -->, gm-only or spoiler marker strips the rest of the file to
+  // EOF. That is the right behavior — never leak the block — but it must not be silent, or
+  // an author who forgot a `-->` loses the tail of the page with no signal.
+  function logWarnings(outputPath, warnings) {
+    for (const warning of warnings || []) {
+      console.warn(`  WARNING: ${outputPath}: ${warning}`);
+    }
+  }
+
   function copyImages(imageMap) {
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
@@ -371,11 +380,7 @@ function build(options = {}) {
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
       const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages });
-      // An unclosed <!-- comment --> or gm-only marker strips the rest of the page to EOF.
-      // That is the right behavior (never leak the block), but it must not be silent.
-      for (const warning of processed.warnings || []) {
-        console.warn(`  WARNING: ${page.outputPath}: ${warning}`);
-      }
+      logWarnings(page.outputPath, processed.warnings);
       let html;
 
       switch (page.frontmatter.type) {
@@ -385,12 +390,9 @@ function build(options = {}) {
           filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
           const spoilerResult = stripSpoiler(filtered);
           filtered = typeof spoilerResult === 'string' ? spoilerResult : spoilerResult.text;
+          // Not logged here: processContent above ran this same strip chain over the same
+          // markdown, and its warnings were already reported.
           const commentResult = stripHtmlComments(filtered);
-          if (commentResult.warnings) {
-            for (const warning of commentResult.warnings) {
-              console.warn(`  WARNING: ${page.outputPath}: ${warning}`);
-            }
-          }
           filtered = typeof commentResult === 'string' ? commentResult : commentResult.text;
           filtered = filterSections(filtered, excludeSections);
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
@@ -409,6 +411,7 @@ function build(options = {}) {
               outputPath: page.outputPath,
             };
             const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages });
+            logWarnings(page.outputPath, storyProcessed.warnings);
             storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           }
 
@@ -608,6 +611,7 @@ function build(options = {}) {
       const outputPath = `story/characters/${slugify(pc.title)}.html`;
       const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
       const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages });
+      logWarnings(outputPath, processed.warnings);
       const story = {
         title: pc.displayTitle, outputPath, html: processed.html,
         sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
