@@ -24,14 +24,19 @@ const NAV_GROUPS = [
   },
 ];
 
-function generateNavGroups(pages) {
+function generateNavGroups(pages, options = {}) {
   const populated = new Set();
   for (const page of pages) {
     populated.add(page.outputDir);
   }
 
   const pcRoster = pages.find(p => p.frontmatter && p.frontmatter.type === 'pc_roster');
-  const overrides = { events: 'timeline.html' };
+  // Only aim the Events link at the timeline when a timeline page is actually written, and
+  // at wherever it is written. The timeline is generated at the root only when dated events
+  // exist; otherwise it may be an authored page under its own folder — or absent, in which
+  // case Events falls through to its own index.
+  const overrides = {};
+  if (options.timelineHref) overrides.events = options.timelineHref;
   if (pcRoster) overrides['characters/pcs'] = pcRoster.outputPath;
 
   return NAV_GROUPS
@@ -54,7 +59,7 @@ function generateNavGroups(pages) {
 }
 
 function renderTopNav(pages, currentOutputPath, config, options = {}) {
-  const groups = generateNavGroups(pages);
+  const groups = generateNavGroups(pages, options);
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
 
   const hasStoryGroup = groups.some(g => g.name === 'Story');

@@ -273,3 +273,153 @@ describe('renderRelationships', () => {
     assert.ok(!result.includes('Captain_James_Harker'), 'Should not contain raw underscored name');
   });
 });
+
+describe('stripHtmlComments (issue #85)', () => {
+  const { stripHtmlComments } = require('../../lib/processor');
+
+  it('removes a standalone comment without splitting the paragraph', () => {
+    assert.strictEqual(
+      stripHtmlComments('Line one.\n<!-- private note -->\nLine two.'),
+      'Line one.\nLine two.');
+  });
+
+  it('removes an inline comment', () => {
+    assert.strictEqual(stripHtmlComments('before <!-- x --> after'), 'before  after');
+  });
+
+  it('removes a multi-line comment', () => {
+    assert.strictEqual(
+      stripHtmlComments('a\n<!-- one\ntwo\nthree -->\nb'),
+      'a\nb');
+  });
+
+  it('leaves comments inside fenced code blocks alone', () => {
+    const md = '```html\n<!-- keep me -->\n```';
+    assert.strictEqual(stripHtmlComments(md), md);
+  });
+
+  it('warns and strips to end of file on an unclosed comment', () => {
+    const out = stripHtmlComments('visible\n<!-- oops\nswallowed');
+    assert.strictEqual(out.text, 'visible');
+    assert.match(out.warnings[0], /unclosed/);
+  });
+
+  it('returns a plain string when there is nothing to warn about', () => {
+    assert.strictEqual(typeof stripHtmlComments('plain text'), 'string');
+  });
+});
+
+describe('resolveImageEmbeds (issues #86b, #88)', () => {
+  const { resolveImageEmbeds } = require('../../lib/processor');
+  const imageMap = {
+    'Chrome Jockey.png': { relPath: 'heritages/Chrome Jockey.png' },
+    'Kung-Fu (Spacer).png': { relPath: 'docs/Kung-Fu (Spacer).png' },
+  };
+
+  it('percent-encodes spaces so the link parses as an image', () => {
+    const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html');
+    assert.strictEqual(out, '![Chrome Jockey](../images/heritages/Chrome%20Jockey.png)');
+  });
+
+  it('encodes parentheses in the destination', () => {
+    const out = resolveImageEmbeds('![[Kung-Fu (Spacer).png]]', imageMap, 'documents/x.html');
+    const dest = out.slice(out.lastIndexOf('(') + 1, -1);
+    assert.strictEqual(dest, '../images/docs/Kung-Fu%20%28Spacer%29.png');
+  });
+
+  it('drops an embed that duplicates the page portrait', () => {
+    const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html',
+      null, { portraitBasename: 'Chrome Jockey.png' });
+    assert.strictEqual(out, '');
+  });
+
+  it('keeps the embed when the portrait names a different file', () => {
+    const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html',
+      null, { portraitBasename: 'Other.png' });
+    assert.match(out, /<img|!\[Chrome Jockey\]/);
+  });
+
+  it('keeps the embed when the portrait is not a scanned image', () => {
+    const out = resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html',
+      null, { portraitBasename: 'Missing.png' });
+    assert.match(out, /!\[Chrome Jockey\]/);
+  });
+
+  it('removes a missing embed rather than leaving a visible comment', () => {
+    const out = resolveImageEmbeds('![[Nope.png]]', imageMap, 'x.html');
+    assert.strictEqual(out, '');
+  });
+
+  it('still records the image as used before deduping', () => {
+    const used = new Set();
+    resolveImageEmbeds('![[Chrome Jockey.png]]', imageMap, 'heritages/chrome-jockey.html',
+      used, { portraitBasename: 'Chrome Jockey.png' });
+    assert.ok(used.has('Chrome Jockey.png'));
+  });
+
+  it('leaves a non-image embed untouched', () => {
+    assert.strictEqual(resolveImageEmbeds('![[Some Note]]', imageMap, 'x.html'), '![[Some Note]]');
+  });
+});
+
+describe('renderMetaValue / plainMetaValue (issue #86c)', () => {
+  const { renderMetaValue, plainMetaValue } = require('../../lib/processor');
+  const linkMap = { 'Corvid Financial': 'factions/corvid-financial.html' };
+
+  it('resolves a wikilink in a frontmatter-derived field', () => {
+    const out = renderMetaValue('Agent for [[Corvid Financial]]', linkMap, 'characters/npcs/marek.html');
+    assert.strictEqual(out,
+      'Agent for <a href="../../factions/corvid-financial.html" class="entity-link">Corvid Financial</a>');
+  });
+
+  it('honors an explicit alias', () => {
+    const out = renderMetaValue('[[Corvid Financial|the bank]]', linkMap, 'x.html');
+    assert.match(out, />the bank<\/a>/);
+  });
+
+  it('degrades an unresolved link to humanized plain text', () => {
+    assert.strictEqual(renderMetaValue('sees [[P.E.T.A.]]', {}, 'x.html'), 'sees P.E.T.A.');
+    assert.strictEqual(renderMetaValue('[[Lord_Percival]]', {}, 'x.html'), 'Lord Percival');
+  });
+
+  it('escapes surrounding text', () => {
+    assert.strictEqual(renderMetaValue('a < b & c', {}, 'x.html'), 'a &lt; b &amp; c');
+  });
+
+  it('plainMetaValue never emits an anchor', () => {
+    assert.strictEqual(plainMetaValue('Agent for [[Corvid Financial]]'), 'Agent for Corvid Financial');
+    assert.doesNotMatch(plainMetaValue('[[Corvid Financial]]'), /</);
+  });
+});
+
+describe('stripHtmlComments fence markers (review regression)', () => {
+  const { stripHtmlComments } = require('../../lib/processor');
+
+  it('does not let a ``` inside a ~~~ block close the fence', () => {
+    const md = ['~~~', '```', 'sample <!-- keep --> here', '~~~'].join('\n');
+    assert.strictEqual(stripHtmlComments(md), md);
+  });
+
+  it('still strips comments after a fence closes', () => {
+    const out = stripHtmlComments(['```', 'code', '```', 'after <!-- gone -->'].join('\n'));
+    assert.strictEqual(out, ['```', 'code', '```', 'after '].join('\n'));
+  });
+});
+
+describe('resolveWikiLinks on non-image transclusions (review regression)', () => {
+  const { resolveWikiLinks } = require('../../lib/processor');
+
+  it('degrades ![[Note]] to a link, never a broken <img> src', () => {
+    const out = resolveWikiLinks('![[Backstory]]', { Backstory: 'docs/backstory.html' }, 'x.html');
+    assert.strictEqual(out, '[Backstory](docs/backstory.html)');
+  });
+
+  it('degrades an unresolved ![[Note]] to plain text', () => {
+    assert.strictEqual(resolveWikiLinks('![[Nope]]', {}, 'x.html'), 'Nope');
+  });
+
+  it('still resolves an ordinary wikilink', () => {
+    const out = resolveWikiLinks('[[Backstory]]', { Backstory: 'docs/backstory.html' }, 'x.html');
+    assert.strictEqual(out, '[Backstory](docs/backstory.html)');
+  });
+});

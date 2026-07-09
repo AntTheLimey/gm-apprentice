@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath, relativeHref } = require('../processor');
+const { escapeHtml, relativePath, relativeHref, publishedSource } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -171,8 +171,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   if (fm.key_traits) {
     const traitsText = Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits);
     epithet = `<div class="pull-quote">${escapeHtml(traitsText)}</div>`;
-  } else if (processedContent.html) {
-    epithet = `<div class="pull-quote">${excerptFromMarkdown(processedContent.html)}</div>`;
+  } else {
+    const quoteText = excerptFromMarkdown(publishedSource(page));
+    if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
   }
 
   // Read system HTML before filtering so the filter can react to what was actually rendered.

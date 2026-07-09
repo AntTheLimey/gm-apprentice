@@ -1,6 +1,6 @@
-const MarkdownIt = require('markdown-it');
-const mdRenderer = new MarkdownIt({ html: false, typographer: true });
-const { escapeHtml, relativePath, resolveWikiLinks } = require('../processor');
+const { createRenderer } = require('../markdown');
+const mdRenderer = createRenderer();
+const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -573,7 +573,19 @@ function sessionSortKey(str) {
   return m ? Number(m[1]) : 0;
 }
 
-function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachments') {
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+
+// The session an entity's state was confirmed accurate as of. Never falls back to
+// `lastUpdated`: that is a maintenance timestamp the tool writes into its own templates,
+// and reading it back as a session put bare dates in the "filter by session" dropdown and
+// sorted them against `Session N`. A date written directly into asOfSession is rejected for
+// the same reason. An entity with no session simply isn't session-filterable.
+function sessionRef(frontmatter) {
+  const value = cleanRef(frontmatter.asOfSession);
+  return ISO_DATE_RE.test(value) ? '' : value;
+}
+
+function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachments', linkMap = {}) {
   const sorted = pages
     .filter(p => p.frontmatter.type === 'npc')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -584,7 +596,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
   const sessionPills = new Set();
   for (const p of sorted) {
     if (p.frontmatter.status) statusPills.add(p.frontmatter.status);
-    const session = cleanRef(p.frontmatter.asOfSession || p.frontmatter.lastUpdated || '');
+    const session = sessionRef(p.frontmatter);
     if (session) sessionPills.add(session);
   }
 
@@ -611,7 +623,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
     const occupation = fm.occupation || '';
     const status = fm.status || '';
     const firstApp = cleanRef(fm.first_appearance || '');
-    const lastSession = cleanRef(fm.asOfSession || fm.lastUpdated || '');
+    const lastSession = sessionRef(fm);
     const canonStatus = getCanonStatus(fm) || '';
     const avatar = portraitImg(fm, dir + '/index.html', imageMap, attachmentsDir);
     const avatarHtml = avatar
@@ -620,7 +632,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
 
     return `<tr data-entity-type="npc" data-entity-name="${escapeHtml(p.displayTitle)}" data-entity-status="${escapeHtml(status)}" data-session="${escapeHtml(lastSession)}">
   <td data-sort="${escapeHtml(p.displayTitle.toLowerCase())}"><a class="npc-row-link" href="${escapeHtml(relHref(p, dir))}">${avatarHtml}${escapeHtml(p.displayTitle)}</a></td>
-  <td>${escapeHtml(occupation)}</td>
+  <td>${renderMetaValue(occupation, linkMap, dir + '/index.html')}</td>
   <td><span class="status-badge status-${escapeHtml(status.replace(/\s+/g, '-').toLowerCase())}">${escapeHtml(status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}</span></td>
   <td>${escapeHtml(firstApp)}</td>
   <td data-sort="${sessionSortKey(lastSession)}">${escapeHtml(lastSession)}</td>
@@ -637,7 +649,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
   <th data-sort-col="occupation">Role</th>
   <th data-sort-col="status">Status</th>
   <th data-sort-col="first">First Appearance</th>
-  <th data-sort-col="session">Last Updated</th>
+  <th data-sort-col="session">As of Session</th>
   <th data-sort-col="canon">Canon Status</th>
 </tr>
 </thead>
@@ -682,7 +694,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
 
   let bodyContent;
   if (isNPCs) {
-    bodyContent = renderNPCTable(pages, dir, imageMap, attachmentsDir);
+    bodyContent = renderNPCTable(pages, dir, imageMap, attachmentsDir, (publishConfig || {})._linkMap || {});
   } else if (isChapters) {
     bodyContent = renderChapterList(pages, dir);
   } else if (isCreatures) {
@@ -708,7 +720,9 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       const portraitHtml = isCharacters && cardImg
         ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';
-      const subtitle = fm.occupation || fm.location_type || fm.faction_type || fm.factionType || '';
+      // Plain text, not renderMetaValue: this sits inside the enclosing <a class="entity-card">,
+      // where a resolved wikilink would nest one anchor inside another.
+      const subtitle = plainMetaValue(fm.occupation || fm.location_type || fm.faction_type || fm.factionType || '');
       return `<a class="entity-card" href="${escapeHtml(relHref(p, dir))}"
   data-entity-type="${escapeHtml(entityType || '')}"
   data-entity-name="${escapeHtml(p.displayTitle)}"

@@ -100,3 +100,24 @@ describe('generateNav', () => {
     assert.strictEqual(desktopMatches, 1);
   });
 });
+
+describe('generateNavGroups timeline target (issue #83)', () => {
+  const pages = [{ outputDir: 'events', outputPath: 'events/battle.html', displayTitle: 'Battle' }];
+
+  function eventsHref(options) {
+    const story = generateNavGroups(pages, options).find(g => g.name === 'Story');
+    return story.links.find(l => l.label === 'Events').href;
+  }
+
+  it('points Events at the generated root timeline when one exists', () => {
+    assert.strictEqual(eventsHref({ timelineHref: 'timeline.html' }), 'timeline.html');
+  });
+
+  it('points Events at an authored timeline wherever it renders', () => {
+    assert.strictEqual(eventsHref({ timelineHref: 'campaign/timeline.html' }), 'campaign/timeline.html');
+  });
+
+  it('falls back to the events index when no timeline exists', () => {
+    assert.strictEqual(eventsHref({}), 'events/index.html');
+  });
+});

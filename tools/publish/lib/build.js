@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, filterFields, resolveImageEmbeds, resolveWikiLinks, relativeHref, escapeHtml } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -115,6 +115,15 @@ function build(options = {}) {
     console.log('  wrote 404.html');
   }
 
+  // An unclosed <!-- comment -->, gm-only or spoiler marker strips the rest of the file to
+  // EOF. That is the right behavior — never leak the block — but it must not be silent, or
+  // an author who forgot a `-->` loses the tail of the page with no signal.
+  function logWarnings(outputPath, warnings) {
+    for (const warning of warnings || []) {
+      console.warn(`  WARNING: ${outputPath}: ${warning}`);
+    }
+  }
+
   function copyImages(imageMap) {
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
@@ -136,6 +145,22 @@ function build(options = {}) {
   // is visible here too. Use corpus to reach excluded *pages* (e.g. the overview), not to recover
   // fields stripped from a *published* page.
   const corpus = pages.slice();
+
+  function vaultRelPathOf(page) {
+    return path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
+  }
+
+  // A Publishing entry that matches no scanned file silently removes nothing and publishes
+  // nothing — the page just never appears. Say so, so a typo can't blackhole a page.
+  if (manifest) {
+    const scanned = new Set(corpus.map(vaultRelPathOf));
+    for (const entry of manifest.publishing) {
+      if (!scanned.has(entry)) {
+        console.warn(`  WARNING: manifest lists "${entry}" but no such page was scanned`);
+      }
+    }
+  }
+
   pairStoryFiles(pages, config.vaultPath);
 
   // Exclude DRAFT entities when configured (after pairing so story files resolve)
@@ -175,10 +200,7 @@ function build(options = {}) {
     // If manifest explicitly lists an auto-excluded file, re-add it
     if (manifest) {
       const allowSet = new Set(manifest.publishing);
-      const reincluded = autoExcludedPages.filter(page => {
-        const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
-        return allowSet.has(vaultRelPath);
-      });
+      const reincluded = autoExcludedPages.filter(page => allowSet.has(vaultRelPathOf(page)));
       if (reincluded.length > 0) {
         pages = pages.concat(reincluded);
         console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);
@@ -190,11 +212,7 @@ function build(options = {}) {
   if (manifest && publishConfig.mode === 'player') {
     const allowSet = new Set(manifest.publishing);
     const beforeCount = pages.length;
-    pages = pages.filter(page => {
-      const vaultRelPath = path.relative(config.vaultPath, page.sourcePath);
-      const posixPath = vaultRelPath.split(path.sep).join('/');
-      return allowSet.has(posixPath);
-    });
+    pages = pages.filter(page => allowSet.has(vaultRelPathOf(page)));
     console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);
   }
 
@@ -279,10 +297,24 @@ function build(options = {}) {
 
   // Apply field filtering after link map is built (aliases/canon_status needed for redirect resolution)
   for (const page of pages) {
-    const vaultRelPath = path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
-    const overridesForFile = fieldOverrides[vaultRelPath] || {};
+    const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};
     page.frontmatter = filterFields(page.frontmatter, excludeFields, overridesForFile);
   }
+
+  // Where the timeline actually lives. Decided after field filtering — so an excluded
+  // `in_game_date` can't resurrect a timeline the GM meant to suppress — but before the nav
+  // is built, so the nav link and the events/ redirect can't disagree with the renderer.
+  // A root timeline.html is generated only when dated events exist; failing that, an
+  // authored Timeline page (which a folderMap may place anywhere, e.g.
+  // campaign/timeline.html) is the real target. With neither, Events keeps its own index.
+  const { buildTimelineData, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
+  const timelineData = buildTimelineData(pages);
+  const generatesTimeline = timelineData.events.length > 0;
+  const authoredTimeline = pages.find(p => p.frontmatter.type === 'timeline')
+    || pages.find(p => p.outputPath.split('/').pop() === 'timeline.html');
+  const timelineHref = generatesTimeline
+    ? 'timeline.html'
+    : (authoredTimeline ? authoredTimeline.outputPath : null);
 
   const imageMap = scanAttachments(config);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
@@ -335,7 +367,7 @@ function build(options = {}) {
 
   write404();
 
-  const navFor = generateNav(pages, { hasStory });
+  const navFor = generateNav(pages, { hasStory, timelineHref });
 
   // Render each page
   const usedImages = new Set();
@@ -348,6 +380,7 @@ function build(options = {}) {
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
       const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages });
+      logWarnings(page.outputPath, processed.warnings);
       let html;
 
       switch (page.frontmatter.type) {
@@ -357,9 +390,17 @@ function build(options = {}) {
           filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
           const spoilerResult = stripSpoiler(filtered);
           filtered = typeof spoilerResult === 'string' ? spoilerResult : spoilerResult.text;
+          // Not logged here: processContent above ran this same strip chain over the same
+          // markdown, and its warnings were already reported.
+          const commentResult = stripHtmlComments(filtered);
+          filtered = typeof commentResult === 'string' ? commentResult : commentResult.text;
           filtered = filterSections(filtered, excludeSections);
+          // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
+          // brackets of an `![[image.png]]` embed and would flatten it to literal text.
+          filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
+            portraitBasename: portraitBasename(page.frontmatter),
+          });
           filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
-          filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages);
           const sections = extractSections(filtered);
 
           let storyHtml;
@@ -370,6 +411,7 @@ function build(options = {}) {
               outputPath: page.outputPath,
             };
             const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages });
+            logWarnings(page.outputPath, storyProcessed.warnings);
             storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           }
 
@@ -416,7 +458,7 @@ function build(options = {}) {
           html = heritageTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
           break;
         case 'world_domain':
-          html = worldDomainTemplate(page, processed, navFor, config, { publishConfig });
+          html = worldDomainTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
           break;
         default: {
           let extraSidebar = {};
@@ -503,14 +545,15 @@ function build(options = {}) {
       console.log(`  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
       continue;
     }
-    if (dir === 'events') {
-      const depth = dir.split('/').length;
-      const rel = '../'.repeat(depth) + 'timeline.html';
+    // Redirect events/ at the timeline only when one exists; with no timeline the redirect
+    // would dangle, so fall through and give events its own index.
+    if (dir === 'events' && timelineHref) {
+      const rel = relativePath(dir, timelineHref);
       const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
       const outPath = path.join(outputDir, dir, 'index.html');
       ensureDir(outPath);
       fs.writeFileSync(outPath, redirectHtml);
-      console.log(`  wrote ${dir}/index.html (redirect → timeline.html)`);
+      console.log(`  wrote ${dir}/index.html (redirect → ${timelineHref})`);
       continue;
     }
     let dirPages = [];
@@ -532,11 +575,9 @@ function build(options = {}) {
   }
 
   // Timeline page
-  const { buildTimelineData, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
   const { timelineTemplate } = require('./templates/timeline-page');
 
-  const timelineData = buildTimelineData(pages);
-  if (timelineData.events.length > 0) {
+  if (generatesTimeline) {
     const fullTimelineContent = renderTimelineHTML(timelineData);
     const timelineHtml = timelineTemplate(fullTimelineContent, navFor, config, publishConfig);
     const timelinePath = path.join(outputDir, 'timeline.html');
@@ -570,6 +611,7 @@ function build(options = {}) {
       const outputPath = `story/characters/${slugify(pc.title)}.html`;
       const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
       const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages });
+      logWarnings(outputPath, processed.warnings);
       const story = {
         title: pc.displayTitle, outputPath, html: processed.html,
         sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),

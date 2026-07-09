@@ -11,6 +11,10 @@ portrait field shows up as plain text metadata in the Properties panel —
 the user never sees the actual image when viewing the note unless they
 manually embed it in the body with `![[filename]]`.
 
+Keeping that manual `![[filename]]` embed is safe: when it resolves to the
+same file as the entity's `portrait:` frontmatter, the publish tool skips
+the inline copy so the published page shows the image once, not twice.
+
 ## Desired Behaviour
 
 When a user opens any entity file that has a portrait value, the image

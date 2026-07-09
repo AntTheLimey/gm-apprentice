@@ -1,3 +1,4 @@
+const { publishedSource } = require('./processor');
 const lunr = require('lunr');
 
 function stripMarkdown(md) {
@@ -17,10 +18,7 @@ function getSubtitle(fm) {
 
 // Search results must reflect only what readers can see, so prefer each page's published
 // view (gm-only + spoiler content stripped) over its raw markdown when available.
-function publishedText(page) {
-  if (!page) return '';
-  return page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
-}
+const publishedText = publishedSource;
 
 function buildSearchIndex(pages) {
   const documents = {};

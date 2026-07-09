@@ -14,6 +14,23 @@ function parseTableRows(html) {
   return rows;
 }
 
+// The part of a section that precedes its first `### ` subheading.
+function aboveSubheadings(sectionHtml) {
+  return String(sectionHtml || '').split(/<h3[ >]/i)[0];
+}
+
+// A section's own tables. Sheets keep descriptive helper tables under `###` subheadings;
+// those carry a foreign column schema and must not be flattened into the machine-readable
+// table. Falls back to the whole section when nothing above the first subheading holds a
+// table, so a sheet whose only table sits under a `###` still parses.
+//
+// Not for Equipment: its `### Load-Outs` / `### Encumbrance` subsections hold real tables
+// that must never be read as items, so it wants aboveSubheadings() with no fallback.
+function topLevelHtml(sectionHtml) {
+  const top = aboveSubheadings(sectionHtml);
+  return /<table[ >]/i.test(top) ? top : sectionHtml;
+}
+
 function findSectionByTitle(sections, ...titles) {
   const lower = titles.map(t => t.toLowerCase());
   return sections.find(s => lower.includes(s.title.toLowerCase()));
@@ -33,4 +50,4 @@ function extractSubsectionHtml(sectionHtml, subsectionTitle) {
   return match ? match[1] : '';
 }
 
-module.exports = { parseTableRows, findSectionByTitle, extractSubsectionHtml };
+module.exports = { parseTableRows, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };

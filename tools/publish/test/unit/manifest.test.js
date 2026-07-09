@@ -111,3 +111,76 @@ describe('loadManifest', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe('parseManifest inline comments (issue #80)', () => {
+  const { stripInlineComment } = require('../../lib/manifest');
+
+  it('keeps only the path from an annotated Publishing entry', () => {
+    const md = [
+      '## Publishing (2 files)',
+      '- [x] Documents/Freefighting (Spacer Kung-Fu).md — Six’s style writeup',
+      '- [x] Locations/Thides.md',
+    ].join('\n');
+    assert.deepStrictEqual(parseManifest(md).publishing, [
+      'Documents/Freefighting (Spacer Kung-Fu).md',
+      'Locations/Thides.md',
+    ]);
+  });
+
+  it('strips en-dash and double-hyphen comments too', () => {
+    assert.strictEqual(stripInlineComment('A/B.md – note'), 'A/B.md');
+    assert.strictEqual(stripInlineComment('A/B.md -- note'), 'A/B.md');
+  });
+
+  it('leaves a bare path untouched', () => {
+    assert.strictEqual(stripInlineComment('A/B.md'), 'A/B.md');
+  });
+
+  it('does not cut a hyphenated filename', () => {
+    assert.strictEqual(stripInlineComment('Docs/well-known-file.md'), 'Docs/well-known-file.md');
+  });
+
+  it('strips comments from Needs Decision entries as well', () => {
+    const md = [
+      '## Needs Decision (2 files)',
+      '- [ ] A.md — undecided',
+      '- [x] B.md — resolved, publish it',
+    ].join('\n');
+    const parsed = parseManifest(md);
+    assert.deepStrictEqual(parsed.needsDecision, ['A.md']);
+    assert.deepStrictEqual(parsed.resolved, ['B.md']);
+  });
+});
+
+describe('parseManifest does not truncate dashed filenames (review regression)', () => {
+  const { stripInlineComment } = require('../../lib/manifest');
+
+  it('keeps an em-dash that is part of the filename', () => {
+    assert.strictEqual(
+      stripInlineComment('Items & Artifacts/Six — Field Sundries & Reloads.md'),
+      'Items & Artifacts/Six — Field Sundries & Reloads.md');
+  });
+
+  it('keeps an en-dash that is part of the filename', () => {
+    assert.strictEqual(
+      stripInlineComment('Sessions/Session 3 – Aftermath.md'),
+      'Sessions/Session 3 – Aftermath.md');
+  });
+
+  it('strips the comment from a dashed filename that also carries one', () => {
+    assert.strictEqual(stripInlineComment('Items/Six — Field.md — the note'), 'Items/Six — Field.md');
+  });
+
+  it('is not confused by a dot in a directory name', () => {
+    assert.strictEqual(stripInlineComment('v1.2/Notes.md — note'), 'v1.2/Notes.md');
+    assert.strictEqual(stripInlineComment('v1.2/Notes.md'), 'v1.2/Notes.md');
+  });
+
+  it('stops at the path, not a .md mentioned inside the comment', () => {
+    assert.strictEqual(stripInlineComment('Foo.md — see Bar.md'), 'Foo.md');
+  });
+
+  it('leaves an extensionless entry alone', () => {
+    assert.strictEqual(stripInlineComment('NoExtension'), 'NoExtension');
+  });
+});

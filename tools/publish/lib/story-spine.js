@@ -1,14 +1,11 @@
 const path = require('path');
-const { extractSections, parseWikiRef, resolveWikiLinks } = require('./processor');
+const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
 // The gm-only/excluded-stripped view if present (set by build.js), else raw markdown.
-function publishedOf(page) {
-  if (!page) return '';
-  return page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
-}
+const publishedOf = publishedSource;
 
 // Find the recap section of a page. Returns { title, html } or null.
 // Heading match is a case-insensitive CONTAINS, because real vaults decorate the title

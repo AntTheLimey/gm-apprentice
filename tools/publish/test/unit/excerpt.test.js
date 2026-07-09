@@ -112,3 +112,56 @@ describe('excerptFromMarkdown', () => {
     assert.ok(!out.includes('construct'), 'must not leak excluded content');
   });
 });
+
+describe('excerptFromMarkdown sanitization (issue #87)', () => {
+  it('drops HTML heading elements rather than leaking their text', () => {
+    const html = '<h2>Overview</h2>\n<p>A charted dead-end. More.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'A charted dead-end.');
+  });
+
+  it('drops rendered image tags', () => {
+    const html = '<p><img src="../images/Thides System.png" alt="Thides System"> A dead-end star. More.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'A dead-end star.');
+  });
+
+  it('drops raw image markdown', () => {
+    const md = '## Overview\n\n![Thides System](../images/Thides System.png)\n\nA charted dead-end. More.';
+    assert.strictEqual(excerptFromMarkdown(md), 'A charted dead-end.');
+  });
+
+  it('drops unresolved Obsidian image embeds', () => {
+    assert.strictEqual(excerptFromMarkdown('![[Thides.png]]\n\nA dead-end. More.'), 'A dead-end.');
+  });
+
+  it('drops HTML comments, including a truncated one', () => {
+    const html = '<p>Points of Interest.</p>\n&lt;!-- mobRPG changed this entity';
+    assert.strictEqual(excerptFromMarkdown(html), 'Points of Interest.');
+    assert.strictEqual(excerptFromMarkdown('<!-- note -->\nReal prose. More.'), 'Real prose.');
+  });
+
+  it('drops a callout marker line, title included', () => {
+    const md = '> [!warning] DRAFT — player-side backstory\n\nMarek is the man they send. More.';
+    assert.strictEqual(excerptFromMarkdown(md), 'Marek is the man they send.');
+  });
+
+  it('drops a rendered callout title', () => {
+    const html = '<div class="callout callout-warning"><div class="callout-title">DRAFT</div>'
+      + '<p>Marek is the man they send. More.</p></div>';
+    assert.strictEqual(excerptFromMarkdown(html), 'Marek is the man they send.');
+  });
+
+  it('de-links a wikilink anchor without leaving a stray space', () => {
+    const html = '<p><a href="x.html">Shackleton Magellan</a>’s enemy walks in. More.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'Shackleton Magellan’s enemy walks in.');
+  });
+
+  it('does not fuse adjacent paragraphs into one word', () => {
+    const html = '<p>One</p><p>Two. Three.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'One Two.');
+  });
+
+  it('drops rendered tables', () => {
+    const html = '<table><tr><td>Str</td><td>12</td></tr></table><p>Real prose. More.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'Real prose.');
+  });
+});

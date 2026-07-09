@@ -1,4 +1,4 @@
-const { parseTableRows, findSectionByTitle, extractSubsectionHtml } = require('./tables');
+const { parseTableRows, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings } = require('./tables');
 const { splitMarkers, stripCost } = require('./render');
 
 const PRIMARY = ['ST', 'DX', 'IQ', 'HT'];
@@ -158,7 +158,7 @@ function parseSkills(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'skills');
   if (!sec) return;
-  const rows = parseTableRows(sec.html);
+  const rows = parseTableRows(topLevelHtml(sec.html));
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = header.findIndex(h => h.includes('name')) >= 0
     ? header.findIndex(h => h.includes('name')) : 0;
@@ -387,7 +387,7 @@ function parseSpells(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'spells');
   if (!sec) return;
-  const rows = parseTableRows(sec.html);
+  const rows = parseTableRows(topLevelHtml(sec.html));
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = Math.max(0, header.findIndex(h => h.includes('name')));
   const { iLevel } = resolveLevelColumns(header);
@@ -567,7 +567,7 @@ function parseTechniques(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'techniques');
   if (!sec) return;
-  const rows = parseTableRows(sec.html);
+  const rows = parseTableRows(topLevelHtml(sec.html));
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = header.findIndex(h => h.includes('name')) >= 0
     ? header.findIndex(h => h.includes('name')) : 0;
@@ -673,8 +673,9 @@ function parseEquipment(model, sections, fm) {
   const sec = findSectionByTitle(sections, 'equipment');
   if (sec) {
     // Restrict to HTML before the first <h3> so ### Encumbrance / ### Load-Outs rows
-    // are not flattened into the item list.
-    const topHtml = sec.html.split(/<h3[ >]/i)[0];
+    // are not flattened into the item list. No topLevelHtml() fallback here: those
+    // subsections hold real tables that must never be read as items.
+    const topHtml = aboveSubheadings(sec.html);
     const rows = parseTableRows(topHtml);
     const header = (rows[0] || []).map(h => h.toLowerCase());
     const idx = n => header.findIndex(h => h.includes(n));
