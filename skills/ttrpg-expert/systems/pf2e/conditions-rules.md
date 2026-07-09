@@ -187,8 +187,8 @@ the whole track. Wounded and doomed both make each future drop deadlier.
   otherwise you don't age or perceive time passing.
 - **Fatigued** — –1 status penalty to AC and saving throws; can't use exploration
   activities while travelling. Recovered after a full night's rest.
-- **Encumbered** — Overloaded: you're **clumsy 1** and take a –10-foot penalty to all
-  Speeds (never below 5 feet).
+- **Encumbered** — Overloaded: gain **clumsy 1** and reduce every Speed
+  by 10 feet (minimum 5 feet).
 
 ## Overriding & Redundant Conditions
 
