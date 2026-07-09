@@ -2,6 +2,7 @@ const { renderCoCSheet } = require('./pc-coc');
 const { renderGURPSSheet } = require('./gurps/index');
 const { renderDnDSheet } = require('./pc-dnd');
 const { renderFitDSheet } = require('./pc-fitd');
+const { renderPF2eSheet } = require('./pc-pf2e');
 
 const renderers = {
   'coc-7e': renderCoCSheet,
@@ -14,6 +15,9 @@ const renderers = {
   'dnd': renderDnDSheet,
   'fitd': renderFitDSheet,
   'blades': renderFitDSheet,
+  'pf2e': renderPF2eSheet,
+  'pathfinder-2e': renderPF2eSheet,
+  'pathfinder': renderPF2eSheet,
 };
 
 function getRenderer(system) {
