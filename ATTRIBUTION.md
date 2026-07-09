@@ -42,6 +42,31 @@ Library of Congress at TX-307-067 and available online at
 https://www.chaosium.com/orclicense. Basic Roleplaying is
 Copyright Chaosium Inc.
 
+### Pathfinder Second Edition (Remaster)
+
+This work includes Licensed Material used under the ORC License.
+
+**ORC Notice.** This product is licensed under the ORC License
+held in the Library of Congress at TX 9-307-067 and available
+online at various locations including https://paizo.com/orclicense
+and https://azoralaw.com/orclicense. All warranties are disclaimed
+as set forth therein.
+
+**Attribution.** The PF2e files under
+`skills/ttrpg-expert/systems/pf2e/` are based on Licensed
+Material from Pathfinder Player Core, Pathfinder Player Core 2,
+Pathfinder GM Core, Pathfinder Monster Core, and Pathfinder
+Monster Core 2 © Paizo Inc., whose rules text is Licensed
+Material as declared in each work's own ORC notice (see each
+book's notice for its complete attribution chain). All
+descriptive text is paraphrased into original summaries;
+Reserved Material — including Paizo's setting, characters, and
+trade dress beyond what each notice licenses — is not knowingly
+included. Content was sourced via an ORC-filtered extraction of
+the Foundry VTT pf2e system data and the PF2SRD (ORC)
+compilation. This is free, non-commercial material, not
+published, endorsed, or specifically approved by Paizo Inc.
+
 ## GURPS
 
 GURPS is a trademark of Steve Jackson Games, and its rules

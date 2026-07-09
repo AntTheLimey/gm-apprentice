@@ -7,6 +7,7 @@ Complements `gm-session-patterns.md` (pre/post-session).
 active play, also read:
 - CoC 7e: `systems/coc-7e/combat-reference.md`, `systems/coc-7e/skills.md`
 - D&D 5e: `systems/dnd-5e-2024/conditions-rules.md`
+- PF2e: `systems/pf2e/conditions-rules.md`
 - GURPS 4e: `systems/gurps-4e/combat.md`
 - FitD: `systems/fitd/rules-reference.md`
 

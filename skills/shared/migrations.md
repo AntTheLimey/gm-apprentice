@@ -1,6 +1,6 @@
 ---
 # Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.8.13"
+current_version: "1.8.15"
 ---
 
 # Vault Migration Registry
@@ -83,6 +83,7 @@ vaults created before the versioning system existed.
   - `pc-coc-7e.md`
   - `pc-coc-7e-regency.md`
   - `pc-dnd-5e-2024.md`
+  - `pc-pf2e.md`
   - `pc-gurps-4e.md`
   - `pc-fitd.md`
   - `crew-fitd.md`

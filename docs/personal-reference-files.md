@@ -41,6 +41,8 @@ skills/ttrpg-expert/systems/
     personal/           <-- your CoC setting material
   dnd-5e-2024/
     personal/           <-- your D&D supplements
+  pf2e/
+    personal/           <-- your PF2e supplements
 ```
 
 Four skills discover and use these files automatically:

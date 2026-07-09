@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.15] — 2026-07-09
+
+### Added
+
+- **Pathfinder 2e (Remaster) system support** — new
+  `systems/pf2e/` knowledge base for ttrpg-expert, sourced
+  entirely from ORC-licensed material (Player Core, Player
+  Core 2, GM Core, Monster Core, Monster Core 2) with all
+  descriptive text paraphrased. Core five files (mechanics,
+  character generation, rules reference, session procedures
+  with DC/encounter-XP/treasure GM math tables, character
+  sheet) plus index+shard fan-outs: spells by rank
+  (cantrips + ranks 1-10, ~408 Player Core spells), monsters
+  by level band (243 curated Monster Core creatures across
+  6 shards), feats by category (general+skill, ancestry,
+  class, archetype), all 24 ORC-remastered classes,
+  ancestries/heritages/backgrounds, all 43 conditions, and
+  Player Core equipment. Routed through ttrpg-expert
+  SKILL.md/INDEX.md and session-play; `pf2e` added to the
+  publish `system` enum; PF2e tone row in shared-patterns.
+- **PF2e PC sheet template** (`skills/shared/templates/pc-pf2e.md`)
+  — Remaster attribute modifiers, TEML skill ranks, hero
+  points, spellcasting by rank, invested items, and the
+  standard Current Status block.
+- **PF2e character sheet renderer** (publish tool 1.8.0) —
+  `pc-pf2e.js` renders attribute cards, skill-rank pills,
+  class features, hero points, and spell slots by rank;
+  registered for `pf2e`, `pathfinder-2e`, and `pathfinder`
+  system identifiers, with unit tests.
+- **PF2e benchmark questions** — five routing/quality probes
+  in `tests/benchmark-questions/ttrpg-expert.md`.
+- **PF2e ORC attribution** — ORC Notice and per-book
+  attribution recorded in `ATTRIBUTION.md`; personal
+  reference directory gitignored at
+  `systems/pf2e/personal/`.
+
+---
+
 ## [1.8.14] — 2026-07-08
 
 ### Fixed

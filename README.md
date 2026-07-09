@@ -45,6 +45,9 @@ generation to campaign management and session lifecycle support.
   files covering mechanics, playbooks, crew types, cohorts,
   gathering information, GM techniques, and faction procedures
 - D&D 5th Edition (2024 Revision)
+- Pathfinder 2nd Edition (Remaster) — classes, ancestries,
+  spells by rank, curated Monster Core statblocks, feats by
+  category, and GM math tables, all from ORC-licensed sources
 
 ## Installation
 
@@ -244,7 +247,8 @@ files) is licensed under [MIT](LICENSE-CODE).
 
 This project includes material from open game content
 licensed under CC-BY 4.0 (D&D SRD 5.2), CC-BY 3.0 (Blades
-in the Dark SRD), and the ORC License (Basic Roleplaying).
+in the Dark SRD), and the ORC License (Basic Roleplaying and
+Pathfinder Second Edition Remaster).
 
 GURPS is a trademark of Steve Jackson Games, and its rules
 and art are copyrighted by Steve Jackson Games. All rights

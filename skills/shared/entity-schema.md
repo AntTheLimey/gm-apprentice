@@ -569,7 +569,7 @@ skills.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `system` | string | Game system identifier (`coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `fitd`). Read by publish tool for system-specific rendering. |
+| `system` | string | Game system identifier (`coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e`, `fitd`). Read by publish tool for system-specific rendering. |
 | `site_dir` | string | Absolute path to the site repo directory. Read by publish-site skill instead of asking each session. Optional — omit if vault doesn't use the publish tool. |
 | `mode` | string | `"player"` or `"full"` — controls GM-only content visibility |
 | `exclude_sections` | array | H2 heading names to strip from published output (default: `["GM Notes"]`) |

@@ -66,6 +66,7 @@ System-specific modules override when available:
 - FitD: `systems/fitd/session-procedures.md`
 - CoC: `systems/coc-7e/session-procedures.md`
 - D&D: `systems/dnd-5e-2024/session-procedures.md`
+- PF2e: `systems/pf2e/session-procedures.md`
 - GURPS/Generic: Universal Faction Turn as-is
 
 ### Step 3: Consequence Surfacing

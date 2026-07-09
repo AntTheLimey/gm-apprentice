@@ -130,3 +130,71 @@ For each question, output:
 
 Do NOT reveal which you think is control or test.
 ```
+
+## PF2e Questions
+
+Added with PF2e (Remaster) support. Same evaluator rubric as above.
+
+### PF2e-Q1 — Degrees of success ruling
+
+In my PF2e game a rogue rolled exactly the DC on a Thievery check
+to disable a trap, then a nat 20 on the follow-up save. Walk me
+through how degrees of success work and how the nat 20 changes
+the outcome.
+
+### PF2e-Q2 — Level 1 champion build
+
+Build me a level 1 PF2e champion — a dwarf defender of a
+mountain-hold. Full ABC (ancestry, background, class), attribute
+boosts, starting feats, and equipment within starting gold.
+
+### PF2e-Q3 — Spell lookup with heightening
+
+What does the fireball spell do in PF2e Remaster, what rank is
+it, and what happens when a level 9 wizard heightens it? Include
+the damage math.
+
+### PF2e-Q4 — Monster for a level 5 party
+
+Give me a PF2e statblock for a severe single-monster encounter
+against four level 5 PCs. Explain why the creature's level makes
+it severe and what its XP cost is.
+
+### PF2e-Q5 — Encounter XP budget
+
+My PF2e party is four level 6 PCs plus one level 6 NPC ally
+(five characters total). What's my XP budget for a moderate
+encounter, and what creature levels fit it? Show the math.
+
+### PF2e agent prompt
+
+```text
+You are a TTRPG rules expert. Read the skill entry point:
+skills/ttrpg-expert/SKILL.md
+Follow routing to find the right files for each question.
+Answer each question concisely (under 150 words each).
+
+Questions:
+
+PF2e-Q1: In my PF2e game a rogue rolled exactly the DC on a
+Thievery check to disable a trap, then a nat 20 on the follow-up
+save. Walk me through how degrees of success work and how the
+nat 20 changes the outcome.
+
+PF2e-Q2: Build me a level 1 PF2e champion — a dwarf defender of
+a mountain-hold. Full ABC (ancestry, background, class),
+attribute boosts, starting feats, and equipment within starting
+gold.
+
+PF2e-Q3: What does the fireball spell do in PF2e Remaster, what
+rank is it, and what happens when a level 9 wizard heightens it?
+Include the damage math.
+
+PF2e-Q4: Give me a PF2e statblock for a severe single-monster
+encounter against four level 5 PCs. Explain why the creature's
+level makes it severe and what its XP cost is.
+
+PF2e-Q5: My PF2e party is four level 6 PCs plus one level 6 NPC
+ally (five characters total). What's my XP budget for a moderate
+encounter, and what creature levels fit it? Show the math.
+```

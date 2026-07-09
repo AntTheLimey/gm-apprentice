@@ -10,6 +10,7 @@ read the relevant system file for stat blocks and mechanical
 grounding:
 - CoC 7e: `systems/coc-7e/occupations.md` (NPC stats, skill values)
 - D&D 5e: `systems/dnd-5e-2024/monsters.md` or `systems/dnd-5e-2024/classes.md`
+- PF2e: `systems/pf2e/monsters.md` or `systems/pf2e/classes.md`
 - GURPS 4e: `systems/gurps-4e/character-generation.md`
 - FitD: `systems/fitd/factions.md` (NPC tier/action ratings)
 

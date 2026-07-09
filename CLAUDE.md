@@ -18,7 +18,7 @@ nine TTRPG Game Master skills:
 - `publish-site` — publish campaign vault as a static website
 
 Supported systems: CoC 7e (+ Regency Cthulhu variant), GURPS 4e, FitD,
-D&D 5e 2024.
+D&D 5e 2024, Pathfinder 2e (Remaster).
 
 ---
 
@@ -37,6 +37,7 @@ above all other conventions.
 | CoC 7e / BRP | [BRP ORC License](https://www.chaosium.com/orclicense) | Mechanics, stat blocks, generic content. No proprietary Chaosium IP (Arkham, Lovecraft Country NPCs, published adventures, flavour text) |
 | D&D 5e (2024) | [CC-BY 4.0 SRD](https://dnd.wizards.com/resources/systems-reference-document) | Anything in the 5.2 SRD with attribution. No content outside the SRD |
 | FitD | [CC-BY 3.0](https://bladesinthedark.com/about-the-dark) | Blades in the Dark rules with attribution. No Deep Cuts, no publisher-specific content |
+| PF2e (Remaster) | [ORC License](https://paizo.com/orclicense) | Paraphrased mechanics, names, and game math from ORC-stamped sources (via `~/PROJECTS/reference-srds/pf2e-orc-dataset/`). No verbatim rules text, no Golarion Reserved Material, never the CUP-licensed vault |
 | GURPS 4e | [SJG Online Policy](http://www.sjgames.com/general/online_policy.html) | **Names, point costs, short notes only.** No full rule text, no full character builds, no tables reproduced verbatim |
 
 **Full license texts and attribution requirements live in `ATTRIBUTION.md`.

@@ -337,4 +337,4 @@ and affect the whole site rather than individual entity pages. See
 
 | Field | Key path | Description |
 |-------|----------|-------------|
-| `system` | `publish.system` | Game system identifier. Expected values: `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `fitd`. Currently informational — system-specific rendering is a future roadmap item. |
+| `system` | `publish.system` | Game system identifier. Expected values: `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e`, `fitd`. Selects the PC character-sheet renderer at build time; matched case-insensitively, with aliases (`coc`, `gurps`, `dnd`, `pathfinder`, `blades`). An unrecognised or absent value falls back to the generic PC layout. |

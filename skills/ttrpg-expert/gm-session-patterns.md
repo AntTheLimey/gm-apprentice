@@ -8,6 +8,7 @@ system-agnostic. For system-specific post-session mechanics
 (faction clocks, XP, downtime), also read:
 - CoC 7e: `systems/coc-7e/session-procedures.md`
 - D&D 5e: `systems/dnd-5e-2024/session-procedures.md`
+- PF2e: `systems/pf2e/session-procedures.md`
 - GURPS 4e: `systems/gurps-4e/session-procedures.md`
 - FitD: `systems/fitd/session-procedures.md` (coin, rep, heat,
   entanglements, downtime, XP triggers)

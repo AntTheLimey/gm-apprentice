@@ -9,6 +9,7 @@ readers.
 and stat blocks when writing scenarios, also read:
 - CoC 7e: `systems/coc-7e/session-procedures.md`, `systems/coc-7e/creatures.md`
 - D&D 5e: `systems/dnd-5e-2024/monsters.md`, `systems/dnd-5e-2024/conditions-rules.md`
+- PF2e: `systems/pf2e/monsters.md`, `systems/pf2e/session-procedures.md`
 - GURPS 4e: `systems/gurps-4e/combat.md`
 - FitD: `systems/fitd/rules-reference.md`
 

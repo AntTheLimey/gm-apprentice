@@ -3119,6 +3119,48 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   border-radius: 0.2rem;
 }
 
+/* PF2e */
+.pf2e-attributes {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.pf2e-attribute-card {
+  text-align: center;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.5rem;
+}
+.pf2e-attribute-card .ability-name {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.pf2e-attribute-card .ability-mod {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+.pf2e-proficiencies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+.pf2e-proficiency {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.2rem;
+}
+
 /* FitD */
 .fitd-sheet { background: var(--bg-card); border-radius: 0.5rem; padding: 1.5rem; }
 .fitd-action-ratings { margin-bottom: 1.5rem; }
@@ -3225,10 +3267,12 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   .landing-hero h1 { font-size: 2.5rem; }
   .card-grid { grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
   .dnd-ability-scores { gap: 0.75rem; }
+  .pf2e-attributes { gap: 0.75rem; }
 }
 
 @media (max-width: 480px) {
   .dnd-ability-scores { grid-template-columns: repeat(3, 1fr); }
+  .pf2e-attributes { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* ===== PRINT ===== */

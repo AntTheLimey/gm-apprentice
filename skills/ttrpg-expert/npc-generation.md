@@ -8,6 +8,7 @@ and antagonist NPCs, system-specific stat blocks.
 values when generating NPCs, also read:
 - CoC 7e: `systems/coc-7e/occupations.md`, `systems/coc-7e/skills.md`
 - D&D 5e: `systems/dnd-5e-2024/classes.md`, `systems/dnd-5e-2024/monsters.md`
+- PF2e: `systems/pf2e/classes.md`, `systems/pf2e/monsters.md`
 - GURPS 4e: `systems/gurps-4e/character-generation.md`
 - FitD: `systems/fitd/playbooks.md`, `systems/fitd/factions.md`
 
