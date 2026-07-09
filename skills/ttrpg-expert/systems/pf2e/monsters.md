@@ -16,7 +16,8 @@ the source books and the ORC dataset.
 |------|------|-----------|
 | Level -1 to 1 | `monsters-level-neg1-1.md` | 55 |
 | Level 2-4 | `monsters-level-2-4.md` | 60 |
-| Level 5-10 | `monsters-level-5-10.md` | 63 |
+| Level 5-7 | `monsters-level-5-7.md` | 32 |
+| Level 8-10 | `monsters-level-8-10.md` | 31 |
 | Level 11-16 | `monsters-level-11-16.md` | 40 |
 | Level 17+ | `monsters-level-17-plus.md` | 25 |
 
@@ -64,13 +65,15 @@ only when the user asks for encounter advice.
 
 **Level 4:** Ogre Glutton, Minotaur Hunter, Shadow, Ghost Commoner, Phantom Knight, Vampire Servitor, Werebear, Weretiger, Barghest, Gargoyle, Scarecrow, Tiger, Rhinoceros, Great White Shark, Griffon, Hadrosaurid, Sweet Hag, Satyr, Pixie, Hobgoblin Archer
 
-## Level 5-10 → `monsters-level-5-10.md`
+## Level 5-7 → `monsters-level-5-7.md`
 
 **Level 5:** Basilisk, Brimorak, Cyclops, Flame Drake, Forest Troll, Harpy, Jaathoom, Poltergeist, Redcap, Venedaemon, Vordine, Yeti
 
 **Level 6:** Hydra, Iron Hag, Jungle Drake, Lamia, Manticore (Scorpion Tail), Mummy Guardian, Nightmare, Smilodon, Vampire Count, Will-o'-Wisp, Wraith, Wyvern
 
 **Level 7:** Dullahan, Frost Drake, Greater Shadow, Jabali, Medusa, Naiad Queen, Omen Dragon (Young), Succubus
+
+## Level 8-10 → `monsters-level-8-10.md`
 
 **Level 8:** Chimera, Desert Drake, Giant Octopus, Horned Dragon (Young), Lamia Matriarch, Marsh Giant, Mountain Oni, Sarglagon, Sphinx, Stone Giant, Triceratops
 

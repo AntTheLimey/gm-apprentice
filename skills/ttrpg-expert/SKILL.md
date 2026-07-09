@@ -59,7 +59,7 @@ Match user intent → go directly to the file. Skip clarification.
 **D&D condition/rule** → `systems/dnd-5e-2024/conditions-rules.md`
 
 **PF2e monster** → `systems/pf2e/monsters.md` (index)
-  → detail: `monsters-level-neg1-1.md`, `monsters-level-2-4.md`, `monsters-level-5-10.md`, `monsters-level-11-16.md`, `monsters-level-17-plus.md`
+  → detail: `monsters-level-neg1-1.md`, `monsters-level-2-4.md`, `monsters-level-5-7.md`, `monsters-level-8-10.md`, `monsters-level-11-16.md`, `monsters-level-17-plus.md`
 **PF2e spell** → `systems/pf2e/spells.md` (index)
   → detail: `spells-cantrips.md`, `spells-rank-1.md` through `spells-rank-10.md`
 **PF2e feat** → `systems/pf2e/feats.md` (index)

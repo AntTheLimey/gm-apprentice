@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with DC/encounter-XP/treasure GM math tables, character
   sheet) plus index+shard fan-outs: spells by rank
   (cantrips + ranks 1-10, ~408 Player Core spells), monsters
-  by level band (~250 curated Monster Core creatures across
-  5 shards), feats by category (general+skill, ancestry,
+  by level band (243 curated Monster Core creatures across
+  6 shards), feats by category (general+skill, ancestry,
   class, archetype), all 24 ORC-remastered classes,
   ancestries/heritages/backgrounds, all 43 conditions, and
   Player Core equipment. Routed through ttrpg-expert
