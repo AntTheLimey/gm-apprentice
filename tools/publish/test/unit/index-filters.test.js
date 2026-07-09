@@ -380,3 +380,67 @@ describe('NPC table avatars', () => {
     assert.ok(html.includes('data-sort="karl brenner"'));
   });
 });
+
+describe('NPC index session filter (issue #89)', () => {
+  const config = { siteTitle: 'T', attachmentsDir: '_attachments' };
+  const stubNav = () => '';
+
+  function npc(name, fm) {
+    return {
+      title: name, displayTitle: name,
+      outputPath: `characters/npcs/${name.toLowerCase()}.html`,
+      outputDir: 'characters/npcs',
+      frontmatter: { type: 'npc', ...fm },
+    };
+  }
+
+  function render(pages) {
+    return indexTemplate('characters/npcs', 'NPCs', pages, stubNav, config, {}, {});
+  }
+
+  it('never offers a lastUpdated date as a session option', () => {
+    const html = render([
+      npc('Alice', { asOfSession: 'Session 1', lastUpdated: '2026-07-05' }),
+      npc('Bob', { asOfSession: 'Session 2', lastUpdated: '2026-07-05' }),
+      npc('Carol', { asOfSession: '', lastUpdated: '2026-07-05' }),
+    ]);
+    assert.ok(html.includes('<option value="Session 1">'), 'real session survives');
+    assert.ok(html.includes('<option value="Session 2">'), 'real session survives');
+    assert.ok(!html.includes('<option value="2026-07-05">'), 'maintenance date is not a session');
+  });
+
+  it('drops the dropdown entirely when the date was the only second option', () => {
+    const html = render([
+      npc('Alice', { asOfSession: 'Session 1', lastUpdated: '2026-07-05' }),
+      npc('Bob', { asOfSession: 'Session 1', lastUpdated: '2026-07-06' }),
+    ]);
+    assert.ok(!html.includes('data-col="session"'), 'one real session is nothing to filter by');
+  });
+
+  it('does not tag a row with a lastUpdated date', () => {
+    const html = render([npc('Bob', { asOfSession: '', lastUpdated: '2026-07-05' })]);
+    assert.ok(html.includes('data-session=""'), 'no session means not session-filterable');
+    assert.ok(!html.includes('data-session="2026-07-05"'));
+  });
+
+  it('rejects an ISO date written directly into asOfSession', () => {
+    const html = render([npc('Carol', { asOfSession: '2026-07-05' })]);
+    assert.ok(!html.includes('data-session="2026-07-05"'));
+    assert.ok(!html.includes('<option value="2026-07-05">'));
+  });
+
+  it('keeps a session wikilink as a session', () => {
+    const html = render([
+      npc('Dave', { asOfSession: '[[Session 02 - The Deep]]' }),
+      npc('Erin', { asOfSession: 'Session 1' }),
+    ]);
+    assert.ok(html.includes('data-session="Session 02 - The Deep"'));
+    assert.ok(html.includes('<option value="Session 02 - The Deep">'));
+  });
+
+  it('labels the column for what it now holds', () => {
+    const html = render([npc('Alice', { asOfSession: 'Session 1' })]);
+    assert.ok(html.includes('>As of Session</th>'));
+    assert.ok(!html.includes('>Last Updated</th>'));
+  });
+});

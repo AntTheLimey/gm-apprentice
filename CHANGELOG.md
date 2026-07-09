@@ -58,6 +58,12 @@ Publish tool 1.9.0. Fixes the eight open publish-site issues.
   `campaign/timeline.html`) the global nav dangled on nearly every page.
   The target is now computed once, and `events/` gets a real index when
   no timeline exists at all. (#83)
+- **The NPC listing's session filter no longer treats `lastUpdated` as a
+  session.** It fell back to that field when `asOfSession` was empty, so a
+  maintenance date (`2026-07-05`) appeared in the "filter by session"
+  dropdown and was sorted against `Session N`. An entity with no
+  `asOfSession` is simply not session-filterable, and an ISO date written
+  directly into `asOfSession` is ignored. (#89)
 - **GURPS `parseTechniques()` no longer merges sub-tables.** Descriptive
   helper tables under a `###` subheading were force-fit into the
   Name/Default/Lvl/Pts grid. Techniques, Skills and Spells now read only
@@ -77,6 +83,9 @@ Publish tool 1.9.0. Fixes the eight open publish-site issues.
 
 ### Changed
 
+- The NPC listing's last column is now headed **As of Session** rather than
+  "Last Updated". It always showed `asOfSession` first and was sorted and
+  filtered as a session; the header was the part that was wrong.
 - Pull-quote excerpts derive from a page's published markdown rather than
   from its rendered HTML — the same source backlinks, search and recency
   already read, and the reason the sanitization above is not a regex pass

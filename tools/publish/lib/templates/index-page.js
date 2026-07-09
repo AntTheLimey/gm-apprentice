@@ -573,6 +573,18 @@ function sessionSortKey(str) {
   return m ? Number(m[1]) : 0;
 }
 
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
+
+// The session an entity's state was confirmed accurate as of. Never falls back to
+// `lastUpdated`: that is a maintenance timestamp the tool writes into its own templates,
+// and reading it back as a session put bare dates in the "filter by session" dropdown and
+// sorted them against `Session N`. A date written directly into asOfSession is rejected for
+// the same reason. An entity with no session simply isn't session-filterable.
+function sessionRef(frontmatter) {
+  const value = cleanRef(frontmatter.asOfSession);
+  return ISO_DATE_RE.test(value) ? '' : value;
+}
+
 function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachments', linkMap = {}) {
   const sorted = pages
     .filter(p => p.frontmatter.type === 'npc')
@@ -584,7 +596,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
   const sessionPills = new Set();
   for (const p of sorted) {
     if (p.frontmatter.status) statusPills.add(p.frontmatter.status);
-    const session = cleanRef(p.frontmatter.asOfSession || p.frontmatter.lastUpdated || '');
+    const session = sessionRef(p.frontmatter);
     if (session) sessionPills.add(session);
   }
 
@@ -611,7 +623,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
     const occupation = fm.occupation || '';
     const status = fm.status || '';
     const firstApp = cleanRef(fm.first_appearance || '');
-    const lastSession = cleanRef(fm.asOfSession || fm.lastUpdated || '');
+    const lastSession = sessionRef(fm);
     const canonStatus = getCanonStatus(fm) || '';
     const avatar = portraitImg(fm, dir + '/index.html', imageMap, attachmentsDir);
     const avatarHtml = avatar
@@ -637,7 +649,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
   <th data-sort-col="occupation">Role</th>
   <th data-sort-col="status">Status</th>
   <th data-sort-col="first">First Appearance</th>
-  <th data-sort-col="session">Last Updated</th>
+  <th data-sort-col="session">As of Session</th>
   <th data-sort-col="canon">Canon Status</th>
 </tr>
 </thead>
