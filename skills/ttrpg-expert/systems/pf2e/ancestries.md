@@ -1,3 +1,7 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) — Ancestries, Heritages & Backgrounds
 
 Character origin in PF2e comes from three choices made at level 1: an **ancestry** (the lineage your character is born into), a **heritage** (a sub-lineage refining that ancestry), and a **background** (life experience before adventuring). This reference covers all 31 ancestries in the ORC dataset, detailed heritage options for the Player Core and Player Core 2 ancestries, and a curated set of Player Core backgrounds.

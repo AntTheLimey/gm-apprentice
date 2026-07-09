@@ -1,3 +1,7 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) — Cantrips
 
 32 cantrips (rank-0 spells) from Player Core + Player Core 2. Cantrips are always

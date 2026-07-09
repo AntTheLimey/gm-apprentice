@@ -1,3 +1,7 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) -- Rules Reference
 
 In-play quick lookup: basic actions, skill actions, exploration and downtime activities, cover, movement, and the death rules. For the resolution engine (degrees of success, proficiency, MAP, saves) see `mechanics.md`; for conditions see `conditions-rules.md`.
@@ -18,7 +22,7 @@ Every creature can use these. Costs: [1] single, [2] two, [R] reaction, [F] free
 | **Leap** | [1] | Jump 10 ft horizontally (15 ft if Speed 30+), or up 3 ft and over 5 ft. |
 | **Seek** | [1] | Perception check to find hidden/undetected creatures or objects in an area (usually 30 ft). Secret. |
 | **Sense Motive** | [1] | Perception vs Deception DC to read a creature's intentions. Secret. |
-| **Aid** | [R] | Prepared beforehand; on a success give an ally +1 (+2/+3/+4 on a crit by rank) circumstance bonus to the triggering check. |
+| **Aid** | [R] | Prepared beforehand; on a success give an ally +1 circumstance bonus to the triggering check (crit success +2, or +3 if you're master with the check, +4 if legendary). Crit failure gives -1. |
 | **Ready** | [2] | Set one action + a trigger to use as a reaction before your next turn. |
 | **Release** | [F] | Let go of a held item; doesn't trigger reactions. |
 | **Delay** | [F] | Remove yourself from initiative and re-enter later after any creature's turn. |
@@ -121,7 +125,7 @@ Measured in days. See `session-procedures.md` for running downtime.
 | **Earn Income** | Trained skill check vs a task-level DC; earn coin per day by result and rank. |
 | **Craft** | Supply half the item's Price in materials, spend days, roll Crafting; extra days offset the rest of the Price. |
 | **Retraining** | Spend a week+ to swap a feat, skill increase, or selectable class feature (not ancestry/background/class/attributes). |
-| **Treat Wounds** | 10 min, Medicine DC 15 (higher DC = more healing); crit success also removes wounded. Target immune 1 hour. |
+| **Treat Wounds** | 10 min, Medicine DC 15 (higher DC = more healing); success or better also removes wounded. Target immune 1 hour. |
 | **Long-Term Rest** | A full day and night restores Con mod x (2 x level) HP. |
 | **Subsist** | Society or Survival to feed and shelter yourself; failure = fatigued. |
 | **Gather Information** | Diplomacy around town to learn about a person or topic. |
@@ -150,7 +154,7 @@ Measured in days. See `session-procedures.md` for running downtime.
 
 At 0 HP a PC is knocked out and gains **dying 1** (dying 2 if from a crit or your own crit fail; add your wounded value). You die at **dying 4**.
 
-- **Recovery check** (start of each turn while dying): flat check vs `10 + dying value`. Crit success -2, success -1, failure +1, crit failure +2 (add wounded on a fail).
+- **Recovery check** (start of each turn while dying): flat check vs `10 + dying value`. Crit success -2, success -1, failure +1, crit failure +2. Wounded doesn't change this check — it raises the dying value you start at next time.
 - **Losing dying** (reaching dying 0, or healed to 1+ HP): you gain or increase **wounded** by 1. Wounded adds to future dying values.
 - **Wounded** ends when you're healed to full and rest 10 minutes, or via a successful Treat Wounds.
 - **Doomed N** lowers your death threshold by N (doomed 1 = die at dying 3). Drops by 1 per full night's rest.

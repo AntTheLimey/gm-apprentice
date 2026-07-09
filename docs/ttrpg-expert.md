@@ -156,7 +156,7 @@ All sources are credited in
 
 ## Tips
 
-- Always specify the game system upfront. Claude supports four systems and needs to know which one you're in.
+- Always specify the game system upfront. Claude supports five systems and needs to know which one you're in.
 - For GURPS characters, give a point budget and concept. Claude will track every point spent.
 - If you have a campaign vault, mention it. Claude can cross-reference existing entities for consistency.
 - Be specific about tone. "A friendly innkeeper" and "a friendly innkeeper hiding a dark secret" produce very different results.

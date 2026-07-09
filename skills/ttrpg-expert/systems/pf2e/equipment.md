@@ -1,3 +1,7 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) — Equipment
 
 Currency, weapons, armor, shields, gear, and fundamental runes from
@@ -56,7 +60,7 @@ is 1 Bulk, a few ounces is negligible, in between is light.
 | Javelin | 1 sp | 1d6 P | 30 ft. | — | L | 1 | Dart | Thrown |
 | Sling | 0 | 1d6 B | 50 ft. | 1 | L | 1 | Sling | Propulsive |
 
-Ammunition is cheap: bolts, arrows, and sling bullets run about 1 sp per 10
+Ammunition is cheap: bolts and arrows run about 1 sp per 10
 (blowgun darts 5 cp per 10, sling bullets 1 cp per 10).
 
 ## Martial Melee Weapons

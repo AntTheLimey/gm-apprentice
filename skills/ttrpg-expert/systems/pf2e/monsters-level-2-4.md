@@ -1,3 +1,7 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) — Monsters Level 2-4
 
 A curated Monster Core selection of 60 creatures for building low-tier

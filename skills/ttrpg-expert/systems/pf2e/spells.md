@@ -1,8 +1,12 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) — Spells (Index)
 
-Player Core + Player Core 2 slot spells (~408). Focus spells and rituals live
-in the dataset but are summarized here only as concepts. Rank-grouped index for
-routing to detail shards.
+Player Core + Player Core 2 spells (408: 32 cantrips plus 376 slot spells).
+Focus spells and rituals live in the dataset but are summarized here only as
+concepts. Rank-grouped index for routing to detail shards.
 
 **Detail files:** `spells-cantrips.md`, `spells-rank-1.md` through `spells-rank-10.md`
 **Sub-file format:** Name | Traditions | Traits | Cast | Range/Area | Effect
@@ -26,7 +30,7 @@ rank. They belong to specific class and archetype features, not this index.
 **Rituals** are collaborative long-form ceremonies any character can attempt
 with the right skills — grand effects like raising the dead, planar travel, or
 binding spirits — costing time and materials rather than slots. Both exist in
-the dataset but are out of scope for this slot-spell index.
+the dataset but are out of scope for this index.
 
 ## Response Templates
 

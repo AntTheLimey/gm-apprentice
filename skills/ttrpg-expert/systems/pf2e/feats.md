@@ -1,3 +1,7 @@
+> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
+> PF2e adaptation: Our own descriptions of uncopyrightable
+> game mechanics (Baker v. Selden, 1879). Not Paizo text.
+
 # Pathfinder 2e (Remaster) — Feats (Index)
 
 Routing index for the feat category shards. Read the shard that
@@ -33,8 +37,9 @@ skill, general, or archetype).
 
 ## Quick Rules
 
-- **Prerequisites** must be met when the feat is taken and are
-  lost if the prerequisite is (retrain to replace the feat).
+- **Prerequisites** must be met when the feat is taken; if you
+  later stop meeting one, you can't use the feat until you meet it
+  again (retrain to replace it).
 - **Dedication lock:** after taking a dedication feat, take two
   more feats from that archetype before adding another dedication.
 - **Retraining** (downtime) swaps one feat for another legal
