@@ -42,7 +42,7 @@ function renderPF2eSheet(frontmatter, sections) {
     const items = features
       .sort((a, b) => (a.level || 0) - (b.level || 0))
       .map(f => {
-        const levelBadge = f.level ? `<span class="sidebar-badge">Level ${f.level}</span>` : '';
+        const levelBadge = f.level ? `<span class="sidebar-badge">Level ${escapeHtml(String(f.level))}</span>` : '';
         const desc = f.description ? `<div class="card-excerpt">${escapeHtml(f.description)}</div>` : '';
         return `<div class="entity-card"><h4>${escapeHtml(f.name || String(f))} ${levelBadge}</h4>${desc}</div>`;
       }).join('\n');
