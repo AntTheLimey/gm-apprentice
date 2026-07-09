@@ -117,6 +117,12 @@ GURPS uses topic-based files for efficient lookup.
   from the SRD 5.2, licensed under CC-BY 4.0 by Wizards of
   the Coast. Built directly into the skill.
 
+- **Pathfinder 2e (Remaster)** — `systems/pf2e/`. Content
+  paraphrased from ORC-licensed Paizo sources (Player Core,
+  Player Core 2, GM Core, Monster Core, Monster Core 2).
+  Spells shard by rank, monsters by level band, feats by
+  category. Built directly into the skill.
+
 - **Forged in the Dark** — `systems/fitd/`. Content sourced
   from the Blades in the Dark SRD, licensed under CC-BY 3.0
   by John Harper / One Seven Design. Built directly into the

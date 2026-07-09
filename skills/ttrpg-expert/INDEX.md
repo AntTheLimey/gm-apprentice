@@ -8,6 +8,7 @@ Read only the file(s) relevant to the current request.
 | System | Subfolder | Variants |
 |--------|-----------|----------|
 | D&D 5e (2024) | `systems/dnd-5e-2024/` | — |
+| Pathfinder 2e (Remaster) | `systems/pf2e/` | — |
 | Forged in the Dark | `systems/fitd/` | — |
 | CoC 7e | `systems/coc-7e/` | `variants/regency/` |
 | GURPS 4e | `systems/gurps-4e/` | — |
@@ -15,7 +16,7 @@ Read only the file(s) relevant to the current request.
 
 ## Per-System Requests
 
-`{system}` = `dnd-5e-2024`, `fitd`, `coc-7e`, `gurps-4e`, or `generic`.
+`{system}` = `dnd-5e-2024`, `pf2e`, `fitd`, `coc-7e`, `gurps-4e`, or `generic`.
 
 | Request | File | Also Read |
 |---------|------|-----------|
@@ -26,18 +27,19 @@ Read only the file(s) relevant to the current request.
 | Character sheet | `{system}/character-sheet.md` | — |
 | Combat | GURPS: `combat.md`. CoC: `combat-reference.md`. Others: `{system}/rules-reference.md` | `{system}/mechanics.md` |
 | Traits / costs | GURPS: `traits-*.md`. Others: `{system}/rules-reference.md` | — |
-| Equipment / weapons | GURPS: `equipment-*.md`. CoC: `equipment-weapons.md`. FitD: `character-sheet.md`. D&D: `equipment.md` | — |
-| Armour | CoC: `equipment-armor.md`. D&D: `equipment.md`. GURPS: `equipment-*.md` | — |
-| Powers / magic | GURPS: `powers-rules.md` or `magic-rules.md`. CoC: `powers-magic.md`. FitD: `rituals-crafting.md`. D&D: `magic-items.md` | — |
-| Spells | GURPS: `spells.md`. CoC: `powers-magic.md`. D&D: `spells.md` | — |
+| Equipment / weapons | GURPS: `equipment-*.md`. CoC: `equipment-weapons.md`. FitD: `character-sheet.md`. D&D: `equipment.md`. PF2e: `equipment.md` | — |
+| Armour | CoC: `equipment-armor.md`. D&D: `equipment.md`. GURPS: `equipment-*.md`. PF2e: `equipment.md` | — |
+| Powers / magic | GURPS: `powers-rules.md` or `magic-rules.md`. CoC: `powers-magic.md`. FitD: `rituals-crafting.md`. D&D: `magic-items.md`. PF2e: `spells.md` | — |
+| Spells | GURPS: `spells.md`. CoC: `powers-magic.md`. D&D: `spells.md`. PF2e: `spells.md` (index → rank shards) | — |
 | Skills | GURPS: `skills-*.md`. CoC: `skills.md`. Others: `{system}/rules-reference.md` | — |
-| Feats | D&D: `feats.md` | — |
-| Conditions | D&D: `conditions-rules.md` | — |
-| Creatures / monsters | CoC: `creatures.md`. D&D: `monsters.md` / `animals.md` | — |
+| Feats | D&D: `feats.md`. PF2e: `feats.md` (index → category shards) | — |
+| Conditions | D&D: `conditions-rules.md`. PF2e: `conditions-rules.md` | — |
+| Creatures / monsters | CoC: `creatures.md`. D&D: `monsters.md` / `animals.md`. PF2e: `monsters.md` (index → level bands) | — |
+| Ancestries / heritages / backgrounds | PF2e: `ancestries.md` | — |
 | Setting / lore | CoC: `setting-lovecraft.md`. FitD: check `personal/` | — |
 | Variant-specific rules | `{system}/variants/{variant}/*.md` | Base system file for same topic |
 | Factions | FitD: `factions.md`. Others: `content-generation.md` | `relationship-patterns.md` |
-| Classes / occupations | CoC: `occupations.md`. FitD: `playbooks.md`. D&D: `classes.md` | — |
+| Classes / occupations | CoC: `occupations.md`. FitD: `playbooks.md`. D&D: `classes.md`. PF2e: `classes.md` | — |
 | Crew / party type | FitD: `crew-types.md` | — |
 | Cohorts / gangs | FitD: `cohorts.md` | `crew-types.md` |
 | Gathering information | FitD: `gathering-information.md` | `mechanics.md` |

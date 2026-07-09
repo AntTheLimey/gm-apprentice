@@ -1,10 +1,11 @@
 ---
 name: ttrpg-expert
-description: "TTRPG rules advisor and content engine for CoC 7e, GURPS 4e, Forged in the Dark, and D&D 5e (2024). Use for: rules lookups, mechanics validation, character building and point-budget tracking, NPC generation, content creation (scenes, locations, factions, items, handouts), scenario and encounter design guidance, continuity and plot-hole detection, canon management, PC arc and spotlight analysis, active play techniques (fail forward, improvisation), and random inspiration. No dependencies on other skills. For session workflows use session-prep/play/wrapup; for vault operations use campaign-organizer; for auditing use campaign-qa. Trigger on: rules questions, character creation, point-buy, stat blocks, NPC generation, encounter design, scenario writing, handout creation, continuity checks, plot holes, spotlight balance, arc stages, canon verification, content generation, 'build me a character', 'make me an NPC', 'check for plot holes', 'write a scene', 'create a handout'."
+description: "TTRPG rules advisor and content engine for CoC 7e, GURPS 4e, Forged in the Dark, D&D 5e (2024), and Pathfinder 2e (Remaster). Use for: rules lookups, mechanics validation, character building and point-budget tracking, NPC generation, content creation (scenes, locations, factions, items, handouts), scenario and encounter design guidance, continuity and plot-hole detection, canon management, PC arc and spotlight analysis, active play techniques (fail forward, improvisation), and random inspiration. No dependencies on other skills. For session workflows use session-prep/play/wrapup; for vault operations use campaign-organizer; for auditing use campaign-qa. Trigger on: rules questions, character creation, point-buy, stat blocks, NPC generation, encounter design, scenario writing, handout creation, continuity checks, plot holes, spotlight balance, arc stages, canon verification, content generation, 'build me a character', 'make me an NPC', 'check for plot holes', 'write a scene', 'create a handout'."
 ---
 
 Expert TTRPG advisory agent and content engine for CoC 7e,
-GURPS 4e, Forged in the Dark, and D&D 5e (2024).
+GURPS 4e, Forged in the Dark, D&D 5e (2024), and Pathfinder 2e
+(Remaster).
 
 **Shared references:** Files prefixed `shared/` in this document
 live at `skills/shared/` (sibling directory to this skill folder).
@@ -56,6 +57,18 @@ Match user intent → go directly to the file. Skip clarification.
 **D&D class** → `systems/dnd-5e-2024/classes.md`
 **D&D feat** → `systems/dnd-5e-2024/feats.md`
 **D&D condition/rule** → `systems/dnd-5e-2024/conditions-rules.md`
+
+**PF2e monster** → `systems/pf2e/monsters.md` (index)
+  → detail: `monsters-level-neg1-1.md`, `monsters-level-2-4.md`, `monsters-level-5-10.md`, `monsters-level-11-16.md`, `monsters-level-17-plus.md`
+**PF2e spell** → `systems/pf2e/spells.md` (index)
+  → detail: `spells-cantrips.md`, `spells-rank-1.md` through `spells-rank-10.md`
+**PF2e feat** → `systems/pf2e/feats.md` (index)
+  → detail by category: `feats-general-skill.md`, `feats-ancestry.md`, `feats-class.md`, `feats-archetype.md`
+**PF2e class** → `systems/pf2e/classes.md`
+**PF2e ancestry/heritage/background** → `systems/pf2e/ancestries.md`
+**PF2e condition/rule** → `systems/pf2e/conditions-rules.md`
+**PF2e equipment/weapon/armor** → `systems/pf2e/equipment.md`
+**PF2e GM math (DCs/XP/treasure)** → `systems/pf2e/session-procedures.md`
 
 **"Validate my character"**
 → `systems/{system}/character-generation.md` (Validation section).
@@ -252,6 +265,20 @@ No variant keyword or tag → use base CoC files only.
 | Feats | feats.md |
 | Conditions / rules | conditions-rules.md |
 | Combat / actions | rules-reference.md |
+
+### PF2e Remaster (`systems/pf2e/`)
+
+| Request | File |
+|---------|------|
+| Monsters (by level) | monsters.md (index) → `monsters-level-{band}.md` |
+| Spells (by rank) | spells.md (index) → `spells-cantrips.md`, `spells-rank-{1-10}.md` |
+| Feats (by category) | feats.md (index) → `feats-general-skill.md`, `feats-ancestry.md`, `feats-class.md`, `feats-archetype.md` |
+| Classes | classes.md |
+| Ancestries / heritages / backgrounds | ancestries.md |
+| Conditions / rules | conditions-rules.md |
+| Equipment / weapons / armor | equipment.md |
+| Combat / actions | rules-reference.md |
+| GM math (DCs, XP budgets, treasure) | session-procedures.md |
 
 ### Personal Reference Files
 

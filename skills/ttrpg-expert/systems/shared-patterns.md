@@ -36,6 +36,7 @@ When designing features:
 |--------|------|-------------|
 | Call of Cthulhu 7e | Dread, fragility, creeping unease | Investigators are ordinary people; horror comes from helplessness and the unknowable |
 | D&D 5e (2024) | Heroic, adventurous, high-fantasy optimism | PCs are exceptional from level 1; the world rewards boldness |
+| Pathfinder 2e (Remaster) | Heroic high fantasy with tactical depth | Competence and teamwork win the day; the three-action economy rewards clever, coordinated play |
 | Forged in the Dark | Noir grit, desperate ambition, messy consequences | Scoundrels claw for scraps of power; nothing comes clean |
 | GURPS 4e | Neutral / setting-dependent | Tone is set entirely by the campaign frame; the system itself is transparent |
 
