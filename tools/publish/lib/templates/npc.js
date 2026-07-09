@@ -1,4 +1,4 @@
-const { escapeHtml, relativeHref } = require('../processor');
+const { escapeHtml, relativeHref, renderMetaValue, publishedSource } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -16,11 +16,12 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   // --- Zone 1: Portrait header banner ---
   const hasPortrait = fm.portrait && imageMap && imageMap[String(fm.portrait).split('/').pop()];
   const metaParts = [];
-  if (fm.occupation) metaParts.push(`<span><span class="label">Role</span> ${escapeHtml(fm.occupation)}</span>`);
-  if (fm.nationality) metaParts.push(`<span><span class="label">Nationality</span> ${escapeHtml(fm.nationality)}</span>`);
+  const meta = v => renderMetaValue(v, linkMap || {}, page.outputPath);
+  if (fm.occupation) metaParts.push(`<span><span class="label">Role</span> ${meta(fm.occupation)}</span>`);
+  if (fm.nationality) metaParts.push(`<span><span class="label">Nationality</span> ${meta(fm.nationality)}</span>`);
   if (fm.status) metaParts.push(`<span><span class="label">Status</span> ${escapeHtml(fm.status)}</span>`);
   if (fm.age) metaParts.push(`<span><span class="label">Age</span> ${escapeHtml(String(fm.age))}</span>`);
-  if (fm.rank) metaParts.push(`<span><span class="label">Rank</span> ${escapeHtml(fm.rank)}</span>`);
+  if (fm.rank) metaParts.push(`<span><span class="label">Rank</span> ${meta(fm.rank)}</span>`);
   const metaHtml = metaParts.join('\n');
 
   let heroBanner;
@@ -45,9 +46,11 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   }
 
   // --- Zone 2: First impression quote ---
-  const pullQuote = processedContent.html
-    ? `<div class="pull-quote">${excerptFromMarkdown(processedContent.html)}</div>`
-    : '';
+  // Excerpt from the published markdown, not the rendered HTML: the source already has
+  // gm-only blocks and excluded sections cut, and taking prose from markdown avoids
+  // re-parsing the renderer's own output to find the sentence.
+  const quoteText = excerptFromMarkdown(publishedSource(page));
+  const pullQuote = quoteText ? `<div class="pull-quote">${escapeHtml(quoteText)}</div>` : '';
 
   // --- Zone 3: Body content ---
   const bodyContent = processedContent.html || '';

@@ -3339,3 +3339,32 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 }
 .npc-row-avatar img.portrait { width: 100%; height: 100%; object-fit: cover; }
 .npc-row-initials { font-size: 0.65rem; font-weight: 700; color: var(--accent); }
+
+/* --- Obsidian callouts (> [!type] Title) --- */
+.callout {
+  --callout-color: var(--accent);
+  margin: 1.25rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--callout-color);
+  border-radius: 0 0.375rem 0.375rem 0;
+  background: var(--bg-card);
+}
+.callout-title {
+  font-weight: 700;
+  color: var(--callout-color);
+  margin-bottom: 0.25rem;
+}
+.callout-title:last-child { margin-bottom: 0; }
+.callout > p { margin: 0.5rem 0 0; }
+.callout > p:last-child { margin-bottom: 0; }
+
+.callout-warning, .callout-caution, .callout-attention { --callout-color: var(--warning); }
+.callout-danger, .callout-error, .callout-bug, .callout-failure, .callout-missing {
+  --callout-color: var(--danger);
+}
+.callout-success, .callout-check, .callout-done, .callout-tip, .callout-hint {
+  --callout-color: var(--success);
+}
+.callout-quote, .callout-cite, .callout-abstract, .callout-summary, .callout-example {
+  --callout-color: var(--text-muted);
+}

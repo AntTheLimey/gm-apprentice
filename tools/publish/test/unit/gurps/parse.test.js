@@ -448,3 +448,51 @@ describe('parseGurps — current encumbrance row (review hardening)', () => {
     assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, false, true]);
   });
 });
+
+describe('parseGurps — helper tables under a ### subheading (issue #82)', () => {
+  const techniquesSection = {
+    title: 'Techniques', id: 'techniques',
+    html: '<table><tr><th>Name</th><th>Default</th><th>Points</th><th>Base</th><th>Current</th></tr>' +
+          '<tr><td>Choke Hold</td><td>Judo-2</td><td>[3]</td><td>14</td><td>14</td></tr>' +
+          '<tr><td>Kicking</td><td>Karate-2</td><td>[3]</td><td>15</td><td>15</td></tr></table>' +
+          '<h3>Freefighting — techniques at a glance</h3>' +
+          '<table><tr><th>Technique</th><th>Diff</th><th>Rolls at (now)</th><th>Bought cap</th><th>Use</th></tr>' +
+          '<tr><td>Arm Lock (Judo)</td><td>Avg</td><td>14</td><td>18</td><td>leverage joint-lock</td></tr>' +
+          '<tr><td>Sweeping Kick</td><td>Hard</td><td>12</td><td>15</td><td>momentum takedown</td></tr></table>',
+  };
+
+  it('parses only the schema table, not the helper table beneath the subheading', () => {
+    const c = parseGurps({}, [techniquesSection]);
+    assert.deepStrictEqual(c.techniques.map(t => t.name), ['Choke Hold', 'Kicking']);
+  });
+
+  it('keeps the real techniques resolving correctly', () => {
+    const c = parseGurps({}, [techniquesSection]);
+    const choke = c.techniques.find(t => t.name === 'Choke Hold');
+    assert.strictEqual(choke.level, '14');
+    assert.strictEqual(choke.def, 'Judo-2');
+    assert.strictEqual(choke.points, '3');
+  });
+
+  it('applies the same guard to Skills', () => {
+    const c = parseGurps({}, [{
+      title: 'Skills', id: 'skills',
+      html: '<table><tr><th>Name</th><th>Level</th><th>Points</th></tr>' +
+            '<tr><td>Judo</td><td>14</td><td>[8]</td></tr></table>' +
+            '<h3>Cheat sheet</h3><table><tr><th>Move</th><th>Note</th></tr>' +
+            '<tr><td>Throw</td><td>see B403</td></tr></table>',
+    }]);
+    assert.deepStrictEqual(c.skills.map(s => s.name), ['Judo']);
+  });
+
+  it('applies the same guard to Spells', () => {
+    const c = parseGurps({}, [{
+      title: 'Spells', id: 'spells',
+      html: '<table><tr><th>Name</th><th>Level</th><th>Points</th></tr>' +
+            '<tr><td>Lend Energy</td><td>13</td><td>1</td></tr></table>' +
+            '<h3>Ritual notes</h3><table><tr><th>Phase</th><th>Note</th></tr>' +
+            '<tr><td>Cast</td><td>1 sec</td></tr></table>',
+    }]);
+    assert.deepStrictEqual(c.spells.map(s => s.name), ['Lend Energy']);
+  });
+});

@@ -12,6 +12,11 @@ All campaign content falls into three categories:
 - Files with `source: "prep"` that have no played counterpart
 - H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
+- **Every other `<!-- ... -->` comment.** Private authoring notes
+  (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are
+  stripped before render and never reach the site. Comments inside
+  fenced code blocks are preserved. An unclosed `<!--` strips to end
+  of file and prints a build warning.
 - Frontmatter fields in `exclude_fields` (default:
   `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`)
 
@@ -139,6 +144,8 @@ needs_decision: 2
 - `## Publishing` — files to include in the build. Each entry
   is a checked checkbox with a vault-relative path:
   `- [x] Characters/NPCs/Friendly Merchant.md`
+  Optionally annotated with an inline reason, like Excluded:
+  `- [x] Documents/House Rules.md — the party's own notes`
 
 - `## Excluded` — files to exclude. Also uses checked checkboxes.
   Optionally annotated with a reason:
@@ -152,7 +159,10 @@ needs_decision: 2
 
 **Path format:** All paths are vault-relative using forward
 slashes (e.g. `Characters/NPCs/Alice.md`). Never use absolute
-filesystem paths.
+filesystem paths. An inline `— comment` after the path is ignored;
+an em dash inside the filename itself is preserved. A Publishing
+entry that matches no vault file prints a build warning rather
+than silently dropping the page.
 
 **Example manifest:**
 

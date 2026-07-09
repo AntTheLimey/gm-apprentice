@@ -75,7 +75,7 @@ describe('worldDomainTemplate', () => {
 
   it('renders rules sidebar when rules present', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, rules: [{ rule: 'No flying mounts' }, { rule: 'Rivers flow south' }] } };
-    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {});
+    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(html.includes('World Rules'), 'should have rules sidebar heading');
     assert.ok(html.includes('No flying mounts'), 'should render first rule');
     assert.ok(html.includes('Rivers flow south'), 'should render second rule');
@@ -83,20 +83,20 @@ describe('worldDomainTemplate', () => {
 
   it('suppresses rules sidebar when publish_rules is false', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, publish_rules: false, rules: [{ rule: 'Hidden rule' }] } };
-    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {});
+    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(!html.includes('World Rules'), 'should not render rules sidebar');
     assert.ok(!html.includes('Hidden rule'), 'should not render rule content');
   });
 
   it('renders summary subtitle', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, summary: 'The lay of the land' } };
-    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {});
+    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(html.includes('The lay of the land'), 'should render summary');
     assert.ok(html.includes('world-domain-summary'), 'should use summary class');
   });
 
   it('renders without optional fields', () => {
-    const html = worldDomainTemplate(basePage, baseContent, stubNav, baseConfig, {});
+    const html = worldDomainTemplate(basePage, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(html.includes('Geography'), 'should render title');
     assert.ok(html.includes('Mountains and rivers'), 'should render body content');
     assert.ok(!html.includes('world-rules-sidebar'), 'should not render rules sidebar');
@@ -104,7 +104,7 @@ describe('worldDomainTemplate', () => {
 
   it('falls back to rule id when rule field is absent', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, rules: [{ id: 'MAX_ALTITUDE_5000' }] } };
-    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {});
+    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(html.includes('MAX_ALTITUDE_5000'), 'should fall back to id field');
   });
 });

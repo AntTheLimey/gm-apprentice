@@ -1,4 +1,4 @@
-const { escapeHtml } = require('../processor');
+const { escapeHtml, plainMetaValue } = require('../processor');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
 const {
   getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
@@ -111,7 +111,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
       const portraitHtml = portraitTag
         ? `<div class="pc-portrait">${portraitTag}</div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
-      const occupation = fm.occupation ? `<div class="pc-traits">${escapeHtml(fm.occupation)}</div>` : '';
+      const occupation = fm.occupation ? `<div class="pc-traits">${escapeHtml(plainMetaValue(fm.occupation))}</div>` : '';
       const traits = fm.key_traits
         ? `<div class="pc-traits">${escapeHtml(Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits))}</div>`
         : '';
@@ -154,7 +154,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
       const iconHtml = portraitTag
         ? `<div class="npc-icon">${portraitTag}</div>`
         : `<div class="npc-icon">${escapeHtml(initials)}</div>`;
-      const role = fm.occupation ? `<div class="npc-role">${escapeHtml(fm.occupation)}</div>` : '';
+      const role = fm.occupation ? `<div class="npc-role">${escapeHtml(plainMetaValue(fm.occupation))}</div>` : '';
       return `<a class="npc-card" href="${escapeHtml(page.outputPath)}">
   ${iconHtml}
   <div><h4>${escapeHtml(page.displayTitle)}</h4>${role}</div>

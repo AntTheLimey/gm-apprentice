@@ -27,3 +27,29 @@ describe('gurps/tables', () => {
     assert.doesNotThrow(() => extractSubsectionHtml(html, 'Senses (Extended)'));
   });
 });
+
+describe('topLevelHtml (issue #82)', () => {
+  const { topLevelHtml, parseTableRows } = require('../../../lib/templates/gurps/tables');
+
+  it('excludes tables under a ### subheading', () => {
+    const html = '<table><tr><th>Name</th></tr><tr><td>Choke Hold</td></tr></table>'
+      + '<h3>At a glance</h3><table><tr><th>Technique</th></tr><tr><td>Arm Lock</td></tr></table>';
+    const rows = parseTableRows(topLevelHtml(html));
+    assert.deepStrictEqual(rows, [['Name'], ['Choke Hold']]);
+  });
+
+  it('falls back to the whole section when the only table is under a subheading', () => {
+    const html = '<h3>Techniques</h3><table><tr><th>Name</th></tr><tr><td>Kicking</td></tr></table>';
+    const rows = parseTableRows(topLevelHtml(html));
+    assert.deepStrictEqual(rows, [['Name'], ['Kicking']]);
+  });
+
+  it('keeps multiple top-level tables', () => {
+    const html = '<table><tr><td>a</td></tr></table><table><tr><td>b</td></tr></table>';
+    assert.deepStrictEqual(parseTableRows(topLevelHtml(html)), [['a'], ['b']]);
+  });
+
+  it('is inert on a section with no table at all', () => {
+    assert.strictEqual(topLevelHtml('<p>prose</p>'), '<p>prose</p>');
+  });
+});

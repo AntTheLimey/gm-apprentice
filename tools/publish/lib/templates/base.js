@@ -1,7 +1,10 @@
-const { relativePath, escapeHtml } = require('../processor');
+const { relativePath, escapeHtml, encodeImageUrl } = require('../processor');
 
 const DIR_LABELS = {
   'campaign': 'Campaign',
+  // Aggregate index over PCs + NPCs. The landing page's "Characters" card targets it, and
+  // the two sub-indexes below still get their own pages.
+  'characters': 'Characters',
   'characters/pcs': 'Player Characters',
   'characters/npcs': 'NPCs',
   'factions': 'Factions & Organizations',
@@ -165,7 +168,10 @@ function portraitImg(frontmatter, outputPath, imageMap, attachmentsDir) {
 
   const currentDir = outputPath.substring(0, outputPath.lastIndexOf('/'));
   const imgPath = 'images/' + relPath;
-  const relativeImgPath = relativePath(currentDir, imgPath);
+  // Attachment filenames routinely carry spaces and non-ASCII ("Vita Ó Taidhg.png"), which
+  // are not valid in a URL. Templates that lift this src back out of the tag (hero banners)
+  // inherit the encoding.
+  const relativeImgPath = encodeImageUrl(relativePath(currentDir, imgPath));
   const alt = escapeHtml(frontmatter.aliases?.[0] || basename.replace(/\.[^.]+$/, ''));
   return `<img src="${relativeImgPath}" alt="${alt}" class="portrait">`;
 }

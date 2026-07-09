@@ -1,3 +1,4 @@
+const { publishedSource } = require('./processor');
 const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 const TERMINAL_STATUSES = new Set(['dead', 'deceased', 'destroyed', 'kia', 'dissolved']);
 // A session counts as "played" once it has been run — including the post-wrap-up, pre-reconcile
@@ -6,10 +7,7 @@ const PLAYED_STATUSES = new Set(['played', 'reviewed', 'wrap-up']);
 
 // Mentions/recency must reflect only what readers can see, so prefer each page's published
 // view (gm-only + excluded sections stripped) over its raw markdown when available (B6).
-function publishedText(page) {
-  if (!page) return '';
-  return page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
-}
+const publishedText = publishedSource;
 
 function extractMentions(markdown) {
   const mentions = new Set();

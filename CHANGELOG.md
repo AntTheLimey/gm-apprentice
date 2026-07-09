@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.16] — 2026-07-09
+
+Publish tool 1.9.0. Fixes the eight open publish-site issues.
+
+### Added
+
+- **Obsidian callouts render as styled callouts.** `> [!type] Title`
+  blockquotes become `<div class="callout callout-{type}">` with a title
+  row, instead of leaking the literal `[!type]` marker as body text. A
+  shared markdown renderer (`lib/markdown.js`) now backs both the page
+  and index-page renderers. (#86a)
+- **Aggregate `characters/index.html`.** The homepage "Characters" card
+  pointed at a page that was never generated; the index now exists and
+  lists PCs and NPCs together. (#84)
+- **Warning for unmatched manifest entries.** A Publishing entry that
+  resolves to no scanned vault file now prints a warning instead of
+  silently dropping the page. (#80)
+
+### Fixed
+
+- **HTML comments no longer reach the published site.** `<!-- ... -->`
+  was HTML-escaped and printed as visible body text, leaking private
+  authoring notes (including "needs GM confirmation" flags) onto
+  player-facing pages. Comments are now stripped before render, outside
+  fenced code blocks, with a warning on an unclosed comment. (#85)
+- **Manifest Publishing entries tolerate inline comments.** `- [x] path
+  — note` silently published nothing, because the whole line was matched
+  against the vault path. The comment is now stripped, matching how the
+  Excluded section is annotated. (#80)
+- **Image embeds render as images.** `![[Some Image.png]]` produced a
+  markdown link with an unencoded space, which markdown-it could not
+  parse, so it fell through as literal text and the typographer rewrote
+  the leading `../` into `…/`. Destinations are now percent-encoded, in
+  embeds and in portrait `src` attributes alike. (#86b)
+- **Wikilinks in frontmatter fields resolve.** `summary:`, `occupation:`
+  and friends leaked literal `[[…]]` while the same links resolved in
+  body prose. (#86c)
+- **Inline embeds are deduped against the frontmatter portrait.** An
+  `![[X.png]]` embed that resolves to the page's `portrait:` is skipped,
+  so authors can keep the embed for Obsidian's reading view without
+  publishing the image twice. (#88)
+- **Pull-quote excerpts are sanitized.** They no longer include section
+  headings, raw image markdown, HTML comments (whole or truncated), or
+  callout markers, and de-linking a wikilink no longer leaves a stray
+  space ("Magellan 's"). (#87)
+- **Timeline nav link and `events/` redirect point at the real page.**
+  Both hard-coded a root `timeline.html` that is only written when dated
+  events exist; with an authored timeline elsewhere (e.g.
+  `campaign/timeline.html`) the global nav dangled on nearly every page.
+  The target is now computed once, and `events/` gets a real index when
+  no timeline exists at all. (#83)
+- **GURPS `parseTechniques()` no longer merges sub-tables.** Descriptive
+  helper tables under a `###` subheading were force-fit into the
+  Name/Default/Lvl/Pts grid. Techniques, Skills and Spells now read only
+  tables above the first subheading. (#82)
+- A missing image embed no longer emits a visible `<!-- image not found -->`
+  paragraph; it is dropped, with a build warning.
+- PC sheets resolve image embeds before wikilinks, so an `![[image.png]]`
+  on a character sheet is no longer flattened to literal text.
+- A non-image transclusion (`![[Some Note]]`) degrades to a link instead
+  of becoming an `<img>` whose `src` points at an HTML page.
+- `world_domain` pages render their `portrait:` frontmatter, which every
+  other entity template already did.
+- Unclosed `<!-- gm-only -->`, `<!-- spoiler -->` and comment markers now
+  print the build warning they always recorded; it was being discarded.
+- `<!-- ... -->` inside a `~~~` fenced block containing a nested ```` ``` ````
+  line is no longer stripped.
+
+### Changed
+
+- Pull-quote excerpts derive from a page's published markdown rather than
+  from its rendered HTML — the same source backlinks, search and recency
+  already read, and the reason the sanitization above is not a regex pass
+  over the renderer's own output. `publishedSource()` is now a single
+  shared helper instead of four near-identical copies.
+
 ## [1.8.15] — 2026-07-09
 
 ### Added

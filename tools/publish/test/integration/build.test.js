@@ -648,6 +648,95 @@ describe('build integration', () => {
     });
   });
 
+  describe('minimal fixture — regressions', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-regress-'));
+      configPath = path.join(outputDir, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: path.join(fixturesDir, 'minimal'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Regression Test',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: {
+          '_Campaign': 'campaign',
+          'Characters/PCs': 'characters/pcs',
+          'Characters/NPCs': 'characters/npcs',
+          'Locations': 'locations',
+        },
+      }, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('generates the aggregate characters index the homepage card links to (issue #84)', () => {
+      const indexPath = path.join(outputDir, 'docs', 'characters', 'index.html');
+      assert.ok(fs.existsSync(indexPath), 'characters/index.html must exist');
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      assert.ok(html.includes('Test PC'), 'aggregate index lists PCs');
+      assert.ok(html.includes('Test NPC'), 'aggregate index lists NPCs');
+
+      const landing = fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+      if (landing.includes('href="characters/index.html"')) {
+        assert.ok(fs.existsSync(indexPath), 'homepage Characters card must not dangle');
+      }
+    });
+
+    it('strips HTML comments instead of printing them (issue #85)', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'test-location.html'), 'utf-8');
+      assert.ok(!html.includes('UNVERIFIED'), 'private authoring note must not reach the page');
+      assert.ok(!html.includes('&lt;!--'));
+      assert.ok(html.includes('A test location.'));
+    });
+
+    it('renders Obsidian callouts as callouts (issue #86a)', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'test-location.html'), 'utf-8');
+      assert.ok(html.includes('class="callout callout-info"'));
+      assert.ok(html.includes('<div class="callout-title">Reconstruction Note</div>'));
+      assert.ok(!html.includes('[!info]'));
+    });
+  });
+
+  describe('manifest publishing backstop (issue #80)', () => {
+    it('warns when a Publishing entry matches no scanned page', () => {
+      const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-warn-'));
+      const configPath = path.join(outputDir, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: path.join(fixturesDir, 'with-manifest'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Manifest Warn',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
+      }, null, 2));
+
+      const warnings = [];
+      const realWarn = console.warn;
+      console.warn = (...args) => warnings.push(args.join(' '));
+      try {
+        build({ configPath });
+      } finally {
+        console.warn = realWarn;
+        fs.rmSync(outputDir, { recursive: true, force: true });
+      }
+
+      assert.ok(warnings.some(w => w.includes('Locations/Typo In This Path.md') && w.includes('no such page was scanned')),
+        `expected an unmatched-entry warning, got: ${JSON.stringify(warnings)}`);
+      assert.ok(!warnings.some(w => w.includes('Locations/Tavern.md')),
+        'an annotated but valid entry must not warn');
+    });
+  });
+
   describe('with-manifest fixture', () => {
     let outputDir;
     let configPath;
@@ -1285,6 +1374,58 @@ describe('build integration', () => {
       const html = fs.readFileSync(indexPath, 'utf-8');
       assert.ok(html.includes('AUTHORED_WORLD_INDEX_MARKER_9f3c'));
       assert.ok(!html.includes('class="card-grid"'));
+    });
+  });
+  describe('timeline target (issue #83)', () => {
+    function buildFixture(fixture, folderMap) {
+      const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-timeline-'));
+      const configPath = path.join(outputDir, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: path.join(fixturesDir, fixture),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Timeline Test',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        folderMap,
+      }, null, 2));
+      build({ configPath });
+      return path.join(outputDir, 'docs');
+    }
+
+    it('aims nav and the events redirect at an authored timeline, not a root one that is never written', () => {
+      const docs = buildFixture('authored-timeline', { Events: 'events', _Campaign: 'campaign' });
+      try {
+        assert.ok(!fs.existsSync(path.join(docs, 'timeline.html')),
+          'no dated events, so no root timeline should be generated');
+        assert.ok(fs.existsSync(path.join(docs, 'campaign', 'timeline.html')));
+
+        const eventPage = fs.readFileSync(path.join(docs, 'events', 'undated-event.html'), 'utf-8');
+        assert.ok(eventPage.includes('href="../campaign/timeline.html"'));
+        assert.ok(!eventPage.includes('href="../timeline.html"'));
+
+        const redirect = fs.readFileSync(path.join(docs, 'events', 'index.html'), 'utf-8');
+        assert.ok(redirect.includes('url=../campaign/timeline.html'));
+      } finally {
+        fs.rmSync(path.dirname(docs), { recursive: true, force: true });
+      }
+    });
+
+    it('gives events a real index when there is no timeline at all', () => {
+      const docs = buildFixture('no-timeline', { Events: 'events' });
+      try {
+        assert.ok(!fs.existsSync(path.join(docs, 'timeline.html')));
+        const index = fs.readFileSync(path.join(docs, 'events', 'index.html'), 'utf-8');
+        assert.ok(!index.includes('http-equiv="refresh"'), 'should not redirect to a missing timeline');
+        assert.ok(index.includes('Undated Event'));
+
+        const eventPage = fs.readFileSync(path.join(docs, 'events', 'undated-event.html'), 'utf-8');
+        assert.ok(eventPage.includes('href="index.html"'), 'nav Events should point at the events index');
+        assert.ok(!eventPage.includes('timeline.html'));
+      } finally {
+        fs.rmSync(path.dirname(docs), { recursive: true, force: true });
+      }
     });
   });
 });

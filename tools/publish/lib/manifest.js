@@ -2,6 +2,24 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 
+// Manifest entries are vault-relative paths, optionally annotated with an inline
+// `— comment` (the Excluded section uses these throughout). Keep only the path, so an
+// annotated Publishing entry still matches a scanned file instead of silently
+// blackholing the page.
+//
+// The path is anchored on its file extension rather than split on the first dash: vault
+// filenames legitimately contain " — " ("Items/Six — Field Sundries.md"), and splitting on
+// the dash would truncate them into the very blackhole this exists to prevent. The lazy
+// prefix stops at the first extension that leaves only a comment (or nothing) behind, so
+// both "Six — Field Sundries.md" and "Foo.md — see Bar.md" resolve correctly.
+const ENTRY_RE = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$/;
+
+function stripInlineComment(entry) {
+  const trimmed = String(entry).trim();
+  const match = ENTRY_RE.exec(trimmed);
+  return match ? match[1] : trimmed;
+}
+
 function parseManifest(markdown) {
   const { data, content } = matter(markdown);
   const publishing = [];
@@ -25,14 +43,14 @@ function parseManifest(markdown) {
 
     if (currentSection === 'publishing') {
       const match = line.match(checkedPattern);
-      if (match) publishing.push(match[1].trim());
+      if (match) publishing.push(stripInlineComment(match[1]));
     }
 
     if (currentSection === 'needs_decision') {
       const unchecked = line.match(uncheckedPattern);
-      if (unchecked) needsDecision.push(unchecked[1].trim());
+      if (unchecked) needsDecision.push(stripInlineComment(unchecked[1]));
       const checked = line.match(checkedPattern);
-      if (checked) resolved.push(checked[1].trim());
+      if (checked) resolved.push(stripInlineComment(checked[1]));
     }
   }
 
@@ -51,4 +69,4 @@ function loadManifest(vaultPath) {
   return parseManifest(raw);
 }
 
-module.exports = { parseManifest, loadManifest };
+module.exports = { parseManifest, loadManifest, stripInlineComment };

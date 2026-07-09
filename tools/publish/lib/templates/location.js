@@ -1,4 +1,4 @@
-const { escapeHtml, relativeHref, parseWikiRef } = require('../processor');
+const { escapeHtml, relativeHref, parseWikiRef, publishedSource } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -56,9 +56,8 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   }
 
   // --- Zone 2: Atmosphere pull-quote ---
-  const pullQuote = processedContent.html
-    ? `<div class="pull-quote">${excerptFromMarkdown(processedContent.html)}</div>`
-    : '';
+  const quoteText = excerptFromMarkdown(publishedSource(page));
+  const pullQuote = quoteText ? `<div class="pull-quote">${escapeHtml(quoteText)}</div>` : '';
 
   // --- Zone 3: Body content ---
   const bodyContent = processedContent.html || '';
@@ -71,8 +70,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   if (childLocations.length > 0) {
     const cards = childLocations.map(child => {
       const href = relativeHref(page.outputPath, child.outputPath);
-      const excerpt = excerptFromMarkdown(
-        child.publishedMarkdown != null ? child.publishedMarkdown : (child.markdown || ''),
+      const excerpt = excerptFromMarkdown(publishedSource(child),
         { excludeSections: (publishConfig && publishConfig.exclude_sections) || [] });
       return `<a class="entity-card" href="${href}">
   <h4>${escapeHtml(child.displayTitle)}</h4>
