@@ -76,7 +76,7 @@ Route these requests directly — don't search, load the file.
 | Need | Go to |
 |------|-------|
 | Rules dispute | `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
-| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS) or `conditions-rules.md` (D&D, PF2e) or `mechanics.md` (FitD) |
+| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
 | Improvise NPC | `ttrpg-expert/npc-generation.md` §The 3-Line NPC (Quick Generation) |
 | Random encounter | `ttrpg-expert/random-generation.md` §Random Encounter Generation |
 | Random NPC | `ttrpg-expert/random-generation.md` §Random NPC Generator |

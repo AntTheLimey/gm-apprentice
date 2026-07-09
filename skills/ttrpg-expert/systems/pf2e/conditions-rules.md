@@ -14,7 +14,7 @@ plus how condition values, overrides, and the death spiral work.
 | **Unnoticed** | binary | Foe has no idea you're there at all (also undetected). |
 | **Invisible** | binary | Can't be seen; undetected to everyone. |
 | **Blinded** | binary | Can't see; crit-fail sight Perception; overrides dazzled. |
-| **Dazzled** | binary | Everything is concealed to you (if sight is your only precise sense). |
+| **Dazzled** | binary | All targets count as concealed to you if sight is your only precise sense. |
 | **Deafened** | binary | Can't hear; crit-fail hearing Perception; DC 5 flat for auditory actions. |
 | **Off-Guard** | binary | –2 circumstance penalty to AC. |
 | **Prone** | binary | Off-guard, –2 to attacks; only Crawl or Stand to move. |

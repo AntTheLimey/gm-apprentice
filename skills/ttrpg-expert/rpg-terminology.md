@@ -8,6 +8,7 @@ internal terminology.
 read the relevant system reference:
 - CoC 7e: `systems/coc-7e/skills.md`, `systems/coc-7e/combat-reference.md`
 - D&D 5e: `systems/dnd-5e-2024/conditions-rules.md`
+- PF2e: `systems/pf2e/mechanics.md`
 - GURPS 4e: `systems/gurps-4e/combat.md`, `mechanics.md`
 - FitD: `systems/fitd/rules-reference.md`
 

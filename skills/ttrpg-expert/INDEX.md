@@ -29,7 +29,7 @@ Read only the file(s) relevant to the current request.
 | Traits / costs | GURPS: `traits-*.md`. Others: `{system}/rules-reference.md` | — |
 | Equipment / weapons | GURPS: `equipment-*.md`. CoC: `equipment-weapons.md`. FitD: `character-sheet.md`. D&D: `equipment.md`. PF2e: `equipment.md` | — |
 | Armour | CoC: `equipment-armor.md`. D&D: `equipment.md`. GURPS: `equipment-*.md`. PF2e: `equipment.md` | — |
-| Powers / magic | GURPS: `powers-rules.md` or `magic-rules.md`. CoC: `powers-magic.md`. FitD: `rituals-crafting.md`. D&D: `magic-items.md`. PF2e: `spells.md` | — |
+| Powers / magic | GURPS: `powers-rules.md` or `magic-rules.md`. CoC: `powers-magic.md`. FitD: `rituals-crafting.md`. D&D: `magic-items.md`. PF2e: `spells.md` (spells), `equipment.md` (magic items/runes) | — |
 | Spells | GURPS: `spells.md`. CoC: `powers-magic.md`. D&D: `spells.md`. PF2e: `spells.md` (index → rank shards) | — |
 | Skills | GURPS: `skills-*.md`. CoC: `skills.md`. Others: `{system}/rules-reference.md` | — |
 | Feats | D&D: `feats.md`. PF2e: `feats.md` (index → category shards) | — |

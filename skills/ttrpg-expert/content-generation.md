@@ -8,6 +8,7 @@ system-specific guidance for ready-to-use TTRPG content.
 detail when generating content, also read:
 - CoC 7e: `systems/coc-7e/creatures.md`, `systems/coc-7e/setting-lovecraft.md`
 - D&D 5e: `systems/dnd-5e-2024/monsters.md`, `systems/dnd-5e-2024/magic-items.md`
+- PF2e: `systems/pf2e/monsters.md`, `systems/pf2e/equipment.md`
 - GURPS 4e: `systems/gurps-4e/character-generation.md`
 - FitD: `systems/fitd/factions.md`, `systems/fitd/gm-techniques.md`
 
