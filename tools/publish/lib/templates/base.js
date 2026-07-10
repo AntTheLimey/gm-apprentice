@@ -160,14 +160,14 @@ function metadataBadgesFor(frontmatter) {
   return `<div class="metadata-badges">${badges.join('\n')}</div>`;
 }
 
-function portraitImg(frontmatter, outputPath, imageMap, attachmentsDir) {
+function portraitImg(frontmatter, outputPath, imageMap) {
   const portrait = frontmatter.portrait;
   if (!portrait) return '';
 
-  const prefix = (attachmentsDir || '_attachments') + '/';
-  const portraitStr = String(portrait);
-  const declaredPath = portraitStr.startsWith(prefix) ? portraitStr.slice(prefix.length) : portraitStr;
-  const basename = declaredPath.split('/').pop();
+  // The scanner keys imageMap by bare basename, so however a `portrait:` spells its path —
+  // `_attachments/characters/Rock.png`, `characters/Rock.png`, or `Rock.png` — the lookup is
+  // the last segment. Stripping the attachments prefix first never changed that.
+  const basename = String(portrait).split('/').pop();
 
   // Verify the image was actually discovered by the scanner
   const entry = imageMap[basename];

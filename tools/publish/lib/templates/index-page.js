@@ -181,7 +181,7 @@ function renderContextCaption(ancestors) {
   return `<p class="loc-context">${trail}</p>`;
 }
 
-function renderGroupedLocationsPage(pages, indexDir, imageMap, attachmentsDir, grouping) {
+function renderGroupedLocationsPage(pages, indexDir, imageMap, grouping) {
   const roots = buildLocationTree(pages);
   const { sections, leftoverRoots } = partitionByPivot(roots, grouping.pivot);
 
@@ -199,7 +199,7 @@ function renderGroupedLocationsPage(pages, indexDir, imageMap, attachmentsDir, g
   function renderNode(node) {
     const p = node.page;
     const locType = p.frontmatter.location_type || '';
-    const thumb = portraitImg(p.frontmatter, outputPath, imageMap, attachmentsDir);
+    const thumb = portraitImg(p.frontmatter, outputPath, imageMap);
     // An invisible spacer, not a dashed placeholder box: rows stay aligned without drawing
     // attention to an entity that simply has no portrait yet.
     const thumbHtml = thumb
@@ -223,7 +223,7 @@ function renderGroupedLocationsPage(pages, indexDir, imageMap, attachmentsDir, g
   function renderSection({ node, ancestors }, { caption }) {
     const p = node.page;
     const locType = p.frontmatter.location_type || '';
-    const thumb = portraitImg(p.frontmatter, outputPath, imageMap, attachmentsDir);
+    const thumb = portraitImg(p.frontmatter, outputPath, imageMap);
     const count = subtreeSize(node);
     const rows = node.children.slice().sort(byTitle).map(renderNode).join('\n');
 
@@ -269,10 +269,10 @@ function renderGroupedLocationsPage(pages, indexDir, imageMap, attachmentsDir, g
 </div>`;
 }
 
-function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments', publishConfig = null) {
+function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = null) {
   const grouping = resolveLocationGrouping(publishConfig);
   if (grouping) {
-    const grouped = renderGroupedLocationsPage(pages, indexDir, imageMap, attachmentsDir, grouping);
+    const grouped = renderGroupedLocationsPage(pages, indexDir, imageMap, grouping);
     if (grouped) return grouped;
   }
 
@@ -310,7 +310,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_
       ? `<div class="loc-children">${renderLocationTreeHTML(node.children, 0, indexDir)}</div>`
       : '';
 
-    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap);
 
     return `<div class="loc-card">
   ${thumb ? `<div class="loc-card-thumb">${thumb}</div>` : ''}
@@ -488,7 +488,7 @@ function renderBestiary(pages, indexDir) {
   return `<div class="bestiary">${cards}</div>`;
 }
 
-function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
+function renderFactions(pages, indexDir, imageMap = {}) {
   const factions = pages
     .filter(p => p.frontmatter.type === 'faction' || p.frontmatter.type === 'organization')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -547,7 +547,7 @@ function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attac
       ? `<span class="intel-canon-badge">${escapeHtml(canon)}</span>`
       : '';
 
-    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap);
 
     return `<article class="intel-card">
   <div class="intel-card-header">
@@ -755,7 +755,7 @@ function sessionRef(frontmatter) {
   return ISO_DATE_RE.test(value) ? '' : value;
 }
 
-function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachments', linkMap = {}) {
+function renderNPCTable(pages, dir, imageMap = {}, linkMap = {}) {
   const sorted = pages
     .filter(p => p.frontmatter.type === 'npc')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -795,7 +795,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
     const firstApp = cleanRef(fm.first_appearance || '');
     const lastSession = sessionRef(fm);
     const canonStatus = getCanonStatus(fm) || '';
-    const avatar = portraitImg(fm, dir + '/index.html', imageMap, attachmentsDir);
+    const avatar = portraitImg(fm, dir + '/index.html', imageMap);
     const avatarHtml = avatar
       ? `<span class="npc-row-avatar">${avatar}</span>`
       : `<span class="npc-row-avatar npc-row-initials" aria-hidden="true">${escapeHtml(getInitials(p.displayTitle))}</span>`;
@@ -832,7 +832,6 @@ ${rows}
 
 function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}) {
   const outputPath = dir + '/index.html';
-  const attachmentsDir = config.attachmentsDir || '_attachments';
   const crumbs = generateBreadcrumbs(outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
   const total = pages.length;
@@ -864,15 +863,15 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
 
   let bodyContent;
   if (isNPCs) {
-    bodyContent = renderNPCTable(pages, dir, imageMap, attachmentsDir, (publishConfig || {})._linkMap || {});
+    bodyContent = renderNPCTable(pages, dir, imageMap, (publishConfig || {})._linkMap || {});
   } else if (isChapters) {
     bodyContent = renderChapterList(pages, dir);
   } else if (isCreatures) {
     bodyContent = renderBestiary(pages, dir);
   } else if (isLocations) {
-    bodyContent = renderLocationsPage(pages, dir, imageMap, attachmentsDir, publishConfig);
+    bodyContent = renderLocationsPage(pages, dir, imageMap, publishConfig);
   } else if (isFactions) {
-    bodyContent = renderFactions(pages, dir, imageMap, attachmentsDir);
+    bodyContent = renderFactions(pages, dir, imageMap);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
   } else if (isCampaign && pages.some(p => p.frontmatter.type === 'campaign_overview')) {
@@ -886,7 +885,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       const fm = p.frontmatter;
       const entityType = isLocations ? (fm.location_type || fm.type) : fm.type;
       const avatarShape = (fm.type === 'pc') ? 'border-radius:0.375rem' : 'border-radius:50%';
-      const cardImg = portraitImg(fm, outputPath, imageMap, attachmentsDir);
+      const cardImg = portraitImg(fm, outputPath, imageMap);
       const portraitHtml = isCharacters && cardImg
         ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';

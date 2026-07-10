@@ -38,7 +38,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   let heroBanner;
   if (hasPortrait) {
-    const imgSrc = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+    const imgSrc = portraitImg(fm, page.outputPath, imageMap || {});
     const imgMatch = (imgSrc || '').match(/src="([^"]+)"/);
     const imgUrl = imgMatch ? imgMatch[1] : '';
     heroBanner = `<div class="hero-banner">

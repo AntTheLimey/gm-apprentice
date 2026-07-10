@@ -43,7 +43,7 @@ const IMAGE_MAP = { 'corwin.png': { sourcePath: '/x/corwin.png', relPath: 'corwi
 const SCIFI = { _genrePreset: 'scifi' };
 
 const render = (pages = VAULT, publishConfig = SCIFI, imageMap = IMAGE_MAP) =>
-  renderLocationsPage(pages, 'locations', imageMap, '_attachments', publishConfig);
+  renderLocationsPage(pages, 'locations', imageMap, publishConfig);
 
 const countOf = (html, needle) => html.split(needle).length - 1;
 

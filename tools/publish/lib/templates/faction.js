@@ -7,7 +7,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const backlinks = (publishConfig._backlinks || {})[page.title] || [];
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   // Metadata badges
   const badges = [];

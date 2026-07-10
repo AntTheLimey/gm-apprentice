@@ -26,7 +26,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
 
   let heroBanner;
   if (hasPortrait) {
-    const imgTag = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+    const imgTag = portraitImg(fm, page.outputPath, imageMap || {});
     const imgMatch = (imgTag || '').match(/src="([^"]+)"/);
     const imgUrl = imgMatch ? imgMatch[1] : '';
     heroBanner = `<div class="hero-cinematic">

@@ -7,7 +7,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const backlinks = (publishConfig._backlinks || {})[page.title] || [];
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   // Build stat block
   const stats = [];

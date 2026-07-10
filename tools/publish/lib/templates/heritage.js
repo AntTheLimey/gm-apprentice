@@ -8,7 +8,7 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
   const publishConfig = (context || {}).publishConfig || {};
   const linkMap = (context || {}).linkMap || {};
   const backlinks = (publishConfig._backlinks || {})[page.title] || [];
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   const badges = [];
   if (fm.notable_traits && Array.isArray(fm.notable_traits)) {
