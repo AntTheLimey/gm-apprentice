@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.18] — 2026-07-10
+
+Publish tool 1.11.0.
+
+### Added
+
+- **Section index banners.** `publish.banners` attaches a hero image or a
+  clickable map to the top of a section index, or a conventional
+  `_banner.*` file in the section's vault folder is picked up with no
+  config at all. An SVG with no click-through target is inlined, so its
+  internal `<a>` elements stay live — a star map whose nodes link to
+  entity pages keeps working, which an `<img>` could not do and an outer
+  anchor would have swallowed. A banner declaring a `link` renders as an
+  `<img>` inside an `<a>` instead. Assets copy to `docs/images/banners/`;
+  a path resolving outside the vault, or a missing file, warns and is
+  skipped rather than failing the build. (#95)
+
 ## [1.8.17] — 2026-07-09
 
 Publish tool 1.10.0.

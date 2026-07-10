@@ -24,6 +24,7 @@ any equivalent in `vault.config.json`.
 | Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Image optimization | `publish.images` | Opt-in WebP re-encoding of copied images (default: off) |
+| Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
 | Locations grouping | `publish.locations` | Pivot the Locations index on a `location_type` (default: genre-derived) |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
@@ -86,6 +87,35 @@ missing encoder never breaks a build. Images that would grow when
 re-encoded keep their original bytes; SVG, GIF, WebP and AVIF are always
 passed through. On a portrait-heavy campaign this is the biggest single
 weight on the site — one real vault went from 164 MB to 11 MB.
+
+### Section index banners
+
+A hero image or clickable map at the top of a section index. Either drop
+a `_banner.*` file into the section's vault folder
+(`Locations/_banner.svg`), or name one explicitly:
+
+```yaml
+publish:
+  banners:
+    locations:
+      image: _attachments/sector-map.webp
+      link: _attachments/sector-map.svg    # optional click-through
+      alt: Sector 7-G star chart
+    factions: _attachments/factions-hero.svg   # shorthand
+```
+
+Keys are output directories (`locations`, `factions`), not vault
+folders. Config wins over the conventional file.
+
+An **SVG with no `link` is inlined**, so its internal `<a>` elements stay
+live — a star map whose nodes link to entity pages keeps working. Write
+those hrefs relative to the index page (`corwin-system.html`). Anything
+with a `link` renders as an `<img>` inside an `<a>`, since an outer
+anchor would swallow an SVG's own links.
+
+Assets are copied to `docs/images/banners/`. A path resolving outside the
+vault, or a missing file, warns and is skipped rather than failing the
+build.
 
 ### Locations index grouping
 

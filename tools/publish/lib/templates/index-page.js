@@ -971,13 +971,16 @@ ${locationTreeHtml}
 ${bodyContent}`;
   }
 
+  // Above the page title, full-width: a section hero, not an illustration of the listing.
+  const bannerHtml = ((publishConfig || {})._banners || {})[dir] || '';
+
   return baseShell({
     title: label,
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),
     navHtml: navFor(outputPath, config),
     rootHref: rootPath(outputPath),
-    content,
+    content: bannerHtml + content,
     footer: config.footer,
     genrePreset: (publishConfig || {})._genrePreset,
     overridesCss: (publishConfig || {})._overridesCss,

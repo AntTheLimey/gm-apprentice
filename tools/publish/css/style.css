@@ -2159,6 +2159,29 @@ tr:nth-child(even) {
   color: var(--text-muted);
 }
 
+/* ===== SECTION INDEX BANNER ===== */
+.section-banner {
+  margin: 0 0 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  line-height: 0; /* kill the descender gap under an inline-level child */
+}
+.section-banner-img,
+.section-banner svg,
+.section-banner-inline svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+.section-banner-link {
+  display: block;
+}
+.section-banner-link:hover {
+  opacity: 0.92;
+}
+
 /* ===== LOCATIONS: PIVOT-GROUPED VIEW ===== */
 /* Sections flow in columns so the page width does the work, instead of one tall,
    deeply-indented tree rooted at a single political node. */

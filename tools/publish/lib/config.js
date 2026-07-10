@@ -117,6 +117,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ...jsonConfigFallback.images,
       ...publish.images,
     },
+    // Per-section index banners, keyed by output dir ("locations", "factions", …). No
+    // defaults: absent means "look for the conventional _banner.* in the section folder".
+    banners: { ...jsonConfigFallback.banners, ...publish.banners },
     // Deliberately not merged with a default: the Locations index needs to tell
     // "group_by never mentioned" (fall back to the genre's pivot) apart from
     // "group_by explicitly falsy" (grouping off), and a default would erase that.

@@ -230,6 +230,44 @@ It includes these sections (each omitted if no relevant data exists):
 - **Explore** — compact grid of category index pages with entry counts,
   excluding PC and NPC categories (those have dedicated sections above)
 
+### Section index banners
+
+Put a hero image or a clickable map at the top of a section index. Either
+drop a `_banner.*` file in the section's vault folder
+(`Locations/_banner.svg`), or name one explicitly:
+
+```yaml
+publish:
+  banners:
+    locations:
+      image: _attachments/sector-map.webp
+      link: _attachments/sector-map.svg    # optional, click-through target
+      alt: Sector 7-G star chart
+    factions: _attachments/factions-hero.svg   # shorthand: image only
+```
+
+Keys are output directories (`locations`, `factions`, `items`, …), not
+vault folders. Config wins over the conventional file. Accepted
+extensions, in preference order: `svg`, `webp`, `avif`, `png`, `jpg`,
+`jpeg`, `gif`.
+
+**SVG with no `link` is inlined**, so its internal `<a>` elements stay
+clickable — a star map whose nodes link to entity pages keeps working.
+An `<img>` would not run those links, and wrapping the SVG in an outer
+anchor would swallow them, so anything with a `link` renders as an
+`<img>` inside an `<a>` instead. That's the "raster on the page,
+full-size SVG behind it" shape.
+
+Because an inlined SVG lands in `<section>/index.html`, its internal
+hrefs must be written relative to that page (`corwin-system.html`, or
+`../characters/npcs/rook.html`).
+
+Assets are copied to `docs/images/banners/`. A banner path that resolves
+outside the vault, or names a file that doesn't exist, prints a warning
+and is skipped rather than failing the build. Banners apply to generated
+index pages; a section with an authored `index.md` renders that page
+instead.
+
 ### Locations index grouping
 
 When a campaign's geography funnels through one political root

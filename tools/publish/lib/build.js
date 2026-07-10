@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
+const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
@@ -582,6 +583,68 @@ function build(options = {}) {
     if (!dirs[dir]) dirs[dir] = [];
     dirs[dir].push(page);
   }
+
+  // Section-index banners. Resolved and copied before the index loop so each index page can
+  // be handed finished HTML with hrefs already relative to its own depth.
+  function resolveVaultAsset(vaultRelPath, label) {
+    const vaultRoot = path.resolve(config.vaultPath);
+    const full = path.resolve(vaultRoot, vaultRelPath);
+    if (full !== vaultRoot && !full.startsWith(vaultRoot + path.sep)) {
+      console.warn(`  WARNING: ${label} "${vaultRelPath}" resolves outside the vault — skipping`);
+      return null;
+    }
+    if (!fs.existsSync(full)) {
+      console.warn(`  WARNING: ${label} "${vaultRelPath}" not found in the vault — skipping`);
+      return null;
+    }
+    return full;
+  }
+
+  function copyBannerAsset(sourceFull) {
+    const outRel = 'images/banners/' + path.basename(sourceFull);
+    const dest = path.join(outputDir, outRel);
+    ensureDir(dest);
+    fs.copyFileSync(sourceFull, dest);
+    return outRel;
+  }
+
+  function buildBanners(dirs) {
+    const rendered = {};
+    for (const dir of dirs) {
+      const entry = resolveBanner(dir, {
+        vaultPath: config.vaultPath,
+        folderMap: config.folderMap,
+        banners: publishConfig.banners,
+      });
+      if (!entry) continue;
+
+      const imageFull = resolveVaultAsset(entry.image, `banner for "${dir}"`);
+      if (!imageFull) continue;
+
+      // Inline SVG keeps its internal <a> links clickable; an <img> would not. A banner that
+      // declares a link target is asking for the anchor instead, so it goes down the <img> path.
+      if (isSvg(imageFull) && !entry.link) {
+        rendered[dir] = renderBanner({ svg: fs.readFileSync(imageFull, 'utf8') });
+        console.log(`  inlined banner for ${dir}/index.html`);
+        continue;
+      }
+
+      let linkHref = null;
+      if (entry.link) {
+        const linkFull = resolveVaultAsset(entry.link, `banner link for "${dir}"`);
+        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull));
+      }
+      rendered[dir] = renderBanner({
+        imageHref: relativePath(dir, copyBannerAsset(imageFull)),
+        linkHref,
+        alt: entry.alt || defaultAlt(imageFull),
+      });
+      console.log(`  wrote banner for ${dir}/index.html`);
+    }
+    return rendered;
+  }
+
+  publishConfig._banners = buildBanners(Object.keys(DIR_LABELS));
 
   const pcRoster = pages.find(p => p.frontmatter.type === 'pc_roster');
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
