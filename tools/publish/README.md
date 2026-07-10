@@ -238,6 +238,37 @@ prevents GM-only images (maps, handouts, portraits of hidden NPCs)
 from leaking into the public site. In full mode, all vault images
 are copied.
 
+### Image optimization
+
+Off by default: images are copied byte-for-byte. Turn it on in
+`_meta/vault-config.md` and PNG/JPEG attachments are re-encoded to WebP
+as they are copied, with the `<img src>` written to match:
+
+```yaml
+publish:
+  images:
+    optimize: true    # default false
+    format: webp      # the only supported target today
+    max_width: 1600   # 0 disables resizing
+    quality: 82
+```
+
+On a portrait-heavy campaign this is the single biggest weight on the
+published site — one real vault of 89 portraits went from 164 MB to
+11 MB.
+
+Requires the **`cwebp`** binary on `PATH` (`brew install webp`,
+`apt install webp`). If it isn't found the build prints a warning and
+copies the originals unchanged, so a missing encoder never breaks a
+build. Images that would grow when re-encoded keep their original bytes,
+and SVG, GIF, WebP and AVIF are always passed through untouched.
+
+Because the tool owns both the image copy and every `<img src>`, it
+converts and re-references in one pass. An external postbuild that
+rewrites `src` attributes after the fact has to string-match paths the
+tool URL-encodes (`images/Rock%20Lavey.jpg`), and silently misses every
+filename containing a space.
+
 ---
 
 ## Library API

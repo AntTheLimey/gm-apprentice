@@ -166,14 +166,18 @@ function portraitImg(frontmatter, outputPath, imageMap, attachmentsDir) {
 
   const prefix = (attachmentsDir || '_attachments') + '/';
   const portraitStr = String(portrait);
-  const relPath = portraitStr.startsWith(prefix) ? portraitStr.slice(prefix.length) : portraitStr;
-  const basename = relPath.split('/').pop();
+  const declaredPath = portraitStr.startsWith(prefix) ? portraitStr.slice(prefix.length) : portraitStr;
+  const basename = declaredPath.split('/').pop();
 
   // Verify the image was actually discovered by the scanner
-  if (!imageMap[basename]) return '';
+  const entry = imageMap[basename];
+  if (!entry) return '';
 
   const currentDir = outputPath.substring(0, outputPath.lastIndexOf('/'));
-  const imgPath = 'images/' + relPath;
+  // The scanner's relPath, not the frontmatter's: it is where copyImages actually writes the
+  // file, so a `portrait:` that omits the subdirectory still resolves — and an image the
+  // build re-encoded carries its new extension here.
+  const imgPath = 'images/' + entry.relPath;
   // Attachment filenames routinely carry spaces and non-ASCII ("Vita Ó Taidhg.png"), which
   // are not valid in a URL. Templates that lift this src back out of the tag (hero banners)
   // inherit the encoding.

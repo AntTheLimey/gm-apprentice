@@ -1,6 +1,8 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
@@ -144,7 +146,7 @@ function build(options = {}) {
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
-      fs.copyFileSync(entry.sourcePath, dest);
+      fs.copyFileSync(entry.encodedPath || entry.sourcePath, dest);
     }
     console.log(`Copied ${Object.keys(imageMap).length} images`);
   }
@@ -334,6 +336,30 @@ function build(options = {}) {
 
   const imageMap = scanAttachments(config);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
+
+  // Re-encode before a single page renders. The tool owns both the image copy and every
+  // `<img src>`, so converting here means the new extension flows into references at
+  // emission time — no rewriting of generated HTML, and no string-matching URL-encoded
+  // paths (`images/Rock%20Lavey.jpg`) that an external postbuild would silently miss.
+  let imagesTmpDir = null;
+  if (resolveImageConfig(publishConfig.images).optimize) {
+    imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));
+    const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir);
+    if (stats.reason) {
+      console.warn(`  WARNING: image optimization requested but skipped — ${stats.reason}`);
+    } else {
+      const mb = bytes => (bytes / 1024 / 1024).toFixed(1);
+      const saved = stats.bytesBefore > 0
+        ? Math.round((1 - stats.bytesAfter / stats.bytesBefore) * 100)
+        : 0;
+      console.log(
+        `Optimized ${stats.converted} image(s) via ${stats.encoder}: ` +
+        `${mb(stats.bytesBefore)} MB → ${mb(stats.bytesAfter)} MB (${saved}% smaller)` +
+        `${stats.skipped ? `, ${stats.skipped} left as-is` : ''}` +
+        `${stats.failed ? `, ${stats.failed} failed` : ''}`
+      );
+    }
+  }
 
   cleanOutput();
   copyCSS();
@@ -539,6 +565,10 @@ function build(options = {}) {
   } else {
     copyImages(imageMap);
   }
+
+  // The encoded bytes are now in the output tree. Scratch dir lives under os.tmpdir(), so a
+  // build that throws before reaching here leaks nothing the OS won't reclaim.
+  if (imagesTmpDir) fs.rmSync(imagesTmpDir, { recursive: true, force: true });
 
   // Generate index pages for each output directory
   const dirs = {};

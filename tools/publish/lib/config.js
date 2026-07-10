@@ -26,6 +26,13 @@ const PUBLISH_DEFAULTS = {
     style: 'in-world',
     message: 'This page is not available.',
   },
+  // Opt-in. Off means images are copied byte-for-byte, as they always were.
+  images: {
+    optimize: false,
+    format: 'webp',
+    max_width: 1600,
+    quality: 82,
+  },
   overrides: {
     exclude: [],
     include: [],
@@ -104,6 +111,11 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     four_oh_four: {
       ...PUBLISH_DEFAULTS.four_oh_four,
       ...publish.four_oh_four,
+    },
+    images: {
+      ...PUBLISH_DEFAULTS.images,
+      ...jsonConfigFallback.images,
+      ...publish.images,
     },
     overrides: {
       ...PUBLISH_DEFAULTS.overrides,
