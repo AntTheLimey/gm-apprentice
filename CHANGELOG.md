@@ -22,7 +22,9 @@ Publish tool 1.11.0.
   anchor would have swallowed. A banner declaring a `link` renders as an
   `<img>` inside an `<a>` instead. Assets copy to `docs/images/banners/`;
   a path resolving outside the vault, or a missing file, warns and is
-  skipped rather than failing the build. (#95)
+  skipped rather than failing the build. Assets are namespaced by section
+  (`docs/images/banners/<section>/`), since the conventional `_banner.*`
+  filename is identical in every section folder. (#95)
 
 ## [1.8.17] — 2026-07-09
 

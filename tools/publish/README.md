@@ -262,11 +262,12 @@ Because an inlined SVG lands in `<section>/index.html`, its internal
 hrefs must be written relative to that page (`corwin-system.html`, or
 `../characters/npcs/rook.html`).
 
-Assets are copied to `docs/images/banners/`. A banner path that resolves
-outside the vault, or names a file that doesn't exist, prints a warning
-and is skipped rather than failing the build. Banners apply to generated
-index pages; a section with an authored `index.md` renders that page
-instead.
+Assets are copied to `docs/images/banners/<section>/`, namespaced by
+section so the conventional `_banner.*` sitting in two different folders
+can't collide. A banner path that resolves outside the vault, or names a
+file that doesn't exist, prints a warning and is skipped rather than
+failing the build. Banners apply to generated index pages; a section with
+an authored `index.md` renders that page instead.
 
 ### Locations index grouping
 

@@ -113,7 +113,8 @@ those hrefs relative to the index page (`corwin-system.html`). Anything
 with a `link` renders as an `<img>` inside an `<a>`, since an outer
 anchor would swallow an SVG's own links.
 
-Assets are copied to `docs/images/banners/`. A path resolving outside the
+Assets are copied to `docs/images/banners/<section>/`, namespaced so two
+sections' `_banner.*` files can't collide. A path resolving outside the
 vault, or a missing file, warns and is skipped rather than failing the
 build.
 

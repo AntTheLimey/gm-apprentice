@@ -600,8 +600,13 @@ function build(options = {}) {
     return full;
   }
 
-  function copyBannerAsset(sourceFull) {
-    const outRel = 'images/banners/' + path.basename(sourceFull);
+  // Namespaced by section, because the conventional banner filename is identical in every
+  // section folder: Locations/_banner.png and Creatures/_banner.png would otherwise both
+  // land on images/banners/_banner.png, and whichever copied last would show on both pages.
+  // The dir may itself contain a slash ("characters/npcs"), so flatten it to one segment.
+  function copyBannerAsset(sourceFull, dir) {
+    const slug = String(dir).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
+    const outRel = `images/banners/${slug}/${path.basename(sourceFull)}`;
     const dest = path.join(outputDir, outRel);
     ensureDir(dest);
     fs.copyFileSync(sourceFull, dest);
@@ -632,10 +637,10 @@ function build(options = {}) {
       let linkHref = null;
       if (entry.link) {
         const linkFull = resolveVaultAsset(entry.link, `banner link for "${dir}"`);
-        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull));
+        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull, dir));
       }
       rendered[dir] = renderBanner({
-        imageHref: relativePath(dir, copyBannerAsset(imageFull)),
+        imageHref: relativePath(dir, copyBannerAsset(imageFull, dir)),
         linkHref,
         alt: entry.alt || defaultAlt(imageFull),
       });

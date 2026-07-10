@@ -57,7 +57,7 @@ describe('section index banners', () => {
       const html = locationsIndex(outputDir);
       assert.ok(html.includes('section-banner-inline'));
       assert.ok(html.includes('<a href="../locations/corwin-system.html">'), 'internal link survives');
-      assert.ok(!html.includes('<img src="../images/banners/_banner.svg"'), 'must not degrade to an <img>');
+      assert.ok(!html.includes('<img src="../images/banners/locations/_banner.svg"'), 'must not degrade to an <img>');
     });
 
     it('sits above the page title', () => {
@@ -86,14 +86,14 @@ describe('section index banners', () => {
     });
 
     it('copies both assets into the output', () => {
-      assert.ok(fs.existsSync(path.join(outputDir, 'images/banners/Sector Map.webp')));
-      assert.ok(fs.existsSync(path.join(outputDir, 'images/banners/Sector Map.svg')));
+      assert.ok(fs.existsSync(path.join(outputDir, 'images/banners/locations/Sector Map.webp')));
+      assert.ok(fs.existsSync(path.join(outputDir, 'images/banners/locations/Sector Map.svg')));
     });
 
     it('renders a clickable img, URL-encoded, at the right relative depth', () => {
       const html = locationsIndex(outputDir);
-      assert.ok(html.includes('<a class="section-banner-link" href="../images/banners/Sector%20Map.svg">'));
-      assert.ok(html.includes('<img src="../images/banners/Sector%20Map.webp"'));
+      assert.ok(html.includes('<a class="section-banner-link" href="../images/banners/locations/Sector%20Map.svg">'));
+      assert.ok(html.includes('<img src="../images/banners/locations/Sector%20Map.webp"'));
       assert.ok(html.includes('alt="Sector 7-G star chart"'));
     });
 
@@ -113,12 +113,57 @@ describe('section index banners', () => {
 
     it('uses the configured image, not the conventional file', () => {
       const html = locationsIndex(outputDir);
-      assert.ok(html.includes('images/banners/Sector%20Map.webp'));
+      assert.ok(html.includes('images/banners/locations/Sector%20Map.webp'));
       assert.ok(!html.includes('section-banner-inline'));
     });
 
     it('derives alt text from the filename when none is given', () => {
       assert.ok(locationsIndex(outputDir).includes('alt="Sector Map"'));
+    });
+  });
+
+  describe('two sections whose banners share a filename', () => {
+    // The conventional basename is identical in every section folder, so this is the common
+    // case, not a corner one: unnamespaced, whichever copied last would show on both pages.
+    let outputDir;
+    before(() => {
+      const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-banner-clash-'));
+      const vaultPath = path.join(siteDir, 'vault');
+      outputDir = path.join(siteDir, 'docs');
+      for (const folder of ['_meta', 'Locations', 'Creatures']) {
+        fs.mkdirSync(path.join(vaultPath, folder), { recursive: true });
+      }
+      fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), '---\n---\n');
+      // Raster, not SVG: an SVG with no link is inlined and never copied.
+      fs.writeFileSync(path.join(vaultPath, 'Locations/_banner.png'), 'LOCATIONS-BYTES');
+      fs.writeFileSync(path.join(vaultPath, 'Creatures/_banner.png'), 'CREATURES-BYTES');
+      fs.writeFileSync(path.join(vaultPath, 'Locations/Corwin.md'), '---\ntype: location\n---\n# Corwin\n');
+      fs.writeFileSync(path.join(vaultPath, 'Creatures/Xeno.md'), '---\ntype: creature\n---\n# Xeno\n');
+
+      const configPath = path.join(siteDir, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath, outputDir, attachmentsDir: '_attachments',
+        siteTitle: 'Clash', siteUrl: 'https://example.github.io/clash',
+        excludeDirs: ['_meta'],
+        folderMap: { 'Locations': 'locations', 'Creatures': 'creatures' },
+      }, null, 2));
+      build({ configPath });
+    });
+
+    it('keeps both assets on disk instead of one overwriting the other', () => {
+      const locations = path.join(outputDir, 'images/banners/locations/_banner.png');
+      const creatures = path.join(outputDir, 'images/banners/creatures/_banner.png');
+      assert.ok(fs.existsSync(locations), 'locations banner survives');
+      assert.ok(fs.existsSync(creatures), 'creatures banner survives');
+      assert.strictEqual(fs.readFileSync(locations, 'utf8'), 'LOCATIONS-BYTES');
+      assert.strictEqual(fs.readFileSync(creatures, 'utf8'), 'CREATURES-BYTES');
+    });
+
+    it('points each index at its own banner', () => {
+      const locations = locationsIndex(outputDir);
+      const creatures = fs.readFileSync(path.join(outputDir, 'creatures/index.html'), 'utf8');
+      assert.ok(locations.includes('src="../images/banners/locations/_banner.png"'));
+      assert.ok(creatures.includes('src="../images/banners/creatures/_banner.png"'));
     });
   });
 
