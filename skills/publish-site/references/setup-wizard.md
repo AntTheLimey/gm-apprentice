@@ -254,6 +254,7 @@ with the values gathered above:
   "siteTitle": "<campaign display name from Step 2>",
   "landingTagline": "<tagline from Step 3>",
   "host": "cloudflare-pages",
+  "cloudflarePagesProject": "<project>",
   "siteUrl": "https://<project>.pages.dev",
   "outputDir": "./docs"
 }

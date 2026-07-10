@@ -20,8 +20,10 @@ difference is the final step: instead of `git push`, you run one
 1. A **free Cloudflare account** — sign up at https://dash.cloudflare.com/sign-up
 2. **Node 22 or later** (same as for building the site).
 3. `wrangler`, Cloudflare's command-line tool — you do **not** need to
-   install it; every command below runs it with `npx`, which fetches it
-   on demand.
+   install it; every command below runs it with `npx wrangler@4`, which
+   fetches it on demand. The `@4` pins the major version so a future
+   wrangler release can't silently change the deploy behaviour; you can
+   drop it once you've installed a specific version yourself.
 
 ---
 
@@ -92,6 +94,13 @@ Save, then load them into your current terminal:
 source ~/.zshenv
 ```
 
+**Bash (most Linux):** if your shell is Bash rather than zsh (check with
+`echo $SHELL`), put the same two `export` lines in `~/.bashrc` instead
+of `~/.zshenv` — Bash does not read `~/.zshenv`. On some setups a login
+shell reads `~/.bash_profile` rather than `~/.bashrc`; if `whoami` below
+still fails, add the lines to `~/.bash_profile` too. Then run
+`source ~/.bashrc` (or open a new terminal).
+
 **Windows:** set the same two variables as user environment variables
 (System Settings → Environment Variables), then open a new terminal.
 
@@ -100,7 +109,7 @@ source ~/.zshenv
 ## Step 4: Verify
 
 ```bash
-npx wrangler whoami
+npx wrangler@4 whoami
 ```
 
 You should see your account name and Account ID, and a line noting the
@@ -142,8 +151,8 @@ From the site directory:
 
 ```bash
 npm run build                                   # generate docs/
-npx wrangler pages project create <project-name> --production-branch=main
-npx wrangler pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true
+npx wrangler@4 pages project create <project-name> --production-branch=main
+npx wrangler@4 pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true
 ```
 
 The `project create` step is a one-time setup per site. When it finishes,
@@ -163,7 +172,7 @@ no `project create`, no git, no browser:
 
 ```bash
 npm run build
-npx wrangler pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true
+npx wrangler@4 pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true
 ```
 
 wrangler only uploads files that changed, so repeat deploys are fast.
@@ -191,7 +200,7 @@ of `<project>.pages.dev`:
 The token isn't reaching the command. Almost always the variables are in
 `~/.zshrc` instead of `~/.zshenv` (see Step 3), or you're in a terminal
 opened before you added them — open a new one or run `source ~/.zshenv`.
-Confirm with `npx wrangler whoami`.
+Confirm with `npx wrangler@4 whoami`.
 
 **A wrong path (e.g. `/nope`) returns a Cloudflare 5xx instead of the
 themed 404 page.** On a **brand-new** project this is normal for the

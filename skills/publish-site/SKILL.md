@@ -143,14 +143,15 @@ Workflow:
       `vault.config.json` if set, otherwise the site directory's folder
       name (lowercase, hyphenated).
    b. **Check credentials first — degrade gracefully.** Run
-      `npx wrangler whoami`. If it reports "not authenticated" (or
+      `npx wrangler@4 whoami` (the `@4` pins the major version). If it
+      reports "not authenticated" (or
       wrangler cannot run), **stop and do not attempt the deploy** —
       the credentials aren't set up. Point the GM at
       `references/cloudflare-pages.md` (Steps 1–4) to create a token and
       save it in `~/.zshenv`, then resume. Never leave them staring at a
       raw wrangler error.
    c. Deploy the built folder:
-      `npx wrangler pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`
+      `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`
    d. If the deploy command fails, treat it as a troubleshooting trigger
       (see `references/cloudflare-pages.md` → Troubleshooting) rather
       than surfacing the raw error.
