@@ -45,6 +45,7 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });

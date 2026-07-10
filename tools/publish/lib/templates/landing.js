@@ -266,6 +266,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
     content,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     scripts: clientScripts(outputPath),
   });
 }

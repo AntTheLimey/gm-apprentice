@@ -21,6 +21,7 @@ function timelineTemplate(timelineContent, navFor, config, publishConfig) {
     content,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(outputPath),
   });

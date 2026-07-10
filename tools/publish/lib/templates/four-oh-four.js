@@ -16,6 +16,12 @@ function fourOhFourTemplate(config) {
     ? `\n  <link rel="stylesheet" href="${href(`css/themes/${config.genrePreset}.css`)}">`
     : '';
 
+  // Same cascade position as every other page: after the generated theme, before the
+  // page-local <style>. Only linked when the build copied one.
+  const overridesLinkTag = config.overridesCss
+    ? `\n  <link rel="stylesheet" href="${href('css/overrides.css')}">`
+    : '';
+
   const imageHtml = campaignImage
     ? `<img src="${href(escapeHtml(campaignImage))}" alt="${siteTitle}" class="four-oh-four-image">`
     : '';
@@ -27,7 +33,7 @@ function fourOhFourTemplate(config) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Not Found — ${siteTitle}</title>
   <link rel="stylesheet" href="${href('css/style.css')}">
-  <link rel="stylesheet" href="${href('css/theme.css')}">${genreLinkTag}
+  <link rel="stylesheet" href="${href('css/theme.css')}">${genreLinkTag}${overridesLinkTag}
   <style>
     .four-oh-four-hero {
       text-align: center;

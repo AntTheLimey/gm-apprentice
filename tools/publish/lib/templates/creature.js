@@ -77,6 +77,7 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap, cont
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });

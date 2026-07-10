@@ -34,7 +34,7 @@ function clientScripts(outputPath) {
   return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, breadcrumbsHtml, scripts }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -42,6 +42,12 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
     : '';
   const genreLinkTag = genreCssHref
     ? `\n  <link rel="stylesheet" href="${genreCssHref}">`
+    : '';
+  // Linked last so a site's own rules win the cascade against style.css, the genre overlay,
+  // and the generated theme.css. Only emitted when the build actually copied one, so a site
+  // that never scaffolded css/overrides.css doesn't 404 on every page.
+  const overridesLinkTag = overridesCss
+    ? `\n  <link rel="stylesheet" href="${cssHref.replace('style.css', 'overrides.css')}">`
     : '';
   const breadcrumbs = breadcrumbsHtml || '';
   const scriptTags = scripts
@@ -54,7 +60,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} — ${escapeHtml(siteTitle)}</title>
   <link rel="stylesheet" href="${cssHref}">${genreLinkTag}
-  <link rel="stylesheet" href="${themeCssHref}">
+  <link rel="stylesheet" href="${themeCssHref}">${overridesLinkTag}
 </head>
 <body>
 

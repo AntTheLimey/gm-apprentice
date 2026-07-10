@@ -100,6 +100,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });

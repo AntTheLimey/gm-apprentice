@@ -802,6 +802,7 @@ ${bodyContent}`;
     content,
     footer: config.footer,
     genrePreset: (publishConfig || {})._genrePreset,
+    overridesCss: (publishConfig || {})._overridesCss,
     breadcrumbsHtml,
     scripts: [...clientScripts(outputPath), rootPath(outputPath) + 'js/filters.js'],
   });

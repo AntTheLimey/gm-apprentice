@@ -77,6 +77,21 @@ function build(options = {}) {
     console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
+  // `gm-publish init` scaffolds css/overrides.css next to vault.config.json as the seam for
+  // durable per-site CSS. It is the only stylesheet the build does not generate, so it is the
+  // only one safe to hand-edit — theme.css is rewritten every build. Returns whether a link
+  // tag should be emitted; absent file means no link, no 404.
+  function copyOverridesCSS() {
+    const src = path.join(configDir, 'css/overrides.css');
+    if (!fs.existsSync(src)) return false;
+    const dest = path.join(outputDir, 'css/overrides.css');
+    if (path.resolve(src) === path.resolve(dest)) return true;
+    ensureDir(dest);
+    fs.copyFileSync(src, dest);
+    console.log('  wrote css/overrides.css');
+    return true;
+  }
+
   function copyJS() {
     const jsDir = path.join(__dirname, '../js');
     if (!fs.existsSync(jsDir)) return;
@@ -110,6 +125,7 @@ function build(options = {}) {
       four_oh_four: publishConfig.four_oh_four,
       theme: publishConfig.theme,
       genrePreset: publishConfig._genrePreset,
+      overridesCss: publishConfig._overridesCss,
     });
     fs.writeFileSync(path.join(outputDir, '404.html'), html);
     console.log('  wrote 404.html');
@@ -324,6 +340,7 @@ function build(options = {}) {
   copyJS();
   copyGenreCSS();
   writeThemeCSS();
+  publishConfig._overridesCss = copyOverridesCSS();
 
   let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path

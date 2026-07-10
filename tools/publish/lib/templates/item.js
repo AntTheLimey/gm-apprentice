@@ -92,6 +92,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });
