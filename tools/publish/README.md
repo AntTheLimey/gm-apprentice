@@ -230,6 +230,70 @@ It includes these sections (each omitted if no relevant data exists):
 - **Explore** — compact grid of category index pages with entry counts,
   excluding PC and NPC categories (those have dedicated sections above)
 
+### Section index banners
+
+Put a hero image or a clickable map at the top of a section index. Either
+drop a `_banner.*` file in the section's vault folder
+(`Locations/_banner.svg`), or name one explicitly:
+
+```yaml
+publish:
+  banners:
+    locations:
+      image: _attachments/sector-map.webp
+      link: _attachments/sector-map.svg    # optional, click-through target
+      alt: Sector 7-G star chart
+    factions: _attachments/factions-hero.svg   # shorthand: image only
+```
+
+Keys are output directories (`locations`, `factions`, `items`, …), not
+vault folders. Config wins over the conventional file. Accepted
+extensions, in preference order: `svg`, `webp`, `avif`, `png`, `jpg`,
+`jpeg`, `gif`.
+
+**SVG with no `link` is inlined**, so its internal `<a>` elements stay
+clickable — a star map whose nodes link to entity pages keeps working.
+An `<img>` would not run those links, and wrapping the SVG in an outer
+anchor would swallow them, so anything with a `link` renders as an
+`<img>` inside an `<a>` instead. That's the "raster on the page,
+full-size SVG behind it" shape.
+
+Because an inlined SVG lands in `<section>/index.html`, its internal
+hrefs must be written relative to that page (`corwin-system.html`, or
+`../characters/npcs/rook.html`).
+
+Assets are copied to `docs/images/banners/<section>/`, namespaced by
+section so the conventional `_banner.*` sitting in two different folders
+can't collide. A banner path that resolves outside the vault, or names a
+file that doesn't exist, prints a warning and is skipped rather than
+failing the build. Banners apply to generated index pages; a section with
+an authored `index.md` renders that page instead.
+
+### Locations index grouping
+
+When a campaign's geography funnels through one political root
+(`Republic → Sector → System → planet`), the default Locations listing is
+a single deep tree. Pivot grouping gives each mid-level node its own
+section:
+
+```yaml
+publish:
+  locations:
+    group_by: system                    # matched against location_type
+    ungrouped_label: Deep Space & Routes
+```
+
+`group_by` is a case-insensitive substring of `location_type`, so
+`system` matches `star system` too. The `scifi` genre defaults it to
+`system`; other genres leave grouping off, and `group_by: false` turns a
+genre default back off.
+
+Every location stays a first-class row with its own thumbnail and type
+badge, with children nested beneath it. Only the scaffolding *above* the
+pivot is collapsed, into a context caption. Locations with no matching
+ancestor collect under `ungrouped_label`. Fewer than two matches falls
+back to the flat view — one section is not a grouping.
+
 ### Player-mode image filtering
 
 When building in `player` mode with a publish manifest, only images
@@ -237,6 +301,37 @@ referenced by the published pages are copied to the output. This
 prevents GM-only images (maps, handouts, portraits of hidden NPCs)
 from leaking into the public site. In full mode, all vault images
 are copied.
+
+### Image optimization
+
+Off by default: images are copied byte-for-byte. Turn it on in
+`_meta/vault-config.md` and PNG/JPEG attachments are re-encoded to WebP
+as they are copied, with the `<img src>` written to match:
+
+```yaml
+publish:
+  images:
+    optimize: true    # default false
+    format: webp      # the only supported target today
+    max_width: 1600   # 0 disables resizing
+    quality: 82
+```
+
+On a portrait-heavy campaign this is the single biggest weight on the
+published site — one real vault of 89 portraits went from 164 MB to
+11 MB.
+
+Requires the **`cwebp`** binary on `PATH` (`brew install webp`,
+`apt install webp`). If it isn't found the build prints a warning and
+copies the originals unchanged, so a missing encoder never breaks a
+build. Images that would grow when re-encoded keep their original bytes,
+and SVG, GIF, WebP and AVIF are always passed through untouched.
+
+Because the tool owns both the image copy and every `<img src>`, it
+converts and re-references in one pass. An external postbuild that
+rewrites `src` attributes after the fact has to string-match paths the
+tool URL-encodes (`images/Rock%20Lavey.jpg`), and silently misses every
+filename containing a space.
 
 ---
 

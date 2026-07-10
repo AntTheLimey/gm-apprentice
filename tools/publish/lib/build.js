@@ -1,6 +1,9 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { optimizeImages, resolveImageConfig } = require('./image-optimize');
+const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
@@ -77,6 +80,21 @@ function build(options = {}) {
     console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
+  // `gm-publish init` scaffolds css/overrides.css next to vault.config.json as the seam for
+  // durable per-site CSS. It is the only stylesheet the build does not generate, so it is the
+  // only one safe to hand-edit — theme.css is rewritten every build. Returns whether a link
+  // tag should be emitted; absent file means no link, no 404.
+  function copyOverridesCSS() {
+    const src = path.join(configDir, 'css/overrides.css');
+    if (!fs.existsSync(src)) return false;
+    const dest = path.join(outputDir, 'css/overrides.css');
+    if (path.resolve(src) === path.resolve(dest)) return true;
+    ensureDir(dest);
+    fs.copyFileSync(src, dest);
+    console.log('  wrote css/overrides.css');
+    return true;
+  }
+
   function copyJS() {
     const jsDir = path.join(__dirname, '../js');
     if (!fs.existsSync(jsDir)) return;
@@ -110,6 +128,7 @@ function build(options = {}) {
       four_oh_four: publishConfig.four_oh_four,
       theme: publishConfig.theme,
       genrePreset: publishConfig._genrePreset,
+      overridesCss: publishConfig._overridesCss,
     });
     fs.writeFileSync(path.join(outputDir, '404.html'), html);
     console.log('  wrote 404.html');
@@ -128,7 +147,7 @@ function build(options = {}) {
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
-      fs.copyFileSync(entry.sourcePath, dest);
+      fs.copyFileSync(entry.encodedPath || entry.sourcePath, dest);
     }
     console.log(`Copied ${Object.keys(imageMap).length} images`);
   }
@@ -319,11 +338,41 @@ function build(options = {}) {
   const imageMap = scanAttachments(config);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
 
+  // Re-encode before a single page renders. The tool owns both the image copy and every
+  // `<img src>`, so converting here means the new extension flows into references at
+  // emission time — no rewriting of generated HTML, and no string-matching URL-encoded
+  // paths (`images/Rock%20Lavey.jpg`) that an external postbuild would silently miss.
+  //
+  // The cost of that ordering: player mode only learns which images are actually referenced
+  // (`usedImages`) while rendering, so an unreferenced attachment is encoded here and then
+  // dropped at copy time. Correct, just wasted work — and unavoidable without emitting a
+  // `src` before knowing the extension it will end up with.
+  let imagesTmpDir = null;
+  if (resolveImageConfig(publishConfig.images).optimize) {
+    imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));
+    const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir);
+    if (stats.reason) {
+      console.warn(`  WARNING: image optimization requested but skipped — ${stats.reason}`);
+    } else {
+      const mb = bytes => (bytes / 1024 / 1024).toFixed(1);
+      const saved = stats.bytesBefore > 0
+        ? Math.round((1 - stats.bytesAfter / stats.bytesBefore) * 100)
+        : 0;
+      console.log(
+        `Optimized ${stats.converted} image(s) via ${stats.encoder}: ` +
+        `${mb(stats.bytesBefore)} MB → ${mb(stats.bytesAfter)} MB (${saved}% smaller)` +
+        `${stats.skipped ? `, ${stats.skipped} left as-is` : ''}` +
+        `${stats.failed ? `, ${stats.failed} failed` : ''}`
+      );
+    }
+  }
+
   cleanOutput();
   copyCSS();
   copyJS();
   copyGenreCSS();
   writeThemeCSS();
+  publishConfig._overridesCss = copyOverridesCSS();
 
   let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
@@ -523,6 +572,10 @@ function build(options = {}) {
     copyImages(imageMap);
   }
 
+  // The encoded bytes are now in the output tree. Scratch dir lives under os.tmpdir(), so a
+  // build that throws before reaching here leaks nothing the OS won't reclaim.
+  if (imagesTmpDir) fs.rmSync(imagesTmpDir, { recursive: true, force: true });
+
   // Generate index pages for each output directory
   const dirs = {};
   for (const page of pages) {
@@ -530,6 +583,73 @@ function build(options = {}) {
     if (!dirs[dir]) dirs[dir] = [];
     dirs[dir].push(page);
   }
+
+  // Section-index banners. Resolved and copied before the index loop so each index page can
+  // be handed finished HTML with hrefs already relative to its own depth.
+  function resolveVaultAsset(vaultRelPath, label) {
+    const vaultRoot = path.resolve(config.vaultPath);
+    const full = path.resolve(vaultRoot, vaultRelPath);
+    if (full !== vaultRoot && !full.startsWith(vaultRoot + path.sep)) {
+      console.warn(`  WARNING: ${label} "${vaultRelPath}" resolves outside the vault — skipping`);
+      return null;
+    }
+    if (!fs.existsSync(full)) {
+      console.warn(`  WARNING: ${label} "${vaultRelPath}" not found in the vault — skipping`);
+      return null;
+    }
+    return full;
+  }
+
+  // Namespaced by section, because the conventional banner filename is identical in every
+  // section folder: Locations/_banner.png and Creatures/_banner.png would otherwise both
+  // land on images/banners/_banner.png, and whichever copied last would show on both pages.
+  // The dir may itself contain a slash ("characters/npcs"), so flatten it to one segment.
+  function copyBannerAsset(sourceFull, dir) {
+    const slug = String(dir).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
+    const outRel = `images/banners/${slug}/${path.basename(sourceFull)}`;
+    const dest = path.join(outputDir, outRel);
+    ensureDir(dest);
+    fs.copyFileSync(sourceFull, dest);
+    return outRel;
+  }
+
+  function buildBanners(dirs) {
+    const rendered = {};
+    for (const dir of dirs) {
+      const entry = resolveBanner(dir, {
+        vaultPath: config.vaultPath,
+        folderMap: config.folderMap,
+        banners: publishConfig.banners,
+      });
+      if (!entry) continue;
+
+      const imageFull = resolveVaultAsset(entry.image, `banner for "${dir}"`);
+      if (!imageFull) continue;
+
+      // Inline SVG keeps its internal <a> links clickable; an <img> would not. A banner that
+      // declares a link target is asking for the anchor instead, so it goes down the <img> path.
+      if (isSvg(imageFull) && !entry.link) {
+        rendered[dir] = renderBanner({ svg: fs.readFileSync(imageFull, 'utf8') });
+        console.log(`  inlined banner for ${dir}/index.html`);
+        continue;
+      }
+
+      let linkHref = null;
+      if (entry.link) {
+        const linkFull = resolveVaultAsset(entry.link, `banner link for "${dir}"`);
+        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull, dir));
+      }
+      rendered[dir] = renderBanner({
+        imageHref: relativePath(dir, copyBannerAsset(imageFull, dir)),
+        linkHref,
+        alt: entry.alt || defaultAlt(imageFull),
+      });
+      console.log(`  wrote banner for ${dir}/index.html`);
+    }
+    return rendered;
+  }
+
+  publishConfig._banners = buildBanners(Object.keys(DIR_LABELS));
 
   const pcRoster = pages.find(p => p.frontmatter.type === 'pc_roster');
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;

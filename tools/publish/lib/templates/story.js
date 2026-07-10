@@ -30,6 +30,7 @@ function storyPage(unit, config, publishConfig, navFor) {
     content,
     footer: config.footer,
     genrePreset: (publishConfig || {})._genrePreset,
+    overridesCss: (publishConfig || {})._overridesCss,
     scripts: clientScripts(unit.outputPath),
   });
 }
@@ -47,7 +48,9 @@ function characterStoryPage(story, config, publishConfig, navFor) {
     title: story.title, siteTitle: config.siteTitle,
     cssHref: cssPath(story.outputPath), navHtml: navFor(story.outputPath, config),
     rootHref: rootPath(story.outputPath), content, footer: config.footer,
-    genrePreset: (publishConfig || {})._genrePreset, scripts: clientScripts(story.outputPath),
+    genrePreset: (publishConfig || {})._genrePreset,
+    overridesCss: (publishConfig || {})._overridesCss,
+    scripts: clientScripts(story.outputPath),
   });
 }
 

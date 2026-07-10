@@ -105,7 +105,186 @@ function renderLocationTreeHTML(nodes, depth, indexDir) {
   return items;
 }
 
-function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
+// The location_type that becomes a top-level section, per genre. A space campaign's
+// geography funnels through one political root (Republic → Sector → System → body), so the
+// star system — not the polity — is the unit a reader actually navigates by.
+const GENRE_LOCATION_PIVOT = {
+  scifi: 'system',
+};
+
+const DEFAULT_UNGROUPED_LABEL = 'Deep Space & Routes';
+
+/**
+ * Resolve the pivot grouping for the Locations index, or null to keep the flat region view.
+ * An explicit `group_by` always wins, including a falsy one, which turns grouping off for a
+ * genre that would otherwise default it on.
+ */
+function resolveLocationGrouping(publishConfig) {
+  const locations = (publishConfig && publishConfig.locations) || {};
+  const genre = (publishConfig && publishConfig._genrePreset) || null;
+  const pivot = Object.prototype.hasOwnProperty.call(locations, 'group_by')
+    ? locations.group_by
+    : GENRE_LOCATION_PIVOT[genre];
+  if (!pivot) return null;
+  return {
+    pivot: String(pivot).toLowerCase(),
+    ungroupedLabel: locations.ungrouped_label || DEFAULT_UNGROUPED_LABEL,
+  };
+}
+
+function isPivotNode(node, pivot) {
+  return String(node.page.frontmatter.location_type || '').toLowerCase().includes(pivot);
+}
+
+function subtreeSize(node) {
+  return 1 + node.children.reduce((sum, c) => sum + subtreeSize(c), 0);
+}
+
+/**
+ * Split the location forest into pivot sections plus everything that hangs outside one.
+ *
+ * A non-pivot node with a pivot somewhere beneath it is *scaffolding* — the political chain
+ * above the systems. It never renders as a row; it survives only as each section's context
+ * caption. A subtree with no pivot anywhere in it (routes, anomalies) is a leftover, and is
+ * captured at its topmost node so it renders exactly once.
+ *
+ * @returns {{sections: Array<{node: object, ancestors: object[]}>, leftoverRoots: object[]}}
+ */
+function partitionByPivot(roots, pivot) {
+  const out = { sections: [], leftoverRoots: [] };
+
+  // Returns whether this node, or anything under it, is a pivot.
+  function classify(node, ancestors) {
+    if (isPivotNode(node, pivot)) {
+      // Don't descend: a pivot nested inside another pivot's subtree stays a nested row
+      // rather than becoming a competing top-level section.
+      out.sections.push({ node, ancestors });
+      return true;
+    }
+    const childHasPivot = node.children.map(child => classify(child, ancestors.concat(node)));
+    if (!childHasPivot.some(Boolean)) return false;
+    node.children.forEach((child, i) => {
+      if (!childHasPivot[i]) out.leftoverRoots.push(child);
+    });
+    return true;
+  }
+
+  for (const root of roots) {
+    if (!classify(root, [])) out.leftoverRoots.push(root);
+  }
+  return out;
+}
+
+function renderContextCaption(ancestors) {
+  if (!ancestors.length) return '';
+  const trail = ancestors.map(a => escapeHtml(a.page.displayTitle)).join(' &rsaquo; ');
+  return `<p class="loc-context">${trail}</p>`;
+}
+
+function renderGroupedLocationsPage(pages, indexDir, imageMap, grouping) {
+  const roots = buildLocationTree(pages);
+  const { sections, leftoverRoots } = partitionByPivot(roots, grouping.pivot);
+
+  // One pivot is not a grouping — it's the same single deep tree with a new heading. Fall
+  // back rather than pretend.
+  if (sections.length < 2) return null;
+
+  const outputPath = indexDir + '/index.html';
+  const byTitle = (a, b) => a.page.displayTitle.localeCompare(b.page.displayTitle);
+
+  // Every location is a first-class row: its own thumbnail, its own badge, its children
+  // nested beneath it even when it is an only child. Collapsing a single-child chain into a
+  // breadcrumb would swallow real bodies — a planet, an asteroid belt — into scaffolding and
+  // make them read unlike their sibling bodies. Grouping by system already keeps this shallow.
+  function renderNode(node) {
+    const p = node.page;
+    const locType = p.frontmatter.location_type || '';
+    const thumb = portraitImg(p.frontmatter, outputPath, imageMap);
+    // An invisible spacer, not a dashed placeholder box: rows stay aligned without drawing
+    // attention to an entity that simply has no portrait yet.
+    const thumbHtml = thumb
+      ? `<span class="loc-node-thumb">${thumb}</span>`
+      : '<span class="loc-node-thumb loc-node-thumb-empty" aria-hidden="true"></span>';
+
+    const childrenHtml = node.children.length
+      ? `<div class="loc-node-children">${node.children.slice().sort(byTitle).map(renderNode).join('\n')}</div>`
+      : '';
+
+    return `<div class="loc-node">
+  <div class="loc-node-row">
+    ${thumbHtml}
+    <a class="loc-node-name" href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a>
+    ${locType ? `<span class="loc-type-badge">${escapeHtml(locType)}</span>` : ''}
+  </div>
+  ${childrenHtml}
+</div>`;
+  }
+
+  function renderSection({ node, ancestors }, { caption }) {
+    const p = node.page;
+    const locType = p.frontmatter.location_type || '';
+    const thumb = portraitImg(p.frontmatter, outputPath, imageMap);
+    const count = subtreeSize(node);
+    const rows = node.children.slice().sort(byTitle).map(renderNode).join('\n');
+
+    // The system heading a section is a location like any other, so it reserves the same
+    // thumbnail slot. Without the spacer, a portrait-less system's title sits flush left
+    // while its neighbours' titles are pushed right by their thumbnails — and in a grid of
+    // section cards that misalignment reads across the whole page.
+    const thumbHtml = thumb
+      ? `<span class="loc-system-thumb">${thumb}</span>`
+      : '<span class="loc-system-thumb loc-system-thumb-empty" aria-hidden="true"></span>';
+
+    return `<section class="loc-system">
+  <header class="loc-system-header">
+    ${thumbHtml}
+    <h2 class="loc-system-title"><a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a></h2>
+    ${locType ? `<span class="loc-type-badge">${escapeHtml(locType)}</span>` : ''}
+    <span class="loc-system-count">${count} location${count !== 1 ? 's' : ''}</span>
+  </header>
+  ${caption ? renderContextCaption(ancestors) : ''}
+  <div class="loc-system-body">${rows}</div>
+</section>`;
+  }
+
+  // When every system hangs off the same political chain, the chain is page context, not
+  // per-section context. Say it once above the sections instead of on every card.
+  const chainOf = s => s.ancestors.map(a => a.page.displayTitle).join(' > ');
+  const sharedChain = sections.every(s => chainOf(s) === chainOf(sections[0]))
+    ? sections[0].ancestors
+    : null;
+  const pageCaption = sharedChain && sharedChain.length ? renderContextCaption(sharedChain) : '';
+
+  const sectionsHtml = sections
+    .slice()
+    .sort((a, b) => byTitle(a.node, b.node))
+    .map(section => renderSection(section, { caption: !sharedChain }))
+    .join('\n');
+
+  const ungroupedHtml = leftoverRoots.length
+    ? `<section class="loc-system loc-system-ungrouped">
+  <header class="loc-system-header">
+    <span class="loc-system-thumb loc-system-thumb-empty" aria-hidden="true"></span>
+    <h2 class="loc-system-title">${escapeHtml(grouping.ungroupedLabel)}</h2>
+    <span class="loc-system-count">${leftoverRoots.length} entr${leftoverRoots.length !== 1 ? 'ies' : 'y'}</span>
+  </header>
+  <div class="loc-system-body">${leftoverRoots.slice().sort(byTitle).map(renderNode).join('\n')}</div>
+</section>`
+    : '';
+
+  return `<div class="locations-page locations-grouped">
+  ${pageCaption}
+  <div class="loc-system-grid">${sectionsHtml}\n${ungroupedHtml}</div>
+</div>`;
+}
+
+function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = null) {
+  const grouping = resolveLocationGrouping(publishConfig);
+  if (grouping) {
+    const grouped = renderGroupedLocationsPage(pages, indexDir, imageMap, grouping);
+    if (grouped) return grouped;
+  }
+
   const roots = buildLocationTree(pages);
 
   // Group ROOT cards: by the (unpublished) parent name if one was
@@ -140,7 +319,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, attachmentsDir = '_
       ? `<div class="loc-children">${renderLocationTreeHTML(node.children, 0, indexDir)}</div>`
       : '';
 
-    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap);
 
     return `<div class="loc-card">
   ${thumb ? `<div class="loc-card-thumb">${thumb}</div>` : ''}
@@ -318,7 +497,7 @@ function renderBestiary(pages, indexDir) {
   return `<div class="bestiary">${cards}</div>`;
 }
 
-function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attachments') {
+function renderFactions(pages, indexDir, imageMap = {}) {
   const factions = pages
     .filter(p => p.frontmatter.type === 'faction' || p.frontmatter.type === 'organization')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -377,7 +556,7 @@ function renderFactions(pages, indexDir, imageMap = {}, attachmentsDir = '_attac
       ? `<span class="intel-canon-badge">${escapeHtml(canon)}</span>`
       : '';
 
-    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap, attachmentsDir);
+    const thumb = portraitImg(fm, indexDir + '/index.html', imageMap);
 
     return `<article class="intel-card">
   <div class="intel-card-header">
@@ -585,7 +764,7 @@ function sessionRef(frontmatter) {
   return ISO_DATE_RE.test(value) ? '' : value;
 }
 
-function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachments', linkMap = {}) {
+function renderNPCTable(pages, dir, imageMap = {}, linkMap = {}) {
   const sorted = pages
     .filter(p => p.frontmatter.type === 'npc')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -625,7 +804,7 @@ function renderNPCTable(pages, dir, imageMap = {}, attachmentsDir = '_attachment
     const firstApp = cleanRef(fm.first_appearance || '');
     const lastSession = sessionRef(fm);
     const canonStatus = getCanonStatus(fm) || '';
-    const avatar = portraitImg(fm, dir + '/index.html', imageMap, attachmentsDir);
+    const avatar = portraitImg(fm, dir + '/index.html', imageMap);
     const avatarHtml = avatar
       ? `<span class="npc-row-avatar">${avatar}</span>`
       : `<span class="npc-row-avatar npc-row-initials" aria-hidden="true">${escapeHtml(getInitials(p.displayTitle))}</span>`;
@@ -662,7 +841,6 @@ ${rows}
 
 function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}) {
   const outputPath = dir + '/index.html';
-  const attachmentsDir = config.attachmentsDir || '_attachments';
   const crumbs = generateBreadcrumbs(outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
   const total = pages.length;
@@ -694,15 +872,15 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
 
   let bodyContent;
   if (isNPCs) {
-    bodyContent = renderNPCTable(pages, dir, imageMap, attachmentsDir, (publishConfig || {})._linkMap || {});
+    bodyContent = renderNPCTable(pages, dir, imageMap, (publishConfig || {})._linkMap || {});
   } else if (isChapters) {
     bodyContent = renderChapterList(pages, dir);
   } else if (isCreatures) {
     bodyContent = renderBestiary(pages, dir);
   } else if (isLocations) {
-    bodyContent = renderLocationsPage(pages, dir, imageMap, attachmentsDir);
+    bodyContent = renderLocationsPage(pages, dir, imageMap, publishConfig);
   } else if (isFactions) {
-    bodyContent = renderFactions(pages, dir, imageMap, attachmentsDir);
+    bodyContent = renderFactions(pages, dir, imageMap);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
   } else if (isCampaign && pages.some(p => p.frontmatter.type === 'campaign_overview')) {
@@ -716,7 +894,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       const fm = p.frontmatter;
       const entityType = isLocations ? (fm.location_type || fm.type) : fm.type;
       const avatarShape = (fm.type === 'pc') ? 'border-radius:0.375rem' : 'border-radius:50%';
-      const cardImg = portraitImg(fm, outputPath, imageMap, attachmentsDir);
+      const cardImg = portraitImg(fm, outputPath, imageMap);
       const portraitHtml = isCharacters && cardImg
         ? `<div class="npc-icon" style="${avatarShape}">${cardImg}</div>`
         : '';
@@ -793,18 +971,25 @@ ${locationTreeHtml}
 ${bodyContent}`;
   }
 
+  // Above the page title, full-width: a section hero, not an illustration of the listing.
+  const bannerHtml = ((publishConfig || {})._banners || {})[dir] || '';
+
   return baseShell({
     title: label,
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),
     navHtml: navFor(outputPath, config),
     rootHref: rootPath(outputPath),
-    content,
+    content: bannerHtml + content,
     footer: config.footer,
     genrePreset: (publishConfig || {})._genrePreset,
+    overridesCss: (publishConfig || {})._overridesCss,
     breadcrumbsHtml,
     scripts: [...clientScripts(outputPath), rootPath(outputPath) + 'js/filters.js'],
   });
 }
 
-module.exports = { indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage };
+module.exports = {
+  indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage,
+  resolveLocationGrouping, partitionByPivot,
+};

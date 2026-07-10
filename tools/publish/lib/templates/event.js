@@ -25,7 +25,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const backlinks = (publishConfig._backlinks || {})[page.title] || [];
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
   const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
 
   const badges = [];
@@ -121,6 +121,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });

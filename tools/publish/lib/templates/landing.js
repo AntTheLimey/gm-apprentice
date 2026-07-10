@@ -107,7 +107,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
     const pcCards = activePCs.map(pc => {
       const fm = pc.frontmatter;
       const initials = getInitials(pc.displayTitle);
-      const portraitTag = fm.portrait ? portraitImg(fm, outputPath, imageMap || {}, config.attachmentsDir) : '';
+      const portraitTag = fm.portrait ? portraitImg(fm, outputPath, imageMap || {}) : '';
       const portraitHtml = portraitTag
         ? `<div class="pc-portrait">${portraitTag}</div>`
         : `<div class="pc-portrait">${escapeHtml(initials)}</div>`;
@@ -150,7 +150,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
     const npcCards = recentNPCs.map(({ page }) => {
       const fm = page.frontmatter;
       const initials = getInitials(page.displayTitle);
-      const portraitTag = fm.portrait ? portraitImg(fm, outputPath, imageMap || {}, config.attachmentsDir) : '';
+      const portraitTag = fm.portrait ? portraitImg(fm, outputPath, imageMap || {}) : '';
       const iconHtml = portraitTag
         ? `<div class="npc-icon">${portraitTag}</div>`
         : `<div class="npc-icon">${escapeHtml(initials)}</div>`;
@@ -266,6 +266,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
     content,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     scripts: clientScripts(outputPath),
   });
 }

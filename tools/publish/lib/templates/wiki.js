@@ -11,7 +11,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const backlinks = (publishConfig._backlinks || {})[page.title] || [];
   const extraSidebar = (context || {}).extraSidebar || {};
   const badges = metadataBadgesFor(fm);
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
@@ -100,6 +100,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });

@@ -34,7 +34,7 @@ function clientScripts(outputPath) {
   return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, breadcrumbsHtml, scripts }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -42,6 +42,12 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
     : '';
   const genreLinkTag = genreCssHref
     ? `\n  <link rel="stylesheet" href="${genreCssHref}">`
+    : '';
+  // Linked last so a site's own rules win the cascade against style.css, the genre overlay,
+  // and the generated theme.css. Only emitted when the build actually copied one, so a site
+  // that never scaffolded css/overrides.css doesn't 404 on every page.
+  const overridesLinkTag = overridesCss
+    ? `\n  <link rel="stylesheet" href="${cssHref.replace('style.css', 'overrides.css')}">`
     : '';
   const breadcrumbs = breadcrumbsHtml || '';
   const scriptTags = scripts
@@ -54,7 +60,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)} — ${escapeHtml(siteTitle)}</title>
   <link rel="stylesheet" href="${cssHref}">${genreLinkTag}
-  <link rel="stylesheet" href="${themeCssHref}">
+  <link rel="stylesheet" href="${themeCssHref}">${overridesLinkTag}
 </head>
 <body>
 
@@ -154,20 +160,24 @@ function metadataBadgesFor(frontmatter) {
   return `<div class="metadata-badges">${badges.join('\n')}</div>`;
 }
 
-function portraitImg(frontmatter, outputPath, imageMap, attachmentsDir) {
+function portraitImg(frontmatter, outputPath, imageMap) {
   const portrait = frontmatter.portrait;
   if (!portrait) return '';
 
-  const prefix = (attachmentsDir || '_attachments') + '/';
-  const portraitStr = String(portrait);
-  const relPath = portraitStr.startsWith(prefix) ? portraitStr.slice(prefix.length) : portraitStr;
-  const basename = relPath.split('/').pop();
+  // The scanner keys imageMap by bare basename, so however a `portrait:` spells its path —
+  // `_attachments/characters/Rock.png`, `characters/Rock.png`, or `Rock.png` — the lookup is
+  // the last segment. Stripping the attachments prefix first never changed that.
+  const basename = String(portrait).split('/').pop();
 
   // Verify the image was actually discovered by the scanner
-  if (!imageMap[basename]) return '';
+  const entry = imageMap[basename];
+  if (!entry) return '';
 
   const currentDir = outputPath.substring(0, outputPath.lastIndexOf('/'));
-  const imgPath = 'images/' + relPath;
+  // The scanner's relPath, not the frontmatter's: it is where copyImages actually writes the
+  // file, so a `portrait:` that omits the subdirectory still resolves — and an image the
+  // build re-encoded carries its new extension here.
+  const imgPath = 'images/' + entry.relPath;
   // Attachment filenames routinely carry spaces and non-ASCII ("Vita Ó Taidhg.png"), which
   // are not valid in a URL. Templates that lift this src back out of the tag (hero banners)
   // inherit the encoding.

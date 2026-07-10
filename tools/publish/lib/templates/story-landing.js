@@ -26,7 +26,9 @@ function storyLanding(spine, characterStories, config, publishConfig, navFor) {
   return baseShell({
     title: 'Story', siteTitle: config.siteTitle, cssHref: cssPath(OUT), navHtml: navFor(OUT, config),
     rootHref: rootPath(OUT), content, footer: config.footer,
-    genrePreset: (publishConfig || {})._genrePreset, scripts: clientScripts(OUT),
+    genrePreset: (publishConfig || {})._genrePreset,
+    overridesCss: (publishConfig || {})._overridesCss,
+    scripts: clientScripts(OUT),
   });
 }
 

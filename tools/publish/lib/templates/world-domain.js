@@ -24,7 +24,7 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
 
   // Render `portrait:` like every other entity template. That invariant is what lets the
   // processor safely drop an inline embed of the same image as a duplicate (#88).
-  const portrait = portraitImg(fm, page.outputPath, imageMap || {}, config.attachmentsDir);
+  const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   const headerHtml = `<h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>${summaryHtml}${portrait}`;
 
@@ -45,6 +45,7 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
     content: contentHtml,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
     scripts: clientScripts(page.outputPath),
   });
