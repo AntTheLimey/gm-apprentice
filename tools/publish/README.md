@@ -5,7 +5,7 @@
 Static site generator for [gm-apprentice](https://github.com/AntTheLimey/gm-apprentice)
 campaign vaults. Reads structured markdown files produced by the
 campaign-organizer skill and outputs a self-contained HTML site suitable
-for GitHub Pages.
+for GitHub Pages or Cloudflare Pages.
 
 ## Requirements
 
@@ -141,7 +141,9 @@ directories listed in `preserveDirs`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `siteTitle` | string | Site name shown in the nav bar and page title |
-| `siteUrl` | string | Canonical base URL (used for absolute links) |
+| `host` | string | Deploy target: `github-pages` (default/absent) or `cloudflare-pages`. Affects only the deploy step, not the built output. |
+| `siteUrl` | string | Canonical base URL. For `cloudflare-pages` set it to the `.pages.dev` (or custom) URL — Cloudflare serves at the root, so a `github.io` URL breaks the 404 page (the build warns). |
+| `cloudflarePagesProject` | string | Optional. Cloudflare Pages project name; defaults to the site directory name. |
 | `landingTagline` | string | One-sentence campaign hook shown on the landing page hero |
 | `vaultPath` | string | Path to the vault directory (resolved relative to the config file) |
 | `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |

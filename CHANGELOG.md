@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.19] — 2026-07-10
+
+Publish tool 1.11.1.
+
+### Added
+
+- **Cloudflare Pages as an alternative deploy target.** A new `host`
+  field in `vault.config.json` (`github-pages`, the default when absent,
+  or `cloudflare-pages`) selects where the site is deployed. The built
+  `docs/` folder is identical for both, so only the final step differs:
+  GitHub Pages keeps using `git push`; Cloudflare uses
+  `wrangler pages deploy docs/`. publish-site's routine-update deploy
+  branches on `host` and, for Cloudflare, checks credentials with
+  `wrangler whoami` first and degrades gracefully — if the token isn't
+  set up or the deploy fails, it points the GM at the setup guide rather
+  than surfacing a raw error. New `references/cloudflare-pages.md` covers
+  creating a least-privilege API token, saving it in `~/.zshenv` (not
+  `~/.zshrc`, which non-interactive deploys skip), the first deploy,
+  custom domains, and troubleshooting. The setup wizard gains a
+  host-selection step; `docs/publish-tool.md` compares the two hosts. The
+  build warns when `host: cloudflare-pages` is paired with a leftover
+  `github.io` `siteUrl` (which would break the 404 page). GitHub Pages
+  behaviour is unchanged, and the two hosts can run in parallel.
+
 ## [1.8.18] — 2026-07-10
 
 Publish tool 1.11.0.

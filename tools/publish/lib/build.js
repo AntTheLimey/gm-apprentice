@@ -25,6 +25,15 @@ function build(options = {}) {
   config.vaultPath = path.resolve(configDir, config.vaultPath);
   const outputDir = path.resolve(configDir, config.outputDir);
 
+  const host = config.host || 'github-pages';
+  if (host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
+    console.warn(
+      `⚠️  host is "cloudflare-pages" but siteUrl looks like a GitHub Pages URL (${config.siteUrl}).\n` +
+      `   Cloudflare serves at the root, so the 404 page's links will break.\n` +
+      `   Set siteUrl to your Cloudflare URL (e.g. https://<project>.pages.dev) and rebuild.`
+    );
+  }
+
   const publishConfig = loadPublishConfig(config.vaultPath, config);
   const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
   publishConfig._genrePreset = genrePreset;
