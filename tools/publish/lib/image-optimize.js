@@ -107,14 +107,24 @@ function detectEncoder() {
   }
 }
 
+// A non-numeric config value must fall back to the default, not sail through as NaN: cwebp
+// would receive the literal string "NaN" as its -q and fail every single image.
+function numberOr(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function clamp(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+
 function resolveImageConfig(images) {
   const cfg = images || {};
-  const maxWidth = cfg.max_width ?? cfg.maxWidth ?? 1600;
   return {
     optimize: cfg.optimize === true,
     format: String(cfg.format || 'webp').toLowerCase(),
-    maxWidth: Number(maxWidth) || 0,
-    quality: Number(cfg.quality ?? 82),
+    maxWidth: Math.max(0, numberOr(cfg.max_width ?? cfg.maxWidth, 1600)),
+    quality: clamp(numberOr(cfg.quality, 82), 0, 100),
   };
 }
 

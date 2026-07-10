@@ -341,6 +341,11 @@ function build(options = {}) {
   // `<img src>`, so converting here means the new extension flows into references at
   // emission time — no rewriting of generated HTML, and no string-matching URL-encoded
   // paths (`images/Rock%20Lavey.jpg`) that an external postbuild would silently miss.
+  //
+  // The cost of that ordering: player mode only learns which images are actually referenced
+  // (`usedImages`) while rendering, so an unreferenced attachment is encoded here and then
+  // dropped at copy time. Correct, just wasted work — and unavoidable without emitting a
+  // `src` before knowing the extension it will end up with.
   let imagesTmpDir = null;
   if (resolveImageConfig(publishConfig.images).optimize) {
     imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));

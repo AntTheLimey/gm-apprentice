@@ -53,6 +53,20 @@ describe('resolveImageConfig', () => {
   it('allows quality 0 without silently substituting 82', () => {
     assert.strictEqual(resolveImageConfig({ quality: 0 }).quality, 0);
   });
+
+  it('falls back to defaults rather than passing NaN down to the encoder', () => {
+    assert.strictEqual(resolveImageConfig({ quality: 'high' }).quality, 82);
+    assert.strictEqual(resolveImageConfig({ max_width: 'wide' }).maxWidth, 1600);
+  });
+
+  it('clamps quality into the range cwebp accepts', () => {
+    assert.strictEqual(resolveImageConfig({ quality: 500 }).quality, 100);
+    assert.strictEqual(resolveImageConfig({ quality: -10 }).quality, 0);
+  });
+
+  it('treats a negative max_width as "do not resize"', () => {
+    assert.strictEqual(resolveImageConfig({ max_width: -800 }).maxWidth, 0);
+  });
 });
 
 describe('buildCwebpArgs', () => {
