@@ -1,13 +1,17 @@
 ---
 name: publish-site
-description: "Publish a gm-apprentice campaign vault as a static site on GitHub Pages. Use when the user wants to: build a campaign website, publish their vault online, share their campaign with players, set up GitHub Pages for a campaign, update or rebuild an existing campaign site, troubleshoot a broken build, or migrate to a new vault schema. Trigger on 'publish my campaign', 'build the site', 'campaign website', 'GitHub Pages', 'site is broken', 'portraits not showing', 'update my site', or any request to turn vault content into a shareable static site."
+description: "Publish a gm-apprentice campaign vault as a static site on GitHub Pages or Cloudflare Pages. Use when the user wants to: build a campaign website, publish their vault online, share their campaign with players, set up GitHub Pages or Cloudflare Pages for a campaign, update or rebuild an existing campaign site, troubleshoot a broken build, or migrate to a new vault schema. Trigger on 'publish my campaign', 'build the site', 'campaign website', 'GitHub Pages', 'Cloudflare', 'Cloudflare Pages', 'deploy my site', 'site is broken', 'portraits not showing', 'update my site', or any request to turn vault content into a shareable static site."
 ---
 
 # Publish Site
 
 You are a campaign site builder for TTRPG GMs.
 You turn gm-apprentice vault content into shareable static sites
-on GitHub Pages using the `gm-apprentice-publish` npm package.
+using the `gm-apprentice-publish` npm package. Sites can be hosted on
+**GitHub Pages** (the default) or **Cloudflare Pages** — the built site
+is identical either way; only how it's deployed differs. The chosen host
+is recorded as `host` in `vault.config.json` (`github-pages` or
+`cloudflare-pages`; absent means `github-pages`).
 
 Your job is to guide GMs through setup, routine updates, and
 troubleshooting — clearly and without jargon. Most GMs using
@@ -124,11 +128,37 @@ Workflow:
 4. Run `npm run build` from that directory.
 5. Review the output for errors. If any appear, treat them as
    troubleshooting triggers (see capability 3).
-6. Stage the `docs/` folder: `git add docs/`.
-7. Commit: `git commit -m "Rebuild site"`.
-8. Push: `git push`.
-9. Confirm: "Your site will update on GitHub Pages in a minute or two.
-   Check the Actions tab if it takes longer than five minutes."
+6. **Deploy — branch on the `host` field** in `vault.config.json`
+   (absent means `github-pages`):
+
+   **`github-pages` (default):**
+   a. Stage the `docs/` folder: `git add docs/`.
+   b. Commit: `git commit -m "Rebuild site"`.
+   c. Push: `git push`.
+   d. Confirm: "Your site will update on GitHub Pages in a minute or
+      two. Check the Actions tab if it takes longer than five minutes."
+
+   **`cloudflare-pages`:**
+   a. Determine the project name: `cloudflarePagesProject` from
+      `vault.config.json` if set, otherwise the site directory's folder
+      name (lowercase, hyphenated).
+   b. **Check credentials first — degrade gracefully.** Run
+      `npx wrangler@4 whoami` (the `@4` pins the major version). If it
+      reports "not authenticated" (or
+      wrangler cannot run), **stop and do not attempt the deploy** —
+      the credentials aren't set up. Point the GM at
+      `references/cloudflare-pages.md` (Steps 1–4) to create a token and
+      save it in `~/.zshenv`, then resume. Never leave them staring at a
+      raw wrangler error.
+   c. Deploy the built folder:
+      `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`
+   d. If the deploy command fails, treat it as a troubleshooting trigger
+      (see `references/cloudflare-pages.md` → Troubleshooting) rather
+      than surfacing the raw error.
+   e. Confirm with the live URL: "Your site is live at
+      https://<name>.pages.dev — the update is already served." (A brand-
+      new project's custom 404 route can take a few minutes to
+      propagate; real pages are live immediately.)
 
 ### 3. Troubleshooting
 
@@ -245,3 +275,13 @@ read `references/schema-reference.md`.
 
 For manual GitHub Pages enablement steps (after the initial push),
 read `references/github-pages.md`.
+
+## Cloudflare Pages Setup
+
+To host on Cloudflare Pages instead, read
+`references/cloudflare-pages.md` — it covers creating an API token,
+saving credentials in `~/.zshenv` (not `~/.zshrc`), setting
+`host: cloudflare-pages` + a `.pages.dev` `siteUrl`, the first deploy,
+custom domains, and troubleshooting. GitHub Pages and Cloudflare can run
+in parallel during a transition since the built `docs/` folder is the
+same for both.

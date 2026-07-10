@@ -154,7 +154,9 @@ display settings that are specific to the generated site.
 | Output directory | `outputDir` | Where generated HTML is written |
 | Site title | `siteTitle` | Name shown in nav bar and browser tab |
 | Landing tagline | `landingTagline` | One-sentence hook on the homepage |
-| Site URL | `siteUrl` | Canonical base URL for absolute links |
+| Host | `host` | Where the site is deployed: `github-pages` (default, or when absent) or `cloudflare-pages`. See `cloudflare-pages.md`. |
+| Site URL | `siteUrl` | Canonical base URL. For `cloudflare-pages` this **must** be the Cloudflare URL (e.g. `https://<project>.pages.dev`) — Cloudflare serves at the root, so a leftover `github.io` URL breaks the 404 page. |
+| Cloudflare project | `cloudflarePagesProject` | Optional. Cloudflare Pages project name for deploys. Defaults to the site directory's folder name. |
 | Attachments directory | `attachmentsDir` | Subfolder in vault holding images |
 | Folder map | `folderMap` | Maps vault folders to site output paths |
 | Exclude directories | `excludeDirs` | Fallback if `vault-config.md` doesn't set `publish.exclude_dirs` |

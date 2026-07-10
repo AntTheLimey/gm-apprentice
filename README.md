@@ -18,7 +18,7 @@ generation to campaign management and session lifecycle support.
 | **session-play** | At-the-table GM support — fast lookups, rules assist, on-the-fly NPC/location generation, note capture. Speed-optimised for live play. | Optional |
 | **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward identification. Accepts raw play notes or [GM-Assistant](https://gmassistant.app) session exports. Works with Obsidian or plain filesystem. | Recommended |
 | **vault-ingest** | Ingest old campaign materials (notes, character sheets, images, transcripts) into a structured vault. Interviews the GM to recover what actually happened. | Recommended |
-| **publish-site** | Publish your campaign vault as a static website on GitHub Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
+| **publish-site** | Publish your campaign vault as a static website on GitHub Pages or Cloudflare Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
 
 ### Skill Taxonomy
 

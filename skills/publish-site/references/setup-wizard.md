@@ -14,7 +14,8 @@ Check that the GM has the following:
   or PowerShell on Windows, any shell on Linux)
 - Node.js 22 or later installed — check with `node --version`
 - Git installed — check with `git --version`
-- A GitHub account
+- A **GitHub account** (for GitHub Pages) **or** a free **Cloudflare
+  account** (for Cloudflare Pages). You'll pick a host in Step 3.5.
 
 If any of these are missing, address them before continuing. For
 Node.js, send the GM to https://nodejs.org and ask them to install
@@ -79,7 +80,40 @@ This becomes the `landingTagline` in `vault.config.json`.
 
 ---
 
+## Step 3.5: Choose your host
+
+Ask:
+
+> "Where would you like to host the site? Two free options:
+> - **GitHub Pages** — hosts from a GitHub repository. Good if you
+>   already use GitHub.
+> - **Cloudflare Pages** — hosts on Cloudflare's network, with easy
+>   custom domains and image optimization.
+>
+> The site itself is identical either way. Which would you like?"
+
+Record the answer as `host` in `vault.config.json`
+(`github-pages` or `cloudflare-pages`).
+
+**This choice forks the rest of the wizard:**
+
+- **GitHub Pages** — continue with Step 4 onward exactly as written
+  (`host: github-pages`, or simply omit the field).
+- **Cloudflare Pages** — set `host: cloudflare-pages`. Still do the
+  vault/title/tagline/site-directory/config-write steps below, but:
+  - In Step 4, ask only for a **project name** (lowercase letters,
+    numbers, hyphens) instead of a GitHub username/repo. Set
+    `siteUrl` to `https://<project>.pages.dev`.
+  - **Skip the GitHub-specific steps** (creating a GitHub repo,
+    enabling GitHub Pages). In their place, follow
+    `references/cloudflare-pages.md` for creating an API token, saving
+    credentials in `~/.zshenv`, and the first deploy.
+
+---
+
 ## Step 4: GitHub username and repo name
+
+*(GitHub Pages path. For Cloudflare, see the fork note in Step 3.5.)*
 
 Ask:
 
@@ -199,12 +233,29 @@ extra download step — `npm install` only needs to re-link the package.
 Open `vault.config.json` in `<targetDir>` and update these fields
 with the values gathered above:
 
+**GitHub Pages:**
+
 ```json
 {
   "vaultPath": "<vault path from Step 1>",
   "siteTitle": "<campaign display name from Step 2>",
   "landingTagline": "<tagline from Step 3>",
+  "host": "github-pages",
   "siteUrl": "https://<githubUsername>.github.io/<repoName>/",
+  "outputDir": "./docs"
+}
+```
+
+**Cloudflare Pages** (`host` and `siteUrl` differ; see Step 3.5):
+
+```json
+{
+  "vaultPath": "<vault path from Step 1>",
+  "siteTitle": "<campaign display name from Step 2>",
+  "landingTagline": "<tagline from Step 3>",
+  "host": "cloudflare-pages",
+  "cloudflarePagesProject": "<project>",
+  "siteUrl": "https://<project>.pages.dev",
   "outputDir": "./docs"
 }
 ```
@@ -394,6 +445,11 @@ git commit -m "Initial site scaffold"
 ---
 
 ## Step 18: Create the GitHub repository
+
+> **Cloudflare Pages path:** skip Steps 18–19 entirely. Instead follow
+> `references/cloudflare-pages.md` (Steps 1–6) to create an API token,
+> save credentials in `~/.zshenv`, create the Pages project, and deploy.
+> Then resume at the closing confirmation.
 
 Check whether the `gh` CLI is available:
 

@@ -4,7 +4,7 @@ The `gm-apprentice-publish` tool turns your campaign vault into a
 static website you can share with your players. It reads the structured
 files that campaign-organizer creates and generates a set of HTML pages
 with navigation, portraits, stat blocks, and cross-linked entities —
-ready to host on GitHub Pages at no cost.
+ready to host for free on **GitHub Pages** or **Cloudflare Pages**.
 
 ## What it produces
 
@@ -59,16 +59,43 @@ frontmatter; the publish-site skill can help you update the folder map.
 ## Getting started
 
 For a guided setup, use the `publish-site` skill. It will walk you
-through installing the package, creating a site repository, connecting
-your vault, enabling GitHub Pages, and publishing for the first time.
-It can also help with routine rebuilds after you update your vault,
-troubleshooting build errors, and adding new entity types.
+through installing the package, connecting your vault, choosing a host,
+and publishing for the first time. It can also help with routine
+rebuilds after you update your vault, troubleshooting build errors, and
+adding new entity types.
 
 To trigger it, say something like:
 
 > "I want to publish my campaign as a website"
 > "Set up a site for my campaign"
 > "Help me share my campaign with my players"
+
+## Choosing where to host it
+
+You build the site the same way regardless of host (`npm run build`
+produces a `docs/` folder). Only the final deploy step differs. Set the
+`host` field in `vault.config.json` to pick one; if it's absent, GitHub
+Pages is assumed.
+
+| | **GitHub Pages** (`github-pages`) | **Cloudflare Pages** (`cloudflare-pages`) |
+|---|---|---|
+| Best if | You already use GitHub | You want Cloudflare's CDN, easy custom domains, image optimization |
+| You need | A GitHub account | A free Cloudflare account + a one-time API token |
+| Deploy step | `git push` (auto-builds the Pages site) | `wrangler pages deploy docs/` (one command) |
+| Site URL | `<user>.github.io/<repo>/` (a subpath) | `<project>.pages.dev` (the root) |
+
+The two can run side by side during a switch — the built `docs/` folder
+is identical, so `git push` keeps GitHub Pages current while a wrangler
+deploy updates Cloudflare.
+
+**Credentials and step-by-step setup** live in the publish-site skill's
+reference guides — the skill walks you through them, or you can read them
+directly:
+
+- **GitHub Pages** — [`references/github-pages.md`](../skills/publish-site/references/github-pages.md)
+- **Cloudflare Pages** — [`references/cloudflare-pages.md`](../skills/publish-site/references/cloudflare-pages.md)
+  (creating a least-privilege API token, saving it in `~/.zshenv`, the
+  first deploy, and custom domains)
 
 ## Technical details
 
