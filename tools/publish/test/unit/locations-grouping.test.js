@@ -179,6 +179,27 @@ describe('grouped locations page', () => {
     assert.ok(!html.includes('placeholder'), 'no visible placeholder box');
   });
 
+  it('gives every body row a thumbnail slot, image or spacer', () => {
+    const html = render();
+    const rows = (html.match(/<div class="loc-node-row">/g) || []).length;
+    const slots = (html.match(/<span class="loc-node-thumb[" ]/g) || []).length;
+    assert.strictEqual(slots, rows, 'each row reserves exactly one thumbnail column');
+  });
+
+  it('reserves the thumbnail slot on section headers too, so titles align across the grid', () => {
+    // Corwin System has a portrait; Eris System does not. Both headers must reserve the box,
+    // or the portrait-less section's title sits flush left against its neighbours'.
+    const html = render();
+    const headers = html.split('<header class="loc-system-header">').slice(1)
+      .map(h => h.split('</header>')[0]);
+    assert.strictEqual(headers.length, 3, 'two systems + ungrouped');
+    for (const header of headers) {
+      assert.match(header, /<span class="loc-system-thumb[" ]/, 'header reserves a thumbnail slot');
+    }
+    assert.ok(headers.some(h => h.includes('images/corwin.png')), 'Corwin shows its portrait');
+    assert.ok(headers.some(h => h.includes('loc-system-thumb-empty')), 'Eris reserves a spacer');
+  });
+
   it('collects locations with no system ancestor into the ungrouped section', () => {
     const html = render();
     assert.ok(html.includes('loc-system-ungrouped'));

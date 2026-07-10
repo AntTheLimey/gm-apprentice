@@ -227,9 +227,17 @@ function renderGroupedLocationsPage(pages, indexDir, imageMap, grouping) {
     const count = subtreeSize(node);
     const rows = node.children.slice().sort(byTitle).map(renderNode).join('\n');
 
+    // The system heading a section is a location like any other, so it reserves the same
+    // thumbnail slot. Without the spacer, a portrait-less system's title sits flush left
+    // while its neighbours' titles are pushed right by their thumbnails — and in a grid of
+    // section cards that misalignment reads across the whole page.
+    const thumbHtml = thumb
+      ? `<span class="loc-system-thumb">${thumb}</span>`
+      : '<span class="loc-system-thumb loc-system-thumb-empty" aria-hidden="true"></span>';
+
     return `<section class="loc-system">
   <header class="loc-system-header">
-    ${thumb ? `<span class="loc-system-thumb">${thumb}</span>` : ''}
+    ${thumbHtml}
     <h2 class="loc-system-title"><a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a></h2>
     ${locType ? `<span class="loc-type-badge">${escapeHtml(locType)}</span>` : ''}
     <span class="loc-system-count">${count} location${count !== 1 ? 's' : ''}</span>
@@ -256,6 +264,7 @@ function renderGroupedLocationsPage(pages, indexDir, imageMap, grouping) {
   const ungroupedHtml = leftoverRoots.length
     ? `<section class="loc-system loc-system-ungrouped">
   <header class="loc-system-header">
+    <span class="loc-system-thumb loc-system-thumb-empty" aria-hidden="true"></span>
     <h2 class="loc-system-title">${escapeHtml(grouping.ungroupedLabel)}</h2>
     <span class="loc-system-count">${leftoverRoots.length} entr${leftoverRoots.length !== 1 ? 'ies' : 'y'}</span>
   </header>

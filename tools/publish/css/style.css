@@ -2205,9 +2205,17 @@ tr:nth-child(even) {
   border-radius: 0.25rem;
   display: block;
 }
+/* Sized on the span, not just the img, so the empty spacer occupies the same box. */
+.loc-system-thumb,
 .loc-system-thumb img.portrait {
   width: 2.25rem;
   height: 2.25rem;
+  flex: 0 0 2.25rem;
+}
+/* Reserve the column so section titles align across the grid; a system with no portrait
+   shouldn't be advertised by a placeholder box. */
+.loc-system-thumb-empty {
+  visibility: hidden;
 }
 /* The collapsed political scaffolding (Republic › Sector): context, not navigation. */
 .loc-context {
