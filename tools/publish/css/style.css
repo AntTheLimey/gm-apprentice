@@ -2159,6 +2159,100 @@ tr:nth-child(even) {
   color: var(--text-muted);
 }
 
+/* ===== LOCATIONS: PIVOT-GROUPED VIEW ===== */
+/* Sections flow in columns so the page width does the work, instead of one tall,
+   deeply-indented tree rooted at a single political node. */
+.loc-system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 1rem;
+  align-items: start;
+  margin-top: 1rem;
+}
+.loc-system {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+.loc-system-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.loc-system-title {
+  font-size: 1rem;
+  margin: 0;
+  flex: 1 1 auto;
+}
+.loc-system-title a {
+  color: var(--text);
+}
+.loc-system-title a:hover {
+  color: var(--accent);
+}
+.loc-system-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.loc-system-thumb img.portrait,
+.loc-node-thumb img.portrait {
+  object-fit: cover;
+  border-radius: 0.25rem;
+  display: block;
+}
+.loc-system-thumb img.portrait {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+/* The collapsed political scaffolding (Republic › Sector): context, not navigation. */
+.loc-context {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.75rem;
+}
+.loc-system .loc-context {
+  margin: 0.6rem 0 0;
+}
+.loc-system-body {
+  margin-top: 0.6rem;
+}
+.loc-node-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+.loc-node-thumb,
+.loc-node-thumb img.portrait {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 1.5rem;
+}
+/* Reserve the column so names stay aligned; an entity with no portrait shouldn't be
+   advertised by a placeholder box. */
+.loc-node-thumb-empty {
+  visibility: hidden;
+}
+.loc-node-name {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.loc-node-name:hover {
+  color: var(--accent);
+}
+.loc-node-children {
+  margin-left: 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--border);
+}
+
 /* ===== CAMPAIGN DEEP DIVE ===== */
 .campaign-deep-dive {
   display: flex;

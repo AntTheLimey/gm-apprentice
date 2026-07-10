@@ -230,6 +230,31 @@ It includes these sections (each omitted if no relevant data exists):
 - **Explore** — compact grid of category index pages with entry counts,
   excluding PC and NPC categories (those have dedicated sections above)
 
+### Locations index grouping
+
+When a campaign's geography funnels through one political root
+(`Republic → Sector → System → planet`), the default Locations listing is
+a single deep tree. Pivot grouping gives each mid-level node its own
+section:
+
+```yaml
+publish:
+  locations:
+    group_by: system                    # matched against location_type
+    ungrouped_label: Deep Space & Routes
+```
+
+`group_by` is a case-insensitive substring of `location_type`, so
+`system` matches `star system` too. The `scifi` genre defaults it to
+`system`; other genres leave grouping off, and `group_by: false` turns a
+genre default back off.
+
+Every location stays a first-class row with its own thumbnail and type
+badge, with children nested beneath it. Only the scaffolding *above* the
+pivot is collapsed, into a context caption. Locations with no matching
+ancestor collect under `ungrouped_label`. Fewer than two matches falls
+back to the flat view — one section is not a grouping.
+
 ### Player-mode image filtering
 
 When building in `player` mode with a publish manifest, only images

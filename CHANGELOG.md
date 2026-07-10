@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.17] — 2026-07-09
+
+Publish tool 1.10.0.
+
+### Added
+
+- **Opt-in WebP image optimization.** `publish.images.optimize` re-encodes
+  PNG/JPEG attachments to WebP as they're copied, resizing to
+  `max_width` (default 1600) at `quality` (default 82). On a
+  portrait-heavy vault this cut 164 MB of images to 11 MB. The pass runs
+  before any page renders, so the swapped extension flows into `<img src>`
+  at emission time rather than being rewritten into generated HTML
+  afterwards. Requires the `cwebp` binary; without it the build warns and
+  copies originals. Images that would grow when re-encoded keep their
+  original bytes. (#91)
+- **Pivot grouping for the Locations index.** `publish.locations.group_by`
+  gives each matching `location_type` — a star system, say — its own
+  section, instead of one deep tree rooted at a single political node. The
+  scaffolding above the pivot collapses into a context caption; every
+  location below it stays a first-class row with its own thumbnail and
+  type badge, children nested beneath it. Locations outside any pivot
+  collect under `ungrouped_label`. Defaults on for the `scifi` genre, and
+  falls back to the flat view when fewer than two locations match. (#93)
+
+### Fixed
+
+- **`css/overrides.css` is now wired into the build.** `gm-publish init`
+  scaffolded it, but nothing copied or linked it, so the one file that
+  looked like the customization seam did nothing — and `theme.css`, the
+  only file that would have worked, is regenerated every build. It is now
+  copied into `docs/css/` and linked last in `<head>`, after `theme.css`
+  and the genre overlay, so site rules win the cascade. Sites without one
+  emit no link tag. (#92)
+- **Portraits resolve through the scanner's image map.** `portraitImg`
+  built its output path from the `portrait:` frontmatter string, so a
+  `portrait:` that omitted its subdirectory pointed at a file the build
+  had copied elsewhere.
+
 ## [1.8.16] — 2026-07-09
 
 Publish tool 1.9.0. Fixes the eight open publish-site issues.

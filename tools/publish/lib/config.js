@@ -117,6 +117,10 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ...jsonConfigFallback.images,
       ...publish.images,
     },
+    // Deliberately not merged with a default: the Locations index needs to tell
+    // "group_by never mentioned" (fall back to the genre's pivot) apart from
+    // "group_by explicitly falsy" (grouping off), and a default would erase that.
+    locations: { ...jsonConfigFallback.locations, ...publish.locations },
     overrides: {
       ...PUBLISH_DEFAULTS.overrides,
       ...publish.overrides,
