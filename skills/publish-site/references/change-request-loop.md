@@ -76,9 +76,18 @@ submission order (`timestamp` ascending), tracking **running unspent points**
      ```bash
      npx gm-apprentice-publish inbox reply <id> rejected "Ronin → Sex Appeal +2 (11→13). Costs 6; he has 5. One short — nothing applied. Send it again with \"GM said OK\" to override."
      ```
+
+     Then log a `⚠` line (character · what was asked · "can't afford — nothing applied").
    - **Ambiguous — ask, don't guess.** If you genuinely can't tell *what* the
-     player means (which skill, which item), do not edit — reply asking which they
-     meant. An override bypasses affordability, never an unknown target.
+     player means (which skill, which item), do not edit. Finalize with a
+     **`rejected`** reply asking which they meant:
+
+     ```bash
+     npx gm-apprentice-publish inbox reply <id> rejected "Which skill did you mean — Guns (Pistol) or Gunner? Send it again naming one."
+     ```
+
+     Then log a `⚠` line (character · the ambiguous request · "needs clarification").
+     An override bypasses affordability, never an unknown target.
 3. **Question → answer** using **player-safe scope only** — the published
    sheet/site + GURPS rules + the character's own non-GM sections. NEVER use
    `GM Notes`, `DM Notes`, `Player Notes`, `Source References`,
