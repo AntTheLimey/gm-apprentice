@@ -179,6 +179,62 @@ wrangler only uploads files that changed, so repeat deploys are fast.
 
 ---
 
+## Change-request inbox (one-time setup)
+
+The change-request inbox lets players submit sheet edits from their phones. It
+needs a KV namespace bound to your Pages project. Do this once per site.
+
+New sites scaffolded after this feature already have `wrangler.toml` and a
+`functions/` directory. Existing sites: copy `wrangler.toml` and the
+`functions/` directory from a freshly `init`-ed site into your site root
+(they are not build output — they live beside `vault.config.json`, not in
+`docs/`).
+
+> **Existing sites — set the project name first.** Open `wrangler.toml` and set
+> `name` to your **existing** Cloudflare Pages project name (the one you first
+> ran `pages project create` with, e.g. `dead-end`). The scaffold fills `name`
+> from the site title, which may not match — and a mismatched `name` deploys to
+> a *different* project. If unsure, run `npx wrangler@4 pages project list`.
+
+1. **Create the KV namespace:**
+
+   ```bash
+   npx wrangler@4 kv namespace create INBOX
+   ```
+
+   It prints an `id`. Paste that id into `wrangler.toml`, replacing
+   `PUT-YOUR-KV-NAMESPACE-ID-HERE`.
+
+2. **Deploy** (with `wrangler.toml` present, the deploy bundles the Function
+   and binds KV automatically):
+
+   ```bash
+   npm run build
+   npx wrangler@4 pages deploy
+   ```
+
+   > **Note — deploy command changes here.** Once `wrangler.toml` exists (it
+   > sets `pages_build_output_dir = "docs"`), deploy with a **bare**
+   > `npx wrangler@4 pages deploy` — no `docs/` argument. Passing the directory
+   > positionally now conflicts with the config and errors. This **replaces**
+   > the `pages deploy docs/` form shown earlier in this guide for any site that
+   > has adopted the inbox.
+
+3. **Verify the endpoint** — with no session code set yet, a submit must be
+   rejected:
+
+   ```bash
+   curl -s -X POST https://<project>.pages.dev/api/request \
+     -H 'content-type: application/json' \
+     -d '{"code":"TEST","character":"x","text":"hello"}'
+   # → {"error":"code"}   (no session open yet — expected)
+   ```
+
+   Setting a live session code and draining the queue are covered by the loop
+   (Part 3).
+
+---
+
 ## Custom domain (optional)
 
 If you own a domain and want the site at `campaign.example.com` instead
