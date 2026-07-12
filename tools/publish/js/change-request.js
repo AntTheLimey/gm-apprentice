@@ -87,7 +87,7 @@
         '<button type="button" class="cr-toggle" aria-expanded="false">✎ Request a change / ask a question</button>' +
         '<button type="button" class="cr-log-btn" aria-label="Open chat log" hidden>💬</button>' +
         '<div class="cr-panel" hidden>' +
-          '<p class="cr-hint">Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?").</p>' +
+          '<p class="cr-hint">Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?"). Can\'t afford something but the GM okayed it? Add "GM said OK" and it\'ll go through anyway.</p>' +
           '<input type="text" class="cr-code" maxlength="4" placeholder="4-char code" aria-label="Session code" hidden>' +
           '<div class="cr-inputrow">' +
             '<textarea class="cr-text" rows="3" aria-label="Your message"></textarea>' +
