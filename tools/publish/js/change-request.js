@@ -88,6 +88,13 @@
       codeInput.hidden = !shouldPromptForCode(readJSON(K_CODE), Date.now());
     }
 
+    // Strip the cache-busting param left over from the forced reload above.
+    if (location.search.indexOf('_cr=') !== -1 && window.history && history.replaceState) {
+      var cleanUrl = new URL(location.href);
+      cleanUrl.searchParams.delete('_cr');
+      history.replaceState(null, '', cleanUrl.pathname + (cleanUrl.search || '') + cleanUrl.hash);
+    }
+
     toggle.addEventListener('click', function () {
       var open = panel.hidden;
       panel.hidden = !open;
@@ -144,7 +151,12 @@
           // Keep still-pending ids; drop resolved ones so we don't re-wait after reload.
           setPending(part.pending);
           localStorage.setItem(K_LIVE, '1');
-          location.reload();
+          // Cache-bust: a plain reload() can be served from bfcache on mobile,
+          // showing the "live" banner over stale content. A unique URL forces
+          // a fresh document fetch.
+          var u = new URL(location.href);
+          u.searchParams.set('_cr', String(Date.now()));
+          location.replace(u.href);
         } else if (action === 'flagged-only') {
           setPending([]);
           clearInterval(timer); timer = null;
@@ -152,6 +164,12 @@
         }
       }).catch(function () { /* transient; try again next tick */ });
     }
+
+    // Backgrounded mobile tabs throttle the 15s poll timer; poll immediately
+    // when the tab regains focus so a returning player doesn't have to wait.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && getPending().length) poll();
+    });
 
     if (getPending().length) startPolling();
   }
