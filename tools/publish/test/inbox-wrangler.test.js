@@ -29,7 +29,7 @@ test('adapter.get returns stdout on success, null on missing', async () => {
   const kv = makeAdapter({ runWrangler, namespaceId: 'NS' });
   assert.equal(await kv.get('req:a'), '{"id":"a"}');           // trailing newline trimmed
   assert.equal(await kv.get('req:missing'), null);
-  assert.deepEqual(calls[0], ['kv', 'key', 'get', 'req:a', '--namespace-id', 'NS']);
+  assert.deepEqual(calls[0], ['kv', 'key', 'get', 'req:a', '--namespace-id', 'NS', '--remote']);
 });
 
 test('adapter.put forwards value and optional TTL', async () => {
@@ -38,13 +38,13 @@ test('adapter.put forwards value and optional TTL', async () => {
   const kv = makeAdapter({ runWrangler, namespaceId: 'NS' });
   await kv.put('config:code', 'WOLF');
   await kv.put('req:a', '{"x":1}', { expirationTtl: 300 });
-  assert.deepEqual(calls[0], ['kv', 'key', 'put', 'config:code', 'WOLF', '--namespace-id', 'NS']);
-  assert.deepEqual(calls[1], ['kv', 'key', 'put', 'req:a', '{"x":1}', '--namespace-id', 'NS', '--expiration-ttl', '300']);
+  assert.deepEqual(calls[0], ['kv', 'key', 'put', 'config:code', 'WOLF', '--namespace-id', 'NS', '--remote']);
+  assert.deepEqual(calls[1], ['kv', 'key', 'put', 'req:a', '{"x":1}', '--namespace-id', 'NS', '--remote', '--expiration-ttl', '300']);
 });
 
 test('adapter.list parses wrangler JSON into {keys:[{name}]}', async () => {
   const runWrangler = (args) => {
-    assert.deepEqual(args, ['kv', 'key', 'list', '--namespace-id', 'NS', '--prefix', 'req:']);
+    assert.deepEqual(args, ['kv', 'key', 'list', '--namespace-id', 'NS', '--remote', '--prefix', 'req:']);
     return { code: 0, stdout: JSON.stringify([{ name: 'req:a' }, { name: 'req:b' }]), stderr: '' };
   };
   const kv = makeAdapter({ runWrangler, namespaceId: 'NS' });

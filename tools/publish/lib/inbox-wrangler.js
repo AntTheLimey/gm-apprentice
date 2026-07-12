@@ -20,7 +20,7 @@ function readNamespaceId(tomlText) {
 }
 
 function makeAdapter({ runWrangler, namespaceId }) {
-  const ns = ['--namespace-id', namespaceId];
+  const ns = ['--namespace-id', namespaceId, '--remote'];
   return {
     async get(key) {
       const res = runWrangler(['kv', 'key', 'get', key, ...ns]);
