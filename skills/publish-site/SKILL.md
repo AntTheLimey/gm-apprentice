@@ -1,6 +1,6 @@
 ---
 name: publish-site
-description: "Publish a gm-apprentice campaign vault as a static site on GitHub Pages or Cloudflare Pages. Use when the user wants to: build a campaign website, publish their vault online, share their campaign with players, set up GitHub Pages or Cloudflare Pages for a campaign, update or rebuild an existing campaign site, troubleshoot a broken build, or migrate to a new vault schema. Trigger on 'publish my campaign', 'build the site', 'campaign website', 'GitHub Pages', 'Cloudflare', 'Cloudflare Pages', 'deploy my site', 'site is broken', 'portraits not showing', 'update my site', or any request to turn vault content into a shareable static site."
+description: "Publish a gm-apprentice campaign vault as a static site on GitHub Pages or Cloudflare Pages, and run the at-table change-request loop that lets players request sheet edits during play. Use when the user wants to: build a campaign website, publish their vault online, share their campaign with players, set up GitHub Pages or Cloudflare Pages for a campaign, update or rebuild an existing campaign site, troubleshoot a broken build, migrate to a new vault schema, or watch for player sheet change requests during a live session. Trigger on 'publish my campaign', 'build the site', 'campaign website', 'GitHub Pages', 'Cloudflare', 'Cloudflare Pages', 'deploy my site', 'site is broken', 'portraits not showing', 'update my site', 'start your checking loop', 'pick up the change requests', 'open the inbox', or any request to turn vault content into a shareable static site."
 ---
 
 # Publish Site
@@ -63,7 +63,7 @@ npm run build    # generate docs/ from the vault
 Node 22 or later is required. If the GM hits a version error,
 advise them to install Node via https://nodejs.org (LTS release).
 
-## Six Capabilities
+## Seven Capabilities
 
 ### 1. First-time setup
 
@@ -229,6 +229,16 @@ automatically.
 
 For full documentation of the filtering model, see
 `references/content-filtering.md`.
+
+### 7. Change-request loop (at-table)
+
+**Trigger:** "start your checking loop", "pick up the change requests",
+"open the inbox", "watch for sheet changes"
+
+Follow `references/change-request-loop.md`. It runs an unattended, self-paced
+loop that drains player sheet-edit requests, applies clean GURPS edits to the
+vault, batches one rebuild + redeploy per tick, and flags edge cases. GURPS 4e
+only for now.
 
 ## Configuration
 

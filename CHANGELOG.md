@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.20] — 2026-07-12
+
+### Added
+
+- At-table player change requests. Players submit natural-language character-sheet
+  edits from the published site via a collapsed request bar on each PC page (the
+  character sheet render itself is unchanged), gated by a 4-character session code
+  remembered for 72 hours, with the page auto-refreshing when a change goes live.
+  A Cloudflare Pages Function validates the code and queues requests in KV; new
+  sites scaffold the Function and a `wrangler.toml` KV binding automatically.
+- publish-site "start your checking loop" workflow: a dedicated, unattended session
+  that drains the request queue on a self-paced ~60s loop, applies clean GURPS 4e
+  edits to the vault (validated against ttrpg-expert's point-cost references),
+  batches one rebuild + redeploy per tick, marks requests handled only after a
+  successful deploy, and flags edge cases for the GM. GURPS 4e for this release.
+
 ## [1.8.19] — 2026-07-10
 
 Publish tool 1.11.1.
