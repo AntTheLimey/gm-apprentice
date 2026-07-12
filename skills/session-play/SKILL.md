@@ -69,6 +69,13 @@ file reference and advance `status` to `played`.
 Acknowledge and hold. No editing or analysis — processed during
 wrap-up. Note new entities for wrap-up attention.
 
+### Player Sheet Changes
+
+If players are submitting sheet edits from the published site during play, the
+**publish-site** skill runs the "start your checking loop" workflow in a
+separate terminal (`references/change-request-loop.md`). Point the GM there;
+session-play does not process the queue itself.
+
 ## Common Mid-Game Lookups
 
 Route these requests directly — don't search, load the file.
