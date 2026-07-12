@@ -63,11 +63,14 @@ async function init(targetDir = '.', options = {}) {
   // isTemplate = true  → read from templates-scaffold, apply placeholders
   // isTemplate = false → read from templates-scaffold as-is (binary-safe / plain copy)
   const plan = [
-    { dest: 'package.json',         tmpl: 'package.json.tmpl',        isTemplate: true  },
-    { dest: 'vault.config.json',    tmpl: 'vault.config.json.tmpl',   isTemplate: true  },
-    { dest: 'README.md',            tmpl: 'README.md.tmpl',           isTemplate: true  },
-    { dest: 'css/overrides.css',    tmpl: 'css/overrides.css',        isTemplate: false },
-    { dest: '.gitignore',           tmpl: 'dot-gitignore',            isTemplate: false },
+    { dest: 'package.json',                    tmpl: 'package.json.tmpl',                    isTemplate: true  },
+    { dest: 'vault.config.json',               tmpl: 'vault.config.json.tmpl',               isTemplate: true  },
+    { dest: 'README.md',                       tmpl: 'README.md.tmpl',                       isTemplate: true  },
+    { dest: 'css/overrides.css',               tmpl: 'css/overrides.css',                    isTemplate: false },
+    { dest: '.gitignore',                      tmpl: 'dot-gitignore',                         isTemplate: false },
+    { dest: 'wrangler.toml',                   tmpl: 'wrangler.toml.tmpl',                    isTemplate: true  },
+    { dest: 'functions/api/inbox-core.mjs',    tmpl: 'functions/api/inbox-core.mjs',          isTemplate: false },
+    { dest: 'functions/api/request.js',        tmpl: 'functions/api/request.js',              isTemplate: false },
   ];
 
   // Check for pre-existing files before writing anything
