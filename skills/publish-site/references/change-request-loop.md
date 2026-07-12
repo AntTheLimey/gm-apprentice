@@ -40,36 +40,57 @@ does the waiting, and you only wake when a request actually arrives.
 
 ## When a batch arrives
 
-The watcher exits and re-invokes you with a JSON array of pending entries
+The watcher hands you a JSON array of pending entries
 `{id, character, text, timestamp, status}` (re-run `npx gm-apprentice-publish
-inbox pull` if you want the freshest state). Then:
+inbox pull` if you want the freshest state). For each, in per-character
+submission order (`timestamp` ascending), tracking **running unspent points**
+(read the current value from the PC's `.md`):
 
-1. Group by `character`; within each character sort by `timestamp` ascending.
-2. For each character, walk their requests in order, tracking **running unspent
-   points** (read the current value from the PC's `.md`):
-   - **Interpret** the natural-language `text`.
-   - **Validate** against GURPS costs using `ttrpg-expert`'s references
-     (`systems/gurps-4e/character-generation.md`, `character-sheet.md`,
-     `skills-*.md`, `traits-*.md`). Attributes: ST/HT 10/level, DX/IQ 20/level.
-     Skills and traits: per those references.
-   - **Classify:**
-     - **Clean** (unambiguous AND affordable/valid): edit the PC's `.md` —
-       raise the attribute/skill, add the equipment, grant/adjust XP, or edit
-       the narrative field — and decrement running unspent points accordingly.
-       Collect the entry `id` into `appliedIds`. Log a `✓` line.
-     - **Edge case** (can't afford / over-budget / ambiguous skill or item):
-       do **not** edit; collect into `flaggedIds`; log a `⚠` line with the
-       reason. Never block the clean ones.
-3. **If `appliedIds` is non-empty**, publish once for the whole batch:
+1. **Classify** the `text`: a **sheet change** (imperative — spend/add/set/
+   raise/remove/note) or a **question** (interrogative / advice-seeking). If
+   genuinely unsure, treat it as a question — never edit the sheet on a guess.
+2. **Change → apply or refuse.** Validate against GURPS costs using
+   `ttrpg-expert`'s references (`systems/gurps-4e/character-generation.md`,
+   `character-sheet.md`, `skills-*.md`, `traits-*.md`). Attributes: ST/HT
+   10/level, DX/IQ 20/level; skills and traits per those references.
+   - **Affordable & unambiguous:** edit the PC's `.md` — raise the attribute/
+     skill, add the equipment, grant/adjust XP, or edit the narrative field —
+     decrement running unspent points, and collect the id into the applied
+     batch. Log a `✓` line. (Its response comes after the deploy.)
+   - **Unaffordable / over-budget / ambiguous:** do **not** edit. Finalize now
+     with a plain-language explanation and the point math, and log a `⚠` line:
+
+     ```bash
+     npx gm-apprentice-publish inbox reply <id> rejected "Ronin → Sex Appeal +2 (11→13). Costs 6; he has 5. One short — nothing applied."
+     ```
+3. **Question → answer** using **player-safe scope only** — the published
+   sheet/site + GURPS rules + the character's own non-GM sections. NEVER use
+   `GM Notes`, `DM Notes`, `Player Notes`, `Source References`,
+   `<!-- gm-only -->` regions, other PCs' private data, or hidden plot/secret.
+   If a good answer would need GM-only info, reply that it's beyond what you
+   can see — never the hidden info itself. Answer as a brief bullet list, then
+   finalize:
+
+   ```bash
+   npx gm-apprentice-publish inbox reply <id> advice "• DX 13→14 = 20 pts …\n• you have 15 — not yet affordable"
+   ```
+4. **Publish the applied batch once.** If the applied batch is non-empty,
    `npm run build` then `npx wrangler@4 pages deploy`.
-   - **On deploy success:** `npx gm-apprentice-publish inbox handled <appliedIds…>`.
-   - **On deploy failure:** do NOT mark handled — the entries stay `pending`
-     (nothing marks them otherwise) and are pulled again on the next watcher
-     cycle. Log the failure.
-4. For each flagged id: `npx gm-apprentice-publish inbox flag <id>` and keep it
-   in the terminal's visible "needs you" list.
+   - **On deploy success:** finalize each applied id with its confirmation:
+
+     ```bash
+     npx gm-apprentice-publish inbox reply <id> applied "✓ Streetwise 2→3 — applied"
+     ```
+   - **On deploy failure:** do **not** reply — the entries stay `pending`
+     (nothing else marks them) and are pulled again on the next watcher cycle.
+     Log the failure.
 5. **Relaunch the background watcher** (the same command as in Start step 4) so
    the next request wakes you. Idle resumes at zero model-token cost.
+
+Every player message therefore returns exactly one response to their chat log:
+`applied` (sheet redeployed), `rejected` (with the point-math reason), or
+`advice`. `reply` is the single finalizer for every item — it supersedes the
+old `handled`/`flag` commands.
 
 ## Terminal log format
 
