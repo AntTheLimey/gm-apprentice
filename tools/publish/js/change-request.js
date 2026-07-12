@@ -85,6 +85,7 @@
       msg.textContent = '✓ your change is live';
       panel.hidden = false;
       toggle.setAttribute('aria-expanded', 'true');
+      codeInput.hidden = !shouldPromptForCode(readJSON(K_CODE), Date.now());
     }
 
     toggle.addEventListener('click', function () {
