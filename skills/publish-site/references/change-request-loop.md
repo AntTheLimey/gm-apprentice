@@ -46,8 +46,9 @@ your checking loop"**, reads out the code, and does not touch it again.
 4. **If `appliedIds` is non-empty**, publish once for the whole batch:
    `npm run build` then `npx wrangler@4 pages deploy`.
    - **On deploy success:** `npx gm-apprentice-publish inbox handled <appliedIds…>`.
-   - **On deploy failure:** do NOT mark handled — leave them (status stays
-     `applied`); they retry next tick. Log the failure.
+   - **On deploy failure:** do NOT mark handled — the entries stay `pending`
+     (nothing marks them otherwise) and are pulled again next tick. Log the
+     failure.
 5. For each flagged id: `npx gm-apprentice-publish inbox flag <id>` and keep it
    in the terminal's visible "needs you" list.
 
@@ -71,8 +72,11 @@ until the next "start your checking loop" replaces it.
 Edit the vault file in place — it is the source of truth; the deploy reflects
 it. Locate unspent/earned points and the relevant section by reading the file
 (GURPS sheets carry an Identity block with Point Total / Unspent Points / Total
-Points Earned, plus Attributes, Skills, and an equipment list). Re-applying an
-already-applied edit must be a no-op (a crash between edit and deploy leaves the
-entry `applied`; on retry, detect the change is already present and just
-re-deploy). Copyright: this only writes the GM's own campaign data — no licensed
-text is introduced.
+Points Earned, plus Attributes, Skills, and an equipment list). A crash between
+editing a `.md` and the deploy leaves the entry `pending`, so the next tick
+pulls it again. Before applying any request, first check whether its change is
+already present in the `.md` (the attribute is already at the target level and
+the unspent points already reflect the cost); if so, treat the apply as a
+no-op and let it ride to the next deploy. This makes re-processing safe.
+Copyright: this only writes the GM's own campaign data — no licensed text is
+introduced.
