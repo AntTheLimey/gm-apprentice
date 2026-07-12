@@ -9,23 +9,42 @@ test('shouldPromptForCode: null or expired prompts, fresh does not', () => {
   assert.equal(cr.shouldPromptForCode({ nope: true }, 1000), true);                           // malformed
 });
 
-test('partitionStatuses buckets pending/applied together', () => {
-  const p = cr.partitionStatuses({ a: 'pending', b: 'applied', c: 'handled', d: 'flagged' });
-  assert.deepEqual(p.pending.sort(), ['a', 'b']);
-  assert.deepEqual(p.handled, ['c']);
-  assert.deepEqual(p.flagged, ['d']);
+test('resolvedResults returns only ids whose response arrived', () => {
+  const results = {
+    a: { status: 'handled', response: '✓ ok', kind: 'applied' },
+    b: { status: 'pending', response: null, kind: null },
+    c: { status: 'flagged', response: 'no', kind: 'rejected' },
+  };
+  const r = cr.resolvedResults(results, ['a', 'b', 'c']);
+  assert.deepEqual(r.map(x => x.id).sort(), ['a', 'c']);
 });
 
-test('decide: reload when any handled', () => {
-  assert.equal(cr.decide({ handled: ['c'], flagged: [], pending: ['a'] }), 'reload');
+test('staleIds returns handled-with-no-response ids (expired), not pending ones', () => {
+  const results = {
+    a: { status: 'handled', response: null, kind: null },   // expired/gone
+    b: { status: 'pending', response: null, kind: null },   // still waiting
+    c: { status: 'handled', response: '✓', kind: 'applied' } // resolved, not stale
+  };
+  assert.deepEqual(cr.staleIds(results, ['a', 'b', 'c']), ['a']);
 });
 
-test('decide: flagged-only when nothing pending and some flagged', () => {
-  assert.equal(cr.decide({ handled: [], flagged: ['d'], pending: [] }), 'flagged-only');
+test('needsReload only when an applied result is present', () => {
+  assert.equal(cr.needsReload([{ id: 'a', kind: 'applied' }]), true);
+  assert.equal(cr.needsReload([{ id: 'c', kind: 'rejected' }, { id: 'd', kind: 'advice' }]), false);
 });
 
-test('decide: keep polling when work remains and nothing handled', () => {
-  assert.equal(cr.decide({ handled: [], flagged: ['d'], pending: ['a'] }), 'poll');
+test('appendLog caps to LOG_MAX', () => {
+  let log = [];
+  for (let i = 0; i < cr.LOG_MAX + 5; i++) log = cr.appendLog(log, { id: 'i' + i, ts: i, message: 'm' });
+  assert.equal(log.length, cr.LOG_MAX);
+  assert.equal(log[log.length - 1].id, 'i' + (cr.LOG_MAX + 4)); // newest kept
+});
+
+test('setLogReply fills the matching entry', () => {
+  const log = [{ id: 'a', ts: 1, message: 'q' }, { id: 'b', ts: 2, message: 'r' }];
+  const out = cr.setLogReply(log, 'b', '• answer', 'advice');
+  assert.deepEqual(out[1], { id: 'b', ts: 2, message: 'r', reply: '• answer', kind: 'advice' });
+  assert.equal(out[0].reply, undefined); // others untouched
 });
 
 test('classifySubmitError maps HTTP status', () => {

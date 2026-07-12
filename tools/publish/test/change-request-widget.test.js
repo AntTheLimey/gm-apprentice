@@ -24,3 +24,12 @@ test('widget falls back to displayTitle when frontmatter.name is absent', () => 
   const html = pcTemplate(p2, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, {});
   assert.ok(html.includes('data-character="Hero"'));
 });
+
+const fs = require('node:fs');
+test('widget script ships the chat-log and hint UI hooks', () => {
+  const src = fs.readFileSync(require('path').join(__dirname, '../js/change-request.js'), 'utf8');
+  assert.ok(src.includes('cr-hint'), 'has the helper-text element');
+  assert.ok(src.includes('cr-log'), 'has the chat-log button/panel');
+  assert.ok(src.includes('cr-expand'), 'has the expand/contract control');
+  assert.ok(src.includes("'cr:log'"), 'uses the cr:log storage key');
+});
