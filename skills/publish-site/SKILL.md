@@ -63,7 +63,7 @@ npm run build    # generate docs/ from the vault
 Node 22 or later is required. If the GM hits a version error,
 advise them to install Node via https://nodejs.org (LTS release).
 
-## Six Capabilities
+## Seven Capabilities
 
 ### 1. First-time setup
 
@@ -229,6 +229,16 @@ automatically.
 
 For full documentation of the filtering model, see
 `references/content-filtering.md`.
+
+### 7. Change-request loop (at-table)
+
+**Trigger:** "start your checking loop", "pick up the change requests",
+"open the inbox", "watch for sheet changes"
+
+Follow `references/change-request-loop.md`. It runs an unattended, self-paced
+loop that drains player sheet-edit requests, applies clean GURPS edits to the
+vault, batches one rebuild + redeploy per tick, and flags edge cases. GURPS 4e
+only for now.
 
 ## Configuration
 
