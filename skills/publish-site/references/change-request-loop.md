@@ -72,8 +72,9 @@ submission order (`timestamp` ascending), tracking **running unspent points**
    finalize:
 
    ```bash
-   npx gm-apprentice-publish inbox reply <id> advice "• DX 13→14 = 20 pts …\n• you have 15 — not yet affordable"
+   npx gm-apprentice-publish inbox reply <id> advice $'• DX 13→14 = 20 pts …\n• you have 15 — not yet affordable'
    ```
+   Multi-line replies (like bullet lists) require real newlines in the chat log — use bash `$'...'` quoting so `\n` becomes a newline.
 4. **Publish the applied batch once.** If the applied batch is non-empty,
    `npm run build` then `npx wrangler@4 pages deploy`.
    - **On deploy success:** finalize each applied id with its confirmation:
