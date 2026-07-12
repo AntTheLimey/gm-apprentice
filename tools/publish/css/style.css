@@ -3503,3 +3503,24 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .cr-panel .cr-code { width: 6rem; text-transform: uppercase; }
 .cr-panel .cr-send { cursor: pointer; }
 .cr-msg { font-size: .85rem; opacity: .85; }
+
+/* --- Comms widget: hint, resizable input, chat log (Part: advice+log) --- */
+.cr-hint { font-size: .8rem; opacity: .8; margin: 0 0 .5rem; }
+.cr-inputrow { display: flex; gap: .35rem; align-items: flex-start; }
+.cr-inputrow .cr-text { flex: 1 1 auto; min-width: 0; resize: vertical; }
+.cr-text.cr-big { min-height: 8rem; }
+.cr-expand { cursor: pointer; align-self: stretch; }
+.cr-log-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: .35rem; }
+.cr-logpanel { margin-top: .5rem; max-height: 16rem; overflow-y: auto; border-top: 1px solid var(--border, #ccc); padding-top: .5rem; }
+.cr-logentry { margin-bottom: .6rem; font-size: .85rem; }
+.cr-you { font-weight: 600; }
+.cr-reply { margin-top: .15rem; white-space: pre-wrap; }
+.cr-reply.cr-rejected { color: var(--danger, #b00); }
+.cr-reply.cr-waiting { opacity: .6; }
+.cr-empty { opacity: .6; font-size: .85rem; }
+
+/* Mobile: center the back-to-top and make it more transparent (Part: advice+log) */
+@media (max-width: 767px) {
+  .back-to-top { left: 50%; right: auto; transform: translateX(-50%); }
+  .back-to-top.visible { opacity: 0.55; }
+}
