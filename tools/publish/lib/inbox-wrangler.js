@@ -28,7 +28,7 @@ function makeAdapter({ runWrangler, namespaceId }) {
       return res.stdout.replace(/\n$/, '');
     },
     async put(key, value, opts) {
-      const extra = opts && opts.expirationTtl ? ['--expiration-ttl', String(opts.expirationTtl)] : [];
+      const extra = opts && opts.expirationTtl ? ['--ttl', String(opts.expirationTtl)] : [];
       const res = runWrangler(['kv', 'key', 'put', key, value, ...ns, ...extra]);
       if (res.code !== 0) throw new Error(`wrangler put failed: ${res.stderr}`);
     },

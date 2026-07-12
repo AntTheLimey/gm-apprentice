@@ -39,7 +39,7 @@ test('adapter.put forwards value and optional TTL', async () => {
   await kv.put('config:code', 'WOLF');
   await kv.put('req:a', '{"x":1}', { expirationTtl: 300 });
   assert.deepEqual(calls[0], ['kv', 'key', 'put', 'config:code', 'WOLF', '--namespace-id', 'NS', '--remote']);
-  assert.deepEqual(calls[1], ['kv', 'key', 'put', 'req:a', '{"x":1}', '--namespace-id', 'NS', '--remote', '--expiration-ttl', '300']);
+  assert.deepEqual(calls[1], ['kv', 'key', 'put', 'req:a', '{"x":1}', '--namespace-id', 'NS', '--remote', '--ttl', '300']);
 });
 
 test('adapter.list parses wrangler JSON into {keys:[{name}]}', async () => {
