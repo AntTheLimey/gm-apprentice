@@ -49,20 +49,36 @@ submission order (`timestamp` ascending), tracking **running unspent points**
 1. **Classify** the `text`: a **sheet change** (imperative — spend/add/set/
    raise/remove/note) or a **question** (interrogative / advice-seeking). If
    genuinely unsure, treat it as a question — never edit the sheet on a guess.
-2. **Change → apply or refuse.** Validate against GURPS costs using
-   `ttrpg-expert`'s references (`systems/gurps-4e/character-generation.md`,
-   `character-sheet.md`, `skills-*.md`, `traits-*.md`). Attributes: ST/HT
-   10/level, DX/IQ 20/level; skills and traits per those references.
-   - **Affordable & unambiguous:** edit the PC's `.md` — raise the attribute/
-     skill, add the equipment, grant/adjust XP, or edit the narrative field —
-     decrement running unspent points, and collect the id into the applied
-     batch. Log a `✓` line. (Its response comes after the deploy.)
-   - **Unaffordable / over-budget / ambiguous:** do **not** edit. Finalize now
-     with a plain-language explanation and the point math, and log a `⚠` line:
+2. **Change → apply, or refuse only when you must.** Default to trusting the
+   player. Validate spends against GURPS costs using `ttrpg-expert`'s references
+   (`systems/gurps-4e/character-generation.md`, `character-sheet.md`,
+   `skills-*.md`, `traits-*.md`). Attributes: ST/HT 10/level, DX/IQ 20/level;
+   skills/traits per those references. Then:
+   - **Grants and narrative edits — always apply.** Adding XP to the character's
+     own pool ("add 5 xp", "give me 3 points") or editing notes/current-status is
+     trusted self-service: apply it, never flag it. An XP grant raises Unspent
+     Points (and Total Points Earned). Collect into the applied batch; log a `✓`.
+   - **Affordable & unambiguous spend — apply.** Edit the `.md`, decrement running
+     unspent points, collect into the applied batch; log a `✓`.
+   - **Player override — apply even if unaffordable.** If the request carries a
+     trust signal — natural-language GM-approval or insistence such as "the GM
+     said it's OK", "GM approved", "GM said to", "do it anyway", "override", "GM
+     okayed it" — apply the spend even when it's over budget. Edit the `.md` and
+     decrement Unspent Points **allowing it to go negative** — write the negative
+     value into the Points Summary / Identity "Unspent Points" field so the
+     deficit shows honestly on the sheet. Collect into the applied batch. Log a
+     prominent **`⚠ OVERRIDE`** terminal line (character · what changed · resulting
+     unspent) so you always see what was pushed through on the player's word.
+   - **Unaffordable with no override — refuse politely.** Apply nothing; finalize
+     with the point-math explanation so the player knows exactly how short they
+     are and can re-send with an override:
 
      ```bash
-     npx gm-apprentice-publish inbox reply <id> rejected "Ronin → Sex Appeal +2 (11→13). Costs 6; he has 5. One short — nothing applied."
+     npx gm-apprentice-publish inbox reply <id> rejected "Ronin → Sex Appeal +2 (11→13). Costs 6; he has 5. One short — nothing applied. Send it again with \"GM said OK\" to override."
      ```
+   - **Ambiguous — ask, don't guess.** If you genuinely can't tell *what* the
+     player means (which skill, which item), do not edit — reply asking which they
+     meant. An override bypasses affordability, never an unknown target.
 3. **Question → answer** using **player-safe scope only** — the published
    sheet/site + GURPS rules + the character's own non-GM sections. NEVER use
    `GM Notes`, `DM Notes`, `Player Notes`, `Source References`,
@@ -81,6 +97,12 @@ submission order (`timestamp` ascending), tracking **running unspent points**
 
      ```bash
      npx gm-apprentice-publish inbox reply <id> applied "✓ Streetwise 2→3 — applied"
+     ```
+
+     An override's confirmation names the override and the resulting deficit:
+
+     ```bash
+     npx gm-apprentice-publish inbox reply <id> applied "✓ Six → DX 13→14 — GM override applied; Unspent now −5 (reconcile when you can)."
      ```
    - **On deploy failure:** do **not** reply — the entries stay `pending`
      (nothing else marks them) and are pulled again on the next watcher cycle.
