@@ -68,3 +68,14 @@ test('GET returns per-id status', async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { k: 'pending', gone: 'handled' });
 });
+
+test('POST is rate-limited after the cap from one IP', async () => {
+  const kv = fakeKV();
+  await inbox.setCode(kv, 'WOLF');
+  let last;
+  for (let i = 0; i < 11; i++) {
+    last = await fn.onRequestPost(postCtx(kv, { code: 'WOLF', character: 'ana', text: 'x' }, '5.5.5.5'));
+  }
+  assert.equal(last.status, 429);
+  assert.deepEqual(await last.json(), { error: 'rate' });
+});
