@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.22] — 2026-07-12
+
+### Changed
+- The change-request loop now trusts the player by default: XP grants and
+  narrative edits always apply, and a player can push an unaffordable change
+  through by adding "GM said OK" (or "do it anyway") — the change applies with
+  Unspent Points shown as a deficit, and every override is logged to the GM's
+  terminal. Ambiguous requests still ask which was meant. The widget hints at
+  the override.
+
 ## [1.8.21] — 2026-07-12
 
 ### Added
