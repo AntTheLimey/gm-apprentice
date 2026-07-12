@@ -242,7 +242,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
 
   // --- Assemble ---
-  const body = `${heroBanner}
+  const crWidget = `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`;
+  const body = `${crWidget}
+${heroBanner}
 ${epithet}
 <div class="tab-bar">
   <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>${combatTabButton}
@@ -277,7 +279,7 @@ ${tabScript()}`;
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
-    scripts: clientScripts(page.outputPath),
+    scripts: [...clientScripts(page.outputPath), rootPath(page.outputPath) + 'js/change-request.js'],
   });
 }
 
