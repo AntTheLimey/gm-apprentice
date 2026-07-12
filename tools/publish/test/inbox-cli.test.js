@@ -51,7 +51,28 @@ test('handled and flag transition status', async () => {
   await inbox.enqueue(kv, { id: 'b', character: 'bo', text: 'y', timestamp: '2026-07-11T14:02:00.000Z' });
   await runInbox(['handled', 'a'], { adapter: kv });
   await runInbox(['flag', 'b'], { adapter: kv });
-  assert.deepEqual(await inbox.getStatuses(kv, ['a', 'b']), { a: 'handled', b: 'flagged' });
+  const r = await inbox.getResults(kv, ['a', 'b']);
+  assert.deepEqual(r.a, { status: 'handled', response: null, kind: null });
+  assert.deepEqual(r.b, { status: 'flagged', response: null, kind: null });
   // both left the pending queue
   assert.deepEqual((await inbox.readPending(kv)).map(e => e.id), []);
+});
+
+test('reply attaches response + kind and finalizes status', async () => {
+  const kv = fakeKV();
+  await inbox.enqueue(kv, { id: 'a', character: 'Six', text: 'x', timestamp: '2026-07-12T00:00:00Z' });
+  await inbox.enqueue(kv, { id: 'b', character: 'Bo', text: 'y', timestamp: '2026-07-12T00:00:01Z' });
+  const rc1 = await runInbox(['reply', 'a', 'applied', '✓ done'], { adapter: kv });
+  const rc2 = await runInbox(['reply', 'b', 'rejected', 'costs 6, has 5'], { adapter: kv });
+  assert.equal(rc1, 0); assert.equal(rc2, 0);
+  const r = await inbox.getResults(kv, ['a', 'b']);
+  assert.deepEqual(r.a, { status: 'handled', response: '✓ done', kind: 'applied' });
+  assert.deepEqual(r.b, { status: 'flagged', response: 'costs 6, has 5', kind: 'rejected' });
+});
+
+test('reply rejects an unknown kind', async () => {
+  const kv = fakeKV(); const c = capture();
+  const rc = await runInbox(['reply', 'a', 'bogus', 'x'], { adapter: kv, out: c.out });
+  assert.equal(rc, 1);
+  assert.match(c.lines.join('\n'), /applied\|rejected\|advice/);
 });

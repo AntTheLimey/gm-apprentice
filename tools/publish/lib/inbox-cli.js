@@ -22,9 +22,9 @@ async function runInbox(argv, deps = {}) {
   const inbox = await import('../templates-scaffold/functions/api/inbox-core.mjs');
   const [sub, ...rest] = argv;
 
-  const KNOWN = ['open', 'code', 'pull', 'handled', 'flag'];
+  const KNOWN = ['open', 'code', 'pull', 'handled', 'flag', 'reply'];
   if (!KNOWN.includes(sub)) {
-    out('Usage: inbox <open|code|pull|handled|flag> [args]');
+    out('Usage: inbox <open|code|pull|handled|flag|reply> [args]');
     return 1;
   }
   // Build the wrangler-backed adapter only for real subcommands, so the usage
@@ -54,8 +54,18 @@ async function runInbox(argv, deps = {}) {
       for (const id of rest) await inbox.markFlagged(kv, id);
       return 0;
     }
+    case 'reply': {
+      const [id, kind, ...textParts] = rest;
+      const text = textParts.join(' ');
+      if (!id || !['applied', 'rejected', 'advice'].includes(kind)) {
+        out('Usage: inbox reply <id> <applied|rejected|advice> "<text>"');
+        return 1;
+      }
+      await inbox.setResponse(kv, id, kind, text);
+      return 0;
+    }
     default:
-      out('Usage: inbox <open|code|pull|handled|flag> [args]');
+      out('Usage: inbox <open|code|pull|handled|flag|reply> [args]');
       return 1;
   }
 }
