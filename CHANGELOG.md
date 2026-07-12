@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.21] — 2026-07-12
+
+### Added
+
+- Two-way comms on the change-request channel: players can ask questions and get
+  a brief, player-safe answer, and every message now returns a response to a
+  per-device chat log (💬) on the sheet — including a plain-language explanation
+  (with point math) when a change can't be applied. The widget reloads only when
+  a change actually applied; advice and refusals update the log without a reload.
+
+### Changed
+
+- Widget input shows its example as helper text (not a placeholder), with a
+  roomier, resizable box. The mobile back-to-top button is centered and more
+  transparent.
+
 ## [1.8.20] — 2026-07-12
 
 ### Added
