@@ -6,28 +6,36 @@
   var CODE_TTL_MS = 72 * 3600 * 1000;
   var POLL_MS = 15000;
   var ENDPOINT = '/api/request';
-  var K_CODE = 'cr:code', K_PENDING = 'cr:pending', K_LIVE = 'cr:live';
+  var LOG_MAX = 50;
+  var K_CODE = 'cr:code', K_PENDING = 'cr:pending', K_LIVE = 'cr:live', K_LOG = 'cr:log';
 
   function shouldPromptForCode(stored, nowMs) {
     if (!stored || typeof stored.at !== 'number' || !stored.code) return true;
     return (nowMs - stored.at) >= CODE_TTL_MS;
   }
 
-  function partitionStatuses(statuses) {
-    var handled = [], flagged = [], pending = [];
-    Object.keys(statuses || {}).forEach(function (id) {
-      var s = statuses[id];
-      if (s === 'handled') handled.push(id);
-      else if (s === 'flagged') flagged.push(id);
-      else pending.push(id); // pending | applied
+  function resolvedResults(results, pendingIds) {
+    var out = [];
+    (pendingIds || []).forEach(function (id) {
+      var r = (results || {})[id];
+      if (r && r.response != null) out.push({ id: id, response: r.response, kind: r.kind });
     });
-    return { handled: handled, flagged: flagged, pending: pending };
+    return out;
   }
 
-  function decide(part) {
-    if (part.handled.length) return 'reload';
-    if (!part.pending.length && part.flagged.length) return 'flagged-only';
-    return 'poll';
+  function needsReload(resolvedList) {
+    return (resolvedList || []).some(function (x) { return x.kind === 'applied'; });
+  }
+
+  function appendLog(log, entry) {
+    var next = (log || []).concat([entry]);
+    return next.length > LOG_MAX ? next.slice(next.length - LOG_MAX) : next;
+  }
+
+  function setLogReply(log, id, reply, kind) {
+    return (log || []).map(function (e) {
+      return e.id === id ? Object.assign({}, e, { reply: reply, kind: kind }) : e;
+    });
   }
 
   function classifySubmitError(httpStatus) {
@@ -40,9 +48,12 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       CODE_TTL_MS: CODE_TTL_MS,
+      LOG_MAX: LOG_MAX,
       shouldPromptForCode: shouldPromptForCode,
-      partitionStatuses: partitionStatuses,
-      decide: decide,
+      resolvedResults: resolvedResults,
+      needsReload: needsReload,
+      appendLog: appendLog,
+      setLogReply: setLogReply,
       classifySubmitError: classifySubmitError,
     };
   }
