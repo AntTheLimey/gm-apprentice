@@ -1,6 +1,6 @@
 // Cloudflare Pages Function: /api/request
 //   POST { code, character, text }  → validate session code, enqueue into KV
-//   GET  ?ids=a,b,c                 → { id: status } for the widget to poll
+//   GET  ?ids=a,b,c                 → { id: { status, response, kind } } for the widget to poll
 // KV namespace is bound as env.INBOX (see wrangler.toml). All queue logic lives
 // in inbox-core.mjs so it stays identical to what the tool tests.
 import * as inbox from './inbox-core.mjs';

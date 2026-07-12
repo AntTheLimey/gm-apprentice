@@ -23,6 +23,15 @@
     return out;
   }
 
+  function staleIds(results, pendingIds) {
+    var out = [];
+    (pendingIds || []).forEach(function (id) {
+      var r = (results || {})[id];
+      if (r && r.status === 'handled' && r.response == null) out.push(id);
+    });
+    return out;
+  }
+
   function needsReload(resolvedList) {
     return (resolvedList || []).some(function (x) { return x.kind === 'applied'; });
   }
@@ -51,6 +60,7 @@
       LOG_MAX: LOG_MAX,
       shouldPromptForCode: shouldPromptForCode,
       resolvedResults: resolvedResults,
+      staleIds: staleIds,
       needsReload: needsReload,
       appendLog: appendLog,
       setLogReply: setLogReply,
@@ -193,13 +203,15 @@
         return res.json();
       }).then(function (results) {
         var done = resolvedResults(results, ids);
-        if (!done.length) return; // still waiting
-        // record replies into the log and drop resolved ids from pending
+        var stale = staleIds(results, ids);
+        if (!done.length && !stale.length) return; // still waiting
+        // record replies into the log and drop resolved + gone/expired ids from pending
         var log = getLog();
-        var doneIds = {};
-        done.forEach(function (d) { doneIds[d.id] = true; log = setLogReply(log, d.id, d.response, d.kind); });
+        var removeIds = {};
+        done.forEach(function (d) { removeIds[d.id] = true; log = setLogReply(log, d.id, d.response, d.kind); });
+        stale.forEach(function (id) { removeIds[id] = true; });
         setLog(log);
-        setPending(ids.filter(function (id) { return !doneIds[id]; }));
+        setPending(ids.filter(function (id) { return !removeIds[id]; }));
         renderLog();
         if (needsReload(done)) {
           localStorage.setItem(K_LIVE, '1');
@@ -211,7 +223,8 @@
           location.replace(u.href);
         } else {
           // advice / rejected only — show the newest reply inline, keep the log open-able
-          msg.textContent = done[done.length - 1].response;
+          // (stale-only ticks have no response to show; the log entry is left as-is)
+          if (done.length) msg.textContent = done[done.length - 1].response;
           if (!getPending().length) { clearInterval(timer); timer = null; }
         }
       }).catch(function () { /* transient; try again next tick */ });

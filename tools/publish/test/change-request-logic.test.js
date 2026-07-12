@@ -19,6 +19,15 @@ test('resolvedResults returns only ids whose response arrived', () => {
   assert.deepEqual(r.map(x => x.id).sort(), ['a', 'c']);
 });
 
+test('staleIds returns handled-with-no-response ids (expired), not pending ones', () => {
+  const results = {
+    a: { status: 'handled', response: null, kind: null },   // expired/gone
+    b: { status: 'pending', response: null, kind: null },   // still waiting
+    c: { status: 'handled', response: '✓', kind: 'applied' } // resolved, not stale
+  };
+  assert.deepEqual(cr.staleIds(results, ['a', 'b', 'c']), ['a']);
+});
+
 test('needsReload only when an applied result is present', () => {
   assert.equal(cr.needsReload([{ id: 'a', kind: 'applied' }]), true);
   assert.equal(cr.needsReload([{ id: 'c', kind: 'rejected' }, { id: 'd', kind: 'advice' }]), false);
