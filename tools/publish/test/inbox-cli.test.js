@@ -70,6 +70,15 @@ test('reply attaches response + kind and finalizes status', async () => {
   assert.deepEqual(r.b, { status: 'flagged', response: 'costs 6, has 5', kind: 'rejected' });
 });
 
+test('reply attaches an advice response and finalizes status', async () => {
+  const kv = fakeKV();
+  await inbox.enqueue(kv, { id: 'c', character: 'Ronin', text: 'is it worth raising DX?', timestamp: '2026-07-12T00:00:02Z' });
+  const rc = await runInbox(['reply', 'c', 'advice', '• hint'], { adapter: kv });
+  assert.equal(rc, 0);
+  const r = await inbox.getResults(kv, ['c']);
+  assert.deepEqual(r.c, { status: 'handled', response: '• hint', kind: 'advice' });
+});
+
 test('reply rejects an unknown kind', async () => {
   const kv = fakeKV(); const c = capture();
   const rc = await runInbox(['reply', 'a', 'bogus', 'x'], { adapter: kv, out: c.out });

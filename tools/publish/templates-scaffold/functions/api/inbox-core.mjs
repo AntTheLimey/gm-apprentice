@@ -84,8 +84,7 @@ export async function setResponse(kv, id, kind, text) {
 }
 
 export async function getResults(kv, ids) {
-  const result = {};
-  for (const id of ids) {
+  const pairs = await Promise.all(ids.map(async (id) => {
     const raw = await kv.get(PREFIX + id);
     let val = { status: 'handled', response: null, kind: null };
     if (raw) {
@@ -94,9 +93,9 @@ export async function getResults(kv, ids) {
         val = { status: e.status, response: e.response ?? null, kind: e.kind ?? null };
       } catch { /* corrupt → treat as handled/no-response */ }
     }
-    result[id] = val;
-  }
-  return result;
+    return [id, val];
+  }));
+  return Object.fromEntries(pairs);
 }
 
 export async function rateLimited(kv, ip, { limit = 10, windowSec = 60 } = {}) {

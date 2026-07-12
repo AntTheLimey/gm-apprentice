@@ -88,10 +88,11 @@ submission order (`timestamp` ascending), tracking **running unspent points**
 5. **Relaunch the background watcher** (the same command as in Start step 4) so
    the next request wakes you. Idle resumes at zero model-token cost.
 
-Every player message therefore returns exactly one response to their chat log:
-`applied` (sheet redeployed), `rejected` (with the point-math reason), or
-`advice`. `reply` is the single finalizer for every item — it supersedes the
-old `handled`/`flag` commands.
+Once a request reaches a terminal outcome it returns exactly one response to
+the chat log: `applied` (sheet redeployed), `rejected` (with the point-math
+reason), or `advice`. A deploy failure leaves the applied items `pending` to
+retry next tick, unreplied for now. `reply` is the single finalizer for every
+item — it supersedes the old `handled`/`flag` commands.
 
 ## Terminal log format
 

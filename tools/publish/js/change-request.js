@@ -113,21 +113,22 @@
     var logPanel = root.querySelector('.cr-logpanel');
     var expandBtn = root.querySelector('.cr-expand');
 
+    var KIND_CLASSES = { applied: 1, rejected: 1, advice: 1 };
     function renderLog() {
       var l = getLog();
       logBtn.hidden = l.length === 0;
       if (!l.length) { logPanel.innerHTML = '<p class="cr-empty">No messages yet.</p>'; return; }
       logPanel.innerHTML = l.slice().reverse().map(function (e) {
-        var kind = e.kind ? ' cr-' + e.kind : '';
+        var kindCls = KIND_CLASSES[e.kind] ? ' cr-' + e.kind : '';
         var reply = e.reply
-          ? '<div class="cr-reply' + kind + '">' + escapeHtml(e.reply) + '</div>'
+          ? '<div class="cr-reply' + kindCls + '">' + escapeHtml(e.reply) + '</div>'
           : '<div class="cr-reply cr-waiting">…</div>';
         return '<div class="cr-logentry"><div class="cr-you">' + escapeHtml(e.message) + '</div>' + reply + '</div>';
       }).join('');
     }
     function escapeHtml(s) {
-      return String(s).replace(/[&<>"]/g, function (c) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
       });
     }
     renderLog();
