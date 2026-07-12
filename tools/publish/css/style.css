@@ -3493,3 +3493,13 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .callout-quote, .callout-cite, .callout-abstract, .callout-summary, .callout-example {
   --callout-color: var(--text-muted);
 }
+
+/* --- Change-request widget (Part 2). Scoped to .cr-*; touches no sheet styles. --- */
+#cr-root { margin: 0 0 1rem; }
+.cr-bar { border: 1px solid var(--border, #ccc); border-radius: 6px; padding: .25rem .5rem; font-size: .9rem; }
+.cr-toggle { background: none; border: none; cursor: pointer; color: inherit; font: inherit; padding: .25rem; }
+.cr-panel { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
+.cr-panel .cr-text { flex: 1 1 12rem; min-width: 0; }
+.cr-panel .cr-code { width: 6rem; text-transform: uppercase; }
+.cr-panel .cr-send { cursor: pointer; }
+.cr-msg { font-size: .85rem; opacity: .85; }
