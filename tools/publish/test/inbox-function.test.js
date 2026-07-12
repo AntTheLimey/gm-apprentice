@@ -69,6 +69,13 @@ test('GET returns per-id status', async () => {
   assert.deepEqual(await res.json(), { k: 'pending', gone: 'handled' });
 });
 
+test('GET with more than 50 ids returns 400', async () => {
+  const kv = fakeKV();
+  const ids = Array.from({ length: 51 }, (_, i) => 'x' + i);
+  const res = await fn.onRequestGet(getCtx(kv, ids));
+  assert.equal(res.status, 400);
+});
+
 test('POST is rate-limited after the cap from one IP', async () => {
   const kv = fakeKV();
   await inbox.setCode(kv, 'WOLF');

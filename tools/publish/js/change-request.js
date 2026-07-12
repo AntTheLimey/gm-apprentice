@@ -65,8 +65,8 @@
       '<div class="cr-bar">' +
         '<button type="button" class="cr-toggle" aria-expanded="false">✎ Request a change</button>' +
         '<div class="cr-panel" hidden>' +
-          '<input type="text" class="cr-code" maxlength="4" placeholder="4-char code" hidden>' +
-          '<textarea class="cr-text" rows="2" placeholder="e.g. spend 1 xp to raise Streetwise"></textarea>' +
+          '<input type="text" class="cr-code" maxlength="4" placeholder="4-char code" aria-label="Session code" hidden>' +
+          '<textarea class="cr-text" rows="2" placeholder="e.g. spend 1 xp to raise Streetwise" aria-label="Describe your change"></textarea>' +
           '<button type="button" class="cr-send">Send</button>' +
           '<span class="cr-msg" role="status"></span>' +
         '</div>' +

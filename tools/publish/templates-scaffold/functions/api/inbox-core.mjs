@@ -45,7 +45,8 @@ export async function readPending(kv) {
   for (const { name } of keys) {
     const raw = await kv.get(name);
     if (!raw) continue;
-    const entry = JSON.parse(raw);
+    let entry;
+    try { entry = JSON.parse(raw); } catch { continue; }
     if (entry.status === 'pending' || entry.status === 'applied') out.push(entry);
   }
   return out.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
@@ -54,7 +55,8 @@ export async function readPending(kv) {
 async function setStatus(kv, id, status, opts) {
   const raw = await kv.get(PREFIX + id);
   if (!raw) return null;
-  const entry = JSON.parse(raw);
+  let entry;
+  try { entry = JSON.parse(raw); } catch { return null; }
   entry.status = status;
   await kv.put(PREFIX + id, JSON.stringify(entry), opts);
   return entry;
@@ -68,7 +70,9 @@ export async function getStatuses(kv, ids) {
   const result = {};
   for (const id of ids) {
     const raw = await kv.get(PREFIX + id);
-    result[id] = raw ? JSON.parse(raw).status : 'handled';
+    let status = 'handled';
+    if (raw) { try { status = JSON.parse(raw).status; } catch { status = 'handled'; } }
+    result[id] = status;
   }
   return result;
 }

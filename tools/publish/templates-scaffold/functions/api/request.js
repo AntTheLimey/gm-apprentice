@@ -37,5 +37,6 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const ids = (url.searchParams.get('ids') || '').split(',').map(s => s.trim()).filter(Boolean);
   if (!ids.length) return json({});
+  if (ids.length > 50) return json({ error: 'too many ids' }, 400);
   return json(await inbox.getStatuses(kv, ids));
 }

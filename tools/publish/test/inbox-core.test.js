@@ -65,6 +65,14 @@ test('readPending returns pending+applied sorted by timestamp, excludes handled/
   assert.equal(pending[0].status, 'applied');
 });
 
+test('readPending skips a corrupted entry instead of throwing', async () => {
+  const kv = fakeKV();
+  await inbox.enqueue(kv, { id: 'good', character: 'ana', text: 'good', timestamp: '2026-07-11T14:00:00.000Z' });
+  await kv.put('req:bad', 'not json{');
+  const pending = await inbox.readPending(kv);
+  assert.deepEqual(pending.map(e => e.id), ['good']);
+});
+
 test('getStatuses maps known ids and treats missing as handled', async () => {
   const kv = fakeKV();
   await inbox.enqueue(kv, { id: 'k', character: 'ana', text: 'k', timestamp: '2026-07-11T14:00:00.000Z' });
