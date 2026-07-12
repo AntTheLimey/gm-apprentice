@@ -61,12 +61,16 @@ test('POST with empty text returns 400', async () => {
   assert.equal(res.status, 400);
 });
 
-test('GET returns per-id status', async () => {
+test('GET returns per-id {status,response,kind}', async () => {
   const kv = fakeKV();
   await inbox.enqueue(kv, { id: 'k', character: 'ana', text: 'k', timestamp: '2026-07-11T14:00:00.000Z' });
+  await inbox.setResponse(kv, 'k', 'advice', '• hi');
   const res = await fn.onRequestGet(getCtx(kv, ['k', 'gone']));
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { k: 'pending', gone: 'handled' });
+  assert.deepEqual(await res.json(), {
+    k: { status: 'handled', response: '• hi', kind: 'advice' },
+    gone: { status: 'handled', response: null, kind: null },
+  });
 });
 
 test('GET with more than 50 ids returns 400', async () => {
