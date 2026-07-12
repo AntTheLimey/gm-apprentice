@@ -8,6 +8,7 @@ export const PREFIX = 'req:';
 export const CODE_KEY = 'config:code';
 export const RL_PREFIX = 'rl:';
 export const HANDLED_TTL = 300; // seconds a handled entry lingers for the widget
+export const RESPONSE_TTL = 600; // seconds a responded (handled) entry lingers for the widget
 
 export function normalizeCode(raw) {
   return String(raw || '').trim().toUpperCase();
@@ -30,7 +31,7 @@ export async function codeMatches(kv, submitted) {
 }
 
 export function buildEntry({ id, character, text, timestamp }) {
-  return { id, character, text, timestamp, status: 'pending' };
+  return { id, character, text, timestamp, status: 'pending', response: null, kind: null };
 }
 
 export async function enqueue(kv, { id, character, text, timestamp }) {
@@ -66,13 +67,34 @@ export async function markApplied(kv, id) { return setStatus(kv, id, 'applied');
 export async function markHandled(kv, id) { return setStatus(kv, id, 'handled', { expirationTtl: HANDLED_TTL }); }
 export async function markFlagged(kv, id) { return setStatus(kv, id, 'flagged'); }
 
-export async function getStatuses(kv, ids) {
+// Attach a player-facing response and finalize the entry:
+//   applied/advice → handled (with TTL, so the widget catches it then it self-reaps)
+//   rejected       → flagged (persists for the GM), still carries the response
+export async function setResponse(kv, id, kind, text) {
+  const raw = await kv.get(PREFIX + id);
+  if (!raw) return null;
+  let entry;
+  try { entry = JSON.parse(raw); } catch { return null; }
+  entry.response = text;
+  entry.kind = kind;
+  entry.status = kind === 'rejected' ? 'flagged' : 'handled';
+  const opts = kind === 'rejected' ? undefined : { expirationTtl: RESPONSE_TTL };
+  await kv.put(PREFIX + id, JSON.stringify(entry), opts);
+  return entry;
+}
+
+export async function getResults(kv, ids) {
   const result = {};
   for (const id of ids) {
     const raw = await kv.get(PREFIX + id);
-    let status = 'handled';
-    if (raw) { try { status = JSON.parse(raw).status; } catch { status = 'handled'; } }
-    result[id] = status;
+    let val = { status: 'handled', response: null, kind: null };
+    if (raw) {
+      try {
+        const e = JSON.parse(raw);
+        val = { status: e.status, response: e.response ?? null, kind: e.kind ?? null };
+      } catch { /* corrupt → treat as handled/no-response */ }
+    }
+    result[id] = val;
   }
   return result;
 }

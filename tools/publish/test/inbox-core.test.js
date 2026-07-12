@@ -73,11 +73,43 @@ test('readPending skips a corrupted entry instead of throwing', async () => {
   assert.deepEqual(pending.map(e => e.id), ['good']);
 });
 
-test('getStatuses maps known ids and treats missing as handled', async () => {
+test('buildEntry seeds response and kind as null', () => {
+  const e = inbox.buildEntry({ id: 'x', character: 'a', text: 't', timestamp: '2026-07-12T00:00:00Z' });
+  assert.equal(e.response, null);
+  assert.equal(e.kind, null);
+});
+
+test('setResponse: applied → handled with response+kind', async () => {
   const kv = fakeKV();
-  await inbox.enqueue(kv, { id: 'k', character: 'ana', text: 'k', timestamp: '2026-07-11T14:00:00.000Z' });
-  const s = await inbox.getStatuses(kv, ['k', 'gone']);
-  assert.deepEqual(s, { k: 'pending', gone: 'handled' });
+  await inbox.enqueue(kv, { id: 'a', character: 'Six', text: 'spend 1 on Streetwise', timestamp: '2026-07-12T00:00:00Z' });
+  const e = await inbox.setResponse(kv, 'a', 'applied', '✓ Streetwise 2→3 — applied');
+  assert.equal(e.status, 'handled');
+  assert.equal(e.kind, 'applied');
+  assert.equal(e.response, '✓ Streetwise 2→3 — applied');
+});
+
+test('setResponse: rejected → flagged, still carries response', async () => {
+  const kv = fakeKV();
+  await inbox.enqueue(kv, { id: 'b', character: 'Ronin', text: 'raise Sex Appeal', timestamp: '2026-07-12T00:00:01Z' });
+  const e = await inbox.setResponse(kv, 'b', 'rejected', 'Costs 6; has 5. Nothing applied.');
+  assert.equal(e.status, 'flagged');
+  assert.equal(e.kind, 'rejected');
+  // flagged stays out of readPending
+  assert.deepEqual((await inbox.readPending(kv)).map(x => x.id), []);
+});
+
+test('setResponse: missing id returns null', async () => {
+  const kv = fakeKV();
+  assert.equal(await inbox.setResponse(kv, 'nope', 'advice', 'x'), null);
+});
+
+test('getResults returns {status,response,kind}; missing → nulls', async () => {
+  const kv = fakeKV();
+  await inbox.enqueue(kv, { id: 'c', character: 'a', text: 't', timestamp: '2026-07-12T00:00:02Z' });
+  await inbox.setResponse(kv, 'c', 'advice', '• do this');
+  const r = await inbox.getResults(kv, ['c', 'gone']);
+  assert.deepEqual(r.c, { status: 'handled', response: '• do this', kind: 'advice' });
+  assert.deepEqual(r.gone, { status: 'handled', response: null, kind: null });
 });
 
 test('rateLimited allows up to limit then blocks', async () => {
