@@ -21,7 +21,7 @@ does the waiting, and you only wake when a request actually arrives.
 3. Print it prominently for the GM to read to the table:
    `╔═══════════════╗  SESSION CODE: WOLF  ╚═══════════════╝`
 4. Launch the **background watcher** (below), then leave the session idle. The
-   watcher is a plain shell loop that polls the queue every ~60s and **sleeps
+   watcher is a plain shell loop that polls the queue every ~30s and **sleeps
    while it is empty — spending no model tokens**. It exits (waking you) only
    when a request arrives.
 
@@ -29,7 +29,7 @@ does the waiting, and you only wake when a request actually arrives.
    while :; do
      out=$(npx gm-apprentice-publish inbox pull 2>/dev/null)
      if [ -n "$out" ] && [ "$out" != "[]" ]; then printf '%s\n' "$out"; break; fi
-     sleep 60
+     sleep 30
    done
    ```
 
