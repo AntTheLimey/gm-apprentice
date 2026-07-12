@@ -196,6 +196,15 @@ New sites scaffolded after this feature already have `wrangler.toml` and a
 > from the site title, which may not match — and a mismatched `name` deploys to
 > a *different* project. If unsure, run `npx wrangler@4 pages project list`.
 
+> **Your API token needs KV permission too.** The token from Step 1 of this
+> guide is scoped to *Cloudflare Pages* only — enough to deploy, but **not** to
+> create or use a KV namespace. Before the steps below, edit that token (or
+> create a new one) so it also has **Account · Workers KV Storage · Edit**. In
+> the Cloudflare dashboard: **My Profile → API Tokens →** your token **→ Edit →**
+> add the permission row **→ Save**. Editing keeps the same token value, so you
+> do not need to change `CLOUDFLARE_API_TOKEN`. Without this, `kv namespace
+> create` fails with `Authentication error [code: 10000]`.
+
 1. **Create the KV namespace:**
 
    ```bash
