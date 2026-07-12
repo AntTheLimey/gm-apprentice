@@ -13,6 +13,7 @@ gm-apprentice-publish - Static site generator for gm-apprentice campaign vaults
 Usage:
   gm-apprentice-publish init [target-dir]    Scaffold a new site
   gm-apprentice-publish build [options]      Build the site
+  gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -139,6 +140,14 @@ if (command === 'build') {
     process.exit(1);
   }
   process.exit(0);
+}
+
+if (command === 'inbox') {
+  const { runInbox } = require('../lib/inbox-cli.js');
+  runInbox(args.slice(1))
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
 }
 
 console.error(`Unknown command: ${command}`);
