@@ -61,9 +61,122 @@ def test_extract_builds_relationship(monkeypatch):
 def test_run_writes_json(monkeypatch, tmp_path):
     monkeypatch.setenv("MOBRPG_TOKEN", "tok")
     monkeypatch.setattr(client, "_request", _fake_request_factory())
+    monkeypatch.setattr(client, "whoami", lambda token: {"id": "u1"})
     out = tmp_path / "extract.json"
     rc = pull.run(["world-1", "--out", str(out)])
     assert rc == 0
     data = json.loads(out.read_text())
     assert data["worldId"] == "world-1"
     assert len(data["entities"]) == 2
+
+
+def _make_fake(lists=None, singles=None):
+    """Generic version of _fake_request_factory, parameterized per-test."""
+    lists = lists or {}
+    singles = singles or {}
+
+    def fake(method, path, *, token=None, query=None, body=None):
+        parts = path.strip("/").split("/")  # world/{w}/{kind...}/{id?}
+        tail = parts[2:]
+        for (kind, eid), val in singles.items():
+            if tail == kind.split("/") + [eid]:
+                return val
+        kind = "/".join(tail)
+        return {"content": lists.get(kind, [])}
+
+    return fake
+
+
+def test_employ_event_refines_predicate_to_located_at(monkeypatch):
+    lists = {
+        "person": [{"id": "p1", "name": "Alice"}],
+        "political": [{"id": "po1", "name": "City State"}],
+        "organization": [{"id": "o1", "name": "Guild"}],
+        "event": [{"id": "e1", "name": "Alice, Envoy"}, {"id": "e2", "name": "Alice, Member"}],
+    }
+    singles = {
+        ("person", "p1"): {"id": "p1", "name": "Alice", "description": "",
+                            "notes": [], "relations": []},
+        ("political", "po1"): {"id": "po1", "name": "City State", "description": "",
+                                "notes": [], "relations": []},
+        ("organization", "o1"): {"id": "o1", "name": "Guild", "description": "",
+                                  "notes": [], "relations": []},
+        ("event", "e1"): {"id": "e1", "name": "Alice, Envoy", "eventType": "Employ",
+                          "title": "Envoy",
+                          "relations": [{"type": "Link", "sourceId": "e1", "targetId": "p1"},
+                                        {"type": "Link", "sourceId": "e1", "targetId": "po1"}]},
+        ("event", "e2"): {"id": "e2", "name": "Alice, Member", "eventType": "Membership",
+                          "title": "Member",
+                          "relations": [{"type": "Link", "sourceId": "e2", "targetId": "p1"},
+                                        {"type": "Link", "sourceId": "e2", "targetId": "o1"}]},
+    }
+    monkeypatch.setattr(client, "_request", _make_fake(lists, singles))
+    result = pull.extract("world-1", "tok")
+    alice = next(e for e in result["entities"] if e["name"] == "Alice")
+    rels = alice["relationships"]
+    # Employ event + political object -> predicate refined to located_at
+    assert any(r["target"] == "City State" and r["predicate"] == "located_at" for r in rels)
+    # Non-Employ event keeps the eventType-mapped predicate (Membership -> member_of)
+    assert any(r["target"] == "Guild" and r["predicate"] == "member_of" for r in rels)
+
+
+def test_notes_split_by_hidden(monkeypatch):
+    lists = {"person": [{"id": "p1", "name": "Bob"}]}
+    singles = {
+        ("person", "p1"): {"id": "p1", "name": "Bob", "description": "",
+                            "notes": [{"note": "<p>public</p>", "hidden": False},
+                                      {"note": "<p>secret</p>", "hidden": True}],
+                            "relations": []},
+    }
+    monkeypatch.setattr(client, "_request", _make_fake(lists, singles))
+    result = pull.extract("world-1", "tok")
+    bob = next(e for e in result["entities"] if e["name"] == "Bob")
+    assert bob["notes_public"] == ["public"]
+    assert bob["notes_gm"] == ["secret"]
+
+
+def test_attribute_edge_becomes_classifier(monkeypatch):
+    lists = {
+        "organization": [{"id": "o1", "name": "Guild"}],
+        "organization/type": [{"id": "t1", "name": "Faction"}],
+    }
+    singles = {
+        ("organization", "o1"): {"id": "o1", "name": "Guild", "description": "", "notes": [],
+                                  "relations": [{"type": "Attribute", "sourceId": "t1",
+                                                 "targetId": "o1"}]},
+    }
+    monkeypatch.setattr(client, "_request", _make_fake(lists, singles))
+    result = pull.extract("world-1", "tok")
+    guild = next(e for e in result["entities"] if e["name"] == "Guild")
+    assert {"kind": "organization/type", "name": "Faction"} in guild["classifiers"]
+
+
+def test_landfeature_types_become_classifiers(monkeypatch):
+    lists = {"landfeature": [{"id": "lf1", "name": "Terra"}]}
+    singles = {
+        ("landfeature", "lf1"): {"id": "lf1", "name": "Terra", "description": "", "notes": [],
+                                  "relations": [], "landFeatureTypes": ["Planet"]},
+    }
+    monkeypatch.setattr(client, "_request", _make_fake(lists, singles))
+    result = pull.extract("world-1", "tok")
+    terra = next(e for e in result["entities"] if e["name"] == "Terra")
+    assert {"kind": "landfeature/subType", "name": "Planet"} in terra["classifiers"]
+
+
+def test_role_from_event_name_comma_fallback():
+    assert pull.role_from_event_name("Zeb, Envoy of X", "Nobody") == "Envoy of X"
+
+
+def test_run_reports_api_error_and_writes_nothing(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("MOBRPG_TOKEN", "tok")
+
+    def raise_api_error(token):
+        raise client.ApiError(401, "bad token", "/user/me")
+
+    monkeypatch.setattr(client, "whoami", raise_api_error)
+    out = tmp_path / "x.json"
+    rc = pull.run(["world-1", "--out", str(out)])
+    assert rc == 1
+    captured = capsys.readouterr()
+    assert "ERROR" in captured.err
+    assert not out.exists()

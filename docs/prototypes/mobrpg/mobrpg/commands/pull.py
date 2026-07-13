@@ -157,6 +157,7 @@ def run(argv: list[str]) -> int:
 
     token = client.get_access_token()
     try:
+        client.whoami(token)  # fail fast on bad auth / no connectivity
         result = extract(args.world, token)
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
