@@ -1,0 +1,152 @@
+# mobRPG ↔ gm-apprentice integration (prototype) — START HERE
+
+Spike work connecting **mobrpg.com** (Tim's web RPG world-builder) with
+gm-apprentice vaults. Parked 2026-06-28. This README is the front door; the
+authoritative status + open decisions live in **`integration-log.md` → the
+"📍 STATUS & OPEN DECISIONS — resume here" section.** Read that first.
+
+## What this is
+
+mobRPG is a collaborative world-builder with a REST API (Spring Boot, Java).
+We proved we can drive it **both directions** and built reusable scripts for:
+- **import** mobRPG world → gm-apprentice vault, and
+- **push** vault → mobRPG world.
+
+Tim's backend source is at `~/PROJECTS/game` (we're collaborators on
+`tdennis/game`, not a fork — pushes go to his repo). It has its own `CLAUDE.md`.
+
+## Auth (how the scripts talk to mobRPG)
+
+Every script imports the shared config/transport module (`import smoketest as
+api`), which resolves **which environment** to hit and **how to authenticate**
+before anything else runs.
+
+### Environment: prod vs dev
+
+`smoketest.py` picks BASE/CLIENT_ID/REDIRECT_URI from `MOBRPG_ENV=dev|prod`
+(default `prod`, preserving this tool's original behavior of talking to the
+real site unless dev is deliberately requested). Individual fields can be
+overridden with `MOBRPG_BASE` / `MOBRPG_CLIENT_ID` / `MOBRPG_REDIRECT_URI` on
+top of whichever preset `MOBRPG_ENV` picked. The resolved environment + BASE
+is always printed to stderr on import — there is no silent ambiguity about
+which server a run is about to hit.
+
+**Safety:** any script that mutates data (creates, suggestion submits, app
+token minting) calls `api.assert_writes_allowed()` before doing so. Against
+`prod` that refuses and exits unless `MOBRPG_ALLOW_PROD_WRITES=1` is *also*
+set — writing to production always needs a second, deliberate opt-in on top
+of `MOBRPG_ENV=prod` (which is otherwise just the default).
+
+### Authenticating
+
+Two ways, same as before, now environment-aware:
+
+- Durable **app token** (bearer) lives in `~/Downloads/credentials.csv`
+  (AccessToken row, prod only). Scripts read it via `MOBRPG_TOKEN`:
+  ```bash
+  export MOBRPG_TOKEN="$(grep '^AccessToken,' ~/Downloads/credentials.csv | cut -d, -f2)"
+  ```
+  It authenticates as the vault owner (antthelimey). The token is a
+  long-lived credential — treat it like a password.
+- Email + password login (works against either environment) —
+  `MOBRPG_EMAIL` / `MOBRPG_PASSWORD`. **Dev example** — the local stack seeds
+  a Read-only collaborator on both dev worlds, `suggester@localhost`
+  (password `local`), used for the suggestion demo below since the whole
+  point of suggestions is that a Read-only user can propose content:
+  ```bash
+  export MOBRPG_ENV=dev
+  export MOBRPG_EMAIL='suggester@localhost'
+  export MOBRPG_PASSWORD='local'
+  python3 smoketest.py
+  ```
+
+## The two worlds in play
+
+| Pairing | Direction done | Vault | mobRPG worldId |
+|---|---|---|---|
+| **Space** → **Dead End** | mobRPG → vault (import) | `~/Documents/space_game` | `a254e424-…` (Read-only to us) |
+| **Canticle** → **Regency Cthulhu** | vault → mobRPG (push) | `~/Documents/CTHULHU/Canticle` | `4b07d8dd-…` (we own it) |
+
+`4b07d8dd-3da2-45fc-9ec5-6a45d21f1adb` is also the **dev** stack's Regency
+Cthulhu world (same id, loaded into the local Postgres) — set `MOBRPG_ENV=dev`
+to point any of these scripts at the local stack instead of the live site
+without changing the worldId.
+
+## Scripts (all dry-run by default; `--execute` to write; idempotent)
+
+| Script | Does |
+|---|---|
+| `smoketest.py` | auth + read sanity check; also the shared env/config module every other script imports |
+| `etl_extract.py` | pull a mobRPG world → structured JSON (import side) |
+| `vault_write.py` | structured JSON → vault markdown files |
+| `merge_overlaps.py` | non-destructive merge for entities that exist in both |
+| `orphan_link.py` | auto-link obvious orphan relationships post-import |
+| `detect_updates.py` | keep-up-to-date: flags mobRPG entities edited since the last sync (see below) |
+| `push_to_mobrpg.py` | vault entities → mobRPG **direct create** (one POST per entity, immediately live; needs ReadWriteDelete) |
+| `push_suggestions.py` | vault entities → mobRPG **suggestions** (`POST /world/{id}/suggestion`, batched, idempotent on `externalRef`; only needs Read — a collaborator proposes content for the GM to accept/dismiss) |
+| `assign_types.py` | set mobRPG types via `Attribute` edges (race/sex, political/type…) |
+| `push_relationships.py` | vault relationships → mobRPG `event`s + `Link` edges |
+
+## Keeping Dead End up to date (added 2026-07-04)
+
+The import above was a one-time batch. `detect_updates.py` closes the gap: it
+tracks a sidecar crosswalk (`_meta/mobrpg-crosswalk.json` in the vault) mapping
+mobRPG entity id → vault file + a content hash, so a later pull can tell what
+Tim actually changed since last time, instead of just skipping anything that
+already has a file.
+
+- **One-time seed (already done for Space → Dead End):**
+  `python3 detect_updates.py bootstrap space_extract.json ~/Documents/space_game _meta/mobrpg-crosswalk.json`
+  — seeded from the original import extract, not "whatever's live today", so
+  the baseline reflects 2026-06-28, not an arbitrary later date. Don't re-run
+  this against a fresh pull; it would discard that real baseline.
+- **Ongoing check:** pull a fresh extract (`etl_extract.py <worldId> fresh.json`),
+  then `python3 detect_updates.py sync fresh.json ~/Documents/space_game
+  _meta/mobrpg-crosswalk.json <report_dir>`. Anything genuinely new in mobRPG
+  is reported (run the normal import path to bring it in); anything changed on
+  an already-imported entity gets a `## mobRPG Update Available` section
+  appended to that vault file — never a blind overwrite — plus a
+  `sync-report.md` summary. Re-running `sync` with no new mobRPG changes is a
+  no-op; a second real change replaces the still-pending section rather than
+  stacking a duplicate.
+- Manual/on-demand only — no scheduled job.
+
+## Reference docs
+
+- `integration-log.md` — **the master log** (method, 19 gotchas, status, open decisions)
+- `schema-map.md` — how the two schemas map (incl. the reified-event relationship model)
+- `gm-apprentice-ontology-export.md` / `.json` — vault predicate ontology + eventType mapping (for Tim)
+- `FINDINGS.md` — original API reverse-engineering notes
+- `canticle-regency-crosswalk.json` — **the crosswalk** (vault↔mobRPG IDs: 42 entities + 80 relationships)
+- `push_out/`, `orphan_link_out/` — run artifacts
+
+## ⚠️ Before you do anything when you resume — read these
+
+1. **Every mobRPG element create needs a non-null `description`** or it 500s
+   (`elements.description` is NOT NULL). Tim is fixing the constraint; until
+   confirmed, always send a description. This was the type-creation 500.
+2. **Types are `Attribute` edges, not fields.** Relationships are reified
+   **`event`s** (eventType enum: Employ/Membership/Leadership/Reign/War/Score/Generic).
+   See the log for exact endpoints.
+3. **Do NOT write the crosswalk back into vault frontmatter.** GM wants
+   frontmatter hand-authored only — `push_relationships.py` still has the
+   frontmatter-writeback code; **rewire it to the sidecar JSON before running again.**
+4. **Don't PR the Hibernate "fix."** The `@JdbcTypeCode(SqlTypes.ARRAY)` swap was a
+   local workaround that drops `StringListConverter`'s order-independent `equals`.
+   The clean-build boot failure is a *question for Tim*, not a blind PR.
+5. **Canticle vault is not under version control** — be careful with automated edits.
+
+## Live state at park time
+
+- Regency Cthulhu (mobRPG): Canticle **Chapter 1 loaded** — events 17→97,
+  people 18→45, locations 15→27, political-types 12→23, items 2→5.
+- Canticle vault frontmatter: **restored to hand-authored** (crosswalk in sidecar).
+- Remaining to push ≈ 250 entities (chapters 0, 0.5, 2, 3, 4; 0.1 already in mobRPG).
+  Chapter 2 (Lyon) dry-run = 60 entities, ready.
+- Local backend repro env: **torn down**. JDK 25 + `~/.m2` jars remain (harmless).
+
+## Likely first moves on resume
+
+1. Decide crosswalk home + sync direction/authority (see log's open decisions).
+2. Rewire `push_relationships.py` (and add entity `mobrpg_id` capture) to the sidecar.
+3. Continue the push chapter by chapter, or design two-way sync using the crosswalk IDs.

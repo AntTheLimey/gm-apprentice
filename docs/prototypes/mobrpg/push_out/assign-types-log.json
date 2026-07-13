@@ -1,0 +1,63 @@
+{
+  "npc": [],
+  "location": [
+    "British Museum Montagu House: Library",
+    "Greaves and Sons: Pawnshop",
+    "Grosvenor Works: Factory",
+    "Kensington Coach Stables: Coach Hire Facility",
+    "Marchbank Terrace: Lodging House",
+    "Orphean Society Building: Townhouse",
+    "Royal Academy of Music: Music Conservatory",
+    "Society of Antiquaries: Archive",
+    "Stonehenge: Ancient Monument",
+    "The Laughing Fox: Coffeehouse",
+    "Thistle Lane: Tenement"
+  ],
+  "item": [
+    "Cultes Des Ghoules: itemType not set (needs UpdateItemRequest data field)",
+    "De Vermiis Mysteriis: itemType not set (needs UpdateItemRequest data field)",
+    "Liber Ivonis: itemType not set (needs UpdateItemRequest data field)"
+  ],
+  "skipped": [
+    "Clara Fen (already typed)",
+    "Collarbone Jack (already typed)",
+    "Dr Erasmus Hume (already typed)",
+    "Edna Greaves (already typed)",
+    "Elbert Fenwick (already typed)",
+    "Eli Barlow (already typed)",
+    "Eli Tadcombe (already typed)",
+    "Emile Fouchard (already typed)",
+    "Ephraim Colley (already typed)",
+    "Father Jeremiah Creel (already typed)",
+    "Giles Mercer (already typed)",
+    "Imogen Bellamy (already typed)",
+    "Lady Octavia Danforth (already typed)",
+    "Miriam Doyle (already typed)",
+    "Mr Jameson (already typed)",
+    "Mr Tipple (already typed)",
+    "Nathan Pryce (already typed)",
+    "Nathaniel Rooke (already typed)",
+    "Phineas Lang (already typed)",
+    "Prudence Middleham (already typed)",
+    "Slade (already typed)",
+    "Thomlin Kerridge (already typed)",
+    "Tobias Greaves (already typed)",
+    "Walter Baines (already typed)",
+    "Walter Pennyman (already typed)",
+    "Wilkins (already typed)",
+    "Silver Quay Tavern (already typed)"
+  ],
+  "new_types": [
+    "Library",
+    "Pawnshop",
+    "Factory",
+    "Coach Hire Facility",
+    "Lodging House",
+    "Townhouse",
+    "Music Conservatory",
+    "Archive",
+    "Ancient Monument",
+    "Coffeehouse",
+    "Tenement"
+  ]
+}

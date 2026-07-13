@@ -52,14 +52,11 @@ docs/superpowers/
 docs/plans/
 .superpowers/
 
-# mobRPG integration prototype (private collaborator tooling, not for distribution).
-# The installable mobrpg CLI package being strangler-ported out of the prototype
-# is tracked; everything else in the directory (private data dumps, ad hoc
-# scripts, .venv) stays ignored.
-docs/prototypes/mobrpg/*
-!docs/prototypes/mobrpg/pyproject.toml
-!docs/prototypes/mobrpg/mobrpg
-!docs/prototypes/mobrpg/tests
+# mobRPG integration prototype. On the mobrpg-cli branch the whole directory is
+# tracked so the strangler-ported `mobrpg` CLI and the legacy scripts it falls
+# back to are version-controlled together (main keeps this dir ignored until the
+# branch merges). Local build junk (.venv, __pycache__, *.egg-info) is excluded
+# by docs/prototypes/mobrpg/.gitignore.
 
 # Test results (run-specific artifacts)
 tests/compaction/
