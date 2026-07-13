@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobrpg-cli"
+version = "0.1.0"
+description = "CLI over the mobRPG world-builder API for gm-apprentice vault sync"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+mobrpg = "mobrpg.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mobrpg*"]

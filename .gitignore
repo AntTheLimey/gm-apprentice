@@ -52,8 +52,14 @@ docs/superpowers/
 docs/plans/
 .superpowers/
 
-# mobRPG integration prototype (private collaborator tooling, not for distribution)
-docs/prototypes/mobrpg/
+# mobRPG integration prototype (private collaborator tooling, not for distribution).
+# The installable mobrpg CLI package being strangler-ported out of the prototype
+# is tracked; everything else in the directory (private data dumps, ad hoc
+# scripts, .venv) stays ignored.
+docs/prototypes/mobrpg/*
+!docs/prototypes/mobrpg/pyproject.toml
+!docs/prototypes/mobrpg/mobrpg
+!docs/prototypes/mobrpg/tests
 
 # Test results (run-specific artifacts)
 tests/compaction/
