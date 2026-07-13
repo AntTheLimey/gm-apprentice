@@ -5,6 +5,10 @@ gm-apprentice vaults. Parked 2026-06-28. This README is the front door; the
 authoritative status + open decisions live in **`integration-log.md` → the
 "📍 STATUS & OPEN DECISIONS — resume here" section.** Read that first.
 
+> **⚠️ Active work — `mobrpg-cli` branch (2026-07-12):** the scripts are being
+> wrapped in an installable `mobrpg` CLI via a strangler port. If you're on that
+> branch, read **`CLI-HANDOFF.md`** to pick up where it left off.
+
 ## What this is
 
 mobRPG is a collaborative world-builder with a REST API (Spring Boot, Java).
