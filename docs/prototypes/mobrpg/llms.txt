@@ -1,0 +1,81 @@
+# mobrpg CLI — guide for AI agents
+
+`mobrpg` is a CLI over the mobRPG world-builder REST API (Tim Dennis'
+mobrpg.com), used to sync mobRPG worlds with gm-apprentice campaign vaults.
+It is a strangler-stage tool: some verbs are native Python subcommands, the
+rest shell out to the original prototype scripts in this directory. All verbs
+share one client (mobrpg/client.py) for environment resolution and auth.
+
+## Install
+
+    python3 -m pip install -e path/to/docs/prototypes/mobrpg
+    mobrpg --help
+
+## Environment & auth (read before running anything)
+
+- MOBRPG_ENV=dev|prod   Which server to hit. Default: prod. The resolved
+                        target (env + BASE URL) is printed to stderr on every
+                        run — never ambiguous.
+- MOBRPG_TOKEN          Bearer token (recommended). Authenticates as the token
+                        owner. Treat like a password.
+- MOBRPG_EMAIL / MOBRPG_PASSWORD   Alternative to a bearer token (local-password
+                        accounts only). Works against either environment.
+- MOBRPG_ALLOW_PROD_WRITES=1   REQUIRED, in addition to MOBRPG_ENV=prod, for any
+                        mutating verb (push, suggest, types, links) to touch
+                        production. Without it, writes to prod refuse and exit 3.
+- Optional per-field overrides: MOBRPG_BASE, MOBRPG_CLIENT_ID, MOBRPG_REDIRECT_URI.
+
+Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured; 3 refused prod
+write (missing MOBRPG_ALLOW_PROD_WRITES).
+
+## Read-only vs mutating
+
+Read-only (safe anywhere): whoami, worlds, pull, sync, images.
+Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
+push, suggest, types, links. write/merge/link-orphans only touch local vault
+files, not the API.
+
+## Commands
+
+    mobrpg whoami                 Print the authenticated user and their worlds.
+    mobrpg worlds                 (same as whoami) list visible worlds.
+    mobrpg pull <world> [--out F] Import a mobRPG world into a JSON extract
+                                  (default extract.json). Entry of the import
+                                  pipeline; feeds `write`.
+    mobrpg write <extract.json> <out_dir>
+                                  Render a JSON extract into vault markdown.
+    mobrpg merge <extract.json> <vault>
+                                  Non-destructive merge for entities in both.
+    mobrpg link-orphans <extract.json> <vault> <outdir>
+                                  Auto-link obvious orphan relationships.
+    mobrpg sync bootstrap <baseline_extract.json> <vault> <crosswalk.json>
+    mobrpg sync sync <fresh_extract.json> <vault> <crosswalk.json> <report_dir>
+                                  Detect mobRPG edits since the last pull.
+    mobrpg push <world> --chapter <ch> [--execute] [--limit N] [--only S]
+                                  Direct-create vault entities in mobRPG.
+    mobrpg suggest <world> --chapter <ch> [--execute] [--limit N] [--only S]
+                                  Submit vault entities as review suggestions
+                                  (only needs Read access on the world).
+    mobrpg types <world> [--chapter <ch>] [--execute]
+                                  Set entity types via Attribute edges.
+    mobrpg links <world> --chapter <ch> [--execute] [--limit N]
+                                  Push vault relationships as mobRPG events.
+    mobrpg images <world> <vault> <crosswalk.json> [--execute]
+                                  Pull entity images into the vault.
+
+Mutating verbs are dry-run by default; add --execute to actually write. Run
+`mobrpg <command> --help` for a command's own options.
+
+## Typical workflows
+
+Import a world into a vault:
+    export MOBRPG_TOKEN=...            # read-only, prod is fine
+    mobrpg pull <worldId> --out extract.json
+    mobrpg write extract.json /path/to/vault
+    mobrpg merge extract.json /path/to/vault
+    mobrpg link-orphans extract.json /path/to/vault ./orphan_out
+
+Push a vault chapter to mobRPG (safe: suggestions):
+    export MOBRPG_TOKEN=...
+    mobrpg suggest <worldId> --chapter chapter-2            # dry-run
+    MOBRPG_ALLOW_PROD_WRITES=1 mobrpg suggest <worldId> --chapter chapter-2 --execute
