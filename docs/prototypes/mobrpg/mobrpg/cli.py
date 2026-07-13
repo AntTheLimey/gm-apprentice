@@ -14,16 +14,19 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mobrpg.commands import whoami as _whoami
+
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 
-# Native verbs (ported to mobrpg.commands.*). Filled in by later tasks.
-NATIVE: dict = {}
+# Native verbs (ported to mobrpg.commands.*).
+NATIVE: dict = {
+    "whoami": _whoami.run,
+    "worlds": _whoami.run,
+}
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
 FALLBACK: dict[str, str] = {
-    "whoami": "smoketest.py",
-    "worlds": "smoketest.py",
     "pull": "etl_extract.py",
     "write": "vault_write.py",
     "merge": "merge_overlaps.py",
