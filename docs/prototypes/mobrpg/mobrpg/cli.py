@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from mobrpg.commands import whoami as _whoami
+from mobrpg.commands import pull as _pull
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -23,11 +24,11 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 NATIVE: dict = {
     "whoami": _whoami.run,
     "worlds": _whoami.run,
+    "pull": _pull.run,
 }
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
 FALLBACK: dict[str, str] = {
-    "pull": "etl_extract.py",
     "write": "vault_write.py",
     "merge": "merge_overlaps.py",
     "link-orphans": "orphan_link.py",
