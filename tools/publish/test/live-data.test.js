@@ -76,6 +76,15 @@ test('defaulted enc-penalized weapon gets a computed series (case 2)', () => {
   assert.deepEqual(d.weapons['Rapier'].parry, [11, 10, 10, 9, 9]);
 });
 
+test('parenthetical (specialized) skill cell yields positive flat to-hit (case 3)', () => {
+  const m = sixModel();
+  // Ranged weapon whose skill is specialized and NOT in the Skills table -> flat default.
+  // The `-` follows `)`, which a signed scan would misread as a negative sign.
+  m.ranged = [{ weapon: 'Blaster', skill: 'Beam Weapons (Pistol)-15', damage: '3d', acc: '6' }];
+  const d = buildLiveData(m, { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.deepEqual(d.weapons['Blaster'].toHit, [15, 15, 15, 15, 15]);
+});
+
 test('returns null when no encumbrance table or no weighted items', () => {
   const m = sixModel(); m.encumbrance = [];
   assert.equal(buildLiveData(m, { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }), null);

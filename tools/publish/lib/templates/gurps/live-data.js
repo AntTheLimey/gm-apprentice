@@ -9,6 +9,14 @@ function num(v) {
   return m ? parseFloat(m[0]) : null;
 }
 
+// A weapon's authored to-hit is the trailing integer of its skill cell, e.g.
+// "Beam Weapons (Pistol)-15" -> 15. A signed scan (num) would misread the `-`
+// after `)` as a negative sign, so extract the trailing number explicitly.
+function weaponToHit(skillCell) {
+  const m = String(skillCell).match(/(\d+)\s*$/);
+  return m ? parseFloat(m[1]) : null;
+}
+
 function normalize(name) {
   return String(name).toLowerCase().replace(/\s*\([^)]*\)/g, '').trim();
 }
@@ -50,7 +58,7 @@ function buildSkills(model, authoredLevel) {
 function weaponSeries(weapon, skillsByName, model, authoredLevel) {
   const skillCell = String(weapon.skill || '');
   const skillName = skillCell.replace(/[\s-]+\d+\s*$/, '').trim();
-  const authoredToHit = num(skillCell);
+  const authoredToHit = weaponToHit(skillCell);
   // Case 1: linked skill present in the Skills table.
   const match = Object.keys(skillsByName).find(n => normalize(n) === normalize(skillName));
   if (match) return skillsByName[match];
@@ -68,7 +76,7 @@ function buildWeapons(model, skillsByName, authoredLevel) {
   const rows = [].concat(model.melee || [], model.ranged || []);
   for (const w of rows) {
     if (!w.weapon) continue;
-    const authoredToHit = num(w.skill);
+    const authoredToHit = weaponToHit(w.skill);
     const series = weaponSeries(w, skillsByName, model, authoredLevel);
     const toHit = [0, 1, 2, 3, 4].map(L => {
       if (series && authoredToHit != null) return authoredToHit + (series[L] - series[authoredLevel]);
