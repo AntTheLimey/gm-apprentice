@@ -3,6 +3,7 @@ const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
+const { liveDataScript } = require('./gurps/live-data');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -180,6 +181,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemHtml = (context || {}).systemSheetHtml || null;
   const systemCombatHtml = (context || {}).systemCombatHtml || null;
   const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
+  const systemLiveData = (context || {}).systemLiveData || null;
 
   // Combat-only consumed titles: only suppress when combat HTML is present.
   const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
@@ -213,7 +215,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   let sheetContent;
   if (systemHtml) {
-    sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
+    const island = systemLiveData ? '\n' + liveDataScript(systemLiveData) : '';
+    sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}${island}`;
   } else {
     sheetContent = `${sectionNav}\n${accordions}\n${processedContent.relationships}`;
   }
@@ -279,7 +282,11 @@ ${tabScript()}`;
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
-    scripts: [...clientScripts(page.outputPath), rootPath(page.outputPath) + 'js/change-request.js'],
+    scripts: [
+      ...clientScripts(page.outputPath),
+      rootPath(page.outputPath) + 'js/change-request.js',
+      ...(systemLiveData ? [rootPath(page.outputPath) + 'js/equipment-toggle.js'] : []),
+    ],
   });
 }
 

@@ -475,7 +475,13 @@ function build(options = {}) {
 
           const system = publishConfig.system;
           const systemRenderer = getRenderer(system);
-          const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections) : null;
+          const meta = {
+            campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
+            pcSlug: require('./scanner').slugify(page.title),
+            buildVersion: require('crypto').createHash('sha1')
+              .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
+          };
+          const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
           const systemOut = (rendered && typeof rendered === 'object')
             ? rendered
             : { sheetHtml: rendered || null };
@@ -485,6 +491,7 @@ function build(options = {}) {
             systemSheetHtml: systemOut.sheetHtml || null,
             systemCombatHtml: systemOut.combatHtml || null,
             systemEquipmentHtml: systemOut.equipmentHtml || null,
+            systemLiveData: systemOut.liveData || null,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
