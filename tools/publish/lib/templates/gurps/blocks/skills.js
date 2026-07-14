@@ -25,8 +25,8 @@ function renderSkills(model) {
       : s.block ? `<div class="subline">Block: ${escapeHtml(s.block)}</div>` : '';
     const baseNote = (s.base && s.base !== s.level)
       ? `<div class="subline">base ${escapeHtml(s.base)}</div>` : '';
-    return `<tr><td class="nm">${escapeHtml(s.name)}${cite}${def}</td>` +
-      `<td class="num">${escapeHtml(s.level)}${marks}${baseNote}</td>` +
+    return `<tr data-skill-key="${escapeHtml(s.name)}"><td class="nm">${escapeHtml(s.name)}${cite}${def}</td>` +
+      `<td class="num"><span class="sk-cur">${escapeHtml(s.level)}</span>${marks}${baseNote}</td>` +
       `<td class="num rel">${escapeHtml(s.relative || '')}</td>` +
       `<td class="num">${cost(s.points)}</td></tr>`;
   }).join('\n');
