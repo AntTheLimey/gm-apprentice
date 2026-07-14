@@ -43,7 +43,13 @@ function block(skill, combatReflexes) {
   return 3 + Math.floor(skill / 2) + (combatReflexes ? 1 : 0);
 }
 
+function parseWeight(str) {
+  if (str == null) return 0;
+  const m = String(str).replace(/,/g, '').match(/\d+(?:\.\d+)?/);
+  return m ? parseFloat(m[0]) : 0;
+}
+
 module.exports = {
   ENC_LEVELS, ENC_PENALIZED_SKILLS,
-  basicLift, encMaxWeights, encMove, encDodge, parry, block,
+  basicLift, encMaxWeights, encMove, encDodge, parry, block, parseWeight,
 };

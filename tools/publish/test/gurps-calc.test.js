@@ -37,3 +37,14 @@ test('ENC_PENALIZED_SKILLS includes fencing skills', () => {
     ['climbing', 'stealth', 'swimming', 'judo', 'karate',
      'rapier', 'saber', 'smallsword', 'main-gauche']);
 });
+
+test('parseWeight handles authored formats', () => {
+  assert.equal(gc.parseWeight('4 lbs'), 4);
+  assert.equal(gc.parseWeight('56 lbs'), 56);
+  assert.equal(gc.parseWeight('0.55 lbs'), 0.55);
+  assert.equal(gc.parseWeight('~2.1 lbs'), 2.1);
+  assert.equal(gc.parseWeight('1 lb'), 1);
+  assert.equal(gc.parseWeight('1,000 lbs'), 1000);
+  assert.equal(gc.parseWeight('—'), 0);
+  assert.equal(gc.parseWeight(null), 0);
+});
