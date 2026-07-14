@@ -78,9 +78,10 @@ test('defaulted enc-penalized weapon gets a computed series (case 2)', () => {
 
 test('parenthetical (specialized) skill cell yields positive flat to-hit (case 3)', () => {
   const m = sixModel();
-  // Ranged weapon whose skill is specialized and NOT in the Skills table -> flat default.
+  // Weapon whose skill is specialized and NOT in the Skills table -> flat default.
   // The `-` follows `)`, which a signed scan would misread as a negative sign.
-  m.ranged = [{ weapon: 'Blaster', skill: 'Beam Weapons (Pistol)-15', damage: '3d', acc: '6' }];
+  // Kept on the melee (now weapons-only) path so the parenthetical-parse regression stays covered.
+  m.melee = [{ weapon: 'Blaster', skill: 'Beam Weapons (Pistol)-15', damage: '3d', acc: '6' }];
   const d = buildLiveData(m, { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
   assert.deepEqual(d.weapons['Blaster'].toHit, [15, 15, 15, 15, 15]);
 });

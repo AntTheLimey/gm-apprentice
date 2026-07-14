@@ -21,7 +21,7 @@ export async function onRequestPut(context) {
   const { request, env } = context;
   let body;
   try { body = await request.json(); } catch { return json({ error: 'bad' }, 400); }
-  if (!core.isValidKey(body && body.key) || !body.state || typeof body.state !== 'object') {
+  if (!core.isValidKey(body && body.key) || !body.state || typeof body.state !== 'object' || Array.isArray(body.state)) {
     return json({ error: 'bad' }, 400);
   }
   await core.writeState(env.INBOX, body.key, body.state);

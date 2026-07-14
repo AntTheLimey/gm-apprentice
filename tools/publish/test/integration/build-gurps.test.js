@@ -162,5 +162,14 @@ describe('build integration — GURPS PC', () => {
       );
       assert.ok(!html.includes('data-tab="combat"'), 'Non-GURPS PC should not have a Combat tab');
     });
+
+    it('non-qualifying page omits the live-data island and loadout script', () => {
+      const html = fs.readFileSync(
+        path.join(outputDir, 'docs', 'characters', 'pcs', 'test-pc.html'),
+        'utf-8'
+      );
+      assert.doesNotMatch(html, /gurps-live-data/);
+      assert.doesNotMatch(html, /equipment-toggle\.js/);
+    });
   });
 });

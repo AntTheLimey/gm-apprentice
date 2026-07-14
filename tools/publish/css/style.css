@@ -3041,6 +3041,11 @@ tr:nth-child(even) {
 .enc .e4 { background: rgba(220, 38, 38, 0.14); }
 .enc .cur { outline: 2px solid var(--gc-attr); outline-offset: -2px; }
 
+/* Equipment toggle column: hidden until the live-loadout JS activates, so a PC
+   with an equipment table but no encumbrance table never shows dead checkboxes. */
+.eq-toggle-cell { display: none; }
+.gl-active .eq-toggle-cell { display: table-cell; }
+
 @media (prefers-color-scheme: light) {
   .enc .e0 { background: #eafaf0; }
   .enc .e1 { background: transparent; }

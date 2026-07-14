@@ -46,6 +46,12 @@ test('PUT rejects a non-loadout key', async () => {
   assert.equal(res.status, 400);
 });
 
+test('PUT rejects an array state', async () => {
+  const kv = fakeKV();
+  const res = await fn.onRequestPut(putCtx(kv, { key: 'loadout:c:p:d', state: [] }));
+  assert.equal(res.status, 400);
+});
+
 test('GET of an unknown key returns empty object', async () => {
   const res = await fn.onRequestGet(getCtx(fakeKV(), 'loadout:c:p:none'));
   assert.deepEqual(await res.json(), {});

@@ -78,7 +78,7 @@
     function syncKV(checked) {
       try {
         fetch('/api/loadout', { method: 'PUT', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ key: KV_KEY, state: { v: data.buildVersion, items: checked, hp: null, fp: null } }) });
+          body: JSON.stringify({ key: KV_KEY, state: { v: data.buildVersion, items: checked, hp: null, fp: null } }) }).catch(function () {});
       } catch (e) {}
     }
 
@@ -124,6 +124,7 @@
     var initial = readLocal() || defaults();
     applyChecked(initial);
     var readout = document.querySelector('.gl-readout'); if (readout) readout.hidden = false;
+    document.documentElement.classList.add('gl-active');
     recalc(false);
     try {
       fetch('/api/loadout?key=' + encodeURIComponent(KV_KEY)).then(function (res) { return res.json(); })

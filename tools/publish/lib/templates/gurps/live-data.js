@@ -73,7 +73,7 @@ function weaponSeries(weapon, skillsByName, model, authoredLevel) {
 
 function buildWeapons(model, skillsByName, authoredLevel) {
   const out = {};
-  const rows = [].concat(model.melee || [], model.ranged || []);
+  const rows = model.melee || [];
   for (const w of rows) {
     if (!w.weapon) continue;
     const authoredToHit = weaponToHit(w.skill);

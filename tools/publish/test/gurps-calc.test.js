@@ -27,6 +27,11 @@ test('parry follows 3 + floor(skill/2) + CR (B376)', () => {
   assert.equal(gc.parry(14, false), 10);  // 3 + 7
 });
 
+test('block follows 3 + floor(skill/2) + CR (B376)', () => {
+  assert.equal(gc.block(16, true), 12);   // 3 + 8 + 1
+  assert.equal(gc.block(14, false), 10);  // 3 + 7
+});
+
 test('encMaxWeights returns 5 thresholds for BL 34', () => {
   const w = gc.encMaxWeights(34).map(x => x.max);
   assert.deepEqual(w, [34, 68, 102, 204, 340]);
