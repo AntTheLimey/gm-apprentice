@@ -87,7 +87,7 @@
     }
     function setText(id, val) { var n = document.getElementById(id); if (n) n.textContent = val; }
 
-    function recalc() {
+    function recalc(persist) {
       var checked = currentChecked();
       var total = api.sumCarriedWeight(data.items, checked);
       var lvl = api.levelForWeight(total, data.levels);
@@ -109,7 +109,7 @@
         if (th && w.toHit) th.textContent = w.toHit.cur;
         if (pa && w.parry) pa.textContent = w.parry.cur;
       });
-      writeLocal(checked); syncKV(checked);
+      if (persist) { writeLocal(checked); syncKV(checked); }
     }
     function cssq(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 
@@ -124,19 +124,19 @@
     var initial = readLocal() || defaults();
     applyChecked(initial);
     var readout = document.querySelector('.gl-readout'); if (readout) readout.hidden = false;
-    recalc();
+    recalc(false);
     try {
       fetch('/api/loadout?key=' + encodeURIComponent(KV_KEY)).then(function (res) { return res.json(); })
-        .then(function (j) { if (j && j.state && j.state.v === data.buildVersion && j.state.items) { applyChecked(j.state.items); recalc(); } })
+        .then(function (j) { if (j && j.state && j.state.v === data.buildVersion && j.state.items) { applyChecked(j.state.items); recalc(false); } })
         .catch(function () {});
     } catch (e) {}
 
-    toggles.forEach(function (t) { t.addEventListener('change', recalc); });
+    toggles.forEach(function (t) { t.addEventListener('change', function () { recalc(true); }); });
     var reset = document.getElementById('gl-reset');
     if (reset) reset.addEventListener('click', function () {
       applyChecked(defaults());
       localStorage.removeItem(LS_KEY);
-      recalc();
+      recalc(true);
     });
   });
 })(typeof window !== 'undefined' ? window : globalThis);
