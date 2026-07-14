@@ -1,0 +1,125 @@
+'use strict';
+const gc = require('./gurps-calc');
+
+function num(v) {
+  if (v == null) return null;
+  // Only treat a leading `-` as a sign when it isn't a separator inside a token
+  // like "Judo-14" / "Rapier-11" (skill cells use `Name-N` for the to-hit level).
+  const m = String(v).match(/(?<![\w.])-?\d+(?:\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+function normalize(name) {
+  return String(name).toLowerCase().replace(/\s*\([^)]*\)/g, '').trim();
+}
+
+// Skills-table entry -> [level0..level4] series.
+function skillSeries(base, current, authoredLevel) {
+  const per = authoredLevel > 0 ? (base - current) / authoredLevel : 0;
+  return [0, 1, 2, 3, 4].map(L => Math.round(base - per * L));
+}
+
+function buildLevels(model) {
+  const enc = model.encumbrance || [];
+  if (enc.length < 5) return null;
+  const levels = enc.slice(0, 5).map((e, i) => ({
+    name: String(e.level).replace(/\s*\(\d+\)\s*$/, '').trim(),
+    num: i,
+    maxWeight: num(e.weight),
+    move: num(e.move),
+    dodge: num(e.dodge),
+  }));
+  if (levels.some(l => l.maxWeight == null || l.move == null || l.dodge == null)) return null;
+  let authoredLevel = enc.findIndex(e => e.current);
+  if (authoredLevel < 0) authoredLevel = 0;
+  return { levels, authoredLevel };
+}
+
+function buildSkills(model, authoredLevel) {
+  const out = {};
+  for (const s of (model.skills || [])) {
+    const cur = num(s.level);
+    if (cur == null) continue;
+    const base = num(s.base) != null ? num(s.base) : cur;
+    out[s.name] = skillSeries(base, cur, authoredLevel);
+  }
+  return out;
+}
+
+// Find the [l0..l4] to-hit series for a weapon, or null if flat/unresolvable.
+function weaponSeries(weapon, skillsByName, model, authoredLevel) {
+  const skillCell = String(weapon.skill || '');
+  const skillName = skillCell.replace(/[\s-]+\d+\s*$/, '').trim();
+  const authoredToHit = num(skillCell);
+  // Case 1: linked skill present in the Skills table.
+  const match = Object.keys(skillsByName).find(n => normalize(n) === normalize(skillName));
+  if (match) return skillsByName[match];
+  // Case 2: absent but enc-penalized -> synthesize from the weapon's own default.
+  if (authoredToHit != null && gc.ENC_PENALIZED_SKILLS.includes(normalize(skillName))) {
+    const base = authoredToHit + authoredLevel;
+    return [0, 1, 2, 3, 4].map(L => base - L);
+  }
+  // Case 3: flat.
+  return null;
+}
+
+function buildWeapons(model, skillsByName, authoredLevel) {
+  const out = {};
+  const rows = [].concat(model.melee || [], model.ranged || []);
+  for (const w of rows) {
+    if (!w.weapon) continue;
+    const authoredToHit = num(w.skill);
+    const series = weaponSeries(w, skillsByName, model, authoredLevel);
+    const toHit = [0, 1, 2, 3, 4].map(L => {
+      if (series && authoredToHit != null) return authoredToHit + (series[L] - series[authoredLevel]);
+      return authoredToHit;
+    });
+    let parry = null;
+    const authoredParry = num(w.parry);
+    if (authoredParry != null) {
+      parry = [0, 1, 2, 3, 4].map(L => {
+        if (series) return authoredParry + (Math.floor(series[L] / 2) - Math.floor(series[authoredLevel] / 2));
+        return authoredParry;
+      });
+    }
+    out[w.weapon] = { toHit, parry, block: null };
+  }
+  return out;
+}
+
+function buildItems(model) {
+  const items = [];
+  for (const it of ((model.equipment || {}).items || [])) {
+    items.push({ key: it.name, weight: gc.parseWeight(it.weight), defaultCarried: true, table: 'main' });
+  }
+  for (const lo of ((model.equipment || {}).loadouts || [])) {
+    for (const it of (lo.items || [])) {
+      items.push({ key: it.name, weight: gc.parseWeight(it.weight), defaultCarried: false, table: `loadout:${lo.name}` });
+    }
+  }
+  return items;
+}
+
+function buildLiveData(model, meta) {
+  const lv = buildLevels(model);
+  if (!lv) return null;
+  const items = buildItems(model);
+  if (items.length === 0) return null;
+  const skills = buildSkills(model, lv.authoredLevel);
+  const weapons = buildWeapons(model, skills, lv.authoredLevel);
+  return {
+    buildVersion: meta.buildVersion,
+    campaignId: meta.campaignId,
+    pcSlug: meta.pcSlug,
+    authoredLevel: lv.authoredLevel,
+    levels: lv.levels,
+    skills, weapons, items,
+  };
+}
+
+function liveDataScript(data) {
+  const json = JSON.stringify(data).replace(/</g, '\\u003c');
+  return `<script type="application/json" id="gurps-live-data">${json}</script>`;
+}
+
+module.exports = { buildLiveData, liveDataScript };
