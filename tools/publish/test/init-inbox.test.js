@@ -15,6 +15,12 @@ test('init scaffolds the inbox Function and wrangler.toml', async () => {
   const request = await fs.readFile(path.join(dir, 'functions/api/request.js'), 'utf8');
   assert.match(request, /onRequestPost/);
 
+  const loadoutCore = await fs.readFile(path.join(dir, 'functions/api/loadout-core.mjs'), 'utf8');
+  assert.match(loadoutCore, /export const PREFIX = 'loadout:'/);
+  const loadout = await fs.readFile(path.join(dir, 'functions/api/loadout.js'), 'utf8');
+  assert.match(loadout, /onRequestGet/);
+  assert.match(loadout, /onRequestPut/);
+
   const wrangler = await fs.readFile(path.join(dir, 'wrangler.toml'), 'utf8');
   assert.match(wrangler, /binding = "INBOX"/);
   assert.match(wrangler, /dead-end/);            // {{PACKAGE_NAME}} substituted
