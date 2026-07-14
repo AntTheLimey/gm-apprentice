@@ -120,11 +120,11 @@ def dice_adds(dice: int, adds: int) -> int:
 
 DIFFICULTY_OFFSETS = {"E": 0, "A": 1, "H": 2, "VH": 3}
 
-# Skills whose rolls take -enc level: B17 (Climbing, Stealth, Swimming)
-# and the Judo/Karate skill descriptions (B203). Perks such as Armor
-# Familiarity (Martial Arts p. 49) can offset these -- that judgement
-# belongs to the reconciliation pass, never to this module.
-ENC_PENALIZED_SKILLS = ("climbing", "stealth", "swimming", "judo", "karate")
+# B17 (climbing/stealth/swimming), B203 (judo/karate), fencing category B208
+# (rapier/saber/smallsword/main-gauche) — all take -encumbrance-level. Perk
+# offsets (Armor Familiarity, MA49) belong to the reconciliation pass, not here.
+ENC_PENALIZED_SKILLS = ("climbing", "stealth", "swimming", "judo", "karate",
+                        "rapier", "saber", "smallsword", "main-gauche")
 
 
 def skill_relative_level(points: int, difficulty: str):

@@ -450,7 +450,8 @@ check("B170 unknown difficulty", gc.skill_relative_level(4, "X"), None)
 check("B170 lowercase vh accepted", gc.skill_relative_level(1, "vh"), -3)
 check("enc-penalized list",
       gc.ENC_PENALIZED_SKILLS,
-      ("climbing", "stealth", "swimming", "judo", "karate"))
+      ("climbing", "stealth", "swimming", "judo", "karate",
+       "rapier", "saber", "smallsword", "main-gauche"))
 
 # --- skills check (SP2) ---
 _SKILLS_TBL = """## Skills
