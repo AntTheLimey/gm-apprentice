@@ -22,6 +22,23 @@ def _round_half_up(x: float) -> int:
     return math.floor(x + 0.5)
 
 
+def halve_up(x: int) -> int:
+    """B419/B426: halve Move/Dodge/ST, rounding up. Callers keep the
+    encumbrance minimum (halve_up(1) == 1)."""
+    return math.ceil(x / 2)
+
+
+def is_reeling(hp: int, max_hp: int) -> bool:
+    """B419: reeling when current HP is strictly below 1/3 max HP.
+    Integer-safe: 3*hp < max_hp (avoids float drift; strict <)."""
+    return 3 * hp < max_hp
+
+
+def is_tired(fp: int, max_fp: int) -> bool:
+    """B426: very tired when current FP is strictly below 1/3 max FP."""
+    return 3 * fp < max_fp
+
+
 def basic_lift(st: int) -> float:
     """B15: ST^2/5 lb; round to nearest whole if 10 or more."""
     bl = st * st / 5.0

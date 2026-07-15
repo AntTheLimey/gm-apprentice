@@ -18,6 +18,12 @@ const ENC_PENALIZED_SKILLS = [
 
 function roundHalfUp(x) { return Math.floor(x + 0.5); }
 
+// B419 (Reeling: <1/3 HP) / B426 (Tired: <1/3 FP). Halve Move/Dodge (and ST when
+// Tired), rounding up. Integer-safe strict-<1/3 thresholds avoid float drift.
+function halveUp(x) { return Math.ceil(x / 2); }
+function isReeling(hp, maxHp) { return 3 * hp < maxHp; }
+function isTired(fp, maxFp) { return 3 * fp < maxFp; }
+
 function basicLift(st) {
   const bl = (st * st) / 5;
   return bl >= 10 ? roundHalfUp(bl) : Math.round(bl * 100) / 100;
@@ -52,4 +58,5 @@ function parseWeight(str) {
 module.exports = {
   ENC_LEVELS, ENC_PENALIZED_SKILLS,
   basicLift, encMaxWeights, encMove, encDodge, parry, block, parseWeight,
+  halveUp, isReeling, isTired,
 };
