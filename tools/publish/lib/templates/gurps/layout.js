@@ -1,5 +1,4 @@
 const { escapeHtml } = require('../../processor');
-const { renderStatus } = require('./blocks/status');
 const { renderAttributes } = require('./blocks/attributes');
 const { renderLiftingFeats, renderSlamTable } = require('./blocks/lifting');
 const { renderSenses } = require('./blocks/senses');
@@ -23,7 +22,6 @@ const { findSectionByTitle } = require('./tables');
 const RICH_COMBAT_TITLES = ['multi-action combat skill chains', 'combat summary'];
 
 function buildSheet(model) {
-  const status = renderStatus(model);
   const flow = [
     renderAttributes(model), renderLiftingFeats(model), renderSlamTable(model),
     renderSenses(model), renderDefenses(model), renderEncumbrance(model),
@@ -36,13 +34,12 @@ function buildSheet(model) {
     renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
   ].filter(Boolean);
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
-  if (flow.length === 0 && wideBlocks.length === 0 && !status) return null;
-  return (status || '') + `<div class="gurps-sheet"><div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
+  if (flow.length === 0 && wideBlocks.length === 0) return null;
+  return `<div class="gurps-sheet"><div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
 }
 
 function buildCombat(model, sections) {
   const parts = [
-    renderStatus(model),
     renderDefenses(model),
     renderMelee(model),
     renderRanged(model),
