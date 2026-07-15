@@ -117,11 +117,22 @@
     function writeLocal(checked, vit) {
       localStorage.setItem(LS_KEY, JSON.stringify({ v: data.buildVersion, items: checked, hp: vit.hp, fp: vit.fp }));
     }
+    // Coalesce + serialize remote writes: keep only the latest pending state and
+    // send it after the current PUT resolves. Independent per-keystroke fetches
+    // could otherwise reach KV out of order and leave it holding a stale value.
+    var kvInFlight = false, kvPending = null;
     function syncKV(checked, vit) {
-      try {
-        fetch('/api/loadout', { method: 'PUT', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ key: KV_KEY, state: { v: data.buildVersion, items: checked, hp: vit.hp, fp: vit.fp } }) }).catch(function () {});
-      } catch (e) {}
+      kvPending = { v: data.buildVersion, items: checked, hp: vit.hp, fp: vit.fp };
+      if (kvInFlight) return;
+      (function flush() {
+        if (!kvPending) return;
+        var state = kvPending; kvPending = null; kvInFlight = true;
+        var done = function () { kvInFlight = false; flush(); };
+        try {
+          fetch('/api/loadout', { method: 'PUT', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ key: KV_KEY, state: state }) }).then(done, done);
+        } catch (e) { kvInFlight = false; }
+      })();
     }
     function currentVitals() {
       var v = data.vitals || null;
@@ -260,6 +271,7 @@
         if (vitalInputs.fp) vitalInputs.fp.value = data.vitals.fp.cur;
       }
       localStorage.removeItem(LS_KEY);
+      locallyChanged = true;
       recalc(true);
     });
   });
