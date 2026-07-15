@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../../../processor');
-const { block } = require('../render');
+const { block, liveStat } = require('../render');
 
 function renderDefenses(model) {
   const d = model.defenses || {};
@@ -10,7 +10,7 @@ function renderDefenses(model) {
   const chips = [];
   for (const p of (d.parry || [])) chips.push(`<span class="def-chip"><span class="def-chip-label">${escapeHtml(p.label)}</span> ${escapeHtml(p.value)}</span>`);
   for (const b of (d.block || [])) chips.push(`<span class="def-chip"><span class="def-chip-label">${escapeHtml(b.label)}</span> ${escapeHtml(b.value)}</span>`);
-  if (d.dodge != null) chips.push(`<span class="def-chip"><span class="def-chip-label">Dodge</span> ${escapeHtml(String(d.dodge))}</span>`);
+  if (d.dodge != null) chips.push(`<span class="def-chip"><span class="def-chip-label">Dodge</span> ${liveStat(String(d.dodge), 'dodge')}</span>`);
   const defRow = chips.length > 0 ? `<div class="defrow">${chips.join('')}</div>` : '';
 
   let locTable = '';

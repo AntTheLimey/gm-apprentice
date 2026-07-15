@@ -176,6 +176,18 @@ point_total: 255
 
 ---
 
+## Encumbrance
+
+| Level | Max Weight | Move | Dodge |
+|-------|-----------|------|-------|
+| None (0) | ≤29 lbs | 6 | 9 |
+| Light (1) | ≤58 lbs | 4 | 8 |
+| Medium (2) | ≤87 lbs | 3 | 7 |
+| Heavy (3) | ≤174 lbs | 2 | 6 |
+| X-Heavy (4) | ≤290 lbs | 1 | 5 |
+
+---
+
 ## Current Status
 
 > [!note] Reconciled (Session 09): "past preserved, future changed."

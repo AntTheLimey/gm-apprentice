@@ -107,6 +107,15 @@ describe('build integration — GURPS PC', () => {
       assert.ok(html.includes('Large Shield'), 'Should list Large Shield');
       assert.ok(html.includes('Mail Hauberk'), 'Should list Mail Hauberk');
     });
+
+    it('GURPS PC page embeds the live-data island and loadout script', () => {
+      const html = fs.readFileSync(
+        path.join(outputDir, 'docs', 'characters', 'pcs', 'karl-brenner.html'),
+        'utf-8'
+      );
+      assert.match(html, /id="gurps-live-data"/);
+      assert.match(html, /js\/equipment-toggle\.js/);
+    });
   });
 
   describe('non-GURPS PC has no Combat tab', () => {
@@ -152,6 +161,15 @@ describe('build integration — GURPS PC', () => {
         'utf-8'
       );
       assert.ok(!html.includes('data-tab="combat"'), 'Non-GURPS PC should not have a Combat tab');
+    });
+
+    it('non-qualifying page omits the live-data island and loadout script', () => {
+      const html = fs.readFileSync(
+        path.join(outputDir, 'docs', 'characters', 'pcs', 'test-pc.html'),
+        'utf-8'
+      );
+      assert.doesNotMatch(html, /gurps-live-data/);
+      assert.doesNotMatch(html, /equipment-toggle\.js/);
     });
   });
 });

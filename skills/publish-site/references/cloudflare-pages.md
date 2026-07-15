@@ -190,6 +190,14 @@ New sites scaffolded after this feature already have `wrangler.toml` and a
 (they are not build output — they live beside `vault.config.json`, not in
 `docs/`).
 
+The at-table **loadout** endpoint (`/api/loadout`) ships in the same
+`functions/api/` directory and **reuses this same `INBOX` KV namespace**
+(under a `loadout:` key prefix) — no new namespace, binding, or
+`wrangler.toml` change. New sites scaffold it automatically. Existing sites
+that already set up the inbox above: copy `functions/api/loadout.js` and
+`functions/api/loadout-core.mjs` from the scaffold alongside the inbox
+files, then redeploy.
+
 > **Existing sites — set the project name first.** Open `wrangler.toml` and set
 > `name` to your **existing** Cloudflare Pages project name (the one you first
 > ran `pages project create` with, e.g. `dead-end`). The scaffold fills `name`

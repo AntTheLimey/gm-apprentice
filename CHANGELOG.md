@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.23] — 2026-07-13
+
+Publish tool 1.11.2.
+
+### Added
+
+- GURPS PC sheets — live in-session equipment loadout: players toggle gear on/off
+  and Move, Dodge, encumbrance level, skill levels, and weapon to-hit/Parry
+  recalculate instantly in the browser. Move and Dodge update everywhere they
+  appear on the sheet — the Attributes block, the status line, the Combat defense
+  chips, and the encumbrance readout (shown as current / base) — so no stat is
+  left frozen. Toggle state persists to Cloudflare KV (`/api/loadout`) with a
+  localStorage cache and a Reset control.
+
+### Fixed
+
+- `ENC_PENALIZED_SKILLS` now includes the fencing skills (Rapier, Saber,
+  Smallsword, Main-Gauche), which take a penalty equal to encumbrance level.
+
 ## [1.8.22] — 2026-07-12
 
 ### Changed
