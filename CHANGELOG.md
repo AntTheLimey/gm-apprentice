@@ -15,8 +15,11 @@ Publish tool 1.11.2.
 
 - GURPS PC sheets — live in-session equipment loadout: players toggle gear on/off
   and Move, Dodge, encumbrance level, skill levels, and weapon to-hit/Parry
-  recalculate instantly in the browser. Toggle state persists to Cloudflare KV
-  (`/api/loadout`) with a localStorage cache and a Reset control.
+  recalculate instantly in the browser. Move and Dodge update everywhere they
+  appear on the sheet — the Attributes block, the status line, the Combat defense
+  chips, and the encumbrance readout (shown as current / base) — so no stat is
+  left frozen. Toggle state persists to Cloudflare KV (`/api/loadout`) with a
+  localStorage cache and a Reset control.
 
 ### Fixed
 

@@ -58,9 +58,26 @@ function cost(v) {
   return `<span class="cost">${escapeHtml(String(v))}</span>`;
 }
 
+/**
+ * Wrap the leading number of a stat value in a live-update span, leaving the
+ * rest of the text (a "/ base" suffix, a parenthetical, etc.) static. The GURPS
+ * live-loadout client rewrites every `[data-gl-field]` element on each toggle so
+ * Move/Dodge track encumbrance wherever they appear on the sheet. If the value
+ * has no leading number, it is returned escaped and unwrapped.
+ */
+function liveStat(value, field) {
+  const s = String(value == null ? '' : value);
+  // Capture the whole leading number (incl. any decimal) so the client, which
+  // may write back a fractional value, replaces it cleanly instead of leaving a
+  // stray ".5" behind. GURPS Move/Dodge are integers, but this stays honest.
+  const m = s.match(/^(\s*)(-?\d+(?:\.\d+)?)([\s\S]*)$/);
+  if (!m) return escapeHtml(s);
+  return `${m[1]}<span class="gl-live" data-gl-field="${escapeHtml(field)}">${escapeHtml(m[2])}</span>${escapeHtml(m[3])}`;
+}
+
 function wide(category, title, inner) {
   if (!inner || !String(inner).trim()) return null;
   return `<div class="wide cat-${category}"><h2>${escapeHtml(title)}</h2>${inner}</div>`;
 }
 
-module.exports = { splitMarkers, stripCost, footnoteRegistry, block, cost, wide };
+module.exports = { splitMarkers, stripCost, footnoteRegistry, block, cost, wide, liveStat };

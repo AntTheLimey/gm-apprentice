@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../../../processor');
-const { block } = require('../render');
+const { block, liveStat } = require('../render');
 
 const PRIMARY = ['ST', 'DX', 'IQ', 'HT'];
 const SECONDARY_ORDER = ['HP', 'Will', 'Per', 'FP', 'Basic Speed', 'Basic Move'];
@@ -35,7 +35,9 @@ function renderAttributes(model) {
   }
   const secCards = secEntries.map(k => {
     const c = sec[k];
-    return `<div class="a"><div class="v">${escapeHtml(c.value)}</div><div class="l">${escapeHtml(k)}</div></div>`;
+    // Move/Dodge track encumbrance live; other secondary chars are static.
+    const vHtml = (k === 'Move' || k === 'Dodge') ? liveStat(c.value, k.toLowerCase()) : escapeHtml(c.value);
+    return `<div class="a"><div class="v">${vHtml}</div><div class="l">${escapeHtml(k)}</div></div>`;
   }).join('');
 
   // DERIVED: compact strip
@@ -47,7 +49,7 @@ function renderAttributes(model) {
   if (a.bl && !der['Basic Lift']) derivedSpans.unshift(`<span><span class="der-label">BL</span> ${escapeHtml(String(a.bl))}</span>`);
   if (a.thrust) derivedSpans.push(`<span><span class="der-label">Thr</span> ${escapeHtml(String(a.thrust))}</span>`);
   if (a.swing) derivedSpans.push(`<span><span class="der-label">Sw</span> ${escapeHtml(String(a.swing))}</span>`);
-  if (a.dodge) derivedSpans.push(`<span><span class="der-label">Dodge</span> ${escapeHtml(String(a.dodge))}</span>`);
+  if (a.dodge) derivedSpans.push(`<span><span class="der-label">Dodge</span> ${liveStat(String(a.dodge), 'dodge')}</span>`);
 
   const inner =
     `<div class="attrgrid">${cards}</div>` +

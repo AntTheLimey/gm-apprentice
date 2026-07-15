@@ -94,7 +94,10 @@
       var r = api.applyModifiers(data, lvl.level);
       setText('gl-weight', Math.round(total * 10) / 10);
       setText('gl-level', r.levelName + (lvl.overloaded ? ' (overloaded!)' : ''));
-      setText('gl-move', r.move.cur); setText('gl-dodge', r.dodge.cur);
+      // Move/Dodge appear in several places (readout, Attributes, status pips,
+      // Combat chips); update every live field so they all track encumbrance.
+      document.querySelectorAll('[data-gl-field="move"]').forEach(function (el) { el.textContent = r.move.cur; });
+      document.querySelectorAll('[data-gl-field="dodge"]').forEach(function (el) { el.textContent = r.dodge.cur; });
       document.querySelectorAll('.enc [data-level], table.enc tr[data-level]').forEach(function (row) {
         row.classList.toggle('cur', Number(row.getAttribute('data-level')) === lvl.level);
       });
