@@ -128,3 +128,9 @@ test('vitalsView surfaces sub-zero GM notes', () => {
   assert.match(v.notes[0], /0 HP/);
   assert.match(v.notes[1], /0 FP/);
 });
+
+test('module loads under node with the full API surface', () => {
+  assert.equal(typeof et.applyModifiers, 'function');
+  assert.equal(typeof et.vitalsView, 'function');
+  assert.equal(typeof et.sumCarriedWeight, 'function');
+});

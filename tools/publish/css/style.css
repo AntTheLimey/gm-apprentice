@@ -3046,6 +3046,38 @@ tr:nth-child(even) {
 .eq-toggle-cell { display: none; }
 .gl-active .eq-toggle-cell { display: table-cell; }
 
+/* --- GURPS live status panel (SP2) --- */
+.gl-status-panel { display: none; }
+.gl-active .gl-status-panel {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.5rem;
+  margin: 0 0 1rem; padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface, rgba(127,127,127,0.06));
+}
+.gl-vitals { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; }
+.gl-vital { display: inline-flex; align-items: center; gap: 0.35rem; }
+.gl-vital-label { font-weight: 700; letter-spacing: 0.03em; }
+.gl-vital-input {
+  width: 3.5ch; text-align: center; font: inherit; padding: 2px 4px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text);
+  -moz-appearance: textfield;
+}
+.gl-vital-input::-webkit-outer-spin-button, .gl-vital-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.gl-vital-max { color: var(--text-muted); }
+.gl-step {
+  font: inherit; line-height: 1; padding: 2px 9px; border: 1px solid var(--border);
+  border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer;
+}
+.gl-step:hover { background: var(--accent-dim); }
+.gl-badge {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 7px; border-radius: 999px;
+}
+.gl-badge-reeling { background: rgba(218,54,51,0.18); color: #f85149; }
+.gl-badge-tired { background: rgba(210,153,34,0.2); color: #d29922; }
+.gl-status-effects { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: center; color: var(--text-muted); font-size: 13px; }
+.gl-delta-after { font-weight: 700; color: var(--text); }
+.gl-status-note { font-style: italic; color: var(--warning); }
+
 @media (prefers-color-scheme: light) {
   .enc .e0 { background: #eafaf0; }
   .enc .e1 { background: transparent; }
