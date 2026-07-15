@@ -53,7 +53,24 @@
     };
   }
 
-  const api = { sumCarriedWeight, levelForWeight, applyModifiers };
+  // Derive the panel's effects-row content from a recalc result. Move/Dodge show
+  // when either condition is active (before = encumbrance-adjusted, after =
+  // condition-adjusted); ST shows only when Tired. Sub-zero HP/FP add a static
+  // GM reminder (informational, not enforced — the deeper ladder is out of scope).
+  function vitalsView(r, vitals) {
+    const deltas = [];
+    if (r.reeling || r.tired) {
+      deltas.push({ field: 'move', before: r.move.enc, after: r.move.cur });
+      deltas.push({ field: 'dodge', before: r.dodge.enc, after: r.dodge.cur });
+      if (r.tired && r.st) deltas.push({ field: 'st', before: r.st.base, after: r.st.cur });
+    }
+    const notes = [];
+    if (vitals && vitals.hp && vitals.hp.cur <= 0) notes.push('0 HP — GM: consciousness rolls apply');
+    if (vitals && vitals.fp && vitals.fp.cur <= 0) notes.push('0 FP — GM: collapse rolls apply');
+    return { active: !!(r.reeling || r.tired), reeling: r.reeling, tired: r.tired, deltas, notes };
+  }
+
+  const api = { sumCarriedWeight, levelForWeight, applyModifiers, vitalsView };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__equipmentToggle = api;
 

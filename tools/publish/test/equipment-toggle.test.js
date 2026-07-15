@@ -91,3 +91,40 @@ test('halving floors at 1 (already Move 1 at X-Heavy)', () => {
   const r = et.applyModifiers(DATA, 4, { hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 } });
   assert.equal(r.move.cur, 1);  // ceil(ceil(1/2)/2) = 1
 });
+
+test('vitalsView is inert when healthy', () => {
+  const r = et.applyModifiers(DATA, 2, { hp: { cur: 13, max: 13 }, fp: { cur: 12, max: 12 } });
+  const v = et.vitalsView(r, { hp: { cur: 13, max: 13 }, fp: { cur: 12, max: 12 } });
+  assert.equal(v.active, false);
+  assert.deepEqual(v.deltas, []);
+  assert.deepEqual(v.notes, []);
+});
+
+test('vitalsView lists Move/Dodge deltas when reeling, no ST', () => {
+  const r = et.applyModifiers(DATA, 2, { hp: { cur: 4, max: 13 }, fp: { cur: 12, max: 12 } });
+  const v = et.vitalsView(r, { hp: { cur: 4, max: 13 }, fp: { cur: 12, max: 12 } });
+  assert.equal(v.active, true);
+  assert.equal(v.reeling, true);
+  assert.deepEqual(v.deltas, [
+    { field: 'move', before: 3, after: 2 },
+    { field: 'dodge', before: 8, after: 4 },
+  ]);
+});
+
+test('vitalsView adds ST delta when tired', () => {
+  const r = et.applyModifiers(DATA, 2, { hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 } });
+  const v = et.vitalsView(r, { hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 } });
+  assert.deepEqual(v.deltas, [
+    { field: 'move', before: 3, after: 1 },
+    { field: 'dodge', before: 8, after: 2 },
+    { field: 'st', before: 13, after: 7 },
+  ]);
+});
+
+test('vitalsView surfaces sub-zero GM notes', () => {
+  const r = et.applyModifiers(DATA, 2, { hp: { cur: 0, max: 13 }, fp: { cur: -1, max: 12 } });
+  const v = et.vitalsView(r, { hp: { cur: 0, max: 13 }, fp: { cur: -1, max: 12 } });
+  assert.equal(v.notes.length, 2);
+  assert.match(v.notes[0], /0 HP/);
+  assert.match(v.notes[1], /0 FP/);
+});
