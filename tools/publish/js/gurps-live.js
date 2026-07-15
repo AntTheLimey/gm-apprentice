@@ -1,5 +1,6 @@
-/* GURPS live loadout recalc. Pure helpers are exported for Node tests; the DOM
-   bootstrap at the bottom only runs in a browser. Mirrors js/change-request.js. */
+/* GURPS live-session recalc: equipment loadout + current HP/FP with the Reeling
+   and Tired condition penalties. Pure helpers are exported for Node tests; the
+   DOM bootstrap at the bottom only runs in a browser. Mirrors js/change-request.js. */
 (function (root) {
   'use strict';
 
@@ -72,7 +73,7 @@
 
   const api = { sumCarriedWeight, levelForWeight, applyModifiers, vitalsView };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  root.__equipmentToggle = api;
+  root.__gurpsLive = api;
 
   // --- DOM bootstrap (browser only) ---
   if (typeof document === 'undefined') return;

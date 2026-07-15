@@ -286,7 +286,7 @@ ${tabScript()}`;
     scripts: [
       ...clientScripts(page.outputPath),
       rootPath(page.outputPath) + 'js/change-request.js',
-      ...(systemLiveData ? [rootPath(page.outputPath) + 'js/equipment-toggle.js'] : []),
+      ...(systemLiveData ? [rootPath(page.outputPath) + 'js/gurps-live.js'] : []),
     ],
   });
 }

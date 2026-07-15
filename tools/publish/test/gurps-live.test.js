@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const et = require('../js/equipment-toggle.js');
+const et = require('../js/gurps-live.js');
 
 const DATA = {
   levels: [

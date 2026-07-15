@@ -12,7 +12,7 @@ function renderGURPSSheet(frontmatter, sections, meta) {
     equipmentHtml: buildEquipment(model),
     liveData,
     // Panel rides the live-data island: only mount when the island exists AND
-    // vitals resolved. Otherwise there is no equipment-toggle.js to drive it.
+    // vitals resolved. Otherwise there is no gurps-live.js to drive it.
     statusPanelHtml: (liveData && liveData.vitals) ? renderStatusPanel(model, liveData.vitals) : null,
   };
 }
