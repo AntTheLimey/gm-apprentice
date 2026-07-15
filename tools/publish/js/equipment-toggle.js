@@ -18,7 +18,9 @@
     return arr ? { base: arr[0], cur: arr[level] } : null;
   }
 
-  function applyModifiers(data, level) {
+  function halveUp(x) { return Math.ceil(x / 2); }
+
+  function applyModifiers(data, level, vitals) {
     const lv = data.levels[level];
     const skills = {};
     for (const k of Object.keys(data.skills || {})) skills[k] = pair(data.skills[k], level);
@@ -27,11 +29,27 @@
       const w = data.weapons[k];
       weapons[k] = { toHit: pair(w.toHit, level), parry: pair(w.parry, level), block: pair(w.block, level) };
     }
+    // Encumbrance-adjusted (pre-condition) Move/Dodge from the answer key.
+    const encMove = lv.move, encDodge = lv.dodge;
+    const baseSt = data.vitals && data.vitals.st != null ? data.vitals.st : null;
+    let move = encMove, dodge = encDodge, st = baseSt;
+    let reeling = false, tired = false;
+    if (vitals) {
+      // Both charts state "All effects are cumulative" — halve in sequence (B419/B426).
+      if (vitals.hp && 3 * vitals.hp.cur < vitals.hp.max) {
+        reeling = true; move = halveUp(move); dodge = halveUp(dodge);
+      }
+      if (vitals.fp && 3 * vitals.fp.cur < vitals.fp.max) {
+        tired = true; move = halveUp(move); dodge = halveUp(dodge);
+        if (st != null) st = halveUp(st);  // ST-based quantities (BL, enc, damage) are NOT re-derived
+      }
+    }
     return {
       level, levelName: lv.name,
-      move: { base: data.levels[0].move, cur: lv.move },
-      dodge: { base: data.levels[0].dodge, cur: lv.dodge },
-      skills, weapons,
+      move: { base: data.levels[0].move, enc: encMove, cur: move },
+      dodge: { base: data.levels[0].dodge, enc: encDodge, cur: dodge },
+      st: baseSt != null ? { base: baseSt, cur: st != null ? st : baseSt } : null,
+      reeling, tired, skills, weapons,
     };
   }
 
