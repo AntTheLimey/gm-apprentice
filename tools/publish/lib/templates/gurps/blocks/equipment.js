@@ -16,7 +16,7 @@ function inventoryTable(items) {
   const rows = items.map(item => {
     const locCell = hasLoc ? `<td>${escapeHtml(item.location ?? '')}</td>` : '';
     const notesCell = hasNotes ? `<td>${escapeHtml(item.notes ?? '')}</td>` : '';
-    return `<tr>${toggleCell(item.name, item.weight, true)}<td class="num">${escapeHtml(String(item.qty))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(item.cost)}</td><td class="num">${escapeHtml(item.weight)}</td>${locCell}${notesCell}</tr>`;
+    return `<tr>${toggleCell(item.name, item.weight, true)}<td class="num">${escapeHtml(String(item.qty ?? ''))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(String(item.cost ?? ''))}</td><td class="num">${escapeHtml(String(item.weight ?? ''))}</td>${locCell}${notesCell}</tr>`;
   }).join('\n');
   const locTh = hasLoc ? '<th>Location</th>' : '';
   const notesTh = hasNotes ? '<th>Notes</th>' : '';
@@ -25,10 +25,10 @@ function inventoryTable(items) {
 
 function loadoutTable(loadout) {
   const rows = (loadout.items || []).map(item =>
-    `<tr>${toggleCell(item.name, item.weight, false)}<td class="num">${escapeHtml(String(item.qty))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(item.cost)}</td><td class="num">${escapeHtml(item.weight)}</td></tr>`
+    `<tr>${toggleCell(item.name, item.weight, false)}<td class="num">${escapeHtml(String(item.qty ?? ''))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(String(item.cost ?? ''))}</td><td class="num">${escapeHtml(String(item.weight ?? ''))}</td></tr>`
   ).join('\n');
   const totals = (loadout.totalCost != null || loadout.totalWeight != null)
-    ? `<tr class="totals-row"><td class="eq-toggle-cell"></td><td></td><td><strong>Totals</strong></td><td class="num"><strong>${escapeHtml(loadout.totalCost || '')}</strong></td><td class="num"><strong>${escapeHtml(loadout.totalWeight || '')}</strong></td></tr>`
+    ? `<tr class="totals-row"><td class="eq-toggle-cell"></td><td></td><td><strong>Totals</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalCost ?? ''))}</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalWeight ?? ''))}</strong></td></tr>`
     : '';
   const inner = `<table class="equip-table loadout-table"><thead><tr><th class="eq-toggle-cell"></th><th class="num">Qty</th><th>Item</th><th class="num">Cost</th><th class="num">Weight</th></tr></thead><tbody>${rows}${totals}</tbody></table>`;
   return wide('table', `Load-Out: ${loadout.name}`, inner);

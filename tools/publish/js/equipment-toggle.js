@@ -48,7 +48,7 @@
     try { data = JSON.parse(el.textContent); } catch (e) { return; }
     if (!data || !data.levels) return;
 
-    var LS_KEY = 'loadout:' + data.campaignId + ':' + data.pcSlug;
+    var LOADOUT_KEY = 'loadout:' + data.campaignId + ':' + data.pcSlug;
     var toggles = Array.prototype.slice.call(document.querySelectorAll('.eq-toggle'));
 
     function playerKey() {
@@ -60,7 +60,11 @@
       if (!d) { d = 'd' + Date.now().toString(36); localStorage.setItem('loadout:device', d); }
       return d;
     }
-    var KV_KEY = LS_KEY + ':' + playerKey();
+    var KV_KEY = LOADOUT_KEY + ':' + playerKey();
+    // Partition the local cache by the same player identity as KV, so two players
+    // sharing one browser (or one player before/after entering a session code)
+    // never read each other's stored loadout.
+    var LS_KEY = KV_KEY;
 
     function defaults() {
       var m = {}; (data.items || []).forEach(function (it) { m[it.key] = !!it.defaultCarried; }); return m;
@@ -129,13 +133,20 @@
     var readout = document.querySelector('.gl-readout'); if (readout) readout.hidden = false;
     document.documentElement.classList.add('gl-active');
     recalc(false);
+    // Late KV hydration must not clobber a toggle the player made while the GET
+    // was in flight; and remote state we accept should seed the local cache.
+    var locallyChanged = false;
     try {
       fetch('/api/loadout?key=' + encodeURIComponent(KV_KEY)).then(function (res) { return res.json(); })
-        .then(function (j) { if (j && j.state && j.state.v === data.buildVersion && j.state.items) { applyChecked(j.state.items); recalc(false); } })
+        .then(function (j) {
+          if (!locallyChanged && j && j.state && j.state.v === data.buildVersion && j.state.items) {
+            applyChecked(j.state.items); writeLocal(j.state.items); recalc(false);
+          }
+        })
         .catch(function () {});
     } catch (e) {}
 
-    toggles.forEach(function (t) { t.addEventListener('change', function () { recalc(true); }); });
+    toggles.forEach(function (t) { t.addEventListener('change', function () { locallyChanged = true; recalc(true); }); });
     var reset = document.getElementById('gl-reset');
     if (reset) reset.addEventListener('click', function () {
       applyChecked(defaults());

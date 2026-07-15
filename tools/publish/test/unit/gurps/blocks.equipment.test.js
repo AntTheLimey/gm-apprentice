@@ -48,6 +48,17 @@ describe('renderEquipment', () => {
     assert.strictEqual(renderEquipment({ equipment: { items: [], loadouts: [] } }), null);
     assert.strictEqual(renderEquipment({}), null);
   });
+  it('renders missing numeric fields as blank, not "undefined", and keeps a literal 0', () => {
+    const html = renderEquipment({
+      equipment: {
+        // qty omitted entirely; a free item priced at 0
+        items: [{ name: 'Field notes', cost: 0, weight: '0.1 lb' }],
+        loadouts: [],
+      },
+    });
+    assert.doesNotMatch(html, /undefined/);
+    assert.match(html, />0</); // cost 0 survives instead of being swallowed to ''
+  });
   it('renders both inventory table and load-out when both present', () => {
     const model = {
       equipment: {
