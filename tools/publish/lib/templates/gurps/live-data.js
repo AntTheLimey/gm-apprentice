@@ -108,6 +108,24 @@ function buildItems(model) {
   return items;
 }
 
+// Max HP/FP and ST are the bought characteristics from the Attributes block;
+// current HP/FP seed from the authored `## Current Status` (leading number of
+// `HP: N/M` / `FP: N`), falling back to max. GURPS defaults HP->ST and FP->HT
+// when the sheet omits the secondary characteristic.
+function buildVitals(model) {
+  const a = model.attributes || {};
+  const prim = a.primary || {};
+  const sec = a.secondary || {};
+  const st = num(prim.ST && prim.ST.value);
+  const maxHp = num(sec.HP && sec.HP.value) != null ? num(sec.HP.value) : st;
+  const maxFp = num(sec.FP && sec.FP.value) != null ? num(sec.FP.value) : num(prim.HT && prim.HT.value);
+  if (maxHp == null || maxFp == null) return null;
+  const s = model.status || {};
+  const curHp = num(s.hp) != null ? num(s.hp) : maxHp;
+  const curFp = num(s.fp) != null ? num(s.fp) : maxFp;
+  return { hp: { cur: curHp, max: maxHp }, fp: { cur: curFp, max: maxFp }, st: st != null ? st : maxHp };
+}
+
 function buildLiveData(model, meta) {
   const lv = buildLevels(model);
   if (!lv) return null;
@@ -122,6 +140,7 @@ function buildLiveData(model, meta) {
     authoredLevel: lv.authoredLevel,
     levels: lv.levels,
     skills, weapons, items,
+    vitals: buildVitals(model),
   };
 }
 
@@ -130,4 +149,4 @@ function liveDataScript(data) {
   return `<script type="application/json" id="gurps-live-data">${json}</script>`;
 }
 
-module.exports = { buildLiveData, liveDataScript };
+module.exports = { buildLiveData, liveDataScript, buildVitals };
