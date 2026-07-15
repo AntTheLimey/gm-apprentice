@@ -6,6 +6,7 @@ const { renderMelee } = require('../lib/templates/gurps/blocks/melee');
 const { renderAttributes } = require('../lib/templates/gurps/blocks/attributes');
 const { renderStatus } = require('../lib/templates/gurps/blocks/status');
 const { renderDefenses } = require('../lib/templates/gurps/blocks/defenses');
+const { renderStatusPanel } = require('../lib/templates/gurps/blocks/status-panel');
 const { liveStat } = require('../lib/templates/gurps/render');
 
 test('encumbrance rows carry data-level and the block has a readout + reset', () => {
@@ -89,4 +90,23 @@ test('encumbrance readout Move/Dodge are live fields showing cur / base', () => 
   // base drawn from the None (level 0) row
   assert.match(html, /data-gl-field="move">[^<]*<\/b> \/ 6/);
   assert.match(html, /data-gl-field="dodge">[^<]*<\/b> \/ 10/);
+});
+
+test('renderStatusPanel emits HP/FP editors, hidden effects row, ST hook, badges', () => {
+  const vitals = { hp: { cur: 13, max: 13 }, fp: { cur: 12, max: 12 }, st: 13 };
+  const html = renderStatusPanel({}, vitals);
+  assert.match(html, /class="gl-status-panel"/);
+  assert.match(html, /data-gl-vital="hp"[^>]*value="13"/);
+  assert.match(html, /data-gl-vital="fp"[^>]*value="12"/);
+  assert.match(html, /data-gl-step="hp"[^>]*data-delta="-1"/);
+  assert.match(html, /data-gl-step="hp"[^>]*data-delta="1"/);
+  assert.match(html, /\/13/);   // HP max label
+  assert.match(html, /class="gl-status-effects"[^>]*hidden/);
+  assert.match(html, /data-gl-field="st"/);
+  assert.match(html, /gl-badge-reeling[^>]*hidden/);
+  assert.match(html, /gl-badge-tired[^>]*hidden/);
+});
+
+test('renderStatusPanel returns null without vitals', () => {
+  assert.equal(renderStatusPanel({}, null), null);
 });
