@@ -114,7 +114,7 @@ describe('build integration — GURPS PC', () => {
         'utf-8'
       );
       assert.match(html, /id="gurps-live-data"/);
-      assert.match(html, /js\/equipment-toggle\.js/);
+      assert.match(html, /js\/gurps-live\.js/);
     });
   });
 
@@ -169,7 +169,7 @@ describe('build integration — GURPS PC', () => {
         'utf-8'
       );
       assert.doesNotMatch(html, /gurps-live-data/);
-      assert.doesNotMatch(html, /equipment-toggle\.js/);
+      assert.doesNotMatch(html, /gurps-live\.js/);
     });
   });
 });

@@ -182,6 +182,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemCombatHtml = (context || {}).systemCombatHtml || null;
   const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
   const systemLiveData = (context || {}).systemLiveData || null;
+  const systemStatusPanelHtml = (context || {}).systemStatusPanelHtml || null;
 
   // Combat-only consumed titles: only suppress when combat HTML is present.
   const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
@@ -249,7 +250,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const body = `${crWidget}
 ${heroBanner}
 ${epithet}
-<div class="tab-bar">
+${systemStatusPanelHtml ? systemStatusPanelHtml + '\n' : ''}<div class="tab-bar">
   <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>${combatTabButton}
   <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
@@ -285,7 +286,7 @@ ${tabScript()}`;
     scripts: [
       ...clientScripts(page.outputPath),
       rootPath(page.outputPath) + 'js/change-request.js',
-      ...(systemLiveData ? [rootPath(page.outputPath) + 'js/equipment-toggle.js'] : []),
+      ...(systemLiveData ? [rootPath(page.outputPath) + 'js/gurps-live.js'] : []),
     ],
   });
 }

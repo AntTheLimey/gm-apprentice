@@ -83,6 +83,16 @@ check("B269: 2d+5 equiv 3d+1",
 check("B269: 1d+2 not equiv 2d",
       gc.dice_adds(1, 2) == gc.dice_adds(2, 0), False)
 
+# --- condition penalties (B419 Reeling / B426 Tired) ---
+check("halve_up 13", gc.halve_up(13), 7)
+check("halve_up 8", gc.halve_up(8), 4)
+check("halve_up 3", gc.halve_up(3), 2)
+check("halve_up 1", gc.halve_up(1), 1)
+check("is_reeling exactly 1/3", gc.is_reeling(3, 9), False)
+check("is_reeling below", gc.is_reeling(2, 9), True)
+check("is_tired exactly 1/3", gc.is_tired(4, 12), False)
+check("is_tired below", gc.is_tired(3, 12), True)
+
 import gurps_check as gk  # noqa: E402
 
 _SHEET_MD = """---

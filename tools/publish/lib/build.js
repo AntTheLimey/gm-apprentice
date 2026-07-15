@@ -492,6 +492,7 @@ function build(options = {}) {
             systemCombatHtml: systemOut.combatHtml || null,
             systemEquipmentHtml: systemOut.equipmentHtml || null,
             systemLiveData: systemOut.liveData || null,
+            systemStatusPanelHtml: systemOut.statusPanelHtml || null,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;

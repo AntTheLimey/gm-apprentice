@@ -53,3 +53,18 @@ test('parseWeight handles authored formats', () => {
   assert.equal(gc.parseWeight('—'), 0);
   assert.equal(gc.parseWeight(null), 0);
 });
+
+test('halveUp rounds up (B419/B426)', () => {
+  assert.equal(gc.halveUp(13), 7);   // 6.5 -> 7
+  assert.equal(gc.halveUp(8), 4);
+  assert.equal(gc.halveUp(3), 2);    // 1.5 -> 2
+  assert.equal(gc.halveUp(1), 1);    // floors at the encumbrance minimum
+  assert.equal(gc.halveUp(2), 1);
+});
+
+test('isReeling / isTired use strict integer-safe thresholds', () => {
+  assert.equal(gc.isReeling(3, 9), false);  // exactly 1/3 -> not yet (3*3 < 9 is false)
+  assert.equal(gc.isReeling(2, 9), true);   // 3*2 < 9
+  assert.equal(gc.isTired(4, 12), false);   // exactly 1/3
+  assert.equal(gc.isTired(3, 12), true);    // 3*3 < 12
+});

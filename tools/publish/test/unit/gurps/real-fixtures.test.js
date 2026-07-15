@@ -11,6 +11,7 @@ const fs = require('fs');
 const matter = require('gray-matter');
 const { extractSections } = require('../../../lib/processor');
 const { renderGURPSSheet } = require('../../../lib/templates/gurps/index');
+const { parseGurps } = require('../../../lib/templates/gurps/parse');
 
 const fixturePath = path.join(__dirname, '../../fixtures/gurps/gurps-ronnie.md');
 const raw = fs.readFileSync(fixturePath, 'utf8');
@@ -114,20 +115,29 @@ describe('GURPS real-fixture: Ronnie Vint', () => {
   // ---------------------------------------------------------------
   // BUG 4 — Current Status banner with bold-label format
   // ---------------------------------------------------------------
+  // SP2 Task 5 retired the inline status pips from the render path (they're
+  // superseded by the live status panel mounted above the tab bar, which
+  // isn't wired up here since this fixture doesn't pass `meta`). The
+  // bold-label parsing this block guards against regressing is still real,
+  // it just now lives only in the parsed model — so assert against that
+  // directly instead of hunting for it in rendered HTML.
   describe('Current Status bold-label parsing (BUG 4)', () => {
-    it('sheetHtml contains the status banner', () => {
-      assert.ok(sheetHtml.includes('class="status"'),
-        'sheetHtml must include the status div');
+    it('sheetHtml no longer includes the retired inline status div', () => {
+      assert.ok(!sheetHtml.includes('class="status"'),
+        'sheetHtml must not include the retired inline status div');
     });
 
-    it('status banner contains Condition text "Unharmed"', () => {
-      assert.ok(sheetHtml.includes('Unharmed'),
-        'status must contain Ronnie\'s Condition value');
+    it('parsed model status.condition contains "Unharmed"', () => {
+      const model = parseGurps(frontmatter, sections);
+      assert.ok(String(model.status.condition || '').includes('Unharmed'),
+        'model.status.condition must contain Ronnie\'s Condition value');
     });
 
-    it('status banner contains Location text', () => {
-      assert.ok(sheetHtml.includes('Las Vegas Airport') || sheetHtml.includes('rewritten present'),
-        'status must contain Location text');
+    it('parsed model status.location contains Location text', () => {
+      const model = parseGurps(frontmatter, sections);
+      const location = String(model.status.location || '');
+      assert.ok(location.includes('Las Vegas Airport') || location.includes('rewritten present'),
+        'model.status.location must contain Location text');
     });
   });
 

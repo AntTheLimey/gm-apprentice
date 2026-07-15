@@ -96,3 +96,60 @@ test('liveDataScript embeds JSON under the expected id', () => {
   assert.match(html, /<script type="application\/json" id="gurps-live-data">/);
   assert.match(html, /"buildVersion":"v"/);
 });
+
+const { buildVitals } = require('../lib/templates/gurps/live-data');
+
+test('buildVitals reads max from Attributes, cur from Current Status', () => {
+  const model = {
+    attributes: { primary: { ST: { value: '13' }, HT: { value: '11' } },
+                  secondary: { HP: { value: '13' }, FP: { value: '12' } } },
+    status: { hp: '4/13', fp: '3' },
+  };
+  assert.deepEqual(buildVitals(model), {
+    hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 }, st: 13,
+  });
+});
+
+test('buildVitals defaults cur to max when no Current Status', () => {
+  const model = {
+    attributes: { primary: { ST: { value: '10' }, HT: { value: '10' } },
+                  secondary: { HP: { value: '10' }, FP: { value: '10' } } },
+    status: {},
+  };
+  assert.deepEqual(buildVitals(model), {
+    hp: { cur: 10, max: 10 }, fp: { cur: 10, max: 10 }, st: 10,
+  });
+});
+
+test('buildVitals falls back HP->ST and FP->HT when secondary absent', () => {
+  const model = {
+    attributes: { primary: { ST: { value: '12' }, HT: { value: '11' } }, secondary: {} },
+    status: {},
+  };
+  assert.deepEqual(buildVitals(model), {
+    hp: { cur: 12, max: 12 }, fp: { cur: 11, max: 11 }, st: 12,
+  });
+});
+
+test('buildVitals returns null when max HP/FP unresolvable', () => {
+  assert.equal(buildVitals({ attributes: { primary: {}, secondary: {} }, status: {} }), null);
+});
+
+test('buildLiveData attaches a vitals block', () => {
+  const model = {
+    encumbrance: [
+      { level: 'None (0)', weight: '≤34', move: '6', dodge: '10', current: false },
+      { level: 'Light (1)', weight: '≤68', move: '4', dodge: '9', current: true },
+      { level: 'Medium (2)', weight: '≤102', move: '3', dodge: '8', current: false },
+      { level: 'Heavy (3)', weight: '≤204', move: '2', dodge: '7', current: false },
+      { level: 'X-Heavy (4)', weight: '≤340', move: '1', dodge: '6', current: false },
+    ],
+    equipment: { items: [{ name: 'Armor', weight: '56' }], loadouts: [] },
+    attributes: { primary: { ST: { value: '13' }, HT: { value: '11' } },
+                  secondary: { HP: { value: '13' }, FP: { value: '12' } } },
+    status: { hp: '13/13', fp: '12' },
+    skills: [], melee: [],
+  };
+  const data = buildLiveData(model, { buildVersion: 'v1', campaignId: 'c', pcSlug: 'p' });
+  assert.deepEqual(data.vitals, { hp: { cur: 13, max: 13 }, fp: { cur: 12, max: 12 }, st: 13 });
+});

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.24] — 2026-07-15
+
+Publish tool 1.11.3.
+
+### Added
+
+- GURPS PC sheets — live in-session HP/FP with condition penalties: players edit
+  current HP and FP in a persistent status panel above the tabs, and the sheet
+  derives Reeling (current HP below ⅓ max → halve Move and Dodge) and Tired
+  (current FP below ⅓ max → halve Move, Dodge, and ST), rounded up and cumulative
+  when both apply. The halved Move/Dodge/ST update everywhere they appear, and a
+  before → after delta line plus Reeling/Tired badges show only while a condition
+  is active. HP/FP persist per player alongside the loadout (Cloudflare KV +
+  localStorage). ST-based quantities (Basic Lift, encumbrance, damage) are not
+  cascaded, per RAW.
+
+### Changed
+
+- The GURPS inline status pips (previously rendered twice, in the Character Sheet
+  and Combat tabs) are replaced by a single persistent status panel above the tab
+  bar.
+
 ## [1.8.23] — 2026-07-13
 
 Publish tool 1.11.2.
