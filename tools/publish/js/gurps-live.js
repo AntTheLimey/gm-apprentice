@@ -71,7 +71,39 @@
     return { active: !!(r.reeling || r.tired), reeling: r.reeling, tired: r.tired, deltas, notes };
   }
 
-  const api = { sumCarriedWeight, levelForWeight, applyModifiers, vitalsView };
+  // Compose the SP1/SP2 chain into one flat live view for the party board.
+  // Used by BOTH build-time render (state=null → authored defaults) and the
+  // browser poller (state = latest KV blob). Stale state (buildVersion drift)
+  // falls back to defaults exactly as the per-sheet client does.
+  function deriveLive(pc, state) {
+    const items = pc.items || [];
+    const fresh = state && state.v === pc.buildVersion;
+    let checked, vitals;
+    if (fresh) {
+      checked = state.items || {};
+      vitals = pc.vitals ? { hp: state.hp || pc.vitals.hp, fp: state.fp || pc.vitals.fp } : null;
+    } else {
+      checked = {};
+      items.forEach(function (it) { checked[it.key] = !!it.defaultCarried; });
+      vitals = pc.vitals ? { hp: pc.vitals.hp, fp: pc.vitals.fp } : null;
+    }
+    const total = sumCarriedWeight(items, checked);
+    const level = levelForWeight(total, pc.levels).level;
+    const r = applyModifiers(pc, level, vitals || undefined);
+    return {
+      hp: vitals ? vitals.hp : null,
+      fp: vitals ? vitals.fp : null,
+      encLevel: level,
+      encName: r.levelName,
+      move: { enc: r.move.enc, cur: r.move.cur },
+      dodge: { enc: r.dodge.enc, cur: r.dodge.cur },
+      st: r.st ? { base: r.st.base, cur: r.st.cur } : null,
+      reeling: r.reeling,
+      tired: r.tired,
+    };
+  }
+
+  const api = { sumCarriedWeight, levelForWeight, applyModifiers, vitalsView, deriveLive };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__gurpsLive = api;
 
