@@ -16,3 +16,22 @@ export async function readState(kv, key) {
 export async function writeState(kv, key, state) {
   await kv.put(key, JSON.stringify(state), { expirationTtl: TTL });
 }
+
+export function isValidCampaign(id) {
+  return typeof id === 'string' && id.length >= 1 && id.length <= 100 && !id.includes(':');
+}
+
+// Read every stored state under loadout:<campaignId>: — READ ONLY, no writes.
+// Caps at `limit` keys (a party is a handful; the cap defends against runaway growth).
+export async function listStates(kv, campaignId, limit = 200) {
+  const prefix = PREFIX + campaignId + ':';
+  const listed = await kv.list({ prefix });
+  const names = (listed.keys || []).slice(0, limit).map((k) => k.name);
+  const out = {};
+  for (const name of names) {
+    const raw = await kv.get(name);
+    if (!raw) continue;
+    try { out[name] = JSON.parse(raw); } catch { /* skip malformed */ }
+  }
+  return out;
+}
