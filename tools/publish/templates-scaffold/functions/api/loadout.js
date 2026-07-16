@@ -24,6 +24,7 @@ export async function onRequestPut(context) {
   if (!core.isValidKey(body && body.key) || !body.state || typeof body.state !== 'object' || Array.isArray(body.state)) {
     return json({ error: 'bad' }, 400);
   }
-  await core.writeState(env.INBOX, body.key, body.state);
+  const state = { ...body.state, updatedAt: Date.now() };
+  await core.writeState(env.INBOX, body.key, state);
   return json({ ok: true });
 }
