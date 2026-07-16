@@ -4,8 +4,6 @@
 (function (root) {
   'use strict';
 
-  var glMod = (typeof module !== 'undefined' && module.exports) ? require('./gurps-live.js') : (root.__gurpsLive || {});
-
   function esc(s) {
     return String(s).replace(/[&<>"]/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
@@ -28,7 +26,7 @@
 
   // base→cur when a condition changed the value, else a plain number.
   function stat(base, cur) {
-    if (base === cur) return String(cur);
+    if (base === cur) return esc(cur);
     return '<span class="gl-was">' + esc(base) + '</span>' + esc(cur);
   }
 

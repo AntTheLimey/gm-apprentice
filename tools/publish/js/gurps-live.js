@@ -81,7 +81,10 @@
     let checked, vitals;
     if (fresh) {
       checked = state.items || {};
-      vitals = pc.vitals ? { hp: state.hp || pc.vitals.hp, fp: state.fp || pc.vitals.fp } : null;
+      vitals = pc.vitals ? {
+        hp: state.hp != null ? { cur: state.hp, max: pc.vitals.hp.max } : pc.vitals.hp,
+        fp: state.fp != null ? { cur: state.fp, max: pc.vitals.fp.max } : pc.vitals.fp,
+      } : null;
     } else {
       checked = {};
       items.forEach(function (it) { checked[it.key] = !!it.defaultCarried; });

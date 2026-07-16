@@ -36,25 +36,36 @@ test('deriveLive with no state uses authored defaults (Pack carried, None enc, h
 });
 
 test('deriveLive with fresh state: armor on (Medium) + reeling halves Move/Dodge', () => {
-  const state = { v: 'v1', items: { Armor: true, Pack: true }, hp: { cur: 4, max: 13 }, fp: { cur: 12, max: 12 } };
+  // Real KV shape: hp/fp are scalar current values, not {cur,max} objects.
+  const state = { v: 'v1', items: { Armor: true, Pack: true }, hp: 4, fp: 12, updatedAt: 100 };
   const v = gl.deriveLive(pc(), state);
-  assert.equal(v.encLevel, 2);            // 40 + 10 = 50 lb → Medium
+  assert.equal(v.encLevel, 2);            // 45 + 10 = 55 lb → Medium
   assert.equal(v.reeling, true);
   assert.equal(v.tired, false);
+  assert.deepEqual(v.hp, { cur: 4, max: 13 });    // reconstructed from scalar + manifest max
   assert.deepEqual(v.move, { enc: 3, cur: 2 });   // Medium 3 → reeling ceil(3/2)=2
   assert.deepEqual(v.dodge, { enc: 8, cur: 4 });   // 8 → 4
   assert.deepEqual(v.st, { base: 13, cur: 13 });   // ST unaffected by reeling
 });
 
 test('deriveLive fresh state reeling+tired double-halves and halves ST once', () => {
-  const state = { v: 'v1', items: { Pack: true }, hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 } };
+  const state = { v: 'v1', items: { Pack: true }, hp: 4, fp: 3, updatedAt: 100 };
   const v = gl.deriveLive(pc(), state);
   assert.equal(v.encLevel, 0);
   assert.equal(v.reeling, true);
   assert.equal(v.tired, true);
+  assert.deepEqual(v.hp, { cur: 4, max: 13 });
+  assert.deepEqual(v.fp, { cur: 3, max: 12 });
   assert.deepEqual(v.move, { enc: 6, cur: 2 });    // 6 → reel 3 → tired 2
   assert.deepEqual(v.dodge, { enc: 10, cur: 3 });   // 10 → 5 → 3
   assert.deepEqual(v.st, { base: 13, cur: 7 });     // 13 → ceil/2 = 7 (once)
+});
+
+test('deriveLive honors 0 HP (not treated as absent by ||)', () => {
+  const state = { v: 'v1', items: { Pack: true }, hp: 0, fp: 12, updatedAt: 100 };
+  const v = gl.deriveLive(pc(), state);
+  assert.equal(v.reeling, true);                  // 3*0 < 13 → reeling
+  assert.deepEqual(v.hp, { cur: 0, max: 13 });    // 0 honored; || would fall back to authored 13
 });
 
 test('deriveLive ignores stale state (buildVersion mismatch) → authored defaults', () => {
