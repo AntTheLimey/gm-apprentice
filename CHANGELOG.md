@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.25] — 2026-07-16
+
+Publish tool 1.11.4.
+
+### Added
+
+- GURPS live GM dashboard (SP3): the PC roster page now leads with a read-only,
+  initiative-ordered party-status board showing every GURPS PC's current HP/FP
+  and condition-adjusted Move/Dodge/ST with Reeling/Tired badges, auto-refreshing
+  (~5s) from the Cloudflare KV `loadout:` keys via a new read-only
+  `/api/loadout-list` Function. Reuses the SP1/SP2 recalc math; writes nothing.
+
 ## [1.8.24] — 2026-07-15
 
 Publish tool 1.11.3.
