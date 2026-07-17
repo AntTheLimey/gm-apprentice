@@ -84,15 +84,14 @@
 
     root.innerHTML =
       '<div class="cr-bar">' +
-        '<button type="button" class="cr-toggle" aria-expanded="false">✎ Request a change / ask a question</button>' +
-        '<button type="button" class="cr-log-btn" aria-label="Open chat log" hidden>💬</button>' +
+        '<div class="cr-barhead">' +
+          '<button type="button" class="cr-toggle" aria-expanded="false">✎ Request a change / ask a question</button>' +
+          '<button type="button" class="cr-log-btn" aria-expanded="false" aria-label="Open chat history">💬 History</button>' +
+        '</div>' +
         '<div class="cr-panel" hidden>' +
           '<p class="cr-hint">Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?"). Can\'t afford something but the GM okayed it? Add "GM said OK" and it\'ll go through anyway.</p>' +
           '<input type="text" class="cr-code" maxlength="4" placeholder="4-char code" aria-label="Session code" hidden>' +
-          '<div class="cr-inputrow">' +
-            '<textarea class="cr-text" rows="3" aria-label="Your message"></textarea>' +
-            '<button type="button" class="cr-expand" aria-label="Expand or shrink the box">⤢</button>' +
-          '</div>' +
+          '<textarea class="cr-text" rows="5" aria-label="Your message" placeholder="Type your change or question…"></textarea>' +
           '<button type="button" class="cr-send">Send</button>' +
           '<span class="cr-msg" role="status"></span>' +
         '</div>' +
@@ -111,12 +110,10 @@
     function setLog(l) { writeJSON(K_LOG, l); }
     var logBtn = root.querySelector('.cr-log-btn');
     var logPanel = root.querySelector('.cr-logpanel');
-    var expandBtn = root.querySelector('.cr-expand');
 
     var KIND_CLASSES = { applied: 1, rejected: 1, advice: 1 };
     function renderLog() {
       var l = getLog();
-      logBtn.hidden = l.length === 0;
       if (!l.length) { logPanel.innerHTML = '<p class="cr-empty">No messages yet.</p>'; return; }
       logPanel.innerHTML = l.slice().reverse().map(function (e) {
         var kindCls = KIND_CLASSES[e.kind] ? ' cr-' + e.kind : '';
@@ -132,8 +129,12 @@
       });
     }
     renderLog();
-    logBtn.addEventListener('click', function () { logPanel.hidden = !logPanel.hidden; if (!logPanel.hidden) renderLog(); });
-    expandBtn.addEventListener('click', function () { textInput.classList.toggle('cr-big'); });
+    logBtn.addEventListener('click', function () {
+      var open = logPanel.hidden;
+      logPanel.hidden = !open;
+      logBtn.setAttribute('aria-expanded', String(open));
+      if (open) renderLog();
+    });
 
     // Persisted "your change is live" flag from before a reload.
     if (localStorage.getItem(K_LIVE) === '1') {

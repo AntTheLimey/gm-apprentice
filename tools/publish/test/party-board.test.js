@@ -38,6 +38,23 @@ test('renderPartyBoard emits rows in initiative order with per-PC hooks', () => 
   assert.match(html, /href="six\.html"/);
   // live indicator element for the poller
   assert.match(html, /gl-party-live-time/);
+  // Basic Speed is surfaced as its own column (the sort key)
+  assert.match(html, /<th[^>]*>Speed<\/th>/);
+  assert.match(html, /class="gl-speed">6\.50</);
+  // the rank/number column is gone
+  assert.doesNotMatch(html, /gl-rank|<th>#<\/th>/);
+});
+
+test('renderPartyBoard uses a portrait thumbnail when present, initials otherwise', () => {
+  const withPortrait = entry('Six', 'six', 6.5, 14, healthy);
+  withPortrait.portrait = 'images/characters/Six.png';
+  const noPortrait = entry('Rock', 'rock', 5.5, 10, healthy); // no portrait field
+  const m = buildPartyManifest('c', [withPortrait, noPortrait]);
+  const html = renderPartyBoard(m, 'characters/pcs/index.html');
+  // Six → <img> thumbnail resolved relative to the roster page
+  assert.match(html, /class="gl-av gl-av-img"><img src="\.\.\/\.\.\/images\/characters\/Six\.png"/);
+  // Rock → initials fallback
+  assert.match(html, /class="gl-av">RL?<\/span>|class="gl-av">R</);
 });
 
 test('renderPartyBoard shows condition badge + base→cur for an injured PC', () => {

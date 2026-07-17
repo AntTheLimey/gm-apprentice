@@ -111,6 +111,19 @@ test('renderStatusPanel returns null without vitals', () => {
   assert.equal(renderStatusPanel({}, null), null);
 });
 
+test('stylesheet lets the hidden attribute hide status-panel badges/effects', () => {
+  // Regression: `.gl-badge { display: inline-block }` (author origin) outranks the
+  // UA `[hidden] { display: none }`, so without an explicit override the
+  // client-toggled REELING/TIRED badges stay visible at full HP/FP.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(path.join(__dirname, '../css/style.css'), 'utf8');
+  assert.match(css, /\.gl-badge\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/,
+    'gl-badge[hidden] must force display:none !important');
+  assert.match(css, /\.gl-status-effects\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/,
+    'gl-status-effects[hidden] must force display:none !important');
+});
+
 // --- SP2 Task 5: render-path wiring retires the inline status pips ---
 
 const { buildSheet, buildCombat } = require('../lib/templates/gurps/layout');

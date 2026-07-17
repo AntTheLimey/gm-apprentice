@@ -36,6 +36,14 @@ test('buildPartyManifest carries the fields deriveLive needs', () => {
   assert.equal(pc.buildVersion, 'v1');
   assert.equal(pc.vitals.hp.max, 13);
   assert.equal(pc.outputPath, 'characters/pcs/six.html');
+  assert.equal(pc.portrait, null);   // absent when the entry carries no portrait
+});
+
+test('buildPartyManifest carries the portrait path when present', () => {
+  const e = entry('Six', 'six', 6.5, 14);
+  e.portrait = 'images/characters/Six.png';
+  const pc = buildPartyManifest('c', [e]).pcs[0];
+  assert.equal(pc.portrait, 'images/characters/Six.png');
 });
 
 test('buildPartyManifest returns null when no entries have live data', () => {

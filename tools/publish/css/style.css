@@ -3054,7 +3054,10 @@ tr:nth-child(even) {
   border: 1px solid var(--border); border-radius: 8px; background: var(--surface, rgba(127,127,127,0.06));
 }
 .gl-vitals { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; }
-.gl-vital { display: inline-flex; align-items: center; gap: 0.35rem; }
+/* Scoped to the status panel: the party board reuses .gl-vital on <td> cells,
+   and a bare `display: inline-flex` here would knock those out of the table's
+   column layout (HP + FP would collapse into one cell). */
+.gl-vitals .gl-vital { display: inline-flex; align-items: center; gap: 0.35rem; }
 .gl-vital-label { font-weight: 700; letter-spacing: 0.03em; }
 .gl-vital-input {
   width: 3.5ch; text-align: center; font: inherit; padding: 2px 4px;
@@ -3534,20 +3537,33 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 /* --- Change-request widget (Part 2). Scoped to .cr-*; touches no sheet styles. --- */
 #cr-root { margin: 0 0 1rem; }
 .cr-bar { border: 1px solid var(--border, #ccc); border-radius: 6px; padding: .25rem .5rem; font-size: .9rem; }
-.cr-toggle { background: none; border: none; cursor: pointer; color: inherit; font: inherit; padding: .25rem; }
-.cr-panel { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
-.cr-panel .cr-text { flex: 1 1 12rem; min-width: 0; }
+.cr-barhead { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; }
+.cr-toggle { flex: 1 1 auto; text-align: left; background: none; border: none; cursor: pointer; color: inherit; font: inherit; padding: .35rem .25rem; min-height: 44px; }
+.cr-panel { display: flex; flex-direction: column; gap: .6rem; margin-top: .5rem; }
 .cr-panel .cr-code { width: 6rem; text-transform: uppercase; }
-.cr-panel .cr-send { cursor: pointer; }
 .cr-msg { font-size: .85rem; opacity: .85; }
 
 /* --- Comms widget: hint, resizable input, chat log (Part: advice+log) --- */
-.cr-hint { font-size: .8rem; opacity: .8; margin: 0 0 .5rem; }
-.cr-inputrow { display: flex; gap: .35rem; align-items: flex-start; }
-.cr-inputrow .cr-text { flex: 1 1 auto; min-width: 0; resize: vertical; }
-.cr-text.cr-big { min-height: 8rem; }
-.cr-expand { cursor: pointer; align-self: stretch; }
-.cr-log-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; margin-left: .35rem; }
+.cr-hint { font-size: .8rem; opacity: .8; margin: 0 0 .25rem; }
+.cr-text {
+  width: 100%; box-sizing: border-box; min-height: 8rem; resize: vertical;
+  font: inherit; font-size: 16px; /* 16px keeps iOS from zooming on focus */
+  line-height: 1.4; padding: .6rem .7rem;
+  border: 1px solid var(--border, #ccc); border-radius: 6px;
+  background: var(--bg-card, #fff); color: var(--text, #111);
+}
+.cr-text::placeholder { color: var(--text-muted, #888); }
+.cr-send {
+  align-self: flex-start; cursor: pointer; font: inherit; font-weight: 600;
+  min-height: 44px; padding: .5rem 1.4rem; border-radius: 6px;
+  border: 1px solid var(--border, #ccc); background: var(--accent, #3b82f6); color: #fff;
+}
+.cr-send:hover { filter: brightness(1.08); }
+.cr-log-btn {
+  flex: 0 0 auto; background: none; cursor: pointer; font: inherit; color: inherit;
+  border: 1px solid var(--border, #ccc); border-radius: 6px;
+  min-height: 44px; padding: .35rem .7rem;
+}
 .cr-log-btn:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: 2px; }
 .cr-logpanel { margin-top: .5rem; max-height: 16rem; overflow-y: auto; border-top: 1px solid var(--border, #ccc); padding-top: .5rem; }
 .cr-logentry { margin-bottom: .6rem; font-size: .85rem; }
@@ -3561,6 +3577,9 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 @media (max-width: 767px) {
   .back-to-top { left: 50%; right: auto; transform: translateX(-50%); }
   .back-to-top.visible { opacity: 0.55; }
+  /* Full-width Send on phones so it's an easy thumb target. */
+  .cr-send { align-self: stretch; text-align: center; }
+  .cr-text { min-height: 9rem; }
 }
 
 /* ---- SP3 live party board ---- */
@@ -3579,15 +3598,21 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .gl-party-row.reeling { background: linear-gradient(90deg, rgba(239,124,58,0.14), transparent 55%); }
 .gl-party-row.tired { background: linear-gradient(90deg, rgba(91,155,213,0.15), transparent 55%); }
 .gl-party-row.both { background: linear-gradient(90deg, rgba(239,124,58,0.14), rgba(91,155,213,0.15) 70%); }
-.gl-rank { text-align: center; font-weight: 700; color: var(--accent); width: 40px; }
 td.gl-pc { text-align: left; }
 td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
 .gl-av { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.8rem; color: var(--accent); background: var(--accent-dim, rgba(240,162,58,0.12)); border: 1px solid var(--border); }
+/* Override .gl-av's grid layout: a plain block lets the img fill the circle
+   (height:100% doesn't resolve against a grid track, which left the portrait
+   rendering as a clipped sliver). */
+.gl-av-img { display: block; padding: 0; overflow: hidden; background: none; }
+.gl-av-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gl-pc-txt { display: flex; flex-direction: column; line-height: 1.15; }
 .gl-pc-name { font-weight: 600; }
-.gl-pc-sub { font-size: 0.7rem; color: var(--text-muted); }
-.gl-enc-chip { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
-.gl-vital { min-width: 78px; }
+.gl-pc-sub { font-size: 0.7rem; color: var(--text-muted); min-height: 0; }
+.gl-enc-chip { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
+/* Basic Speed column — the initiative sort key, right-aligned like the stats. */
+.gl-speed { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gl-party-table .gl-vital { min-width: 78px; }
 .gl-vnum { font-weight: 700; }
 .gl-vnum.gl-low { color: var(--danger); }
 .gl-max { color: var(--text-muted); font-weight: 500; font-size: 0.82em; }
@@ -3598,9 +3623,19 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
 .gl-third { position: absolute; top: -1px; bottom: -1px; left: 33%; width: 1px; background: rgba(255,255,255,0.3); }
 .gl-stat { font-weight: 700; min-width: 56px; }
 .gl-was { color: var(--text-muted); font-weight: 500; font-size: 0.78em; text-decoration: line-through; margin-right: 4px; }
+.gl-of { color: var(--text-muted); font-weight: 500; font-size: 0.82em; }
 .gl-status { white-space: nowrap; }
 .gl-badge { display: inline-block; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; }
 .gl-badge.reeling { color: #ef7c3a; background: rgba(239,124,58,0.14); }
 .gl-badge.tired { color: #5b9bd5; background: rgba(91,155,213,0.15); }
 .gl-badge.ok { color: var(--text-muted); font-weight: 600; }
+/* The status panel's Reeling/Tired badges and effects row are rendered into the
+   DOM with the `hidden` attribute and toggled by the live client. An author
+   `display` rule (e.g. .gl-badge { display: inline-block }) outranks the UA
+   `[hidden] { display: none }`, which would leave both badges permanently
+   visible even at full HP/FP. Make `hidden` win for these live-toggled elements. */
+.gl-badge[hidden],
+.gl-status-effects[hidden],
+.gl-delta[hidden],
+.gl-status-note[hidden] { display: none !important; }
 @media (max-width: 640px) { .gl-col-st { display: none; } }
