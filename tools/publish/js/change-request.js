@@ -86,7 +86,7 @@
       '<div class="cr-bar">' +
         '<div class="cr-barhead">' +
           '<button type="button" class="cr-toggle" aria-expanded="false">✎ Request a change / ask a question</button>' +
-          '<button type="button" class="cr-log-btn" aria-label="Open chat history">💬 History</button>' +
+          '<button type="button" class="cr-log-btn" aria-expanded="false" aria-label="Open chat history">💬 History</button>' +
         '</div>' +
         '<div class="cr-panel" hidden>' +
           '<p class="cr-hint">Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?"). Can\'t afford something but the GM okayed it? Add "GM said OK" and it\'ll go through anyway.</p>' +
@@ -129,7 +129,12 @@
       });
     }
     renderLog();
-    logBtn.addEventListener('click', function () { logPanel.hidden = !logPanel.hidden; if (!logPanel.hidden) renderLog(); });
+    logBtn.addEventListener('click', function () {
+      var open = logPanel.hidden;
+      logPanel.hidden = !open;
+      logBtn.setAttribute('aria-expanded', String(open));
+      if (open) renderLog();
+    });
 
     // Persisted "your change is live" flag from before a reload.
     if (localStorage.getItem(K_LIVE) === '1') {
