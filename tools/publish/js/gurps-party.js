@@ -93,8 +93,11 @@
       if (document.hidden || inFlight) return;
       inFlight = true;
       fetch('/api/loadout-list?campaign=' + encodeURIComponent(manifest.campaignId))
-        .then(function (r) { return r.json(); })
-        .then(function (j) { paint(j && j.states); })
+        .then(function (r) { if (!r.ok) throw new Error('loadout-list ' + r.status); return r.json(); })
+        .then(function (j) {
+          if (!j || !j.states || typeof j.states !== 'object') throw new Error('bad loadout-list payload');
+          paint(j.states);
+        })
         .catch(function () { /* keep last-good */ })
         .then(function () { inFlight = false; });
     }

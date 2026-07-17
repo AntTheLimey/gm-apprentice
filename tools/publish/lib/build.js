@@ -434,7 +434,7 @@ function build(options = {}) {
   let errorCount = 0;
   const partyEntries = [];
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
-  let deferredRoster = null;
+  const deferredRosters = [];
   for (const page of pages) {
     try {
       if (page.frontmatter.type === 'world_flags') continue;
@@ -446,7 +446,7 @@ function build(options = {}) {
       logWarnings(page.outputPath, processed.warnings);
       let html;
 
-      if (page.frontmatter.type === 'pc_roster') { deferredRoster = { page, processed }; continue; }
+      if (page.frontmatter.type === 'pc_roster') { deferredRosters.push({ page, processed }); continue; }
 
       switch (page.frontmatter.type) {
         case 'pc': {
@@ -586,21 +586,23 @@ function build(options = {}) {
     }
   }
 
-  if (deferredRoster) {
-    try {
-      const manifest = buildPartyManifest(partyCampaignId, partyEntries);
-      const boardHtml = manifest ? renderPartyBoard(manifest, deferredRoster.page.outputPath) : null;
-      const islandHtml = manifest ? partyDataScript(manifest) : null;
-      const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
-        publishConfig, linkMap, pages, partyBoardHtml: boardHtml, partyDataScript: islandHtml,
-      });
-      const outPath = path.join(outputDir, deferredRoster.page.outputPath);
-      ensureDir(outPath);
-      fs.writeFileSync(outPath, html);
-      console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
-    } catch (e) {
-      errorCount++;
-      console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
+  if (deferredRosters.length) {
+    const manifest = buildPartyManifest(partyCampaignId, partyEntries);
+    for (const deferredRoster of deferredRosters) {
+      try {
+        const boardHtml = manifest ? renderPartyBoard(manifest, deferredRoster.page.outputPath) : null;
+        const islandHtml = manifest ? partyDataScript(manifest) : null;
+        const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
+          publishConfig, linkMap, pages, partyBoardHtml: boardHtml, partyDataScript: islandHtml,
+        });
+        const outPath = path.join(outputDir, deferredRoster.page.outputPath);
+        ensureDir(outPath);
+        fs.writeFileSync(outPath, html);
+        console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
+      } catch (e) {
+        errorCount++;
+        console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
+      }
     }
   }
 
