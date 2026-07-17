@@ -2,18 +2,29 @@
 const { deriveLive } = require('../../../js/gurps-live');
 const { rowCells } = require('../../../js/gurps-party');
 const { getInitials } = require('../landing-data');
-const { relativeHref, escapeHtml } = require('../../processor');
+const { relativeHref, escapeHtml, encodeImageUrl } = require('../../processor');
+
+// Circular avatar: portrait thumbnail when the PC has one, initials otherwise.
+function avatarHtml(pc, rosterOutputPath) {
+  if (pc.portrait) {
+    const src = encodeImageUrl(relativeHref(rosterOutputPath, pc.portrait));
+    return `<span class="gl-av gl-av-img"><img src="${escapeHtml(src)}" alt="" loading="lazy"></span>`;
+  }
+  return `<span class="gl-av">${escapeHtml(getInitials(pc.name))}</span>`;
+}
 
 function renderPartyBoard(manifest, rosterOutputPath) {
   if (!manifest || !manifest.pcs || !manifest.pcs.length) return null;
-  const rows = manifest.pcs.map((pc, i) => {
+  // Rows arrive pre-sorted by Basic Speed (initiative order); the Speed column
+  // surfaces that ordering value, so no separate rank number is needed.
+  const rows = manifest.pcs.map((pc) => {
     const view = deriveLive(pc, null);           // authored-default initial render
     const c = rowCells(view);
     const href = relativeHref(rosterOutputPath, pc.outputPath);
-    const bs = pc.basicSpeed != null ? 'Basic Speed ' + pc.basicSpeed.toFixed(2) : '';
+    const speed = pc.basicSpeed != null ? pc.basicSpeed.toFixed(2) : '—';
     return `<tr class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
-  <td class="gl-rank">${i + 1}</td>
-  <td class="gl-pc"><a href="${escapeHtml(href)}"><span class="gl-av">${escapeHtml(getInitials(pc.name))}</span><span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub">${escapeHtml(bs)} <span data-gl-party-field="enc">${c.enc}</span></span></span></a></td>
+  <td class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub" data-gl-party-field="enc">${c.enc}</span></span></a></td>
+  <td class="gl-speed">${escapeHtml(speed)}</td>
   <td class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
   <td class="gl-vital" data-gl-party-field="fp">${c.fp}</td>
   <td class="gl-stat" data-gl-party-field="move">${c.move}</td>
@@ -30,7 +41,7 @@ function renderPartyBoard(manifest, rosterOutputPath) {
   </div>
   <div class="gl-party-scroll">
   <table class="gl-party-table">
-    <thead><tr><th>#</th><th class="gl-pc">Character</th><th>HP</th><th>FP</th><th>Move</th><th>Dodge</th><th class="gl-col-st">ST</th><th>Status</th></tr></thead>
+    <thead><tr><th class="gl-pc">Character</th><th class="gl-col-speed">Speed</th><th>HP</th><th>FP</th><th>Move</th><th>Dodge</th><th class="gl-col-st">ST</th><th>Status</th></tr></thead>
     <tbody>
 ${rows}
     </tbody>

@@ -493,7 +493,14 @@ function build(options = {}) {
             ? rendered
             : { sheetHtml: rendered || null };
           if (systemOut.liveData) {
-            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, data: systemOut.liveData });
+            // Root-relative output path of the PC portrait, for the party-board
+            // thumbnail. Resolved the same way portraitImg does (imageMap keyed
+            // by bare basename → the scanner's relPath under images/).
+            const { portraitBasename } = require('./processor');
+            const pBase = portraitBasename(page.frontmatter);
+            const pEntry = pBase && imageMap ? imageMap[pBase] : null;
+            const portrait = pEntry ? 'images/' + pEntry.relPath : null;
+            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData });
           }
           html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
             publishConfig,

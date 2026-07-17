@@ -30,6 +30,13 @@
     return '<span class="gl-was">' + esc(base) + '</span>' + esc(cur);
   }
 
+  // current/basic, e.g. "3/6" — always show both so the GM sees how far
+  // encumbrance/conditions have knocked a value down from its unloaded value.
+  function ratio(cur, base) {
+    if (base == null) return esc(cur);
+    return esc(cur) + '<span class="gl-of">/' + esc(base) + '</span>';
+  }
+
   function bar(kind, cur, max) {
     var pct = max > 0 ? Math.max(0, Math.min(100, Math.round((cur / max) * 100))) : 0;
     return '<span class="gl-vnum' + (3 * cur < max ? ' gl-low' : '') + '">' + esc(cur) + '<span class="gl-max">/' + esc(max) + '</span></span>' +
@@ -47,7 +54,7 @@
       rowClass: rowClass,
       hp: view.hp ? bar('hp', view.hp.cur, view.hp.max) : '—',
       fp: view.fp ? bar('fp', view.fp.cur, view.fp.max) : '—',
-      move: stat(view.move.enc, view.move.cur),
+      move: ratio(view.move.cur, view.move.base),
       dodge: stat(view.dodge.enc, view.dodge.cur),
       st: view.st ? stat(view.st.base, view.st.cur) : '—',
       status: status,

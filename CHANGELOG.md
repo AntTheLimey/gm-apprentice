@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.26] — 2026-07-17
+
+Publish tool 1.11.5.
+
+### Changed
+
+- Change-request widget (PC sheets): the message box is now large by default
+  (~8rem, ~9rem on phones) with the browser's native drag-resize handle, the
+  fiddly slim expand/contract button is gone, and the Send button is a proper
+  tap target (full-width on mobile). The chat-history button ("💬 History") is
+  now always visible instead of only appearing once a device already has
+  messages, so players can find past replies on a fresh phone.
+- Change-request message box now uses the theme's card surface and text colours
+  (`--bg-card`/`--text`) instead of a hardcoded white background, so typed text
+  is readable on dark genre themes.
+- GURPS party board (GM screen) redesign: character portraits now render as
+  circular thumbnails (initials fallback); Basic Speed — the initiative sort
+  key — is its own column and the redundant rank/number column is gone; Move
+  shows current/basic (e.g. `3/6`) so encumbrance/condition loss is visible at a
+  glance. The board still auto-refreshes from live KV state.
+
+### Fixed
+
+- GURPS party board: HP and FP collapsed into a single cell because the status
+  panel's `.gl-vital { display: inline-flex }` rule also matched the board's
+  `<td class="gl-vital">` cells, knocking them out of the table's column layout.
+  Scoped that rule to the status panel (`.gl-vitals .gl-vital`) and the
+  min-width rule to `.gl-party-table .gl-vital`.
+- GURPS party board: portrait thumbnails rendered as a clipped sliver because
+  `height: 100%` didn't resolve against the avatar's `display: grid` track. The
+  thumbnail wrapper is now a plain block so the image fills the circle.
+
+- GURPS status panel: the REELING and TIRED badges (and the effects row) were
+  permanently visible even at full HP/FP. They are rendered with the `hidden`
+  attribute and toggled by the live client, but the author `.gl-badge { display:
+  inline-block }` rule outranked the user-agent `[hidden] { display: none }`, so
+  `hidden` never took effect. Added a `[hidden] { display: none !important }`
+  safeguard for the live-toggled panel elements; badges now show only when a PC
+  is actually below ⅓ HP (Reeling) or ⅓ FP (Tired).
+
 ## [1.8.25] — 2026-07-16
 
 Publish tool 1.11.4.

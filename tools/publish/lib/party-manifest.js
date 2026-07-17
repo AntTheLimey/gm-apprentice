@@ -16,6 +16,7 @@ function buildPartyManifest(campaignId, entries) {
       pcSlug: e.data.pcSlug,
       name: e.name,
       outputPath: e.outputPath,
+      portrait: e.portrait != null ? e.portrait : null,
       buildVersion: e.data.buildVersion,
       basicSpeed: e.data.basicSpeed != null ? e.data.basicSpeed : null,
       dx: e.data.dx != null ? e.data.dx : null,

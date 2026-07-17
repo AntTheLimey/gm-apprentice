@@ -27,8 +27,8 @@ test('deriveLive with no state uses authored defaults (Pack carried, None enc, h
   const v = gl.deriveLive(pc(), null);
   assert.equal(v.encLevel, 0);
   assert.equal(v.encName, 'None');
-  assert.deepEqual(v.move, { enc: 6, cur: 6 });
-  assert.deepEqual(v.dodge, { enc: 10, cur: 10 });
+  assert.deepEqual(v.move, { base: 6, enc: 6, cur: 6 });
+  assert.deepEqual(v.dodge, { base: 10, enc: 10, cur: 10 });
   assert.equal(v.reeling, false);
   assert.equal(v.tired, false);
   assert.deepEqual(v.hp, { cur: 13, max: 13 });
@@ -43,8 +43,8 @@ test('deriveLive with fresh state: armor on (Medium) + reeling halves Move/Dodge
   assert.equal(v.reeling, true);
   assert.equal(v.tired, false);
   assert.deepEqual(v.hp, { cur: 4, max: 13 });    // reconstructed from scalar + manifest max
-  assert.deepEqual(v.move, { enc: 3, cur: 2 });   // Medium 3 → reeling ceil(3/2)=2
-  assert.deepEqual(v.dodge, { enc: 8, cur: 4 });   // 8 → 4
+  assert.deepEqual(v.move, { base: 6, enc: 3, cur: 2 });   // Medium 3 → reeling ceil(3/2)=2
+  assert.deepEqual(v.dodge, { base: 10, enc: 8, cur: 4 });   // 8 → 4
   assert.deepEqual(v.st, { base: 13, cur: 13 });   // ST unaffected by reeling
 });
 
@@ -56,8 +56,8 @@ test('deriveLive fresh state reeling+tired double-halves and halves ST once', ()
   assert.equal(v.tired, true);
   assert.deepEqual(v.hp, { cur: 4, max: 13 });
   assert.deepEqual(v.fp, { cur: 3, max: 12 });
-  assert.deepEqual(v.move, { enc: 6, cur: 2 });    // 6 → reel 3 → tired 2
-  assert.deepEqual(v.dodge, { enc: 10, cur: 3 });   // 10 → 5 → 3
+  assert.deepEqual(v.move, { base: 6, enc: 6, cur: 2 });    // 6 → reel 3 → tired 2
+  assert.deepEqual(v.dodge, { base: 10, enc: 10, cur: 3 });   // 10 → 5 → 3
   assert.deepEqual(v.st, { base: 13, cur: 7 });     // 13 → ceil/2 = 7 (once)
 });
 
@@ -73,7 +73,7 @@ test('deriveLive ignores stale state (buildVersion mismatch) → authored defaul
   const v = gl.deriveLive(pc(), state);
   assert.equal(v.encLevel, 0);            // stale items ignored → defaults (Pack only)
   assert.equal(v.reeling, false);          // stale hp/fp ignored → healthy
-  assert.deepEqual(v.move, { enc: 6, cur: 6 });
+  assert.deepEqual(v.move, { base: 6, enc: 6, cur: 6 });
 });
 
 test('deriveLive on a PC with no vitals returns null vitals and null st', () => {
