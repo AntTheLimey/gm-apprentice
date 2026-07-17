@@ -117,13 +117,15 @@ function buildVitals(model) {
   const prim = a.primary || {};
   const sec = a.secondary || {};
   const st = num(prim.ST && prim.ST.value);
+  const basicSpeed = num(sec['Basic Speed'] && sec['Basic Speed'].value);
+  const dx = num(prim.DX && prim.DX.value);
   const maxHp = num(sec.HP && sec.HP.value) != null ? num(sec.HP.value) : st;
   const maxFp = num(sec.FP && sec.FP.value) != null ? num(sec.FP.value) : num(prim.HT && prim.HT.value);
   if (maxHp == null || maxFp == null) return null;
   const s = model.status || {};
   const curHp = num(s.hp) != null ? num(s.hp) : maxHp;
   const curFp = num(s.fp) != null ? num(s.fp) : maxFp;
-  return { hp: { cur: curHp, max: maxHp }, fp: { cur: curFp, max: maxFp }, st: st != null ? st : maxHp };
+  return { hp: { cur: curHp, max: maxHp }, fp: { cur: curFp, max: maxFp }, st: st != null ? st : maxHp, basicSpeed, dx };
 }
 
 function buildLiveData(model, meta) {
@@ -133,6 +135,7 @@ function buildLiveData(model, meta) {
   if (items.length === 0) return null;
   const skills = buildSkills(model, lv.authoredLevel);
   const weapons = buildWeapons(model, skills, lv.authoredLevel);
+  const v = buildVitals(model);
   return {
     buildVersion: meta.buildVersion,
     campaignId: meta.campaignId,
@@ -140,7 +143,9 @@ function buildLiveData(model, meta) {
     authoredLevel: lv.authoredLevel,
     levels: lv.levels,
     skills, weapons, items,
-    vitals: buildVitals(model),
+    vitals: v,
+    basicSpeed: v ? v.basicSpeed : null,
+    dx: v ? v.dx : null,
   };
 }
 

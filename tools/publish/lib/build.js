@@ -12,6 +12,8 @@ const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
+const { buildPartyManifest, partyDataScript } = require('./party-manifest');
+const { renderPartyBoard } = require('./templates/gurps/party-board');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -430,6 +432,9 @@ function build(options = {}) {
   // Render each page
   const usedImages = new Set();
   let errorCount = 0;
+  const partyEntries = [];
+  const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
+  const deferredRosters = [];
   for (const page of pages) {
     try {
       if (page.frontmatter.type === 'world_flags') continue;
@@ -440,6 +445,8 @@ function build(options = {}) {
       const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages });
       logWarnings(page.outputPath, processed.warnings);
       let html;
+
+      if (page.frontmatter.type === 'pc_roster') { deferredRosters.push({ page, processed }); continue; }
 
       switch (page.frontmatter.type) {
         case 'pc': {
@@ -485,6 +492,9 @@ function build(options = {}) {
           const systemOut = (rendered && typeof rendered === 'object')
             ? rendered
             : { sheetHtml: rendered || null };
+          if (systemOut.liveData) {
+            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, data: systemOut.liveData });
+          }
           html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
             publishConfig,
             pages,
@@ -573,6 +583,26 @@ function build(options = {}) {
     } catch (e) {
       errorCount++;
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
+    }
+  }
+
+  if (deferredRosters.length) {
+    const manifest = buildPartyManifest(partyCampaignId, partyEntries);
+    for (const deferredRoster of deferredRosters) {
+      try {
+        const boardHtml = manifest ? renderPartyBoard(manifest, deferredRoster.page.outputPath) : null;
+        const islandHtml = manifest ? partyDataScript(manifest) : null;
+        const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
+          publishConfig, linkMap, pages, partyBoardHtml: boardHtml, partyDataScript: islandHtml,
+        });
+        const outPath = path.join(outputDir, deferredRoster.page.outputPath);
+        ensureDir(outPath);
+        fs.writeFileSync(outPath, html);
+        console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
+      } catch (e) {
+        errorCount++;
+        console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
+      }
     }
   }
 

@@ -10,6 +10,8 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const pages = (context || {}).pages || [];
   const backlinks = (publishConfig._backlinks || {})[page.title] || [];
   const extraSidebar = (context || {}).extraSidebar || {};
+  const partyBoardHtml = (context || {}).partyBoardHtml || null;
+  const partyDataScript = (context || {}).partyDataScript || null;
   const badges = metadataBadgesFor(fm);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
@@ -97,12 +99,15 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: contentHtml,
+    content: (partyBoardHtml ? partyBoardHtml + '\n' : '') + contentHtml + (partyDataScript ? '\n' + partyDataScript : ''),
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,
     breadcrumbsHtml,
-    scripts: clientScripts(page.outputPath),
+    scripts: [
+      ...clientScripts(page.outputPath),
+      ...(partyBoardHtml ? [rootPath(page.outputPath) + 'js/gurps-live.js', rootPath(page.outputPath) + 'js/gurps-party.js'] : []),
+    ],
   });
 }
 

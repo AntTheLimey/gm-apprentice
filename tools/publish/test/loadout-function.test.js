@@ -31,13 +31,17 @@ test('isValidKey requires the loadout: prefix', () => {
   assert.equal(core.isValidKey(''), false);
 });
 
-test('PUT then GET round-trips state', async () => {
+test('PUT then GET round-trips state and stamps updatedAt', async () => {
   const kv = fakeKV();
   const state = { v: 'v1', items: { Axe: true }, hp: null, fp: null };
   const put = await fn.onRequestPut(putCtx(kv, { key: 'loadout:c:p:d', state }));
   assert.equal(put.status, 200);
   const got = await fn.onRequestGet(getCtx(kv, 'loadout:c:p:d'));
-  assert.deepEqual((await got.json()).state, state);
+  const stored = (await got.json()).state;
+  assert.equal(stored.v, 'v1');
+  assert.deepEqual(stored.items, { Axe: true });
+  assert.equal(typeof stored.updatedAt, 'number');
+  assert.ok(stored.updatedAt > 0);
 });
 
 test('PUT rejects a non-loadout key', async () => {

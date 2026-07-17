@@ -106,7 +106,7 @@ test('buildVitals reads max from Attributes, cur from Current Status', () => {
     status: { hp: '4/13', fp: '3' },
   };
   assert.deepEqual(buildVitals(model), {
-    hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 }, st: 13,
+    hp: { cur: 4, max: 13 }, fp: { cur: 3, max: 12 }, st: 13, basicSpeed: null, dx: null,
   });
 });
 
@@ -117,7 +117,7 @@ test('buildVitals defaults cur to max when no Current Status', () => {
     status: {},
   };
   assert.deepEqual(buildVitals(model), {
-    hp: { cur: 10, max: 10 }, fp: { cur: 10, max: 10 }, st: 10,
+    hp: { cur: 10, max: 10 }, fp: { cur: 10, max: 10 }, st: 10, basicSpeed: null, dx: null,
   });
 });
 
@@ -127,7 +127,7 @@ test('buildVitals falls back HP->ST and FP->HT when secondary absent', () => {
     status: {},
   };
   assert.deepEqual(buildVitals(model), {
-    hp: { cur: 12, max: 12 }, fp: { cur: 11, max: 11 }, st: 12,
+    hp: { cur: 12, max: 12 }, fp: { cur: 11, max: 11 }, st: 12, basicSpeed: null, dx: null,
   });
 });
 
@@ -151,5 +151,42 @@ test('buildLiveData attaches a vitals block', () => {
     skills: [], melee: [],
   };
   const data = buildLiveData(model, { buildVersion: 'v1', campaignId: 'c', pcSlug: 'p' });
-  assert.deepEqual(data.vitals, { hp: { cur: 13, max: 13 }, fp: { cur: 12, max: 12 }, st: 13 });
+  assert.deepEqual(data.vitals, { hp: { cur: 13, max: 13 }, fp: { cur: 12, max: 12 }, st: 13, basicSpeed: null, dx: null });
+});
+
+function modelWith(primary, secondary) {
+  return {
+    attributes: { primary, secondary },
+    encumbrance: [
+      { level: 'None (0)', weight: '26', move: '6', dodge: '10', current: true },
+      { level: 'Light (1)', weight: '52', move: '4', dodge: '9' },
+      { level: 'Medium (2)', weight: '78', move: '3', dodge: '8' },
+      { level: 'Heavy (3)', weight: '156', move: '2', dodge: '7' },
+      { level: 'X-Heavy (4)', weight: '260', move: '1', dodge: '6' },
+    ],
+    skills: [], melee: [],
+    equipment: { items: [{ name: 'Pack', weight: '10 lb' }], loadouts: [] },
+    status: {},
+  };
+}
+
+test('buildLiveData surfaces basicSpeed and dx from attributes', () => {
+  const model = modelWith(
+    { ST: { value: 13 }, DX: { value: 14 }, HT: { value: 12 } },
+    { HP: { value: 13 }, FP: { value: 12 }, 'Basic Speed': { value: '6.50' } }
+  );
+  const data = buildLiveData(model, { buildVersion: 'v1', campaignId: 'c', pcSlug: 's' });
+  assert.equal(data.basicSpeed, 6.5);
+  assert.equal(data.dx, 14);
+});
+
+test('buildLiveData tolerates missing Basic Speed / DX (null, PC still built)', () => {
+  const model = modelWith(
+    { ST: { value: 13 }, HT: { value: 12 } },
+    { HP: { value: 13 }, FP: { value: 12 } }
+  );
+  const data = buildLiveData(model, { buildVersion: 'v1', campaignId: 'c', pcSlug: 's' });
+  assert.equal(data.basicSpeed, null);
+  assert.equal(data.dx, null);
+  assert.ok(Array.isArray(data.levels));   // still a valid build
 });

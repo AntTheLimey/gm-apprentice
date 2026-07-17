@@ -198,6 +198,16 @@ that already set up the inbox above: copy `functions/api/loadout.js` and
 `functions/api/loadout-core.mjs` from the scaffold alongside the inbox
 files, then redeploy.
 
+### `/api/loadout-list` (GM party dashboard — read only)
+
+`GET /api/loadout-list?campaign=<campaignId>` returns every party member's live
+state (`{ "<key>": {v,items,hp,fp,updatedAt}, … }`) for the roster-page party
+board. It is **read-only** — it exposes only `onRequestGet`, never a write. Bound
+to the same `INBOX` KV namespace as `/api/loadout`; no new namespace or binding is
+needed. Sites scaffolded with a newer `gm-publish init` get it automatically;
+**existing sites must hand-copy** `functions/api/loadout-list.js` (and re-deploy)
+the same way they copied `functions/api/loadout.js` for SP1.
+
 > **Existing sites — set the project name first.** Open `wrangler.toml` and set
 > `name` to your **existing** Cloudflare Pages project name (the one you first
 > ran `pages project create` with, e.g. `dead-end`). The scaffold fills `name`
