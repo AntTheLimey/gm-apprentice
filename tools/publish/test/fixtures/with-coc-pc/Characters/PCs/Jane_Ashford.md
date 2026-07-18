@@ -8,6 +8,7 @@ age: 24
 gender: Female
 first_appearance: The Hollow at Ashcombe
 asOfSession: Chapter 2, Session 3
+portrait: jane-ashford.svg
 ---
 
 # Jane Ashford

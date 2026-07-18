@@ -30,8 +30,14 @@ describe('build integration — CoC PC', () => {
     assert.match(html, /Investigator's Record/);
   });
   it('renders the full skill list (untouched at base)', () => {
-    assert.ok(html.includes('Spot Hidden'));   // present even though the PC didn't list it
+    assert.ok(html.includes('First Aid'));      // canonical skill the PC never listed — proves full-list injection
     assert.ok(html.includes('class="exp"'));    // experience boxes rendered
+  });
+  it('injects the resolved portrait into the sheet', () => {
+    assert.match(html, /<img class="portrait"[^>]*src="[^"]*images\/jane-ashford\.svg"/);
+  });
+  it('renders the backstory strip from the Background labelled fields', () => {
+    assert.match(html, /class="bs"[\s\S]*?Personal Description/);
   });
   it('marks the active condition from the Status checklist', () => {
     assert.match(html, /cond-chip on[^>]*>\s*Indefinite Insanity/i);
