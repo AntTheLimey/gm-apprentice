@@ -131,6 +131,18 @@ test('registerMember ignores an invalid key without writing', async () => {
   assert.equal(kv.counts.put, 0);
 });
 
+test('overlapping registerMember on one edge keeps both members (read-your-writes)', async () => {
+  // Two co-located players register in quick succession. On a single edge KV is
+  // read-your-writes, so the second read already reflects the first member, and
+  // the union keeps both. (Truly simultaneous cross-edge adds are the documented
+  // KV residual — no CAS is available — and self-heal: a clobbered member is
+  // re-added on their next save, which happens on every board poll/change.)
+  const kv = countingKV({ 'roster:c': JSON.stringify(['loadout:c:rock:d9']) });
+  await core.registerMember(kv, 'loadout:c:six:d1');
+  assert.deepEqual(JSON.parse(kv._store.get('roster:c')).sort(), ['loadout:c:rock:d9', 'loadout:c:six:d1']);
+  assert.equal(kv.counts.list, 0);
+});
+
 test('GET returns states for a valid campaign, no list calls', async () => {
   const kv = countingKV({
     'roster:c': JSON.stringify(['loadout:c:p:d']),

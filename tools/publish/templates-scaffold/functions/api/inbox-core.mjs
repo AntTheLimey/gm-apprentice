@@ -41,8 +41,19 @@ async function writeIndex(kv, ids) {
 async function ensureIndex(kv) {
   const existing = await readIndex(kv);
   if (existing !== null) return existing;
-  const { keys } = await kv.list({ prefix: PREFIX });
-  const seeded = keys.map(({ name }) => name.slice(PREFIX.length));
+  // Cloudflare KV paginates list(): a single page caps at ~1,000 keys and an
+  // empty `keys` array does NOT mean "done" — only `list_complete` does. Follow
+  // the cursor so a pre-index inbox with more than one page seeds every req: key
+  // rather than silently dropping the tail. (The in-memory test adapter returns
+  // no cursor, so this collapses to a single list there.)
+  const seeded = [];
+  let cursor;
+  for (;;) {
+    const page = await kv.list({ prefix: PREFIX, cursor });
+    for (const { name } of (page.keys || [])) seeded.push(name.slice(PREFIX.length));
+    if (page.list_complete || !page.cursor) break;
+    cursor = page.cursor;
+  }
   // Re-read right before writing: a concurrent enqueue may have created the index
   // while we were listing, so union rather than clobber its ids.
   const landed = await readIndex(kv);

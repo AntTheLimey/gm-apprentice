@@ -162,6 +162,69 @@ test('ensureIndex seed unions an index a concurrent enqueue created mid-migratio
   assert.deepEqual(JSON.parse(store.get(inbox.INDEX_KEY)).sort(), ['x', 'y']);
 });
 
+// KV whose list() paginates like Cloudflare: `pageSize` keys per call, exposing
+// `cursor` + `list_complete`. A seed that reads only the first page would miss
+// the tail here.
+function paginatingKV(entries = {}, pageSize = 2) {
+  const store = new Map(Object.entries(entries));
+  const counts = { list: 0, get: 0, put: 0 };
+  return {
+    counts,
+    _store: store,
+    async get(k) { counts.get++; return store.has(k) ? store.get(k) : null; },
+    async put(k, v) { counts.put++; store.set(k, v); },
+    async delete(k) { store.delete(k); },
+    async list({ prefix = '', cursor } = {}) {
+      counts.list++;
+      const all = [...store.keys()].filter(k => k.startsWith(prefix)).sort();
+      const start = cursor ? parseInt(cursor, 10) : 0;
+      const slice = all.slice(start, start + pageSize);
+      const next = start + pageSize;
+      const list_complete = next >= all.length;
+      return { keys: slice.map(name => ({ name })), list_complete, cursor: list_complete ? undefined : String(next) };
+    },
+  };
+}
+
+test('cold-start seed follows the KV cursor and recovers every pre-index req: key', async () => {
+  const entries = {};
+  for (let i = 1; i <= 5; i++) {
+    entries['req:m' + i] = JSON.stringify(
+      inbox.buildEntry({ id: 'm' + i, character: 'a', text: 't', timestamp: '2026-07-11T14:0' + i + ':00.000Z' }));
+  }
+  const kv = paginatingKV(entries, 2);   // 5 keys spread over 3 pages
+  const pending = await inbox.readPending(kv);
+  assert.deepEqual(pending.map(e => e.id).sort(), ['m1', 'm2', 'm3', 'm4', 'm5']); // tail not dropped
+  assert.equal(kv.counts.list, 3);       // walked all three pages via the cursor
+  assert.deepEqual(JSON.parse(kv._store.get(inbox.INDEX_KEY)).sort(), ['m1', 'm2', 'm3', 'm4', 'm5']);
+});
+
+test('readPending prune re-reads the index and preserves a concurrently-enqueued id', async () => {
+  // 'a' is flagged (terminal) so the prune drops it. Between readPending's first
+  // index read and its pre-prune re-read, a concurrent enqueue lands 'new'. The
+  // re-read+filter must drop only 'a' and keep 'new'.
+  const store = new Map();
+  store.set('req:a', JSON.stringify({ ...inbox.buildEntry({ id: 'a', character: 'x', text: 't', timestamp: '2026-07-11T00:00:00Z' }), status: 'flagged' }));
+  store.set(inbox.INDEX_KEY, JSON.stringify(['a']));
+  let idxGets = 0;
+  const kv = {
+    async get(k) {
+      if (k === inbox.INDEX_KEY) {
+        idxGets++;
+        if (idxGets === 2) {   // concurrent enqueue lands just before the prune write
+          store.set('req:new', JSON.stringify(inbox.buildEntry({ id: 'new', character: 'y', text: 't', timestamp: '2026-07-11T00:01:00Z' })));
+          store.set(k, JSON.stringify(['a', 'new']));
+        }
+      }
+      return store.has(k) ? store.get(k) : null;
+    },
+    async put(k, v) { store.set(k, v); },
+    async list() { return { keys: [] }; },
+  };
+  await inbox.readPending(kv);
+  assert.deepEqual(JSON.parse(store.get(inbox.INDEX_KEY)).sort(), ['new']);   // 'a' dropped, 'new' kept
+});
+
 test('readPending drops a flagged (terminal, no-TTL) id from the index', async () => {
   const kv = countingKV();
   await inbox.enqueue(kv, { id: 'a', character: 'ana', text: 'x', timestamp: '2026-07-11T14:00:00.000Z' });
