@@ -111,7 +111,7 @@ createdSession: ""
 | Dodge | — | | | |
 | Drive Carriage | 20 | | | |
 | Etiquette | 15 | | | |
-| Fashion | 05 | | | |
+| Fashion | 10 | | | |
 | Fast Talk | 05 | | | |
 | Fighting (Brawl) | 25 | | | |
 | Firearms (Pistol) | 20 | | | |
@@ -122,18 +122,18 @@ createdSession: ""
 | Intimidate | 15 | | | |
 | Jump | 20 | | | |
 | Language (Own) | EDU | | | |
-| Language () | 01 | | | |
+| Language (Other) | 01 | | | |
 | Law | 05 | | | |
 | Library Use | 20 | | | |
 | Listen | 20 | | | |
 | Locksmith | 01 | | | |
-| Mech. Repair | 10 | | | |
+| Mechanical Repair | 10 | | | |
 | Medicine | 01 | | | |
 | Natural Philosophy | 01 | | | |
 | Natural World | 10 | | | |
 | Navigate | 10 | | | |
 | Occult | 05 | | | |
-| Operate Hvy. Machine | 01 | | | |
+| Operate Heavy Machinery | 01 | | | |
 | Persuade | 10 | | | |
 | Photography | 05 | | | |
 | Pilot () | 01 | | | |
