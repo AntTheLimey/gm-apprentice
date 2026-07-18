@@ -33,6 +33,6 @@ describe('buildSheet', () => {
     const html = buildSheet(model);
     assert.ok(html.includes('class="exp"'), 'experience box present');
     assert.ok(html.includes('class="reg"'));
-    assert.ok(html.includes('coc-sheet-root'));
+    assert.ok(html.includes('coc-charsheet'));
   });
 });

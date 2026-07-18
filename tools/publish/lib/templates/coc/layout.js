@@ -219,7 +219,7 @@ function buildWeapons(weapons) {
 
 function buildSheet(model) {
   const m = model || {};
-  return `<div class="coc-sheet-root">` +
+  return `<div class="coc-charsheet">` +
     buildIdentity(m.identity) +
     `<div class="grid-main">` +
       `<div>${buildChars(m.chars)}${buildCombatBox(m.combat)}</div>` +

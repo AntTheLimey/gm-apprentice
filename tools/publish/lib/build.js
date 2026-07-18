@@ -483,6 +483,7 @@ function build(options = {}) {
           const system = publishConfig.system;
           const systemRenderer = getRenderer(system);
           const meta = {
+            system,
             campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
             pcSlug: require('./scanner').slugify(page.title),
             buildVersion: require('crypto').createHash('sha1')
@@ -509,6 +510,8 @@ function build(options = {}) {
             systemEquipmentHtml: systemOut.equipmentHtml || null,
             systemLiveData: systemOut.liveData || null,
             systemStatusPanelHtml: systemOut.statusPanelHtml || null,
+            systemRecordHtml: systemOut.recordHtml || null,
+            systemStatusBarHtml: systemOut.statusBarHtml || null,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
