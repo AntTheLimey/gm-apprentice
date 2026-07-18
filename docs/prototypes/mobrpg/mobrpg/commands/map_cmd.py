@@ -110,8 +110,8 @@ def discover(world: str, token: str) -> dict:
                  "person/race", "person/profession", "language", "landfeature"):
         try:
             data = client._request("GET", f"/world/{world}/{kind}?size=500", token=token)
-        except client.ApiError:
-            data = []
+        except (client.ApiError, ValueError):
+            data = []  # ValueError covers JSONDecodeError (some endpoints return non-JSON/empty)
         items = data if isinstance(data, list) else data.get("content", []) if isinstance(data, dict) else []
         out[kind] = {_norm(e.get("name")): e.get("id") for e in items if isinstance(e, dict)}
     return out
