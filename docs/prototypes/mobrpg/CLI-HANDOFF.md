@@ -61,7 +61,8 @@ suggestions,catalog,review,submit_batch,update,map_cmd}.py`, `llms.txt`, `pyproj
 | `submit-batch` | ✅ native — submit a pre-built compound batch (types+edges+relations) from JSON |
 | `update` | ✅ native — replace a Pending suggestion's payload (PUT) |
 | `map` | ✅ native — per-vault vocab→type map (`init` / `sync` / `check`) |
-| `write`, `merge`, `link-orphans`, `sync`, `push`, `suggest`, `types`, `links`, `images` | ⏳ fallback → legacy script |
+| `suggest` | ✅ native — builds the full datatype graph (Types + Attribute edges + reified events) from the map + crosswalk, chunked ≤100, via the shared submit transport |
+| `write`, `merge`, `link-orphans`, `sync`, `push`, `types`, `links`, `images` | ⏳ fallback → legacy script |
 
 Verified (2026-07-18): **60 tests pass** (`pytest -q`); `mobrpg --help` lists all verbs +
 the `llms.txt` pointer. Earlier live read-only prod check (2026-07-12) passed — `whoami`
@@ -102,12 +103,8 @@ and `MOBRPG_ALLOW_PROD_WRITES=1` required for any write against prod.
 ## What's next (two tracks)
 
 **Track A — the mapping/suggest/writeback work (the real remaining value).** See
-`COMPLETE-SUGGESTIONS-SPEC.md` "Implementation order": steps 1–2 (GFM converter, the `map`
-scaffolder) are ✅ done; the remaining **⏳** work is 3–5:
-- **compound `suggest`** — teach `suggest` (or a `suggest-complete`) to build the full datatype
-  graph (Types + `Attribute` edges + reified relationship events) from the map + crosswalk and
-  submit it via the existing `submit-batch` transport. `suggest` still shells out to the bare
-  `push_suggestions.py`, so this is the highest-value port, not a mechanical one.
+`COMPLETE-SUGGESTIONS-SPEC.md` "Implementation order": steps 1–3 (GFM converter, the `map`
+scaffolder, compound `suggest`) are ✅ done; the remaining **⏳** work is 4–5:
 - **Pillar 3 vault-writeback** — persist determined mappings into vault frontmatter + crosswalk
   review-state (`pending|accepted|dismissed|edited`) + `content_hash`; authority rule "vault wins
   until mobRPG returns an edited version, then mobRPG wins."

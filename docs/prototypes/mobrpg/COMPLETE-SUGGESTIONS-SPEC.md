@@ -202,7 +202,7 @@ primitives and the skill.
 
 ## Implementation order
 
-_Progress (2026-07-18): steps 1–2 shipped on `mobrpg-cli`; 3–5 remain. See the ✅/⏳ markers._
+_Progress (2026-07-18): steps 1–3 shipped on `mobrpg-cli`; 4–5 remain. See the ✅/⏳ markers._
 
 1. ✅ **Done** — Real GFM↔HTML converter (unblocks fidelity), replacing `md_to_html` + pull's
    `html_to_md`. Landed as `mobrpg/md.py` (tables/lists/links); `push` and `pull` rewired onto it.
@@ -211,11 +211,9 @@ _Progress (2026-07-18): steps 1–2 shipped on `mobrpg-cli`; 3–5 remain. See t
    vocab + scan vault distinct values → draft map, `bound`/`new`, location Political-vs-LandFeature
    resolved by rule), `sync` (non-destructive re-discovery, preserves confirmed, promotes `new→bound`,
    flags `stale`), `check` (read-only coverage report).
-3. ⏳ **Remaining** — Teach `suggest` (or a new `suggest-complete`) to build compound batches from the
-   map (Pillars 1–2). `suggest` still shells out to `push_suggestions.py`, which emits bare
-   `CreateElement`s. The `submit-batch` transport verb exists; what's missing is the builder that reads
-   the map + crosswalk and assembles the full datatype graph (Types + `Attribute` edges + reified
-   relationship events) per entity.
+3. ✅ **Done** — landed as the native `mobrpg suggest` (`mobrpg/commands/suggest.py`) + shared
+   `submit_batch.submit()`; builder = element + classifier `Attribute` edges (incl. race-scoped Sex)
+   + reified relationship Events, greedy ≤100 chunking.
 4. ⏳ **Remaining** — Vault-writeback + crosswalk review-state + authority reconciliation (Pillar 3).
    Persist determined mappings into vault frontmatter, extend the crosswalk with review-state
    (`pending|accepted|dismissed|edited`) + `content_hash`, and enforce "vault is authoritative until
