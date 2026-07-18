@@ -26,5 +26,8 @@ export async function onRequestPut(context) {
   }
   const state = { ...body.state, updatedAt: Date.now() };
   await core.writeState(env.INBOX, body.key, state);
+  // Record this member in the campaign roster so the GM board can read party
+  // state without kv.list(). Writes at most once per member.
+  await core.registerMember(env.INBOX, body.key);
   return json({ ok: true });
 }

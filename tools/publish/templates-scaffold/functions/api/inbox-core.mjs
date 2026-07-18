@@ -6,9 +6,59 @@
 
 export const PREFIX = 'req:';
 export const CODE_KEY = 'config:code';
+export const INDEX_KEY = 'config:req-index'; // JSON array of request ids; lets readPending skip kv.list()
 export const RL_PREFIX = 'rl:';
 export const HANDLED_TTL = 300; // seconds a handled entry lingers for the widget
 export const RESPONSE_TTL = 600; // seconds a responded (handled) entry lingers for the widget
+
+// The request index removes kv.list() from the change-request loop's hot path.
+// The GM's inbox loop polls readPending repeatedly during a session; on the free
+// tier that was one list per poll against a 1,000-lists/day cap. Now enqueue
+// records each id in a single index key and readPending fans out plain gets.
+// readIndex returns null ONLY when the key is truly absent (never seeded) — an
+// emptied index is stored as `[]` — so ensureIndex can tell a cold start apart
+// from an inbox that has simply been drained.
+async function readIndex(kv) {
+  const raw = await kv.get(INDEX_KEY);
+  if (raw == null) return null;
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeIndex(kv, ids) {
+  await kv.put(INDEX_KEY, JSON.stringify(ids));
+}
+
+// Return the current index, seeding it ONCE from a single kv.list() the first
+// time it is missing. This is the migration bridge: a site upgraded from a
+// pre-index deployment may already hold pending `req:` entries, and seeding
+// recovers them so none are silently lost. After the seed the key exists (even
+// if empty), so this never lists again.
+async function ensureIndex(kv) {
+  const existing = await readIndex(kv);
+  if (existing !== null) return existing;
+  const { keys } = await kv.list({ prefix: PREFIX });
+  const seeded = keys.map(({ name }) => name.slice(PREFIX.length));
+  // Re-read right before writing: a concurrent enqueue may have created the index
+  // while we were listing, so union rather than clobber its ids.
+  const landed = await readIndex(kv);
+  const merged = landed === null ? seeded : [...new Set([...landed, ...seeded])];
+  await writeIndex(kv, merged);
+  return merged;
+}
+
+// Add an id to the index, re-reading immediately before the write and unioning so
+// a concurrent enqueue's id is not clobbered. KV offers no compare-and-set, so a
+// cross-edge simultaneous write can still race in theory; players sharing one
+// table (hence one edge, with read-your-writes) are covered in practice.
+async function addToIndex(kv, id) {
+  const cur = (await readIndex(kv)) || [];
+  if (!cur.includes(id)) { cur.push(id); await writeIndex(kv, cur); }
+}
 
 export function normalizeCode(raw) {
   return String(raw || '').trim().toUpperCase();
@@ -37,18 +87,36 @@ export function buildEntry({ id, character, text, timestamp }) {
 export async function enqueue(kv, { id, character, text, timestamp }) {
   const entry = buildEntry({ id, character, text, timestamp });
   await kv.put(PREFIX + id, JSON.stringify(entry));
+  await ensureIndex(kv);       // guarantee the index exists (seeds on migration)
+  await addToIndex(kv, id);
   return entry;
 }
 
+// Read every pending/applied request WITHOUT kv.list() on the steady-state path.
+// One get for the index, then one get per id. Ids are dropped from the index
+// when their entry is terminal for this view: null (a handled entry that has
+// self-reaped via TTL) or `flagged` (rejected — persists with no TTL and is
+// never re-surfaced here, so it would otherwise cost a get on every poll
+// forever). The prune re-reads the index immediately before writing and removes
+// only those specific ids, so an enqueue that landed since our first read is
+// preserved.
 export async function readPending(kv) {
+  const ids = await ensureIndex(kv);
   const out = [];
-  const { keys } = await kv.list({ prefix: PREFIX });
-  for (const { name } of keys) {
-    const raw = await kv.get(name);
-    if (!raw) continue;
+  const drop = [];
+  for (const id of ids) {
+    const raw = await kv.get(PREFIX + id);
+    if (!raw) { drop.push(id); continue; }
     let entry;
-    try { entry = JSON.parse(raw); } catch { continue; }
+    try { entry = JSON.parse(raw); } catch { continue; } // corrupt but present → keep in index
     if (entry.status === 'pending' || entry.status === 'applied') out.push(entry);
+    else if (entry.status === 'flagged') drop.push(id);
+  }
+  if (drop.length) {
+    const dropSet = new Set(drop);
+    const current = (await readIndex(kv)) || [];
+    const cleaned = current.filter((id) => !dropSet.has(id));
+    if (cleaned.length !== current.length) await writeIndex(kv, cleaned);
   }
   return out.sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
 }

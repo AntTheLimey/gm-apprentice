@@ -9,10 +9,14 @@ before(async () => {
 
 function fakeKV() {
   const store = new Map();
+  const counts = { list: 0, get: 0, put: 0, delete: 0 };
   return {
-    async get(k) { return store.has(k) ? store.get(k) : null; },
-    async put(k, v) { store.set(k, v); },
-    async delete(k) { store.delete(k); },
+    store,
+    counts,
+    async get(k) { counts.get++; return store.has(k) ? store.get(k) : null; },
+    async put(k, v) { counts.put++; store.set(k, v); },
+    async delete(k) { counts.delete++; store.delete(k); },
+    async list() { counts.list++; return { keys: [] }; },
   };
 }
 function putCtx(kv, body) {
@@ -59,4 +63,18 @@ test('PUT rejects an array state', async () => {
 test('GET of an unknown key returns empty object', async () => {
   const res = await fn.onRequestGet(getCtx(fakeKV(), 'loadout:c:p:none'));
   assert.deepEqual(await res.json(), {});
+});
+
+test('PUT registers the member in the campaign roster (no duplicates), never lists', async () => {
+  const kv = fakeKV();
+  const state = { v: 'v1', items: {}, hp: null, fp: null };
+  await fn.onRequestPut(putCtx(kv, { key: 'loadout:c:six:d1', state }));
+  assert.deepEqual(JSON.parse(kv.store.get('roster:c')), ['loadout:c:six:d1']);
+  const putsAfterFirst = kv.counts.put;
+  // A second write from the same member must not grow the roster, but does re-put
+  // it to refresh its TTL (state write + roster-TTL refresh = two puts).
+  await fn.onRequestPut(putCtx(kv, { key: 'loadout:c:six:d1', state }));
+  assert.deepEqual(JSON.parse(kv.store.get('roster:c')), ['loadout:c:six:d1']);
+  assert.equal(kv.counts.put, putsAfterFirst + 2);
+  assert.equal(kv.counts.list, 0);
 });

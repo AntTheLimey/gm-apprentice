@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.28] — 2026-07-18
+
+Publish tool 1.11.7.
+
+### Fixed
+
+- GURPS party board no longer exhausts the Cloudflare KV free-tier list quota.
+  The board polled `/api/loadout-list` every 5 seconds and that endpoint ran a
+  `kv.list()` on every poll; the free tier allows only 1,000 list operations per
+  day, so a single open party-board tab drained the day's quota in about 1h23m
+  (after which the board silently stopped updating until UTC midnight). The
+  loadout Functions now maintain a per-campaign `roster:<campaignId>` index on
+  write and read party state with plain `kv.get()` calls — **zero `kv.list()`** —
+  and the board polls every 60 seconds only while a game is actively running
+  (activity = a player edit advancing state, a keypress/pointer press, or the tab
+  becoming visible), going dormant after 15 idle minutes and never fetching while
+  the tab is hidden. Migration is self-healing and needs no backfill: the roster
+  starts empty and each player is registered the first time they save (the roster
+  key's TTL is refreshed on every save so it never expires under an active
+  party); pre-existing per-player keys stay valid.
+- Change-request inbox no longer runs a `kv.list()` on every poll of the GM
+  loop. `readPending` now reads a single `config:req-index` key and fetches each
+  request by id; `enqueue` maintains the index. The index is seeded once from a
+  single `kv.list()` the first time it is missing, so a site upgraded from an
+  earlier deployment recovers any in-flight pending requests without losing them,
+  and never lists again afterwards.
+- **Existing deployed sites keep running the old, quota-burning Functions until
+  updated** — re-copy `functions/api/loadout-core.mjs`, `functions/api/loadout.js`,
+  `functions/api/loadout-list.js`, `functions/api/inbox-core.mjs`, and
+  `js/gurps-party.js` from the scaffold and redeploy (see the Cloudflare Pages
+  guide). Closing the party-board tab stops the loadout burn immediately in the
+  meantime.
+
+---
+
 ## [1.8.27] — 2026-07-18
 
 Publish tool 1.11.6.

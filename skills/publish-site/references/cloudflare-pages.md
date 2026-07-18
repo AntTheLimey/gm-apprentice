@@ -208,6 +208,32 @@ needed. Sites scaffolded with a newer `gm-publish init` get it automatically;
 **existing sites must hand-copy** `functions/api/loadout-list.js` (and re-deploy)
 the same way they copied `functions/api/loadout.js` for SP1.
 
+> **KV list-quota fix — existing sites must refresh the loadout + inbox Functions
+> and redeploy.** Early builds had the party board poll the list endpoint every 5
+> seconds, and both that endpoint and the change-request inbox used `kv.list()` on
+> every poll. Cloudflare's free tier allows only **1,000 list operations per
+> day**, so one party-board tab left open exhausted the day's quota in about
+> 1h23m (after which the board stops updating until the quota resets at UTC
+> midnight); a long inbox-loop session added to the same burn. The fix removes
+> `kv.list()` from both hot paths — the party board maintains a per-campaign
+> `roster:<campaignId>` index (written on save, read with plain gets) and the
+> inbox maintains a `config:req-index` key — and slows the board to a 60-second
+> poll that only runs while a game is actually in progress. To adopt it, re-copy
+> from the scaffold: `functions/api/loadout-core.mjs`, `functions/api/loadout.js`,
+> `functions/api/loadout-list.js`, `functions/api/inbox-core.mjs`, and the roster
+> page's `js/gurps-party.js`, then redeploy. A site still running the **old**
+> Functions keeps burning the list quota until it is updated; the two versions do
+> not need to match across deploys, but the old one is not fixed until you
+> redeploy the new files. **Migration is automatic and needs no backfill:** the
+> party roster starts empty and each member is added the first time they save
+> (which happens seconds into any session), the roster key's TTL is refreshed on
+> every save so it never expires under an active party, and every pre-existing
+> per-player key stays valid. The inbox index is seeded once from a single
+> `kv.list()` the first time it is missing, so any in-flight pending requests on
+> an upgraded site are recovered rather than lost, and it never lists again after
+> that. **Immediate mitigation while you wait to redeploy:** closing the
+> party-board tab stops the burn right away, and the quota resets at UTC midnight.
+
 > **Existing sites — set the project name first.** Open `wrangler.toml` and set
 > `name` to your **existing** Cloudflare Pages project name (the one you first
 > ran `pages project create` with, e.g. `dead-end`). The scaffold fills `name`
