@@ -104,7 +104,8 @@ def run(argv: list[str]) -> int:
                     row["element"] = client._request(
                         "GET", f"/world/{args.world}/{TYPE_EP[etype]}/{rid}", token=token)
                     row["elementExists"] = True
-                except client.ApiError as e:
+                except (client.ApiError, ValueError) as e:
+                    # ValueError covers JSONDecodeError (some endpoints, e.g. language, return non-JSON)
                     row["elementExists"] = False
                     row["element"] = {"error": str(e)}
         report.append(row)
