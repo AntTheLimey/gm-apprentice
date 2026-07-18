@@ -159,6 +159,13 @@ Sergeant Coombe (parish constable).
 
 ---
 
+## Connections
+
+Correspondence with a London bookseller who asks no questions, and a
+standing invitation to the Ashcombe parsonage she has not used in a year.
+
+---
+
 ## Equipment
 
 - A worn leather writing-case with letters from home

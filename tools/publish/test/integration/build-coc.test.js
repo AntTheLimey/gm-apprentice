@@ -46,6 +46,10 @@ describe('build integration — CoC PC', () => {
     assert.match(html, /class="era">Regency Cthulhu · in the year 1814</);
   });
   it('loads the CoC client script', () => assert.match(html, /js\/coc-sheet\.js/));
+  it('routes a non-consumed section (Connections) into the Record instead of dropping it', () => {
+    assert.match(html, /<summary>Connections<\/summary>/);
+    assert.ok(html.includes('a London bookseller who asks no questions'));
+  });
   it('does not duplicate the Skills section as a loose accordion', () => {
     // "Skills" should appear in the structured sheet, not as an accordion header button
     assert.ok(!html.includes('class="accordion-header">Skills'));
