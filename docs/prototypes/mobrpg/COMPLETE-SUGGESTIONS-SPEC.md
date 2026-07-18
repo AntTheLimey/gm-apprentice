@@ -173,6 +173,33 @@ This makes pushes progressively cleaner and idempotent **by content**, not just 
   need per-vault judgment. This is the "separate mobrpg skill" Ant asked about — **yes, build it**, on
   top of the CLI primitives.
 
+## The `map` command family (mapping generation + upkeep)
+
+Turns the per-vault map from hand-authored into **discovered-and-maintained**. Built on `catalog`.
+
+- **`mobrpg map init <world> --vault <path>`** — first run: (1) discover mobRPG classifier vocab via
+  `catalog` (political/type, organization/type, creature/type, person/race, person/profession,
+  language, landfeature); (2) scan the vault's distinct `location_type`/`occupation`/`gender`/
+  `faction_type`/`creature_type`/relationship-predicate values (with counts); (3) propose a route per
+  value — exact/ci match → bind to the existing type's real id; no match → propose a new type name;
+  ambiguous (Political-vs-LandFeature, monuments/ruins) → flag `review:true`. Write
+  `_meta/mobrpg-map.json` (+ `discoveredAt` and a vocab snapshot for cheap diffs).
+- **`mobrpg map sync <world> --vault <path>`** — re-runnable upkeep. Diff current mobRPG types + vault
+  vocab vs the map; report/merge three drifts **non-destructively (preserve curated entries)**:
+  new vault values needing mapping; new mobRPG types that now satisfy a previously "create-new" entry
+  (e.g. GM created "Hospital" → stop proposing to create it); stale entries. Feeds obs #10: a GM's
+  accept-time type edit is learned back here (mobRPG wins).
+- **`mobrpg map check`** — read-only coverage report (mapped / unmapped / would-create-new).
+
+**Map (rules) vs crosswalk (instances) — two files, two upkeep mechanisms.** The **map** is
+`vault-value → mobRPG-type` *rules* (kept current by `map sync` re-discovering **types**). The
+**crosswalk** is `entity → mobRPG element id` *instances* (kept current by pulling accepted/edited
+**elements** back — `suggestions --correlate` + `detect_updates.py`). Don't conflate them.
+
+**Discover (deterministic, CLI) + propose (judgment).** `map` emits a *draft*; the ambiguous
+`review:true` routes are resolved by the mobRPG skill or a human. This is the boundary between the CLI
+primitives and the skill.
+
 ## Implementation order
 1. Real GFM↔HTML converter (unblocks fidelity) — replace `md_to_html` + pull's `html_to_md`.
 2. `_meta/mobrpg-map.json` schema + a `map-locations`/`map-build` scaffolder (discover + propose).
