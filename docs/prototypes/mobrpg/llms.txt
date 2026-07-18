@@ -32,8 +32,8 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
-push, suggest, types, links. write/merge/link-orphans only touch local vault
-files, not the API.
+push, suggest, types, links, review. write/merge/link-orphans only touch local
+vault files, not the API.
 
 ## Commands
 
@@ -53,6 +53,12 @@ files, not the API.
                                   List the elements of one kind (names + ids),
                                   e.g. political/type, landfeature, person. See
                                   what exists before pushing, to avoid dup Types.
+    mobrpg review <world> <suggestionId> <accept|dismiss|reinstate>
+                       [--note TEXT] [--execute]
+                                  GM review action on one suggestion (needs
+                                  ReadWriteDelete). Dry-run without --execute.
+                                  accept is irreversible; dismiss keeps the
+                                  externalRef claimed (see resubmit note below).
     mobrpg write <extract.json> <out_dir>
                                   Render a JSON extract into vault markdown.
     mobrpg merge <extract.json> <vault>

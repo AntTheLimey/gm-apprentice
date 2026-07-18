@@ -18,6 +18,7 @@ from mobrpg.commands import whoami as _whoami
 from mobrpg.commands import pull as _pull
 from mobrpg.commands import suggestions as _suggestions
 from mobrpg.commands import catalog as _catalog
+from mobrpg.commands import review as _review
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -29,6 +30,7 @@ NATIVE: dict = {
     "pull": _pull.run,
     "suggestions": _suggestions.run,
     "catalog": _catalog.run,
+    "review": _review.run,
 }
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
@@ -51,6 +53,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("pull", "import a mobRPG world into a structured JSON extract"),
     ("suggestions", "list suggestions by review state; --correlate maps accepted back to the vault"),
     ("catalog", "list the elements of one kind (e.g. political/type, landfeature) in a world"),
+    ("review", "accept | dismiss | reinstate a suggestion (GM; needs write access)"),
     ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
