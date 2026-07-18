@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.29] — 2026-07-18
+
+Publish tool 1.11.8.
+
+### Added
+
+- Shared live-state store (`js/live-state.js`) that persists per-device sheet
+  state to Cloudflare KV with a localStorage fallback, behind one opaque-blob
+  interface reused by every system's live client.
+- Call of Cthulhu investigator sheet live tracking: HP/MP pips, SAN/Luck/
+  Reputation steppers, condition chips, and per-skill experience ticks now
+  persist and restore across reloads (`js/coc-live.js`).
+
+### Changed
+
+- Unified live-state persistence across systems: current state now lives in KV,
+  with localStorage and then the vault's authored values as fallbacks, and is no
+  longer discarded on a site rebuild. The GURPS live client and party board were
+  migrated onto the shared store, so a stale-build member now shows current KV
+  values rather than authored defaults.
+
+---
+
 ## [1.8.28] — 2026-07-18
 
 Publish tool 1.11.7.

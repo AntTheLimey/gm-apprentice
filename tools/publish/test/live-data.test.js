@@ -91,8 +91,8 @@ test('returns null when no encumbrance table or no weighted items', () => {
   assert.equal(buildLiveData(m, { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }), null);
 });
 
-test('liveDataScript embeds JSON under the expected id', () => {
-  const html = liveDataScript({ buildVersion: 'v', items: [] });
+test('liveDataScript embeds JSON under the given id', () => {
+  const html = liveDataScript({ buildVersion: 'v', items: [] }, 'gurps-live-data');
   assert.match(html, /<script type="application\/json" id="gurps-live-data">/);
   assert.match(html, /"buildVersion":"v"/);
 });

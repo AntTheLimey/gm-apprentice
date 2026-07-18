@@ -194,7 +194,8 @@ function buildPortraitRow(backstory) {
 
 function skillRow(s) {
   const dev = s && s.developed ? ' dev' : '';
-  return `<div class="skill${dev}"><button type="button" class="exp" aria-pressed="false" ` +
+  return `<div class="skill${dev}" data-skill="${escapeHtml(String((s && s.name) || ''))}">` +
+    `<button type="button" class="exp" aria-pressed="false" ` +
     `aria-label="Experience check: ${escapeHtml(String((s && s.name) || ''))}"></button>` +
     `<span class="sname">${nameHtml(s.name)}</span>` +
     `<span class="reg">${pad2(s.reg)}</span>` +

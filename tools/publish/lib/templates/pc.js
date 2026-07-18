@@ -4,6 +4,7 @@ const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
 const { liveDataScript } = require('./gurps/live-data');
+const { liveScriptHrefs, clientFor } = require('./live-mount');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -319,7 +320,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   let sheetContent;
   if (systemHtml) {
-    const island = systemLiveData ? '\n' + liveDataScript(systemLiveData) : '';
+    const liveClient = systemLiveData ? clientFor(publishConfig.system) : null;
+    const island = liveClient ? '\n' + liveDataScript(systemLiveData, liveClient.domId) : '';
     sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}${island}`;
   } else {
     sheetContent = `${sectionNav}\n${accordions}\n${processedContent.relationships}`;
@@ -360,6 +362,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const sealUrl = crestKey
       ? (((portraitImg({ portrait: crestKey }, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
       : '';
+    const cocLiveClient = systemLiveData ? clientFor(publishConfig.system) : null;
+    const cocIsland = cocLiveClient ? '\n' + liveDataScript(systemLiveData, cocLiveClient.domId) : '';
     const cocBody = buildCocBody({
       page, fm, publishConfig,
       displayTitle: page.displayTitle,
@@ -369,7 +373,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       portraitUrl, sealUrl, crWidget,
       equipmentContent, storyContent, journeyContent,
       leftoverSections: sheetSections,
-    });
+    }) + cocIsland;
     return baseShell({
       title: page.displayTitle,
       siteTitle: config.siteTitle,
@@ -385,6 +389,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
         ...clientScripts(page.outputPath),
         rootPath(page.outputPath) + 'js/change-request.js',
         rootPath(page.outputPath) + 'js/coc-sheet.js',
+        ...liveScriptHrefs(rootPath(page.outputPath), publishConfig.system),
       ],
     });
   }
@@ -428,7 +433,7 @@ ${tabScript()}`;
     scripts: [
       ...clientScripts(page.outputPath),
       rootPath(page.outputPath) + 'js/change-request.js',
-      ...(systemLiveData ? [rootPath(page.outputPath) + 'js/gurps-live.js'] : []),
+      ...liveScriptHrefs(rootPath(page.outputPath), publishConfig.system),
     ],
   });
 }

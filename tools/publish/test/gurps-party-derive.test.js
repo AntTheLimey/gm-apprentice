@@ -68,12 +68,12 @@ test('deriveLive honors 0 HP (not treated as absent by ||)', () => {
   assert.deepEqual(v.hp, { cur: 0, max: 13 });    // 0 honored; || would fall back to authored 13
 });
 
-test('deriveLive ignores stale state (buildVersion mismatch) → authored defaults', () => {
-  const state = { v: 'OLD', items: { Armor: true, Pack: true }, hp: { cur: 1, max: 13 }, fp: { cur: 1, max: 12 } };
+test('deriveLive uses present state regardless of buildVersion (KV = current)', () => {
+  const state = { v: 'OLD', items: { Armor: true, Pack: true }, hp: 1, fp: 1, updatedAt: 100 };
   const v = gl.deriveLive(pc(), state);
-  assert.equal(v.encLevel, 0);            // stale items ignored → defaults (Pack only)
-  assert.equal(v.reeling, false);          // stale hp/fp ignored → healthy
-  assert.deepEqual(v.move, { base: 6, enc: 6, cur: 6 });
+  assert.equal(v.encLevel, 2);             // Armor+Pack = 55 lb → Medium, applied
+  assert.equal(v.reeling, true);           // hp 1 honored → reeling
+  assert.deepEqual(v.hp, { cur: 1, max: 13 });
 });
 
 test('deriveLive on a PC with no vitals returns null vitals and null st', () => {

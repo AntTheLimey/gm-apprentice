@@ -46,6 +46,13 @@ describe('build integration — CoC PC', () => {
     assert.match(html, /class="era">Regency Cthulhu · in the year 1814</);
   });
   it('loads the CoC client script', () => assert.match(html, /js\/coc-sheet\.js/));
+  it('wires live tracking: emits the coc-live-data island and loads live-state + coc-live', () => {
+    assert.match(html, /id="coc-live-data"/);
+    const iLS = html.indexOf('js/live-state.js');
+    const iCL = html.indexOf('js/coc-live.js');
+    assert.ok(iLS > -1 && iCL > -1, 'both live scripts included');
+    assert.ok(iLS < iCL, 'live-state.js loads before coc-live.js');
+  });
   it('routes a non-consumed section (Connections) into the Record instead of dropping it', () => {
     assert.match(html, /<summary>Connections<\/summary>/);
     assert.ok(html.includes('a London bookseller who asks no questions'));
