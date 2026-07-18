@@ -99,3 +99,44 @@ def test_element_items(tmp_path):
     assert items[0]["payload"]["data"]["type"] == "Political"
     assert items[0]["externalRef"] == "canticle:Locations/British_Museum"
     assert items[0]["payload"]["altNames"] == ["BM"]
+
+
+def test_classifier_items_profession_bound_and_create():
+    mp = _map()
+    mp["classifiers"]["profession"] = {
+        "Priest": {"mobrpgId": "prof-real", "status": "proposed", "name": "Priest"},
+        "Housemaid": {"name": "Servant", "status": "proposed"}}
+    ent = {"kind": "npc", "occupation": "Priest, cultist", "location_type": None}
+    items, unmapped = suggest.classifier_items(ent, mp, "e1", "race-h", "e1")
+    edges = [i for i in items if i["operation"] == "AddRelation"]
+    # bound profession -> edge sourceRef is the REAL id, no Type create for it
+    assert any(e["payload"]["sourceRef"] == "prof-real"
+               and e["payload"]["targetRef"] == "suggestion:e1"
+               and e["payload"]["type"] == "Attribute" for e in edges)
+
+    ent2 = {"kind": "npc", "occupation": "Housemaid", "location_type": None}
+    items2, _ = suggest.classifier_items(ent2, mp, "e1", "race-h", "e1")
+    creates = [i for i in items2 if i["operation"] == "CreateElement"]
+    assert any(c["payload"]["name"] == "Servant"
+               and c["payload"]["data"]["type"] == "Profession" for c in creates)
+    # edge points from the new Type's suggestion ref to the person
+    tref = next(c["ref"] for c in creates if c["payload"]["name"] == "Servant")
+    assert any(e["payload"]["sourceRef"] == f"suggestion:{tref}"
+               and e["payload"]["targetRef"] == "suggestion:e1" for e in items2
+               if e["operation"] == "AddRelation")
+
+
+def test_classifier_items_political_type():
+    mp = _map()
+    ent = {"kind": "location", "location_type": "Museum"}
+    items, _ = suggest.classifier_items(ent, mp, "e1", "race-h", "e1")
+    creates = [i for i in items if i["operation"] == "CreateElement"]
+    assert any(c["payload"]["data"]["type"] == "PoliticalType"
+               and c["payload"]["name"] == "Museum" for c in creates)
+
+
+def test_classifier_items_landfeature_has_no_edge():
+    mp = _map()
+    ent = {"kind": "location", "location_type": "River"}
+    items, _ = suggest.classifier_items(ent, mp, "e1", "race-h", "e1")
+    assert items == []   # subtype is inline on the element; no Type edge

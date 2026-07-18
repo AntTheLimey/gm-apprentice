@@ -185,3 +185,66 @@ def element_items(entity, mp, ref, vault, namespace) -> list[dict]:
                     description=entity.get("description") or "<p></p>",
                     altNames=entity.get("aliases"),
                     external_ref=external_ref(entity["path"], vault, namespace))]
+
+
+def _attach_classifier(section, raw, type_kind, entity_ref, ref_id):
+    """Return (items, unmapped_report_or_None) for one classifier attached to entity_ref.
+    Emits a Type create (unless bound) + an Attribute edge (classifier source → entity target)."""
+    entry = _lookup(section, raw)
+    unmapped = None
+    if entry is None:
+        if not raw:
+            return [], None
+        name = map_cmd._first_token(raw).title()
+        mode, val = "create", name
+        unmapped = f"{type_kind}:{name}"
+    else:
+        mode, val = resolve_classifier(entry)
+    if mode == "drop" or not val:
+        return [], None
+    if mode == "bound":
+        return [_relation("Attribute", val, f"suggestion:{entity_ref}", [entity_ref])], unmapped
+    tref = ref_id
+    return ([_create(tref, val, TYPE_DATA[type_kind]()),
+             _relation("Attribute", f"suggestion:{tref}", f"suggestion:{entity_ref}",
+                       [tref, entity_ref])], unmapped)
+
+
+def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[dict], list[str]]:
+    cls = mp.get("classifiers", {})
+    items, reports = [], []
+    n = [0]
+
+    def seed():
+        r = f"{ref_seed}t{n[0]}"; n[0] += 1; return r
+
+    def add(section_name, raw, type_kind):
+        it, rep = _attach_classifier(cls.get(section_name, {}), raw, type_kind, entity_ref, seed())
+        items.extend(it)
+        if rep:
+            reports.append(rep)
+
+    kind = entity["kind"]
+    if kind in ("npc", "pc"):
+        add("profession", entity.get("occupation"), "Profession")
+        # Race/Sex added in Task 6
+    elif kind in ("faction", "organization"):
+        add("organizationType", entity.get("faction_type"), "OrganizationType")
+    elif kind == "creature":
+        add("creatureType", entity.get("creature_type"), "CreatureType")
+    elif kind == "location":
+        ek, _, route = element_spec(entity, mp)
+        if ek == "political":
+            name = (route or {}).get("politicalType") or map_cmd._first_token(
+                entity.get("location_type") or "").title()
+            if name:
+                pid = (route or {}).get("mobrpgId")
+                if pid:
+                    items.append(_relation("Attribute", pid, f"suggestion:{entity_ref}", [entity_ref]))
+                else:
+                    tref = seed()
+                    items.append(_create(tref, name, TYPE_DATA["PoliticalType"]()))
+                    items.append(_relation("Attribute", f"suggestion:{tref}",
+                                           f"suggestion:{entity_ref}", [tref, entity_ref]))
+        # landfeature: subtype is inline on the element; no edge
+    return items, reports
