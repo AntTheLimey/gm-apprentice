@@ -18,8 +18,13 @@ const SKILL_ALIASES = {
 const GENERIC_PARENTS = new Set(['art/craft', 'language', 'science', 'pilot', 'survival']);
 
 function normalizeName(name) {
-  const key = String(name || '').trim().toLowerCase();
-  return SKILL_ALIASES[key] || String(name || '').trim();
+  // Collapse an empty specialisation placeholder ("Art/Craft ()") — which the
+  // shipped template ships for every specialisable skill — onto its canonical
+  // parent, so a freshly-templated sheet doesn't render phantom "()" rows that
+  // also suppress the real parent.
+  const stripped = String(name || '').trim().replace(/\s*\(\s*\)\s*$/, '').trim();
+  const key = stripped.toLowerCase();
+  return SKILL_ALIASES[key] || stripped;
 }
 function parentOf(name) {
   const m = String(name).match(/^(.*?)\s*\(/);
@@ -36,11 +41,15 @@ function mergeSkills(pcSkills, variant) {
   const specParents = new Set();
   for (const pc of (pcSkills || [])) {
     const name = normalizeName(pc.name);
-    const reg = Number(pc.reg);
     const key = name.toLowerCase();
     const existing = byName.get(key);
     const base = existing ? existing.base : (Number(pc.base) || 0);
-    byName.set(key, { name: existing ? existing.name : name, base, reg: Number.isFinite(reg) ? reg : base });
+    // A blank/absent Regular means the skill was never developed — keep it at its
+    // base default. (Number(null) is 0, so guard the empty cell explicitly.)
+    const blank = pc.reg == null || (typeof pc.reg === 'string' && pc.reg.trim() === '');
+    const regNum = Number(pc.reg);
+    const reg = (blank || !Number.isFinite(regNum)) ? base : regNum;
+    byName.set(key, { name: existing ? existing.name : name, base, reg });
     const p = parentOf(name);
     if (p && GENERIC_PARENTS.has(p.toLowerCase())) specParents.add(p.toLowerCase());
   }

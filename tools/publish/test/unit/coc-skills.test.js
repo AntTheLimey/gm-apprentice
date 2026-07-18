@@ -49,4 +49,29 @@ describe('mergeSkills', () => {
     const out = mergeSkills([], 'regency');
     assert.equal(out.find(s => s.name === 'Accounting').developed, false);
   });
+
+  // The shipped template ships every canonical skill as a row with Base filled
+  // and Regular blank — a present-but-blank row must render at base, not 0.
+  it('renders a present-but-blank skill row at its base default, not 0', () => {
+    const out = mergeSkills([{ name: 'Appraise', base: 5, reg: null }], 'regency');
+    const appraise = out.find(s => s.name === 'Appraise');
+    assert.deepEqual(
+      { reg: appraise.reg, half: appraise.half, fifth: appraise.fifth, developed: appraise.developed },
+      { reg: 5, half: 2, fifth: 1, developed: false }
+    );
+  });
+
+  it('collapses an empty () specialisation placeholder onto its canonical parent', () => {
+    const out = mergeSkills([{ name: 'Art/Craft ()', base: 5, reg: null }], 'regency');
+    assert.ok(!out.some(s => /\(\s*\)/.test(s.name)), 'no phantom empty-paren row');
+    const parent = out.find(s => s.name === 'Art/Craft');
+    assert.ok(parent, 'canonical Art/Craft parent still present, not suppressed');
+    assert.equal(parent.reg, 5);
+  });
+
+  it('a real specialisation still suppresses its bare untouched parent', () => {
+    const out = mergeSkills([{ name: 'Art/Craft (Pianoforte)', base: 5, reg: 41 }], 'regency');
+    assert.ok(out.some(s => s.name === 'Art/Craft (Pianoforte)'));
+    assert.ok(!out.some(s => s.name === 'Art/Craft'), 'bare parent suppressed when a real specialisation exists');
+  });
 });
