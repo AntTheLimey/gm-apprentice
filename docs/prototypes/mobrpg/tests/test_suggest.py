@@ -169,3 +169,39 @@ def test_person_without_race_id_skips_race_and_sex():
     items, reports = suggest.classifier_items(ent, mp, "e1", None, "e1")
     assert items == []           # no race id → cannot scope Sex → emit neither
     assert any("race" in r.lower() for r in reports)
+
+
+def _crosswalk():
+    return {
+        "entities": [{"name": "Dr Erasmus Hume", "kind": "npc", "mobrpg_id": "hume-id"},
+                     {"name": "Nathaniel Rooke", "kind": "npc", "mobrpg_id": "rooke-id"}],
+        "relationships": [{"subject": "Imogen Bellamy", "target": "Nathaniel Rooke",
+                           "predicate": "friend_of", "mobrpg_event_id": "ev-existing"}]}
+
+
+def test_crosswalk_index():
+    idx, linked = suggest.crosswalk_index(_crosswalk())
+    assert idx[suggest._key("Dr_Erasmus_Hume")] == "hume-id"
+    assert (suggest._key("Imogen Bellamy"), "friend_of", suggest._key("Nathaniel Rooke")) in linked
+
+
+def test_relationship_items(tmp_path):
+    mp = _map()
+    mp["relationshipTypes"] = {"imprisoned_by": "Generic"}
+    idx, linked = suggest.crosswalk_index(_crosswalk())
+    ent = {"path": str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md"), "name": "Imogen Bellamy",
+           "relationships": [
+               {"target": "Dr_Erasmus_Hume", "predicate": "imprisoned_by", "desc": "held"},
+               {"target": "Nathaniel_Rooke", "predicate": "friend_of", "desc": ""},   # already linked -> skip
+               {"target": "Unknown_Person", "predicate": "knows", "desc": ""}]}       # unresolvable -> skip
+    items, skipped = suggest.relationship_items(ent, mp, "e1", idx, linked,
+                                                str(tmp_path), "canticle", "e1")
+    events = [i for i in items if i["operation"] == "CreateElement"]
+    assert len(events) == 1
+    ev = events[0]
+    assert ev["payload"]["data"] == {"type": "Event", "eventType": "Generic"}
+    assert ev["externalRef"].startswith("canticle:rel/")
+    links = [i for i in items if i["operation"] == "AddRelation"]
+    assert {l["payload"]["targetRef"] for l in links} == {"suggestion:e1", "hume-id"}
+    assert all(l["payload"]["type"] == "Link" for l in links)
+    assert any("Nathaniel" in s for s in skipped) and any("Unknown" in s for s in skipped)

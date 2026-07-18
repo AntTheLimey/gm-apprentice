@@ -267,3 +267,49 @@ def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[di
                                            f"suggestion:{entity_ref}", [tref, entity_ref]))
         # landfeature: subtype is inline on the element; no edge
     return items, reports
+
+
+def crosswalk_index(crosswalk) -> tuple[dict, set]:
+    idx = {}
+    for e in crosswalk.get("entities", []):
+        if e.get("mobrpg_id"):
+            idx[_key(e.get("name"))] = e["mobrpg_id"]
+    linked = set()
+    for r in crosswalk.get("relationships", []):
+        if r.get("mobrpg_event_id"):
+            linked.add((_key(r.get("subject")), r.get("predicate"), _key(r.get("target"))))
+    return idx, linked
+
+
+def _event_type(mp, predicate) -> str:
+    rt = mp.get("relationshipTypes", {})
+    return rt.get(predicate) or map_cmd.PREDICATE_EVENTTYPE.get(predicate, "Generic")
+
+
+def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
+                       vault, namespace, ref_seed) -> tuple[list[dict], list[str]]:
+    items, skipped = [], []
+    subj_key = _key(entity["name"])
+    n = 0
+    for rel in entity.get("relationships", []):
+        pred, tgt_raw = rel["predicate"], rel["target"]
+        tgt_key = _key(tgt_raw)
+        if (subj_key, pred, tgt_key) in linked_triples:
+            skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (already linked)")
+            continue
+        tgt_id = ent_id_by_key.get(tgt_key)
+        if not tgt_id:
+            skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (target not in crosswalk)")
+            continue
+        et = _event_type(mp, pred)
+        tgt_disp = tgt_raw.replace("_", " ")
+        eref = f"{ref_seed}v{n}"; n += 1
+        desc = f"<p>{rel.get('desc') or pred}</p>"
+        ext = f"{namespace}:rel/" + external_ref(entity["path"], vault, namespace).split(":", 1)[1] \
+              + f"/{pred}/{tgt_key}"
+        items.append(_create(eref, f"{entity['name']}, {pred} {tgt_disp}",
+                             {"type": "Event", "eventType": et},
+                             description=desc, external_ref=ext))
+        items.append(_relation("Link", f"suggestion:{eref}", f"suggestion:{entity_ref}", [eref, entity_ref]))
+        items.append(_relation("Link", f"suggestion:{eref}", tgt_id, [eref]))
+    return items, skipped
