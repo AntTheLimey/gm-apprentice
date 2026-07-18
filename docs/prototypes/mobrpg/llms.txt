@@ -32,8 +32,8 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
-push, suggest, submit-batch, types, links, review. write/merge/link-orphans
-only touch local vault files, not the API.
+push, suggest, submit-batch, update, types, links, review. write/merge/
+link-orphans only touch local vault files, not the API.
 
 ## Commands
 
@@ -53,6 +53,11 @@ only touch local vault files, not the API.
                                   List the elements of one kind (names + ids),
                                   e.g. political/type, landfeature, person. See
                                   what exists before pushing, to avoid dup Types.
+    mobrpg update <world> <suggestionId> <update.json> [--execute]
+                                  Replace a Pending suggestion's payload (PUT,
+                                  whole-payload). Edits inline fields only (name,
+                                  description, altNames, data e.g. Person.languages)
+                                  — cannot add classifier edges; use submit-batch.
     mobrpg review <world> <suggestionId> <accept|dismiss|reinstate>
                        [--note TEXT] [--execute]
                                   GM review action on one suggestion (needs
