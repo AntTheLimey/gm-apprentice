@@ -83,3 +83,26 @@ describe('parseCoC', () => {
     assert.equal(model.variant, 'regency');
   });
 });
+
+describe('parseCoC backstory', () => {
+  const background = {
+    title: 'Background', id: 'background',
+    html: `<p><strong>Personal Description:</strong> Plainly dressed and easy to overlook.</p>
+      <p><strong>Ideology &amp; Beliefs:</strong> Reads the arrangement she was not meant to read.</p>`,
+  };
+  const model = parseCoC({}, [background], 'regency-cthulhu');
+
+  it('extracts labelled Background fields into the backstory strip', () => {
+    const desc = model.backstory.find(b => b.label === 'Personal Description');
+    assert.ok(desc, 'Personal Description present');
+    assert.equal(desc.value, 'Plainly dressed and easy to overlook.');
+  });
+  it('decodes HTML entities in labels so they are not double-encoded', () => {
+    const ideology = model.backstory.find(b => b.label === 'Ideology & Beliefs');
+    assert.ok(ideology, 'label decoded to a plain ampersand');
+  });
+  it('returns an empty strip when Background has no labelled fields', () => {
+    const plain = parseCoC({}, [{ title: 'Background', id: 'background', html: '<p>Just prose.</p>' }], 'regency-cthulhu');
+    assert.deepEqual(plain.backstory, []);
+  });
+});

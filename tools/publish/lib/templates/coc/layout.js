@@ -176,12 +176,16 @@ function buildCombatBox(combat) {
     `</div>`;
 }
 
-function buildPortraitRow() {
-  // Backstory fields (Personal Description, Ideology…) are not in the model —
-  // they live in the Background prose, rendered by buildRecord. The portrait
-  // <img> is a slot: pc.js (Task 8) injects the resolved src.
+function buildPortraitRow(backstory) {
+  // Backstory fields (Personal Description, Ideology…) are pulled from the
+  // Background prose by parseBackstory; the full prose still renders in the
+  // Record tab. The portrait <img> is a slot: pc.js injects the resolved src
+  // (and removes the slot when the PC has no portrait).
+  const bs = (backstory || []).map(b =>
+    `<div class="bs"><span class="lab">${txt(b.label)}</span><span class="val">${txt(b.value)}</span></div>`
+  ).join('');
   return `<div class="portrait-row">` +
-    `<div class="backstory"></div>` +
+    `<div class="backstory">${bs}</div>` +
     `<img class="portrait" data-portrait alt="">` +
     `</div>`;
 }
@@ -223,7 +227,7 @@ function buildSheet(model) {
     buildIdentity(m.identity) +
     `<div class="grid-main">` +
       `<div>${buildChars(m.chars)}${buildCombatBox(m.combat)}</div>` +
-      `<div>${buildPortraitRow()}${buildSkills(m.skills)}${buildWeapons(m.weapons)}</div>` +
+      `<div>${buildPortraitRow(m.backstory)}${buildSkills(m.skills)}${buildWeapons(m.weapons)}</div>` +
     `</div>` +
     `</div>`;
 }

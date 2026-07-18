@@ -79,6 +79,10 @@ asOfSession: Chapter 2, Session 3
 | Persuade | 10 | 50 | 25 | 10 |
 | Psychology | 10 | 45 | 22 | 9 |
 | Library Use | 20 | 65 | 32 | 13 |
+| Spot Hidden | 25 | 58 | 29 | 11 |
+| Stealth | 20 | 44 | 22 | 8 |
+| Art/Craft (Pianoforte) | 5 | 41 | 20 | 8 |
+| Firearms (Pistol) | 20 | 35 | 17 | 7 |
 
 ---
 
@@ -88,20 +92,36 @@ asOfSession: Chapter 2, Session 3
 |--------|---------|--------|---------|-------|------|------|
 | Brawl | 28 | 1D3+DB | 1 | — | — | — |
 | Hatpin | 32 | 1D2 | 1 | — | — | — |
+| Pocket Pistol | 35 | 1D6 | 1 | 5 yds | 1 | 100 |
 
 ---
 
 ## Background
 
-Jane Ashford grew up in a modest vicarage outside Ashcombe, the second
-daughter of a curate whose library was better stocked than his purse. She
-learned to read Latin before she learned to dance, and it was the former
-skill, not the latter, that landed her a post as companion to Lady Vane
-of Ashcombe Hall. The old woman was reputed eccentric even before her
-health began to fail; Jane has spent the better part of two years reading
-aloud from books she was never meant to understand, and asking fewer
-questions than she should have about the locked room at the top of the
-east stair.
+**Personal Description:** A composed, watchful young woman of four-and-twenty,
+plainly dressed and easy to overlook — which suits her.
+
+**Traits:** Patient, literate, and slow to alarm; keeps her fear behind a
+still face and turns over in private the questions she does not ask aloud.
+
+**Ideology & Beliefs:** Suspects the world is arranged by people who never
+meant her to read the arrangement, and reads it anyway.
+
+**Significant People:** Lady Vane of Ashcombe Hall, her failing employer;
+the Reverend Ashford, her late father, whose Latin she still hears.
+
+**Meaningful Locations:** The locked room at the top of the east stair at
+Ashcombe Hall; the vicarage library where she was raised.
+
+**Treasured Possessions:** Her father's annotated Book of Common Prayer, and
+a pressed sprig of rosemary from her mother's grave.
+
+---
+
+## Injuries & Scars
+
+A thin white line across the left palm, taken gripping something in the dark
+at Ashcombe that she has not let herself name. It aches before rain.
 
 ---
 
@@ -113,3 +133,49 @@ one faces the bed. She attributes this to a childhood scare, but it has
 sharpened considerably since the events at Ashcombe Hall. She has also
 taken up the private, compulsive habit of counting the panes in every
 window she passes; she is not yet aware how often she does it aloud.
+
+---
+
+## Encounters with Strange Entities
+
+**The thing on the east stair** (Chapter 1). Not seen so much as felt — a
+wrongness in the geometry of the landing that the candle would not
+illuminate, and a sound like wet cloth drawn slowly over stone.
+
+---
+
+## Arcane Tomes & Spells
+
+None recorded. Jane has read three pages of a book she should not have
+opened, and has been careful to forget them.
+
+---
+
+## Fellow Investigators
+
+Dr Aloysius Penn (physician) · Miss Harriet Bly (governess, Ashcombe) ·
+Sergeant Coombe (parish constable).
+
+---
+
+## Equipment
+
+- A worn leather writing-case with letters from home
+- A brass hatpin, kept sharp
+- Lady Vane's spare reading-spectacles
+- A pocket pistol and a twist of powder
+
+| Attribute | Value |
+|-----------|-------|
+| Spending Level | £1 10s |
+| Cash | £4 8s |
+| Assets | A modest wardrobe; £60 owed her from the Ashcombe living |
+
+---
+
+## Current Status
+
+*As of Chapter 2, Session 3.* Jane remains in service at Ashcombe Hall,
+though Lady Vane's lucid hours grow fewer each week and the household has
+begun to keep to the west wing after dark. She has not told anyone what she
+saw on the stair, and is not certain the telling would be believed.

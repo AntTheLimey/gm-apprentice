@@ -2726,6 +2726,12 @@ tr:nth-child(even) {
   --didone:"Didot","Bodoni 72","Bodoni MT","Playfair Display","Hoefler Text",Didot,Georgia,serif;
   --body:"Baskerville","Libre Baskerville","Hoefler Text",Georgia,"Times New Roman",serif;
 }
+/* The CoC sheet is a full 1060px dossier, not body text — let it break out of
+   the site's narrow reading column (main.content max-width:52rem) on CoC pages
+   only (scoped via :has()). Guard against horizontal overflow at phone widths. */
+.content:has(.coc-sheet-root){ max-width:none; overflow-x:hidden; }
+/* No portrait → the backstory strip spans the whole row instead of leaving a gap. */
+.coc-sheet-root .portrait-row:not(:has(img.portrait)){ grid-template-columns:1fr; }
 .coc-sheet-root{ max-width:1060px; margin:0 auto; position:relative; color:var(--ink);
   font-family:var(--body); line-height:1.36;
   background:

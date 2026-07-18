@@ -113,6 +113,33 @@ function parseWeapons(sections) {
   return out;
 }
 
+// The `## Background` section carries `**Label:** value` lines (Personal
+// Description, Ideology & Beliefs, …). Pull those labelled pairs for the
+// sheet-face backstory strip; the full prose still renders in the Record tab.
+// The label/value come from already-rendered HTML, so they carry entity
+// encoding (e.g. `Ideology &amp; Beliefs`). Decode to plain text here; the
+// layout re-escapes on output, so leaving entities in would double-encode.
+function decodeEntities(s) {
+  return String(s)
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&amp;/g, '&');
+}
+
+function parseBackstory(sections) {
+  const sec = findSectionByTitle(sections || [], 'background');
+  if (!sec || !sec.html) return [];
+  const out = [];
+  const re = /<strong>([^<]+?)<\/strong>\s*:?\s*([\s\S]*?)(?=<strong>|<\/p>|<p>|$)/gi;
+  let m;
+  while ((m = re.exec(sec.html)) !== null) {
+    const label = decodeEntities(m[1].replace(/[:.]\s*$/, '')).trim();
+    const value = decodeEntities(m[2].replace(/<[^>]+>/g, '')).trim();
+    if (label && value) out.push({ label, value });
+  }
+  return out;
+}
+
 function parseCoC(frontmatter, sections, system) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -134,6 +161,7 @@ function parseCoC(frontmatter, sections, system) {
     reputation: parseReputation(statHtml),
     combat: parseCombat(statHtml),
     conditions: parseConditions(statHtml),
+    backstory: parseBackstory(secs),
     skills: mergeSkills(rawSkills, variant),
     weapons: parseWeapons(secs),
   };
