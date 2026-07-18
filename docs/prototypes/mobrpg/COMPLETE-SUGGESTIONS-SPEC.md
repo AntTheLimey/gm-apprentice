@@ -42,6 +42,20 @@ The tool must carry (or discover at runtime) the mobRPG data contract. All of th
 
 `notes` is base `@NotNull` but constructor-initialized to `{}` — omit it, never send `"notes":null`.
 
+**Classifier delivery is not uniform — three distinct mechanisms:**
+- **Edge classifiers** (Race, Sex, Profession, OrganizationType, CreatureType, PoliticalType): separate
+  element + `Attribute` edge (classifier SOURCE → subject TARGET). Sex is race-scoped (§1c).
+- **Inline-enum classifier** (LandFeature): the type is an inline enum on the element
+  (`landFeatureTypes`), no separate element/edge.
+- **Inline-by-UUID reference** (Language): `PersonData.languages` is a `Set<PersonLanguage>` where each
+  entry is `{languageId (@NotNull, exactly-36-char UUID of a real Language element), type
+  (Spoken|Literate|Both), mastery (None|Semi|Proficient|Native)}`. So a language requires a
+  **pre-existing `Language` element** — you **cannot create-and-reference a Language in the same batch**
+  (the inline `languageId` must be a real UUID, not a `suggestion:` ref). ⇒ **two-phase**: discover/
+  create Language elements first (accept them), THEN reference their ids inline. Same pattern applies to
+  any inline-by-UUID field. (This is why a "complete" Person still shows Language blank if the batch
+  didn't pre-create the Language element.) `Item.attributes.itemType` is a fourth shape (inline discriminated object).
+
 ### 1b. Classifier model (Types are their own elements + an Attribute edge)
 A classifier Type is a separate element joined to its subject by an **`Attribute`** relation where the
 **classifier is the SOURCE and the subject is the TARGET**. Name-identity classifiers (dedupe by
