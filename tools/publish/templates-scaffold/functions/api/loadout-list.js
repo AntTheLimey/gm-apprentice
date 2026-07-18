@@ -12,6 +12,6 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const campaign = new URL(request.url).searchParams.get('campaign');
   if (!core.isValidCampaign(campaign)) return json({}, 400);
-  const states = await core.listStates(env.INBOX, campaign);
+  const states = await core.getStates(env.INBOX, campaign);
   return json({ states });
 }
