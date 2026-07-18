@@ -13,6 +13,7 @@ import re
 import sys
 
 from mobrpg import client
+from mobrpg import md as _md
 
 # mobRPG eventType (7-enum) → gm-apprentice relationship predicate.
 EVENTTYPE_TO_PREDICATE = {
@@ -48,25 +49,9 @@ def _get_one(world: str, kind: str, eid: str, token: str) -> dict:
 
 
 def html_to_md(html: str | None) -> str:
-    """Lightweight HTML→markdown for mobRPG's WYSIWYG output."""
-    if not html:
-        return ""
-    s = html
-    s = re.sub(r"<\s*br\s*/?\s*>", "\n", s, flags=re.I)
-    s = re.sub(r"</p\s*>", "\n\n", s, flags=re.I)
-    s = re.sub(r"<\s*li\s*>", "- ", s, flags=re.I)
-    s = re.sub(r"</li\s*>", "\n", s, flags=re.I)
-    s = re.sub(r"<\s*h2[^>]*>", "## ", s, flags=re.I)
-    s = re.sub(r"<\s*h3[^>]*>", "### ", s, flags=re.I)
-    s = re.sub(r"</h[23]\s*>", "\n\n", s, flags=re.I)
-    s = re.sub(r"<\s*(strong|b)\s*>(.*?)</\s*(strong|b)\s*>", r"**\2**", s, flags=re.I | re.S)
-    s = re.sub(r"<\s*(em|i)\s*>(.*?)</\s*(em|i)\s*>", r"*\2*", s, flags=re.I | re.S)
-    s = re.sub(r"<[^>]+>", "", s)
-    s = (s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-           .replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " "))
-    s = re.sub(r"[ \t]+\n", "\n", s)
-    s = re.sub(r"\n{3,}", "\n\n", s)
-    return s.strip()
+    """HTML→markdown for mobRPG's WYSIWYG output. Delegates to the shared GFM
+    converter (tables/lists/links) so pull is the inverse of the push conversion."""
+    return _md.html_to_md(html)
 
 
 def role_from_event_name(name: str, subject: str) -> str | None:

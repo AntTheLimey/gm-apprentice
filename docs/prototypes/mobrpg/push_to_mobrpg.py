@@ -36,6 +36,10 @@ from __future__ import annotations
 import argparse, glob, json, os, re, sys
 import smoketest as api
 
+# Use the shared GFM converter (tables/lists/links) rather than the old lossy inline one.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mobrpg import md as _md
+
 VAULT = os.path.expanduser("~/Documents/CTHULHU/Canticle")
 KIND_EP = {"npc": "person", "pc": "person", "location": "political",
            "faction": "organization", "organization": "organization",
@@ -73,19 +77,8 @@ def md_to_html(body: str) -> str:
     body = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", lambda m: m.group(2).replace("_", " "), body)
     body = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).replace("_", " "), body)
     body = re.sub(r"^#\s+.*$", "", body, flags=re.M)           # drop leading H1 title (== name)
-    out = []
-    for blk in re.split(r"\n\s*\n", body.strip()):
-        blk = blk.strip()
-        if not blk:
-            continue
-        m = re.match(r"^(#{2,4})\s+(.*)$", blk)
-        if m:
-            lvl = len(m.group(1)); out.append(f"<h{lvl}>{m.group(2).strip()}</h{lvl}>"); continue
-        blk = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", blk)
-        blk = re.sub(r"(?<!\*)\*(?!\*)(.+?)\*(?!\*)", r"<em>\1</em>", blk)
-        blk = blk.replace("\n", "<br>")                        # single newlines -> <br>
-        out.append(f"<p>{blk}</p>")
-    return "".join(out) or "<p></p>"
+    # Delegate the actual markdown->HTML to the shared GFM converter (tables/lists/links included).
+    return _md.md_to_html(body.strip()) or "<p></p>"
 
 
 def display_name(path: str, info: dict) -> str:
