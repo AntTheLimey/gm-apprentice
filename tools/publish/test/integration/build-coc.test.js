@@ -51,7 +51,9 @@ describe('build integration — CoC PC', () => {
     assert.ok(html.includes('a London bookseller who asks no questions'));
   });
   it('does not duplicate the Skills section as a loose accordion', () => {
-    // "Skills" should appear in the structured sheet, not as an accordion header button
-    assert.ok(!html.includes('class="accordion-header">Skills'));
+    // Skills is consumed into the structured sheet — it must not also appear as a
+    // Record/leftover accordion (the CoC path uses <details class="acc"><summary>).
+    assert.ok(!/<summary>\s*Skills\s*<\/summary>/i.test(html), 'Skills not a loose accordion');
+    assert.ok(html.includes('Investigator Skills'), 'Skills render in the structured sheet');
   });
 });

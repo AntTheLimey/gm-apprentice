@@ -431,6 +431,12 @@ function build(options = {}) {
 
   // Render each page
   const usedImages = new Set();
+  // The CoC sheet masthead renders a campaign-level crest (publishConfig.sheet_crest);
+  // register it so the image-manifest pruning below doesn't drop it from the output.
+  if (publishConfig.sheet_crest) {
+    const crestBase = String(publishConfig.sheet_crest).split('/').pop();
+    if (crestBase && imageMap[crestBase]) usedImages.add(crestBase);
+  }
   let errorCount = 0;
   const partyEntries = [];
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');

@@ -68,11 +68,10 @@ function buildCocBody(opts) {
     sheet = sheet.replace(/<img class="portrait" data-portrait[^>]*>/, '');
   }
 
-  // Content-loss guard: any non-consumed prose section the generic path would have
-  // shown (minus relationships/appearances, handled by Journey) is appended to the
-  // record so nothing is silently dropped.
+  // Content-loss guard: every non-consumed prose section (including any authored
+  // Relationships/Appearances — empty auto-stubs are already dropped upstream by
+  // the sheetSections filter) is appended to the record so nothing is silently lost.
   const leftover = (leftoverSections || [])
-    .filter(s => !['relationships', 'appearances'].includes(s.title.toLowerCase()))
     .map(s => `<details class="acc"><summary>${escapeHtml(s.title)}</summary><div class="acc-body">${s.html}</div></details>`)
     .join('');
   const recordBody = (recordHtml || '') + leftover;
