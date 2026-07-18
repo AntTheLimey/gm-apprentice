@@ -56,12 +56,21 @@ test('flush warns for a KV slug with no matching vault sheet', async () => {
   assert.equal(r.writes['/vault/NPCs/Gatekeeper.md'], undefined); // NPCs untouched
 });
 
-test('flush reports a possible failed KV read when the roster is empty', async () => {
+test('flush reports nothing to flush when the roster is empty', async () => {
   const r = run({ adapter: fakeAdapter({ 'roster:test-campaign': '[]' }) });
   const code = await r.promise;
   assert.equal(code, 0);
-  assert.equal(r.writes['/vault/PCs/Jane_Ashford.md'], undefined);
-  assert.ok(r.lines.some((l) => /could not be read/.test(l)));
+  assert.equal(Object.keys(r.writes).length, 0);
+  assert.ok(r.lines.some((l) => /no players have saved/.test(l)));
+});
+
+test('flush returns non-zero and writes nothing when the KV read fails', async () => {
+  const boom = { async get() { throw new Error('Authentication error [code: 10000]'); } };
+  const r = run({ adapter: boom });
+  const code = await r.promise;
+  assert.equal(code, 1);
+  assert.equal(Object.keys(r.writes).length, 0);
+  assert.ok(r.lines.some((l) => /Could not read live state/.test(l)));
 });
 
 test('flush does not write when the sheet already holds the values', async () => {

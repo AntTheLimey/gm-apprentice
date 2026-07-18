@@ -24,8 +24,16 @@ function makeAdapter({ runWrangler, namespaceId }) {
   return {
     async get(key) {
       const res = runWrangler(['kv', 'key', 'get', key, ...ns]);
-      if (res.code !== 0) return null;
-      return res.stdout.replace(/\n$/, '');
+      if (res.code === 0) return res.stdout.replace(/\n$/, '');
+      // A non-zero exit is EITHER a genuinely-absent key (benign) OR a real read
+      // failure — auth expired, wrong namespace, no network, wrangler missing.
+      // Wrangler reports an absent key with a "not found" message; treat that as
+      // null, mirroring a real KV binding where a missing key returns null.
+      // Anything else must throw rather than masquerade as an empty result —
+      // otherwise a broken read is indistinguishable from an empty campaign to
+      // every caller (getStates, readPending, ...).
+      if (/not found|not_found|no value|does not exist/i.test(res.stderr || '')) return null;
+      throw new Error('wrangler kv get failed for "' + key + '": ' + ((res.stderr || '').trim() || 'exit ' + res.code));
     },
     async put(key, value, opts) {
       const extra = opts && opts.expirationTtl ? ['--ttl', String(opts.expirationTtl)] : [];

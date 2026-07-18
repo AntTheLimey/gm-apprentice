@@ -48,11 +48,18 @@ async function runFlush(deps) {
 
   const adapter = deps.adapter || defaultAdapter(configDir);
   const core = await import('../templates-scaffold/functions/api/loadout-core.mjs');
-  const states = await core.getStates(adapter, campaignId);
+  let states;
+  try {
+    states = await core.getStates(adapter, campaignId);
+  } catch (e) {
+    out('✖ Could not read live state from KV: ' + e.message);
+    out('  Nothing was written. Check `npx wrangler@4 whoami` and the INBOX namespace id in wrangler.toml, then re-run flush.');
+    return 1;
+  }
   const latest = latestStateByPcSlug(states);
 
   if (!Object.keys(latest).length) {
-    out('No live state read for campaign ' + campaignId + '. If players saved sheet state this session, this can also mean KV could not be read — check `npx wrangler@4 whoami` and the INBOX namespace id in wrangler.toml.');
+    out('No live state to flush for campaign ' + campaignId + ' — no players have saved sheet state yet.');
     return 0;
   }
 

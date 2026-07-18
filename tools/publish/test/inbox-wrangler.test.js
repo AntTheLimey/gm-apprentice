@@ -32,6 +32,12 @@ test('adapter.get returns stdout on success, null on missing', async () => {
   assert.deepEqual(calls[0], ['kv', 'key', 'get', 'req:a', '--namespace-id', 'NS', '--remote']);
 });
 
+test('adapter.get throws on a real read failure (not a missing key)', async () => {
+  const runWrangler = () => ({ code: 1, stdout: '', stderr: 'Authentication error [code: 10000]' });
+  const kv = makeAdapter({ runWrangler, namespaceId: 'NS' });
+  await assert.rejects(() => kv.get('req:a'), /wrangler kv get failed/);
+});
+
 test('adapter.put forwards value and optional TTL', async () => {
   const calls = [];
   const runWrangler = (args) => { calls.push(args); return { code: 0, stdout: '', stderr: '' }; };
