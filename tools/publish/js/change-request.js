@@ -95,7 +95,6 @@
           '<button type="button" class="cr-send">Send</button>' +
           '<span class="cr-msg" role="status"></span>' +
         '</div>' +
-        '<div class="cr-logpanel" hidden></div>' +
       '</div>';
 
     var toggle = root.querySelector('.cr-toggle');
@@ -109,7 +108,24 @@
     function getLog() { return readJSON(K_LOG) || []; }
     function setLog(l) { writeJSON(K_LOG, l); }
     var logBtn = root.querySelector('.cr-log-btn');
-    var logPanel = root.querySelector('.cr-logpanel');
+
+    // History renders in a modal appended to <body>. The modal behaviour is
+    // system-agnostic; the parchment skin is gated to CoC via the `.coc` class.
+    var backdrop = document.createElement('div');
+    backdrop.className = 'cr-modal-backdrop';
+    if (document.querySelector('.coc-sheet-root')) backdrop.classList.add('coc');
+    backdrop.hidden = true;
+    backdrop.innerHTML =
+      '<div class="cr-modal" role="dialog" aria-modal="true" aria-label="Correspondence history">' +
+        '<div class="cr-modal-head">' +
+          '<span class="cr-modal-title">Correspondence — this device</span>' +
+          '<button type="button" class="cr-modal-close" aria-label="Close">✕</button>' +
+        '</div>' +
+        '<div class="cr-modal-body"></div>' +
+      '</div>';
+    document.body.appendChild(backdrop);
+    var logPanel = backdrop.querySelector('.cr-modal-body');
+    var closeBtn = backdrop.querySelector('.cr-modal-close');
 
     var KIND_CLASSES = { applied: 1, rejected: 1, advice: 1 };
     function renderLog() {
@@ -129,11 +145,24 @@
       });
     }
     renderLog();
-    logBtn.addEventListener('click', function () {
-      var open = logPanel.hidden;
-      logPanel.hidden = !open;
-      logBtn.setAttribute('aria-expanded', String(open));
-      if (open) renderLog();
+    function openModal() {
+      backdrop.hidden = false;
+      document.body.style.overflow = 'hidden';
+      logBtn.setAttribute('aria-expanded', 'true');
+      renderLog();
+      closeBtn.focus();               // move focus into the dialog for keyboard/SR users
+    }
+    function closeModal() {
+      backdrop.hidden = true;
+      document.body.style.overflow = '';
+      logBtn.setAttribute('aria-expanded', 'false');
+      logBtn.focus();                 // restore focus to the trigger
+    }
+    logBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeModal(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !backdrop.hidden) closeModal();
     });
 
     // Persisted "your change is live" flag from before a reload.

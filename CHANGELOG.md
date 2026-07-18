@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.27] — 2026-07-18
+
+Publish tool 1.11.6.
+
+### Added
+
+- CoC 7e investigator sheet: the publish tool now renders Call of Cthulhu PCs as
+  an authentic Regency-parchment dossier (the CoC analogue of the GURPS sheet).
+  It reads the PC's body tables into a structured model and shows the full
+  alphabetical skill list (Regular / ½ / ⅕, always complete, untouched skills at
+  their base default), a live status bar (HP/MP pip tracks, Sanity bar with
+  starting marker, Luck/Reputation steppers, and the five condition chips), folio
+  tabs (Character Sheet / Investigator's Record / Equipment & Wealth / Story /
+  Journey), a backstory strip drawn from the Background section, a portrait
+  cameo, and a configurable Order crest. The masthead era line shows the
+  campaign's `setting_year`. Interactive controls (pips, steppers, chips,
+  experience boxes) respond locally this release; persistence and recompute
+  follow in a later release.
+
+### Changed
+
+- Change-request widget (all PC sheets): the correspondence history now opens in
+  a modal dialog (backdrop / Esc / click-away to close) instead of an inline
+  panel, and the compose box stays collapsed until asked for. On CoC pages the
+  modal picks up the parchment styling; other systems get a neutral modal.
+
+---
+
 ## [1.8.26] — 2026-07-17
 
 Publish tool 1.11.5.

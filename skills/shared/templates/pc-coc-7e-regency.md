@@ -97,21 +97,24 @@ createdSession: ""
 | Skill | Base | Regular | Half | Fifth |
 |-------|------|---------|------|-------|
 | Accounting | 05 | | | |
+| Animal Handling | 05 | | | |
 | Anthropology | 01 | | | |
 | Appraise | 05 | | | |
 | Archaeology | 01 | | | |
 | Art/Craft () | 05 | | | |
+| Artillery | 01 | | | |
 | Astronomy | 01 | | | |
 | Charm | 15 | | | |
 | Climb | 20 | | | |
 | Credit Rating | 00 | | | |
 | Cthulhu Mythos | 00 | | | |
 | Dancing | 05 | | | |
+| Demolitions | 01 | | | |
 | Disguise | 05 | | | |
 | Dodge | — | | | |
 | Drive Carriage | 20 | | | |
 | Etiquette | 15 | | | |
-| Fashion | 05 | | | |
+| Fashion | 10 | | | |
 | Fast Talk | 05 | | | |
 | Fighting (Brawl) | 25 | | | |
 | Firearms (Pistol) | 20 | | | |
@@ -122,27 +125,26 @@ createdSession: ""
 | Intimidate | 15 | | | |
 | Jump | 20 | | | |
 | Language (Own) | EDU | | | |
-| Language () | 01 | | | |
+| Language (Other) | 01 | | | |
 | Law | 05 | | | |
 | Library Use | 20 | | | |
 | Listen | 20 | | | |
 | Locksmith | 01 | | | |
-| Mech. Repair | 10 | | | |
+| Lore | 01 | | | |
+| Mechanical Repair | 10 | | | |
 | Medicine | 01 | | | |
+| Mesmerism | 01 | | | |
 | Natural Philosophy | 01 | | | |
 | Natural World | 10 | | | |
 | Navigate | 10 | | | |
 | Occult | 05 | | | |
-| Operate Hvy. Machine | 01 | | | |
 | Persuade | 10 | | | |
-| Photography | 05 | | | |
-| Pilot () | 01 | | | |
-| Psychoanalysis | 01 | | | |
+| Pilot (Boat) | 01 | | | |
 | Psychology | 10 | | | |
+| Read Lips | 01 | | | |
 | Reassure | 10 | | | |
 | Religion | 05 | | | |
 | Ride | 05 | | | |
-| Science () | 01 | | | |
 | Sleight of Hand | 10 | | | |
 | Spot Hidden | 25 | | | |
 | Stealth | 20 | | | |

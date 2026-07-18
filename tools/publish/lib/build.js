@@ -431,6 +431,12 @@ function build(options = {}) {
 
   // Render each page
   const usedImages = new Set();
+  // The CoC sheet masthead renders a campaign-level crest (publishConfig.sheet_crest);
+  // register it so the image-manifest pruning below doesn't drop it from the output.
+  if (publishConfig.sheet_crest) {
+    const crestBase = String(publishConfig.sheet_crest).split('/').pop();
+    if (crestBase && imageMap[crestBase]) usedImages.add(crestBase);
+  }
   let errorCount = 0;
   const partyEntries = [];
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
@@ -483,6 +489,7 @@ function build(options = {}) {
           const system = publishConfig.system;
           const systemRenderer = getRenderer(system);
           const meta = {
+            system,
             campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
             pcSlug: require('./scanner').slugify(page.title),
             buildVersion: require('crypto').createHash('sha1')
@@ -509,6 +516,8 @@ function build(options = {}) {
             systemEquipmentHtml: systemOut.equipmentHtml || null,
             systemLiveData: systemOut.liveData || null,
             systemStatusPanelHtml: systemOut.statusPanelHtml || null,
+            systemRecordHtml: systemOut.recordHtml || null,
+            systemStatusBarHtml: systemOut.statusBarHtml || null,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;

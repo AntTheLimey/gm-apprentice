@@ -111,6 +111,63 @@ Original-content files (house rules, campaign notes) need no attribution.
 
 ---
 
+## 8. CoC 7e investigator sheet — structure the publish tool reads
+
+`tools/publish/lib/templates/coc/parse.js` renders CoC PC pages by
+**parsing the markdown body tables** of the PC file. The shipped templates
+(`skills/shared/templates/pc-coc-7e.md` and `pc-coc-7e-regency.md`) must
+keep this structure exactly — the parser matches on section titles,
+subsection titles, and the first column of each table. If you rename a
+section or column, **you must update
+`tools/publish/lib/templates/coc/parse.js`** in the same change, or the
+field silently stops rendering.
+
+Required body structure:
+
+| Section | Subsection | Table columns / rows the parser reads |
+|---------|-----------|----------------------------------------|
+| `## Stat Sheet` | `### Characteristics` | `Characteristic \| Regular \| Half \| Fifth` (rows STR/CON/DEX/INT/SIZ/POW/APP/EDU) |
+| | `### Derived` | `Attribute \| Max \| Current` (rows HP, MP, `Luck \| — \|`, Sanity) |
+| | `### Reputation` (Regency only) | `Attribute \| Value` (rows `Starting Reputation`, `Current Reputation`, `Censure`) |
+| | `### Combat` | `Attribute \| Value` (rows Move, Build, Damage Bonus, `Dodge (Regular)`, `Dodge (Half)`, `Dodge (Fifth)`) |
+| | `### Status` | 5 checkbox items (Temporary Insanity, Indefinite Insanity, Major Wound, Unconscious, Dying) |
+| `## Skills` | — | `Skill \| Base \| Regular \| Half \| Fifth` |
+| `## Combat` | — | weapons: `Weapon \| Skill % \| Damage \| Attacks \| Range \| Ammo \| Malf` |
+| `## Equipment` | — | Wealth: `Attribute \| Value` (rows `Spending Level`, `Cash`, `Assets`); plus the prose Record sections |
+
+Notes:
+
+- **Two sections are both titled Combat.** `### Combat` *inside* `## Stat
+  Sheet` holds Move/Build/DB/Dodge; the top-level `## Combat` holds the
+  weapons table. The parser scopes the stat one to the Stat Sheet section,
+  so keep both titles as-is.
+- **Skill names must match the builder's canonical names.** The merger
+  (`coc/skills.js`) starts from a canonical skill list and appends any
+  extra skills it finds on the sheet; it recomputes Half/Fifth from
+  `Regular` and derives a "developed" flag from `Regular > Base`, so the
+  `Base` column is advisory for canonical skills. Use full names
+  (`Mechanical Repair`, `Electrical Repair`, `Operate Heavy Machinery`,
+  `Language (Other)`) rather than abbreviations — an alias table exists only
+  as a safety net for legacy hand-written sheets. Leave specialisation
+  placeholders (`Art/Craft ()`, `Science ()`, `Survival ()`, `Pilot ()`)
+  empty; the builder appends real specialisations and suppresses the bare
+  parent.
+- **Record prose sections** the page renders as narrative: Background,
+  Injuries & Scars, Phobias & Manias, Encounters with Strange Entities,
+  Arcane Tomes & Spells, Fellow Investigators, Current Status.
+
+### Sheet crest (campaign-wide masthead image)
+
+The optional investigator-sheet crest is a **campaign-level** setting, not a
+per-PC frontmatter field. Set `sheet_crest` (a path or URL to the crest
+image) in the vault config (`_meta/vault-config.md` frontmatter, alongside
+other publish settings such as `setting_year`); it applies to every CoC PC
+page in the campaign. There is **no** per-PC `crest` frontmatter override —
+that was deliberately deferred, so adding a crest needs no
+schema-change-procedure and no entity-template change.
+
+---
+
 ## Quick Checklist
 
 - [ ] Attribution header present (licensed content)

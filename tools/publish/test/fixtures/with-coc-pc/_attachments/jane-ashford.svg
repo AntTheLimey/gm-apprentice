@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 400" role="img" aria-label="Investigator portrait placeholder">
+  <defs>
+    <radialGradient id="paper" cx="42%" cy="32%" r="80%">
+      <stop offset="0%" stop-color="#f3ecd8"/>
+      <stop offset="100%" stop-color="#e2d6b8"/>
+    </radialGradient>
+    <radialGradient id="cameo" cx="50%" cy="40%" r="65%">
+      <stop offset="0%" stop-color="#efe6cd"/>
+      <stop offset="100%" stop-color="#d8c9a6"/>
+    </radialGradient>
+  </defs>
+  <rect width="300" height="400" fill="url(#paper)"/>
+  <ellipse cx="150" cy="188" rx="118" ry="150" fill="url(#cameo)" stroke="#7c2114" stroke-width="2.5" opacity="0.95"/>
+  <ellipse cx="150" cy="188" rx="110" ry="142" fill="none" stroke="#b6a483" stroke-width="1"/>
+  <!-- Regency profile silhouette, facing right -->
+  <path fill="#2a201a" d="M133 84
+    C120 86 108 96 101 112 C95 126 96 140 89 150 C82 160 78 168 82 178
+    C86 188 96 192 104 196 C112 200 116 206 116 216 L116 244
+    C116 252 110 256 96 262 C74 271 60 286 55 312 C51 334 52 360 54 400
+    L256 400 C258 360 258 332 252 310 C245 284 228 272 206 264
+    C196 260 190 256 188 248 L186 214
+    C201 212 214 204 221 190 C227 178 224 168 216 162
+    C224 156 227 146 223 136 C227 130 228 120 222 110
+    C214 96 202 87 188 85 C172 82 150 82 133 84 Z"/>
+  <!-- hair bun -->
+  <circle cx="97" cy="128" r="21" fill="#2a201a"/>
+  <text x="150" y="368" text-anchor="middle" font-family="Georgia, serif" font-size="12" letter-spacing="2" fill="#7c2114" opacity="0.75">PLACEHOLDER</text>
+</svg>

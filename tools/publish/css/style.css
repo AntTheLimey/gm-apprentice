@@ -2699,60 +2699,262 @@ tr:nth-child(even) {
 
 /* ===== SYSTEM-SPECIFIC CHARACTER SHEETS ===== */
 
-/* CoC 7e */
-.coc-sheet { background: var(--bg-card); border-radius: 0.5rem; padding: 1.5rem; }
-.coc-characteristics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+/* CoC 7e — "Regency Refined" parchment investigator sheet.
+   Ported from docs/superpowers/specs/coc-investigator-sheet-mockup/index.html.
+   SCOPING (multi-page themed site — these differ from the standalone mockup):
+   - The mockup's global `body{...}` dark repaint is DROPPED; the parchment
+     background + engraved double frame live on the `.coc-sheet-root` wrapper.
+   - The mockup's `*{box-sizing}` is dropped (the global reset already sets it).
+   - The mockup's `:root{ --paper… }` custom props are declared on a scoped
+     selector group so they never override the site's global :root tokens.
+   - The `.cr-*` correspondence widget + `.tab-panel` + `.portrait` + bare `.pip`
+     collide with existing site rules, so their parchment versions are scoped to
+     a CoC ancestor (`.coc-sheet-root` / `.cr-modal`) to win the cascade AND to
+     leave every other system's sheet untouched. */
+/* Custom props live on the two CoC roots only; every CoC element is a descendant
+   of one of these and inherits them, so no other page sees the parchment tokens. */
+.coc-sheet-root,
+.cr-modal-backdrop.coc {
+  --paper:#e7ddc3; --paper-2:#f3ecd8;
+  --ink:#241d13; --ink-soft:#5a4b36; --ink-mid:#6f5c40;
+  --rule:#7c6a4d; --rule-soft:#b6a483;
+  --oxblood:#6e2318; --oxblood-2:#8a3222;
+  --seal:#7c2114;
+  --box:#fbf6e7;
+  --didone:"Didot","Bodoni 72","Bodoni MT","Playfair Display","Hoefler Text","Georgia",serif;
+  --body:"Baskerville","Libre Baskerville","Hoefler Text","Georgia","Times New Roman",serif;
 }
-.coc-char-box {
-  text-align: center;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  padding: 0.5rem;
-}
-.coc-char-box .char-label {
-  font-size: 0.65rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-}
-.coc-char-box .char-value {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 1.25rem;
-}
-.coc-sanity-tracker {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-}
-.coc-skills-category h4 {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
-  margin: 1rem 0 0.5rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.25rem;
-}
-.coc-skill-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.25rem 0;
-  font-size: 0.875rem;
-}
-.coc-skill-value {
-  font-family: var(--font-mono);
-  font-weight: 600;
+/* The CoC sheet is a full 1060px dossier, not body text — let it break out of
+   the site's narrow reading column (main.content max-width:52rem) on CoC pages
+   only (scoped via :has()). Guard against horizontal overflow at phone widths. */
+/* Match the reference's tight 1rem gutter (the site's .content bumps to 2rem on
+   desktop, which reads as an over-thick margin around the dossier). */
+.content:has(.coc-sheet-root){ max-width:none; padding:1rem 1rem 3rem; overflow-x:hidden; }
+/* No portrait → the backstory strip spans the whole row instead of leaving a gap. */
+.coc-sheet-root .portrait-row:not(:has(img.portrait)){ grid-template-columns:1fr; }
+.coc-sheet-root{ max-width:1060px; margin:0 auto; position:relative; color:var(--ink);
+  font-family:var(--body); line-height:1.36;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(150,120,70,.07), transparent 42%),
+    radial-gradient(circle at 78% 68%, rgba(150,118,60,.06), transparent 38%),
+    radial-gradient(circle at 60% 90%, rgba(120,90,50,.05), transparent 40%),
+    repeating-linear-gradient(90deg, rgba(124,106,77,.05) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(0deg, rgba(124,106,77,.03) 0 2px, transparent 2px 27px),
+    radial-gradient(120% 92% at 20% 0%, var(--paper-2), var(--paper) 72%);
+  border:1px solid #100c06;
+  box-shadow:0 12px 44px rgba(0,0,0,.6), inset 0 0 0 6px var(--paper), inset 0 0 0 7px var(--rule);
+  padding:2.4rem 2.3rem 2.6rem;}
+/* engraved double frame + corner flourishes */
+.coc-sheet-root::before{ content:""; position:absolute; inset:13px; border:1.5px solid var(--rule); pointer-events:none;}
+.coc-sheet-root::after{ content:""; position:absolute; inset:16px; border:1px solid var(--rule-soft); pointer-events:none;}
+.coc-sheet-root .corner{ position:absolute; color:var(--oxblood); font-size:1.3rem; line-height:1; opacity:.72; pointer-events:none; z-index:2;}
+.coc-sheet-root .corner.tl{ top:7px; left:11px;} .coc-sheet-root .corner.tr{ top:7px; right:11px;}
+.coc-sheet-root .corner.bl{ bottom:5px; left:11px;} .coc-sheet-root .corner.br{ bottom:5px; right:11px;}
+/* configurable Order crest / wax seal — renders only when an image is supplied */
+.coc-sheet-root .seal-img{ position:absolute; top:10px; right:16px; width:104px; height:auto; z-index:3;
+  transform:rotate(-6deg); filter:drop-shadow(0 3px 5px rgba(0,0,0,.45));}
+/* masthead */
+.coc-sheet-root .masthead{ text-align:center; margin-bottom:.4rem; position:relative;}
+.coc-sheet-root .masthead .kicker{ font-family:var(--body); font-style:italic; font-size:.9rem; letter-spacing:.06em; color:var(--ink-mid);}
+.coc-sheet-root .masthead h1{ margin:.15rem 0 .05rem; font-family:var(--didone); font-size:3rem; letter-spacing:.03em; font-weight:700; color:var(--ink);
+  text-shadow:0 1px 0 rgba(255,250,235,.5);}
+.coc-sheet-root .masthead .era{ font-family:var(--didone); font-size:.82rem; letter-spacing:.34em; text-transform:uppercase; color:var(--oxblood-2);}
+.coc-sheet-root .fleuron{ text-align:center; color:var(--oxblood); font-size:1rem; margin:.5rem 0 1rem; letter-spacing:.5em;
+  display:flex; align-items:center; gap:1rem; justify-content:center;}
+.coc-sheet-root .fleuron::before,.coc-sheet-root .fleuron::after{ content:""; height:1px; background:linear-gradient(90deg,transparent,var(--rule) 40%,var(--rule)); flex:1; max-width:220px;}
+.coc-sheet-root .fleuron::after{ background:linear-gradient(270deg,transparent,var(--rule) 40%,var(--rule));}
+.coc-sheet-root .identity{ display:grid; grid-template-columns:repeat(3,1fr); gap:0 1.5rem; margin:0 0 1.4rem;}
+.coc-sheet-root .fld{ border-bottom:1px solid var(--rule); padding:.15rem .1rem .05rem; margin-bottom:.6rem; min-height:1.65rem;}
+.coc-sheet-root .fld .lab{ display:block; font-family:var(--didone); font-size:.62rem; letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.coc-sheet-root .fld .val{ font-size:1.04rem;}
+.coc-sheet-root .grid-main{ display:grid; grid-template-columns:252px 1fr; gap:1.7rem; align-items:start;}
+/* characteristics */
+.coc-sheet-root .char-list{ display:flex; flex-direction:column; gap:.5rem;}
+.coc-sheet-root .char{ display:grid; grid-template-columns:1fr 52px; grid-template-rows:auto auto;
+  border:1.5px solid var(--rule); background:var(--box); border-radius:2px; overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(255,250,235,.5);}
+.coc-sheet-root .char .cname{ grid-column:1; grid-row:1/3; display:flex; align-items:center; gap:.55rem; padding:.3rem .6rem;
+  font-family:var(--didone); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.88rem;}
+.coc-sheet-root .char .cname b{ font-size:1.7rem; letter-spacing:0; color:var(--oxblood); min-width:2.4ch; text-align:right;}
+.coc-sheet-root .char .half,.coc-sheet-root .char .fifth{ padding:.05rem .3rem; font-size:.9rem; text-align:center; border-left:1px solid var(--rule-soft); font-weight:600;}
+.coc-sheet-root .char .half{ border-bottom:1px solid var(--rule-soft);}
+.coc-sheet-root .char .half span,.coc-sheet-root .char .fifth span{ display:block; font-size:.5rem; letter-spacing:.12em; color:var(--ink-mid); text-transform:uppercase; font-weight:400;}
+.coc-sheet-root .vitals{ display:grid; grid-template-columns:repeat(2,1fr); gap:.7rem; margin-top:1rem;}
+.coc-sheet-root .vital{ border:1.5px solid var(--rule); background:var(--box); border-radius:2px; padding:.45rem .55rem; text-align:center;}
+.coc-sheet-root .vital .vlab{ font-family:var(--didone); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.coc-sheet-root .vital .vnum{ font-size:1.5rem; font-weight:700; font-family:var(--didone);}
+.coc-sheet-root .vital .vnum small{ font-size:.66rem; color:var(--ink-mid); font-weight:400; font-family:var(--body);}
+.coc-sheet-root .track{ display:flex; gap:3px; justify-content:center; margin-top:.3rem; flex-wrap:wrap;}
+/* pips/exp are <button>s (keyboard-operable): reset native chrome, keep the circle */
+.coc-sheet-root .pip{ width:9px; height:9px; border:1px solid var(--rule); border-radius:50%; padding:0; box-sizing:border-box; -webkit-appearance:none; appearance:none;}
+.coc-sheet-root .pip.on{ background:var(--oxblood);}
+.coc-sheet-root .vital.sanity{ grid-column:1/3; text-align:left;}
+.coc-sheet-root .sanbar{ position:relative; height:16px; margin-top:.4rem; border:1.5px solid var(--rule); border-radius:8px; background:linear-gradient(90deg,#8a3b2c22,#8a3b2c0a); overflow:hidden;}
+.coc-sheet-root .sanbar .fill{ position:absolute; inset:0 auto 0 0; width:38%; background:repeating-linear-gradient(45deg,var(--oxblood) 0 6px,#7c2a1e 6px 12px);}
+.coc-sheet-root .sanbar .mark{ position:absolute; top:-3px; width:2px; height:22px; background:var(--ink);}
+.coc-sheet-root .san-scale{ display:flex; justify-content:space-between; font-size:.58rem; color:var(--ink-mid); margin-top:.25rem;}
+.coc-sheet-root .badge-insane{ display:inline-block; margin-top:.45rem; font-family:var(--didone); font-size:.64rem; letter-spacing:.14em; text-transform:uppercase; font-weight:700; color:#f3e6df; background:var(--oxblood); padding:.16rem .55rem; border-radius:2px;}
+.coc-sheet-root .rep{ margin-top:1rem; border:1.5px dashed var(--rule); border-radius:2px; padding:.5rem .65rem; display:flex; justify-content:space-between; align-items:center;}
+.coc-sheet-root .rep .rlab{ font-family:var(--didone); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.coc-sheet-root .rep .rnum{ font-size:1.5rem; font-weight:700; font-family:var(--didone);} .coc-sheet-root .rep .rnum small{ font-size:.66rem; color:var(--ink-mid); font-weight:400; font-family:var(--body);}
+.coc-sheet-root .portrait-row{ display:grid; grid-template-columns:1fr 152px; gap:1.2rem; margin-bottom:.6rem;}
+.coc-sheet-root .backstory{ display:grid; grid-template-columns:1fr 1fr; gap:.45rem .9rem; align-content:start;}
+/* empty backstory (all discrete fields live in the Record tab) — collapse so the
+   portrait keeps its column instead of leaving a wide empty grid cell */
+.coc-sheet-root .backstory:empty{ display:none;}
+.coc-sheet-root .portrait-row:has(.backstory:empty){ grid-template-columns:152px; justify-content:end;}
+.coc-sheet-root .bs{ border-bottom:1px dotted var(--rule); padding-bottom:.24rem;}
+.coc-sheet-root .bs .lab{ font-family:var(--didone); font-size:.6rem; letter-spacing:.13em; text-transform:uppercase; color:var(--oxblood); font-weight:700; display:block;}
+.coc-sheet-root .bs .val{ font-size:.86rem; color:var(--ink-soft);}
+.coc-sheet-root .portrait{ border:6px solid #fbf6e7; box-shadow:0 2px 10px rgba(0,0,0,.4), 0 0 0 1px var(--rule); aspect-ratio:3/4; object-fit:cover; object-position:top center; width:100%; filter:sepia(.12);}
+.coc-sheet-root h2.section{ font-family:var(--didone); font-size:1rem; letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood);
+  margin:1.5rem 0 .55rem; font-weight:700; display:flex; align-items:center; gap:.7rem;}
+.coc-sheet-root h2.section::before{ content:"❧"; color:var(--oxblood-2); font-size:1rem; -webkit-transform:scaleX(-1); transform:scaleX(-1);}
+.coc-sheet-root h2.section .rule{ flex:1; height:0; border-top:2px solid var(--rule); border-bottom:1px solid var(--rule-soft); align-self:center; margin-top:3px;}
+.coc-sheet-root h2.section .hint{ font-family:var(--body); font-size:.62rem; letter-spacing:.02em; text-transform:none; color:var(--ink-mid); font-weight:400; font-style:italic;}
+/* SKILLS — full list, alphabetical, larger reg / half / fifth */
+.coc-sheet-root .skills-wrap{ display:grid; grid-template-columns:1fr 1fr; gap:0 2.4rem;}
+.coc-sheet-root .colcap{ display:grid; grid-template-columns:16px 1fr 34px 30px 28px; gap:.4rem; font-family:var(--didone); font-size:.58rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); font-weight:700; border-bottom:1.5px solid var(--rule); padding-bottom:.22rem; margin-bottom:.35rem;}
+.coc-sheet-root .colcap span:nth-child(n+3){ text-align:right;}
+.coc-sheet-root .skill{ display:grid; grid-template-columns:16px 1fr 34px 30px 28px; align-items:baseline; gap:.4rem; break-inside:avoid; padding:.13rem 0; border-bottom:1px dotted var(--rule-soft);}
+/* experience-check bubble — a <button> ticked on a successful roll (reset native chrome) */
+.coc-sheet-root .skill .exp{ width:12px; height:12px; border:1.5px solid var(--oxblood-2); border-radius:50%; position:relative; top:2px; background:var(--box); padding:0; box-sizing:border-box; cursor:pointer; -webkit-appearance:none; appearance:none;}
+.coc-sheet-root .skill.checked .exp{ background:var(--oxblood); box-shadow:inset 0 0 0 2px var(--box);}
+.coc-sheet-root .skill .sname{ font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0;}
+.coc-sheet-root .skill.dev .sname{ font-weight:600;}
+.coc-sheet-root .skill .sname em{ color:var(--ink-mid); font-style:italic; font-size:.78rem;}
+.coc-sheet-root .skill .reg{ font-weight:700; font-size:1.06rem; text-align:right; font-family:var(--didone);}
+.coc-sheet-root .skill.dev .reg{ color:var(--oxblood);}
+.coc-sheet-root .skill .h,.coc-sheet-root .skill .f{ font-size:.92rem; text-align:right; color:var(--ink-mid); font-weight:600; font-family:var(--didone);}
+.coc-sheet-root table.weap{ width:100%; border-collapse:collapse; font-size:.86rem;}
+.coc-sheet-root table.weap th{ text-align:left; font-family:var(--didone); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); border-bottom:1.5px solid var(--rule); padding:.32rem .4rem;}
+.coc-sheet-root table.weap td{ padding:.32rem .4rem; border-bottom:1px solid var(--rule-soft);}
+.coc-sheet-root table.weap td:first-child{ font-weight:600;}
+/* ---- Correspondence (change-request / comms) widget — same #cr-root/.cr-* structure as the
+   live site, reskinned to parchment. Scoped to .coc-sheet-root / .cr-modal so the parchment skin
+   wins over the site's generic .cr-* widget AND never touches other systems' correspondence bar. ---- */
+.coc-sheet-root #cr-root{ margin:0 0 1.5rem;}
+.coc-sheet-root .cr-bar{ border:1.5px solid var(--rule); border-radius:3px; padding:.35rem .55rem; background:rgba(255,250,235,.55);}
+.coc-sheet-root .cr-barhead{ display:flex; flex-wrap:wrap; align-items:center; gap:.3rem .5rem;}
+.coc-sheet-root .cr-toggle{ flex:1 1 auto; text-align:left; background:none; border:none; cursor:pointer; font-family:var(--body); font-style:italic; font-size:.95rem; color:var(--ink-soft); padding:.4rem .3rem; min-height:44px;}
+.coc-sheet-root .cr-log-btn{ flex:0 0 auto; background:none; cursor:pointer; font-family:var(--didone); font-size:.64rem; letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood); border:1px solid var(--rule); border-radius:3px; padding:.4rem .8rem; min-height:44px;}
+.coc-sheet-root .cr-panel{ display:flex; flex-direction:column; gap:.55rem; margin-top:.55rem;}
+.coc-sheet-root .cr-panel[hidden]{ display:none;}
+.coc-sheet-root .cr-toggle::before{ content:"▸ "; color:var(--oxblood-2); font-style:normal;}
+.coc-sheet-root .cr-toggle[aria-expanded="true"]::before{ content:"▾ ";}
+/* History modal — neutral fallback (any system). Uses existing site tokens so a
+   non-CoC modal is a clean, usable dialog without inheriting the parchment skin. */
+.cr-modal-backdrop{ position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:1.2rem;
+  background:rgba(0,0,0,.5);}
+.cr-modal-backdrop[hidden]{ display:none;}
+.cr-modal{ width:100%; max-width:580px; max-height:84vh; display:flex; flex-direction:column; border-radius:6px;
+  background:var(--bg-card, #fff); border:1px solid var(--border, #ccc); color:var(--text, #111);
+  box-shadow:0 24px 60px rgba(0,0,0,.4);}
+.cr-modal-head{ display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.3rem .7rem; border-bottom:1px solid var(--border, #ccc);}
+.cr-modal-title{ font-weight:700;}
+.cr-modal-close{ background:none; border:1px solid var(--border, #ccc); border-radius:3px; cursor:pointer; color:var(--text-muted, #666); font-size:1rem; line-height:1; width:30px; height:30px;}
+.cr-modal-body{ overflow-y:auto; padding:1rem 1.3rem 1.3rem;}
+
+/* History modal — CoC parchment skin (gated to the `.coc` backdrop). */
+.cr-modal-backdrop.coc{ background:rgba(24,18,10,.66); backdrop-filter:blur(2px);}
+.cr-modal-backdrop.coc .cr-modal{ border-radius:4px; border:1px solid #100c06;
+  background:
+    radial-gradient(circle at 22% 12%, rgba(150,120,70,.07), transparent 45%),
+    repeating-linear-gradient(0deg, rgba(124,106,77,.03) 0 2px, transparent 2px 27px),
+    radial-gradient(120% 92% at 20% 0%, var(--paper-2), var(--paper) 72%);
+  box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 0 0 5px var(--paper), inset 0 0 0 6px var(--rule);}
+.cr-modal-backdrop.coc .cr-modal-head{ padding:1rem 1.3rem .7rem; border-bottom:2px double var(--rule);}
+.cr-modal-backdrop.coc .cr-modal-title{ font-family:var(--didone); font-size:.82rem; letter-spacing:.2em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.cr-modal-backdrop.coc .cr-modal-close{ border:1px solid var(--rule); color:var(--ink-soft);}
+.cr-modal-backdrop.coc .cr-modal-close:hover{ background:rgba(110,35,24,.08); color:var(--oxblood);}
+.coc-sheet-root .cr-hint{ font-size:.82rem; color:var(--ink-mid); margin:0; font-style:italic;}
+.coc-sheet-root .cr-text{ width:100%; box-sizing:border-box; min-height:5rem; resize:vertical; font-family:var(--body); font-size:.98rem; line-height:1.4; padding:.6rem .7rem; border:1px solid var(--rule); border-radius:3px; background:#fffdf6; color:var(--ink);}
+.coc-sheet-root .cr-text::placeholder{ color:var(--ink-mid); opacity:.7;}
+.coc-sheet-root .cr-send{ align-self:flex-start; cursor:pointer; font-family:var(--didone); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.7rem; min-height:44px; padding:.5rem 1.6rem; border-radius:3px; border:1px solid var(--oxblood); background:var(--oxblood); color:#f3e6df;}
+.cr-modal-backdrop.coc .cr-logpanel{ margin-top:.65rem; border-top:1px solid var(--rule); padding-top:.65rem;}
+.cr-modal-backdrop.coc .cr-loglabel{ font-family:var(--didone); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oxblood); margin:0 0 .5rem;}
+.cr-modal-backdrop.coc .cr-logentry{ margin-bottom:.75rem; font-size:.9rem;}
+.cr-modal-backdrop.coc .cr-you{ font-weight:600; color:var(--ink);}
+.cr-modal-backdrop.coc .cr-you::before{ content:"❧ "; color:var(--oxblood-2);}
+.cr-modal-backdrop.coc .cr-reply{ margin-top:.18rem; white-space:pre-wrap; color:var(--ink-soft); padding-left:1rem; border-left:2px solid var(--rule-soft);}
+.cr-modal-backdrop.coc .cr-reply.cr-live{ color:#3d6b3a; border-left-color:#3d6b3a;}
+.cr-modal-backdrop.coc .cr-reply.cr-rejected{ color:var(--oxblood); border-left-color:var(--oxblood);}
+.cr-modal-backdrop.coc .cr-reply.cr-waiting{ opacity:.55; font-style:italic;}
+/* ---- Live status bar (mutable vitals + conditions) — designed editable ---- */
+.coc-sheet-root .statusbar{ border:1.5px solid var(--rule); border-radius:4px; margin:0 0 1.2rem; padding:.75rem .85rem;
+  background:linear-gradient(180deg, rgba(255,250,235,.72), rgba(251,246,231,.5));
+  box-shadow:inset 0 0 0 1px rgba(255,250,235,.6);}
+.coc-sheet-root .sb-grid{ display:grid; grid-template-columns:auto auto 1fr auto auto; gap:1rem 1.3rem; align-items:start;}
+.coc-sheet-root .sb-cell{ min-width:0; display:flex; flex-direction:column; gap:.3rem;}
+.coc-sheet-root .sb-lab{ font-family:var(--didone); font-size:.58rem; letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood); font-weight:700; white-space:nowrap;}
+.coc-sheet-root .sb-num,.coc-sheet-root .sb-count{ font-family:var(--didone); font-weight:700; display:inline-flex; align-items:baseline; gap:.28rem; white-space:nowrap;}
+.coc-sheet-root .sb-num b,.coc-sheet-root .sb-count b{ font-size:1.6rem; color:var(--ink); min-width:1.6ch; text-align:center;}
+.coc-sheet-root .sb-of{ font-size:.6rem; color:var(--ink-mid); font-weight:400; letter-spacing:.02em;}
+.coc-sheet-root .step{ font-family:var(--body); width:21px; height:21px; line-height:1; border:1px solid var(--rule); border-radius:50%; background:var(--box); color:var(--oxblood); cursor:pointer; font-size:.95rem; padding:0; align-self:center; -webkit-appearance:none; appearance:none;}
+.coc-sheet-root .step:hover{ background:var(--oxblood); color:#f3e6df;}
+.coc-sheet-root .pips{ display:flex; gap:3px; margin-top:.4rem; flex-wrap:wrap;}
+.coc-sheet-root .pips .pip{ width:14px; height:14px; border:1.5px solid var(--rule); border-radius:50%; cursor:pointer; background:var(--box);}
+.coc-sheet-root .pips .pip.on{ background:var(--oxblood); border-color:var(--oxblood);}
+.coc-sheet-root .pips .pip:hover{ box-shadow:0 0 0 2px rgba(110,35,24,.25);}
+.coc-sheet-root .sb-cell .sanbar{ margin-top:.5rem;}
+.coc-sheet-root .sb-conditions{ display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin-top:.75rem; padding-top:.65rem; border-top:1px dotted var(--rule);}
+.coc-sheet-root .sb-condlab{ font-family:var(--didone); font-size:.58rem; letter-spacing:.14em; text-transform:uppercase; color:var(--oxblood); font-weight:700; margin-right:.2rem;}
+.coc-sheet-root .cond-chip{ font-family:var(--didone); font-size:.58rem; letter-spacing:.08em; text-transform:uppercase; font-weight:700; color:var(--ink-mid); background:none; border:1.5px solid var(--rule-soft); border-radius:20px; padding:.24rem .62rem; cursor:pointer;}
+.coc-sheet-root .cond-chip:hover{ border-color:var(--oxblood); color:var(--oxblood);}
+.coc-sheet-root .cond-chip.on{ color:#f3e6df; background:var(--oxblood); border-color:var(--oxblood);}
+.coc-sheet-root .sb-hint{ display:block; margin:.55rem 0 0; font-size:.7rem; color:var(--ink-mid); font-style:italic;}
+/* static combat box (left column, replaces the moved vitals) */
+.coc-sheet-root .combatbox{ display:grid; grid-template-columns:repeat(2,1fr); gap:.5rem; margin-top:1rem;}
+.coc-sheet-root .cb{ border:1.5px solid var(--rule); background:var(--box); border-radius:2px; padding:.4rem .55rem; text-align:center;}
+.coc-sheet-root .cb-l{ display:block; font-family:var(--didone); font-size:.55rem; letter-spacing:.13em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.coc-sheet-root .cb-v{ font-family:var(--didone); font-size:1.3rem; font-weight:700;} .coc-sheet-root .cb-v small{ font-size:.64rem; color:var(--ink-mid); font-weight:400;}
+@media (max-width:720px){ .coc-sheet-root .sb-grid{ grid-template-columns:1fr 1fr;} .coc-sheet-root .sb-cell.sb-wide{ grid-column:1/3;} }
+
+/* ---- Tabs + page-2 record accordions ---- */
+.coc-sheet-root .folio{ margin:.3rem 0 0;}
+.coc-sheet-root .foliotabs{ display:flex; gap:.3rem; padding:0 .5rem; overflow-x:auto; scrollbar-width:none; position:relative; z-index:2;}
+.coc-sheet-root .foliotabs::-webkit-scrollbar{ display:none;}
+.coc-sheet-root .foliotab{ flex:0 0 auto; font-family:var(--didone); font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; font-weight:700; color:var(--ink-mid); cursor:pointer; white-space:nowrap;
+  background:linear-gradient(180deg,#dccfae,#d0c3a0); border:1.5px solid var(--rule); border-bottom:none; border-radius:9px 9px 0 0;
+  padding:.6rem 1.05rem .75rem; margin-bottom:-2px; transform:translateY(4px); box-shadow:inset 0 3px 5px rgba(0,0,0,.08); transition:transform .12s, color .12s;}
+.coc-sheet-root .foliotab:hover{ transform:translateY(2px); color:var(--oxblood);}
+.coc-sheet-root .foliotab.active{ color:var(--oxblood); background:linear-gradient(180deg,var(--paper-2),var(--box)); transform:translateY(0);
+  box-shadow:0 -3px 9px rgba(0,0,0,.12); z-index:3; position:relative;}
+.coc-sheet-root .foliopanel{ position:relative; z-index:1; border:1.5px solid var(--rule); border-radius:0 6px 6px 6px;
+  background:linear-gradient(180deg,var(--box),rgba(255,250,235,.35)); padding:1.5rem 1.4rem;
+  box-shadow:inset 0 1px 0 rgba(255,250,235,.6), 0 8px 20px rgba(0,0,0,.13);}
+.coc-sheet-root .foliotab{ -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;}
+.coc-sheet-root .t-short{ display:none;}
+/* the site's global `.tab-panel{display:none}` (default-hidden, .active shows) would hide every folio
+   panel; inside the folio the mockup toggles [hidden] instead, so re-establish that here. */
+.coc-sheet-root .folio .tab-panel{ display:block;}
+.coc-sheet-root .folio .tab-panel[hidden]{ display:none;}
+.coc-sheet-root .rechead{ font-family:var(--didone); text-align:center; color:var(--oxblood); font-size:.72rem; letter-spacing:.28em; text-transform:uppercase; margin:1.6rem 0 .4rem; display:flex; align-items:center; gap:1rem; justify-content:center;}
+.coc-sheet-root .rechead::before,.coc-sheet-root .rechead::after{ content:""; height:1px; background:var(--rule-soft); flex:1;}
+.coc-sheet-root details.acc{ border:1px solid var(--rule-soft); border-radius:3px; margin-top:.6rem; background:rgba(255,250,235,.4);}
+.coc-sheet-root details.acc>summary{ list-style:none; cursor:pointer; font-family:var(--didone); font-size:.82rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); font-weight:700; padding:.6rem .8rem; display:flex; align-items:center; gap:.5rem;}
+.coc-sheet-root details.acc>summary::-webkit-details-marker{ display:none;}
+.coc-sheet-root details.acc>summary::before{ content:"▸"; color:var(--oxblood-2); font-size:.7rem;}
+.coc-sheet-root details.acc[open]>summary::before{ content:"▾";}
+.coc-sheet-root details.acc>summary:hover{ background:rgba(110,35,24,.05);}
+.coc-sheet-root .acc-body{ padding:.2rem 1rem 1rem; font-size:.9rem; color:var(--ink-soft); line-height:1.55;}
+.coc-sheet-root .acc-body p{ margin:.45rem 0;} .coc-sheet-root .acc-body strong{ color:var(--ink);}
+.coc-sheet-root .acc-body .lead{ font-family:var(--didone); font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.coc-sheet-root .empty-note{ color:var(--ink-mid); font-style:italic;}
+.coc-sheet-root .gear-list{ margin:.4rem 0; padding-left:1.1rem;} .coc-sheet-root .gear-list li{ margin:.22rem 0;}
+.coc-sheet-root table.wealth{ border-collapse:collapse; margin-top:.6rem;}
+.coc-sheet-root table.wealth td{ padding:.32rem 1.2rem .32rem 0; border-bottom:1px dotted var(--rule-soft); font-size:.9rem;}
+.coc-sheet-root table.wealth td:first-child{ font-family:var(--didone); font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--oxblood);}
+.coc-sheet-root .story-link{ font-family:var(--didone); letter-spacing:.06em; color:var(--oxblood); text-decoration:none; font-weight:700; border-bottom:1px solid var(--rule-soft);}
+@media (max-width:720px){ .coc-sheet-root .grid-main{grid-template-columns:1fr;} .coc-sheet-root .skills-wrap{grid-template-columns:1fr;} .coc-sheet-root .identity,.coc-sheet-root .portrait-row,.coc-sheet-root .backstory{grid-template-columns:1fr;} .coc-sheet-root .seal-img{position:static;display:block;margin:0 auto 1rem;transform:none;}
+  /* mobile folio: tidy wrapping pill row, no scroll/bounce/bleed */
+  .coc-sheet-root .foliotabs{ flex-wrap:wrap; overflow:visible; padding:0; gap:.35rem;}
+  .coc-sheet-root .foliotab{ transform:none; margin-bottom:0; box-shadow:none; border:1.5px solid var(--rule); border-radius:7px; padding:.42rem .8rem; font-size:.64rem; letter-spacing:.05em;}
+  .coc-sheet-root .foliotab.active{ transform:none; box-shadow:none; background:var(--oxblood); color:#f3e6df; border-color:var(--oxblood);}
+  .coc-sheet-root .foliopanel{ border-radius:7px; margin-top:.55rem; padding:1.1rem;}
+  .coc-sheet-root .t-full{ display:none;} .coc-sheet-root .t-short{ display:inline;}
+  .coc-sheet-root .skill .sname{ white-space:normal;} /* wrap full skill names instead of truncating */
+  .coc-sheet-root table.weap{ font-size:.72rem;} .coc-sheet-root table.weap th,.coc-sheet-root table.weap td{ padding:.28rem .3rem;}
 }
 
 /* ===== GURPS 4e — Modern Sheet ===== */

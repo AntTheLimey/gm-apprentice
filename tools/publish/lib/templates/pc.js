@@ -29,8 +29,107 @@ const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'wea
 // (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
 const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status', 'multi-action combat skill chains', 'combat summary']);
 
+// Titles the structured CoC sheet/record consume. 'connections' and 'cover
+// identity' are deliberately NOT here: the structured renderer doesn't place
+// them, so consuming them would silently drop the sections. Left un-consumed,
+// they fall through to the Record tab's leftover-accordion guard (no content loss).
+const COC_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'combat', 'background', 'injuries & scars', 'phobias & manias', 'encounters with strange entities', 'arcane tomes & spells', 'fellow investigators', 'current status', 'equipment']);
+
 function isGurpsSystem(publishConfig) {
   return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
+function isCocSystem(publishConfig) {
+  return ['coc-7e', 'coc', 'regency-cthulhu'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
+// System label shown in the CoC masthead era line when the PC has no explicit `era`.
+function cocSystemLabel(publishConfig) {
+  return String((publishConfig || {}).system || '').toLowerCase() === 'regency-cthulhu'
+    ? 'Regency Cthulhu'
+    : 'Call of Cthulhu';
+}
+
+// Builds the approved parchment folio body for a CoC investigator (mockup:
+// docs/superpowers/specs/coc-investigator-sheet-mockup/index.html). The single
+// outer .coc-sheet-root carries the engraved frame; #cr-root must live inside it
+// so the parchment-scoped .cr-* rules apply.
+function buildCocBody(opts) {
+  const { page, fm, publishConfig, displayTitle, sheetHtml, recordHtml, statusBarHtml,
+    portraitUrl, sealUrl, crWidget, equipmentContent, storyContent, journeyContent, leftoverSections } = opts;
+
+  // Portrait: the sheet carries an empty <img class="portrait" data-portrait> slot.
+  // Inject the resolved src, or drop the framed box entirely when absent.
+  let sheet = sheetHtml || '';
+  if (portraitUrl) {
+    sheet = sheet.replace(/<img class="portrait" data-portrait[^>]*>/,
+      `<img class="portrait" src="${portraitUrl}" alt="${escapeHtml(displayTitle)}">`);
+  } else {
+    sheet = sheet.replace(/<img class="portrait" data-portrait[^>]*>/, '');
+  }
+
+  // Content-loss guard: every non-consumed prose section (including any authored
+  // Relationships/Appearances — empty auto-stubs are already dropped upstream by
+  // the sheetSections filter) is appended to the record so nothing is silently lost.
+  const leftover = (leftoverSections || [])
+    .map(s => `<details class="acc"><summary>${escapeHtml(s.title)}</summary><div class="acc-body">${s.html}</div></details>`)
+    .join('');
+  const recordBody = (recordHtml || '') + leftover;
+  const recordPanel = recordBody.trim()
+    ? recordBody
+    : '<p class="empty-note">No record entries yet.</p>';
+
+  // Era line: an explicit `era` frontmatter wins verbatim; otherwise the system
+  // label, plus "· in the year <setting_year>" from vault config when set.
+  const settingYear = (publishConfig || {}).setting_year;
+  const yearSuffix = (settingYear != null && String(settingYear).trim())
+    ? ` · in the year ${String(settingYear).trim()}` : '';
+  const era = fm.era
+    ? escapeHtml(String(fm.era))
+    : escapeHtml(cocSystemLabel(publishConfig) + yearSuffix);
+  const corners = '<span class="corner tl">❦</span><span class="corner tr">❦</span><span class="corner bl">❦</span><span class="corner br">❦</span>';
+  const seal = sealUrl ? `<img class="seal-img" src="${sealUrl}" alt="">` : '';
+
+  return `<div class="coc-sheet-root">
+${corners}
+${seal}
+<div class="masthead">
+  <div class="kicker">Being a true account of the investigator</div>
+  <h1>${escapeHtml(displayTitle)}</h1>
+  <div class="era">${era}</div>
+</div>
+<div class="fleuron">❧ ❦ ❧</div>
+${statusBarHtml || ''}
+${crWidget}
+<div class="folio">
+  <div class="foliotabs" role="tablist">
+    <button type="button" class="foliotab active" data-target="p-sheet"><span class="t-full">Character Sheet</span><span class="t-short">Sheet</span></button>
+    <button type="button" class="foliotab" data-target="p-record"><span class="t-full">Investigator's Record</span><span class="t-short">Record</span></button>
+    <button type="button" class="foliotab" data-target="p-equipment"><span class="t-full">Equipment &amp; Wealth</span><span class="t-short">Gear</span></button>
+    <button type="button" class="foliotab" data-target="p-story">Story</button>
+    <button type="button" class="foliotab" data-target="p-journey">Journey</button>
+  </div>
+  <div class="foliopanel">
+    <div class="tab-panel" id="p-sheet">
+${sheet}
+    </div>
+    <div class="tab-panel" id="p-record" hidden>
+${recordPanel}
+    </div>
+    <div class="tab-panel" id="p-equipment" hidden>
+${equipmentContent}
+    </div>
+    <div class="tab-panel" id="p-story" hidden>
+  <div class="story-prose">
+    ${storyContent}
+  </div>
+    </div>
+    <div class="tab-panel" id="p-journey" hidden>
+${journeyContent}
+    </div>
+  </div>
+</div>
+</div>`;
 }
 
 function extractEquipment(frontmatter, sections) {
@@ -183,6 +282,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
   const systemLiveData = (context || {}).systemLiveData || null;
   const systemStatusPanelHtml = (context || {}).systemStatusPanelHtml || null;
+  const systemRecordHtml = (context || {}).systemRecordHtml || null;
+  const systemStatusBarHtml = (context || {}).systemStatusBarHtml || null;
 
   // Combat-only consumed titles: only suppress when combat HTML is present.
   const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
@@ -192,11 +293,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const emptyAppearPattern = /^\s*(<p><em>Scenes and sessions where .+ appears\.<\/em><\/p>)?\s*$/;
 
   const gurpsSheet = isGurpsSystem(publishConfig);
+  const cocSheet = isCocSystem(publishConfig);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
     if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
     if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
+    if (cocSheet && (systemHtml || systemRecordHtml) && COC_CONSUMED_TITLES.has(lower)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;
@@ -247,6 +350,45 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   // --- Assemble ---
   const crWidget = `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`;
+
+  // --- CoC parchment folio (branch off the generic assembly) ---
+  if (cocSheet) {
+    const portraitUrl = hasPortrait
+      ? (((portraitImg(fm, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
+      : '';
+    const crestKey = publishConfig.sheet_crest;
+    const sealUrl = crestKey
+      ? (((portraitImg({ portrait: crestKey }, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
+      : '';
+    const cocBody = buildCocBody({
+      page, fm, publishConfig,
+      displayTitle: page.displayTitle,
+      sheetHtml: systemHtml,
+      recordHtml: systemRecordHtml,
+      statusBarHtml: systemStatusBarHtml,
+      portraitUrl, sealUrl, crWidget,
+      equipmentContent, storyContent, journeyContent,
+      leftoverSections: sheetSections,
+    });
+    return baseShell({
+      title: page.displayTitle,
+      siteTitle: config.siteTitle,
+      cssHref: cssPath(page.outputPath),
+      navHtml: navFor(page.outputPath, config),
+      rootHref: rootPath(page.outputPath),
+      content: cocBody,
+      footer: config.footer,
+      genrePreset: publishConfig._genrePreset,
+      overridesCss: publishConfig._overridesCss,
+      breadcrumbsHtml,
+      scripts: [
+        ...clientScripts(page.outputPath),
+        rootPath(page.outputPath) + 'js/change-request.js',
+        rootPath(page.outputPath) + 'js/coc-sheet.js',
+      ],
+    });
+  }
+
   const body = `${crWidget}
 ${heroBanner}
 ${epithet}
