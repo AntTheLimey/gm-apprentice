@@ -201,8 +201,24 @@ Turns the per-vault map from hand-authored into **discovered-and-maintained**. B
 primitives and the skill.
 
 ## Implementation order
-1. Real GFM↔HTML converter (unblocks fidelity) — replace `md_to_html` + pull's `html_to_md`.
-2. `_meta/mobrpg-map.json` schema + a `map-locations`/`map-build` scaffolder (discover + propose).
-3. Teach `suggest` (or a new `suggest-complete`) to build compound batches from the map (Pillars 1–2).
-4. Vault-writeback + crosswalk review-state + authority reconciliation (Pillar 3).
-5. The mobRPG skill wrapping 2–4 with judgment + curation.
+
+_Progress (2026-07-18): steps 1–2 shipped on `mobrpg-cli`; 3–5 remain. See the ✅/⏳ markers._
+
+1. ✅ **Done** — Real GFM↔HTML converter (unblocks fidelity), replacing `md_to_html` + pull's
+   `html_to_md`. Landed as `mobrpg/md.py` (tables/lists/links); `push` and `pull` rewired onto it.
+2. ✅ **Done** — `_meta/mobrpg-map.json` schema + the discover/propose scaffolder. Landed as the
+   native **`mobrpg map`** command (`mobrpg/commands/map_cmd.py`): `init` (discover mobRPG classifier
+   vocab + scan vault distinct values → draft map, `bound`/`new`, location Political-vs-LandFeature
+   resolved by rule), `sync` (non-destructive re-discovery, preserves confirmed, promotes `new→bound`,
+   flags `stale`), `check` (read-only coverage report).
+3. ⏳ **Remaining** — Teach `suggest` (or a new `suggest-complete`) to build compound batches from the
+   map (Pillars 1–2). `suggest` still shells out to `push_suggestions.py`, which emits bare
+   `CreateElement`s. The `submit-batch` transport verb exists; what's missing is the builder that reads
+   the map + crosswalk and assembles the full datatype graph (Types + `Attribute` edges + reified
+   relationship events) per entity.
+4. ⏳ **Remaining** — Vault-writeback + crosswalk review-state + authority reconciliation (Pillar 3).
+   Persist determined mappings into vault frontmatter, extend the crosswalk with review-state
+   (`pending|accepted|dismissed|edited`) + `content_hash`, and enforce "vault is authoritative until
+   mobRPG returns an edited version; then mobRPG wins."
+5. ⏳ **Remaining** — The mobRPG skill wrapping 2–4 with judgment + curation (resolves `map`'s
+   `review:true` routes; the boundary between the deterministic CLI primitives and the skill).
