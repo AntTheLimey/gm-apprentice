@@ -30,7 +30,7 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 ## Read-only vs mutating
 
-Read-only (safe anywhere): whoami, worlds, pull, sync, images.
+Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
 push, suggest, types, links. write/merge/link-orphans only touch local vault
 files, not the API.
@@ -42,6 +42,17 @@ files, not the API.
     mobrpg pull <world> [--out F] Import a mobRPG world into a JSON extract
                                   (default extract.json). Entry of the import
                                   pipeline; feeds `write`.
+    mobrpg suggestions <world> [--state Pending|Accepted|Dismissed] [--correlate]
+                       [--vault DIR] [--fetch-elements] [--json] [--out DIR]
+                                  List suggestions by review state (the return
+                                  leg of `suggest`). --correlate joins each back
+                                  to its vault file (externalRef) and shows the
+                                  resultElementId an Accepted one produced. Needs
+                                  ReadWriteDelete on the world.
+    mobrpg catalog <world> <kind> [--size N] [--names-only] [--json]
+                                  List the elements of one kind (names + ids),
+                                  e.g. political/type, landfeature, person. See
+                                  what exists before pushing, to avoid dup Types.
     mobrpg write <extract.json> <out_dir>
                                   Render a JSON extract into vault markdown.
     mobrpg merge <extract.json> <vault>
@@ -79,3 +90,8 @@ Push a vault chapter to mobRPG (safe: suggestions):
     export MOBRPG_TOKEN=...
     mobrpg suggest <worldId> --chapter chapter-2            # dry-run
     MOBRPG_ALLOW_PROD_WRITES=1 mobrpg suggest <worldId> --chapter chapter-2 --execute
+
+Confirm the round-trip after a GM accepts them in mobRPG (read-only):
+    mobrpg catalog <worldId> political/type                # see existing Types first
+    mobrpg suggestions <worldId> --state Accepted --correlate --vault /path/to/vault
+                                                            # externalRef -> vault file -> new element id
