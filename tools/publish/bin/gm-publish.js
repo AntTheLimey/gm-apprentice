@@ -14,6 +14,7 @@ Usage:
   gm-apprentice-publish init [target-dir]    Scaffold a new site
   gm-apprentice-publish build [options]      Build the site
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
+  gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -145,6 +146,18 @@ if (command === 'build') {
 if (command === 'inbox') {
   const { runInbox } = require('../lib/inbox-cli.js');
   runInbox(args.slice(1))
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'flush') {
+  let configPath = './vault.config.json';
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--config' && args[i + 1]) { configPath = args[i + 1]; i++; }
+  }
+  const { runFlush } = require('../lib/flush-cli.js');
+  runFlush({ configPath })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
