@@ -63,9 +63,19 @@ async function ensureIndex(kv) {
 }
 
 // Add an id to the index, re-reading immediately before the write and unioning so
-// a concurrent enqueue's id is not clobbered. KV offers no compare-and-set, so a
-// cross-edge simultaneous write can still race in theory; players sharing one
-// table (hence one edge, with read-your-writes) are covered in practice.
+// a concurrent enqueue's id is not clobbered on the same edge.
+//
+// KNOWN LIMITATION — accepted best-effort, NOT self-healing. KV has no
+// compare-and-set, so two enqueues on DIFFERENT edges can each read the same
+// index snapshot and write back only their own id; the last write drops the
+// other. Unlike the loadout roster (registerMember runs on every save, so a
+// clobbered member re-registers), an enqueue runs once: the orphaned req:<id> is
+// stored but, since ensureIndex re-lists only on cold start (index key absent),
+// it is never rediscovered by readPending. This is an intentional trade-off for
+// a zero-infra, free-tier design (Durable Objects are out of scope). Co-located
+// players share one edge (read-your-writes) and are unaffected; a request lost to
+// a cross-edge race is recovered by the player resubmitting. A periodic
+// list()+union reconciliation could close the gap if this proves to matter.
 async function addToIndex(kv, id) {
   const cur = (await readIndex(kv)) || [];
   if (!cur.includes(id)) { cur.push(id); await writeIndex(kv, cur); }
