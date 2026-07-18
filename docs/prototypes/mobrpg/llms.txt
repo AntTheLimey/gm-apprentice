@@ -30,7 +30,7 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 ## Read-only vs mutating
 
-Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, sync, images.
+Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, map, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
 push, suggest, submit-batch, update, types, links, review. write/merge/
 link-orphans only touch local vault files, not the API.
@@ -53,6 +53,12 @@ link-orphans only touch local vault files, not the API.
                                   List the elements of one kind (names + ids),
                                   e.g. political/type, landfeature, person. See
                                   what exists before pushing, to avoid dup Types.
+    mobrpg map <init|sync|check> <world> --vault <path> [--map FILE]
+                                  Generate/maintain the per-vault type mapping.
+                                  init: discover mobRPG types + scan vault vocab ->
+                                  propose _meta/mobrpg-map.json. sync: re-discover +
+                                  merge non-destructively (preserve confirmed).
+                                  check: coverage report. Read-only on mobRPG.
     mobrpg update <world> <suggestionId> <update.json> [--execute]
                                   Replace a Pending suggestion's payload (PUT,
                                   whole-payload). Edits inline fields only (name,

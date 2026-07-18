@@ -21,6 +21,7 @@ from mobrpg.commands import catalog as _catalog
 from mobrpg.commands import review as _review
 from mobrpg.commands import submit_batch as _submit_batch
 from mobrpg.commands import update as _update
+from mobrpg.commands import map_cmd as _map
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -35,6 +36,7 @@ NATIVE: dict = {
     "review": _review.run,
     "submit-batch": _submit_batch.run,
     "update": _update.run,
+    "map": _map.run,
 }
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
@@ -60,6 +62,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("review", "accept | dismiss | reinstate a suggestion (GM; needs write access)"),
     ("submit-batch", "submit a pre-built compound suggestion batch (types+edges+relations) from JSON"),
     ("update", "replace a Pending suggestion's payload (PUT) from JSON; edits inline fields only"),
+    ("map", "init | sync | check the per-vault mobRPG type mapping (discover + propose)"),
     ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
