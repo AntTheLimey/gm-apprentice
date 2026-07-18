@@ -36,14 +36,16 @@ function pct(part, whole) {
 
 // -- Status bar -------------------------------------------------------------
 
-function pipTrack(track, cur, max) {
+function pipTrack(track, label, cur, max) {
   const total = Math.max(0, Number(max) || 0);
   const filled = Math.max(0, Math.min(total, Number(cur) || 0));
   let pips = '';
   for (let i = 0; i < total; i++) {
-    pips += `<span class="pip${i < filled ? ' on' : ''}"></span>`;
+    const on = i < filled;
+    pips += `<button type="button" class="pip${on ? ' on' : ''}" aria-pressed="${on}" ` +
+      `aria-label="${escapeHtml(label)} ${i + 1}"></button>`;
   }
-  return `<div class="pips" data-track="${track}">${pips}</div>`;
+  return `<div class="pips" data-track="${track}" role="group" aria-label="${escapeHtml(label)}">${pips}</div>`;
 }
 
 const CONDITION_CHIPS = [
@@ -80,14 +82,14 @@ function buildStatusBar(model) {
     `<div class="sb-cell">` +
       `<span class="sb-lab">Hit Points</span>` +
       `<span class="sb-count"><b data-hp>${txt(hp.cur)}</b><span class="sb-of">/${txt(hp.max)}</span></span>` +
-      pipTrack('hp', hp.cur, hp.max) +
+      pipTrack('hp', 'Hit points', hp.cur, hp.max) +
     `</div>`
   );
   cells.push(
     `<div class="sb-cell">` +
       `<span class="sb-lab">Magic Pts</span>` +
       `<span class="sb-count"><b data-mp>${txt(mp.cur)}</b><span class="sb-of">/${txt(mp.max)}</span></span>` +
-      pipTrack('mp', mp.cur, mp.max) +
+      pipTrack('mp', 'Magic points', mp.cur, mp.max) +
     `</div>`
   );
   cells.push(
@@ -192,7 +194,8 @@ function buildPortraitRow(backstory) {
 
 function skillRow(s) {
   const dev = s && s.developed ? ' dev' : '';
-  return `<div class="skill${dev}"><span class="exp"></span>` +
+  return `<div class="skill${dev}"><button type="button" class="exp" aria-pressed="false" ` +
+    `aria-label="Experience check: ${escapeHtml(String((s && s.name) || ''))}"></button>` +
     `<span class="sname">${nameHtml(s.name)}</span>` +
     `<span class="reg">${pad2(s.reg)}</span>` +
     `<span class="h">${txt(s.half)}</span>` +

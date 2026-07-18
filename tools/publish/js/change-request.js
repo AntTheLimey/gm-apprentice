@@ -150,11 +150,13 @@
       document.body.style.overflow = 'hidden';
       logBtn.setAttribute('aria-expanded', 'true');
       renderLog();
+      closeBtn.focus();               // move focus into the dialog for keyboard/SR users
     }
     function closeModal() {
       backdrop.hidden = true;
       document.body.style.overflow = '';
       logBtn.setAttribute('aria-expanded', 'false');
+      logBtn.focus();                 // restore focus to the trigger
     }
     logBtn.addEventListener('click', openModal);
     closeBtn.addEventListener('click', closeModal);

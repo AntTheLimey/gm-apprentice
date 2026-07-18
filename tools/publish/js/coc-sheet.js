@@ -37,14 +37,21 @@
         p.addEventListener('click', function () {
           var target = i + 1, filled = track.querySelectorAll('.pip.on').length;
           if (filled === target) target = i;
-          pips.forEach(function (q, j) { q.classList.toggle('on', j < target); });
+          pips.forEach(function (q, j) {
+            var on = j < target;
+            q.classList.toggle('on', on);
+            q.setAttribute('aria-pressed', on);
+          });
           if (out) out.textContent = target;
         });
       });
     });
     // experience checkbox (local toggle only)
     document.querySelectorAll('.skill .exp').forEach(function (b) {
-      b.addEventListener('click', function () { b.parentElement.classList.toggle('checked'); });
+      b.addEventListener('click', function () {
+        var on = b.parentElement.classList.toggle('checked');
+        b.setAttribute('aria-pressed', on);
+      });
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
