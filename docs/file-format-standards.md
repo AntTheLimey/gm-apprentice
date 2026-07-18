@@ -113,12 +113,12 @@ Original-content files (house rules, campaign notes) need no attribution.
 
 ## 8. CoC 7e investigator sheet — structure the publish tool reads
 
-The publish tool renders CoC PC pages by **parsing the markdown body tables**
-of the PC file (`tools/publish/lib/templates/coc/parse.js`), not the
-frontmatter. The shipped templates (`skills/shared/templates/pc-coc-7e.md`
-and `pc-coc-7e-regency.md`) must keep this structure exactly — the parser
-matches on section titles, subsection titles, and the first column of each
-table. If you rename a section or column, **you must update
+`tools/publish/lib/templates/coc/parse.js` renders CoC PC pages by
+**parsing the markdown body tables** of the PC file. The shipped templates
+(`skills/shared/templates/pc-coc-7e.md` and `pc-coc-7e-regency.md`) must
+keep this structure exactly — the parser matches on section titles,
+subsection titles, and the first column of each table. If you rename a
+section or column, **you must update
 `tools/publish/lib/templates/coc/parse.js`** in the same change, or the
 field silently stops rendering.
 
