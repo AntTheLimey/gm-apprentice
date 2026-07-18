@@ -27,12 +27,17 @@ function makeAdapter({ runWrangler, namespaceId }) {
       if (res.code === 0) return res.stdout.replace(/\n$/, '');
       // A non-zero exit is EITHER a genuinely-absent key (benign) OR a real read
       // failure — auth expired, wrong namespace, no network, wrangler missing.
-      // Wrangler reports an absent key with a "not found" message; treat that as
-      // null, mirroring a real KV binding where a missing key returns null.
-      // Anything else must throw rather than masquerade as an empty result —
-      // otherwise a broken read is indistinguishable from an empty campaign to
-      // every caller (getStates, readPending, ...).
-      if (/not found|not_found|no value|does not exist/i.test(res.stderr || '')) return null;
+      // Mirror a real KV binding: a missing key returns null, everything else
+      // throws. Anything swallowed here masquerades as an empty campaign to every
+      // caller (getStates, readPending, ...), which is the failure we must avoid.
+      //
+      // An operational failure often ALSO contains "not found" (e.g. a wrong
+      // namespace: "KV namespace ... not found [code: 10041]"), so those signals
+      // are checked first and always throw — only a key-scoped not-found with no
+      // operational signal is treated as an absent key.
+      const err = (res.stderr || '').toLowerCase();
+      const operational = /namespace|authenticat|authoriz|unauthor|permission|credential|not logged in|network|fetch failed|timeout|econn|enotfound|10041|10000/.test(err);
+      if (!operational && /not found|not_found|no value|does not exist/.test(err)) return null;
       throw new Error('wrangler kv get failed for "' + key + '": ' + ((res.stderr || '').trim() || 'exit ' + res.code));
     },
     async put(key, value, opts) {

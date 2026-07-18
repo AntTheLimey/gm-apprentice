@@ -38,6 +38,14 @@ test('adapter.get throws on a real read failure (not a missing key)', async () =
   await assert.rejects(() => kv.get('req:a'), /wrangler kv get failed/);
 });
 
+test('adapter.get throws on a namespace error even though it says "not found"', async () => {
+  // A wrong-namespace failure carries "not found" too; it must NOT be swallowed
+  // as an absent key, or flush/inbox would read it as an empty campaign.
+  const runWrangler = () => ({ code: 1, stdout: '', stderr: 'KV namespace "NS" not found [code: 10041]' });
+  const kv = makeAdapter({ runWrangler, namespaceId: 'NS' });
+  await assert.rejects(() => kv.get('req:a'), /wrangler kv get failed/);
+});
+
 test('adapter.put forwards value and optional TTL', async () => {
   const calls = [];
   const runWrangler = (args) => { calls.push(args); return { code: 0, stdout: '', stderr: '' }; };
