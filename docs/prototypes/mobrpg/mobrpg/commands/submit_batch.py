@@ -44,6 +44,31 @@ def _summarize(req: dict) -> None:
                   f"{pl.get('sourceRef')} -> {pl.get('targetRef')}  deps={it.get('dependsOn')}")
 
 
+def submit(world: str, request: dict, *, execute: bool, index: int | None = None) -> dict:
+    """Dry-run summary (returns {}) or POST one SubmitSuggestionsRequest (returns the response).
+    Shared by `submit-batch` (file in) and `suggest` (built in memory)."""
+    tag = f"batch {index}: " if index is not None else ""
+    n = len(request.get("suggestions", []))
+    if not execute:
+        print(f"{tag}DRY-RUN — would POST this batch (add --execute to submit):")
+        _summarize(request)
+        return {}
+    client.assert_writes_allowed()
+    token = client.get_access_token()
+    print(f"→ {tag}POST /world/{world}/suggestion  n={n} ...")
+    resp = client._request("POST", f"/world/{world}/suggestion", token=token, body=request)
+    stored = resp.get("suggestions", []) if isinstance(resp, dict) else []
+    resolved = resp.get("resolvedRefs", {}) if isinstance(resp, dict) else {}
+    print(f"  ✓ {len(stored)} suggestion(s) stored")
+    for s in stored:
+        pl = s.get("payload") or {}
+        print(f"      - {s.get('reviewState','?'):8} {s.get('operation',''):14} "
+              f"id={s.get('id')} {pl.get('name') or ''}")
+    if resolved:
+        print(f"  resolvedRefs (deduped/swallowed → existing element id): {resolved}")
+    return resp if isinstance(resp, dict) else {}
+
+
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg submit-batch",
@@ -62,27 +87,9 @@ def run(argv: list[str]) -> int:
         print(f"ERROR reading {args.file}: {e}", file=sys.stderr)
         return 2
 
-    if not args.execute:
-        print("DRY-RUN — would POST this batch (add --execute to submit):")
-        _summarize(req)
-        return 0
-
     try:
-        client.assert_writes_allowed()
-        token = client.get_access_token()
-        print(f"→ POST /world/{args.world}/suggestion  n={len(req.get('suggestions', []))} ...")
-        resp = client._request("POST", f"/world/{args.world}/suggestion", token=token, body=req)
+        submit(args.world, req, execute=args.execute)
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
-
-    stored = resp.get("suggestions", []) if isinstance(resp, dict) else []
-    resolved = resp.get("resolvedRefs", {}) if isinstance(resp, dict) else {}
-    print(f"  ✓ {len(stored)} suggestion(s) stored")
-    for s in stored:
-        pl = s.get("payload") or {}
-        print(f"      - {s.get('reviewState','?'):8} {s.get('operation',''):14} "
-              f"id={s.get('id')} {pl.get('name') or ''}")
-    if resolved:
-        print(f"  resolvedRefs (deduped/swallowed → existing element id): {resolved}")
     return 0
