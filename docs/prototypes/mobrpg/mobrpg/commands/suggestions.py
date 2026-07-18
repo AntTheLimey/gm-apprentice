@@ -29,11 +29,17 @@ from mobrpg import client
 
 STATES = ("Pending", "Accepted", "Dismissed")
 # mobRPG element discriminator -> the /world/{id}/{kind} sub-resource used to GET it.
+# Covers every WorldElementData subtype a suggestion can create, so --fetch-elements
+# can confirm any accepted element (incl. Event relationships and classifier Types).
 TYPE_EP = {
     "Person": "person", "Political": "political", "PoliticalType": "political/type",
     "Organization": "organization", "OrganizationType": "organization/type",
     "Item": "item", "Creature": "creature", "CreatureType": "creature/type",
     "LandFeature": "landfeature", "Race": "person/race", "Profession": "person/profession",
+    "Event": "event", "Culture": "culture", "Currency": "currency", "Language": "language",
+    "Term": "term", "Writing": "writing", "Calendar": "calendar", "Map": "map",
+    # Sex lives under a race (/person/race/{raceId}/sex); a flat fetch isn't reliable, so it's
+    # intentionally omitted here — correlate still reports its externalRef/resultElementId.
 }
 
 
