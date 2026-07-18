@@ -157,7 +157,11 @@ After `suggest` builds an entity's payload:
 Dry-run is the default; the node is written **only** on `--execute --write-back` (the node records
 what we *sent* — never write it for a dry-run).
 
-### 3.2 Direction ↓ — reconcile / pull-down (new verb)
+### 3.2 Direction ↓ — pull-down (new verb)
+
+> **Naming:** the CLI verb must **not** be called `reconcile` — `skills/shared/reconcile.md` already
+> names a different concept (GM content review → `canon_status` promotion in session-wrapup).
+> Working name: `pull-canon` (final name a plan detail).
 
 Reads the review queue + live elements
 (`GET /world/{id}/suggestion?reviewState=…`, then `--fetch-elements` per accepted element — the
@@ -216,9 +220,21 @@ stale → surface "push these first" rather than overwriting.
 - Write-forward on `suggest` (`--write-back`), `content_hash`, idempotent skip.
 - The **reconcile** verb: all five review states + Tier-B new-note scaffolding + the pending guard.
 - One-time **crosswalk → node** migration (§6).
-- **Schema adoption** (chosen in-scope): add the `mobrpg:` node to the entity `_Templates/`, add a
-  mirror entry to `_meta/entity-types.md`, bump `gm_apprentice_version`, and record a vault
-  migration in `_meta/vault-config.md`'s changelog. The node ships as declared schema.
+- **Schema adoption** (chosen in-scope): this ships in the **gm-apprentice plugin** (all vaults),
+  not as a one-off vault edit. Edit the plugin *source*, and vaults receive it through the normal
+  migration-on-version-bump:
+  - `skills/shared/entity-schema.md` — add the `mobrpg:` node to the Type-Specific Fields section
+    (the schema source of record; each vault's `_meta/entity-types.md` is a mirror resynced on
+    migration via "Schema Mirror Sync").
+  - `skills/shared/templates/` — add the `mobrpg:` node scaffold to the relevant entity templates
+    (migrations re-diff each vault's `_Templates/` against these).
+  - `skills/shared/migrations.md` — add one migration entry in ascending version order (Structural:
+    scaffold the node + Canticle crosswalk backfill; Content: template re-diff), and bump
+    `.claude-plugin/plugin.json` (currently 1.8.22; the version stamps `current_version` at build).
+  - The per-vault effects (`_meta/entity-types.md` mirror, `_Templates/` re-diff,
+    `gm_apprentice_version` + changelog in `_meta/vault-config.md`) are produced **automatically** by
+    campaign-organizer's migration workflow when a vault opens at a lower version — they are not
+    hand-edited or branch-committed.
 
 **DEFERRED to the step-5 mobRPG skill (LLM judgment):**
 
@@ -230,10 +246,17 @@ stale → surface "push these first" rather than overwriting.
 
 ---
 
-## 6. One-time migration: retire the sidecar crosswalk
+## 6. Migration: schema addition (all vaults) + Canticle crosswalk backfill (one-time)
 
-`canticle-regency-crosswalk.json` (42 entities + 80 relationships) exists **only** because of the
-old "no IDs in frontmatter" decision. Once the node exists, its reason to exist is gone.
+Two distinct migrations, don't conflate them:
+
+- **Schema addition — general, all vaults.** The plugin migration (§5) makes every vault *capable*
+  of carrying `mobrpg:` nodes: schema mirror + template scaffold. This runs on any vault that opens
+  at a lower `gm_apprentice_version`. It adds no data — a vault with no mobRPG world simply carries
+  the (empty/absent) node schema.
+- **Canticle crosswalk backfill — one-time, Canticle only.** `canticle-regency-crosswalk.json`
+  (42 entities + 80 relationships) exists **only** because of the old "no IDs in frontmatter"
+  decision. Only Canticle has one. Backfill its rows into `mobrpg:` nodes, then the sidecar is dead:
 
 - Convert every crosswalk `entities[]` row → a `mobrpg:` node (`element_id`, `external_ref`,
   `element_kind` from the entity kind, `review_state: accepted`) on the matching vault file.
@@ -247,7 +270,19 @@ This also absorbs the long-standing chore recorded in integration-log / README (
 
 ---
 
-## 7. Constraints (inherited)
+## 7. Test vaults (end-to-end verification)
+
+Three real vaults are available as test cases:
+
+- **2 vaults already in mobRPG** — provide real canon to exercise the **pull-down** direction (all
+  five review states, post-acceptance drift, Tier-B new-note scaffolding) against live elements.
+- **1 vault not yet in mobRPG** — exercises the **first-time push** path (write-forward from empty,
+  no prior nodes) end-to-end; can be loaded into mobRPG to then exercise pull-down too.
+
+All live exercises stay read-only / dry-run by default; any `--execute` against a real world needs
+`MOBRPG_ALLOW_PROD_WRITES=1` and explicit go-ahead. Canticle remains the crosswalk-backfill case.
+
+## 8. Constraints (inherited)
 
 - **TDD.** Baseline **79 tests** must stay green (`.venv/bin/python -m pytest -q` from
   `docs/prototypes/mobrpg`).
