@@ -37,3 +37,27 @@ def test_collect_entities_kind_and_only(tmp_path):
     v = _vault(tmp_path)
     assert {e["name"] for e in suggest.collect_entities(v, kind="location")} == {"British Museum"}
     assert {e["name"] for e in suggest.collect_entities(v, only="imogen")} == {"Imogen Bellamy"}
+
+
+def test_item_builders():
+    c = suggest._create("e1", "Dr X", {"type": "Person", "languages": [], "equipment": []},
+                        description="<p>hi</p>", altNames=["Doc"], external_ref="canticle:x")
+    assert c["ref"] == "e1" and c["operation"] == "CreateElement"
+    assert c["payload"]["operation"] == "CreateElement" and c["payload"]["name"] == "Dr X"
+    assert c["payload"]["data"]["type"] == "Person" and c["externalRef"] == "canticle:x"
+    r = suggest._relation("Attribute", "suggestion:t1", "suggestion:e1", ["t1", "e1"])
+    assert r["operation"] == "AddRelation" and "ref" not in r
+    assert r["payload"] == {"operation": "AddRelation", "sourceRef": "suggestion:t1",
+                            "targetRef": "suggestion:e1", "type": "Attribute"}
+    assert r["dependsOn"] == ["t1", "e1"]
+
+
+def test_resolve_classifier_and_lookup():
+    assert suggest.resolve_classifier({"mobrpgId": "abc", "status": "proposed"}) == ("bound", "abc")
+    assert suggest.resolve_classifier({"status": "drop", "name": "X"}) == ("drop", None)
+    assert suggest.resolve_classifier({"name": "Servant"}) == ("create", "Servant")
+    assert suggest.resolve_classifier(None) == ("drop", None)
+    section = {"Priest": {"mobrpgId": "p1"}, "male": {"name": "Male"}}
+    assert suggest._lookup(section, "Priest, cultist") == {"mobrpgId": "p1"}   # first token
+    assert suggest._lookup(section, "Male") == {"name": "Male"}                # case-tolerant
+    assert suggest._lookup(section, "Unknown") is None

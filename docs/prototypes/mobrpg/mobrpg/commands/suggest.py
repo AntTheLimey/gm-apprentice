@@ -102,3 +102,59 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0) -> list[di
     if limit:
         out = out[:limit]
     return out
+
+
+KIND_DATA = {
+    "person": lambda: {"type": "Person", "languages": [], "equipment": []},
+    "organization": lambda: {"type": "Organization", "titles": []},
+    "item": lambda: {"type": "Item", "attributes": {"itemType": "Generic"}},
+    "creature": lambda: {"type": "Creature"},
+    "political": lambda: {"type": "Political", "titles": []},
+}
+
+# classifier element kind → fresh minimal Type data
+TYPE_DATA = {
+    "Profession": lambda: {"type": "Profession"},
+    "Race": lambda: {"type": "Race"},
+    "Sex": lambda: {"type": "Sex"},
+    "OrganizationType": lambda: {"type": "OrganizationType", "titles": []},
+    "CreatureType": lambda: {"type": "CreatureType"},
+    "PoliticalType": lambda: {"type": "PoliticalType", "titles": []},
+}
+
+
+def _create(ref, name, data, *, description="<p></p>", altNames=None, external_ref=None) -> dict:
+    item = {"ref": ref, "operation": "CreateElement",
+            "payload": {"operation": "CreateElement", "name": name,
+                        "description": description, "altNames": list(altNames or []),
+                        "data": data},
+            "dependsOn": []}
+    if external_ref:
+        item["externalRef"] = external_ref
+    return item
+
+
+def _relation(rel_type, source_ref, target_ref, depends) -> dict:
+    return {"operation": "AddRelation",
+            "payload": {"operation": "AddRelation", "sourceRef": source_ref,
+                        "targetRef": target_ref, "type": rel_type},
+            "dependsOn": list(depends)}
+
+
+def resolve_classifier(entry) -> tuple[str, str | None]:
+    if not entry:
+        return ("drop", None)
+    if entry.get("mobrpgId"):
+        return ("bound", entry["mobrpgId"])
+    if entry.get("status") == "drop":
+        return ("drop", None)
+    return ("create", entry.get("name"))
+
+
+def _lookup(section, raw):
+    if not raw:
+        return None
+    key = map_cmd._first_token(raw)
+    if key in section:
+        return section[key]
+    return {k.lower(): v for k, v in section.items()}.get(key.lower())
