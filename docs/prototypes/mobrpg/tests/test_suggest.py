@@ -140,3 +140,32 @@ def test_classifier_items_landfeature_has_no_edge():
     ent = {"kind": "location", "location_type": "River"}
     items, _ = suggest.classifier_items(ent, mp, "e1", "race-h", "e1")
     assert items == []   # subtype is inline on the element; no Type edge
+
+
+def test_person_race_and_sex_edges():
+    mp = _map()
+    mp["classifiers"]["sex"] = {"female": {"name": "Female", "status": "new"}}
+    ent = {"kind": "npc", "occupation": None, "gender": "Female", "location_type": None}
+    items, _ = suggest.classifier_items(ent, mp, "e1", "race-human", "e1")
+    edges = [i for i in items if i["operation"] == "AddRelation"]
+    creates = [i for i in items if i["operation"] == "CreateElement"]
+    # Race attached to person using the real race id
+    assert any(e["payload"]["sourceRef"] == "race-human"
+               and e["payload"]["targetRef"] == "suggestion:e1" for e in edges)
+    # Sex element created
+    sref = next(c["ref"] for c in creates if c["payload"]["data"]["type"] == "Sex")
+    assert next(c for c in creates if c["ref"] == sref)["payload"]["name"] == "Female"
+    # Race -> Sex (scoping, real race id as source) and Sex -> Person
+    assert any(e["payload"]["sourceRef"] == "race-human"
+               and e["payload"]["targetRef"] == f"suggestion:{sref}" for e in edges)
+    assert any(e["payload"]["sourceRef"] == f"suggestion:{sref}"
+               and e["payload"]["targetRef"] == "suggestion:e1" for e in edges)
+
+
+def test_person_without_race_id_skips_race_and_sex():
+    mp = _map()
+    mp["classifiers"]["sex"] = {"female": {"name": "Female"}}
+    ent = {"kind": "npc", "occupation": None, "gender": "Female", "location_type": None}
+    items, reports = suggest.classifier_items(ent, mp, "e1", None, "e1")
+    assert items == []           # no race id → cannot scope Sex → emit neither
+    assert any("race" in r.lower() for r in reports)

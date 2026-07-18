@@ -227,7 +227,26 @@ def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[di
     kind = entity["kind"]
     if kind in ("npc", "pc"):
         add("profession", entity.get("occupation"), "Profession")
-        # Race/Sex added in Task 6
+        if race_id:
+            # Race → Person (default Human, real id)
+            items.append(_relation("Attribute", race_id, f"suggestion:{entity_ref}", [entity_ref]))
+            gender = entity.get("gender")
+            if gender:
+                entry = _lookup(cls.get("sex", {}), gender)
+                sex_name = (entry or {}).get("name") or map_cmd._first_token(gender).title()
+                mode, bound = resolve_classifier(entry) if entry else ("create", None)
+                if mode == "bound" and bound:
+                    # scope + classify the existing Sex id
+                    items.append(_relation("Attribute", race_id, bound, []))
+                    items.append(_relation("Attribute", bound, f"suggestion:{entity_ref}", [entity_ref]))
+                elif mode != "drop":
+                    sref = seed()
+                    items.append(_create(sref, sex_name, TYPE_DATA["Sex"]()))
+                    items.append(_relation("Attribute", race_id, f"suggestion:{sref}", [sref]))
+                    items.append(_relation("Attribute", f"suggestion:{sref}",
+                                           f"suggestion:{entity_ref}", [sref, entity_ref]))
+        elif entity.get("gender"):
+            reports.append("race:Human (no live race id — skipped Race/Sex)")
     elif kind in ("faction", "organization"):
         add("organizationType", entity.get("faction_type"), "OrganizationType")
     elif kind == "creature":
