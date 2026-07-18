@@ -51,7 +51,10 @@ async function runFlush(deps) {
   const states = await core.getStates(adapter, campaignId);
   const latest = latestStateByPcSlug(states);
 
-  if (!Object.keys(latest).length) { out('No live state in KV for campaign ' + campaignId); return 0; }
+  if (!Object.keys(latest).length) {
+    out('No live state read for campaign ' + campaignId + '. If players saved sheet state this session, this can also mean KV could not be read — check `npx wrangler@4 whoami` and the INBOX namespace id in wrangler.toml.');
+    return 0;
+  }
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
   const bySlug = {};
