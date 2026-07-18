@@ -313,3 +313,26 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         items.append(_relation("Link", f"suggestion:{eref}", f"suggestion:{entity_ref}", [eref, entity_ref]))
         items.append(_relation("Link", f"suggestion:{eref}", tgt_id, [eref]))
     return items, skipped
+
+
+def build_group(entity, mp, ent_id_by_key, linked_triples, race_id,
+                vault, namespace, seq) -> tuple[list[dict], list[str]]:
+    ref = f"e{seq}"
+    items = element_items(entity, mp, ref, vault, namespace)
+    cls_items, reports = classifier_items(entity, mp, ref, race_id, ref)
+    rel_items, skipped = relationship_items(entity, mp, ref, ent_id_by_key, linked_triples,
+                                            vault, namespace, ref)
+    return items + cls_items + rel_items, reports + skipped
+
+
+def chunk_groups(groups, cap=100) -> list[list[dict]]:
+    chunks, cur = [], []
+    for g in groups:
+        if len(g) > cap:
+            raise ValueError(f"entity group has {len(g)} items > cap {cap}; narrow the entity")
+        if cur and len(cur) + len(g) > cap:
+            chunks.append(cur); cur = []
+        cur.extend(g)
+    if cur:
+        chunks.append(cur)
+    return chunks

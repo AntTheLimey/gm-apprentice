@@ -205,3 +205,37 @@ def test_relationship_items(tmp_path):
     assert {l["payload"]["targetRef"] for l in links} == {"suggestion:e1", "hume-id"}
     assert all(l["payload"]["type"] == "Link" for l in links)
     assert any("Nathaniel" in s for s in skipped) and any("Unknown" in s for s in skipped)
+
+
+def test_build_group_person_full(tmp_path):
+    mp = _map()
+    mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "prof-real"}}
+    mp["classifiers"]["sex"] = {"female": {"name": "Female"}}
+    mp["relationshipTypes"] = {"friend_of": "Generic"}
+    idx = {suggest._key("Nathaniel Rooke"): "rooke-id"}
+    ent = {"path": str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md"), "kind": "npc",
+           "name": "Imogen Bellamy", "aliases": [], "description": "<p>x</p>",
+           "occupation": "Priest", "gender": "Female", "location_type": None,
+           "faction_type": None, "creature_type": None,
+           "relationships": [{"target": "Nathaniel_Rooke", "predicate": "friend_of", "desc": ""}]}
+    items, reports = suggest.build_group(ent, mp, idx, set(), "race-h", str(tmp_path), "canticle", 1)
+    assert items[0]["ref"] == "e1" and items[0]["payload"]["data"]["type"] == "Person"
+    types = {i["payload"]["data"]["type"] for i in items if i["operation"] == "CreateElement"}
+    assert {"Person", "Sex", "Event"} <= types    # profession is bound → no Profession create
+    assert all(i["operation"] in ("CreateElement", "AddRelation") for i in items)
+
+
+def test_chunk_groups_packs_and_never_splits():
+    g1 = [{"x": i} for i in range(60)]
+    g2 = [{"y": i} for i in range(60)]
+    g3 = [{"z": i} for i in range(10)]
+    chunks = suggest.chunk_groups([g1, g2, g3], cap=100)
+    assert len(chunks) == 2
+    assert len(chunks[0]) == 60 and len(chunks[1]) == 70   # g1 | g2+g3
+    assert chunks[0] == g1                                 # group kept intact
+
+
+def test_chunk_groups_oversized_group_errors():
+    import pytest
+    with pytest.raises(ValueError):
+        suggest.chunk_groups([[{"x": i} for i in range(101)]], cap=100)
