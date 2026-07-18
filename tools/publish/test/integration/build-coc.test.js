@@ -42,6 +42,9 @@ describe('build integration — CoC PC', () => {
   it('marks the active condition from the Status checklist', () => {
     assert.match(html, /cond-chip on[^>]*>\s*Indefinite Insanity/i);
   });
+  it('composes the masthead era with the vault setting_year', () => {
+    assert.match(html, /class="era">Regency Cthulhu · in the year 1814</);
+  });
   it('loads the CoC client script', () => assert.match(html, /js\/coc-sheet\.js/));
   it('does not duplicate the Skills section as a loose accordion', () => {
     // "Skills" should appear in the structured sheet, not as an accordion header button

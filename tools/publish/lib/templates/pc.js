@@ -76,7 +76,14 @@ function buildCocBody(opts) {
     ? recordBody
     : '<p class="empty-note">No record entries yet.</p>';
 
-  const era = fm.era ? escapeHtml(String(fm.era)) : escapeHtml(cocSystemLabel(publishConfig));
+  // Era line: an explicit `era` frontmatter wins verbatim; otherwise the system
+  // label, plus "· in the year <setting_year>" from vault config when set.
+  const settingYear = (publishConfig || {}).setting_year;
+  const yearSuffix = (settingYear != null && String(settingYear).trim())
+    ? ` · in the year ${String(settingYear).trim()}` : '';
+  const era = fm.era
+    ? escapeHtml(String(fm.era))
+    : escapeHtml(cocSystemLabel(publishConfig) + yearSuffix);
   const corners = '<span class="corner tl">❦</span><span class="corner tr">❦</span><span class="corner bl">❦</span><span class="corner br">❦</span>';
   const seal = sealUrl ? `<img class="seal-img" src="${sealUrl}" alt="">` : '';
 
