@@ -23,3 +23,19 @@ test('clampScalar clamps to [0, max] and floors when max is null', () => {
   assert.equal(cl.clampScalar(-1, null), 0);
   assert.equal(cl.clampScalar(7, null), 7);
 });
+
+test('pipTarget sets to the tapped ordinal, but drops one when tapping the topmost filled pip', () => {
+  assert.equal(cl.pipTarget(3, 5), 6);   // 4 filled shown as 3? tap 6th pip → raise to 6
+  assert.equal(cl.pipTarget(6, 5), 5);   // 6 filled, tap the 6th (topmost) → drop to 5
+  assert.equal(cl.pipTarget(1, 0), 0);   // 1 filled, tap the 1st (topmost) → drop to 0
+  assert.equal(cl.pipTarget(0, 0), 1);   // empty, tap the 1st → raise to 1
+  assert.equal(cl.pipTarget(2, 4), 5);   // tap above the fill → set to that ordinal
+});
+
+test('barPct is value/max as a rounded percent, 0 when value or max is missing', () => {
+  assert.equal(cl.barPct(46, 92), 50);
+  assert.equal(cl.barPct(92, 92), 100);
+  assert.equal(cl.barPct(0, 92), 0);
+  assert.equal(cl.barPct(null, 92), 0);
+  assert.equal(cl.barPct(46, 0), 0);
+});

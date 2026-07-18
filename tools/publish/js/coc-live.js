@@ -31,7 +31,22 @@
     return x;
   }
 
-  var api = { cocNotes: cocNotes, reassocTicks: reassocTicks, clampScalar: clampScalar };
+  // Tapping a pip sets the track to that pip's ordinal (index+1), EXCEPT tapping
+  // the current topmost filled pip drops the track by one — the only gesture that
+  // lets a track fall (down to 0). Mirrors the approved sheet mockup.
+  function pipTarget(filled, clickedIndex) {
+    var target = clickedIndex + 1;
+    return filled === target ? clickedIndex : target;
+  }
+
+  // Sanity-bar fill percentage. 0 when the value or max is missing.
+  function barPct(val, max) {
+    if (val == null || !max) return 0;
+    return Math.round((Number(val) / Number(max)) * 100);
+  }
+
+  var api = { cocNotes: cocNotes, reassocTicks: reassocTicks, clampScalar: clampScalar,
+    pipTarget: pipTarget, barPct: barPct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__cocLive = api;
 
@@ -108,10 +123,22 @@
         p.classList.toggle('on', on);
         p.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
+      // Keep the prominent numeric readout (<b data-hp>/<b data-mp>) in sync with
+      // the filled pip count — on tap and on restore from cache/KV.
+      var out = q('[data-' + track + ']');
+      if (out) out.textContent = n;
     }
     function setScalar(field, val) {
       var b = q('[data-' + field + ']');
-      if (b && val != null) b.textContent = clampScalar(val, maxFor(field));
+      if (!b || val == null) return;
+      var max = maxFor(field);
+      var v = clampScalar(val, max);
+      b.textContent = v;
+      // Sanity has a progress bar that must track the number (Luck/Rep have none).
+      if (field === 'san') {
+        var fill = bar.querySelector('.sanbar .fill');
+        if (fill) fill.style.width = barPct(v, max) + '%';
+      }
     }
 
     // Apply an opaque blob -> DOM. Structural-drift safety: ticks apply only to
@@ -169,7 +196,7 @@
       var t = pipTrack(track);
       if (!t) return;
       Array.prototype.forEach.call(t.querySelectorAll('.pip'), function (pip, i) {
-        pip.addEventListener('click', function () { setPips(track, i + 1); change(); });
+        pip.addEventListener('click', function () { setPips(track, pipTarget(pipCount(track), i)); change(); });
       });
     });
     ['san', 'luck', 'rep'].forEach(function (field) {
