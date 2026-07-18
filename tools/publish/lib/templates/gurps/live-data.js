@@ -149,9 +149,9 @@ function buildLiveData(model, meta) {
   };
 }
 
-function liveDataScript(data) {
+function liveDataScript(data, domId) {
   const json = JSON.stringify(data).replace(/</g, '\\u003c');
-  return `<script type="application/json" id="gurps-live-data">${json}</script>`;
+  return `<script type="application/json" id="${domId}">${json}</script>`;
 }
 
 module.exports = { buildLiveData, liveDataScript, buildVitals };
