@@ -127,18 +127,34 @@ def _bind(value: str, existing: dict, target_kind: str) -> dict:
     return {"target": target_kind, "name": name, "mobrpgId": None, "status": "new"}
 
 
+# natural-feature words NOT spelled exactly like a LandFeatureSubType enum value
+LAND_SYNONYMS = {
+    "waterway": "River", "brook": "Stream", "creek": "Stream", "woods": "Wood", "wood": "Wood",
+    "hills": "Hill", "mountains": "Mountain", "peak": "Mountain", "summit": "Mountain",
+    "plateau": "Mesa", "canyon": "Gorge", "ravine": "Gorge", "gully": "Gully", "marshland": "Marsh",
+    "wetland": "Marsh", "bog": "Swamp", "seashore": "Shore", "coastline": "Coast", "riverbank": "River",
+}
+
+
 def _route_location(value: str, disc: dict) -> dict:
+    """Rule: obviously-not-a-landfeature => Political type. A location routes to LandFeature ONLY
+    when its type clearly names a natural feature (LandFeatureSubType enum, or a small synonym list);
+    everything else defaults to a Political type. This resolves the ambiguity by fiat (Ant's rule),
+    so locations don't get parked in 'review' — the few genuine landfeatures the rule misses are
+    hand-flipped in the map (set target: landfeature + confirmed: true)."""
     tok = _first_token(value)
-    # existing PoliticalType wins
-    hit = disc["political/type"].get(_norm(tok))
-    if hit:
+    n = _norm(tok)
+    hit = disc["political/type"].get(n)
+    if hit:  # reuse an existing PoliticalType
         return {"target": "political", "politicalType": tok, "mobrpgId": hit, "status": "bound"}
-    # a natural-feature word -> landfeature
-    if _norm(tok) in LAND_SUBTYPES:
-        return {"target": "landfeature", "landFeatureType": LAND_SUBTYPES[_norm(tok)],
+    if n in LAND_SUBTYPES:  # clearly a natural feature (exact enum)
+        return {"target": "landfeature", "landFeatureType": LAND_SUBTYPES[n],
                 "mobrpgId": None, "status": "new"}
-    # otherwise a new PoliticalType, but ambiguous (could be a monument/natural) -> review
-    return {"target": "political", "politicalType": tok.title(), "mobrpgId": None, "status": "review"}
+    if n in LAND_SYNONYMS:  # clearly natural (synonym of an enum value)
+        return {"target": "landfeature", "landFeatureType": LAND_SYNONYMS[n],
+                "mobrpgId": None, "status": "new"}
+    # default: a new PoliticalType (obviously-not-landfeature => political)
+    return {"target": "political", "politicalType": tok.title(), "mobrpgId": None, "status": "new"}
 
 
 def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict, now: str) -> dict:

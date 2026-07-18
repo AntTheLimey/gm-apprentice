@@ -31,10 +31,16 @@ def test_scan_vault(tmp_path):
 
 def test_route_location():
     disc = {"political/type": {"district": "dist-id"}}
+    # obviously-not-a-landfeature -> Political type (new), not parked in review
     assert m._route_location("Hospital", disc) == {
-        "target": "political", "politicalType": "Hospital", "mobrpgId": None, "status": "review"}
+        "target": "political", "politicalType": "Hospital", "mobrpgId": None, "status": "new"}
+    # exact enum -> landfeature
     assert m._route_location("River", disc)["target"] == "landfeature"
     assert m._route_location("River", disc)["landFeatureType"] == "River"
+    # synonym of an enum value -> landfeature
+    assert m._route_location("waterway", disc)["target"] == "landfeature"
+    assert m._route_location("waterway", disc)["landFeatureType"] == "River"
+    # existing type -> bound
     d = m._route_location("District", disc)
     assert d["status"] == "bound" and d["mobrpgId"] == "dist-id"
 
@@ -64,7 +70,8 @@ def test_init_then_sync(tmp_path, monkeypatch):
     mp = str(tmp_path / "_meta" / "mobrpg-map.json")
     assert m.run(["init", "w1", "--vault", vault, "--map", mp, "--now", "T0"]) == 0
     data = json.load(open(mp))
-    assert data["locationRouting"]["Hospital"]["status"] == "review"     # new political type
+    assert data["locationRouting"]["Hospital"]["status"] == "new"        # new political type
+    assert data["locationRouting"]["Hospital"]["target"] == "political"
     assert data["locationRouting"]["River"]["target"] == "landfeature"
     assert data["locationRouting"]["District"]["status"] == "bound"      # matched existing
 
