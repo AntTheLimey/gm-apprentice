@@ -239,3 +239,32 @@ def test_chunk_groups_oversized_group_errors():
     import pytest
     with pytest.raises(ValueError):
         suggest.chunk_groups([[{"x": i} for i in range(101)]], cap=100)
+
+
+import json
+from mobrpg import client
+
+
+def test_run_dry_run_end_to_end(tmp_path, monkeypatch, capsys):
+    # minimal vault
+    d = tmp_path / "vault"
+    (d / "Characters/NPCs").mkdir(parents=True)
+    (d / "_meta").mkdir(parents=True)
+    (d / "Characters/NPCs/Imogen_Bellamy.md").write_text(
+        '---\ntype: npc\ntags:\n  - chapter-1\noccupation: "Priest"\ngender: Female\n---\nBody.\n',
+        encoding="utf-8")
+    (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
+    cw = tmp_path / "cw.json"
+    cw.write_text(json.dumps(_crosswalk()), encoding="utf-8")
+
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    def boom(*a, **k):
+        raise AssertionError("no write in dry-run")
+    monkeypatch.setattr(client, "assert_writes_allowed", boom)
+
+    rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
+                      "--chapter", "chapter-1", "--out", str(tmp_path / "out")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "DRY-RUN" in out and "Imogen Bellamy" in out

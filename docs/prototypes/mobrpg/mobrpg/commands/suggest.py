@@ -8,12 +8,17 @@ scripts (which print a PROD banner on import and couple to legacy transport).
 """
 from __future__ import annotations
 
+import argparse
 import glob
+import json
 import os
 import re
+import sys
 
+from mobrpg import client
 from mobrpg import md as _md
 from mobrpg.commands import map_cmd
+from mobrpg.commands import submit_batch
 
 
 def _read(path: str) -> tuple[str, str]:
@@ -336,3 +341,102 @@ def chunk_groups(groups, cap=100) -> list[list[dict]]:
     if cur:
         chunks.append(cur)
     return chunks
+
+
+def discover_race_id(world, token, race_name="Human") -> str | None:
+    try:
+        data = client._request("GET", f"/world/{world}/person/race?size=500", token=token)
+    except (client.ApiError, ValueError):
+        return None
+    items = data if isinstance(data, list) else data.get("content", []) if isinstance(data, dict) else []
+    for e in items:
+        if isinstance(e, dict) and (e.get("name") or "").strip().lower() == race_name.lower():
+            return e.get("id")
+    return None
+
+
+def _default_map_path(vault):
+    return os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json")
+
+
+def _default_crosswalk():
+    # canticle-regency-crosswalk.json ships next to the package's parent (prototype dir)
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                        "canticle-regency-crosswalk.json")
+
+
+def run(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(
+        prog="mobrpg suggest",
+        description="Build + submit the full datatype graph per vault entity "
+                    "(element + classifier Types + reified relationship events).")
+    ap.add_argument("world", help="mobRPG worldId")
+    ap.add_argument("--vault", required=True, help="vault root path")
+    ap.add_argument("--map", default="", help="map file (default: <vault>/_meta/mobrpg-map.json)")
+    ap.add_argument("--crosswalk", default="", help="crosswalk file (default: packaged Canticle crosswalk)")
+    ap.add_argument("--chapter", default="", help="restrict to entities tagged with a chapter")
+    ap.add_argument("--kind", default="", help="restrict to one vault kind")
+    ap.add_argument("--only", default="", help="substring match on entity name")
+    ap.add_argument("--limit", type=int, default=0, help="cap number of entities")
+    ap.add_argument("--batch-label", default="", help="override the batch label")
+    ap.add_argument("--out", default="./push_out", help="where to write batch JSON")
+    ap.add_argument("--execute", action="store_true", help="actually submit (default: dry-run)")
+    args = ap.parse_args(argv)
+
+    map_path = args.map or _default_map_path(args.vault)
+    cw_path = args.crosswalk or _default_crosswalk()
+    try:
+        mp = json.load(open(map_path, encoding="utf-8"))
+        crosswalk = json.load(open(cw_path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR reading map/crosswalk: {e}", file=sys.stderr)
+        return 2
+
+    namespace = mp.get("vaultNamespace", "canticle")
+    entities = collect_entities(args.vault, chapter=args.chapter, kind=args.kind,
+                                only=args.only, limit=args.limit)
+    if not entities:
+        print("No matching vault entities for that --chapter/--kind/--only.", file=sys.stderr)
+        return 1
+
+    try:
+        token = client.get_access_token()
+        race_id = discover_race_id(args.world, token)
+    except client.ApiError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    if race_id is None:
+        print("  note: no live 'Human' race found — persons will skip Race/Sex edges.", file=sys.stderr)
+
+    ent_id_by_key, linked = crosswalk_index(crosswalk)
+    groups, all_reports = [], []
+    for i, ent in enumerate(entities, 1):
+        items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,
+                                     args.vault, namespace, i)
+        groups.append(items)
+        all_reports.extend(reports)
+
+    try:
+        chunks = chunk_groups(groups, cap=100)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+    label = args.batch_label or f"Canticle suggest ({args.chapter or 'all'})"
+    os.makedirs(args.out, exist_ok=True)
+    print(f"{len(entities)} entit(y/ies) → {sum(len(c) for c in chunks)} items in {len(chunks)} batch(es)")
+    for r in all_reports:
+        print(f"  [note] {r}")
+
+    rc = 0
+    for idx, chunk in enumerate(chunks, 1):
+        req = {"batchLabel": f"{label} [{idx}/{len(chunks)}]", "suggestions": chunk}
+        json.dump(req, open(os.path.join(args.out, f"suggest-batch-{idx}.json"), "w"),
+                  indent=2, ensure_ascii=False)
+        try:
+            submit_batch.submit(args.world, req, execute=args.execute, index=idx)
+        except client.ApiError as e:
+            print(f"ERROR on batch {idx}: {e}", file=sys.stderr)
+            rc = 1
+            break
+    return rc

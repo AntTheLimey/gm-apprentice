@@ -22,6 +22,7 @@ from mobrpg.commands import review as _review
 from mobrpg.commands import submit_batch as _submit_batch
 from mobrpg.commands import update as _update
 from mobrpg.commands import map_cmd as _map
+from mobrpg.commands import suggest as _suggest
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -37,6 +38,7 @@ NATIVE: dict = {
     "submit-batch": _submit_batch.run,
     "update": _update.run,
     "map": _map.run,
+    "suggest": _suggest.run,
 }
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
@@ -46,7 +48,6 @@ FALLBACK: dict[str, str] = {
     "link-orphans": "orphan_link.py",
     "sync": "detect_updates.py",
     "push": "push_to_mobrpg.py",
-    "suggest": "push_suggestions.py",
     "types": "assign_types.py",
     "links": "push_relationships.py",
     "images": "pull_images.py",
@@ -68,7 +69,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
     ("sync", "detect mobRPG entities edited since the last pull (bootstrap|sync)"),
     ("push", "push vault entities to mobRPG (direct create; needs write access)"),
-    ("suggest", "push vault entities to mobRPG as review suggestions"),
+    ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
     ("types", "set entity types via Attribute edges"),
     ("links", "push vault relationships as mobRPG events"),
     ("images", "pull entity images from a mobRPG world into the vault"),
