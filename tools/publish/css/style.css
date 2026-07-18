@@ -2716,8 +2716,7 @@ tr:nth-child(even) {
 .statusbar,
 #cr-root,
 .folio,
-.cr-modal-backdrop,
-.cr-modal {
+.cr-modal-backdrop.coc {
   --paper:#e7ddc3; --paper-2:#f3ecd8;
   --ink:#241d13; --ink-soft:#5a4b36; --ink-mid:#6f5c40;
   --rule:#7c6a4d; --rule-soft:#b6a483;
@@ -2836,34 +2835,44 @@ table.weap td:first-child{ font-weight:600;}
 .coc-sheet-root .cr-panel[hidden]{ display:none;}
 .coc-sheet-root .cr-toggle::before{ content:"▸ "; color:var(--oxblood-2); font-style:normal;}
 .coc-sheet-root .cr-toggle[aria-expanded="true"]::before{ content:"▾ ";}
-/* History modal */
+/* History modal — neutral fallback (any system). Uses existing site tokens so a
+   non-CoC modal is a clean, usable dialog without inheriting the parchment skin. */
 .cr-modal-backdrop{ position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; padding:1.2rem;
-  background:rgba(24,18,10,.66); backdrop-filter:blur(2px);}
+  background:rgba(0,0,0,.5);}
 .cr-modal-backdrop[hidden]{ display:none;}
-.cr-modal{ width:100%; max-width:580px; max-height:84vh; display:flex; flex-direction:column; border-radius:4px; border:1px solid #100c06;
+.cr-modal{ width:100%; max-width:580px; max-height:84vh; display:flex; flex-direction:column; border-radius:6px;
+  background:var(--bg-card, #fff); border:1px solid var(--border, #ccc); color:var(--text, #111);
+  box-shadow:0 24px 60px rgba(0,0,0,.4);}
+.cr-modal-head{ display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.3rem .7rem; border-bottom:1px solid var(--border, #ccc);}
+.cr-modal-title{ font-weight:700;}
+.cr-modal-close{ background:none; border:1px solid var(--border, #ccc); border-radius:3px; cursor:pointer; color:var(--text-muted, #666); font-size:1rem; line-height:1; width:30px; height:30px;}
+.cr-modal-body{ overflow-y:auto; padding:1rem 1.3rem 1.3rem;}
+
+/* History modal — CoC parchment skin (gated to the `.coc` backdrop). */
+.cr-modal-backdrop.coc{ background:rgba(24,18,10,.66); backdrop-filter:blur(2px);}
+.cr-modal-backdrop.coc .cr-modal{ border-radius:4px; border:1px solid #100c06;
   background:
     radial-gradient(circle at 22% 12%, rgba(150,120,70,.07), transparent 45%),
     repeating-linear-gradient(0deg, rgba(124,106,77,.03) 0 2px, transparent 2px 27px),
     radial-gradient(120% 92% at 20% 0%, var(--paper-2), var(--paper) 72%);
   box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 0 0 5px var(--paper), inset 0 0 0 6px var(--rule);}
-.cr-modal-head{ display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.3rem .7rem; border-bottom:2px double var(--rule);}
-.cr-modal-title{ font-family:var(--didone); font-size:.82rem; letter-spacing:.2em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
-.cr-modal-close{ background:none; border:1px solid var(--rule); border-radius:3px; cursor:pointer; color:var(--ink-soft); font-size:1rem; line-height:1; width:30px; height:30px;}
-.cr-modal-close:hover{ background:rgba(110,35,24,.08); color:var(--oxblood);}
-.cr-modal-body{ overflow-y:auto; padding:1rem 1.3rem 1.3rem;}
+.cr-modal-backdrop.coc .cr-modal-head{ padding:1rem 1.3rem .7rem; border-bottom:2px double var(--rule);}
+.cr-modal-backdrop.coc .cr-modal-title{ font-family:var(--didone); font-size:.82rem; letter-spacing:.2em; text-transform:uppercase; color:var(--oxblood); font-weight:700;}
+.cr-modal-backdrop.coc .cr-modal-close{ border:1px solid var(--rule); color:var(--ink-soft);}
+.cr-modal-backdrop.coc .cr-modal-close:hover{ background:rgba(110,35,24,.08); color:var(--oxblood);}
 .coc-sheet-root .cr-hint{ font-size:.82rem; color:var(--ink-mid); margin:0; font-style:italic;}
 .coc-sheet-root .cr-text{ width:100%; box-sizing:border-box; min-height:5rem; resize:vertical; font-family:var(--body); font-size:.98rem; line-height:1.4; padding:.6rem .7rem; border:1px solid var(--rule); border-radius:3px; background:#fffdf6; color:var(--ink);}
 .coc-sheet-root .cr-text::placeholder{ color:var(--ink-mid); opacity:.7;}
 .coc-sheet-root .cr-send{ align-self:flex-start; cursor:pointer; font-family:var(--didone); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.7rem; min-height:44px; padding:.5rem 1.6rem; border-radius:3px; border:1px solid var(--oxblood); background:var(--oxblood); color:#f3e6df;}
-.cr-modal .cr-logpanel{ margin-top:.65rem; border-top:1px solid var(--rule); padding-top:.65rem;}
-.cr-modal .cr-loglabel{ font-family:var(--didone); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oxblood); margin:0 0 .5rem;}
-.cr-modal .cr-logentry{ margin-bottom:.75rem; font-size:.9rem;}
-.cr-modal .cr-you{ font-weight:600; color:var(--ink);}
-.cr-modal .cr-you::before{ content:"❧ "; color:var(--oxblood-2);}
-.cr-modal .cr-reply{ margin-top:.18rem; white-space:pre-wrap; color:var(--ink-soft); padding-left:1rem; border-left:2px solid var(--rule-soft);}
-.cr-modal .cr-reply.cr-live{ color:#3d6b3a; border-left-color:#3d6b3a;}
-.cr-modal .cr-reply.cr-rejected{ color:var(--oxblood); border-left-color:var(--oxblood);}
-.cr-modal .cr-reply.cr-waiting{ opacity:.55; font-style:italic;}
+.cr-modal-backdrop.coc .cr-logpanel{ margin-top:.65rem; border-top:1px solid var(--rule); padding-top:.65rem;}
+.cr-modal-backdrop.coc .cr-loglabel{ font-family:var(--didone); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oxblood); margin:0 0 .5rem;}
+.cr-modal-backdrop.coc .cr-logentry{ margin-bottom:.75rem; font-size:.9rem;}
+.cr-modal-backdrop.coc .cr-you{ font-weight:600; color:var(--ink);}
+.cr-modal-backdrop.coc .cr-you::before{ content:"❧ "; color:var(--oxblood-2);}
+.cr-modal-backdrop.coc .cr-reply{ margin-top:.18rem; white-space:pre-wrap; color:var(--ink-soft); padding-left:1rem; border-left:2px solid var(--rule-soft);}
+.cr-modal-backdrop.coc .cr-reply.cr-live{ color:#3d6b3a; border-left-color:#3d6b3a;}
+.cr-modal-backdrop.coc .cr-reply.cr-rejected{ color:var(--oxblood); border-left-color:var(--oxblood);}
+.cr-modal-backdrop.coc .cr-reply.cr-waiting{ opacity:.55; font-style:italic;}
 /* ---- Live status bar (mutable vitals + conditions) — designed editable ---- */
 .statusbar{ border:1.5px solid var(--rule); border-radius:4px; margin:0 0 1.2rem; padding:.75rem .85rem;
   background:linear-gradient(180deg, rgba(255,250,235,.72), rgba(251,246,231,.5));
