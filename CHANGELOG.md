@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.30] — 2026-07-18
+
+Publish tool 1.11.9.
+
+### Added
+
+- `flush` command: writes each player's current KV live-state (HP/MP/SAN/Luck, Reputation, and Status conditions) back into the CoC vault sheets, keeping the build-time fallback seed fresh past KV's 30-day TTL. Run automatically when the change-request loop stops, or ad hoc; idempotent, edits vault source only (no rebuild/deploy). Skill experience ticks are left for Advancement.
+
+---
+
 ## [1.8.29] — 2026-07-18
 
 Publish tool 1.11.8.
