@@ -18,7 +18,7 @@ function parseChars(statHtml) {
   const chars = {};
   const html = extractSubsectionHtml(statHtml, 'Characteristics') || '';
   for (const row of parseTableRows(html)) {
-    const key = (row[0] || '').toUpperCase();
+    const key = (row[0] || '').trim().toUpperCase();
     if (['STR','CON','SIZ','DEX','INT','POW','APP','EDU'].includes(key)) {
       const reg = int(row[1]);
       chars[key] = { reg, half: half(reg), fifth: fifth(reg) };
@@ -31,7 +31,7 @@ function parseDerived(statHtml) {
   const d = { hp:{}, mp:{}, sanity:{}, luck:{} };
   const html = extractSubsectionHtml(statHtml, 'Derived') || '';
   for (const row of parseTableRows(html)) {
-    const key = (row[0] || '').toLowerCase();
+    const key = (row[0] || '').trim().toLowerCase();
     const max = num(row[1]); const cur = num(row[2]);
     if (key === 'hp') d.hp = { cur: cur.value, max: max.value };
     else if (key === 'mp') d.mp = { cur: cur.value, max: max.value };
@@ -46,7 +46,7 @@ function parseReputation(statHtml) {
   if (!html) return null;
   const rep = { current: null, start: null, censure: null };
   for (const row of parseTableRows(html)) {
-    const k = (row[0] || '').toLowerCase();
+    const k = (row[0] || '').trim().toLowerCase();
     if (k.includes('starting')) rep.start = int(row[1]);
     else if (k.includes('current')) rep.current = int(row[1]);
     else if (k.includes('censure')) rep.censure = (row[1] || '').replace(/—/, '').trim() || null;
@@ -58,7 +58,7 @@ function parseCombat(statHtml) {
   const html = extractSubsectionHtml(statHtml, 'Combat') || '';
   const c = { move: null, build: null, db: null, dodge: {} };
   for (const row of parseTableRows(html)) {
-    const k = (row[0] || '').toLowerCase();
+    const k = (row[0] || '').trim().toLowerCase();
     const v = (row[1] || '').trim();
     if (k === 'move') c.move = v;
     else if (k === 'build') c.build = v;
@@ -77,11 +77,14 @@ const CONDITION_KEYS = [
 function parseConditions(statHtml) {
   const out = { temporaryInsanity:false, indefiniteInsanity:false, majorWound:false, unconscious:false, dying:false };
   const html = extractSubsectionHtml(statHtml, 'Status') || '';
-  // Split into list items, strip tags, look for a ticked box next to a known label.
-  const items = html.split(/<li[^>]*>/i).slice(1).map(s => s.replace(/<[^>]+>/g, ' '));
+  // Split into list items. Keep the raw markup so `/checked/` can see a real
+  // <input checked> attribute; derive stripped text separately for `[x]` and
+  // label matching (markdown `- [x]` renders the literal "[x]", HTML checkboxes
+  // render an `<input checked>` — support both).
+  const items = html.split(/<li[^>]*>/i).slice(1);
   for (const raw of items) {
-    const text = raw.toLowerCase();
-    const ticked = /\[x\]/.test(text) || /checked/.test(raw);
+    const text = raw.replace(/<[^>]+>/g, ' ').toLowerCase();
+    const ticked = /\[x\]/.test(text) || /checked/i.test(raw);
     if (!ticked) continue;
     for (const [needle, key] of CONDITION_KEYS) if (text.includes(needle)) out[key] = true;
   }
