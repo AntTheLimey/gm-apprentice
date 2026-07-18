@@ -158,3 +158,30 @@ def _lookup(section, raw):
     if key in section:
         return section[key]
     return {k.lower(): v for k, v in section.items()}.get(key.lower())
+
+
+def external_ref(path, vault, namespace) -> str:
+    rel = os.path.relpath(path, os.path.expanduser(vault))
+    if rel.endswith(".md"):
+        rel = rel[:-3]
+    return f"{namespace}:" + rel.replace(os.sep, "/")
+
+
+def element_spec(entity, mp) -> tuple[str, dict, dict | None]:
+    kind = entity["kind"]
+    if kind == "location":
+        route = _lookup(mp.get("locationRouting", {}), entity.get("location_type") or "")
+        if route and route.get("target") == "landfeature":
+            sub = route.get("landFeatureType") or "Rock"
+            return ("landfeature", {"type": "LandFeature", "landFeatureTypes": [sub]}, route)
+        return ("political", {"type": "Political", "titles": []}, route)
+    ek = mp.get("kinds", {}).get(kind) or map_cmd.KINDS.get(kind)
+    return (ek, KIND_DATA[ek](), None)
+
+
+def element_items(entity, mp, ref, vault, namespace) -> list[dict]:
+    _, data, _ = element_spec(entity, mp)
+    return [_create(ref, entity["name"], data,
+                    description=entity.get("description") or "<p></p>",
+                    altNames=entity.get("aliases"),
+                    external_ref=external_ref(entity["path"], vault, namespace))]

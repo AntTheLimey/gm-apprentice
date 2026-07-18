@@ -61,3 +61,41 @@ def test_resolve_classifier_and_lookup():
     assert suggest._lookup(section, "Priest, cultist") == {"mobrpgId": "p1"}   # first token
     assert suggest._lookup(section, "Male") == {"name": "Male"}                # case-tolerant
     assert suggest._lookup(section, "Unknown") is None
+
+
+def _map():
+    return {
+        "vaultNamespace": "canticle",
+        "kinds": {"npc": "person", "pc": "person", "location": "political",
+                  "faction": "organization", "item": "item", "creature": "creature"},
+        "locationRouting": {
+            "Museum": {"target": "political", "politicalType": "Museum", "mobrpgId": None, "status": "new"},
+            "River": {"target": "landfeature", "landFeatureType": "River", "mobrpgId": None, "status": "new"}},
+        "classifiers": {"profession": {}, "organizationType": {}, "creatureType": {}, "sex": {}},
+        "relationshipTypes": {},
+    }
+
+
+def test_element_spec_routing():
+    mp = _map()
+    person = {"kind": "npc", "location_type": None}
+    assert suggest.element_spec(person, mp)[0] == "person"
+    assert suggest.element_spec(person, mp)[1] == {"type": "Person", "languages": [], "equipment": []}
+    built = {"kind": "location", "location_type": "Museum"}
+    assert suggest.element_spec(built, mp)[:2] == ("political", {"type": "Political", "titles": []})
+    natural = {"kind": "location", "location_type": "River"}
+    ek, data, route = suggest.element_spec(natural, mp)
+    assert ek == "landfeature" and data == {"type": "LandFeature", "landFeatureTypes": ["River"]}
+
+
+def test_element_items(tmp_path):
+    mp = _map()
+    ent = {"path": str(tmp_path / "Locations/British_Museum.md"), "kind": "location",
+           "name": "British Museum", "aliases": ["BM"], "description": "<p>hi</p>",
+           "location_type": "Museum"}
+    items = suggest.element_items(ent, mp, "e1", str(tmp_path), "canticle")
+    assert len(items) == 1
+    assert items[0]["ref"] == "e1"
+    assert items[0]["payload"]["data"]["type"] == "Political"
+    assert items[0]["externalRef"] == "canticle:Locations/British_Museum"
+    assert items[0]["payload"]["altNames"] == ["BM"]
