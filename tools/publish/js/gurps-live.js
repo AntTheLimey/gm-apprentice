@@ -77,7 +77,8 @@
   // falls back to defaults exactly as the per-sheet client does.
   function deriveLive(pc, state) {
     const items = pc.items || [];
-    const fresh = state && state.v === pc.buildVersion;
+    // KV present -> current. Freshness = a usable state blob, not a build match.
+    const fresh = !!(state && typeof state === 'object' && state.items);
     let checked, vitals;
     if (fresh) {
       checked = state.items || {};
@@ -119,55 +120,20 @@
     try { data = JSON.parse(el.textContent); } catch (e) { return; }
     if (!data || !data.levels) return;
 
-    var LOADOUT_KEY = 'loadout:' + data.campaignId + ':' + data.pcSlug;
     var toggles = Array.prototype.slice.call(document.querySelectorAll('.eq-toggle'));
     var panel = document.querySelector('.gl-status-panel');
     var vitalInputs = { hp: document.querySelector('[data-gl-vital="hp"]'), fp: document.querySelector('[data-gl-vital="fp"]') };
-
-    function playerKey() {
-      try {
-        var cr = JSON.parse(localStorage.getItem('cr:code') || 'null');
-        if (cr && cr.code) return cr.code;
-      } catch (e) {}
-      var d = localStorage.getItem('loadout:device');
-      if (!d) { d = 'd' + Date.now().toString(36); localStorage.setItem('loadout:device', d); }
-      return d;
-    }
-    var KV_KEY = LOADOUT_KEY + ':' + playerKey();
-    // Partition the local cache by the same player identity as KV, so two players
-    // sharing one browser (or one player before/after entering a session code)
-    // never read each other's stored loadout.
-    var LS_KEY = KV_KEY;
+    var store = root.__liveState.createStore({ campaignId: data.campaignId, pcSlug: data.pcSlug });
 
     function defaults() {
       var m = {}; (data.items || []).forEach(function (it) { m[it.key] = !!it.defaultCarried; }); return m;
     }
     function readLocal() {
-      try {
-        var s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-        if (s && s.v === data.buildVersion && s.items) return s.items;
-      } catch (e) {}
-      return null;
+      var s = store.readCache();
+      return s && s.items ? s.items : null;
     }
-    function writeLocal(checked, vit) {
-      localStorage.setItem(LS_KEY, JSON.stringify({ v: data.buildVersion, items: checked, hp: vit.hp, fp: vit.fp }));
-    }
-    // Coalesce + serialize remote writes: keep only the latest pending state and
-    // send it after the current PUT resolves. Independent per-keystroke fetches
-    // could otherwise reach KV out of order and leave it holding a stale value.
-    var kvInFlight = false, kvPending = null;
-    function syncKV(checked, vit) {
-      kvPending = { v: data.buildVersion, items: checked, hp: vit.hp, fp: vit.fp };
-      if (kvInFlight) return;
-      (function flush() {
-        if (!kvPending) return;
-        var state = kvPending; kvPending = null; kvInFlight = true;
-        var done = function () { kvInFlight = false; flush(); };
-        try {
-          fetch('/api/loadout', { method: 'PUT', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ key: KV_KEY, state: state }) }).then(done, done);
-        } catch (e) { kvInFlight = false; }
-      })();
+    function persist(checked, vit) {
+      store.save({ v: data.buildVersion, items: checked, hp: vit.hp, fp: vit.fp });
     }
     function currentVitals() {
       var v = data.vitals || null;
@@ -186,7 +152,7 @@
     }
     function setText(id, val) { var n = document.getElementById(id); if (n) n.textContent = val; }
 
-    function recalc(persist) {
+    function recalc(doPersist) {
       var checked = currentChecked();
       var vit = currentVitals();
       var total = api.sumCarriedWeight(data.items, checked);
@@ -214,8 +180,8 @@
         if (pa && w.parry) pa.textContent = w.parry.cur;
       });
       if (panel && vit) renderPanel(api.vitalsView(r, vit));
-      if (persist && vit) { writeLocal(checked, { hp: vit.hp.cur, fp: vit.fp.cur }); syncKV(checked, { hp: vit.hp.cur, fp: vit.fp.cur }); }
-      else if (persist) { writeLocal(checked, { hp: null, fp: null }); syncKV(checked, { hp: null, fp: null }); }
+      if (doPersist && vit) persist(checked, { hp: vit.hp.cur, fp: vit.fp.cur });
+      else if (doPersist) persist(checked, { hp: null, fp: null });
     }
 
     function renderPanel(view) {
@@ -252,37 +218,28 @@
     // Initial state: KV -> localStorage -> defaults.
     var initial = readLocal() || defaults();
     (function seedCachedVitals() {
-      try {
-        var s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-        if (s && s.v === data.buildVersion) {
-          if (vitalInputs.hp && s.hp != null) vitalInputs.hp.value = s.hp;
-          if (vitalInputs.fp && s.fp != null) vitalInputs.fp.value = s.fp;
-        }
-      } catch (e) {}
+      var s = store.readCache();
+      if (s) {
+        if (vitalInputs.hp && s.hp != null) vitalInputs.hp.value = s.hp;
+        if (vitalInputs.fp && s.fp != null) vitalInputs.fp.value = s.fp;
+      }
     })();
     applyChecked(initial);
     var readout = document.querySelector('.gl-readout'); if (readout) readout.hidden = false;
     document.documentElement.classList.add('gl-active');
     recalc(false);
-    // Late KV hydration must not clobber a toggle the player made while the GET
-    // was in flight; and remote state we accept should seed the local cache.
-    var locallyChanged = false;
-    try {
-      fetch('/api/loadout?key=' + encodeURIComponent(KV_KEY)).then(function (res) { return res.json(); })
-        .then(function (j) {
-          if (!locallyChanged && j && j.state && j.state.v === data.buildVersion && j.state.items) {
-            applyChecked(j.state.items);
-            if (vitalInputs.hp && j.state.hp != null) vitalInputs.hp.value = j.state.hp;
-            if (vitalInputs.fp && j.state.fp != null) vitalInputs.fp.value = j.state.fp;
-            var vNow = currentVitals();
-            writeLocal(j.state.items, vNow ? { hp: vNow.hp.cur, fp: vNow.fp.cur } : { hp: null, fp: null });
-            recalc(false);
-          }
-        })
-        .catch(function () {});
-    } catch (e) {}
+    // Late KV hydration: the store skips this if the player already changed a
+    // control, and seeds the local cache with any accepted remote state.
+    store.hydrate(function (state) {
+      if (state && state.items) {
+        applyChecked(state.items);
+        if (vitalInputs.hp && state.hp != null) vitalInputs.hp.value = state.hp;
+        if (vitalInputs.fp && state.fp != null) vitalInputs.fp.value = state.fp;
+        recalc(false);
+      }
+    });
 
-    toggles.forEach(function (t) { t.addEventListener('change', function () { locallyChanged = true; recalc(true); }); });
+    toggles.forEach(function (t) { t.addEventListener('change', function () { recalc(true); }); });
     Array.prototype.slice.call(document.querySelectorAll('.gl-step')).forEach(function (btn) {
       btn.addEventListener('click', function () {
         var kind = btn.getAttribute('data-gl-step');
@@ -291,12 +248,12 @@
         if (!input) return;
         var n = parseInt(input.value, 10); if (isNaN(n)) n = 0;
         input.value = n + delta;
-        locallyChanged = true; recalc(true);
+        recalc(true);
       });
     });
     ['hp', 'fp'].forEach(function (kind) {
       var input = vitalInputs[kind];
-      if (input) input.addEventListener('input', function () { locallyChanged = true; recalc(true); });
+      if (input) input.addEventListener('input', function () { recalc(true); });
     });
     var reset = document.getElementById('gl-reset');
     if (reset) reset.addEventListener('click', function () {
@@ -305,8 +262,6 @@
         if (vitalInputs.hp) vitalInputs.hp.value = data.vitals.hp.cur;
         if (vitalInputs.fp) vitalInputs.fp.value = data.vitals.fp.cur;
       }
-      localStorage.removeItem(LS_KEY);
-      locallyChanged = true;
       recalc(true);
     });
   });
