@@ -32,8 +32,8 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
-push, suggest, types, links, review. write/merge/link-orphans only touch local
-vault files, not the API.
+push, suggest, submit-batch, types, links, review. write/merge/link-orphans
+only touch local vault files, not the API.
 
 ## Commands
 
@@ -72,7 +72,13 @@ vault files, not the API.
                                   Direct-create vault entities in mobRPG.
     mobrpg suggest <world> --chapter <ch> [--execute] [--limit N] [--only S]
                                   Submit vault entities as review suggestions
-                                  (only needs Read access on the world).
+                                  (only needs Read access on the world). Emits
+                                  bare CreateElements (no types/relationships).
+    mobrpg submit-batch <world> <batch.json> [--execute]
+                                  Submit a pre-built COMPOUND batch (classifier
+                                  Types, Attribute edges, reified Event + Link
+                                  relationships, in-batch ref/dependsOn wiring).
+                                  Dry-run by default.
     mobrpg types <world> [--chapter <ch>] [--execute]
                                   Set entity types via Attribute edges.
     mobrpg links <world> --chapter <ch> [--execute] [--limit N]
