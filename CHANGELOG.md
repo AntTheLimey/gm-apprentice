@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.35] — 2026-07-19
+
+### Changed
+
+- session-prep now draws the session out of the GM instead of generating it: a new up-front Session Intent step, an elicited Intent → Spotlight → Scenes sequence (seeds to react to, propose-before-write at the premise, not the finished scene), and a stance preamble transplanted from the-midwife ("spark, shape, refine, never decide for them").
+- session-prep's Verify half is now assistance, not enforcement — the apprentice silently fixes table pipes, offers a clock for multi-day plans, and raises only real read-aloud issues conversationally; the GM never sees an ERROR/WARNING report.
+- Scene length is now earn-your-length with a soft ~1,200-word bloat nudge, replacing the fixed 400-600-word per-scene cap (`scenario-writing.md`, session-prep step 15). Preamble (~1,000-word) and recap (≤150-word) caps stay.
+- `vault_check.py` gains `tables`, `timeline`, and `read-aloud` checks reworked for the assistance model: `timeline` is an INFO cue (offer to build a clock), and the high-precision read-aloud blockquote signal replaces the dropped noisy plan-wide agency PC-subject scan.
+
+### Added
+
+- `## Session Intent` and `## Open Questions` sections in the session-plan template; a hard guard so headless / "just do it" runs cannot silently produce a creative spine (they stop-and-ask or file the spine under Open Questions marked apprentice-guessed); and a light resumable-prep marker so interrupted weekly prep resumes without re-asking.
+
+---
+
 ## [1.8.34] — 2026-07-19
 
 ### Changed
