@@ -32,7 +32,7 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, map, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
-push, suggest, submit-batch, update, types, links, review. write/merge/
+push, suggest, suggest-desc, submit-batch, update, types, links, review. write/merge/
 link-orphans/pull-canon/pull-desc/backfill/relink only touch local vault files,
 not the API (pull-canon and pull-desc read from mobRPG but only ever write
 locally; backfill and relink make no API calls at all).
@@ -87,6 +87,23 @@ locally; backfill and relink make no API calls at all).
                                   Vault-only writes, gated by --execute (dry-run
                                   default). The mobrpg-sync skill is the interactive
                                   UI; it walks the GM through conflicts one at a time.
+    mobrpg suggest-desc <world> --vault <path> [--only <ref>] [--threshold F]
+                        [--batch-label L] [--execute]
+                                  Suggest a linked note's authored *description*
+                                  UP to mobRPG when the element is an empty stub
+                                  or poorer than the vault (the inverse of pull-
+                                  desc). Emits one UpdateElement suggestion per
+                                  candidate (sparse edit: targetRef=real element
+                                  id + the canon-section prose as HTML) — a
+                                  reviewable proposal the world owner accepts,
+                                  never a direct element PUT. Candidate = the live
+                                  description is empty, or differs below
+                                  --threshold similarity (difflib, autojunk off;
+                                  default 0.98); --only targets one note. Dry-run
+                                  by default; --execute submits (prod also needs
+                                  MOBRPG_ALLOW_PROD_WRITES=1). Each edit carries a
+                                  distinct `<ns>:desc/<relpath>` externalRef so a
+                                  re-run dedupes instead of piling up.
     mobrpg relink --vault <path> --to <new-rel-path> [--from <old-rel-path>]
                   [--execute]
                                   Re-point a moved/renamed note's mobrpg
