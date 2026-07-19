@@ -82,7 +82,8 @@ def _display_name(path: str) -> str:
 
 
 def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
-                     exclude_kinds=None) -> list[dict]:
+                     exclude_kinds=None, only_provenance=None,
+                     exclude_provenance=None) -> list[dict]:
     vault = os.path.expanduser(vault)
     exclude_kinds = exclude_kinds or set()
     out = []
@@ -106,8 +107,13 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
             ntype = map_cmd._scalar(fm, "type")
             if ntype and ntype != vkind:
                 continue
+            prov = map_cmd._scalar(fm, "provenance")
+            if only_provenance and prov not in only_provenance:
+                continue
+            if exclude_provenance and prov in exclude_provenance:
+                continue
             out.append({
-                "path": p, "kind": vkind, "name": name,
+                "path": p, "kind": vkind, "name": name, "provenance": prov,
                 "aliases": _aliases(fm), "description": _description(body),
                 "location_type": map_cmd._scalar(fm, "location_type"),
                 "occupation": map_cmd._scalar(fm, "occupation"),
@@ -547,6 +553,10 @@ def run(argv: list[str]) -> int:
                     help="write a pending mobrpg: node into each entity's vault file")
     ap.add_argument("--include-pcs", action="store_true",
                     help="also push player characters (PCs are excluded by default)")
+    ap.add_argument("--only-provenance", default="",
+                    help="only entities with this provenance (comma-separated: mobrpg,play,midwife,backstory)")
+    ap.add_argument("--exclude-provenance", default="",
+                    help="skip entities with this provenance (comma-separated)")
     args = ap.parse_args(argv)
 
     map_path = args.map or _default_map_path(args.vault)
@@ -564,8 +574,11 @@ def run(argv: list[str]) -> int:
     namespace = mp.get("vaultNamespace") or map_cmd.derive_namespace(args.vault)
     # PCs are player-owned; don't push them to the shared world unless asked.
     exclude_kinds = set() if args.include_pcs else {"pc"}
+    only_prov = {s.strip() for s in args.only_provenance.split(",") if s.strip()}
+    excl_prov = {s.strip() for s in args.exclude_provenance.split(",") if s.strip()}
     entities = collect_entities(args.vault, chapter=args.chapter, kind=args.kind,
-                                only=args.only, limit=args.limit, exclude_kinds=exclude_kinds)
+                                only=args.only, limit=args.limit, exclude_kinds=exclude_kinds,
+                                only_provenance=only_prov, exclude_provenance=excl_prov)
     if not entities:
         print("No matching vault entities for that --chapter/--kind/--only.", file=sys.stderr)
         return 1

@@ -144,6 +144,20 @@ def test_collect_entities_exclude_kinds(tmp_path):
     assert "Six" in {e["name"] for e in suggest.collect_entities(str(tmp_path))}
 
 
+def test_collect_entities_provenance_filter(tmp_path):
+    npcs = tmp_path / "Characters/NPCs"; npcs.mkdir(parents=True)
+    (npcs / "A.md").write_text('---\ntype: npc\nprovenance: "midwife"\n---\nB\n', encoding="utf-8")
+    (npcs / "B.md").write_text('---\ntype: npc\nprovenance: "mobrpg"\n---\nB\n', encoding="utf-8")
+    (npcs / "C.md").write_text('---\ntype: npc\n---\nB\n', encoding="utf-8")  # unmarked
+    names = lambda **k: {e["name"] for e in suggest.collect_entities(str(tmp_path), **k)}
+    assert names() == {"A", "B", "C"}
+    assert names(exclude_provenance={"midwife"}) == {"B", "C"}
+    assert names(only_provenance={"midwife"}) == {"A"}
+    # entities carry their provenance for reporting
+    got = {e["name"]: e["provenance"] for e in suggest.collect_entities(str(tmp_path))}
+    assert got == {"A": "midwife", "B": "mobrpg", "C": None}   # unmarked → None
+
+
 def test_node_index_resolves_targets_by_alias(tmp_path):
     from mobrpg import node
     (tmp_path / "Locations").mkdir(parents=True)
