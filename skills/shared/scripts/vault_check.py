@@ -11,6 +11,9 @@ Usage:
   vault_check.py VAULT index
   vault_check.py VAULT stale-drafts
   vault_check.py VAULT changed --since N
+  vault_check.py VAULT tables
+  vault_check.py VAULT timeline
+  vault_check.py VAULT read-aloud
   vault_check.py VAULT all
 
 Skips hidden directories, `_Templates/`, and `_inbox/` (staging).
@@ -325,11 +328,177 @@ def check_changed(vault: Path, since: int) -> list[str]:
     return rows
 
 
+def iter_body_lines(text: str):
+    """Yield (lineno, line) for body lines, 1-based, skipping YAML
+    frontmatter so scans never trip on `aliases:` or `type:` values."""
+    lines = text.splitlines()
+    start = 0
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                start = i + 1
+                break
+    for idx in range(start, len(lines)):
+        yield idx + 1, lines[idx]
+
+
+TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+ALIAS_LINK_RE = re.compile(r"\[\[[^\[\]]*\|[^\[\]]*\]\]")
+
+
+def check_tables(vault: Path) -> list[str]:
+    r"""Pipes inside table cells break the table when Obsidian reflows it.
+    Flag aliased wikilinks ([[A|B]]) and escaped pipes (\|) inside table
+    blocks. ERROR: deterministic render break the apprentice silently fixes
+    as a chore (the level is internal — never shown to the GM as a report)."""
+    rows = []
+    for rel, text in vault_files(vault):
+        body = list(iter_body_lines(text))
+        is_row = [bool(TABLE_ROW_RE.match(ln)) for _, ln in body]
+        for i, (lineno, ln) in enumerate(body):
+            if not is_row[i]:
+                continue
+            # Require a table *block*: a stray piped prose line is not a table.
+            neighbour = (i > 0 and is_row[i - 1]) or \
+                        (i < len(body) - 1 and is_row[i + 1])
+            if not neighbour:
+                continue
+            am = ALIAS_LINK_RE.search(ln)
+            if am:
+                rows.append(f"ERROR\t{rel}:{lineno}\taliased wikilink pipe "
+                            f"in table cell breaks Obsidian reflow: "
+                            f"{am.group(0)}")
+            if "\\|" in ln:
+                rows.append(f"ERROR\t{rel}:{lineno}\tescaped pipe '\\|' in "
+                            f"table cell breaks Obsidian reflow")
+    return rows
+
+
+TIMELINE_SECTION_RE = re.compile(r"^##\s+Timeline\b", re.IGNORECASE | re.MULTILINE)
+# A date-range marker in a string in_game_date: en/em dash, a spaced
+# hyphen (so ISO "1893-05-01" is NOT a range), or a word form.
+DATE_RANGE_RE = re.compile(
+    r"[–—]|\s-|-\s|\bto\b|\bthrough\b|\bthru\b", re.IGNORECASE)
+
+
+def _is_multi_day(value) -> bool:
+    """Multi-day if in_game_date is a list of 2+ dates (the documented
+    form) or a string expressing a range ("Sept 17–24", "1814 to 1815")."""
+    if isinstance(value, list):
+        return len([v for v in value if v is not None]) >= 2
+    if isinstance(value, str):
+        return bool(DATE_RANGE_RE.search(value))
+    return False
+
+
+def check_timeline(vault: Path) -> list[str]:
+    """Internal 'is this multi-day?' cue (INFO, not a scold). When a
+    `type: session-plan` spans multiple days (a 2+ list, or a string range)
+    and has no `## Timeline` section, surface a cue so the apprentice can
+    *offer to build the clock with the GM*. Single-day plans are silent."""
+    rows = []
+    for rel, text in vault_files(vault):
+        fm = extract_frontmatter(text) or {}
+        if fm.get("type") != "session-plan":
+            continue
+        if not _is_multi_day(fm.get("in_game_date")):
+            continue
+        if TIMELINE_SECTION_RE.search(text):
+            continue
+        rows.append(f"INFO\t{rel}\tmulti-day plan (in_game_date spans "
+                    f"multiple days) — offer to build a '## Timeline' clock "
+                    f"with the GM so hours and same-day travel stay coherent")
+    return rows
+
+
+PC_INACTIVE_STATUS = {"dead", "retired", "inactive"}
+
+
+def active_pc_names(vault: Path) -> set[str]:
+    """Active PCs, mirroring session_context.py: type: pc, not *_Story.md,
+    status not dead/retired/inactive. Name set = filename stem, each
+    capitalised stem token (len >= 3), and each alias — for whole-word
+    matching of both 'Katherine Winslow' and 'Katherine'."""
+    names: set[str] = set()
+    for rel, text in vault_files(vault):
+        fm = extract_frontmatter(text) or {}
+        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
+            continue
+        if str(fm.get("status", "")).casefold() in PC_INACTIVE_STATUS:
+            continue
+        stem = Path(rel).stem.replace("_", " ").strip()
+        if stem:
+            names.add(stem)
+            for tok in stem.split():
+                if len(tok) >= 3 and tok[:1].isupper():
+                    names.add(tok)
+        aliases = fm.get("aliases")
+        if isinstance(aliases, list):
+            for a in aliases:
+                if isinstance(a, str) and a.strip():
+                    names.add(a.strip())
+    return names
+
+
+def pc_name_regex(names: set[str]):
+    """A single whole-word alternation, longest name first so multi-word
+    names win over their tokens. None when there are no active PCs."""
+    if not names:
+        return None
+    ordered = sorted(names, key=len, reverse=True)
+    alt = "|".join(re.escape(n) for n in ordered)
+    return re.compile(rf"\b({alt})\b", re.IGNORECASE)
+
+
+READ_ALOUD_SCAN_TYPES = {"session-plan", "scene"}
+SECOND_PERSON_RE = re.compile(
+    r"\byou\s+(feel|feels|sense|senses|realize|realizes|realise|realises|"
+    r"notice|notices|know|knows|want|wants|remember|remembers)\b",
+    re.IGNORECASE)
+THIRD_PERSON_RE = re.compile(r"\b(he|she|him|her|his|hers)\b", re.IGNORECASE)
+
+
+def check_read_aloud(vault: Path) -> list[str]:
+    """Read-aloud blockquote signal (INFO — a high-precision cue the
+    apprentice uses to ask about a real read-aloud line, never a report the
+    GM sees). Over `> ` blockquote lines in session-plan/scene files, flag a
+    named PC, a 2nd-person feeling verb, or a 3rd-person pronoun. The Slice B
+    plan-wide 'PC name as action subject' scan is intentionally *not* here —
+    it scolded the GM's own prose."""
+    pc_re = pc_name_regex(active_pc_names(vault))
+    rows: list[str] = []
+    for rel, text in vault_files(vault):
+        fm = extract_frontmatter(text) or {}
+        if fm.get("type") not in READ_ALOUD_SCAN_TYPES:
+            continue
+        for lineno, line in iter_body_lines(text):
+            stripped = line.lstrip()
+            if not stripped.startswith(">"):
+                continue
+            bq = stripped.lstrip(">").strip()
+            pm = pc_re.search(bq) if pc_re else None
+            if pm:
+                rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
+                            f"names PC '{pm.group(0)}' — read-aloud addresses "
+                            f"the table, not one PC")
+            sm = SECOND_PERSON_RE.search(bq)
+            if sm:
+                rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
+                            f"dictates player feeling: '{sm.group(0)}'")
+            tm = THIRD_PERSON_RE.search(bq)
+            if tm:
+                rows.append(f"INFO\t{rel}:{lineno}\tread-aloud blockquote "
+                            f"uses 3rd-person pronoun '{tm.group(0)}' "
+                            f"(advisory — fine for NPCs)")
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", choices=["frontmatter", "names", "index",
-                                        "stale-drafts", "changed", "all"])
+                                        "stale-drafts", "changed", "tables",
+                                        "timeline", "read-aloud", "all"])
     ap.add_argument("--folder", help="restrict frontmatter check to subfolder")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
@@ -355,6 +524,12 @@ def main() -> int:
         emit("index", check_index(args.vault))
     if args.command in ("stale-drafts", "all"):
         emit("stale-drafts", check_stale_drafts(args.vault))
+    if args.command in ("tables", "all"):
+        emit("tables", check_tables(args.vault))
+    if args.command in ("timeline", "all"):
+        emit("timeline", check_timeline(args.vault))
+    if args.command in ("read-aloud", "all"):
+        emit("read-aloud", check_read_aloud(args.vault))
     return 0
 
 
