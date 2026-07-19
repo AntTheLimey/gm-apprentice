@@ -268,3 +268,21 @@ def test_run_dry_run_end_to_end(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert "DRY-RUN" in out and "Imogen Bellamy" in out
+
+
+def test_determined_for_person_and_locations():
+    mp = _map()
+    mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "p1", "name": "Priest"}}
+    mp["classifiers"]["sex"] = {"female": {"name": "Female"}}
+    person = {"kind": "npc", "occupation": "Priest, cultist", "gender": "Female",
+              "location_type": None, "faction_type": None, "creature_type": None}
+    assert suggest.determined_for(person, mp) == {
+        "profession": "Priest", "race": "Human", "sex": "Female"}
+
+    built = {"kind": "location", "location_type": "Museum"}
+    assert suggest.determined_for(built, mp) == {"political_type": "Museum"}
+    natural = {"kind": "location", "location_type": "River"}
+    assert suggest.determined_for(natural, mp) == {"land_feature_type": "River"}
+
+    item = {"kind": "item"}
+    assert suggest.determined_for(item, mp) == {"item_type": "Generic"}

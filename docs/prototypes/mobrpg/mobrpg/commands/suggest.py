@@ -440,3 +440,52 @@ def run(argv: list[str]) -> int:
             rc = 1
             break
     return rc
+
+
+def _determined_name(section, raw):
+    """The determined classifier NAME for a raw vault value, or None."""
+    if not raw:
+        return None
+    entry = _lookup(section, raw)
+    if entry is not None:
+        mode, val = resolve_classifier(entry)
+        if mode == "drop":
+            return None
+        if mode == "bound":
+            return entry.get("name") or map_cmd._first_token(raw).title()
+        return val or map_cmd._first_token(raw).title()
+    return map_cmd._first_token(raw).title()
+
+
+def determined_for(entity: dict, mp: dict) -> dict:
+    cls = mp.get("classifiers", {})
+    kind = entity["kind"]
+    out: dict = {}
+    if kind in ("npc", "pc"):
+        prof = _determined_name(cls.get("profession", {}), entity.get("occupation"))
+        if prof:
+            out["profession"] = prof
+        out["race"] = "Human"
+        sex = _determined_name(cls.get("sex", {}), entity.get("gender"))
+        if sex:
+            out["sex"] = sex
+    elif kind in ("faction", "organization"):
+        ot = _determined_name(cls.get("organizationType", {}), entity.get("faction_type"))
+        if ot:
+            out["organization_type"] = ot
+    elif kind == "creature":
+        ct = _determined_name(cls.get("creatureType", {}), entity.get("creature_type"))
+        if ct:
+            out["creature_type"] = ct
+    elif kind == "location":
+        ek, data, route = element_spec(entity, mp)
+        if ek == "landfeature":
+            out["land_feature_type"] = data["landFeatureTypes"][0]
+        else:
+            name = (route or {}).get("politicalType") or map_cmd._first_token(
+                entity.get("location_type") or "").title()
+            if name:
+                out["political_type"] = name
+    elif kind == "item":
+        out["item_type"] = "Generic"
+    return out
