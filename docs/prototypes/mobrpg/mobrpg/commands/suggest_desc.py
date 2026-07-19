@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import html as _html
+import re
 import sys
 
 from mobrpg import client
@@ -59,6 +61,25 @@ def similarity(a: str | None, b: str | None) -> float:
     return difflib.SequenceMatcher(None, a or "", b or "", autojunk=False).ratio()
 
 
+_HEADING_TAG = re.compile(r"<h[1-6][^>]*>.*?</h[1-6]>", re.I | re.S)
+_TAG = re.compile(r"<[^>]+>")
+
+
+def normalize_for_compare(html: str | None) -> str:
+    """Reduce a description to a comparable plain-text key so the threshold
+    catches genuine content deltas, not formatting noise. The vault side is
+    `md_to_html` of a canon-section that leads with a `## Overview` heading and
+    HTML-entity-encodes; mobRPG stores the same prose headingless and
+    `<span style="">`-wrapped. Left raw, otherwise-identical text scored ~0.82–
+    0.87 and mis-flagged as 'differs'. So: drop heading blocks (`<h1..h6>`, i.e.
+    the `## Overview` header), strip all remaining tags (incl. the style spans),
+    decode entities, collapse whitespace, and lowercase — applied to BOTH sides."""
+    s = _HEADING_TAG.sub(" ", html or "")
+    s = _TAG.sub(" ", s)
+    s = _html.unescape(s)
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
 def classify_candidate(cand_html: str | None, live_html: str | None,
                        threshold: float = DEFAULT_THRESHOLD) -> tuple[bool, str]:
     """(is_candidate, reason). Pure. reason ∈ {no-prose, empty, differs, in-sync}.
@@ -72,7 +93,10 @@ def classify_candidate(cand_html: str | None, live_html: str | None,
         return False, "no-prose"
     if _is_empty_html(live_html):
         return True, "empty"
-    if similarity(cand_html, live_html) >= threshold:
+    # Compare NORMALIZED plain text, not raw HTML — otherwise the vault's
+    # `## Overview` heading + entity encoding vs mobRPG's headingless span-wrapped
+    # prose mis-scores identical text as 'differs' (see normalize_for_compare).
+    if similarity(normalize_for_compare(cand_html), normalize_for_compare(live_html)) >= threshold:
         return False, "in-sync"
     return True, "differs"
 

@@ -94,6 +94,35 @@ def test_classify_threshold_is_tunable():
     assert suggest_desc.classify_candidate(CAND_HTML, live, threshold=0.5)[0] is False
 
 
+# ---- normalization: heading + span/entity formatting noise ----
+
+def test_normalize_strips_heading_tags_spans_and_entities():
+    n = suggest_desc.normalize_for_compare
+    assert n('<h2>Overview</h2><p>Same prose.</p>') == "same prose."
+    assert n('<p><span style="color:red">Same prose.</span></p>') == "same prose."
+    assert n("<p>A &amp; B</p>") == "a & b"
+    # both sides collapse to the identical comparison key
+    assert n('<h2>Overview</h2><p>Same prose.</p>') == n('<p><span style="">Same prose.</span></p>')
+
+
+def test_classify_ignores_heading_and_span_formatting_noise():
+    # the exact G5-followup case: vault "## Overview\n\nSame prose." vs mobRPG
+    # headingless <span>-wrapped prose must classify in-sync, NOT differs.
+    cand = suggest_desc.vault_html("\n## Overview\n\nSame prose.\n")
+    live = '<p><span style="">Same prose.</span></p>'
+    # raw HTML would be well under threshold (the noise); normalized they match
+    assert suggest_desc.similarity(cand, live) < 0.98
+    is_cand, reason = suggest_desc.classify_candidate(cand, live)
+    assert is_cand is False and reason == "in-sync"
+
+
+def test_classify_still_flags_real_content_delta_after_normalization():
+    cand = suggest_desc.vault_html("\n## Overview\n\nFull authored prose about the thing.\n")
+    live = '<p><span style="">Stub.</span></p>'
+    is_cand, reason = suggest_desc.classify_candidate(cand, live)
+    assert is_cand is True and reason == "differs"
+
+
 # ---- build_suggestion / payload shape ----
 
 def test_build_suggestion_is_update_element_targeting_real_id():

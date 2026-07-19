@@ -142,17 +142,25 @@ Registered in `cli.py` + documented in `llms.txt` (Mutating list). Coverage: 21
 new tests in `test_suggest_desc.py` (189 total, was 168).
 
 Verified live read-only against the Space world (`a254e424-…`,
-`~/Documents/space_game`): **140 candidates of 140 synced notes — 6 `empty`
-(genuine stubs across NPC/Location/Faction/Item, incl. the `_World`-style currency
-case G5 was filed for), 134 `differs`** — dry-run, nothing written. **Follow-up:**
-the 134 `differs` are largely *formatting* noise, not richer content — the vault
-`canon_section` includes a leading `## Overview` → `<h2>` heading and HTML-entity
-encoding, while mobRPG stores headingless `<span style="">`-wrapped prose (~0.82–
-0.87 similarity on otherwise-identical text). Before anyone runs `--execute` on
-this vault, the diff should be normalized (strip the `## Overview` heading + tag/
-entity noise) so `--threshold` catches only genuine content deltas; otherwise it
-would suggest 134 formatting-only edits. The empty-stub path (G5's actual intent)
-is already correct.
+`~/Documents/space_game`): the first pass reported **140 candidates of 140 synced
+notes — 6 `empty` (genuine stubs across NPC/Location/Faction/Item, incl. the
+`_World`-style currency case G5 was filed for), 134 `differs`** — dry-run, nothing
+written.
+
+**Follow-up (RESOLVED 2026-07-19):** the 134 `differs` were largely *formatting*
+noise, not richer content — the vault `canon_section` includes a leading
+`## Overview` → `<h2>` heading and HTML-entity encoding, while mobRPG stores
+headingless `<span style="">`-wrapped prose (~0.82–0.87 similarity on
+otherwise-identical text). `classify_candidate` now compares a NORMALIZED
+plain-text key (`normalize_for_compare`) instead of raw HTML: drop `<h1..h6>`
+heading blocks (the `## Overview` header), strip remaining tags (incl. the style
+spans), decode entities, collapse whitespace, lowercase — applied to BOTH sides;
+`similarity` still uses `SequenceMatcher(autojunk=False)`. Empty-stub detection
+stays on raw HTML, and the *submitted* description is unchanged (full authored
+prose) — only the comparison is normalized. Re-run live read-only, the candidate
+set dropped to **35 of 140 — 6 `empty` + 29 genuine `differs`, with 105 now
+correctly `in-sync`** (was 134 false `differs`). 3 new tests in
+`test_suggest_desc.py`.
 
 ### G3 — no verb re-points a moved/renamed note's `external_ref` ✅
 **Resolved 2026-07-19.** New `mobrpg relink` verb (native, vault-only — no API
