@@ -415,6 +415,38 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
     return items, skipped
 
 
+def partition_entities(entities, ent_id_by_key) -> tuple[list[dict], list[dict]]:
+    """Split entities into (net_new, linked).
+
+    An entity whose name (or an alias, via the caller's key index) already
+    resolves to an upstream element id is *linked* — it exists in mobRPG and must
+    NOT be re-filed as a brand-new CreateElement. The rest are *net-new* and get a
+    full CreateElement cluster. Linked entities' genuine relationship deltas are
+    the job of the relationship-baseline pass (which stamps event_ids so a delta
+    is computable), not of re-mirroring the whole graph on every push."""
+    net_new, linked = [], []
+    for ent in entities:
+        (linked if _key(ent["name"]) in ent_id_by_key else net_new).append(ent)
+    return net_new, linked
+
+
+def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples) -> int:
+    """How many relationships hang off already-linked entities and *would* be
+    genuine new edges (target resolves, not already linked) — i.e. the deltas the
+    baseline pass will carry. Reported so a skipped-linked push never silently
+    swallows real relationship content."""
+    held = 0
+    for ent in linked:
+        subj = _key(ent["name"])
+        for rel in ent.get("relationships", []):
+            tgt_key = _key(rel["target"])
+            if (subj, rel["predicate"], tgt_key) in linked_triples:
+                continue
+            if tgt_key in ent_id_by_key or tgt_key in ref_by_key:
+                held += 1
+    return held
+
+
 def build_group(entity, mp, ent_id_by_key, linked_triples, race_id,
                 vault, namespace, seq, ref_by_key=None) -> tuple[list[dict], list[str]]:
     ref = f"e{seq}"
@@ -608,15 +640,23 @@ def run(argv: list[str]) -> int:
     node_idx, node_linked = node_index(args.vault)
     ent_id_by_key.update(node_idx)
     linked |= node_linked
-    # Every entity's in-batch group ref, so a relationship whose target is itself
-    # net-new in this push resolves to that target's `suggestion:<ref>` instead of
-    # being skipped for want of an upstream id.
-    ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(entities, 1)}
-    for i, ent in enumerate(entities, 1):          # aliases resolve too; names already set win
+
+    # An already-upstream entity must NOT be re-filed as a brand-new CreateElement
+    # (that filed 140 of Space's 169 Tranche-A entities as bogus creates). Only
+    # net-new entities get a full cluster; linked entities' relationship deltas are
+    # the baseline pass's job, so they're held (and reported), never silently lost.
+    net_new, linked_ents = partition_entities(entities, ent_id_by_key)
+
+    # Every NET-NEW entity's in-batch group ref, so a relationship whose target is
+    # itself net-new in this push resolves to that target's `suggestion:<ref>`
+    # instead of being skipped for want of an upstream id. (Linked targets resolve
+    # to their real id via ent_id_by_key, which is consulted first.)
+    ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(net_new, 1)}
+    for i, ent in enumerate(net_new, 1):           # aliases resolve too; names already set win
         for al in ent.get("aliases", []):
             ref_by_key.setdefault(_key(al), f"e{i}")
     groups, refs, all_reports = [], [], []
-    for i, ent in enumerate(entities, 1):
+    for i, ent in enumerate(net_new, 1):
         items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,
                                      args.vault, namespace, i, ref_by_key)
         groups.append(items)
@@ -631,7 +671,13 @@ def run(argv: list[str]) -> int:
 
     label = args.batch_label or f"{namespace} suggest ({args.chapter or 'all'})"
     os.makedirs(args.out, exist_ok=True)
-    print(f"{len(entities)} entit(y/ies) → {sum(len(c) for c in chunks)} items in {len(chunks)} batch(es)")
+    print(f"{len(net_new)} net-new entit(y/ies) → {sum(len(c) for c in chunks)} "
+          f"items in {len(chunks)} batch(es)")
+    if linked_ents:
+        held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked)
+        print(f"  [skipped] {len(linked_ents)} already-linked entit(y/ies) not re-created "
+              f"(they exist upstream)"
+              + (f"; {held} relationship delta(s) held for the baseline pass" if held else ""))
     for r in all_reports:
         print(f"  [note] {r}")
     if deferred:
@@ -642,7 +688,9 @@ def run(argv: list[str]) -> int:
             print(f"    · {src} → {tgt}", file=sys.stderr)
 
     if args.write_back:
-        w, s = write_back(entities, mp, args.vault, namespace, execute=args.execute)
+        # Only net-new entities get a fresh pending node here; already-linked
+        # entities keep their existing (accepted) nodes untouched.
+        w, s = write_back(net_new, mp, args.vault, namespace, execute=args.execute)
         print(f"write-back: {w} node(s) written, {s} unchanged (skipped)"
               + ("" if args.execute else "  [dry-run — no files changed]"))
 

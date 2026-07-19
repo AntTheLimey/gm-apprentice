@@ -355,6 +355,59 @@ def test_run_namespace_and_label_not_hardcoded_canticle(tmp_path, monkeypatch, c
     assert "Canticle suggest" not in out
 
 
+def test_partition_entities_splits_linked_from_netnew():
+    # An entity whose name (or an already-known key) resolves to an upstream
+    # element id must NOT be re-created; the rest are net-new.
+    ents = [{"name": "Imogen Bellamy", "aliases": []},
+            {"name": "British Museum", "aliases": []},
+            {"name": "Brand New NPC", "aliases": []}]
+    ent_id_by_key = {suggest._key("Imogen Bellamy"): "im-id",
+                     suggest._key("British Museum"): "bm-id"}
+    netnew, linked = suggest.partition_entities(ents, ent_id_by_key)
+    assert {e["name"] for e in netnew} == {"Brand New NPC"}
+    assert {e["name"] for e in linked} == {"Imogen Bellamy", "British Museum"}
+
+
+def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):
+    # The central fix: `suggest` must NOT re-file an already-upstream entity as a
+    # brand-new CreateElement. A note carrying a mobrpg: node with an element_id is
+    # already linked; only the genuinely net-new note becomes a CreateElement.
+    from mobrpg import node
+    d = tmp_path / "space_game"
+    (d / "Characters/NPCs").mkdir(parents=True)
+    (d / "_meta").mkdir(parents=True)
+    linked_node = {"world_id": "", "external_ref": "space_game:Characters/NPCs/Imogen_Bellamy",
+                   "element_id": "im-id", "element_kind": "Person", "review_state": "accepted",
+                   "relationships": [], "languages": []}
+    (d / "Characters/NPCs/Imogen_Bellamy.md").write_text(
+        "---\ntype: npc\noccupation: \"Priest\"\ngender: Female\n"
+        + node.emit_node(linked_node) + "---\nBody.\n", encoding="utf-8")
+    (d / "Characters/NPCs/Brand_New.md").write_text(
+        '---\ntype: npc\noccupation: "Priest"\ngender: Female\n---\nBody.\n', encoding="utf-8")
+    (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
+    cw = tmp_path / "cw.json"
+    cw.write_text(json.dumps({"entities": [], "relationships": []}), encoding="utf-8")
+
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
+                      "--out", str(tmp_path / "out")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # net-new is created; already-linked is not re-created
+    assert "CreateElement" in out and "Brand New" in out
+    assert "Imogen Bellamy" not in out.split("skip")[0]  # not in the create summary
+    # a batch JSON was written — assert Imogen has NO CreateElement item anywhere
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    created = [it["payload"]["name"] for it in batch["suggestions"]
+               if it.get("operation") == "CreateElement"]
+    assert "Brand New" in created
+    assert "Imogen Bellamy" not in created
+    # and the run reports the linked entity was skipped
+    assert "1" in out and "linked" in out.lower()
+
+
 def test_determined_for_person_and_locations():
     mp = _map()
     mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "p1", "name": "Priest"}}
