@@ -133,6 +133,19 @@ if (command === 'build') {
   warnIfVersionDrift();
   assertRuntimeDeps();
 
+  // Bring plugin-owned Cloudflare Functions up to date on every build, so API routes
+  // added or fixed in a newer plugin version reach sites scaffolded before they existed
+  // (init only copies them once). The site root holds functions/ alongside the config.
+  try {
+    const { syncScaffoldFunctions } = require('../lib/sync-functions');
+    const siteRoot = path.dirname(path.resolve(configPath));
+    const { created, updated } = syncScaffoldFunctions(siteRoot);
+    for (const f of created) console.log(`  synced (new) functions/${f}`);
+    for (const f of updated) console.log(`  synced (updated) functions/${f}`);
+  } catch (err) {
+    console.warn(`⚠️  Could not sync scaffold Functions: ${err.message}`);
+  }
+
   const { build } = loadBuild();
   try {
     build({ configPath });

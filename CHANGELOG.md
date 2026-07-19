@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.33] — 2026-07-19
+
+Publish tool 1.11.12.
+
+### Fixed
+
+- Cloudflare Pages Functions added or fixed in a newer plugin version never reached sites scaffolded before they existed: `init` copies them once and refuses to run over an existing site, and neither `build` nor the version repoint touched `functions/`. Sites therefore 404'd on new API routes (e.g. `/api/loadout-list`). `build` now syncs the plugin-owned scaffold Functions into the site on every run — copying missing files and overwriting stale ones to match the running plugin version (byte comparison, so an in-sync site produces no churn) (#115).
+
+---
+
 ## [1.8.32] — 2026-07-19
 
 Publish tool 1.11.11.
