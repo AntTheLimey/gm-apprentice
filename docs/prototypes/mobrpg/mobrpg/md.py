@@ -177,7 +177,10 @@ class _ToMd(HTMLParser):
             self._href = None
         elif tag in ("ul", "ol") and self.list_stack:
             self.list_stack.pop()
-            self.out.append("\n")
+            # A block that follows the outermost list needs a blank-line
+            # separator, or it glues onto the last item and is re-parsed as an
+            # extra bullet on the next push. Nested list-ends keep a single \n.
+            self.out.append("\n\n" if not self.list_stack else "\n")
         elif tag in ("td", "th"):
             cell = "".join(self._cell or []).strip()
             self.row.append(cell)
@@ -190,7 +193,9 @@ class _ToMd(HTMLParser):
             self.row = []
             self.is_header_row = False
         elif tag == "table":
-            self.out.append("\n" + self._render_table() + "\n")
+            # Trailing blank line: a block glued directly after the table rows is
+            # re-parsed as an extra table row on the next push.
+            self.out.append("\n" + self._render_table() + "\n\n")
             self.in_table = False
         elif tag in ("p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote"):
             self.out.append("\n\n")

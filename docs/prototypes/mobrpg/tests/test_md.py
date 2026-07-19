@@ -48,3 +48,31 @@ def test_html_to_md_basics():
     assert md.html_to_md("<h2>Title</h2>") == "## Title"
     out = md.html_to_md("<ul><li>one</li><li>two</li></ul>")
     assert "- one" in out and "- two" in out
+
+
+def test_list_followed_by_paragraph_stays_separated():
+    # Regression: a <p> after a </ul> lost its blank-line separator, so the
+    # paragraph glued onto the last list item and, on the next push, was
+    # absorbed into the list as an extra bullet.
+    out = md.html_to_md("<ul><li>a</li><li>b</li></ul><p>See more.</p>")
+    assert out == "- a\n- b\n\nSee more."
+
+
+def test_converter_idempotent_over_corpus():
+    # The base-hash for description merge must be stable: md -> html -> md must
+    # be a fixed point on the shapes the vault uses, or untouched entities read
+    # as "changed" every sync.
+    corpus = [
+        "## Background\n\nA **ruthless** smuggler with *hidden* debts.\n\n"
+        "- Owns the Blue Boar\n- Fears the excise men\n\n"
+        "See also the [ledger](http://x).",
+        "Plain paragraph only.",
+        "Body line above a list.\n\n- solo bullet\n\nTrailing paragraph.",
+        "1. first\n2. second\n\nAfter the ordered list.",
+        "| Attr | Val |\n| --- | --- |\n| STR | 12 |\n\nStats above.",
+        "> a quoted aside\n\nand a paragraph.",
+    ]
+    for src in corpus:
+        once = md.html_to_md(md.md_to_html(src))
+        twice = md.html_to_md(md.md_to_html(once))
+        assert once == twice, f"not a fixed point:\n{once!r}\n{twice!r}"
