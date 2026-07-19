@@ -32,7 +32,7 @@ payloads, chunked at exactly ≤100 items per batch.
 ## Flow
 
 1. **Dry-run the batch:**
-   `mobrpg suggest --write-back --out <dir> [--chapter CH] [--kind K] [--only ONLY] <world>`
+   `mobrpg suggest --vault <path> --write-back --out <dir> [--chapter CH] [--kind K] [--only ONLY] <world>`
    (no `--execute`). This emits `suggest-batch-N.json` and computes — but does
    not write — the node write-back.
 2. **Build and show the submission report** (below). This is the confirm gate
@@ -114,7 +114,7 @@ edges / N relationships, across M batches.
 Only after the GM has read the report and given an explicit yes:
 
 ```
-.venv/bin/mobrpg suggest --write-back --out <dir> --execute <world>
+.venv/bin/mobrpg suggest --vault <path> --write-back --out <dir> --execute <world>
 ```
 
 (Drop `--write-back` if the GM only wants the API submission this pass, per
