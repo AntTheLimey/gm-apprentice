@@ -33,9 +33,9 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, map, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
 push, suggest, submit-batch, update, types, links, review. write/merge/
-link-orphans/pull-canon/backfill/relink only touch local vault files, not the API
-(pull-canon reads the suggestion queue but only ever writes locally; backfill and
-relink make no API calls at all).
+link-orphans/pull-canon/pull-desc/backfill/relink only touch local vault files,
+not the API (pull-canon and pull-desc read from mobRPG but only ever write
+locally; backfill and relink make no API calls at all).
 
 ## Commands
 
@@ -70,6 +70,23 @@ relink make no API calls at all).
                                   deleted flags, pending leaves the vault alone.
                                   Verifies each accepted element to detect drift
                                   and deletion; --no-verify skips that pass.
+    mobrpg pull-desc <world> --vault <path>
+                    [--resolve take-canon|keep-vault|merge|separate|baseline
+                     --only <ref>] [--execute]
+                                  Reconcile note *description prose* with mobRPG
+                                  canon (pull-canon only handles the machine
+                                  node). No flags = read-only report classifying
+                                  each synced note (in-sync / canon-only /
+                                  vault-only / conflict) with diffs. --resolve
+                                  applies one entity's outcome via --only: take-
+                                  canon, keep-vault, merge (diff3 — leaves conflict
+                                  markers on overlap), separate (stop reconciling
+                                  it), baseline (first-time base capture). Change
+                                  detection compares mobRPG's raw HTML hash and the
+                                  frozen canon base, never the lossy converter.
+                                  Vault-only writes, gated by --execute (dry-run
+                                  default). The mobrpg-sync skill is the interactive
+                                  UI; it walks the GM through conflicts one at a time.
     mobrpg relink --vault <path> --to <new-rel-path> [--from <old-rel-path>]
                   [--execute]
                                   Re-point a moved/renamed note's mobrpg
