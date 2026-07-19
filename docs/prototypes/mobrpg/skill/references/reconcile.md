@@ -69,15 +69,66 @@ dry-run → present → confirm → `--execute` sequence as every other mutating
 verb in this skill. Don't skip the confirm step just because the guard
 doesn't apply.
 
-## Description content — NOT YET (Plan 2)
+## Description content — reconcile via `pull-desc`
 
-`pull-canon` reconciles the machine `mobrpg:` node; it does not merge the
-note's *description* prose. When a description differs between the vault and
-mobRPG, say so plainly and leave the prose to the GM for now. Automated
-three-way description merge (merge / take-canon / keep-vault /
-maintain-separately) arrives in Plan 2 — do not hand-improvise it here,
-because without the recorded canon base you cannot tell which side changed,
-and a guess can clobber authored prose.
+`pull-canon` reconciles the machine `mobrpg:` node; it does **not** merge the
+note's *description* prose. That is `pull-desc`'s job. Run it after `pull-canon`.
 
-*Why:* honest degradation — the skill states the boundary instead of faking a
-risky merge.
+**You are the interactive UI.** `pull-desc` gives you two primitives — a
+read-only report and a one-entity apply — and you walk the GM through each
+conflict one at a time. Never batch a resolution the GM hasn't seen.
+
+**Step 1 — report (read-only):**
+
+```
+.venv/bin/mobrpg pull-desc <world> --vault <path>
+```
+
+This classifies every synced note and prints, per changed entity, a
+`base → vault` and `base → mobRPG` diff. States:
+
+- **in-sync** → nothing to do (not printed).
+- **canon-only** → only mobRPG changed. Safe to `take-canon`.
+- **vault-only** → only the vault changed. Nothing to pull; it's push territory
+  (the vault is ahead — re-`suggest` if you want mobRPG updated).
+- **conflict** → both sides changed. Ask the GM (Step 2).
+- **unbaselined** → synced before a base was recorded. Offer `baseline` to
+  capture the current state as the reference point (treats the vault as the
+  source of truth; the GM can immediately `take-canon` to flip it).
+- **deleted** → mobRPG deleted the element. Report it; do not merge.
+
+**Step 2 — present each conflict and ask, one at a time.** For each conflicted
+entity, show the GM the two diffs and ask the four-way question:
+
+> *<name>*'s description changed on both sides. Your vault says [X]; mobRPG says
+> [Y]. **Merge** them, take **mobRPG's**, keep **yours**, or keep them
+> **separate** on purpose?
+
+Then apply their answer to that one entity — dry-run first, show the result,
+get an explicit yes, then `--execute`:
+
+```
+.venv/bin/mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref>
+.venv/bin/mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref> --execute
+```
+
+`<mode>` is `take-canon` | `keep-vault` | `merge` | `separate` | `baseline`;
+`<ref>` is the note's `external_ref`. Then move to the next entity.
+
+- **merge** does a three-way merge. Non-overlapping edits combine automatically;
+  a genuine overlap is written back with `<<<<<<< vault` / `>>>>>>> mobRPG`
+  conflict markers and the command says so — the note sits unresolved until the
+  GM cleans the markers, then re-run (a clean `merge`, or `keep-vault` once it
+  reads right, re-baselines it).
+- **separate** stops reconciling that entity's description entirely, until the
+  GM clears the `description_policy`.
+
+Every `pull-desc --execute` writes local vault files only — it never calls a
+mobRPG write endpoint, so the PROD write guard (`MOBRPG_ALLOW_PROD_WRITES=1`)
+does not gate it. It is still a vault mutation: same dry-run → present → confirm
+→ `--execute` sequence, per entity.
+
+*Why it's safe:* change detection compares mobRPG's raw HTML to its recorded
+hash and the vault prose to a frozen base — never a lossy converter round-trip —
+so an untouched entity never falsely reads as changed, and authored prose is
+never clobbered by a guess.

@@ -26,7 +26,7 @@ canon", "fix my mapping") over the detected default.
 |---|---|
 | no `<vault>/_meta/mobrpg-map.json`, or `mobrpg map check` shows `new`/unmapped vocab (map drift) | **Mapping maintenance** → `references/mapping-maintenance.md` |
 | map clean; `mobrpg suggest --write-back` (dry-run) shows entities to push | **Push** → `references/push.md` |
-| `mobrpg suggestions <world> --state Accepted\|Dismissed --correlate --vault <path>` (two queries — one per state) shows ratified suggestions awaiting pull-back | **Reconcile** → `references/reconcile.md` |
+| `mobrpg suggestions <world> --state Accepted\|Dismissed --correlate --vault <path>` (two queries — one per state) shows ratified suggestions awaiting pull-back, **or** a note's description prose differs between vault and mobRPG (`mobrpg pull-desc <world> --vault <path>` report) | **Reconcile** → `references/reconcile.md` |
 | a legacy crosswalk sidecar exists but entities lack `mobrpg:` `element_id` | **Backfill** → `references/backfill.md` |
 
 Present what you found and the recommended phase; let the GM redirect.
