@@ -89,6 +89,34 @@ def test_write_preserves_blank_line_before_following_key():
                                    "languages": []}
 
 
+def test_canon_base_scalars_round_trip_with_embedded_newlines():
+    # The description-merge base: an HTML hash, the frozen canon-section markdown
+    # (multi-line, JSON-encoded onto one line), a sync timestamp, and the
+    # maintain-separately policy flag.
+    n = dict(NODE,
+             canon_html_hash="sha256:9f98",
+             canon_base_md="## Background\n\nA ruthless smuggler.",
+             canon_synced_at="2026-07-19T14:02:00Z",
+             description_policy="separate")
+    text = node.emit_node(n)
+    assert '  canon_html_hash: "sha256:9f98"\n' in text
+    assert '  canon_synced_at: "2026-07-19T14:02:00Z"\n' in text
+    assert '  description_policy: "separate"\n' in text
+    # the multi-line base is emitted on a single JSON-encoded line
+    assert '  canon_base_md: "## Background\\n\\nA ruthless smuggler."\n' in text
+    back = node.read_node("---\n" + text + "---\n")
+    assert back["canon_base_md"] == "## Background\n\nA ruthless smuggler."
+    assert back == n
+
+
+def test_canon_base_scalars_absent_when_unset():
+    # Back-compat: a node without the new scalars emits none of them.
+    text = node.emit_node(NODE)
+    for k in ("canon_html_hash", "canon_base_md", "canon_synced_at",
+              "description_policy"):
+        assert k not in text
+
+
 def test_previous_ref_round_trips_when_present():
     n = dict(NODE, external_ref="canticle:new/Path", previous_ref="canticle:old/Path")
     text = node.emit_node(n)

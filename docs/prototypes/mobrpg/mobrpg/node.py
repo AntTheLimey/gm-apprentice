@@ -12,7 +12,11 @@ import hashlib
 import json
 
 _SCALARS = ["world_id", "external_ref", "previous_ref", "element_id", "element_kind",
-            "review_state", "content_hash", "last_synced", "review_note"]
+            "review_state", "content_hash", "last_synced", "review_note",
+            # Description-merge base (Plan 2): raw-HTML hash for canon-change
+            # detection, the frozen canon-section markdown ancestor, the sync
+            # timestamp, and the maintain-separately policy flag.
+            "canon_html_hash", "canon_base_md", "canon_synced_at", "description_policy"]
 _REL_KEYS = ["predicate", "target", "event_type", "event_id", "review_state"]
 _LANG_KEYS = ["language", "language_id", "type", "mastery", "review_state"]
 
