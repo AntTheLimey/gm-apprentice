@@ -22,16 +22,22 @@ Thideian Chitinoteuthis) were missing from the entity diff until queried
 directly. New-content discovery must cover **entities + edits + classifier
 types**, not just entities.
 
-Fix direction: either (a) extend `pull` to also fetch the `/type` endpoints and
-emit them in the extract (a `types` section alongside `entities`/`events`), or
-(b) make the discovery/report path run `map init` (which already walks the
-`/type` endpoints) and fold its output into the new-content report. `map init`
-is the new-schema tool for exactly this, so (b) is likely the cleaner route —
-but the extract itself being type-blind is the underlying gap. Note the two
-creature types have no creature entities yet (`creature` count = 0), so they'd
-also be invisible to any entity-first walk. Landfeature/item have no `/type`
-endpoint (those types live on the elements), so the traversal set is
-creature/organization/political types.
+**`map init` does NOT rescue this** (verified live 2026-07-19). `map_cmd.discover()`
+*does* GET `creature/type`, but the proposed map is built by iterating over
+**vault vocab** (`for v in vocab["creature_type"]`), and with zero creature
+entities/vocab the discovered types are discarded — the two creature types
+appear **nowhere** in the emitted map file, not even `_discoveredVocab`
+(`creatureType total=0`). So the underlying gap is: **a mobRPG classifier type
+that no vault content references is silently dropped by every current verb.**
+Only a direct `GET /world/{world}/creature/type` surfaces them.
+
+Fix direction: add a discovery path that emits **all discovered classifier
+types (bound or not)** so unrepresented/new types are visible — either (a) a
+`types` section in the `pull` extract fetched from the `/type` endpoints, or (b)
+a `map`/report mode that lists discovered mobRPG types with no vault counterpart
+(the "new type, vault has no equivalent" set). The traversal set is
+creature/organization/political types; landfeature/item have no `/type` endpoint
+(those types live on the elements).
 
 ## Resolved
 
