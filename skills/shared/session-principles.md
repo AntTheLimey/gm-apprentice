@@ -32,6 +32,17 @@ Prep builds new potential on established reality.
   Unplayed prep is scrap — only mention if it contains
   critical clues players still need.
 
+- **The Plan is an instrument, not an audit trail.** Never
+  record what an earlier draft said, what was dropped or
+  reversed, or why something is absent ("formally dropped",
+  "this plan revises", "noted here only so it is a deliberate
+  silence", "that is now wrong"). Fix the other file and say
+  nothing. Provenance, if it must be kept, belongs in the
+  Wrap-Up's Reconciliation Context or a QA log — never in the
+  Plan the Keeper reads. (Reconciliation Context, in the
+  Wrap-Up, is the sanctioned home for "what was dropped or
+  recycled"; the Plan itself stays clean.)
+
 ## Companion Skills
 
 - **ttrpg-expert** — Content generation, rules reference,
