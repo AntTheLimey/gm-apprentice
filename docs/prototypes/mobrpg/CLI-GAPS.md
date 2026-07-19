@@ -10,36 +10,30 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-### G4 — `pull` is entity-only; it never traverses classifier `/type` endpoints
-**Found 2026-07-19** during a live pull of the Space world
-(`a254e424-…`). `pull.py` walks only entity kinds (`KINDS` = person /
-organization / political / landfeature / item / creature / culture / race /
-event) and does **not** GET the classifier endpoints
-(`creature/type`, `organization/type`, `political/type`, …). So a "what's new
-in mobRPG" report built from a `pull` extract **silently drops every classifier
-type** — e.g. two genuinely new creature types (Thideian Furry Lamprey,
-Thideian Chitinoteuthis) were missing from the entity diff until queried
-directly. New-content discovery must cover **entities + edits + classifier
-types**, not just entities.
-
-**`map init` does NOT rescue this** (verified live 2026-07-19). `map_cmd.discover()`
-*does* GET `creature/type`, but the proposed map is built by iterating over
-**vault vocab** (`for v in vocab["creature_type"]`), and with zero creature
-entities/vocab the discovered types are discarded — the two creature types
-appear **nowhere** in the emitted map file, not even `_discoveredVocab`
-(`creatureType total=0`). So the underlying gap is: **a mobRPG classifier type
-that no vault content references is silently dropped by every current verb.**
-Only a direct `GET /world/{world}/creature/type` surfaces them.
-
-Fix direction: add a discovery path that emits **all discovered classifier
-types (bound or not)** so unrepresented/new types are visible — either (a) a
-`types` section in the `pull` extract fetched from the `/type` endpoints, or (b)
-a `map`/report mode that lists discovered mobRPG types with no vault counterpart
-(the "new type, vault has no equivalent" set). The traversal set is
-creature/organization/political types; landfeature/item have no `/type` endpoint
-(those types live on the elements).
+_(none)_
 
 ## Resolved
+
+### G4 — `pull` was entity-only; it never traversed classifier `/type` endpoints ✅
+**Resolved 2026-07-19.** `pull.extract()` now emits a top-level **`types`**
+section alongside `entities`/`events`/`counts`. A new `TYPE_KINDS`
+(`creature/type`, `organization/type`, `political/type`) is GET'd via the
+existing `_list_all()` helper — which already swallows the endpoints that 404 or
+return non-JSON/empty (mirrors the entity-list try/except), so a missing endpoint
+yields `[]` rather than aborting the pull. Each entry is a bare `{id, name}`
+record. landfeature/item are deliberately excluded — they have **no** `/type`
+endpoint (their types live on the elements as `landFeatureTypes` / item
+`attributes.itemType`, already surfaced as entity `classifiers`). So a "what's
+new in mobRPG" report built from a `pull` extract now covers **entities + edits +
+classifier types (bound or not)**, no longer silently dropping a standalone/new
+type that no vault content references.
+
+Verified live read-only against the Space world (`a254e424-…`): the `types`
+section carried the **2 creature types** the gap was filed for (Thideian Furry
+Lamprey, Thideian Chitinoteuthis), plus **3 organization types** (Governmental,
+Criminal, Corporation) and **5 political types** (Gate, City, Starport,
+Spaceship, Space Station) — none of which appear as entity records. Coverage: 3
+new tests in `test_pull.py` (extraction, empty/missing, non-JSON endpoint).
 
 ### G6 — `backfill` only accepts the Regency-style crosswalk, not the `detect_updates` dict format ✅
 **Resolved 2026-07-19** (commit `8252a9a`). `backfill.nodes_from_crosswalk` now

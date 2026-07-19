@@ -43,7 +43,10 @@ locally; backfill and relink make no API calls at all).
     mobrpg worlds                 (same as whoami) list visible worlds.
     mobrpg pull <world> [--out F] Import a mobRPG world into a JSON extract
                                   (default extract.json). Entry of the import
-                                  pipeline; feeds `write`.
+                                  pipeline; feeds `write`. The extract carries
+                                  entities/events/counts plus a `types` section
+                                  (creature/organization/political classifier
+                                  types, bound or not) for "what's new" discovery.
     mobrpg suggestions <world> [--state Pending|Accepted|Dismissed] [--correlate]
                        [--vault DIR] [--fetch-elements] [--json] [--out DIR]
                                   List suggestions by review state (the return

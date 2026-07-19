@@ -30,6 +30,12 @@ KINDS = ["person", "organization", "political", "landfeature", "item",
          "creature", "culture", "race", "event"]
 CLASSIFIER_KINDS = ["organization/type", "political/type"]
 
+# Classifier `/type` endpoints traversed for the extract's `types` section, so a
+# standalone/new type with no vault content (e.g. a new creature type) is still
+# visible to a "what's new" report. landfeature/item have NO `/type` endpoint —
+# their types live on the elements — so they are excluded here.
+TYPE_KINDS = ["creature/type", "organization/type", "political/type"]
+
 
 def _list_all(world: str, kind: str, token: str) -> list:
     try:
@@ -126,7 +132,15 @@ def extract(world: str, token: str) -> dict:
                 {"target": records[obj]["name"], "predicate": pred,
                  "eventType": et, "role": role})
 
+    # 4. classifier types (bound or not) from the /type endpoints — so a
+    # standalone/new type unreferenced by any entity is still surfaced.
+    types_out: dict[str, list] = {}
+    for kind in TYPE_KINDS:
+        types_out[kind] = [{"id": it["id"], "name": it.get("name") or it.get("title") or "?"}
+                           for it in _list_all(world, kind, token) if it.get("id")]
+
     return {"worldId": world, "entities": list(records.values()), "events": events_out,
+            "types": types_out,
             "counts": {k: sum(1 for r in records.values() if r["kind"] == k)
                        for k in KINDS if k != "event"}}
 
@@ -149,6 +163,9 @@ def run(argv: list[str]) -> int:
         return 1
     with open(args.out, "w") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
-    print(f"wrote {args.out}: {len(result['entities'])} entities, {len(result['events'])} events")
+    n_types = sum(len(v) for v in result.get("types", {}).values())
+    print(f"wrote {args.out}: {len(result['entities'])} entities, "
+          f"{len(result['events'])} events, {n_types} classifier types")
     print("counts:", result["counts"])
+    print("types:", {k: len(v) for k, v in result.get("types", {}).items()})
     return 0

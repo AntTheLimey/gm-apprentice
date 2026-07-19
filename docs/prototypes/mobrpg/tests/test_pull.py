@@ -167,6 +167,44 @@ def test_role_from_event_name_comma_fallback():
     assert pull.role_from_event_name("Zeb, Envoy of X", "Nobody") == "Envoy of X"
 
 
+def test_extract_emits_classifier_types_section(monkeypatch):
+    lists = {
+        "creature/type": [{"id": "ct1", "name": "Thideian Furry Lamprey"},
+                          {"id": "ct2", "name": "Chitinoteuthis"}],
+        "organization/type": [{"id": "ot1", "name": "Guild"}],
+        "political/type": [{"id": "pt1", "name": "Town"}, {"id": "pt2", "name": "City"}],
+    }
+    monkeypatch.setattr(client, "_request", _make_fake(lists, {}))
+    result = pull.extract("world-1", "tok")
+    types = result["types"]
+    assert {t["name"] for t in types["creature/type"]} == {"Thideian Furry Lamprey", "Chitinoteuthis"}
+    assert types["organization/type"] == [{"id": "ot1", "name": "Guild"}]
+    assert {t["name"] for t in types["political/type"]} == {"Town", "City"}
+    # each entry is a bare {id, name} record
+    assert types["creature/type"][0] == {"id": "ct1", "name": "Thideian Furry Lamprey"}
+
+
+def test_extract_types_section_handles_empty_or_missing(monkeypatch):
+    # no /type endpoints return anything -> section present, all keys empty lists
+    monkeypatch.setattr(client, "_request", _make_fake({}, {}))
+    result = pull.extract("world-1", "tok")
+    assert result["types"] == {"creature/type": [], "organization/type": [], "political/type": []}
+
+
+def test_extract_types_section_survives_non_json_endpoint(monkeypatch):
+    def fake(method, path, *, token=None, query=None, body=None):
+        if path.endswith("/creature/type"):
+            raise ValueError("not JSON")  # some /type endpoints 404 / return non-JSON
+        if path.endswith("/political/type"):
+            return {"content": [{"id": "pt1", "name": "Town"}]}
+        return {"content": []}
+
+    monkeypatch.setattr(client, "_request", fake)
+    result = pull.extract("world-1", "tok")
+    assert result["types"]["creature/type"] == []
+    assert result["types"]["political/type"] == [{"id": "pt1", "name": "Town"}]
+
+
 def test_run_reports_api_error_and_writes_nothing(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("MOBRPG_TOKEN", "tok")
 
