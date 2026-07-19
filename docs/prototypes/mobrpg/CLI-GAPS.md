@@ -26,19 +26,6 @@ dict format, `element_id = key`, `element_kind` from `kind`, `external_ref` from
 `vault_path`. Ideally also baseline the Plan-2 description fields
 (`pull-desc baseline`) in the same migration so the nodes are sync-ready.
 
-### G5 — no verb suggests aux-type (currency/term/type) descriptions *up* to mobRPG
-**Found 2026-07-19.** Where the vault has authored content but the mobRPG
-element is an empty stub (e.g. `_World/Federal Credits.md` vs the empty
-`currency` element `9282b30a-…`), the right move is to **suggest the vault prose
-up**, not pull the empty stub down. `suggest` only builds the entity datatype
-graph; it has no path for `currency`/`term`/classifier descriptions. Per Ant's
-guidance this MUST go through the **suggestion** endpoint (a reviewable proposal
-to the world owner), never a direct element `PUT` — a suggestion is safe because
-Tim reviews it. Fix: a verb that, for a linked vault note whose mobRPG element
-lacks a description, submits the vault canon-section as a suggested description
-edit via `/suggestion`. Pairs with G4 (discovering the empty stubs) and the
-`mobrpg:` node link (knowing which element to target).
-
 ### G4 — `pull` is entity-only; it never traverses classifier `/type` endpoints
 **Found 2026-07-19** during a live pull of the Space world
 (`a254e424-…`). `pull.py` walks only entity kinds (`KINDS` = person /
@@ -69,6 +56,51 @@ creature/organization/political types; landfeature/item have no `/type` endpoint
 (those types live on the elements).
 
 ## Resolved
+
+### G5 — no verb suggests a note's authored description *up* to mobRPG ✅
+**Resolved 2026-07-19.** New `mobrpg suggest-desc` verb (native), the inverse of
+`pull-desc`: where a linked note carries authored canon-section prose that the
+mobRPG element is missing (empty stub) or poorer on, it proposes that prose *up*
+as a reviewable suggestion — never a direct element `PUT`.
+
+    mobrpg suggest-desc <world> --vault <path> [--only <ref>] [--threshold F]
+                        [--batch-label L] [--execute]
+
+**API shape (grounded in the Spring backend, `models/world/suggestion/`, not
+guessed):** operation **`UpdateElement`**, payload `UpdateElementPayload` — a
+**sparse** edit `{ operation, targetRef, description?, name?, altNames? }` where a
+present field replaces and null leaves alone. `targetRef` must be a **real element
+id** (`SuggestionService` throws "UpdateElement must target a real element" on a
+`suggestion:` ref); the typed `data` block is deliberately not accepted. Carried
+in the same `SubmitSuggestionsRequest` transport as `suggest`/`submit-batch`, so
+`submit_batch.submit()` gives the dry-run summary, `--execute`, and the
+`assert_writes_allowed()` prod guard for free. Each edit uses a **distinct
+`<ns>:desc/<relpath>` externalRef** (never the element's own create externalRef):
+the backend dedupes an active suggestion by externalRef, so a re-run collapses
+onto its own still-pending desc suggestion instead of piling up or being swallowed
+by the element's create.
+
+Candidate selection is pure/testable (mirrors `pull-desc`'s classify/resolve
+split): `no-prose` (nothing authored — skip), `empty` (mobRPG stub — the core G5
+case), `in-sync` (live >= `--threshold` similar, default 0.98), or `differs`.
+Similarity uses `difflib.SequenceMatcher(autojunk=False)` — the default heuristic
+drops "popular" characters on long strings and reports false near-zero ratios.
+Dry-run by default; `--execute` submits; prod also needs `MOBRPG_ALLOW_PROD_WRITES=1`.
+Registered in `cli.py` + documented in `llms.txt` (Mutating list). Coverage: 21
+new tests in `test_suggest_desc.py` (189 total, was 168).
+
+Verified live read-only against the Space world (`a254e424-…`,
+`~/Documents/space_game`): **140 candidates of 140 synced notes — 6 `empty`
+(genuine stubs across NPC/Location/Faction/Item, incl. the `_World`-style currency
+case G5 was filed for), 134 `differs`** — dry-run, nothing written. **Follow-up:**
+the 134 `differs` are largely *formatting* noise, not richer content — the vault
+`canon_section` includes a leading `## Overview` → `<h2>` heading and HTML-entity
+encoding, while mobRPG stores headingless `<span style="">`-wrapped prose (~0.82–
+0.87 similarity on otherwise-identical text). Before anyone runs `--execute` on
+this vault, the diff should be normalized (strip the `## Overview` heading + tag/
+entity noise) so `--threshold` catches only genuine content deltas; otherwise it
+would suggest 134 formatting-only edits. The empty-stub path (G5's actual intent)
+is already correct.
 
 ### G3 — no verb re-points a moved/renamed note's `external_ref` ✅
 **Resolved 2026-07-19.** New `mobrpg relink` verb (native, vault-only — no API
