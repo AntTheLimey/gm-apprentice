@@ -84,7 +84,11 @@
       function poll() {
         if (document.hidden || inFlight) return Promise.resolve(undefined);
         inFlight = true;
-        return fetch('/api/loadout-list?campaign=' + encodeURIComponent(manifest.campaignId))
+        // Bound the request: a hung connection would otherwise pin inFlight true
+        // forever and silently freeze the board until a full reload.
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function () { controller.abort(); }, 15000);
+        return fetch('/api/loadout-list?campaign=' + encodeURIComponent(manifest.campaignId), { signal: controller.signal })
           .then(function (r) { if (!r.ok) throw new Error('loadout-list ' + r.status); return r.json(); })
           .then(function (j) {
             if (!j || !j.states || typeof j.states !== 'object') throw new Error('bad loadout-list payload');
@@ -92,7 +96,7 @@
             return j.states;
           })
           .catch(function () { return undefined; })
-          .then(function (states) { inFlight = false; return states; });
+          .then(function (states) { clearTimeout(timeoutId); inFlight = false; return states; });
       }
       var poller = createPoller({
         now: function () { return Date.now(); },

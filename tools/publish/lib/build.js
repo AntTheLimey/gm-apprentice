@@ -603,11 +603,22 @@ function build(options = {}) {
 
   if (deferredRosters.length) {
     const board = boardFor(publishConfig.system);
-    const manifest = board ? board.buildManifest(partyCampaignId, partyEntries) : null;
+    // Named partyManifest (not manifest) to avoid shadowing the outer vault
+    // manifest. Guarded like every other render path so a manifest-build failure
+    // does not abort the banners/story/timeline/landing stages that follow.
+    let partyManifest = null;
+    if (board) {
+      try {
+        partyManifest = board.buildManifest(partyCampaignId, partyEntries);
+      } catch (e) {
+        errorCount++;
+        console.error(`  ERROR building party manifest: ${e.message}`);
+      }
+    }
     for (const deferredRoster of deferredRosters) {
       try {
-        const boardHtml = (board && manifest) ? board.renderBoard(manifest, deferredRoster.page.outputPath) : null;
-        const islandHtml = (board && manifest) ? partyDataScript(manifest, board.scriptId) : null;
+        const boardHtml = (board && partyManifest) ? board.renderBoard(partyManifest, deferredRoster.page.outputPath) : null;
+        const islandHtml = (board && partyManifest) ? partyDataScript(partyManifest, board.scriptId) : null;
         const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
           publishConfig, linkMap, pages,
           partyBoardHtml: boardHtml, partyDataScript: islandHtml,
