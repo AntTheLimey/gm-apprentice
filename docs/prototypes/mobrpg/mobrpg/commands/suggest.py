@@ -57,6 +57,7 @@ def _relationships(fm: str) -> list[dict]:
 
 
 def _description(body: str) -> str:
+    body = _md.strip_boilerplate(body)   # drop import placeholders / gm-only / comments
     for h in ["## Appearances", "## Source References", "## GM Notes", "## Notes"]:
         i = body.find(h)
         if i != -1:
@@ -68,7 +69,15 @@ def _description(body: str) -> str:
     body = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", lambda m: m.group(2).replace("_", " "), body)
     body = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).replace("_", " "), body)
     body = re.sub(r"^#\s+.*$", "", body, flags=re.M)
-    return _md.md_to_html(body.strip()) or "<p></p>"
+    html = _md.md_to_html(body.strip()) or "<p></p>"
+    # A body with only section headings and no real prose (e.g. an imported
+    # named-entity scaffold) has no authored content — emit the empty stub, not
+    # bare heading tags, so nothing junky lands as the element description. Drop
+    # heading elements entirely (incl. their text), then check what's left.
+    no_headings = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", html, flags=re.I | re.S)
+    if not re.sub(r"<[^>]+>", "", no_headings).strip():
+        return "<p></p>"
+    return html
 
 
 def _key(name: str) -> str:

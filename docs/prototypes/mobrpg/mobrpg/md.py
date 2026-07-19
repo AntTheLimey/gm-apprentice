@@ -21,6 +21,29 @@ import html as _html
 import re
 from html.parser import HTMLParser
 
+# ---------------- boilerplate stripping ----------------
+
+# Machine-injected artifacts that must never count as authored prose or be pushed
+# up as a description: the import "named entity" placeholder, GM-only blocks
+# (content included — it must never leak into a public push), and any other HTML
+# comments (import-provenance notes, stray markers).
+_GM_ONLY_BLOCK = re.compile(r"<!--\s*gm-only\s*-->.*?<!--\s*/gm-only\s*-->", re.S | re.I)
+_IMPORT_PLACEHOLDER = re.compile(r"[*_]{0,2}\(No description[^)]*\)[*_]{0,2}", re.I)
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+
+
+def strip_boilerplate(md_text: str | None) -> str:
+    """Remove machine-injected artifacts from a note body/section so a note that
+    carries only boilerplate reads as empty and is never pushed as prose. Strips
+    whole gm-only blocks (content + markers) first so GM-only text can't leak,
+    then remaining HTML comments, then the import 'named entity' placeholder."""
+    s = md_text or ""
+    s = _GM_ONLY_BLOCK.sub("", s)
+    s = _HTML_COMMENT.sub("", s)
+    s = _IMPORT_PLACEHOLDER.sub("", s)
+    return s
+
+
 # ---------------- markdown -> HTML ----------------
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")

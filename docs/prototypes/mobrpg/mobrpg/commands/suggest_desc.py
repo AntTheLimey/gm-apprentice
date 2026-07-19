@@ -49,7 +49,7 @@ def _is_empty_html(html: str | None) -> bool:
 def vault_html(body: str) -> str:
     """The note's canon-section prose, converted to the HTML mobRPG stores.
     The GM-only tail (## GM Notes/Notes/...) is never included — it is not canon."""
-    region = section.canon_section(body)[0]
+    region = _md.strip_boilerplate(section.canon_section(body)[0])
     return _md.md_to_html(region)
 
 
@@ -89,7 +89,10 @@ def classify_candidate(cand_html: str | None, live_html: str | None,
     - in-sync:  live description is >= threshold similar to the vault prose (skip).
     - differs:  vault prose meaningfully differs from / is richer than live.
     """
-    if _is_empty_html(cand_html):
+    # No-prose covers a truly empty description AND a section that carries only
+    # structure/boilerplate (bare headings, stripped import placeholders) — its
+    # normalized text is empty, so there's nothing real to suggest up.
+    if _is_empty_html(cand_html) or not normalize_for_compare(cand_html):
         return False, "no-prose"
     if _is_empty_html(live_html):
         return True, "empty"

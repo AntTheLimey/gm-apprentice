@@ -144,6 +144,32 @@ def test_collect_entities_exclude_kinds(tmp_path):
     assert "Six" in {e["name"] for e in suggest.collect_entities(str(tmp_path))}
 
 
+def test_strip_boilerplate_import_placeholder_and_comments():
+    from mobrpg import md
+    # the "imported as a named entity" stub reduces to empty
+    s = "\n\n## Overview\n\n*(No description in mobRPG yet — imported as a named entity.)*\n\n## History\n"
+    out = md.strip_boilerplate(s)
+    assert "No description" not in out
+    # import-provenance comment stripped, real prose kept
+    s2 = "Real lore here.\n<!-- Imported from Tim's mobRPG 'Space' world. -->\n"
+    out2 = md.strip_boilerplate(s2)
+    assert "Real lore here." in out2 and "Imported from Tim" not in out2
+    # gm-only blocks are removed ENTIRELY (content must never leak into a push)
+    s3 = "Public.\n<!-- gm-only -->\nSECRET twist.\n<!-- /gm-only -->\nMore public."
+    out3 = md.strip_boilerplate(s3)
+    assert "Public." in out3 and "More public." in out3 and "SECRET" not in out3
+
+
+def test_placeholder_only_description_is_empty_in_both_paths(tmp_path):
+    from mobrpg.commands import suggest, suggest_desc
+    body = "\n\n## Overview\n\n*(No description in mobRPG yet — imported as a named entity.)*\n\n## History\n"
+    # entity push: a placeholder-only body yields the empty stub, not the placeholder text
+    assert suggest._description(body) == "<p></p>"
+    # suggest-desc: placeholder-only vault prose is no-prose (never suggested up), even vs an empty element
+    is_cand, reason = suggest_desc.classify_candidate(suggest_desc.vault_html(body), "")
+    assert is_cand is False and reason == "no-prose"
+
+
 def test_collect_entities_provenance_filter(tmp_path):
     npcs = tmp_path / "Characters/NPCs"; npcs.mkdir(parents=True)
     (npcs / "A.md").write_text('---\ntype: npc\nprovenance: "midwife"\n---\nB\n', encoding="utf-8")
