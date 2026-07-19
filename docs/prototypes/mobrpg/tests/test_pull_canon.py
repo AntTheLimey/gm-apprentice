@@ -1,4 +1,5 @@
 from mobrpg.commands import pull_canon
+from mobrpg import node
 
 BASE = {"world_id": "w1", "external_ref": "canticle:Characters/NPCs/Imogen_Bellamy",
         "element_id": None, "element_kind": "Person", "review_state": "pending",
@@ -47,3 +48,16 @@ def test_deleted_flags_and_clears_id():
 def test_pending_left_untouched():
     live = {"state": "pending", "element_id": None, "determined": {}, "event_ids": {}}
     assert pull_canon.apply_state(BASE, live) == BASE
+
+
+def test_scaffold_note_creates_minimal_file():
+    live = {"state": "accepted", "element_id": "new-1", "name": "Hidden Cult",
+            "kind": "faction", "element_kind": "Organization",
+            "determined": {"organization_type": "Cult"}, "event_ids": {}}
+    rel, text = pull_canon.scaffold_note("canticle:Factions/Hidden_Cult", live, "canticle")
+    assert rel == "Factions/Hidden_Cult.md"
+    assert text.startswith("---\ntype: faction\n")
+    n = node.read_node(text)
+    assert n["element_id"] == "new-1" and n["review_state"] == "accepted"
+    assert n["element_kind"] == "Organization"
+    assert "# Hidden Cult" in text

@@ -54,6 +54,27 @@ def apply_state(existing: dict, live: dict) -> dict:
     return existing
 
 
+_ELEMENTKIND_VAULTKIND = {"Person": "npc", "Political": "location", "LandFeature": "location",
+                          "Organization": "faction", "Creature": "creature", "Item": "item"}
+
+
+def scaffold_note(external_ref, live, namespace):
+    _, rel = external_ref.split(":", 1)
+    name = live.get("name") or rel.rsplit("/", 1)[-1].replace("_", " ")
+    vault_kind = live.get("kind") or _ELEMENTKIND_VAULTKIND.get(
+        live.get("element_kind"), "npc")
+    n = {
+        "world_id": "", "external_ref": external_ref,
+        "element_id": live.get("element_id"),
+        "element_kind": live.get("element_kind") or "Person",
+        "review_state": "accepted", "content_hash": "", "last_synced": "",
+        "review_note": "", "determined": dict(live.get("determined") or {}),
+        "relationships": [], "languages": [],
+    }
+    text = (f"---\ntype: {vault_kind}\n" + node.emit_node(n) + f"---\n# {name}\n")
+    return rel + ".md", text
+
+
 def _vault_file(external_ref, vault):
     if not external_ref or ":" not in external_ref:
         return None
@@ -104,6 +125,14 @@ def run(argv: list[str]) -> int:
     for ext, live in live_by_ref.items():
         path = _vault_file(ext, args.vault)
         if not path:
+            if live.get("state") == "accepted":
+                rel, text = scaffold_note(ext, live, os.path.basename(args.vault))
+                dest = os.path.join(os.path.expanduser(args.vault), rel)
+                if args.execute and not os.path.exists(dest):
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    with open(dest, "w", encoding="utf-8") as fh:
+                        fh.write(text)
+                updated += 1
             continue
         txt = open(path, encoding="utf-8").read()
         existing = node.read_node(txt)
