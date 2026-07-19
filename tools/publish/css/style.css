@@ -3841,3 +3841,16 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
 .gl-delta[hidden],
 .gl-status-note[hidden] { display: none !important; }
 @media (max-width: 640px) { .gl-col-st { display: none; } }
+
+/* --- CoC party board skin (SP3) --- */
+.gl-bar-san > i { background: #9d7bd8; }   /* Sanity — violet */
+.gl-bar-mp  > i { background: #4ba3c7; }   /* Magic points — cyan */
+.gl-dex { color: var(--text-muted); font-weight: 600; }
+.gl-rep { font-weight: 700; }
+.gl-badge.cond-insanity    { color: #b98be0; background: rgba(157,123,216,0.16); }
+.gl-badge.cond-wound       { color: #e06b5c; background: rgba(192,57,43,0.18); }
+.gl-badge.cond-unconscious { color: #d4a017; background: rgba(212,160,23,0.18); }
+.gl-badge.cond-dying       { color: #ff6b6b; background: rgba(192,57,43,0.28); }
+.gl-party-row.mad  { background: linear-gradient(90deg, rgba(157,123,216,0.14), transparent 60%); }
+.gl-party-row.hurt { background: linear-gradient(90deg, rgba(192,57,43,0.15), transparent 60%); }
+.gl-party-row.mad.hurt { background: linear-gradient(90deg, rgba(192,57,43,0.15), rgba(157,123,216,0.14) 70%); }

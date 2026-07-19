@@ -1,17 +1,8 @@
 'use strict';
 const { deriveLive } = require('../../../js/gurps-live');
 const { rowCells } = require('../../../js/gurps-party');
-const { getInitials } = require('../landing-data');
-const { relativeHref, escapeHtml, encodeImageUrl } = require('../../processor');
-
-// Circular avatar: portrait thumbnail when the PC has one, initials otherwise.
-function avatarHtml(pc, rosterOutputPath) {
-  if (pc.portrait) {
-    const src = encodeImageUrl(relativeHref(rosterOutputPath, pc.portrait));
-    return `<span class="gl-av gl-av-img"><img src="${escapeHtml(src)}" alt="" loading="lazy"></span>`;
-  }
-  return `<span class="gl-av">${escapeHtml(getInitials(pc.name))}</span>`;
-}
+const { relativeHref, escapeHtml } = require('../../processor');
+const { avatarHtml } = require('../party-avatar');
 
 function renderPartyBoard(manifest, rosterOutputPath) {
   if (!manifest || !manifest.pcs || !manifest.pcs.length) return null;

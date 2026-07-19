@@ -12,6 +12,8 @@ function buildCoCLiveData(model, meta) {
     campaignId: meta.campaignId,
     pcSlug: meta.pcSlug,
     buildVersion: meta.buildVersion, // informational; never gates hydration
+    dex: (model && model.chars && model.chars.DEX && model.chars.DEX.reg != null) ? model.chars.DEX.reg : null,
+    player: (model && model.player) || null,
     hp: { cur: hp.cur, max: hp.max },
     mp: { cur: mp.cur, max: mp.max },
     san: { cur: san.cur, max: san.max, start: san.start },

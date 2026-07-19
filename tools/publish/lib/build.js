@@ -12,8 +12,8 @@ const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
-const { buildPartyManifest, partyDataScript } = require('./party-manifest');
-const { renderPartyBoard } = require('./templates/gurps/party-board');
+const { partyDataScript } = require('./party-manifest');
+const { boardFor } = require('./party-board-registry');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -602,13 +602,27 @@ function build(options = {}) {
   }
 
   if (deferredRosters.length) {
-    const manifest = buildPartyManifest(partyCampaignId, partyEntries);
+    const board = boardFor(publishConfig.system);
+    // Named partyManifest (not manifest) to avoid shadowing the outer vault
+    // manifest. Guarded like every other render path so a manifest-build failure
+    // does not abort the banners/story/timeline/landing stages that follow.
+    let partyManifest = null;
+    if (board) {
+      try {
+        partyManifest = board.buildManifest(partyCampaignId, partyEntries);
+      } catch (e) {
+        errorCount++;
+        console.error(`  ERROR building party manifest: ${e.message}`);
+      }
+    }
     for (const deferredRoster of deferredRosters) {
       try {
-        const boardHtml = manifest ? renderPartyBoard(manifest, deferredRoster.page.outputPath) : null;
-        const islandHtml = manifest ? partyDataScript(manifest) : null;
+        const boardHtml = (board && partyManifest) ? board.renderBoard(partyManifest, deferredRoster.page.outputPath) : null;
+        const islandHtml = (board && partyManifest) ? partyDataScript(partyManifest, board.scriptId) : null;
         const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
-          publishConfig, linkMap, pages, partyBoardHtml: boardHtml, partyDataScript: islandHtml,
+          publishConfig, linkMap, pages,
+          partyBoardHtml: boardHtml, partyDataScript: islandHtml,
+          partyClientScripts: boardHtml ? board.clientScripts : [],
         });
         const outPath = path.join(outputDir, deferredRoster.page.outputPath);
         ensureDir(outPath);

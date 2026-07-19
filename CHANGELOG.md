@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.31] — 2026-07-18
+
+Publish tool 1.11.10.
+
+### Added
+
+- Read-only CoC investigator party board on the roster page: per-PC HP/SAN/MP/Luck, DEX, optional Reputation (Regency), and the five condition badges. Reuses the roster-index/`getStates` fan-out and the 60s adaptive poller (no `kv.list`). The party board is now system-aware via a shared spine (`js/party-core.js`) + per-system skins dispatched by `lib/party-board-registry.js`.
+
+---
+
 ## [1.8.30] — 2026-07-18
 
 Publish tool 1.11.9.

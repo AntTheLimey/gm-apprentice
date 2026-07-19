@@ -30,9 +30,10 @@ function buildPartyManifest(campaignId, entries) {
   return { campaignId, pcs };
 }
 
-function partyDataScript(manifest) {
+function partyDataScript(manifest, elId) {
+  const id = elId || 'gurps-party-data';
   const json = JSON.stringify(manifest).replace(/</g, '\\u003c');
-  return `<script type="application/json" id="gurps-party-data">${json}</script>`;
+  return `<script type="application/json" id="${id}">${json}</script>`;
 }
 
 module.exports = { buildPartyManifest, partyDataScript };
