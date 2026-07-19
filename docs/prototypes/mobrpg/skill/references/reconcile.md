@@ -1,8 +1,18 @@
 # Reconcile — mobRPG canon → vault
 
-Entered when suggestions have gone out and are awaiting pull-back: `mobrpg
-suggestions <world>` shows accepted or dismissed review states not yet
-reflected in the vault's `mobrpg:` nodes. Every write here is a
+Entered when suggestions have gone out and are awaiting pull-back:
+
+```
+.venv/bin/mobrpg suggestions <world> --state Accepted --correlate --vault <path>
+```
+
+shows accepted review states not yet reflected in the vault's `mobrpg:`
+nodes. `--state` takes one value per run — bare `mobrpg suggestions <world>`
+defaults to `--state Pending`, which is not what this phase is about, so
+accepted and dismissed are two separate queries (swap `--state Dismissed` for
+the second). The phase's per-entity outcomes below are built from both lists
+together. `--correlate --vault <path>` is what joins each suggestion back to
+its originating vault note. Every write here is a
 `.venv/bin/mobrpg pull-canon ...` invocation — never `python -m mobrpg`.
 
 ## Node authority rule (via `pull-canon`)

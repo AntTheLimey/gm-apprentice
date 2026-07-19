@@ -20,8 +20,9 @@ If anything drifted, run `mobrpg map sync <world> --vault <path>` (confirm
 first — it writes the map file). `sync` also re-discovers the live world's
 vocab via the API, so the map tracks changes made on the mobRPG side too, and
 it non-destructively preserves any entry you've hand-confirmed. If no map
-exists yet at all, use `mobrpg map init <world> --vault <path>` instead —
-`sync` refuses to run without an existing file.
+exists yet at all, use `mobrpg map init <world> --vault <path>` instead
+(confirm first — it writes a new map file) — `sync` refuses to run without an
+existing file.
 
 ## 2. Resolve `review` routes — one at a time
 
