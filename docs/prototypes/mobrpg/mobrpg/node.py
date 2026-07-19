@@ -56,9 +56,11 @@ def _split_frontmatter(md_text: str):
     end = md_text.find("\n---", 3)
     if end == -1:
         return None, None, None
-    fm_body = md_text[md_text.find("\n", 3) + 1:end + 1]  # includes trailing \n
-    post = md_text[end + 1:]                               # starts at "---"
-    return "---\n", fm_body, post
+    nl = md_text.find("\n", 3)                # end of the real opening fence line
+    pre = md_text[:nl + 1]                     # opening fence bytes, verbatim
+    fm_body = md_text[nl + 1:end + 1]          # includes trailing \n
+    post = md_text[end + 1:]                   # starts at "---"
+    return pre, fm_body, post
 
 
 def _find_node_block(fm_body: str):
@@ -80,7 +82,10 @@ def _find_node_block(fm_body: str):
         return None
     for j in range(start_line + 1, len(lines)):
         ln = lines[j]
-        if ln.strip() and not ln[0].isspace():   # next column-0 key
+        # The mobrpg: block contains no blank lines, so it ends at the first
+        # following line that is blank OR a column-0 key — whichever is first.
+        # Any separating blank line(s) stay in the preserved region.
+        if ln.strip() == "" or not ln[0].isspace():
             return offsets[start_line], offsets[j]
     return offsets[start_line], len(fm_body)
 

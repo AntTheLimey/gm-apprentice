@@ -57,3 +57,33 @@ def test_write_replaces_existing_block_only():
 def test_read_none_when_absent():
     assert node.read_node("---\ntype: npc\n---\nbody\n") is None
     assert node.read_node("no frontmatter here") is None
+
+
+def test_write_preserves_crlf_opening_fence():
+    md = "---\r\ntype: npc\r\n---\r\nbody\r\n"
+    out = node.write_node(md, {"world_id": "w1"})
+    # the CRLF opening fence bytes survive verbatim
+    assert out.startswith("---\r\n")
+    # every authored non-mobrpg line is byte-identical
+    assert "type: npc\r\n" in out
+    assert out.endswith("---\r\nbody\r\n")
+    assert node.read_node(out) == {"world_id": "w1", "relationships": [],
+                                   "languages": []}
+
+
+def test_write_preserves_blank_line_before_following_key():
+    fm = ('---\n'
+          'type: npc\n'
+          'mobrpg:\n'
+          '  world_id: "w1"\n'
+          '\n'
+          'author: bob\n'
+          '---\n'
+          'body\n')
+    out = node.write_node(fm, {"world_id": "w2"})
+    # the blank line separating the mobrpg block from author: bob survives
+    assert '\n\nauthor: bob\n' in out
+    assert 'author: bob\n' in out
+    # and the node still round-trips as the updated node
+    assert node.read_node(out) == {"world_id": "w2", "relationships": [],
+                                   "languages": []}
