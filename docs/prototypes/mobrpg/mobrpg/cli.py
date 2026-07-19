@@ -23,6 +23,8 @@ from mobrpg.commands import submit_batch as _submit_batch
 from mobrpg.commands import update as _update
 from mobrpg.commands import map_cmd as _map
 from mobrpg.commands import suggest as _suggest
+from mobrpg.commands import pull_canon as _pull_canon
+from mobrpg.commands import backfill as _backfill
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -39,6 +41,8 @@ NATIVE: dict = {
     "update": _update.run,
     "map": _map.run,
     "suggest": _suggest.run,
+    "pull-canon": _pull_canon.run,
+    "backfill": _backfill.run,
 }
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
@@ -64,6 +68,8 @@ VERB_HELP: list[tuple[str, str]] = [
     ("submit-batch", "submit a pre-built compound suggestion batch (types+edges+relations) from JSON"),
     ("update", "replace a Pending suggestion's payload (PUT) from JSON; edits inline fields only"),
     ("map", "init | sync | check the per-vault mobRPG type mapping (discover + propose)"),
+    ("pull-canon", "pull ratified mobRPG canon down into vault mobrpg: nodes"),
+    ("backfill", "one-time: migrate a sidecar crosswalk into mobrpg: nodes"),
     ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
