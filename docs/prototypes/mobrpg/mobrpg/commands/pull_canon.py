@@ -15,8 +15,6 @@ import sys
 
 from mobrpg import client
 from mobrpg import node
-from mobrpg.commands import map_cmd
-from mobrpg.commands import suggest
 
 
 def apply_state(existing: dict, live: dict) -> dict:
@@ -83,6 +81,22 @@ def _vault_file(external_ref, vault):
     return p if os.path.exists(p) else None
 
 
+def _scaffoldable(external_ref):
+    """True only for refs that safely map to a new vault note. Rejects:
+    colon-less refs (scaffold_note would ValueError), reified-relationship Event
+    refs (rel-path starts with `rel/` — Events are not notes), and any rel-path
+    that would escape the vault via `..`/absolute traversal."""
+    if not external_ref or ":" not in external_ref:
+        return False
+    rel = external_ref.split(":", 1)[1]
+    if rel.startswith("rel/"):
+        return False
+    norm = os.path.normpath(rel)
+    if os.path.isabs(norm) or norm == ".." or norm.startswith(".." + os.sep):
+        return False
+    return True
+
+
 def _fetch_live(world, token):
     """Return {external_ref: live_summary} across Accepted+Dismissed queues.
     live_summary = {state, element_id, determined, review_note, event_ids}."""
@@ -125,7 +139,7 @@ def run(argv: list[str]) -> int:
     for ext, live in live_by_ref.items():
         path = _vault_file(ext, args.vault)
         if not path:
-            if live.get("state") == "accepted":
+            if live.get("state") == "accepted" and _scaffoldable(ext):
                 rel, text = scaffold_note(ext, live, os.path.basename(args.vault))
                 dest = os.path.join(os.path.expanduser(args.vault), rel)
                 if args.execute and not os.path.exists(dest):

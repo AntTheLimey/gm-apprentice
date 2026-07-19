@@ -61,3 +61,41 @@ def test_scaffold_note_creates_minimal_file():
     assert n["element_id"] == "new-1" and n["review_state"] == "accepted"
     assert n["element_kind"] == "Organization"
     assert "# Hidden Cult" in text
+
+
+def _run_execute(monkeypatch, vault, live_by_ref):
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon, "_fetch_live", lambda world, token: live_by_ref)
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--execute"])
+    assert rc == 0
+
+
+def test_run_does_not_scaffold_reified_event_ref(monkeypatch, tmp_path, capsys):
+    # An Accepted reified-relationship Event ref (rel/ prefix) must never scaffold a note.
+    ref = "canticle:rel/Characters/NPCs/Imogen_Bellamy/friend_of/nathanielrooke"
+    live = {ref: {"state": "accepted", "element_id": "ev-1", "element_kind": "Person",
+                  "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, tmp_path, live)
+    assert not (tmp_path / "rel").exists()
+    assert list(tmp_path.rglob("*.md")) == []
+    assert "0 node(s) updated" in capsys.readouterr().out
+
+
+def test_run_skips_colonless_ref_without_crashing(monkeypatch, tmp_path, capsys):
+    live = {"nocolonref": {"state": "accepted", "element_id": "el-9",
+                           "element_kind": "Person", "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, tmp_path, live)
+    assert list(tmp_path.rglob("*.md")) == []
+    assert "0 node(s) updated" in capsys.readouterr().out
+
+
+def test_run_skips_traversal_ref(monkeypatch, tmp_path, capsys):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    ref = "canticle:../evil"
+    live = {ref: {"state": "accepted", "element_id": "el-x", "element_kind": "Person",
+                  "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert not (tmp_path / "evil.md").exists()
+    assert list(tmp_path.rglob("*.md")) == []
+    assert "0 node(s) updated" in capsys.readouterr().out
