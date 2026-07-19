@@ -60,6 +60,13 @@ base CoC skills remain available.
 
 **Tables** for lookup data with 3+ fields or 5+ rows.
 
+**Never put a `|` inside a table cell.** Both an aliased wikilink
+(`[[Target|Alias]]`) and an escaped pipe (`\|`) break the table: the escape
+renders correctly until Obsidian's formatter reflows the table, then parses the
+escape as a real column boundary and splits the cell. Link by frontmatter alias
+(`[[Hassan]]`), which Obsidian resolves to the file and displays cleanly with no
+pipe; fall back to a plain `[[Filename]]` where no alias exists.
+
 **No padding:** no "This section covers…" lead-ins, no flavour text,
 no restatements of the header. Every sentence must carry mechanical
 information.

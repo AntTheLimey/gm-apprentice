@@ -26,7 +26,11 @@ Prep builds new potential on established reality.
 
 - **Wiki-link everything.** Every entity reference:
   `[[wiki-link]]`. NPCs, locations, items, factions,
-  sessions, scenes — all linked.
+  sessions, scenes — all linked. **Inside a markdown table
+  cell, use alias-form links only** (`[[Hassan]]`) — never an
+  aliased link (`[[Target|Alias]]`) or an escaped pipe (`\|`),
+  because both break the table when Obsidian reflows it. Full
+  rule: `docs/file-format-standards.md` §4.
 
 - **Reality over plans.** Once played, the plan is dead.
   Unplayed prep is scrap — only mention if it contains
