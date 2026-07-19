@@ -95,6 +95,13 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0) -> list[di
             if only and only.lower() not in name.lower():
                 continue
             fm, body = _read(p)
+            # An entity folder can hold non-entity sidecars (e.g. a `character-story`
+            # note living beside its `pc`). Its `type` won't match the folder's kind,
+            # and it isn't a world element — skip it so it never becomes a bogus
+            # "… Story" push. Untyped legacy notes (no `type`) are still collected.
+            ntype = map_cmd._scalar(fm, "type")
+            if ntype and ntype != vkind:
+                continue
             out.append({
                 "path": p, "kind": vkind, "name": name,
                 "aliases": _aliases(fm), "description": _description(body),
@@ -319,7 +326,20 @@ def _mapped_type(mp, predicate) -> str:
 
 
 def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
-                       vault, namespace, ref_seed) -> tuple[list[dict], list[str]]:
+                       vault, namespace, ref_seed,
+                       ref_by_key=None) -> tuple[list[dict], list[str]]:
+    """Build the relationship items for one entity.
+
+    Targets resolve in three tiers: (1) an already-upstream element → its real
+    id; (2) a *net-new* entity being created in this same push (its key is in
+    `ref_by_key`) → the target's in-batch `suggestion:<ref>`, with that ref added
+    to `dependsOn` and every item of the edge tagged `_needs=<ref>` so the
+    chunker co-locates source and target in one batch (or defers the edge); (3)
+    otherwise — the target is not a world element (a PC, a session note, a
+    dangling wiki-link) → skipped. This closes the gap where an edge to a
+    not-yet-linked entity was dropped even though the compound-suggestion
+    transport can create-and-reference it in a single batch."""
+    ref_by_key = ref_by_key or {}
     items, skipped = [], []
     subj_key = _key(entity["name"])
     n = 0
@@ -330,36 +350,51 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (already linked)")
             continue
         tgt_id = ent_id_by_key.get(tgt_key)
-        if not tgt_id:
-            skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (target not in crosswalk)")
+        tgt_ref = None if tgt_id else ref_by_key.get(tgt_key)
+        if not tgt_id and not tgt_ref:
+            skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (target not a world element)")
             continue
+        # Reference the target by real id (upstream) or in-batch suggestion ref (net-new).
+        tgt_val = tgt_id if tgt_id else f"suggestion:{tgt_ref}"
+        xdeps = [] if tgt_id else [tgt_ref]
         et = _mapped_type(mp, pred)
         tgt_disp = tgt_raw.replace("_", " ")
         if et in map_cmd.RELATION_TYPES:
             # Structural relation (Parent/Child/Link/Spouse): a direct
             # WorldElementRelation from the entity to the target — no reified
             # Event. Parent/Child auto-create their reverse on the backend.
-            items.append(_relation(et, f"suggestion:{entity_ref}", tgt_id, [entity_ref]))
+            rel_item = _relation(et, f"suggestion:{entity_ref}", tgt_val, [entity_ref] + xdeps)
+            if tgt_ref:
+                rel_item["_needs"] = tgt_ref
+            items.append(rel_item)
             continue
         eref = f"{ref_seed}v{n}"; n += 1
         desc = f"<p>{rel.get('desc') or pred}</p>"
         ext = f"{namespace}:rel/" + external_ref(entity["path"], vault, namespace).split(":", 1)[1] \
               + f"/{pred}/{tgt_key}"
-        items.append(_create(eref, f"{entity['name']}, {pred} {tgt_disp}",
-                             {"type": "Event", "eventType": et},
-                             description=desc, external_ref=ext))
-        items.append(_relation("Link", f"suggestion:{eref}", f"suggestion:{entity_ref}", [eref, entity_ref]))
-        items.append(_relation("Link", f"suggestion:{eref}", tgt_id, [eref]))
+        unit = [
+            _create(eref, f"{entity['name']}, {pred} {tgt_disp}",
+                    {"type": "Event", "eventType": et},
+                    description=desc, external_ref=ext),
+            _relation("Link", f"suggestion:{eref}", f"suggestion:{entity_ref}", [eref, entity_ref]),
+            _relation("Link", f"suggestion:{eref}", tgt_val, [eref] + xdeps),
+        ]
+        if tgt_ref:
+            # Tag the whole reified unit so it defers together — an Event linked to
+            # its source but not its target would be meaningless.
+            for it in unit:
+                it["_needs"] = tgt_ref
+        items.extend(unit)
     return items, skipped
 
 
 def build_group(entity, mp, ent_id_by_key, linked_triples, race_id,
-                vault, namespace, seq) -> tuple[list[dict], list[str]]:
+                vault, namespace, seq, ref_by_key=None) -> tuple[list[dict], list[str]]:
     ref = f"e{seq}"
     items = element_items(entity, mp, ref, vault, namespace)
     cls_items, reports = classifier_items(entity, mp, ref, race_id, ref)
     rel_items, skipped = relationship_items(entity, mp, ref, ent_id_by_key, linked_triples,
-                                            vault, namespace, ref)
+                                            vault, namespace, ref, ref_by_key)
     return items + cls_items + rel_items, reports + skipped
 
 
@@ -374,6 +409,88 @@ def chunk_groups(groups, cap=100) -> list[list[dict]]:
     if cur:
         chunks.append(cur)
     return chunks
+
+
+def chunk_groups_colocated(groups, refs, cap=100) -> tuple[list[list[dict]], list[tuple]]:
+    """Pack per-entity groups into <=cap batches, keeping a group and every
+    net-new target group it references (items tagged `_needs=<ref>`) in the SAME
+    batch, so the in-batch `suggestion:<ref>` resolves. Groups joined by such an
+    edge form a co-location component that must land whole in one batch. A
+    component that fits goes in whole; a component larger than `cap` is split and
+    the edges spanning the split are DEFERRED — dropped from the batch and
+    returned — rather than emitted as an unresolvable cross-batch ref (which
+    would fail the all-or-nothing batch). Returns `(chunks, deferred)`, where
+    `deferred` is a sorted list of `(source_ref, target_ref)` pairs."""
+    n = len(groups)
+    for g in groups:
+        if len(g) > cap:
+            raise ValueError(f"entity group has {len(g)} items > cap {cap}; narrow the entity")
+    idx_of = {r: i for i, r in enumerate(refs)}
+    needs = [{it["_needs"] for it in g if it.get("_needs") in idx_of} for g in groups]
+
+    uf = list(range(n))
+    def find(a):
+        while uf[a] != a:
+            uf[a] = uf[uf[a]]; a = uf[a]
+        return a
+    for i, ns in enumerate(needs):
+        for t in ns:
+            uf[find(i)] = find(idx_of[t])
+
+    comps: dict[int, list[int]] = {}
+    for i in range(n):
+        comps.setdefault(find(i), []).append(i)
+
+    batches: list[list[int]] = []
+    batch_of: dict[int, int] = {}
+
+    def _fits(members, extra):
+        return sum(len(groups[m]) for m in members) + extra <= cap
+
+    def place_whole(members):
+        tot = sum(len(groups[m]) for m in members)
+        for bi, b in enumerate(batches):
+            if _fits(b, tot):
+                b.extend(members)
+                for m in members:
+                    batch_of[m] = bi
+                return
+        batches.append(list(members))
+        for m in members:
+            batch_of[m] = len(batches) - 1
+
+    def place_split(members):
+        for m in sorted(members, key=lambda i: -len(groups[i])):
+            for bi, b in enumerate(batches):
+                if _fits(b, len(groups[m])):
+                    b.append(m); batch_of[m] = bi
+                    break
+            else:
+                batches.append([m]); batch_of[m] = len(batches) - 1
+
+    # Largest fitting components first (better packing), then oversized ones.
+    ordered = sorted(comps.values(), key=lambda ms: -sum(len(groups[m]) for m in ms))
+    for members in ordered:
+        (place_whole if sum(len(groups[m]) for m in members) <= cap else place_split)(members)
+
+    deferred: set[tuple] = set()
+    chunks: list[list[dict]] = []
+    for bi, members in enumerate(batches):
+        chunk = []
+        for m in members:
+            for it in groups[m]:
+                t = it.get("_needs")
+                # Defer (drop) any item whose net-new target ref isn't co-located in
+                # THIS batch — including the defensive case where the ref names no
+                # known group at all (t not in idx_of): keeping it would ship an
+                # unresolvable cross-batch `suggestion:` ref and fail the batch. So
+                # the guard is safe-defer, never silent-keep.
+                if t is not None and (t not in idx_of or batch_of.get(idx_of[t]) != bi):
+                    deferred.add((refs[m], t))
+                    continue
+                chunk.append({k: v for k, v in it.items() if k != "_needs"} if "_needs" in it else it)
+        chunks.append(chunk)
+    return chunks, sorted(deferred)
 
 
 def discover_race_id(world, token, race_name="Human") -> str | None:
@@ -453,15 +570,20 @@ def run(argv: list[str]) -> int:
     node_idx, node_linked = node_index(args.vault)
     ent_id_by_key.update(node_idx)
     linked |= node_linked
-    groups, all_reports = [], []
+    # Every entity's in-batch group ref, so a relationship whose target is itself
+    # net-new in this push resolves to that target's `suggestion:<ref>` instead of
+    # being skipped for want of an upstream id.
+    ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(entities, 1)}
+    groups, refs, all_reports = [], [], []
     for i, ent in enumerate(entities, 1):
         items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,
-                                     args.vault, namespace, i)
+                                     args.vault, namespace, i, ref_by_key)
         groups.append(items)
+        refs.append(f"e{i}")
         all_reports.extend(reports)
 
     try:
-        chunks = chunk_groups(groups, cap=100)
+        chunks, deferred = chunk_groups_colocated(groups, refs, cap=100)
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
@@ -471,6 +593,12 @@ def run(argv: list[str]) -> int:
     print(f"{len(entities)} entit(y/ies) → {sum(len(c) for c in chunks)} items in {len(chunks)} batch(es)")
     for r in all_reports:
         print(f"  [note] {r}")
+    if deferred:
+        print(f"  [deferred] {len(deferred)} relationship(s) span an oversized co-location "
+              f"component — they push once their targets have upstream ids "
+              f"(re-run suggest after accept + pull-canon):", file=sys.stderr)
+        for src, tgt in deferred:
+            print(f"    · {src} → {tgt}", file=sys.stderr)
 
     if args.write_back:
         w, s = write_back(entities, mp, args.vault, namespace, execute=args.execute)
