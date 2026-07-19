@@ -48,12 +48,21 @@ created_by: session-prep
 tags: []
 ---
 
+## Session Intent
+
+The GM's stated purpose for *this* session, drawn out at the start of
+prep — not decided by the apprentice. One or two sentences: what the GM
+wants this session to be *about*, and whose moment it is. This governs
+the spotlight and the scenes that follow. (E.g. "This one's Emma's — the
+anklet debt finally comes due, and I want the Brotherhood to feel close
+for the first time.")
+
 ## Session Overview
 
-Brief description of the session's dramatic purpose. What is this
-session *about* dramatically? Not "the PCs go to the opera" but
-"the investigators make first contact with Viennese high society
-and get their first glimpse of the Brotherhood's influence."
+Short dramatic synopsis, derived from the Session Intent above. What is
+this session *about* dramatically? Not "the PCs go to the opera" but
+"the investigators make first contact with Viennese high society and get
+their first glimpse of the Brotherhood's influence."
 
 ## Reconciliation Context
 
@@ -76,7 +85,11 @@ and get their first glimpse of the Brotherhood's influence."
 fast. Keep all pre-scene context below (Previously On, Active
 Threads, NPC Quick Reference, World State) under ~1,000 words
 combined; recap ≤150 words; NPC Quick Reference one line per NPC.
-Thousands of words of preamble is a defect, not thoroughness. -->
+Thousands of words of preamble is a defect, not thoroughness.
+Scenes themselves are not word-capped — a scene runs as long as
+its situation, initiator, branches, and mechanical notes earn;
+cut bloat, not substance. Over ~1,200 words, sanity-check that
+the length is load-bearing. -->
 
 ## Previously On...
 
@@ -156,6 +169,16 @@ during step 14.]
 ## Audit Notes
 
 [Agency + canon audit findings. Written during step 15.]
+
+## Open Questions
+
+Calls the GM deferred, and anything the apprentice could not ground in
+canon. Kept explicit and un-invented — never auto-filled. If the
+apprentice had to guess (e.g. a headless run), the guess lives here,
+labelled **(apprentice guess — confirm)**, never promoted into settled
+plan content.
+
+- [ ] [Unresolved question — who owns it, what's blocked until it's answered]
 
 ## Gaps & Actions
 
