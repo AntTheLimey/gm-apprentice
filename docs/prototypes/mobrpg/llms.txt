@@ -33,9 +33,9 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, map, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
 push, suggest, submit-batch, update, types, links, review. write/merge/
-link-orphans/pull-canon/backfill only touch local vault files, not the API
-(pull-canon reads the suggestion queue but only ever writes locally; backfill
-makes no API calls at all).
+link-orphans/pull-canon/backfill/relink only touch local vault files, not the API
+(pull-canon reads the suggestion queue but only ever writes locally; backfill and
+relink make no API calls at all).
 
 ## Commands
 
@@ -61,13 +61,25 @@ makes no API calls at all).
                                   propose _meta/mobrpg-map.json. sync: re-discover +
                                   merge non-destructively (preserve confirmed).
                                   check: coverage report. Read-only on mobRPG.
-    mobrpg pull-canon <world> --vault <path> [--execute]
+    mobrpg pull-canon <world> --vault <path> [--no-verify] [--execute]
                                   Pull ratified mobRPG canon down into vault
                                   mobrpg: nodes. mobRPG is canon; the vault is
                                   the working surface: accepted fills ids,
                                   accepted-after-edit/drift overwrites
                                   `determined`, dismissed records a note,
                                   deleted flags, pending leaves the vault alone.
+                                  Verifies each accepted element to detect drift
+                                  and deletion; --no-verify skips that pass.
+    mobrpg relink --vault <path> --to <new-rel-path> [--from <old-rel-path>]
+                  [--execute]
+                                  Re-point a moved/renamed note's mobrpg
+                                  external_ref to its current path, keeping
+                                  element_id and recording the old ref in
+                                  previous_ref. Vault-only (no API); run after
+                                  renaming/moving a synced note so a re-push
+                                  won't mint a duplicate. Dry-run without
+                                  --execute; --from guards against relinking the
+                                  wrong note.
     mobrpg backfill <world> --vault <path> --crosswalk <file.json>
                     [--namespace NS] [--execute]
                                   One-time: migrate a sidecar crosswalk into

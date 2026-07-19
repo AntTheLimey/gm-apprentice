@@ -10,21 +10,26 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-### G3 — no verb re-points a moved/renamed note's `external_ref`
-**Severity:** medium.
-The `mobrpg:` node's `external_ref` records the vault-relative path. When a note
-is renamed or moved, its `external_ref` no longer matches its path; re-pushing it
-would create a duplicate element and orphan the old link (the name-collision
-hazard the foundation audit flagged). No `mobrpg` verb re-points the ref while
-preserving the `element_id` — grep of `pull_canon`/`suggest`/`backfill` finds
-none. The skill's mapping-maintenance rename/move guard therefore has to
-instruct a **manual** edit of the `mobrpg:` block in the note's frontmatter.
-**Fix:** add a verb (e.g. `mobrpg relink --from <old> --to <new>`, or a flag on
-an existing verb) that rewrites `external_ref` to the current path, keeps the
-`element_id`, and records the old path — dry-run→confirm→execute like the other
-mutations — so the guard is a one-command safe operation instead of a hand-edit.
+_(none)_
 
 ## Resolved
+
+### G3 — no verb re-points a moved/renamed note's `external_ref` ✅
+**Resolved 2026-07-19.** New `mobrpg relink` verb (native, vault-only — no API
+call, so no token/world):
+
+    mobrpg relink --vault <path> --to <new-rel-path> [--from <old-rel-path>] [--execute]
+
+Reads the note now at `--to`, derives the namespace from its existing
+`external_ref`, rewrites `external_ref` → `<namespace>:<to>`, **preserves
+`element_id`**, and records the prior ref in a new optional `previous_ref` node
+scalar (`node._SCALARS`, emitted only when present → backward compatible).
+`--from` is an optional guard that refuses the relink if the note's current ref
+doesn't match. Dry-run → present → `--execute` like the other vault mutations;
+no-op when already linked; refuses `..` traversal / missing note / node without
+an `external_ref`. Registered in `cli.py` + documented in `llms.txt`. Verified
+end-to-end (dry-run leaves the file byte-identical; execute preserves authored
+frontmatter). Coverage: 9 tests in `test_relink.py` + 2 in `test_node.py`.
 
 ### G2 — `map`: `status:"review"` is schema-reserved but never emitted ✅
 **Resolved 2026-07-19.** Ambiguity criterion (Ant's call): *word-embedded

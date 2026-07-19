@@ -89,6 +89,18 @@ def test_write_preserves_blank_line_before_following_key():
                                    "languages": []}
 
 
+def test_previous_ref_round_trips_when_present():
+    n = dict(NODE, external_ref="canticle:new/Path", previous_ref="canticle:old/Path")
+    text = node.emit_node(n)
+    assert '  previous_ref: "canticle:old/Path"\n' in text
+    assert node.read_node("---\n" + text + "---\n")["previous_ref"] == "canticle:old/Path"
+
+
+def test_previous_ref_absent_when_unset():
+    # a node without previous_ref must not emit the key (backward compatible)
+    assert "previous_ref" not in node.emit_node(NODE)
+
+
 def test_content_hash_stable_and_order_independent():
     a = {"name": "X", "altNames": ["a", "b"], "data": {"type": "Person"}}
     b = {"data": {"type": "Person"}, "name": "X", "altNames": ["a", "b"]}

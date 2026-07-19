@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-_SCALARS = ["world_id", "external_ref", "element_id", "element_kind",
+_SCALARS = ["world_id", "external_ref", "previous_ref", "element_id", "element_kind",
             "review_state", "content_hash", "last_synced", "review_note"]
 _REL_KEYS = ["predicate", "target", "event_type", "event_id", "review_state"]
 _LANG_KEYS = ["language", "language_id", "type", "mastery", "review_state"]

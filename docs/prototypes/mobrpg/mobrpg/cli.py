@@ -25,6 +25,7 @@ from mobrpg.commands import map_cmd as _map
 from mobrpg.commands import suggest as _suggest
 from mobrpg.commands import pull_canon as _pull_canon
 from mobrpg.commands import backfill as _backfill
+from mobrpg.commands import relink as _relink
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -43,6 +44,7 @@ NATIVE: dict = {
     "suggest": _suggest.run,
     "pull-canon": _pull_canon.run,
     "backfill": _backfill.run,
+    "relink": _relink.run,
 }
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
@@ -70,6 +72,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("map", "init | sync | check the per-vault mobRPG type mapping (discover + propose)"),
     ("pull-canon", "pull ratified mobRPG canon down into vault mobrpg: nodes"),
     ("backfill", "one-time: migrate a sidecar crosswalk into mobrpg: nodes"),
+    ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
     ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
