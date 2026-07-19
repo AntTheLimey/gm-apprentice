@@ -7,6 +7,16 @@ Session preparation assistant. Builds on what session-wrapup
 established as canon to get the GM ready for next session.
 Workflow: Reconcile → Gather → Plan → Verify → Handoff.
 
+## Stance — you draw the session out of the GM
+
+You draw the session out of the GM — spark, shape, refine, never decide for
+them. Every creative call (intent, spotlight, scenes) is offered as 2–3 seeds
+to react to, not a finished answer. Lead harder when the GM is low on energy —
+offer more concrete options — but they always choose. Never resolve a creative
+question the GM hasn't: unresolved calls go to `## Open Questions`, named and
+un-invented, never silently filled. The apprentice does the chores (gather,
+draft prose from the GM's decisions, run checks); the GM makes the calls.
+
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
 
@@ -36,9 +46,11 @@ when creating or updating session notes.
 
 **Creative planning references:** Read
 `skills/ttrpg-expert/arc-spotlight-reference.md` before
-starting creative planning (steps 11-14). For system-specific
-arc drivers, also read the active campaign's system
-`session-procedures.md`.
+starting creative planning (the elicited Intent → Spotlight →
+Scenes sequence, steps 11–14). For system-specific arc drivers,
+also read the active campaign's system `session-procedures.md`.
+The creative middle is *elicited*, not generated — see the Stance
+section above.
 
 **Progressive file writes:** Every step writes its output to
 the Plan file before proceeding. The Plan file is the
@@ -188,101 +200,163 @@ play, not material to be duplicated.
 (rationale: `shared/content-fidelity.md`)
 → Write `## Available Plans` to Plan file.
 
-## Phase 2: Prep Forward — Creative Planning
+## Phase 2: Prep Forward — Creative Planning (elicited)
 
-**11. PC Roster + Arc Check** — Per-PC deep review:
-- Backstory hooks, stated goals, current arc stage (five-stage
-  model), arc theme, relationships with other PCs and NPCs
-- Decisions from recent sessions needing consequences
-- `## Current Status` read: `Open threads` → decisions needing
-  consequences / next arc beat; `Knows (exclusive)` → personalized
-  touchpoint fuel (feeds Step 12)
+The whole creative spine — intent, spotlight, scenes — is drawn out of the
+GM (see Stance). Offer seeds; the GM chooses. One question at a time, light
+touch — don't interrogate. Anything the GM defers goes to `## Open Questions`,
+never invented.
+
+**11. Session Intent — "what's this session for?"** Before any scene work,
+surface the vault-mined material as seeds and ask the GM to set the dramatic
+intent:
+
+> Here's what's live going into this session: [owed beats, ticking clocks,
+> dormant threads, PC arcs due — drawn from Gather, steps 8–10]. What do you
+> want this one to be *about*? Whose moment is it?
+
+The GM sets the intent; you do not. Write their stated purpose to
+`## Session Intent` in the Plan file (and a one-line synopsis to
+`## Session Overview`). If the GM is unsure, offer 2–3 concrete directions
+grounded in what's live — but the choice is theirs. Do not proceed to
+spotlight until intent is set or explicitly deferred to `## Open Questions`.
+→ Write `## Session Intent` to Plan file.
+
+**12. PC Roster + Arc Check (grounding)** — Re-read the active PC sheets so the
+conversation is grounded, not guessed. Per-PC:
+- Backstory hooks, stated goals, current arc stage (five-stage model), arc
+  theme, relationships with other PCs and NPCs
+- `## Current Status` read: `Open threads` → decisions needing consequences /
+  next arc beat; `Knows (exclusive)` → personalized touchpoint fuel
 - Mechanical highlights (signature abilities, resources)
-- Last spotlight level, sessions since last B-plot feature
-- Next arc beat: what should happen next in this PC's arc
+- Last spotlight level, sessions since last B-plot feature; next arc beat
 
-Then assign A/B/C plot roles for the upcoming session:
-- **A-plot** (50-60%): main campaign storyline, all PCs
-- **B-plot** (25-35%): one featured PC, personal arc focus
-- **C-plot** (10-15%): lighter personal touch for a second PC
-
+This is chore-work that *feeds* the GM's spotlight decision — it is evidence,
+not a decision.
 → Write `## PC Roster & Arcs` to Plan file.
 
-**12. Touchpoint Assignment** — Assign at least one touchpoint
-per PC using the six types from arc-spotlight-reference.md:
-Backstory Connection, Moral Dilemma, Ability Showcase,
-Decision Callback, Arc Advancement Clue, Character Moment.
+**13. Spotlight — whose moment (elicited)** — Offer a lean plus alternatives,
+grounded in the arc/spotlight data, and let the GM choose the A/B/C split:
 
-B-plot PC gets at least one high-impact touchpoint. Vary types
-across PCs within the session. Coverage check: every PC must
-have at least one assigned touchpoint. No PC should go 3+
-sessions without a high-impact touchpoint.
-→ Write `## Touchpoint Plan` to Plan file.
+> I'd lean Emma for the B-plot — the anklet debt is owed — or Katherine, who
+> hasn't had a solo beat in three sessions. Or someone else entirely?
 
-**13. Scene Design** — Design scenes that deliver the assigned
-touchpoints. **Propose each scene to the GM before writing it.**
+The data is *evidence for the GM's decision*, not the decision. A-plot
+(~50–60%, main storyline, all PCs); B-plot (~25–35%, one featured PC); C-plot
+(~10–15%, a lighter second PC). Once the GM chooses, assign touchpoints against
+that choice using the six types from arc-spotlight-reference.md (Backstory
+Connection, Moral Dilemma, Ability Showcase, Decision Callback, Arc Advancement
+Clue, Character Moment); the B-plot PC gets at least one high-impact touchpoint.
+Then run coverage as **questions**, never silent fills:
 
-For each scene, pitch it first:
-- 1-2 sentence summary (what happens, why it matters)
-- Scene type (investigation, social, combat, chase, horror, other)
-- Dramatic objective
-- Key entities involved (NPCs, locations, items)
-- Which PC touchpoints it delivers
+> Freddy has no beat yet — light on purpose, or do you want one?
 
-Wait for the GM to **approve**, **tweak**, or **reject**:
-- **Approve** — write the scene to the Plan file
-- **Tweak** — incorporate the GM's changes, then write
-- **Reject** — drop the scene, move to the next proposal
+→ Write `## Spotlight Forecast` and `## Touchpoint Plan` to Plan file.
 
-Prefer embedding personal content in group scenes over
-splitting the party. Include open interaction windows where
-PC initiative can emerge naturally. The GM may also propose
-their own scenes at any point — confirm understanding, then
-write.
+**14. Scenes — from intent + spotlight (elicited)** — Scenes *emerge from* the
+intent and spotlight the GM just set. The propose-before-write gate lives at
+the **premise**, not the finished scene. For each scene:
 
-→ Write each approved scene to `## Planned Scenes` in Plan file.
+1. Pitch the **situation + whose want drives it** — a lean, or 2–3 options:
+   > A dinner where the viscount's charm is the trap, or a back-room where
+   > the ledger is the trap? Either way it's Emma's want that opens the door.
+2. The GM shapes it — yes / no / tweak / their own premise.
+3. *Then* you write it up, applying the kept craft rules:
+   - **Objective** = the *situation* the scene puts in front of the players,
+     not a lesson to land (name the pressure, not the theme).
+   - **Named initiator** — who brings this PC here in the first sixty seconds,
+     and what they want from *this* PC (ensemble scenes: the household
+     schedule is a valid initiator). A scene that cannot answer this is not
+     finished.
+   - **Read-aloud** as a `> ` blockquote: objective sensory description,
+     2–4 sentences, addressed to the table — never naming one PC or dictating
+     a feeling ("you feel…").
 
-**14. Spotlight Forecast** — Estimate per-PC spotlight share
-for the planned session. Check:
-- 15% floor: any PC below ~15% needs corrective adjustment
-- Sustained imbalance: any PC underserved for 3+ consecutive
-  sessions needs immediate corrective action (B-plot feature,
-  high-impact touchpoint, or encounter built around their
-  strengths)
-- Apply corrective B/C plot adjustments if needed
+Prefer embedding personal content in group scenes over splitting the party.
+Include open windows where PC initiative can emerge. The GM may propose their
+own scenes at any point — confirm understanding, then write. Spotlight balance
+across the written scenes is verification you run *against the GM's choices*,
+surfacing gaps as questions, never silently filling them.
+→ Write each scene to `## Planned Scenes` in Plan file.
 
-→ Write `## Spotlight Forecast` to Plan file.
+## Phase 2: Verify (assistance, not enforcement)
 
-## Phase 2: Verify
+You run the deterministic checks as **chores** and act on them yourself. The
+GM never sees an ERROR/WARNING report. Silently fix objective breakage, offer
+to build artifacts, and raise only *genuine* craft issues conversationally.
 
-**15. Agency + Canon Audit** — Review all planned content.
+**15. Run the checks as chores** — Against the Plan file's vault
+(`vault_check.py` lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`):
 
-Agency violations (ref: `skills/ttrpg-expert/scenario-writing.md`):
-- PC name as subject of declarative action verb
-- PC emotions/thoughts/internal state described
-- PC actions assumed without conditional language
-- Read-aloud using 2nd-person emotion/perception verbs
-- Confrontation scene without ≥2 contingencies
+- **Tables** — `vault_check.py <vault> tables`. Aliased-wikilink pipes or
+  escaped pipes inside a table break Obsidian's reflow. **Silently fix** them
+  (alias-form links, no `\|`); do not narrate it.
+- **Multi-day clock** — `vault_check.py <vault> timeline`. If the plan spans
+  multiple days, *offer* to build the `## Timeline` clock with the GM so hours
+  and same-day travel stay coherent — an offer, not a warning:
+  > This one runs across three days — want me to lay out a quick hour-by-hour
+  > clock so nothing double-books?
+- **Read-aloud** — `vault_check.py <vault> read-aloud`. Each hit is a
+  high-precision cue that a `> ` read-aloud line names a PC, dictates a feeling
+  ("you feel…"), or leans on a 3rd-person pronoun. Raise only the real ones as
+  a question:
+  > Scene 2's boxed text says "Katherine steps into the lamplight" — want that
+  > kept general so it reads to the whole table?
+- **Scene length** — a scene runs as long as its content earns (situation,
+  initiator, branches, NPC wants, mechanical notes). Flag **bloat** — restated
+  theses, repetition, self-documentation, unusable purple prose — regardless of
+  length, and offer to trim it. Over ~1,200 words, sanity-check with the GM
+  that the length is load-bearing. It is a nudge, not a cap.
+  (ref: `skills/ttrpg-expert/scenario-writing.md`)
+- **Preamble** — keep pre-scene context (Previously On, Active Threads, NPC
+  Quick Reference, World State) under ~1,000 words combined, recap ≤150 words,
+  so the Keeper reaches Scene 1 fast. Trim silently.
+- **Canon** — NPC details, locations, or events not traceable to the vault are
+  not stated as canon. Anything you cannot ground goes to `## Open Questions`,
+  named — never invented as a "pipeline gap" fill.
+  (ref: `skills/ttrpg-expert/continuity-engine.md`)
 
-Canon violations (ref: `skills/ttrpg-expert/continuity-engine.md`):
-- NPC details, locations, or events not traceable to vault
-- Unverified claims flagged as such, not stated as canon
+→ Apply fixes in place; there is no audit-notes report for the GM to read.
 
-Length violations:
-- Any scene over ~600 words — split or cut
-- Pre-scene context over ~1,000 words combined, or a recap over
-  150 words — trim so the Keeper reaches Scene 1 fast
-
-→ Write `## Audit Notes` to Plan file.
-
-**16. Gap Check** — Flag:
-- PCs without touchpoints (should not happen after step 12)
-- NPCs referenced but lacking vault files
-- Locations not described
+**16. Gap Check** — Surface, as questions or a short actionable list:
+- NPCs referenced but lacking vault files; locations not described
 - Stale entity files: flag for update vs retire
 - Missing entity stubs needed for planned scenes
+- **Unresolved calls** — anything the GM deferred, or you could not ground in
+  canon, goes to `## Open Questions`, explicit and un-invented. This is where
+  "Georgiana's post-Vienna SAN is unrecorded" lives — named, not guessed.
 
-→ Write `## Gaps & Actions` to Plan file.
+→ Write actionable gaps to `## Gaps & Actions` and unresolved calls to
+`## Open Questions` in Plan file.
+
+## Hard Guard — never generate the creative spine
+
+session-prep does **not** emit a settled `## Session Intent`, spotlight, or
+`## Planned Scenes` without GM input. If pushed to "just do it," or run
+headless / non-interactively (e.g. dispatched as a subagent with no GM to
+answer):
+
+- **Stop and ask** if a GM is reachable — the intent step gates the rest.
+- **Otherwise** produce those sections **entirely under `## Open Questions`**,
+  each line labelled **(apprentice guess — confirm)**, never as settled plan
+  content. The Gather and Verify chores may run; the creative calls may not be
+  silently resolved.
+
+This is what makes the guided flow real rather than cosmetic.
+
+## Resumable prep
+
+Weekly prep gets interrupted. Keep a light prep-state marker in the Plan file
+so a resumed session doesn't re-ask settled questions. After each decision
+lands, update a short HTML comment near the top of the Plan recording what's
+decided vs open and where the conversation is:
+
+```html
+<!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 open=[Freddy beat?] -->
+```
+
+On resume, read it first and pick up from the first open item.
 
 ## Handoff
 
@@ -297,7 +371,9 @@ Plan file. Based on gaps and actions identified:
 ## Sub-agent Opportunity
 
 - Steps 7-10: independent vault reads — parallelizable.
-- Steps 11-14: sequential creative planning — run in order.
-- Steps 15-16: independent quality checks — parallelizable.
+- Steps 11-14: the elicited creative spine — run in order, *with the GM*.
+  A sub-agent may gather and draft prose from the GM's decisions, but must
+  not resolve intent/spotlight/scenes itself (see Hard Guard).
+- Steps 15-16: independent chore checks — parallelizable.
 
 If sub-agents unavailable, run all steps sequentially.
