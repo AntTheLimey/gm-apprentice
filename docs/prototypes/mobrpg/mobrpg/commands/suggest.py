@@ -81,11 +81,15 @@ def _display_name(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0].replace("_", " ")
 
 
-def collect_entities(vault, *, chapter="", kind="", only="", limit=0) -> list[dict]:
+def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
+                     exclude_kinds=None) -> list[dict]:
     vault = os.path.expanduser(vault)
+    exclude_kinds = exclude_kinds or set()
     out = []
     for folder, vkind in map_cmd.FOLDERS.items():
         if kind and vkind != kind:
+            continue
+        if vkind in exclude_kinds:
             continue
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             txt = open(p, encoding="utf-8").read()
@@ -303,18 +307,26 @@ def node_index(vault) -> tuple[dict, set]:
     node-migrated vault that no longer relies on a sidecar crosswalk. A node
     relationship already carrying an `event_id` is treated as already-linked."""
     idx, linked = {}, set()
+    aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
     for folder in map_cmd.FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
-            nd = node.read_node(open(p, encoding="utf-8").read())
+            txt = open(p, encoding="utf-8").read()
+            nd = node.read_node(txt)
             if not nd or not nd.get("element_id"):
                 continue
             subj = _key(_display_name(p))
-            idx[subj] = nd["element_id"]
+            eid = nd["element_id"]
+            idx[subj] = eid
+            fm, _ = _read(p)
+            for al in _aliases(fm):
+                aliases.append((_key(al), eid))     # aliased target resolution (name wins — added after)
             for r in nd.get("relationships", []):
                 if r.get("event_id"):
                     tgt = re.sub(r"^\[\[|\]\]$", "", (r.get("target") or "")).split("|")[0]
                     linked.add((subj, r.get("predicate"), _key(tgt)))
+    for k, eid in aliases:
+        idx.setdefault(k, eid)                       # a real entity name always wins over an alias
     return idx, linked
 
 
@@ -533,6 +545,8 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--execute", action="store_true", help="actually submit (default: dry-run)")
     ap.add_argument("--write-back", action="store_true",
                     help="write a pending mobrpg: node into each entity's vault file")
+    ap.add_argument("--include-pcs", action="store_true",
+                    help="also push player characters (PCs are excluded by default)")
     args = ap.parse_args(argv)
 
     map_path = args.map or _default_map_path(args.vault)
@@ -548,8 +562,10 @@ def run(argv: list[str]) -> int:
     # "canticle" (an older/foreign map would mint mismatched externalRefs that
     # don't correlate to the vault's own nodes → duplicate-create risk).
     namespace = mp.get("vaultNamespace") or map_cmd.derive_namespace(args.vault)
+    # PCs are player-owned; don't push them to the shared world unless asked.
+    exclude_kinds = set() if args.include_pcs else {"pc"}
     entities = collect_entities(args.vault, chapter=args.chapter, kind=args.kind,
-                                only=args.only, limit=args.limit)
+                                only=args.only, limit=args.limit, exclude_kinds=exclude_kinds)
     if not entities:
         print("No matching vault entities for that --chapter/--kind/--only.", file=sys.stderr)
         return 1
@@ -574,6 +590,9 @@ def run(argv: list[str]) -> int:
     # net-new in this push resolves to that target's `suggestion:<ref>` instead of
     # being skipped for want of an upstream id.
     ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(entities, 1)}
+    for i, ent in enumerate(entities, 1):          # aliases resolve too; names already set win
+        for al in ent.get("aliases", []):
+            ref_by_key.setdefault(_key(al), f"e{i}")
     groups, refs, all_reports = [], [], []
     for i, ent in enumerate(entities, 1):
         items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,

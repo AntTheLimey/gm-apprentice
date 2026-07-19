@@ -133,6 +133,32 @@ def test_chunker_three_way_component_stays_whole():
 
 # ---- collect_entities: skip non-entity sidecar notes (character-story) ----
 
+def test_collect_entities_exclude_kinds(tmp_path):
+    (tmp_path / "Characters/PCs").mkdir(parents=True)
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    (tmp_path / "Characters/PCs/Six.md").write_text("---\ntype: pc\n---\nB\n", encoding="utf-8")
+    (tmp_path / "Characters/NPCs/Bob.md").write_text("---\ntype: npc\n---\nB\n", encoding="utf-8")
+    names = {e["name"] for e in suggest.collect_entities(str(tmp_path), exclude_kinds={"pc"})}
+    assert "Bob" in names and "Six" not in names
+    # default (no exclusion) still collects PCs
+    assert "Six" in {e["name"] for e in suggest.collect_entities(str(tmp_path))}
+
+
+def test_node_index_resolves_targets_by_alias(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Locations").mkdir(parents=True)
+    nd = {"world_id": "", "external_ref": "space_game:Locations/MacMillian Station IV",
+          "element_id": "mac-id", "element_kind": "Political", "review_state": "accepted",
+          "relationships": [], "languages": []}
+    (tmp_path / "Locations/MacMillian Station IV.md").write_text(
+        '---\ntype: location\naliases: ["Thides Station", "The Station"]\n'
+        + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+    idx, _ = suggest.node_index(str(tmp_path))
+    assert idx[suggest._key("MacMillian Station IV")] == "mac-id"
+    assert idx[suggest._key("Thides Station")] == "mac-id"      # alias resolves to the same element
+    assert idx[suggest._key("The Station")] == "mac-id"
+
+
 def test_collect_entities_skips_type_mismatched_sidecars(tmp_path):
     pcs = tmp_path / "Characters/PCs"
     pcs.mkdir(parents=True)
