@@ -213,6 +213,28 @@ def test_relationship_items(tmp_path):
     assert any("Nathaniel" in s for s in skipped) and any("Unknown" in s for s in skipped)
 
 
+def test_node_index_resolves_targets_from_mobrpg_nodes(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Locations").mkdir(parents=True)
+    sysn = {"world_id": "", "external_ref": "space_game:Locations/Eris System",
+            "element_id": "eris-id", "element_kind": "LandFeature",
+            "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / "Locations/Eris System.md").write_text(
+        "---\ntype: location\n" + node.emit_node(sysn) + "---\nBody\n", encoding="utf-8")
+    body = {"world_id": "", "external_ref": "space_game:Locations/Eris II",
+            "element_id": "eris2-id", "element_kind": "LandFeature", "review_state": "accepted",
+            "relationships": [{"predicate": "part_of", "target": "[[Eris System]]",
+                               "event_id": "ev9", "review_state": "accepted"}],
+            "languages": []}
+    (tmp_path / "Locations/Eris II.md").write_text(
+        "---\ntype: location\n" + node.emit_node(body) + "---\nBody\n", encoding="utf-8")
+    idx, linked = suggest.node_index(str(tmp_path))
+    assert idx[suggest._key("Eris System")] == "eris-id"
+    assert idx[suggest._key("Eris II")] == "eris2-id"
+    # a node relationship already carrying an event_id is treated as already-linked
+    assert (suggest._key("Eris II"), "part_of", suggest._key("Eris System")) in linked
+
+
 def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
     # part_of is spatial hierarchy, not a reified event: it must emit a direct
     # WorldElementRelation (Parent), NOT an Event(eventType=...) — "Parent" is not

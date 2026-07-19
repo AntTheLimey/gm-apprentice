@@ -290,6 +290,27 @@ def crosswalk_index(crosswalk) -> tuple[dict, set]:
     return idx, linked
 
 
+def node_index(vault) -> tuple[dict, set]:
+    """Build the target-resolution index from the vault's own `mobrpg:` nodes —
+    the same (ent_id_by_key, linked) shape as `crosswalk_index`, for a
+    node-migrated vault that no longer relies on a sidecar crosswalk. A node
+    relationship already carrying an `event_id` is treated as already-linked."""
+    idx, linked = {}, set()
+    vault = os.path.expanduser(vault)
+    for folder in map_cmd.FOLDERS:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            nd = node.read_node(open(p, encoding="utf-8").read())
+            if not nd or not nd.get("element_id"):
+                continue
+            subj = _key(_display_name(p))
+            idx[subj] = nd["element_id"]
+            for r in nd.get("relationships", []):
+                if r.get("event_id"):
+                    tgt = re.sub(r"^\[\[|\]\]$", "", (r.get("target") or "")).split("|")[0]
+                    linked.add((subj, r.get("predicate"), _key(tgt)))
+    return idx, linked
+
+
 def _mapped_type(mp, predicate) -> str:
     """The mobRPG type for a predicate — a WorldElementRelationType (structural)
     or an Event eventType. The map's relationshipTypes overrides the defaults."""
@@ -422,7 +443,13 @@ def run(argv: list[str]) -> int:
     if race_id is None:
         print("  note: no live 'Human' race found — persons will skip Race/Sex edges.", file=sys.stderr)
 
+    # Resolve relationship targets from the crosswalk AND the vault's own
+    # mobrpg: nodes; nodes win, so a node-migrated vault resolves targets even
+    # when the (default/foreign) crosswalk doesn't know them.
     ent_id_by_key, linked = crosswalk_index(crosswalk)
+    node_idx, node_linked = node_index(args.vault)
+    ent_id_by_key.update(node_idx)
+    linked |= node_linked
     groups, all_reports = [], []
     for i, ent in enumerate(entities, 1):
         items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,
