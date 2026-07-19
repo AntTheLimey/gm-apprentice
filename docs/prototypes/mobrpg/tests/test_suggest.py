@@ -286,3 +286,44 @@ def test_determined_for_person_and_locations():
 
     item = {"kind": "item"}
     assert suggest.determined_for(item, mp) == {"item_type": "Generic"}
+
+
+import os as _os
+from mobrpg import node as _node
+
+
+def test_build_node_person(tmp_path):
+    mp = _map()
+    mp["classifiers"]["sex"] = {"female": {"name": "Female"}}
+    ent = {"path": str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md"), "kind": "npc",
+           "name": "Imogen Bellamy", "aliases": ["Bells"], "description": "<p>x</p>",
+           "occupation": "Priest", "gender": "Female", "location_type": None,
+           "faction_type": None, "creature_type": None,
+           "relationships": [{"target": "Nathaniel_Rooke", "predicate": "friend_of", "desc": ""}]}
+    n = suggest.build_node(ent, mp, "canticle", str(tmp_path))
+    assert n["external_ref"] == "canticle:Characters/NPCs/Imogen_Bellamy"
+    assert n["element_id"] is None and n["review_state"] == "pending"
+    assert n["element_kind"] == "Person"
+    assert n["determined"] == {"profession": "Priest", "race": "Human", "sex": "Female"}
+    assert n["relationships"][0] == {
+        "predicate": "friend_of", "target": "Nathaniel_Rooke",
+        "event_type": "Generic", "event_id": None, "review_state": "pending"}
+    assert n["content_hash"].startswith("sha256:")
+
+
+def test_write_back_writes_then_skips(tmp_path):
+    mp = _map()
+    d = tmp_path
+    (d / "Characters/NPCs").mkdir(parents=True)
+    f = d / "Characters/NPCs/Imogen_Bellamy.md"
+    f.write_text('---\ntype: npc\noccupation: "Priest"\n---\nBody.\n', encoding="utf-8")
+    ents = suggest.collect_entities(str(d), only="imogen")
+    w, s = suggest.write_back(ents, mp, str(d), "canticle", execute=True)
+    assert (w, s) == (1, 0)
+    assert _node.read_node(f.read_text())["review_state"] == "pending"
+    # second pass: unchanged content → skip, file untouched
+    before = f.read_text()
+    w2, s2 = suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                               mp, str(d), "canticle", execute=True)
+    assert (w2, s2) == (0, 1)
+    assert f.read_text() == before

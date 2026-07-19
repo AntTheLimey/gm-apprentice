@@ -17,6 +17,7 @@ import sys
 
 from mobrpg import client
 from mobrpg import md as _md
+from mobrpg import node
 from mobrpg.commands import map_cmd
 from mobrpg.commands import submit_batch
 
@@ -381,6 +382,8 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--batch-label", default="", help="override the batch label")
     ap.add_argument("--out", default="./push_out", help="where to write batch JSON")
     ap.add_argument("--execute", action="store_true", help="actually submit (default: dry-run)")
+    ap.add_argument("--write-back", action="store_true",
+                    help="write a pending mobrpg: node into each entity's vault file")
     args = ap.parse_args(argv)
 
     map_path = args.map or _default_map_path(args.vault)
@@ -427,6 +430,11 @@ def run(argv: list[str]) -> int:
     print(f"{len(entities)} entit(y/ies) → {sum(len(c) for c in chunks)} items in {len(chunks)} batch(es)")
     for r in all_reports:
         print(f"  [note] {r}")
+
+    if args.write_back:
+        w, s = write_back(entities, mp, args.vault, namespace, execute=args.execute)
+        print(f"write-back: {w} node(s) written, {s} unchanged (skipped)"
+              + ("" if args.execute else "  [dry-run — no files changed]"))
 
     rc = 0
     for idx, chunk in enumerate(chunks, 1):
@@ -489,3 +497,54 @@ def determined_for(entity: dict, mp: dict) -> dict:
     elif kind == "item":
         out["item_type"] = "Generic"
     return out
+
+
+def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="pending"):
+    ek, data, _ = element_spec(entity, mp)
+    det = determined_for(entity, mp)
+    payload = {"name": entity["name"], "altNames": sorted(entity.get("aliases") or []),
+               "description": entity.get("description") or "<p></p>",
+               "data": data, "determined": det}
+    rels = [{"predicate": r["predicate"], "target": r["target"],
+             "event_type": _event_type(mp, r["predicate"]),
+             "event_id": None, "review_state": review_state}
+            for r in entity.get("relationships", [])]
+    kind_name = {"person": "Person", "political": "Political", "landfeature": "LandFeature",
+                 "organization": "Organization", "creature": "Creature", "item": "Item"}
+    return {
+        "world_id": mp.get("worldId", ""),
+        "external_ref": external_ref(entity["path"], vault, namespace),
+        "element_id": element_id,
+        "element_kind": kind_name.get(ek, ek.title()),
+        "review_state": review_state,
+        "content_hash": node.content_hash(payload),
+        "last_synced": "",
+        "review_note": "",
+        "determined": det,
+        "relationships": rels,
+        "languages": [],
+    }
+
+
+def write_back(entities, mp, vault, namespace, *, execute) -> tuple[int, int]:
+    written = skipped = 0
+    for ent in entities:
+        newn = build_node(ent, mp, namespace, vault)
+        try:
+            txt = open(ent["path"], encoding="utf-8").read()
+        except OSError:
+            continue
+        existing = node.read_node(txt)
+        if existing and existing.get("content_hash") == newn["content_hash"] \
+                and existing.get("review_state") not in (None, "pending"):
+            skipped += 1
+            continue
+        if existing and existing.get("content_hash") == newn["content_hash"]:
+            skipped += 1
+            continue
+        merged = node.write_node(txt, newn)
+        if execute:
+            with open(ent["path"], "w", encoding="utf-8") as fh:
+                fh.write(merged)
+        written += 1
+    return written, skipped
