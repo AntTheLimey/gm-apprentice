@@ -128,3 +128,36 @@ def test_rebuild_writes_node_scalars_and_body_preserving_frontmatter():
     # new body prose landed, GM tail preserved
     assert "reformed smuggler" in pull_desc._body_of(out)
     assert "## GM Notes\n\nSecretly the informant." in out
+
+
+def test_rebuild_survives_dashes_in_scalar_and_body():
+    # canon_base_md holding a GFM table separator (| --- |) and a body with a
+    # thematic-break --- rule must NOT confuse the frontmatter split.
+    body_with_rule = "\n## Overview\n\nBefore.\n\n---\n\nAfter.\n\n## GM Notes\n\nx\n"
+    nd = _node(canon_base_md="| A | B |\n| --- | --- |\n| 1 | 2 |")
+    txt = ("---\ntype: npc\n" + node.emit_node(nd) + "---" + body_with_rule)
+    # body extracted correctly despite the --- rule inside it
+    assert pull_desc._body_of(txt) == body_with_rule
+    new_node = dict(nd, canon_html_hash="sha256:new",
+                    canon_base_md="| C | D |\n| --- | --- |\n| 3 | 4 |")
+    out = pull_desc._rebuild(txt, new_node, body_with_rule)
+    reread = node.read_node(out)
+    assert reread is not None
+    assert reread["canon_html_hash"] == "sha256:new"
+    assert reread["canon_base_md"] == "| C | D |\n| --- | --- |\n| 3 | 4 |"
+    assert pull_desc._body_of(out) == body_with_rule
+
+
+def test_find_note_prefers_exact_and_rejects_ambiguous():
+    notes = [
+        ("/v/Characters/NPCs/Silas Wren.md", "", {"external_ref": "space:npc/silas_wren"}),
+        ("/v/Characters/NPCs/Silas Bracken.md", "", {"external_ref": "space:npc/silas_bracken"}),
+    ]
+    # exact external_ref wins
+    assert pull_desc._find_note(notes, "space:npc/silas_wren")[0] == notes[0][0]
+    # unambiguous suffix resolves
+    assert pull_desc._find_note(notes, "silas_bracken")[0] == notes[1][0]
+    # ambiguous suffix (both paths end with ".md") -> no match, with a reason
+    match, reason = pull_desc._find_note(notes, ".md")
+    assert match is None
+    assert "ambiguous" in reason.lower()

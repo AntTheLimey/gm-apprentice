@@ -133,17 +133,22 @@ def _iter_notes(vault: str):
 
 
 def _body_of(txt: str) -> str:
-    parts = txt.split("---", 2)
-    return parts[2] if len(parts) >= 3 else txt
+    # node._split_frontmatter anchors on a real "\n---" fence, so a --- rule in
+    # the body or a "| --- |" table row inside a single-line node scalar can't
+    # fool it (str.split("---") can). `post` starts at the closing "---" fence.
+    _, fm_body, post = node._split_frontmatter(txt)
+    if fm_body is None:
+        return txt
+    return post[3:]              # drop the closing "---", keep the rest (incl. \n)
 
 
 def _rebuild(txt: str, new_node: dict, new_body: str) -> str:
     """Write the updated node into the frontmatter and swap in the new body."""
     txt2 = node.write_node(txt, new_node)
-    parts = txt2.split("---", 2)
-    if len(parts) >= 3:
-        return "---" + parts[1] + "---" + new_body
-    return txt2
+    pre, fm_body, post = node._split_frontmatter(txt2)
+    if fm_body is None:
+        return txt2
+    return pre + fm_body + post[:3] + new_body    # ...--- + new body
 
 
 def _fetch_description(world: str, nd: dict, token: str):
@@ -191,17 +196,30 @@ def _report(world: str, vault: str, token: str) -> int:
     return 0
 
 
-def _resolve_one(world, vault, token, only, mode, execute) -> int:
-    match = None
-    for path, txt, nd in _iter_notes(vault):
+def _find_note(notes, only):
+    """Return (path_or_None, reason). An exact external_ref/path match wins
+    outright; otherwise a suffix match resolves only when unambiguous, so a
+    short/loose --only can never silently write the wrong note."""
+    suffix = []
+    for path, txt, nd in notes:
         ref = nd.get("external_ref") or ""
-        if only in (ref, path) or path.endswith(only) or ref.endswith(only):
-            match = (path, txt, nd)
-            break
-    if match is None:
-        print(f"ERROR: no synced note matching --only {only!r}", file=sys.stderr)
+        if only == ref or only == path:
+            return path, (path, txt, nd)
+        if path.endswith(only) or ref.endswith(only):
+            suffix.append((path, txt, nd))
+    if len(suffix) == 1:
+        return suffix[0][0], suffix[0]
+    if len(suffix) > 1:
+        return None, f"ambiguous --only {only!r}: matches {len(suffix)} notes"
+    return None, f"no synced note matching --only {only!r}"
+
+
+def _resolve_one(world, vault, token, only, mode, execute) -> int:
+    found, detail = _find_note(list(_iter_notes(vault)), only)
+    if found is None:
+        print(f"ERROR: {detail}", file=sys.stderr)
         return 1
-    path, txt, nd = match
+    path, txt, nd = detail
     body = _body_of(txt)
     live_html, status = _fetch_description(world, nd, token)
     if status == "deleted":
