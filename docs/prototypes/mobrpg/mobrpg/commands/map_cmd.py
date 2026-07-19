@@ -57,6 +57,27 @@ PREDICATE_EVENTTYPE = {
     "enemy_of": "War", "participated_in": "Score",
 }
 
+# mobRPG has a SECOND relationship mechanism besides reified Events: a direct
+# WorldElementRelation (enum Attribute | Link | Parent | Child | Spouse), where
+# Parent/Child are auto-bidirectional. Structural/spatial predicates belong here,
+# not as Generic events — a planet `part_of` a system is the system's Child.
+RELATION_TYPES = {"Parent", "Child", "Link", "Spouse"}
+PREDICATE_RELATION = {
+    "part_of": "Parent",          # X part_of Y  -> X's parent is Y
+    "contains": "Child", "hosts": "Child",   # X contains Y -> X's child is Y
+    "adjacent_to": "Link",        # symmetric spatial adjacency
+    "spouse_of": "Spouse", "married_to": "Spouse",
+}
+
+
+def predicate_type(predicate: str) -> str:
+    """Resolve a vault predicate to its mobRPG type. A WorldElementRelationType
+    (Parent/Child/Link/Spouse — see RELATION_TYPES) means a direct relation;
+    anything else is an Event eventType (defaulting to Generic)."""
+    if predicate in PREDICATE_RELATION:
+        return PREDICATE_RELATION[predicate]
+    return PREDICATE_EVENTTYPE.get(predicate, "Generic")
+
 
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
@@ -209,7 +230,7 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
                 for v in vocab["gender"]},
     }
     location_routing = {v: _route_location(v, disc) for v in vocab["location_type"]}
-    rel_types = {p: PREDICATE_EVENTTYPE.get(p, "Generic") for p in vocab["predicate"]}
+    rel_types = {p: predicate_type(p) for p in vocab["predicate"]}
     return {
         "schema": "mobrpg-vault-map/v1",
         "world": world_meta.get("name"), "worldId": world,

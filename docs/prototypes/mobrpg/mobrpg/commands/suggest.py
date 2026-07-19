@@ -290,9 +290,11 @@ def crosswalk_index(crosswalk) -> tuple[dict, set]:
     return idx, linked
 
 
-def _event_type(mp, predicate) -> str:
+def _mapped_type(mp, predicate) -> str:
+    """The mobRPG type for a predicate — a WorldElementRelationType (structural)
+    or an Event eventType. The map's relationshipTypes overrides the defaults."""
     rt = mp.get("relationshipTypes", {})
-    return rt.get(predicate) or map_cmd.PREDICATE_EVENTTYPE.get(predicate, "Generic")
+    return rt.get(predicate) or map_cmd.predicate_type(predicate)
 
 
 def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
@@ -310,8 +312,14 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         if not tgt_id:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (target not in crosswalk)")
             continue
-        et = _event_type(mp, pred)
+        et = _mapped_type(mp, pred)
         tgt_disp = tgt_raw.replace("_", " ")
+        if et in map_cmd.RELATION_TYPES:
+            # Structural relation (Parent/Child/Link/Spouse): a direct
+            # WorldElementRelation from the entity to the target — no reified
+            # Event. Parent/Child auto-create their reverse on the backend.
+            items.append(_relation(et, f"suggestion:{entity_ref}", tgt_id, [entity_ref]))
+            continue
         eref = f"{ref_seed}v{n}"; n += 1
         desc = f"<p>{rel.get('desc') or pred}</p>"
         ext = f"{namespace}:rel/" + external_ref(entity["path"], vault, namespace).split(":", 1)[1] \
@@ -509,7 +517,7 @@ def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="p
                "description": entity.get("description") or "<p></p>",
                "data": data, "determined": det}
     rels = [{"predicate": r["predicate"], "target": r["target"],
-             "event_type": _event_type(mp, r["predicate"]),
+             "event_type": _mapped_type(mp, r["predicate"]),
              "event_id": None, "review_state": review_state}
             for r in entity.get("relationships", [])]
     kind_name = {"person": "Person", "political": "Political", "landfeature": "LandFeature",

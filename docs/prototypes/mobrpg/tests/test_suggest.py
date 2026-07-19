@@ -213,6 +213,37 @@ def test_relationship_items(tmp_path):
     assert any("Nathaniel" in s for s in skipped) and any("Unknown" in s for s in skipped)
 
 
+def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
+    # part_of is spatial hierarchy, not a reified event: it must emit a direct
+    # WorldElementRelation (Parent), NOT an Event(eventType=...) — "Parent" is not
+    # a valid EventType so the event path would build an invalid payload.
+    mp = _map()
+    mp["relationshipTypes"] = {"part_of": "Parent"}
+    idx, linked = suggest.crosswalk_index(_crosswalk())
+    ent = {"path": str(tmp_path / "Locations/Body.md"), "name": "Imogen Bellamy",
+           "relationships": [{"target": "Dr_Erasmus_Hume", "predicate": "part_of", "desc": ""}]}
+    items, skipped = suggest.relationship_items(ent, mp, "e1", idx, linked,
+                                                str(tmp_path), "canticle", "e1")
+    assert not any(i["operation"] == "CreateElement" for i in items)   # no reified Event
+    rels = [i for i in items if i["operation"] == "AddRelation"]
+    assert len(rels) == 1
+    assert rels[0]["payload"]["type"] == "Parent"
+    assert rels[0]["payload"]["sourceRef"] == "suggestion:e1"          # entity is the child
+    assert rels[0]["payload"]["targetRef"] == "hume-id"                # target is the parent
+
+
+def test_predicate_type_maps_containment_to_relations_and_events():
+    from mobrpg.commands import map_cmd
+    assert map_cmd.predicate_type("part_of") == "Parent"
+    assert map_cmd.predicate_type("contains") == "Child"
+    assert map_cmd.predicate_type("hosts") == "Child"
+    assert map_cmd.predicate_type("adjacent_to") == "Link"
+    assert map_cmd.predicate_type("member_of") == "Membership"      # still an event
+    assert map_cmd.predicate_type("owns") == "Reign"
+    assert map_cmd.predicate_type("charter_house_of") == "Generic"  # narrative -> event
+    assert "Parent" in map_cmd.RELATION_TYPES and "Membership" not in map_cmd.RELATION_TYPES
+
+
 def test_build_group_person_full(tmp_path):
     mp = _map()
     mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "prof-real"}}
