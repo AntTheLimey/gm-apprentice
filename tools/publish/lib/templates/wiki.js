@@ -12,6 +12,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const extraSidebar = (context || {}).extraSidebar || {};
   const partyBoardHtml = (context || {}).partyBoardHtml || null;
   const partyDataScript = (context || {}).partyDataScript || null;
+  const partyClientScripts = (context || {}).partyClientScripts || [];
   const badges = metadataBadgesFor(fm);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
@@ -106,7 +107,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     breadcrumbsHtml,
     scripts: [
       ...clientScripts(page.outputPath),
-      ...(partyBoardHtml ? [rootPath(page.outputPath) + 'js/gurps-live.js', rootPath(page.outputPath) + 'js/gurps-party.js'] : []),
+      ...(partyBoardHtml ? partyClientScripts.map(s => rootPath(page.outputPath) + 'js/' + s) : []),
     ],
   });
 }
