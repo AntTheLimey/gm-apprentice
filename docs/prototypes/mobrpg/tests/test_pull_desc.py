@@ -101,6 +101,28 @@ def test_resolve_merge_conflict_leaves_markers_and_does_not_rebaseline():
     assert new_node["canon_html_hash"] == original["canon_html_hash"]
 
 
+def test_resolve_baseline_captures_current_state_without_touching_prose():
+    nd = _node()
+    del nd["canon_base_md"]
+    del nd["canon_html_hash"]                       # unbaselined
+    new_node, new_body, note = pull_desc.resolve(nd, BODY, CANON_HTML, "baseline", NOW)
+    assert new_body == BODY                          # prose untouched
+    assert new_node["canon_html_hash"] == pull_desc.html_hash(CANON_HTML)
+    assert new_node["canon_base_md"] == section.canon_section(BODY)[0]
+    assert new_node["canon_synced_at"] == NOW
+    # freshly baselined -> next classify is in-sync
+    assert pull_desc.classify(new_node, BODY, CANON_HTML) == "in-sync"
+
+
+def test_baseline_is_the_only_resolve_allowed_without_only():
+    # per-entity outcomes need a target; batch baseline does not.
+    assert pull_desc._requires_only("take-canon", None) is True
+    assert pull_desc._requires_only("merge", None) is True
+    assert pull_desc._requires_only("separate", None) is True
+    assert pull_desc._requires_only("baseline", None) is False
+    assert pull_desc._requires_only("baseline", "npc/x") is False
+
+
 def test_resolve_separate_sets_policy_and_leaves_body():
     new_node, new_body, note = pull_desc.resolve(_node(), BODY, CANON_HTML, "separate", NOW)
     assert new_node["description_policy"] == "separate"

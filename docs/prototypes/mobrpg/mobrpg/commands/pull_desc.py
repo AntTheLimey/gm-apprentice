@@ -239,6 +239,38 @@ def _resolve_one(world, vault, token, only, mode, execute) -> int:
     return 0
 
 
+def _requires_only(mode: str, only) -> bool:
+    """Per-entity outcomes need a --only target; batch `baseline` (record the
+    current state as the reference point for every unbaselined node) does not."""
+    return bool(mode) and mode != "baseline" and not only
+
+
+def _baseline_all(world, vault, token, execute) -> int:
+    """Baseline every unbaselined synced node in one pass — the migration step
+    that makes freshly-backfilled nodes sync-ready. Non-destructive: records the
+    current vault canon-section + live canon hash, never edits prose."""
+    done = 0
+    skipped = 0
+    now = now_iso()
+    for path, txt, nd in _iter_notes(vault):
+        body = _body_of(txt)
+        live_html, status = _fetch_description(world, nd, token)
+        if status != "ok":
+            skipped += 1
+            continue
+        if classify(nd, body, live_html) != "unbaselined":
+            continue
+        new_node, new_body, _ = resolve(nd, body, live_html, "baseline", now)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(_rebuild(txt, new_node, new_body))
+        done += 1
+    tag = "" if execute else "  [dry-run — no files changed]"
+    note = f", {skipped} skipped (element unfetchable)" if skipped else ""
+    print(f"pull-desc baseline: {done} node(s) baselined{note}{tag}")
+    return 0
+
+
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg pull-desc",
@@ -247,7 +279,8 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--vault", required=True)
     ap.add_argument("--resolve", choices=RESOLVE_MODES,
                     help="apply one entity's outcome (needs --only)")
-    ap.add_argument("--only", help="external_ref (or path suffix) of the note to resolve")
+    ap.add_argument("--only", help="external_ref (or path suffix) of the note to resolve "
+                    "(required for every --resolve mode except batch baseline)")
     ap.add_argument("--execute", action="store_true",
                     help="write vault changes (default: dry-run)")
     args = ap.parse_args(argv)
@@ -259,9 +292,11 @@ def run(argv: list[str]) -> int:
         return 1
 
     if args.resolve:
-        if not args.only:
-            print("ERROR: --resolve requires --only <ref>", file=sys.stderr)
+        if _requires_only(args.resolve, args.only):
+            print(f"ERROR: --resolve {args.resolve} requires --only <ref>", file=sys.stderr)
             return 2
+        if args.resolve == "baseline" and not args.only:
+            return _baseline_all(args.world, args.vault, token, args.execute)
         return _resolve_one(args.world, args.vault, token, args.only,
                             args.resolve, args.execute)
     return _report(args.world, args.vault, token)
