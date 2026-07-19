@@ -87,3 +87,11 @@ def test_write_preserves_blank_line_before_following_key():
     # and the node still round-trips as the updated node
     assert node.read_node(out) == {"world_id": "w2", "relationships": [],
                                    "languages": []}
+
+
+def test_content_hash_stable_and_order_independent():
+    a = {"name": "X", "altNames": ["a", "b"], "data": {"type": "Person"}}
+    b = {"data": {"type": "Person"}, "name": "X", "altNames": ["a", "b"]}
+    assert node.content_hash(a) == node.content_hash(b)         # key order irrelevant
+    assert node.content_hash(a).startswith("sha256:")
+    assert node.content_hash(a) != node.content_hash(dict(a, name="Y"))
