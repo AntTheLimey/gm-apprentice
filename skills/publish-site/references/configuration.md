@@ -26,6 +26,7 @@ any equivalent in `vault.config.json`.
 | Image optimization | `publish.images` | Opt-in WebP re-encoding of copied images (default: off) |
 | Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
 | Locations grouping | `publish.locations` | Pivot the Locations index on a `location_type` (default: genre-derived) |
+| CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists; a per-PC `crest` frontmatter value overrides it |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
 > **Landing page state.** The landing hero (in-game date, session count) and the

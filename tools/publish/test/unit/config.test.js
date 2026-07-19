@@ -242,3 +242,45 @@ describe('exclude_fields union merge', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe('sheet_crest', () => {
+  // Regression for #112: the field-by-field allow-list in loadPublishConfig
+  // silently dropped sheet_crest, so the CoC sheet crest/seal never rendered.
+  it('preserves sheet_crest from the vault-config.md publish block', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  sheet_crest: "_attachments/factions/order.webp"\n---\n',
+    );
+    const result = loadPublishConfig(tmpDir);
+    assert.strictEqual(result.sheet_crest, '_attachments/factions/order.webp');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('falls back to vault.config.json sheet_crest when the publish block has none', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const result = loadPublishConfig(tmpDir, { sheet_crest: 'images/crest.png' });
+    assert.strictEqual(result.sheet_crest, 'images/crest.png');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('lets the publish block win over the vault.config.json fallback', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  sheet_crest: "block.webp"\n---\n',
+    );
+    const result = loadPublishConfig(tmpDir, { sheet_crest: 'fallback.webp' });
+    assert.strictEqual(result.sheet_crest, 'block.webp');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('defaults sheet_crest to null when unset', () => {
+    const result = loadPublishConfig('/nonexistent/path');
+    assert.strictEqual(result.sheet_crest, null);
+  });
+});

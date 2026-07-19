@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.32] — 2026-07-19
+
+Publish tool 1.11.11.
+
+### Fixed
+
+- CoC investigator-sheet crest/seal (`publish.sheet_crest`) never rendered: the config loader's field-by-field allow-list silently dropped the key, so it never reached the renderer. `loadPublishConfig` now carries `sheet_crest` (publish block first, then the `vault.config.json` fallback), and it is documented in the publish-site configuration reference (#112).
+
+---
+
 ## [1.8.31] — 2026-07-18
 
 Publish tool 1.11.10.
