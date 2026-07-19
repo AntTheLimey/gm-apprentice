@@ -78,6 +78,10 @@ AI-assisted session planning.
 
 **Player Agency Violation Scan:**
 
+(Why this matters is engineering, not just etiquette — a
+PC-predicted scene engine is fragile; see "Player Agency
+Constraints" in `scenario-writing.md`.)
+
 1. Flag PC name / "the party" as subject of declarative action verb
    ("Varrio approaches" = violation; "If Varrio approaches" = ok)
 2. Flag PC emotions/thoughts/internal state described

@@ -268,6 +268,11 @@ Canon violations (ref: `skills/ttrpg-expert/continuity-engine.md`):
 - NPC details, locations, or events not traceable to vault
 - Unverified claims flagged as such, not stated as canon
 
+Length violations:
+- Any scene over ~600 words — split or cut
+- Pre-scene context over ~1,000 words combined, or a recap over
+  150 words — trim so the Keeper reaches Scene 1 fast
+
 → Write `## Audit Notes` to Plan file.
 
 **16. Gap Check** — Flag:

@@ -45,6 +45,17 @@ paragraphs. GMs referencing mid-session can't parse dense prose.
 
 ## Player Agency Constraints
 
+These constraints are engineering, not etiquette. A scene engine
+built on a **predicted PC response** is fragile: the moment the
+player chooses otherwise, the hook collapses. A hook resting on
+an NPC's want survives any player choice. (A repair that assumed
+a PC would refuse food, was "visibly unwell", had "pushed away
+two meals" — all invented, all the player's decisions — broke the
+instant the player chose to eat. Rebuilt on the cook's want (she
+needs a job done, puts a tray in the PC's arms), it runs no
+matter what any PC does.) That is why the rule pays for itself,
+independent of agency ethics.
+
 ### Hooks, Not Rails
 
 ≥3 hooks pointing toward core engagement (same logic as Three
@@ -72,6 +83,25 @@ investigators visit the library..."
 The Alexandrian: prepare situations (locations, NPCs,
 motivations, resources, threats), not sequences. The scenario
 defines what exists; PCs determine what happens.
+
+### Why Would This PC Go There?
+
+The single highest-value question for any character scene:
+**why would this PC go there, and who is making them?** A scene
+that waits for a PC to arrive unprompted has no engine — it
+describes a condition, and a condition has no way of starting.
+
+A hook is an NPC who wants something from a specific PC and comes
+and takes it; it does not wait to be discovered. Bruyère has not
+seen France since 1801 and a viscount who was in Vienna three
+weeks ago just walked into his inn — so Bruyère pours. Nafisa
+wants a job done and puts a tray in the PC's arms. Each brings
+the scene to the player in the first sixty seconds.
+
+Do not confuse characterisation with a hook: an NPC being
+reticent, unimpressible, or hard to charm describes what happens
+once the PC is already in the room. A "hook" made of an NPC
+conspicuously not engaging is worse than no hook.
 
 ### Adventure Shapes
 
@@ -140,6 +170,9 @@ engagement visibly.
 - Separate immediate facts from contingent facts
 - NPC behaviour rather than dialogue scripts
 - Include failure states for every check/combat
+- Target 400-600 words per scene. A scene past ~600 words is
+  doing too much — split it or cut it. Length is not
+  thoroughness.
 
 ### Three-Stage Encounters
 

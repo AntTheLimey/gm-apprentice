@@ -26,11 +26,27 @@ Prep builds new potential on established reality.
 
 - **Wiki-link everything.** Every entity reference:
   `[[wiki-link]]`. NPCs, locations, items, factions,
-  sessions, scenes — all linked.
+  sessions, scenes — all linked. **Inside a markdown table
+  cell, use alias-form links only** (`[[Hassan]]`) — never an
+  aliased link (`[[Target|Alias]]`) or an escaped pipe (`\|`),
+  because both break the table when Obsidian reflows it. Full
+  rule: `docs/file-format-standards.md` §4.
 
 - **Reality over plans.** Once played, the plan is dead.
   Unplayed prep is scrap — only mention if it contains
   critical clues players still need.
+
+- **The Plan is an instrument, not an audit trail.** Never
+  lace the session-running content the Keeper reads (scenes,
+  NPC references, world state) with the Plan's own edit history
+  or defences against charges nobody made ("formally dropped",
+  "this plan revises", "noted here only so it is a deliberate
+  silence", "that is now wrong"). If another file is wrong, fix
+  that file — do not carry a standing note that it is wrong. The
+  `## Prior Prep Review` section is prep-time triage, not
+  session content: keep it a terse "kept vs updated" note, not a
+  changelog. Durable provenance belongs in a QA log, never
+  woven through the content run at the table.
 
 ## Companion Skills
 

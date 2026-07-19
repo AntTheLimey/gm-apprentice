@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.34] — 2026-07-19
+
+### Changed
+
+- Session-plan quality guardrails (failure-report Slice A): scene objectives are now framed as situations rather than authorial theses, and every scene must name the NPC or schedule that initiates it ("why would this PC go there"); added a 400-600-word per-scene budget and a ~1,000-word preamble cap enforced by the session-prep audit; banned self-documentation (edit-history notes) in session plans; reframed the player-agency rule as scene engineering (a PC-predicted engine is fragile) alongside the ethics framing; and made "no pipe inside a markdown table cell" a hard formatting rule. Edits in `session-prep`, `ttrpg-expert` (`scenario-writing.md`, `continuity-engine.md`), `shared/session-principles.md`, and `docs/file-format-standards.md`.
+
+---
+
 ## [1.8.33] — 2026-07-19
 
 Publish tool 1.11.12.
