@@ -10,22 +10,6 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-### G6 — `backfill` only accepts the Regency-style crosswalk, not the `detect_updates` dict format
-**Found 2026-07-19.** `backfill.nodes_from_crosswalk` reads
-`crosswalk["entities"]` (a list, each entry keyed by `name` + `mobrpg_id`) and
-`crosswalk["relationships"]` — the `canticle-regency-crosswalk.json` schema. But
-a vault bootstrapped via the legacy `write`/`sync` path (e.g. `~/Documents/
-space_game`) has `_meta/mobrpg-crosswalk.json` in the **`detect_updates`
-format**: a dict keyed by `element_id` → `{name, kind, vault_path, content_hash,
-canonical, last_synced}`. `crosswalk.get("entities", [])` is then empty, so
-backfill reports `0 node(s) to write` and silently migrates nothing. The
-dict-format crosswalk is *better* for backfill — it carries `vault_path`
-directly, so nodes can be stamped without fuzzy name-matching. Fix: detect the
-format (list-with-`entities` vs id-keyed dict) and handle both; for the
-dict format, `element_id = key`, `element_kind` from `kind`, `external_ref` from
-`vault_path`. Ideally also baseline the Plan-2 description fields
-(`pull-desc baseline`) in the same migration so the nodes are sync-ready.
-
 ### G4 — `pull` is entity-only; it never traverses classifier `/type` endpoints
 **Found 2026-07-19** during a live pull of the Space world
 (`a254e424-…`). `pull.py` walks only entity kinds (`KINDS` = person /
@@ -56,6 +40,46 @@ creature/organization/political types; landfeature/item have no `/type` endpoint
 (those types live on the elements).
 
 ## Resolved
+
+### G6 — `backfill` only accepts the Regency-style crosswalk, not the `detect_updates` dict format ✅
+**Resolved 2026-07-19** (commit `8252a9a`). `backfill.nodes_from_crosswalk` now
+detects the crosswalk schema by the presence of the `entities` key: the
+Regency-style `{worldId, entities[], relationships[]}` list form still routes
+through the fuzzy name-match path, while the `detect_updates` id-keyed dict
+(`element_id` → `{name, kind, vault_path, …}`) routes through the new
+`_nodes_from_dict_crosswalk()`. A mobRPG-kind→element_kind map
+(`_MOBRPG_KIND_NAME`: person→Person, organization→Organization,
+political→Political, landfeature→LandFeature, item→Item, creature→Creature,
+currency→Currency, culture→Culture) converts the stored mobRPG kind to the
+`element_kind` used in `mobrpg:` nodes. The dict form resolves each node **by
+`vault_path`** (exact join against the vault root), not by name — a missing
+file is reported unresolved rather than silently dropped. So the
+`space_game` vault's dict-format `_meta/mobrpg-crosswalk.json` now migrates
+instead of reporting `0 node(s) to write`. Coverage in `test_backfill.py`.
+
+### Structural relationship mapping — predicates now map to WorldElementRelation, not Generic events ✅
+**Resolved 2026-07-19** (commit `250d2e6`). `map_cmd` gained `PREDICATE_RELATION`
++ `RELATION_TYPES` + `predicate_type()`: mobRPG has a second relationship
+mechanism besides reified Events — a direct `WorldElementRelation` whose enum is
+`{Attribute, Link, Parent, Child, Spouse}` (`WorldElementRelationType`, backend).
+Structural/spatial predicates now resolve there: `part_of`→Parent,
+`contains`/`hosts`→Child, `adjacent_to`→Link (spouse_of/married_to→Spouse). A
+planet `part_of` a system is the system's Child (Parent/Child are
+auto-bidirectional on the backend), not a `Generic` event. `suggest` now emits a
+direct `AddRelation` (`type=Parent|Child|Link`) for a structural predicate
+instead of reifying it as an Event; non-structural predicates still map to an
+Event `eventType` (defaulting to Generic). The map's `relationshipTypes` block is
+generated via `predicate_type()` so a GM can override per predicate.
+
+### Node-based target resolution — `suggest` resolves relationship targets from `mobrpg:` nodes ✅
+**Resolved 2026-07-19** (commit `2c6e701`). `suggest.node_index(vault)` builds
+the same `(ent_id_by_key, linked)` shape as `crosswalk_index` but from the
+vault's own `mobrpg:` nodes: it walks `map_cmd.FOLDERS`, reads each note's node,
+and indexes `element_id` by name-key plus every already-`event_id`-linked
+relationship. `suggest` merges this over `crosswalk_index`, so a node-migrated
+vault (no sidecar crosswalk) still resolves a relationship's target to a real
+element id. Verified live read-only against the Space world: `part_of` on
+`Eris II` resolved its Parent target to the real `Eris System` element id.
 
 ### G5 — no verb suggests a note's authored description *up* to mobRPG ✅
 **Resolved 2026-07-19.** New `mobrpg suggest-desc` verb (native), the inverse of
