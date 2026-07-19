@@ -87,16 +87,12 @@ edges / N relationships, across M batches.
   mobRPG (via `suggest`'s own `<p></p>` default) — neither is a push to wave
   through blind. Tell the GM which entities have no real description and let
   them add one before pushing, rather than accept the placeholder.
-- **Unresolved `status:"review"` routes still in the map.** If the map has any
-  entry parked at `review`, send the GM back to mapping maintenance first —
+- **Unresolved `status:"review"` routes still in the map.** If `map check`
+  reports any `review > 0`, send the GM back to mapping maintenance first —
   building suggestions against an undecided type mapping bakes the guess in.
-  > **Current CLI status:** `map check` never actually reports `review > 0`
-  > today — location and classifier routing resolve every ambiguous term
-  > automatically instead of parking it (tracked as **G2** in
-  > `docs/prototypes/mobrpg/CLI-GAPS.md`). This flag is still correct target
-  > behavior: once G2 is fixed and review routes can exist, this is what stops
-  > a push from running against an unresolved mapping decision. Until then it
-  > naturally never fires, since `review` is always `0`.
+  For classifiers this is also enforced downstream (an unresolved review is
+  dropped rather than minted, so no near-duplicate type is created), but resolve
+  it first so the entity actually gets its intended classifier rather than none.
 - **Pending-window re-suggest.** If an entity's existing `mobrpg:` node has
   `review_state: "pending"`, its prior suggestion hasn't been accepted or
   dismissed yet. Re-pushing it now risks creating a duplicate suggestion on

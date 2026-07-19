@@ -37,17 +37,17 @@ Take their decision, record it in the map, move to the next. The map is "clean"
 only when `map check` reports zero `review` routes. Judgment here is the point —
 a wrong type mapping propagates into every suggestion built from it.
 
-> **Current CLI status:** today's `map` routing resolves every ambiguous vocab
-> term automatically (location routing follows "Ant's rule": natural-feature
-> words go to `landfeature`, everything else defaults to a `political` type;
-> classifier routing binds-or-proposes with no ambiguity check) — so no route
-> is ever actually parked at `status:"review"`, even though the schema and
-> `map check`'s `review=N` column support it. This loop is the workflow the
-> skill runs once the CLI is extended to flag genuinely ambiguous vocab as
-> `review` instead of auto-resolving it (tracked as **G2** in
-> `docs/prototypes/mobrpg/CLI-GAPS.md`). Until then, this section is dormant —
-> skip straight to §3 if `map check` shows `review=0` everywhere, which it
-> always will.
+**What lands in `review`:** a *location* whose type embeds a natural-feature
+word but isn't itself a clean feature (e.g. "River port and boatyard on the
+Nile" — a landfeature, or a place named after one?); the entry carries both a
+`politicalType` default and a `landFeatureType` hint. A *classifier* value that
+is a close match to an existing mobRPG type but not exact (e.g. vault
+"Archaeologist" vs existing "archeologist" — likely a variant of it, carrying
+`nearExisting`/`nearId`). **Resolve** by editing the map entry: bind it (set
+`mobrpgId` to reuse the existing type), or confirm it as genuinely new (set
+`status: "confirmed"`) — both survive the next `sync`. An *unresolved* classifier
+review is dropped at push time, never minted, so it can't silently create a
+near-duplicate type; resolve it before pushing.
 
 ## 3. Identity links (vault entity ↔ mobRPG element)
 
@@ -57,15 +57,20 @@ by `pull-canon`). `external_ref` is the vault-relative path.
 **Rename/move guard:** if a note was renamed or moved, its `external_ref` no
 longer matches its path — pushing it would create a *duplicate* element and
 orphan the old link. When you detect a path that changed against the node's
-recorded `external_ref`, stop and offer to re-point the ref (keeping the
-`element_id`, recording the old path) rather than let a dup be created. This
-is the name-collision hazard the foundation audit flagged.
+recorded `external_ref`, stop and re-point the ref before any push. This is the
+name-collision hazard the foundation audit flagged.
 
-There is no `mobrpg` verb that performs this re-point — no command reads an
-existing node and rewrites just its `external_ref`. Treat it as a manual edit
-of the note's `mobrpg:` frontmatter block: update `external_ref` to the note's
-current vault-relative path, leave `element_id` untouched, and note the old
-path (e.g. in `review_note`) so the change is traceable. Show the GM the
-before/after of the block and get an explicit yes before writing — it's a
-hand-edit, not a scripted mutation, so there's no dry-run flag to lean on;
-your own preview of the diff is the confirmation step.
+Use the `relink` verb (vault-only — no API call):
+
+```
+.venv/bin/mobrpg relink --vault <path> --to <new-vault-relative-path>
+```
+
+It reads the note now at `--to`, rewrites `external_ref` to that current path,
+keeps `element_id`, and records the prior ref in `previous_ref`. Add
+`--from <old-vault-relative-path>` as a guard — it refuses if the note's current
+ref doesn't match, so you can't relink the wrong note. Dry-run first (no
+`--execute`): it prints the `old → new` ref and the preserved `element_id`;
+show that to the GM, get an explicit yes, then re-run with `--execute`. Same
+dry-run → present → confirm → `--execute` discipline as the other vault
+mutations.

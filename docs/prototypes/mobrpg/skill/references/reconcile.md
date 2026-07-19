@@ -37,16 +37,13 @@ the per-entity outcomes to the GM before writing anything:
 Get an explicit yes on the presented outcomes, then re-run the same command
 with `--execute` to write.
 
-> **Current CLI status:** today's `pull-canon` only ever surfaces **accepted**
-> and **dismissed** — `_fetch_live()` queries just those two review states and
-> always reports an empty `determined`, so the edited/deleted/pending branches
-> can't fire yet even though `apply_state()` already implements all five
-> outcomes. This is the target behavior the skill runs in full once
-> `_fetch_live()` is extended to query the other states and populate
-> `determined` (tracked as **G1** in `docs/prototypes/mobrpg/CLI-GAPS.md`).
-> Present all five outcomes regardless — accepted/dismissed are the ones a
-> real pull will show right now, and the rest activate automatically as the
-> CLI catches up.
+All five outcomes are live. To surface **edited** (drift) and **deleted**,
+`pull-canon` verifies each accepted suggestion's ratified element: a live
+element supplies the canon `determined` (so drift is detected against the
+vault's), and a deleted one (element GET 404) flags the node. That verification
+pass is on by default; `--no-verify` skips it (faster/offline, but only
+accepted/dismissed will then surface). **pending** is queried too but is a
+no-op on the vault — it just means "still under review, nothing to reconcile."
 
 There is no `--crosswalk` flag on `pull-canon` — that flag belongs to
 `backfill` (see `backfill.md`) for the one-time sidecar migration. Don't
