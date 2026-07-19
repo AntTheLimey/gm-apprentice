@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import re
 
+# `[ \t\r]*$` (not `[ \t]*$`): re.M `$` matches before a `\n` but not before the
+# `\r` of a CRLF line ending, so the `\r` must be allowed in the trailing run or
+# CRLF vault files silently fail to match and leak the GM-only tail.
 _GM_HEADING = re.compile(
-    r"^##[ \t]+(?:Appearances|Source References|GM Notes|Notes)[ \t]*$", re.M)
+    r"^##[ \t]+(?:Appearances|Source References|GM Notes|Notes)[ \t\r]*$", re.M)
 
 
 def canon_section(body: str):
@@ -32,10 +35,10 @@ def canon_section(body: str):
     cut = m.start()
     head = body[:cut]
     tail = body[cut:]
-    region = head.rstrip("\n")
+    region = head.rstrip("\r\n")
     sep = head[len(region):]  # the exact newlines between region and the heading
 
     def reinsert(new_region: str) -> str:
-        return new_region.rstrip("\n") + sep + tail
+        return new_region.rstrip("\r\n") + sep + tail
 
     return region, reinsert

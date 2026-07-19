@@ -57,6 +57,17 @@ def test_h1_stays_in_region():
     assert "## GM Notes" not in region
 
 
+def test_crlf_body_protects_gm_tail():
+    # re.M `$` won't match before the `\r` of a `\r\n`, so a CRLF heading line
+    # must still be recognised or the GM-only tail leaks into the region and
+    # gets clobbered by take-canon.
+    crlf = "Lede paragraph.\r\n\r\n## GM Notes\r\n\r\nkiller\r\n"
+    region, reinsert = section.canon_section(crlf)
+    assert "## GM Notes" not in region
+    assert "killer" not in region
+    assert reinsert(region) == crlf
+
+
 def test_changed_region_preserves_tail_and_separates():
     _, reinsert = section.canon_section(BODY_TRAILING)
     out = reinsert("## Overview\n\nRewritten canon prose.")
