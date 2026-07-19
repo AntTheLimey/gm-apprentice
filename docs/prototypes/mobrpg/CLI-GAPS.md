@@ -10,7 +10,27 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-_(none)_
+### P1 — make the `provenance` marker self-sustaining (templates + the-midwife skill)
+
+The source-level `provenance:` field (`mobrpg`/`play`/`midwife`/`backstory`/`manual`,
+see `PROVENANCE.md`) was backfilled onto the `space_game` vault so origin is answerable,
+and `suggest` filters on it (`--only-/--exclude-provenance`) for tranche pushes. But it's
+only durable going forward if the tools that CREATE entities stamp it. As part of this
+branch:
+
+- **Entity templates** — add `provenance:` to the entity frontmatter templates (the
+  shared/per-kind templates in the gm-apprentice repo), next to `source:`, so every
+  newly-scaffolded note carries the field.
+- **the-midwife skill** — when the midwife scaffolds entities for the Session-0 handoff,
+  it must set `provenance: "midwife"` on what it creates (the whole reason this marker
+  exists — midwife output is otherwise indistinguishable from manual genesis prep).
+- Consider the sibling skills that create entities (session-wrapup → `play`,
+  ttrpg-expert/manual → `manual`, vault-ingest, campaign-organizer) so the field is set
+  at creation everywhere, not just by the midwife.
+
+NOTE: templates + skills live in the **main gm-apprentice repo**, not this prototype dir —
+this touches main-repo schema, so follow `docs/schema-change-procedure.md` (new frontmatter
+field) when it's picked up.
 
 ## Resolved
 
