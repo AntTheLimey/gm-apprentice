@@ -154,21 +154,17 @@ Not a railroad — a set of possible good stopping points.
 ## PC Roster & Arcs
 
 [Per-PC: arc stage, arc theme, next beat, A/B/C plot assignment.
-Written during creative planning step 11.]
+Written during creative planning step 12.]
 
 ## Touchpoint Plan
 
 [Per-PC touchpoint assignments with type, description, timing.
-Coverage checklist. Written during step 12.]
+Coverage checklist. Written during step 13.]
 
 ## Spotlight Forecast
 
 [Per-PC estimated spotlight share. Imbalance flags. Written
-during step 14.]
-
-## Audit Notes
-
-[Agency + canon audit findings. Written during step 15.]
+during step 13.]
 
 ## Open Questions
 
