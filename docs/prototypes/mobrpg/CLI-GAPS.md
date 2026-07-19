@@ -10,19 +10,6 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-### G2 — `map`: `status:"review"` is schema-reserved but never emitted
-**Severity:** medium.
-The map schema and `_counts()` recognize a `review` route status (a route that
-needs a human type decision), but `_route_location()`
-(`mobrpg/commands/map_cmd.py`, "Ant's rule" docstring ~139-144) resolves every
-ambiguous location by fiat so nothing is ever parked in `review`. The skill's
-mapping-maintenance phase is written to run a human-in-the-loop review-route
-resolution loop — which currently has no input to act on.
-**Fix:** have location routing (and classifier routing) flag genuinely
-ambiguous vocab as `status:"review"` instead of auto-resolving, so the GM gets
-the deliberate type decision the skill offers. Until then the skill documents
-the loop as the intended workflow and notes it is dormant pending this fix.
-
 ### G3 — no verb re-points a moved/renamed note's `external_ref`
 **Severity:** medium.
 The `mobrpg:` node's `external_ref` records the vault-relative path. When a note
@@ -38,6 +25,31 @@ an existing verb) that rewrites `external_ref` to the current path, keeps the
 mutations — so the guard is a one-command safe operation instead of a hand-edit.
 
 ## Resolved
+
+### G2 — `map`: `status:"review"` is schema-reserved but never emitted ✅
+**Resolved 2026-07-19.** Ambiguity criterion (Ant's call): *word-embedded
+feature* for locations, *fuzzy near-duplicate* for classifiers.
+
+- `_route_location()` now parks a location in `status:"review"` when its type
+  **embeds a landfeature word as a component** (`_embedded_landfeature()`,
+  word-split against the enum + synonym tables) but isn't itself a clean feature
+  — e.g. "River port and boatyard on the Nile". Clean features still route to
+  landfeature; plain political types ("Hospital", "Town") still auto-route to a
+  new PoliticalType; existing types still bind. The review entry carries both
+  candidates (`politicalType` default + `landFeatureType` hint) so the skill's
+  review loop can present the decision.
+- `_bind()` now flags a classifier value `status:"review"` when it is a **close
+  fuzzy match to an existing type** (`difflib`, cutoff 0.85) but not exact-CI —
+  e.g. "Archaeologist" vs existing "archeologist" — carrying `nearExisting` /
+  `nearId`. Prevents silently minting near-duplicate types.
+- Push-time safety net: `suggest.resolve_classifier()` treats an unresolved
+  `status:"review"` as `drop` (skip minting) so an un-triaged near-duplicate is
+  never created behind the GM's back; a GM resolution to `confirmed` (create) or
+  a bound `mobrpgId` (reuse) still works. `_merge` gives classifiers the same
+  confirmed-wins / review→bound parity as locations.
+- Validated on real data: locations 3/80 review (all genuine, 0 false
+  positives), professions 1/201 review (the Archaeologist/archeologist variant).
+- Coverage: 7 new tests across `test_map.py` + `test_suggest.py`.
 
 ### G1 — `pull-canon`: 3 of 5 authority-rule outcomes are unreachable ✅
 **Resolved 2026-07-19.** `apply_state()` already implemented all five outcomes;

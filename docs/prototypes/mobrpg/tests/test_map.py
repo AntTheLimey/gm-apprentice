@@ -51,6 +51,74 @@ def test_bind_matches_existing_else_new():
     assert m._bind("Priest", existing, "person/profession")["status"] == "new"
 
 
+# --- G2: genuinely-ambiguous vocab is parked in status "review" ---------------
+
+def test_route_location_embedded_feature_word_goes_to_review():
+    disc = {"political/type": {}}
+    # "River Valley" embeds the landfeature word "river" but isn't itself a clean
+    # feature -> ambiguous (a river/valley, or a district named after one?) -> review.
+    r = m._route_location("River Valley", disc)
+    assert r["status"] == "review"
+    assert r["landFeatureType"] == "River"            # the matched feature hint
+    assert r["politicalType"] == "River Valley"       # the tentative political default
+    assert r["target"] == "political"
+
+
+def test_route_location_embedded_synonym_word_goes_to_review():
+    disc = {"political/type": {}}
+    r = m._route_location("Old Mill Creek", disc)     # "creek" is a synonym of Stream
+    assert r["status"] == "review" and r["landFeatureType"] == "Stream"
+
+
+def test_route_location_plain_political_not_reviewed():
+    disc = {"political/type": {}}
+    # no landfeature word anywhere -> stays a plain new political type, never review.
+    assert m._route_location("Hospital", disc)["status"] == "new"
+    assert m._route_location("Town", disc)["status"] == "new"
+
+
+def test_route_location_clean_feature_still_landfeature_not_review():
+    disc = {"political/type": {}}
+    assert m._route_location("River", disc)["target"] == "landfeature"
+    assert m._route_location("River", disc)["status"] == "new"
+
+
+def test_bind_near_duplicate_of_existing_goes_to_review():
+    existing = {"occultist": "occ-id"}
+    r = m._bind("Occultists", existing, "person/profession")   # plural variant
+    assert r["status"] == "review"
+    assert r["nearExisting"] == "occultist" and r["nearId"] == "occ-id"
+
+
+def test_bind_distant_value_still_new_not_review():
+    existing = {"occultist": "occ-id"}
+    assert m._bind("Priest", existing, "person/profession")["status"] == "new"
+
+
+def test_merge_classifier_review_resolution_survives_and_promotes():
+    # A GM-resolved classifier review (via the same status:"confirmed" idiom that
+    # works for locations) must survive sync; and a review whose type later exists
+    # must promote to bound.
+    old = {"classifiers": {
+        "profession": {
+            "Occultists": {"target": "person/profession", "name": "Occultists",
+                           "status": "confirmed", "mobrpgId": "occ-id"},        # GM-resolved
+            "Archaeologist": {"target": "person/profession", "name": "Archaeologist",
+                              "status": "review", "nearExisting": "archeologist"},
+        }}}
+    new = {"classifiers": {
+        "profession": {
+            "Occultists": {"target": "person/profession", "name": "Occultists",
+                           "status": "review", "nearExisting": "occultist"},     # recomputed
+            "Archaeologist": {"target": "person/profession", "name": "Archaeologist",
+                              "status": "bound", "mobrpgId": "arch-id"},          # now exists
+        }}}
+    merged, _ = m._merge(old, new)
+    prof = merged["classifiers"]["profession"]
+    assert prof["Occultists"]["status"] == "confirmed"      # human decision preserved
+    assert prof["Archaeologist"]["status"] == "bound"       # review promoted to bound
+
+
 def test_init_then_sync(tmp_path, monkeypatch):
     vault = _make_vault(tmp_path)
     # mobRPG starts with only "District" as a political type

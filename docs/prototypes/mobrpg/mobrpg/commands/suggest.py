@@ -152,7 +152,10 @@ def resolve_classifier(entry) -> tuple[str, str | None]:
         return ("drop", None)
     if entry.get("mobrpgId"):
         return ("bound", entry["mobrpgId"])
-    if entry.get("status") == "drop":
+    # An unresolved near-duplicate (map status "review") must NOT mint a new type
+    # — that is the collision the review flag exists to prevent. Skip it until the
+    # GM resolves it (to "confirmed" => create, or a bound mobrpgId => reuse).
+    if entry.get("status") in ("drop", "review"):
         return ("drop", None)
     return ("create", entry.get("name"))
 

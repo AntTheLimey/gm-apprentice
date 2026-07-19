@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import difflib
 import glob
 import json
 import os
@@ -117,14 +118,35 @@ def discover(world: str, token: str) -> dict:
     return out
 
 
+# A vault value this close to an existing type (but not an exact-CI match) is
+# probably a variant/typo of it, not a genuinely new type — park it for review.
+_NEAR_DUP_CUTOFF = 0.85
+
+
+def _closest(n: str, existing: dict) -> tuple[str, str] | None:
+    """The (normalized-name, id) of the existing type closest to `n` above the
+    near-duplicate cutoff, or None. `n` is assumed already normalized and NOT an
+    exact match (callers check that first)."""
+    hit = difflib.get_close_matches(n, list(existing), n=1, cutoff=_NEAR_DUP_CUTOFF)
+    if hit and hit[0] != n:
+        return hit[0], existing[hit[0]]
+    return None
+
+
 def _bind(value: str, existing: dict, target_kind: str) -> dict:
-    """Match a vault value to an existing mobRPG type, else propose a new one."""
-    hit = existing.get(_norm(_first_token(value)))
-    name = _first_token(value).title() if not hit else _first_token(value)
+    """Match a vault value to an existing mobRPG type, flag a near-duplicate for
+    review, else propose a new one."""
+    tok = _first_token(value)
+    n = _norm(tok)
+    hit = existing.get(n)
     if hit:
         # recover the original-cased existing name
-        return {"target": target_kind, "name": _first_token(value), "mobrpgId": hit, "status": "bound"}
-    return {"target": target_kind, "name": name, "mobrpgId": None, "status": "new"}
+        return {"target": target_kind, "name": tok, "mobrpgId": hit, "status": "bound"}
+    near = _closest(n, existing)
+    if near:
+        return {"target": target_kind, "name": tok.title(), "mobrpgId": None,
+                "status": "review", "nearExisting": near[0], "nearId": near[1]}
+    return {"target": target_kind, "name": tok.title(), "mobrpgId": None, "status": "new"}
 
 
 # natural-feature words NOT spelled exactly like a LandFeatureSubType enum value
@@ -136,12 +158,26 @@ LAND_SYNONYMS = {
 }
 
 
+def _embedded_landfeature(n: str) -> str | None:
+    """The canonical LandFeatureSubType named by a *component word* of `n`, or
+    None. Splits on non-letters so 'river valley' / 'old mill creek' surface the
+    'river' / 'creek' feature word while single clean features (handled earlier)
+    and plain political names ('hospital') do not."""
+    for w in re.split(r"[^a-z]+", n):
+        if w in LAND_SUBTYPES:
+            return LAND_SUBTYPES[w]
+        if w in LAND_SYNONYMS:
+            return LAND_SYNONYMS[w]
+    return None
+
+
 def _route_location(value: str, disc: dict) -> dict:
-    """Rule: obviously-not-a-landfeature => Political type. A location routes to LandFeature ONLY
-    when its type clearly names a natural feature (LandFeatureSubType enum, or a small synonym list);
-    everything else defaults to a Political type. This resolves the ambiguity by fiat (Ant's rule),
-    so locations don't get parked in 'review' — the few genuine landfeatures the rule misses are
-    hand-flipped in the map (set target: landfeature + confirmed: true)."""
+    """Route a vault location_type to a mobRPG target. An existing PoliticalType
+    binds; a type that IS a clean natural feature (exact LandFeatureSubType enum
+    or a synonym) routes to LandFeature; a type that merely EMBEDS a feature word
+    but isn't itself a clean feature is genuinely ambiguous (a natural feature, or
+    a place named after one?) and is parked in 'review' with both candidates; and
+    everything else defaults to a new PoliticalType."""
     tok = _first_token(value)
     n = _norm(tok)
     hit = disc["political/type"].get(n)
@@ -153,6 +189,10 @@ def _route_location(value: str, disc: dict) -> dict:
     if n in LAND_SYNONYMS:  # clearly natural (synonym of an enum value)
         return {"target": "landfeature", "landFeatureType": LAND_SYNONYMS[n],
                 "mobrpgId": None, "status": "new"}
+    feature = _embedded_landfeature(n)
+    if feature:  # embeds a feature word but isn't a clean feature -> GM decides
+        return {"target": "political", "politicalType": tok.title(),
+                "landFeatureType": feature, "mobrpgId": None, "status": "review"}
     # default: a new PoliticalType (obviously-not-landfeature => political)
     return {"target": "political", "politicalType": tok.title(), "mobrpgId": None, "status": "new"}
 
@@ -225,9 +265,9 @@ def _merge(old: dict, new: dict) -> tuple[dict, list[str]]:
         res = {}
         for k, nv in n.items():
             ov = o.get(k)
-            if ov and ov.get("confirmed"):
-                res[k] = ov
-            elif ov and ov.get("status") == "new" and nv.get("status") == "bound":
+            if ov and (ov.get("confirmed") or ov.get("status") == "confirmed"):
+                res[k] = ov  # human decision wins (parity with locationRouting)
+            elif ov and ov.get("status") in ("new", "review") and nv.get("status") == "bound":
                 res[k] = nv; notes.append(f"classifiers.{name}[{k}]: now bound")
             else:
                 res[k] = nv

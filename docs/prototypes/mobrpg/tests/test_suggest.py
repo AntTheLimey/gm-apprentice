@@ -57,6 +57,12 @@ def test_resolve_classifier_and_lookup():
     assert suggest.resolve_classifier({"status": "drop", "name": "X"}) == ("drop", None)
     assert suggest.resolve_classifier({"name": "Servant"}) == ("create", "Servant")
     assert suggest.resolve_classifier(None) == ("drop", None)
+    # an unresolved near-duplicate (map status "review") is skipped, never minted
+    assert suggest.resolve_classifier(
+        {"status": "review", "name": "Occultists", "nearExisting": "occultist"}) == ("drop", None)
+    # ...but once the GM confirms it as genuinely new, it is created
+    assert suggest.resolve_classifier(
+        {"status": "confirmed", "name": "Occultists"}) == ("create", "Occultists")
     section = {"Priest": {"mobrpgId": "p1"}, "male": {"name": "Male"}}
     assert suggest._lookup(section, "Priest, cultist") == {"mobrpgId": "p1"}   # first token
     assert suggest._lookup(section, "Male") == {"name": "Male"}                # case-tolerant
