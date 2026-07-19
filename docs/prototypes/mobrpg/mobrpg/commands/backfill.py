@@ -17,6 +17,17 @@ from mobrpg.commands import suggest
 _KIND_NAME = {"npc": "Person", "pc": "Person", "location": "Political",
               "faction": "Organization", "item": "Item", "creature": "Creature"}
 
+# The detect_updates crosswalk stores the mobRPG kind (person/organization/…),
+# not the vault kind — map those to the element_kind used in mobrpg: nodes.
+_MOBRPG_KIND_NAME = {"person": "Person", "organization": "Organization",
+                     "political": "Political", "landfeature": "LandFeature",
+                     "item": "Item", "creature": "Creature",
+                     "currency": "Currency", "culture": "Culture"}
+
+
+def _element_kind(kind: str) -> str:
+    return _MOBRPG_KIND_NAME.get(kind) or _KIND_NAME.get(kind, "Person")
+
 
 def _index_vault(vault):
     """_key(name) -> (path, vault_kind) for every entity file under FOLDERS."""
@@ -28,7 +39,34 @@ def _index_vault(vault):
     return idx
 
 
+def _nodes_from_dict_crosswalk(crosswalk, vault, namespace):
+    """The detect_updates crosswalk: dict keyed by element_id, each value
+    carrying `vault_path` directly — so we resolve by path (exact), not by
+    fuzzy name-match. A missing/absent vault_path file is unresolved."""
+    vault = os.path.expanduser(vault)
+    nodes: dict = {}
+    unresolved = []
+    for eid, e in crosswalk.items():
+        rel = e.get("vault_path")
+        path = os.path.join(vault, rel) if rel else None
+        if not path or not os.path.exists(path):
+            unresolved.append(f"{eid} ({e.get('name')}): vault_path not found: {rel}")
+            continue
+        nodes[path] = {
+            "world_id": "", "external_ref": suggest.external_ref(path, vault, namespace),
+            "element_id": eid, "element_kind": _element_kind(e.get("kind")),
+            "review_state": "accepted", "content_hash": "", "last_synced": "",
+            "review_note": "", "determined": {}, "relationships": [], "languages": [],
+        }
+    return nodes, unresolved
+
+
 def nodes_from_crosswalk(crosswalk, vault, namespace):
+    # Two crosswalk schemas in the wild: the Regency-style {worldId, entities[],
+    # relationships[]} and the detect_updates id-keyed dict. Detect by the
+    # `entities` key; the dict form carries vault_path so it resolves exactly.
+    if "entities" not in crosswalk:
+        return _nodes_from_dict_crosswalk(crosswalk, vault, namespace)
     idx = _index_vault(vault)
     nodes: dict = {}
     unresolved = []

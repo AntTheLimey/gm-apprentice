@@ -32,6 +32,33 @@ def test_nodes_from_crosswalk(tmp_path):
     assert any("Ghost Person" in u for u in unresolved)   # no vault file
 
 
+def _dict_crosswalk():
+    # detect_updates format: dict keyed by element_id, carries the mobRPG kind
+    # and vault_path directly.
+    return {
+        "im-1": {"name": "Imogen Bellamy", "kind": "person",
+                 "vault_path": "Characters/NPCs/Imogen_Bellamy.md"},
+        "no-1": {"name": "Nathaniel Rooke", "kind": "organization",
+                 "vault_path": "Characters/NPCs/Nathaniel_Rooke.md"},
+        "gh-1": {"name": "Ghost Person", "kind": "person",
+                 "vault_path": "Characters/NPCs/Ghost.md"},   # file doesn't exist
+    }
+
+
+def test_nodes_from_dict_keyed_crosswalk(tmp_path):
+    v = _vault(tmp_path)
+    nodes, unresolved = backfill.nodes_from_crosswalk(_dict_crosswalk(), v, "space_game")
+    key = str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md")
+    assert nodes[key]["element_id"] == "im-1"
+    assert nodes[key]["element_kind"] == "Person"
+    assert nodes[key]["review_state"] == "accepted"
+    assert nodes[key]["external_ref"] == "space_game:Characters/NPCs/Imogen_Bellamy"
+    # mobRPG kind maps correctly (not defaulted to Person)
+    rooke = str(tmp_path / "Characters/NPCs/Nathaniel_Rooke.md")
+    assert nodes[rooke]["element_kind"] == "Organization"
+    assert any("gh-1" in u or "Ghost" in u for u in unresolved)
+
+
 def test_run_writes_nodes(tmp_path, capsys):
     v = _vault(tmp_path)
     cw = tmp_path / "cw.json"

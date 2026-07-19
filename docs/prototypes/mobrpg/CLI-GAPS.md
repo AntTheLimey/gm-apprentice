@@ -10,6 +10,35 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
+### G6 — `backfill` only accepts the Regency-style crosswalk, not the `detect_updates` dict format
+**Found 2026-07-19.** `backfill.nodes_from_crosswalk` reads
+`crosswalk["entities"]` (a list, each entry keyed by `name` + `mobrpg_id`) and
+`crosswalk["relationships"]` — the `canticle-regency-crosswalk.json` schema. But
+a vault bootstrapped via the legacy `write`/`sync` path (e.g. `~/Documents/
+space_game`) has `_meta/mobrpg-crosswalk.json` in the **`detect_updates`
+format**: a dict keyed by `element_id` → `{name, kind, vault_path, content_hash,
+canonical, last_synced}`. `crosswalk.get("entities", [])` is then empty, so
+backfill reports `0 node(s) to write` and silently migrates nothing. The
+dict-format crosswalk is *better* for backfill — it carries `vault_path`
+directly, so nodes can be stamped without fuzzy name-matching. Fix: detect the
+format (list-with-`entities` vs id-keyed dict) and handle both; for the
+dict format, `element_id = key`, `element_kind` from `kind`, `external_ref` from
+`vault_path`. Ideally also baseline the Plan-2 description fields
+(`pull-desc baseline`) in the same migration so the nodes are sync-ready.
+
+### G5 — no verb suggests aux-type (currency/term/type) descriptions *up* to mobRPG
+**Found 2026-07-19.** Where the vault has authored content but the mobRPG
+element is an empty stub (e.g. `_World/Federal Credits.md` vs the empty
+`currency` element `9282b30a-…`), the right move is to **suggest the vault prose
+up**, not pull the empty stub down. `suggest` only builds the entity datatype
+graph; it has no path for `currency`/`term`/classifier descriptions. Per Ant's
+guidance this MUST go through the **suggestion** endpoint (a reviewable proposal
+to the world owner), never a direct element `PUT` — a suggestion is safe because
+Tim reviews it. Fix: a verb that, for a linked vault note whose mobRPG element
+lacks a description, submits the vault canon-section as a suggested description
+edit via `/suggestion`. Pairs with G4 (discovering the empty stubs) and the
+`mobrpg:` node link (knowing which element to target).
+
 ### G4 — `pull` is entity-only; it never traverses classifier `/type` endpoints
 **Found 2026-07-19** during a live pull of the Space world
 (`a254e424-…`). `pull.py` walks only entity kinds (`KINDS` = person /
