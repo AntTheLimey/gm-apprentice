@@ -20,18 +20,14 @@ share one client (mobrpg/client.py) for environment resolution and auth.
                         owner. Treat like a password.
 - MOBRPG_EMAIL / MOBRPG_PASSWORD   Alternative to a bearer token (local-password
                         accounts only). Works against either environment.
-- MOBRPG_ALLOW_PROD_WRITES=1   REQUIRED, in addition to MOBRPG_ENV=prod, for any
-                        mutating verb (push, suggest, types, links) to touch
-                        production. Without it, writes to prod refuse and exit 3.
 - Optional per-field overrides: MOBRPG_BASE, MOBRPG_CLIENT_ID, MOBRPG_REDIRECT_URI.
 
-Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured; 3 refused prod
-write (missing MOBRPG_ALLOW_PROD_WRITES).
+Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured.
 
 ## Read-only vs mutating
 
 Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, sync, images.
-Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
+Mutating (need write access; dry-run by default, add --execute to apply):
 push, suggest, suggest-desc, submit-batch, update, types, links, review. write/merge/
 link-orphans/pull-canon/pull-desc/backfill/relink only touch local vault files,
 not the API (pull-canon and pull-desc read from mobRPG but only ever write
@@ -112,8 +108,7 @@ locally; backfill and relink make no API calls at all).
                                   description is empty, or differs below
                                   --threshold similarity (difflib, autojunk off;
                                   default 0.98); --only targets one note. Dry-run
-                                  by default; --execute submits (prod also needs
-                                  MOBRPG_ALLOW_PROD_WRITES=1). Each edit carries a
+                                  by default; --execute submits. Each edit carries a
                                   distinct `<ns>:desc/<relpath>` externalRef so a
                                   re-run dedupes instead of piling up.
     mobrpg relink --vault <path> --to <new-rel-path> [--from <old-rel-path>]
@@ -186,7 +181,7 @@ Import a world into a vault:
 Push a vault chapter to mobRPG (safe: suggestions):
     export MOBRPG_TOKEN=...
     mobrpg suggest <worldId> --chapter chapter-2            # dry-run
-    MOBRPG_ALLOW_PROD_WRITES=1 mobrpg suggest <worldId> --chapter chapter-2 --execute
+    mobrpg suggest <worldId> --chapter chapter-2 --execute
 
 Confirm the round-trip after a GM accepts them in mobRPG (read-only):
     mobrpg catalog <worldId> political/type                # see existing Types first

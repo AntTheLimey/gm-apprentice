@@ -102,8 +102,8 @@ commands:
 {commands}
 
 Auth: set MOBRPG_TOKEN (bearer), or MOBRPG_EMAIL + MOBRPG_PASSWORD.
-Target: MOBRPG_ENV=dev|prod (default prod). Writing to prod also needs
-MOBRPG_ALLOW_PROD_WRITES=1. The resolved target prints to stderr on every run.
+Target: MOBRPG_ENV=dev|prod (default prod). The resolved target prints to
+stderr on every run.
 
 Run `mobrpg <command> --help` for a command's own options.
 AI agents: read llms.txt (next to this package) for the full command model,

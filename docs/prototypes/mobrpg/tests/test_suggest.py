@@ -320,7 +320,7 @@ def test_run_dry_run_end_to_end(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     def boom(*a, **k):
         raise AssertionError("no write in dry-run")
-    monkeypatch.setattr(client, "assert_writes_allowed", boom)
+    monkeypatch.setattr(client, "_request", boom)
 
     rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
                       "--chapter", "chapter-1", "--out", str(tmp_path / "out")])

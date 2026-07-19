@@ -19,7 +19,6 @@ def test_dry_run_no_call(tmp_path, monkeypatch, capsys):
         raise AssertionError("no API in dry-run")
 
     monkeypatch.setattr(client, "_request", boom)
-    monkeypatch.setattr(client, "assert_writes_allowed", boom)
     rc = update.run(["w1", "s1", str(f)])
     assert rc == 0
     assert "DRY-RUN" in capsys.readouterr().out
@@ -33,7 +32,6 @@ def test_execute_puts_body(tmp_path, monkeypatch, capsys):
         calls["method"], calls["path"], calls["body"] = method, path, body
         return {"id": "s1", "reviewState": "Pending"}
 
-    monkeypatch.setattr(client, "assert_writes_allowed", lambda: None)
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "_request", fake)
     rc = update.run(["w1", "s1", str(f), "--execute"])

@@ -12,8 +12,7 @@ Discovered API shape (mobRPG Spring backend, models/world/suggestion/):
     element id (SuggestionService rejects a suggestion: ref — "UpdateElement must
     target a real element"). The typed `data` block is deliberately NOT accepted.
     Submitted through the same SubmitSuggestionsRequest transport as suggest /
-    submit-batch, so the dry-run summary, --execute, and the prod-write guard
-    (client.assert_writes_allowed) come for free.
+    submit-batch, so the dry-run summary and --execute come for free.
 
 Idempotency/safety: each edit carries a DISTINCT externalRef `<ns>:desc/<relpath>`,
 never the element's own create externalRef `<ns>:<relpath>`. The backend dedupes

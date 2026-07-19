@@ -8,8 +8,7 @@ reviewer endpoints, all of which need ReadWriteDelete on the world:
     reinstate POST /world/{worldId}/suggestion/{id}/reinstate    (Dismissed -> Pending)
 
 Mutating: like the other write verbs it is dry-run by default (prints what it
-would do) and needs --execute to fire; against prod it also needs
-MOBRPG_ALLOW_PROD_WRITES=1 (client.assert_writes_allowed()).
+would do) and needs --execute to fire.
 
 Note on dismiss+resubmit: a dismissed suggestion KEEPS its externalRef claimed
 (unique index on (world_id, external_ref) over all live rows), so re-pushing the
@@ -20,7 +19,7 @@ than creating a fresh Pending one. To genuinely re-propose a corrected version,
 Examples:
     mobrpg review <worldId> <suggestionId> dismiss --note "needs a type" --execute
     mobrpg review <worldId> <suggestionId> reinstate --execute
-    MOBRPG_ALLOW_PROD_WRITES=1 mobrpg review <worldId> <suggestionId> accept --execute
+    mobrpg review <worldId> <suggestionId> accept --execute
 """
 
 from __future__ import annotations
@@ -52,11 +51,10 @@ def run(argv: list[str]) -> int:
 
     if not args.execute:
         print(f"DRY-RUN: would POST {path}" + (f"  body={body}" if body else ""))
-        print("  (add --execute to act; prod also needs MOBRPG_ALLOW_PROD_WRITES=1)")
+        print("  (add --execute to act)")
         return 0
 
     try:
-        client.assert_writes_allowed()
         token = client.get_access_token()
         print(f"→ POST {path} ...")
         resp = client._request("POST", path, token=token, body=body)

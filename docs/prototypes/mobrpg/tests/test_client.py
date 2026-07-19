@@ -35,26 +35,6 @@ def test_resolve_environment_field_override(monkeypatch):
     assert base == "http://example.test/api"
 
 
-def test_assert_writes_allowed_refuses_prod(monkeypatch):
-    monkeypatch.setattr(client, "MOBRPG_ENV", "prod")
-    monkeypatch.delenv("MOBRPG_ALLOW_PROD_WRITES", raising=False)
-    with pytest.raises(SystemExit) as exc:
-        client.assert_writes_allowed()
-    assert exc.value.code == 3
-
-
-def test_assert_writes_allowed_prod_with_optin(monkeypatch):
-    monkeypatch.setattr(client, "MOBRPG_ENV", "prod")
-    monkeypatch.setenv("MOBRPG_ALLOW_PROD_WRITES", "1")
-    client.assert_writes_allowed()  # must not raise
-
-
-def test_assert_writes_allowed_dev_ok(monkeypatch):
-    monkeypatch.setattr(client, "MOBRPG_ENV", "dev")
-    monkeypatch.delenv("MOBRPG_ALLOW_PROD_WRITES", raising=False)
-    client.assert_writes_allowed()  # must not raise
-
-
 def test_get_access_token_requires_auth(monkeypatch):
     for k in ("MOBRPG_TOKEN", "MOBRPG_EMAIL", "MOBRPG_PASSWORD"):
         monkeypatch.delenv(k, raising=False)

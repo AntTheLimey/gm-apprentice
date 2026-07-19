@@ -13,10 +13,10 @@ so use a fresh compound batch (submit-batch) for those.
 Tip: fetch the current payload first (GET /world/{id}/suggestion/{id}), edit it,
 and pass the whole thing back.
 
-Mutating: dry-run by default; --execute to PUT; prod also needs MOBRPG_ALLOW_PROD_WRITES=1.
+Mutating: dry-run by default; --execute to PUT.
 
     mobrpg update <worldId> <suggestionId> update.json            # dry-run
-    MOBRPG_ALLOW_PROD_WRITES=1 mobrpg update <worldId> <suggestionId> update.json --execute
+    mobrpg update <worldId> <suggestionId> update.json --execute
 """
 
 from __future__ import annotations
@@ -56,11 +56,10 @@ def run(argv: list[str]) -> int:
         pl = body["payload"]
         print(f"DRY-RUN: would PUT {path}")
         print(f"  payload.name={pl.get('name')!r}  data.type={(pl.get('data') or {}).get('type')}")
-        print("  (add --execute to apply; prod also needs MOBRPG_ALLOW_PROD_WRITES=1)")
+        print("  (add --execute to apply)")
         return 0
 
     try:
-        client.assert_writes_allowed()
         token = client.get_access_token()
         print(f"→ PUT {path} ...")
         resp = client._request("PUT", path, token=token, body=body)

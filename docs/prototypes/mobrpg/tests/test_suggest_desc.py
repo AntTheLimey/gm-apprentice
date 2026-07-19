@@ -229,7 +229,6 @@ def test_run_dry_run_lists_candidates_and_never_posts(monkeypatch, capsys):
         raise AssertionError("no API write in dry-run")
 
     monkeypatch.setattr(client, "_request", boom)
-    monkeypatch.setattr(client, "assert_writes_allowed", boom)
 
     rc = suggest_desc.run(["w1", "--vault", "/v"])
     assert rc == 0
@@ -267,7 +266,6 @@ def test_run_execute_posts_update_element(monkeypatch, capsys):
 
     monkeypatch.setattr(suggest_desc.client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
-    monkeypatch.setattr(client, "assert_writes_allowed", lambda: None)
     monkeypatch.setattr(client, "_request", fake)
 
     rc = suggest_desc.run(["w1", "--vault", "/v", "--execute"])

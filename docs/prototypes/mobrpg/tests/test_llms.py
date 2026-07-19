@@ -13,5 +13,5 @@ def test_llms_exists_and_covers_every_verb():
 
 def test_llms_documents_auth_and_write_guard():
     text = LLMS.read_text()
-    for token in ("MOBRPG_TOKEN", "MOBRPG_ENV", "MOBRPG_ALLOW_PROD_WRITES"):
+    for token in ("MOBRPG_TOKEN", "MOBRPG_ENV"):
         assert token in text

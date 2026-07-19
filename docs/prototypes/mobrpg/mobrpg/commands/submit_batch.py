@@ -13,11 +13,10 @@ File shape (SubmitSuggestionsRequest):
     { "batchLabel": "...",
       "suggestions": [ { "ref","operation","payload","dependsOn","externalRef" }, ... ] }
 
-Mutating: dry-run by default (prints a summary, no call); --execute submits;
-prod also needs MOBRPG_ALLOW_PROD_WRITES=1.
+Mutating: dry-run by default (prints a summary, no call); --execute submits.
 
     mobrpg submit-batch <worldId> batch.json               # dry-run summary
-    MOBRPG_ALLOW_PROD_WRITES=1 mobrpg submit-batch <worldId> batch.json --execute
+    mobrpg submit-batch <worldId> batch.json --execute
 """
 
 from __future__ import annotations
@@ -53,7 +52,6 @@ def submit(world: str, request: dict, *, execute: bool, index: int | None = None
         print(f"{tag}DRY-RUN — would POST this batch (add --execute to submit):")
         _summarize(request)
         return {}
-    client.assert_writes_allowed()
     token = client.get_access_token()
     print(f"→ {tag}POST /world/{world}/suggestion  n={n} ...")
     resp = client._request("POST", f"/world/{world}/suggestion", token=token, body=request)

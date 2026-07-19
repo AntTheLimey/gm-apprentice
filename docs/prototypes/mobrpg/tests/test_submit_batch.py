@@ -31,7 +31,6 @@ def test_dry_run_summarizes_no_call(tmp_path, monkeypatch, capsys):
         raise AssertionError("no API in dry-run")
 
     monkeypatch.setattr(client, "_request", boom)
-    monkeypatch.setattr(client, "assert_writes_allowed", boom)
     rc = submit_batch.run(["w1", str(f)])
     assert rc == 0
     out = capsys.readouterr().out
@@ -50,7 +49,6 @@ def test_execute_posts_body(tmp_path, monkeypatch, capsys):
                                  "payload": {"name": "Surgeon"}}],
                 "resolvedRefs": {"t1": "existing-prof-id"}}
 
-    monkeypatch.setattr(client, "assert_writes_allowed", lambda: None)
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "_request", fake)
     rc = submit_batch.run(["w1", str(f), "--execute"])
@@ -72,7 +70,6 @@ def test_submit_helper_execute_returns_response(monkeypatch):
         return {"suggestions": [{"id": "s1", "operation": "CreateElement",
                                  "reviewState": "Pending", "payload": {"name": "X"}}],
                 "resolvedRefs": {}}
-    monkeypatch.setattr(client, "assert_writes_allowed", lambda: None)
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "_request", fake)
     resp = submit_batch.submit("w1", {"batchLabel": "b", "suggestions": [{"ref": "e1"}]},
@@ -85,7 +82,6 @@ def test_submit_helper_dry_run_no_call(monkeypatch, capsys):
     def boom(*a, **k):
         raise AssertionError("no API in dry-run")
     monkeypatch.setattr(client, "_request", boom)
-    monkeypatch.setattr(client, "assert_writes_allowed", boom)
     resp = submit_batch.submit("w1", {"batchLabel": "b", "suggestions": []}, execute=False)
     assert resp == {}
     assert "DRY-RUN" in capsys.readouterr().out

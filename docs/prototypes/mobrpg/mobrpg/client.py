@@ -13,8 +13,7 @@ Auth flow:
 Environment (prod vs dev) is resolved once at import from MOBRPG_ENV plus
 optional MOBRPG_BASE / MOBRPG_CLIENT_ID / MOBRPG_REDIRECT_URI overrides, and
 the resolved target is printed to stderr so a run is never ambiguous about
-which server it hits. Mutating calls must call assert_writes_allowed() first;
-against prod that refuses unless MOBRPG_ALLOW_PROD_WRITES=1.
+which server it hits.
 
 No third-party dependencies — stdlib urllib only.
 """
@@ -63,24 +62,10 @@ MOBRPG_ENV, BASE, CLIENT_ID, REDIRECT_URI = _resolve_environment()
 
 print(f"┌─ mobRPG target: {MOBRPG_ENV.upper()}  (BASE={BASE})", file=sys.stderr)
 if MOBRPG_ENV == "prod":
-    print("└─ ⚠️  THIS IS PRODUCTION. Mutating calls need MOBRPG_ALLOW_PROD_WRITES=1 "
-          "(see assert_writes_allowed()). Set MOBRPG_ENV=dev to target local dev instead.",
+    print("└─ ⚠️  THIS IS PRODUCTION. Set MOBRPG_ENV=dev to target local dev instead.",
           file=sys.stderr)
 else:
     print(f"└─ client_id={CLIENT_ID}  redirect_uri={REDIRECT_URI}", file=sys.stderr)
-
-
-def assert_writes_allowed() -> None:
-    """Call before any mutating request. Refuses prod unless
-    MOBRPG_ALLOW_PROD_WRITES=1, so a script can never write to production by
-    accident — only by a deliberate opt-in on top of MOBRPG_ENV."""
-    if MOBRPG_ENV == "prod" and os.environ.get("MOBRPG_ALLOW_PROD_WRITES") != "1":
-        print("ERROR: refusing to write to PRODUCTION.", file=sys.stderr)
-        print("  Set MOBRPG_ENV=dev to target the local dev stack instead, or",
-              file=sys.stderr)
-        print("  set MOBRPG_ALLOW_PROD_WRITES=1 if you really mean to write to prod.",
-              file=sys.stderr)
-        raise SystemExit(3)
 
 
 class ApiError(Exception):
