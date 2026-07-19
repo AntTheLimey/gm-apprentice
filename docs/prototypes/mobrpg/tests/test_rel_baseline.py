@@ -70,6 +70,41 @@ def test_match_node_skips_already_baselined_relationship():
     assert eids == {} and reviews == []
 
 
+def test_build_structural_index_symmetrizes_link_and_spouse_only():
+    known = {"a", "b"}
+    rels_by = {"a": [{"id": "L", "sourceId": "a", "targetId": "b", "type": "Link"},
+                     {"id": "P", "sourceId": "a", "targetId": "b", "type": "Parent"}]}
+    idx = rb.build_structural_index(rels_by, known)
+    assert idx[("a", "Link", "b")] == "L" and idx[("b", "Link", "a")] == "L"   # both dirs
+    assert idx[("a", "Parent", "b")] == "P" and ("b", "Parent", "a") not in idx  # directional
+
+
+def test_match_node_symmetric_match_from_opposite_end():
+    mp = {"relationshipTypes": {"allied_with": "Link"}}
+    id_by_key = {rb._key("Bravo"): "b"}
+    # vault authors alpha--allied_with-->bravo; mobRPG stored the Link as (b -> a)
+    node = {"element_id": "a",
+            "relationships": [{"predicate": "allied_with", "target": "[[Bravo]]"}]}
+    structural = rb.build_structural_index(
+        {"b": [{"id": "L", "sourceId": "b", "targetId": "a", "type": "Link"}]}, {"a", "b"})
+    eids, reviews = rb.match_node(node, id_by_key, structural, {}, mp)
+    assert eids == {"allied_with|[[Bravo]]": "L"} and reviews == []
+
+
+def test_match_node_does_not_reuse_one_upstream_event_for_two_edges():
+    # Two different vault predicates between the same pair both collapse to Generic
+    # and there is a single Generic upstream event — only the first may claim it.
+    mp = {}
+    id_by_key = {rb._key("Bravo"): "b"}
+    node = {"element_id": "a", "relationships": [
+        {"predicate": "commands", "target": "[[Bravo]]"},   # -> Generic
+        {"predicate": "oversees", "target": "[[Bravo]]"}]}  # -> Generic
+    reified = {(frozenset({"a", "b"}), "Generic"): ["ev-1"]}
+    eids, reviews = rb.match_node(node, id_by_key, {}, reified, mp)
+    assert list(eids.values()) == ["ev-1"] and len(eids) == 1   # only one stamped
+    assert len(reviews) == 1 and "already claimed" in reviews[0]
+
+
 def test_stamp_baseline_sets_event_id_and_leaves_rest_untouched():
     node = {"element_id": "corwin", "review_state": "edited", "determined": {"x": 1},
             "relationships": [

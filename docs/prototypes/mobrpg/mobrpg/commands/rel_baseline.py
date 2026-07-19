@@ -33,12 +33,17 @@ from mobrpg.commands.suggest import _key, _mapped_type
 # Events. Attribute is a classifier edge, never a vault "relationship", so it is
 # not in this set — a relationship predicate never maps to Attribute.
 STRUCTURAL = map_cmd.RELATION_TYPES  # {Parent, Child, Link, Spouse}
+# Symmetric structural edges: mobRPG stores one directed row, but the vault may
+# author it from either endpoint, so index both orientations for these. Parent /
+# Child are directional (child→parent) and are NOT symmetrized.
+_SYMMETRIC = {"Link", "Spouse"}
 
 # node element_kind → API kind path segment for the /relation endpoint.
 KIND_PATH = {"Person": "person", "Organization": "organization", "Political": "political",
              "LandFeature": "landfeature", "Item": "item", "Creature": "creature"}
 
 _PAGE = 200
+_MAX_PAGES = 1000
 
 
 # ---------------- pure index + match ----------------
@@ -54,6 +59,8 @@ def build_structural_index(relations_by_element, known_ids) -> dict:
             t, s, d = r.get("type"), r.get("sourceId"), r.get("targetId")
             if t in STRUCTURAL and s in known_ids and d in known_ids:
                 idx.setdefault((s, t, d), r.get("id"))
+                if t in _SYMMETRIC:            # match whichever end the vault authored
+                    idx.setdefault((d, t, s), r.get("id"))
     return idx
 
 
@@ -86,29 +93,34 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp) -> tuple[dict, 
     src = node.get("element_id")
     event_ids: dict = {}
     reviews: list = []
+    used: set = set()          # upstream ids already claimed by an edge on THIS node
     if not src:
         return event_ids, reviews
     for r in node.get("relationships", []):
         if r.get("event_id"):
+            used.add(r["event_id"])            # a pre-baselined edge already owns its id
             continue
         pred = r.get("predicate")
-        tgt = id_by_key.get(_key(_target_name(r.get("target"))))
+        name = _target_name(r.get("target"))
+        tgt = id_by_key.get(_key(name))
         if not tgt:
             continue
         et = _mapped_type(mp, pred)
         key = f"{pred}|{r.get('target')}"
         if et in STRUCTURAL:
-            rid = structural_idx.get((src, et, tgt))
-            if rid:
-                event_ids[key] = rid
+            hits = [structural_idx[(src, et, tgt)]] if (src, et, tgt) in structural_idx else []
         else:
-            hits = reified_idx.get((frozenset({src, tgt}), et)) or []
-            if len(hits) == 1:
-                event_ids[key] = hits[0]
-            elif len(hits) > 1:
-                reviews.append(
-                    f"{_target_name(r.get('target'))} ({pred}/{et}): "
-                    f"{len(hits)} upstream events match — review, not auto-stamped")
+            hits = list(reified_idx.get((frozenset({src, tgt}), et)) or [])
+        fresh = [h for h in hits if h not in used]
+        if len(hits) > 1:
+            reviews.append(f"{name} ({pred}/{et}): {len(hits)} upstream edges match "
+                           f"— review, not auto-stamped")
+        elif len(hits) == 1 and fresh:
+            event_ids[key] = hits[0]
+            used.add(hits[0])
+        elif len(hits) == 1:                   # single match, but that id is already claimed
+            reviews.append(f"{name} ({pred}/{et}): the one upstream match is already "
+                           f"claimed by another vault relationship — review")
     return event_ids, reviews
 
 
@@ -138,7 +150,7 @@ def _get_relations(world, kind, eid, token) -> list:
     """All WorldElementRelation edges touching one element (both directions, all
     types), paged. Returns [{id, sourceId, targetId, type}, ...]."""
     out, page = [], 0
-    while True:
+    while page < _MAX_PAGES:          # safety cap: never loop forever on a broken pager
         try:
             r = client._request("GET", f"/world/{world}/{kind}/{eid}/relation",
                                  token=token, query={"page": page, "size": _PAGE})
@@ -163,7 +175,7 @@ def _fetch_events(world, token) -> list:
         if not eid:
             continue
         ev = pull._get_one(world, "event", eid, token)
-        parts = [(rel["targetId"] if rel.get("sourceId") == eid else rel.get("sourceId"))
+        parts = [(rel.get("targetId") if rel.get("sourceId") == eid else rel.get("sourceId"))
                  for rel in (ev.get("relations") or []) if rel.get("type") == "Link"]
         out.append({"id": eid, "eventType": ev.get("eventType"),
                     "participants": [p for p in parts if p]})

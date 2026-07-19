@@ -675,9 +675,16 @@ def run(argv: list[str]) -> int:
           f"items in {len(chunks)} batch(es)")
     if linked_ents:
         held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked)
+        # Be precise about what "held" means: this run emits NO edges for linked
+        # entities. `pull-canon --baseline` reconciles the ones that already exist
+        # upstream (stamping event_ids); the remainder are genuinely-new edges on
+        # existing elements that no verb pushes yet — the relationship-delta pass
+        # owns them. Don't imply the baseline carries all of them.
         print(f"  [skipped] {len(linked_ents)} already-linked entit(y/ies) not re-created "
-              f"(they exist upstream)"
-              + (f"; {held} relationship delta(s) held for the baseline pass" if held else ""))
+              f"(exist upstream)"
+              + (f"; {held} of their relationship(s) not emitted here — run "
+                 f"`pull-canon --baseline` to reconcile pre-existing edges; any "
+                 f"genuinely-new ones await the relationship-delta pass" if held else ""))
     for r in all_reports:
         print(f"  [note] {r}")
     if deferred:
