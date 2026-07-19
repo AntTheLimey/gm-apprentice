@@ -1,4 +1,7 @@
+import pytest
+
 from mobrpg.commands import pull_canon
+from mobrpg import client
 from mobrpg import node
 
 BASE = {"world_id": "w1", "external_ref": "canticle:Characters/NPCs/Imogen_Bellamy",
@@ -65,7 +68,8 @@ def test_scaffold_note_creates_minimal_file():
 
 def _run_execute(monkeypatch, vault, live_by_ref):
     monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
-    monkeypatch.setattr(pull_canon, "_fetch_live", lambda world, token: live_by_ref)
+    monkeypatch.setattr(pull_canon, "_fetch_live",
+                        lambda world, token, *, verify=True: live_by_ref)
     rc = pull_canon.run(["w1", "--vault", str(vault), "--execute"])
     assert rc == 0
 
@@ -99,3 +103,166 @@ def test_run_skips_traversal_ref(monkeypatch, tmp_path, capsys):
     assert not (tmp_path / "evil.md").exists()
     assert list(tmp_path.rglob("*.md")) == []
     assert "0 node(s) updated" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# G1 — determined_from_element: rebuild ratified `determined` off a live element.
+# Fixtures below are trimmed from real payloads captured 2026-07-19 against the
+# Regency Cthulhu world (4b07d8dd-3da2-45fc-9ec5-6a45d21f1adb).
+# ---------------------------------------------------------------------------
+
+def _attr(source_type, name):
+    return {"type": "Attribute", "source": {"type": source_type, "name": name}}
+
+
+def test_determined_from_element_person_sex_race():
+    el = {"type": "person", "name": "Miriam Doyle",
+          "relations": [_attr("sex", "Female"), _attr("race", "Human")]}
+    assert pull_canon.determined_from_element(el) == {"sex": "Female", "race": "Human"}
+
+
+def test_determined_from_element_person_multi_profession_collapses():
+    el = {"type": "person", "name": "Mr. Alfred Smythe",
+          "relations": [_attr("race", "Human"), _attr("sex", "Male"),
+                        _attr("profession", "Linguist"),
+                        _attr("profession", "Cryptologist")]}
+    out = pull_canon.determined_from_element(el)
+    assert out["profession"] == "Cryptologist, Linguist"   # sorted, comma-joined
+    assert out["race"] == "Human" and out["sex"] == "Male"
+
+
+def test_determined_from_element_political_type():
+    el = {"type": "political", "name": "Bath", "relations": [_attr("politicaltype", "Town")]}
+    assert pull_canon.determined_from_element(el) == {"political_type": "Town"}
+
+
+def test_determined_from_element_organization_type():
+    el = {"type": "organization", "name": "The Aeternum Choir",
+          "relations": [_attr("organizationtype", "Cult")]}
+    assert pull_canon.determined_from_element(el) == {"organization_type": "Cult"}
+
+
+def test_determined_from_element_item_type_from_attributes():
+    el = {"type": "item", "name": "Liber Ivonis", "relations": [],
+          "attributes": {"itemType": "Generic", "cost": 0.0, "weight": 0.0}}
+    assert pull_canon.determined_from_element(el) == {"item_type": "Generic"}
+
+
+def test_determined_from_element_landfeature_type_from_list():
+    el = {"type": "landfeature", "name": "River Thames", "relations": [],
+          "landFeatureTypes": ["River"]}
+    assert pull_canon.determined_from_element(el) == {"land_feature_type": "River"}
+
+
+def test_determined_from_element_no_classifiers_is_empty():
+    el = {"type": "person", "name": "Nobody", "relations": []}
+    assert pull_canon.determined_from_element(el) == {}
+
+
+# ---------------------------------------------------------------------------
+# G1 — _fetch_live: query all three states and verify accepted elements so the
+# deleted / edited outcomes become reachable.
+# ---------------------------------------------------------------------------
+
+class _FakeApi:
+    """Routes client._request by path. `elements` maps elementId -> payload;
+    a missing id raises ApiError(404); ids in `errors` raise that status."""
+
+    def __init__(self, by_state, elements=None, errors=None):
+        self.by_state = by_state
+        self.elements = elements or {}
+        self.errors = errors or {}
+        self.element_gets = []
+
+    def __call__(self, method, path, *, token=None, **kw):
+        if "/suggestion?reviewState=" in path:
+            state = path.rsplit("=", 1)[1]
+            return list(self.by_state.get(state, []))
+        # element GET: /world/<w>/<ep>/<id>
+        rid = path.rsplit("/", 1)[1]
+        self.element_gets.append(rid)
+        if rid in self.errors:
+            raise client.ApiError(self.errors[rid], "err", path)
+        if rid not in self.elements:
+            raise client.ApiError(404, "not found", path)
+        return self.elements[rid]
+
+
+def _sug(ext, rid, etype="Person", note=""):
+    return {"externalRef": ext, "resultElementId": rid,
+            "payload": {"data": {"type": etype}}, "reviewNote": note}
+
+
+def test_fetch_live_queries_all_three_states(monkeypatch):
+    fake = _FakeApi(by_state={
+        "Accepted": [_sug("c:A", "el-a")],
+        "Dismissed": [_sug("c:D", None, note="dup")],
+        "Pending": [_sug("c:P", None)],
+    }, elements={"el-a": {"type": "person", "relations": [_attr("race", "Human")]}})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert live["c:A"]["state"] == "accepted"
+    assert live["c:D"]["state"] == "dismissed" and live["c:D"]["review_note"] == "dup"
+    assert live["c:P"]["state"] == "pending"
+
+
+def test_fetch_live_populates_determined_from_element(monkeypatch):
+    fake = _FakeApi(
+        by_state={"Accepted": [_sug("c:Bath", "el-bath", etype="Political")]},
+        elements={"el-bath": {"type": "political",
+                              "relations": [_attr("politicaltype", "Town")]}})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert live["c:Bath"]["determined"] == {"political_type": "Town"}
+    assert live["c:Bath"]["element_id"] == "el-bath"
+
+
+def test_fetch_live_404_element_marks_deleted(monkeypatch):
+    fake = _FakeApi(by_state={"Accepted": [_sug("c:Gone", "el-gone")]}, elements={})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert live["c:Gone"]["state"] == "deleted"
+
+
+def test_fetch_live_transient_error_stays_accepted_not_deleted(monkeypatch):
+    # A 500/network error must NOT be mistaken for deletion (would clear element_id).
+    fake = _FakeApi(by_state={"Accepted": [_sug("c:Blip", "el-blip")]},
+                    errors={"el-blip": 500})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert fake.element_gets == ["el-blip"]      # verification was attempted
+    assert live["c:Blip"]["state"] == "accepted"  # ...but a 500 is not a deletion
+    assert live["c:Blip"]["determined"] == {}
+
+
+def test_fetch_live_accepted_wins_over_resubmitted_pending(monkeypatch):
+    # Same externalRef with both an Accepted row and a later Pending re-submission
+    # must keep the authoritative Accepted outcome, not be clobbered by Pending.
+    fake = _FakeApi(by_state={
+        "Accepted": [_sug("c:Dup", "el-dup", etype="Political")],
+        "Pending": [_sug("c:Dup", None, etype="Political")],
+    }, elements={"el-dup": {"type": "political",
+                            "relations": [_attr("politicaltype", "Town")]}})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert live["c:Dup"]["state"] == "accepted"
+    assert live["c:Dup"]["determined"] == {"political_type": "Town"}
+
+
+def test_fetch_live_no_verify_skips_element_fetch(monkeypatch):
+    fake = _FakeApi(by_state={"Accepted": [_sug("c:A", "el-a")]},
+                    elements={"el-a": {"type": "person", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok", verify=False)
+    assert live["c:A"]["state"] == "accepted"
+    assert fake.element_gets == []          # no element GET happened
+
+
+def test_fetch_live_unknown_etype_skips_get_stays_accepted(monkeypatch):
+    # A type with no TYPE_EP endpoint (e.g. a classifier Sex) can't be fetched;
+    # it must stay plain-accepted without attempting (or mis-routing) a GET.
+    fake = _FakeApi(by_state={"Accepted": [_sug("c:X", "el-x", etype="Sex")]})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert live["c:X"]["state"] == "accepted"
+    assert fake.element_gets == []

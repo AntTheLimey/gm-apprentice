@@ -10,21 +10,6 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-### G1 — `pull-canon`: 3 of 5 authority-rule outcomes are unreachable
-**Severity:** high (this is the core reconcile value the skill promises).
-`apply_state()` (`mobrpg/commands/pull_canon.py:20-52`) implements all five
-outcomes — accepted, **edited** (canon overwrites `determined`), dismissed,
-**deleted**, **pending** — but `_fetch_live()` (`pull_canon.py:100-121`) only
-queries `reviewState=Accepted` and `reviewState=Dismissed` and hardcodes the
-state to `"accepted"`/`"dismissed"`, and it always sets `"determined": {}`.
-Net effect today: only `accepted` and `dismissed` ever occur; the `edited`
-(canon-overwrites-vault) path can never fire because `live_det` is always the
-falsy `{}`, and `deleted`/`pending` are never produced.
-**Fix:** extend `_fetch_live()` to also query Deleted and Pending review states,
-and to populate `determined` from the ratified canon so the edited/drift branch
-can fire. Then the skill's reconcile authority rule delivers all five outcomes
-as designed.
-
 ### G2 — `map`: `status:"review"` is schema-reserved but never emitted
 **Severity:** medium.
 The map schema and `_counts()` recognize a `review` route status (a route that
@@ -53,4 +38,31 @@ an existing verb) that rewrites `external_ref` to the current path, keeps the
 mutations — so the guard is a one-command safe operation instead of a hand-edit.
 
 ## Resolved
-_(none yet)_
+
+### G1 — `pull-canon`: 3 of 5 authority-rule outcomes are unreachable ✅
+**Resolved 2026-07-19.** `apply_state()` already implemented all five outcomes;
+the gap was entirely in `_fetch_live()`, which only queried Accepted+Dismissed
+and always set `determined: {}`.
+
+Correction to the original fix sketch: the suggestion review-state enum is only
+`Pending | Accepted | Dismissed` — **there is no `Deleted` review state**. So
+`deleted` and `edited` cannot come from a query; they are detected by verifying
+the ratified element.
+
+Fix landed:
+- `_fetch_live(world, token, *, verify=True)` now also queries **Pending**
+  (emits `state:"pending"` — an `apply_state` no-op, for coverage/reporting).
+- For each Accepted row with a `resultElementId`, a verification GET on the
+  element (via `suggestions.TYPE_EP`): a **404 → `state:"deleted"`**; a live
+  element → `determined` rebuilt by the new `determined_from_element()` helper,
+  so the **edited/drift** branch fires when canon differs from the vault.
+  Non-404 errors leave the row plain-accepted (a transient failure is never
+  mistaken for a deletion).
+- `determined_from_element()` maps live classifiers → vault `determined` keys
+  (Attribute relations: `sex`/`race`/`profession`/`politicaltype`→`political_type`/
+  `organizationtype`→`organization_type`/`creaturetype`→`creature_type`; plus
+  item `attributes.itemType` and landfeature `landFeatureTypes`). Multi-valued
+  types collapse to a sorted comma-joined string. Verified against live Regency
+  Cthulhu payloads across all element kinds.
+- New `mobrpg pull-canon --no-verify` skips the element-fetch pass.
+- Coverage: 12 new tests in `test_pull_canon.py` (114 total, was 102).

@@ -15,6 +15,7 @@ import sys
 
 from mobrpg import client
 from mobrpg import node
+from mobrpg.commands import suggestions
 
 
 def apply_state(existing: dict, live: dict) -> dict:
@@ -97,11 +98,78 @@ def _scaffoldable(external_ref):
     return True
 
 
-def _fetch_live(world, token):
-    """Return {external_ref: live_summary} across Accepted+Dismissed queues.
-    live_summary = {state, element_id, determined, review_note, event_ids}."""
+# Live-element classifier -> vault `determined` key. Attribute relations carry
+# the classifier as source.type (lowercased, no separators); item/landfeature
+# store their type in a top-level field instead. Confirmed against real payloads
+# (Regency Cthulhu, 2026-07-19).
+_ATTR_TYPE_DETKEY = {
+    "sex": "sex", "race": "race", "profession": "profession",
+    "politicaltype": "political_type", "organizationtype": "organization_type",
+    "creaturetype": "creature_type",
+}
+
+
+def determined_from_element(element: dict) -> dict:
+    """Rebuild the ratified `determined` dict from a live mobRPG element, in the
+    same scalar shape `suggest.determined_for` emits, so it can be compared for
+    drift. A type with multiple values (e.g. several professions) collapses to a
+    sorted comma-joined string — a single value stays scalar (no false drift)."""
+    names: dict = {}
+    for rel in element.get("relations") or []:
+        if not isinstance(rel, dict) or rel.get("type") != "Attribute":
+            continue
+        src = rel.get("source")
+        if not isinstance(src, dict):
+            continue
+        key = _ATTR_TYPE_DETKEY.get((src.get("type") or "").lower())
+        name = src.get("name")
+        if key and name:
+            names.setdefault(key, []).append(name)
+    out = {k: ", ".join(sorted(v)) for k, v in names.items()}
+    attrs = element.get("attributes")
+    if isinstance(attrs, dict) and attrs.get("itemType"):
+        out["item_type"] = attrs["itemType"]
+    lft = element.get("landFeatureTypes")
+    if isinstance(lft, list) and lft:
+        out["land_feature_type"] = ", ".join(sorted(lft))
+    return out
+
+
+def _verify_accepted(world, token, sug, summary):
+    """GET the ratified element for an Accepted suggestion so the edited/drift
+    and deleted outcomes become reachable. A 404 means canon deleted it; a live
+    element supplies `determined`. Other errors leave the row plain-accepted
+    (never mistake a transient failure for a deletion)."""
+    rid = sug.get("resultElementId")
+    pl = sug.get("payload") or {}
+    etype = (pl.get("data") or {}).get("type") or sug.get("typeName") or ""
+    ep = suggestions.TYPE_EP.get(etype)
+    if not rid or not ep:
+        return
+    try:
+        element = client._request("GET", f"/world/{world}/{ep}/{rid}", token=token)
+    except client.ApiError as e:
+        if e.status == 404:
+            summary["state"] = "deleted"
+        return
+    except ValueError:
+        return
+    if isinstance(element, dict):
+        summary["determined"] = determined_from_element(element)
+
+
+def _fetch_live(world, token, *, verify=True):
+    """Return {external_ref: live_summary} across the Accepted, Dismissed and
+    Pending queues (the review-state enum has no Deleted — deletion is detected
+    by verifying the accepted element). live_summary =
+    {state, element_id, determined, review_note, event_ids}. With verify, each
+    Accepted row's element is fetched to populate `determined` (drift) or flag it
+    `deleted`; verify=False skips that pass (accepted/dismissed only)."""
     live = {}
-    for state in ("Accepted", "Dismissed"):
+    # Precedence is iteration order + first-write-wins: a ref that already has an
+    # authoritative Accepted outcome is never shadowed by a later Dismissed or
+    # (re-submitted) Pending row for the same externalRef.
+    for state in ("Accepted", "Dismissed", "Pending"):
         try:
             data = client._request(
                 "GET", f"/world/{world}/suggestion?reviewState={state}", token=token)
@@ -111,13 +179,16 @@ def _fetch_live(world, token):
             data.get("content", []) if isinstance(data, dict) else [])
         for s in rows:
             ext = s.get("externalRef")
-            if not ext:
+            if not ext or ext in live:
                 continue
-            live[ext] = {
+            summary = {
                 "state": state.lower(),
                 "element_id": s.get("resultElementId"),
                 "review_note": s.get("reviewNote") or "",
                 "determined": {}, "event_ids": {}}
+            if state == "Accepted" and verify:
+                _verify_accepted(world, token, s, summary)
+            live[ext] = summary
     return live
 
 
@@ -128,13 +199,16 @@ def run(argv: list[str]) -> int:
     ap.add_argument("world")
     ap.add_argument("--vault", required=True)
     ap.add_argument("--execute", action="store_true")
+    ap.add_argument("--no-verify", action="store_true",
+                    help="skip the accepted-element verification pass (faster / "
+                         "offline; edited-drift and deleted outcomes won't be detected)")
     args = ap.parse_args(argv)
     try:
         token = client.get_access_token()
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
-    live_by_ref = _fetch_live(args.world, token)
+    live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)
     updated = 0
     for ext, live in live_by_ref.items():
         path = _vault_file(ext, args.vault)
