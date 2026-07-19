@@ -81,6 +81,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const merged = {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
     system: publish.system || null,
+    // CoC sheet masthead crest/seal. Not part of any list-union — a bare passthrough,
+    // publish block first then the vault.config.json fallback (see #112).
+    sheet_crest: publish.sheet_crest || jsonConfigFallback.sheet_crest || null,
     exclude_drafts: publish.exclude_drafts ?? PUBLISH_DEFAULTS.exclude_drafts,
     exclude_sections: unionExcludeList(
       publish.exclude_sections,
