@@ -61,7 +61,9 @@ suggestions,catalog,review,submit_batch,update,map_cmd}.py`, `llms.txt`, `pyproj
 | `submit-batch` | ✅ native — submit a pre-built compound batch (types+edges+relations) from JSON |
 | `update` | ✅ native — replace a Pending suggestion's payload (PUT) |
 | `map` | ✅ native — per-vault vocab→type map (`init` / `sync` / `check`) |
-| `suggest` | ✅ native — builds the full datatype graph (Types + Attribute edges + reified events) from the map + crosswalk, chunked ≤100, via the shared submit transport |
+| `suggest` | ✅ native — builds the full datatype graph (Types + Attribute edges + reified events) from the map + crosswalk, chunked ≤100, via the shared submit transport + `--write-back` writes pending `mobrpg:` nodes |
+| `pull-canon` | ✅ native — pull ratified mobRPG canon into vault `mobrpg:` nodes (authority rule) |
+| `backfill` | ✅ native — one-time crosswalk → `mobrpg:` node migration |
 | `write`, `merge`, `link-orphans`, `sync`, `push`, `types`, `links`, `images` | ⏳ fallback → legacy script |
 
 Verified (2026-07-18): **60 tests pass** (`pytest -q`); `mobrpg --help` lists all verbs +
@@ -103,12 +105,14 @@ and `MOBRPG_ALLOW_PROD_WRITES=1` required for any write against prod.
 ## What's next (two tracks)
 
 **Track A — the mapping/suggest/writeback work (the real remaining value).** See
-`COMPLETE-SUGGESTIONS-SPEC.md` "Implementation order": steps 1–3 (GFM converter, the `map`
-scaffolder, compound `suggest`) are ✅ done; the remaining **⏳** work is 4–5:
-- **Pillar 3 vault-writeback** — persist determined mappings into vault frontmatter + crosswalk
-  review-state (`pending|accepted|dismissed|edited`) + `content_hash`; authority rule "vault wins
-  until mobRPG returns an edited version, then mobRPG wins."
-- **the mobRPG skill** — wraps map-curation + writeback with judgment (resolves `map`'s
+`COMPLETE-SUGGESTIONS-SPEC.md` "Implementation order": steps 1–4 (GFM converter, the `map`
+scaffolder, compound `suggest`, **Pillar 3 vault-writeback**) are ✅ done; the remaining
+**⏳** work is step 5:
+- ✅ **Pillar 3 vault-writeback** — done. Landed as `mobrpg/node.py` (the `mobrpg:` node),
+  `suggest --write-back`, `pull-canon` (authority rule: vault wins until mobRPG returns an
+  edited version, then mobRPG wins), `backfill` (crosswalk retirement), and the 1.8.23 plugin
+  schema migration.
+- ⏳ **the mobRPG skill** — wraps map-curation + writeback with judgment (resolves `map`'s
   `review:true` routes). This is the "skill work" — a new gm-apprentice skill, not more CLI.
 
 **Track B — mechanical fallback ports (low-value, do as needed).** `write`, `merge`,

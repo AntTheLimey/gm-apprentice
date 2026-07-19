@@ -202,7 +202,7 @@ primitives and the skill.
 
 ## Implementation order
 
-_Progress (2026-07-18): steps 1–3 shipped on `mobrpg-cli`; 4–5 remain. See the ✅/⏳ markers._
+_Progress (2026-07-18): steps 1–4 shipped; 5 remains. See the ✅/⏳ markers._
 
 1. ✅ **Done** — Real GFM↔HTML converter (unblocks fidelity), replacing `md_to_html` + pull's
    `html_to_md`. Landed as `mobrpg/md.py` (tables/lists/links); `push` and `pull` rewired onto it.
@@ -214,9 +214,8 @@ _Progress (2026-07-18): steps 1–3 shipped on `mobrpg-cli`; 4–5 remain. See t
 3. ✅ **Done** — landed as the native `mobrpg suggest` (`mobrpg/commands/suggest.py`) + shared
    `submit_batch.submit()`; builder = element + classifier `Attribute` edges (incl. race-scoped Sex)
    + reified relationship Events, greedy ≤100 chunking.
-4. ⏳ **Remaining** — Vault-writeback + crosswalk review-state + authority reconciliation (Pillar 3).
-   Persist determined mappings into vault frontmatter, extend the crosswalk with review-state
-   (`pending|accepted|dismissed|edited`) + `content_hash`, and enforce "vault is authoritative until
-   mobRPG returns an edited version; then mobRPG wins."
+4. ✅ **Done** — Vault-writeback + crosswalk review-state + authority reconciliation (Pillar 3).
+   Landed as `mobrpg/node.py` (the `mobrpg:` node), `suggest --write-back`, `pull-canon`
+   (authority rule), `backfill` (crosswalk retirement), and the 1.8.23 plugin schema migration.
 5. ⏳ **Remaining** — The mobRPG skill wrapping 2–4 with judgment + curation (resolves `map`'s
    `review:true` routes; the boundary between the deterministic CLI primitives and the skill).
