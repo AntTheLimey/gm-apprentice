@@ -74,6 +74,67 @@ def _run_execute(monkeypatch, vault, live_by_ref):
     assert rc == 0
 
 
+def test_run_baseline_stamps_matched_event_ids(monkeypatch, tmp_path, capsys):
+    import json
+    from mobrpg.commands import suggest
+    vault = tmp_path / "space_game"
+    (vault / "Characters/NPCs").mkdir(parents=True)
+    (vault / "Factions & Organizations").mkdir(parents=True)
+    (vault / "_meta").mkdir(parents=True)
+    (vault / "_meta/mobrpg-map.json").write_text("{}", encoding="utf-8")
+
+    corwin = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Corwin Dace",
+              "element_id": "corwin", "element_kind": "Person", "review_state": "accepted",
+              "relationships": [{"predicate": "member_of", "target": "[[Halcyon]]",
+                                 "event_type": "Membership", "event_id": None,
+                                 "review_state": "pending"}],
+              "languages": []}
+    (vault / "Characters/NPCs/Corwin Dace.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(corwin) + "---\nBody\n", encoding="utf-8")
+    halcyon = {"world_id": "w1", "external_ref": "space_game:Factions & Organizations/Halcyon",
+               "element_id": "h", "element_kind": "Organization", "review_state": "accepted",
+               "relationships": [], "languages": []}
+    (vault / "Factions & Organizations/Halcyon.md").write_text(
+        "---\ntype: faction\n" + node.emit_node(halcyon) + "---\nBody\n", encoding="utf-8")
+
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    # canned upstream graph: one reified Membership event linking corwin↔h
+    reified = {(frozenset({"corwin", "h"}), "Membership"): ["ev-9"]}
+    monkeypatch.setattr(pull_canon.rel_baseline, "fetch_upstream",
+                        lambda world, token, nodes: ({}, reified, {"corwin", "h"}))
+
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--baseline", "--execute"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "matched 1 pre-existing upstream relationship" in out
+    nd = node.read_node((vault / "Characters/NPCs/Corwin Dace.md").read_text(encoding="utf-8"))
+    assert nd["relationships"][0]["event_id"] == "ev-9"
+    assert nd["relationships"][0]["review_state"] == "accepted"
+
+
+def test_run_baseline_dry_run_writes_nothing(monkeypatch, tmp_path, capsys):
+    from mobrpg import node as _n
+    vault = tmp_path / "space_game"
+    (vault / "Characters/NPCs").mkdir(parents=True)
+    (vault / "_meta").mkdir(parents=True)
+    (vault / "_meta/mobrpg-map.json").write_text("{}", encoding="utf-8")
+    corwin = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Corwin Dace",
+              "element_id": "corwin", "element_kind": "Person", "review_state": "accepted",
+              "relationships": [{"predicate": "member_of", "target": "[[Halcyon]]",
+                                 "event_type": "Membership", "event_id": None,
+                                 "review_state": "pending"}], "languages": []}
+    p = vault / "Characters/NPCs/Corwin Dace.md"
+    p.write_text("---\ntype: npc\n" + _n.emit_node(corwin) + "---\nBody\n", encoding="utf-8")
+    before = p.read_text(encoding="utf-8")
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.rel_baseline, "fetch_upstream",
+                        lambda world, token, nodes: ({}, {}, set()))
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--baseline"])
+    assert rc == 0
+    assert "dry-run" in capsys.readouterr().out
+    assert p.read_text(encoding="utf-8") == before
+
+
 def test_run_does_not_scaffold_reified_event_ref(monkeypatch, tmp_path, capsys):
     # An Accepted reified-relationship Event ref (rel/ prefix) must never scaffold a note.
     ref = "canticle:rel/Characters/NPCs/Imogen_Bellamy/friend_of/nathanielrooke"

@@ -10,11 +10,15 @@ gm-apprentice concept (canon_status promotion).
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
 from mobrpg import client
 from mobrpg import node
+from mobrpg.commands import pull_desc
+from mobrpg.commands import rel_baseline
+from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
 
 
@@ -192,6 +196,55 @@ def _fetch_live(world, token, *, verify=True):
     return live
 
 
+def run_baseline(world, vault, token, *, execute) -> int:
+    """Relationship-baseline pass: read mobRPG's PRE-EXISTING edges among the
+    vault's linked elements and stamp `event_id` onto matching node relationships,
+    so a subsequent `suggest` skips edges that already exist upstream instead of
+    re-proposing them. Vault-write only (dry-run default). See rel_baseline."""
+    vault = os.path.expanduser(vault)
+    map_path = os.path.join(vault, "_meta", "mobrpg-map.json")
+    try:
+        mp = json.load(open(map_path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR reading map {map_path}: {e}", file=sys.stderr)
+        return 2
+    id_by_key, _ = suggest.node_index(vault)
+    notes = list(pull_desc._iter_notes(vault))          # (path, txt, node) for every linked note
+    try:
+        structural, reified, _known = rel_baseline.fetch_upstream(
+            world, token, [nd for _, _, nd in notes])
+    except client.ApiError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+    stamped_nodes = matched = 0
+    reviews: list[str] = []
+    for path, txt, nd in notes:
+        eids, revs = rel_baseline.match_node(nd, id_by_key, structural, reified, mp)
+        reviews += [f"{os.path.relpath(path, vault)}: {r}" for r in revs]
+        if not eids:
+            continue
+        newn = rel_baseline.stamp_baseline(nd, eids)
+        if newn == nd:
+            continue
+        merged = node.write_node(txt, newn)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(merged)
+        stamped_nodes += 1
+        matched += len(eids)
+
+    reified_edges = sum(len(v) for v in reified.values())
+    print(f"pull-canon --baseline: matched {matched} pre-existing upstream "
+          f"relationship(s) across {stamped_nodes} node(s)"
+          + ("" if execute else "  [dry-run — no files changed]"))
+    print(f"  scanned {len(structural)} structural + {reified_edges} reified "
+          f"upstream edge(s)")
+    for r in reviews:
+        print(f"  [review] {r}")
+    return 0
+
+
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg pull-canon",
@@ -202,12 +255,19 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--no-verify", action="store_true",
                     help="skip the accepted-element verification pass (faster / "
                          "offline; edited-drift and deleted outcomes won't be detected)")
+    ap.add_argument("--baseline", action="store_true",
+                    help="instead of the review-queue pass, reconcile PRE-EXISTING "
+                         "mobRPG relationships against the vault's authored edges and "
+                         "stamp their event_ids (so a later suggest skips them). "
+                         "Vault-write only; dry-run unless --execute.")
     args = ap.parse_args(argv)
     try:
         token = client.get_access_token()
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+    if args.baseline:
+        return run_baseline(args.world, args.vault, token, execute=args.execute)
     live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)
     updated = 0
     for ext, live in live_by_ref.items():
