@@ -427,7 +427,10 @@ def run(argv: list[str]) -> int:
         print(f"ERROR reading map/crosswalk: {e}", file=sys.stderr)
         return 2
 
-    namespace = mp.get("vaultNamespace", "canticle")
+    # Derive the namespace when the map omits it — never silently fall back to
+    # "canticle" (an older/foreign map would mint mismatched externalRefs that
+    # don't correlate to the vault's own nodes → duplicate-create risk).
+    namespace = mp.get("vaultNamespace") or map_cmd.derive_namespace(args.vault)
     entities = collect_entities(args.vault, chapter=args.chapter, kind=args.kind,
                                 only=args.only, limit=args.limit)
     if not entities:
@@ -463,7 +466,7 @@ def run(argv: list[str]) -> int:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
-    label = args.batch_label or f"Canticle suggest ({args.chapter or 'all'})"
+    label = args.batch_label or f"{namespace} suggest ({args.chapter or 'all'})"
     os.makedirs(args.out, exist_ok=True)
     print(f"{len(entities)} entit(y/ies) → {sum(len(c) for c in chunks)} items in {len(chunks)} batch(es)")
     for r in all_reports:

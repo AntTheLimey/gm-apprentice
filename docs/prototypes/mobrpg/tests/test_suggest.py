@@ -329,6 +329,32 @@ def test_run_dry_run_end_to_end(tmp_path, monkeypatch, capsys):
     assert "DRY-RUN" in out and "Imogen Bellamy" in out
 
 
+def test_run_namespace_and_label_not_hardcoded_canticle(tmp_path, monkeypatch, capsys):
+    # A map missing vaultNamespace must NOT silently fall back to "canticle" —
+    # derive it from the vault (basename here) so externalRefs correlate. And the
+    # batch label must be derived, not hardcoded "Canticle".
+    d = tmp_path / "space_game"
+    (d / "Characters/NPCs").mkdir(parents=True)
+    (d / "_meta").mkdir(parents=True)
+    (d / "Characters/NPCs/Imogen_Bellamy.md").write_text(
+        '---\ntype: npc\noccupation: "Priest"\ngender: Female\n---\nBody.\n', encoding="utf-8")
+    mp = _map()
+    del mp["vaultNamespace"]  # older map without the field
+    (d / "_meta/mobrpg-map.json").write_text(json.dumps(mp), encoding="utf-8")
+    cw = tmp_path / "cw.json"
+    cw.write_text(json.dumps(_crosswalk()), encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
+                      "--out", str(tmp_path / "out")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "space_game:Characters/NPCs/Imogen_Bellamy" in out
+    assert "space_game suggest" in out
+    assert "canticle:" not in out.lower()
+    assert "Canticle suggest" not in out
+
+
 def test_determined_for_person_and_locations():
     mp = _map()
     mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "p1", "name": "Priest"}}

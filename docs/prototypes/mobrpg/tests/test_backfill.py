@@ -67,3 +67,33 @@ def test_run_writes_nodes(tmp_path, capsys):
     assert rc == 0
     f = tmp_path / "Characters/NPCs/Imogen_Bellamy.md"
     assert node.read_node(f.read_text())["element_id"] == "im-1"
+
+
+def test_run_default_namespace_is_derived_from_vault_basename(tmp_path):
+    # No --namespace given: default is derived from the vault (basename here, since
+    # no note carries a node yet), NOT hardcoded "canticle".
+    v = tmp_path / "space_game"
+    (v / "Characters/NPCs").mkdir(parents=True)
+    (v / "Characters/NPCs/Imogen_Bellamy.md").write_text(
+        "---\ntype: npc\n---\nBody.\n", encoding="utf-8")
+    cw = tmp_path / "cw.json"
+    cw.write_text(json.dumps(_dict_crosswalk()), encoding="utf-8")
+    rc = backfill.run(["w1", "--vault", str(v), "--crosswalk", str(cw), "--execute"])
+    assert rc == 0
+    f = v / "Characters/NPCs/Imogen_Bellamy.md"
+    ref = node.read_node(f.read_text())["external_ref"]
+    assert ref == "space_game:Characters/NPCs/Imogen_Bellamy"
+
+
+def test_run_explicit_namespace_overrides_derivation(tmp_path):
+    v = tmp_path / "space_game"
+    (v / "Characters/NPCs").mkdir(parents=True)
+    (v / "Characters/NPCs/Imogen_Bellamy.md").write_text(
+        "---\ntype: npc\n---\nBody.\n", encoding="utf-8")
+    cw = tmp_path / "cw.json"
+    cw.write_text(json.dumps(_dict_crosswalk()), encoding="utf-8")
+    rc = backfill.run(["w1", "--vault", str(v), "--crosswalk", str(cw),
+                       "--namespace", "override", "--execute"])
+    assert rc == 0
+    f = v / "Characters/NPCs/Imogen_Bellamy.md"
+    assert node.read_node(f.read_text())["external_ref"].startswith("override:")

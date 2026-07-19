@@ -14,6 +14,40 @@ _(none)_
 
 ## Resolved
 
+### G7 — hardcoded `canticle` namespace mints mismatched externalRefs on non-Canticle vaults ✅
+**Found + resolved 2026-07-19.** `map_cmd.build_map` hardcoded
+`"vaultNamespace": "canticle"` and `backfill.run` defaulted `--namespace` to
+`"canticle"`. For any non-Canticle vault this is wrong: the `space_game` vault's
+nodes carry `space_game:` external_refs (from `backfill --namespace space_game`),
+but `map init` wrote `vaultNamespace="canticle"`, so `suggest` built `canticle:`
+externalRefs that don't correlate to the existing elements — the backend can't
+dedupe by externalRef, so a `--execute` risks **duplicate-creating** every
+element instead of matching it.
+
+Fix: a shared `map_cmd.derive_namespace(vault)` helper — prefer the namespace of
+an existing note's `mobrpg:` node `external_ref` (the substring before the first
+`:`, scanning the vault's `FOLDERS` for the first note with a node), else fall
+back to the vault directory basename. Wired into **both** `map init`
+(`vaultNamespace`) and `backfill` (the `--namespace` default is now derived, not
+`"canticle"`, when not passed). Two adjacent footguns closed in the same class:
+`suggest.run` fell back to `"canticle"` when a (older/foreign) map omitted
+`vaultNamespace` — now `mp.get("vaultNamespace") or derive_namespace(vault)`; and
+its batch label hardcoded `"Canticle suggest (...)"` — now `f"{namespace} suggest
+(...)"`.
+
+Verified live read-only: rebuilding the real `space_game` vault map
+(`map init … --vault ~/Documents/space_game`) now writes
+`vaultNamespace: "space_game"` (was `canticle`), with `relationshipTypes` still
+mapping `part_of`→Parent / `contains`,`hosts`→Child / `adjacent_to`→Link. A
+`suggest … --only "Eris II"` dry-run (no `--execute`) then emitted
+`CreateElement Political 'Eris II' externalRef=space_game:Locations/Eris II`
+(not `canticle:`), batch label `space_game suggest (all)`, and resolved the
+`part_of` Parent target to the real Eris System element id
+(`caee3173-1f28-4b46-b1fe-e5ece1f68340`). Coverage: 3 tests in `test_map.py`
+(node-derived, basename fallback, init end-to-end), 2 in `test_backfill.py`
+(derived default + explicit override), 1 in `test_suggest.py` (no `canticle`
+fallback in namespace or label).
+
 ### G4 — `pull` was entity-only; it never traversed classifier `/type` endpoints ✅
 **Resolved 2026-07-19.** `pull.extract()` now emits a top-level **`types`**
 section alongside `entities`/`events`/`counts`. A new `TYPE_KINDS`

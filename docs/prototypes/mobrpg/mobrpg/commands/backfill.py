@@ -102,7 +102,8 @@ def run(argv: list[str]) -> int:
     ap.add_argument("world")
     ap.add_argument("--vault", required=True)
     ap.add_argument("--crosswalk", required=True)
-    ap.add_argument("--namespace", default="canticle")
+    ap.add_argument("--namespace", default=None,
+                    help="external_ref namespace (default: derived from the vault)")
     ap.add_argument("--execute", action="store_true")
     args = ap.parse_args(argv)
     try:
@@ -110,7 +111,8 @@ def run(argv: list[str]) -> int:
     except (OSError, json.JSONDecodeError) as e:
         print(f"ERROR reading crosswalk: {e}", file=sys.stderr)
         return 2
-    nodes, unresolved = nodes_from_crosswalk(crosswalk, args.vault, args.namespace)
+    namespace = args.namespace or map_cmd.derive_namespace(args.vault)
+    nodes, unresolved = nodes_from_crosswalk(crosswalk, args.vault, namespace)
     print(f"{len(nodes)} node(s) to write; {len(unresolved)} unresolved")
     for u in unresolved:
         print(f"  [unresolved] {u}")

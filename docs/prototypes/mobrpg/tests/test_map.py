@@ -2,7 +2,51 @@ import json
 import os
 
 from mobrpg import client
+from mobrpg import node
 from mobrpg.commands import map_cmd as m
+
+
+def test_derive_namespace_from_node(tmp_path):
+    # a note carrying a mobrpg: node -> namespace is the ref prefix, not a basename
+    p = tmp_path / "Locations" / "Eris II.md"
+    p.parent.mkdir(parents=True)
+    body = node.write_node(
+        "---\ntype: location\n---\nbody\n",
+        {"external_ref": "space_game:Locations/Eris II", "element_id": "e1"})
+    p.write_text(body, encoding="utf-8")
+    assert m.derive_namespace(str(tmp_path)) == "space_game"
+
+
+def test_derive_namespace_basename_fallback(tmp_path):
+    # no note has a node -> fall back to the vault directory basename
+    d = tmp_path / "my_campaign"
+    (d / "Locations").mkdir(parents=True)
+    (d / "Locations" / "Nile.md").write_text(
+        "---\ntype: location\n---\nbody\n", encoding="utf-8")
+    assert m.derive_namespace(str(d)) == "my_campaign"
+    # trailing slash is tolerated
+    assert m.derive_namespace(str(d) + "/") == "my_campaign"
+
+
+def test_init_writes_derived_vault_namespace(tmp_path, monkeypatch):
+    p = tmp_path / "Locations" / "Eris II.md"
+    p.parent.mkdir(parents=True)
+    body = node.write_node(
+        "---\ntype: location\n---\nbody\n",
+        {"external_ref": "space_game:Locations/Eris II", "element_id": "e1"})
+    p.write_text(body, encoding="utf-8")
+    monkeypatch.setenv("MOBRPG_TOKEN", "tok")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(m, "discover", lambda world, token: {
+        k: {} for k in ("political/type", "organization/type", "creature/type",
+                        "person/race", "person/profession", "language", "landfeature")})
+    monkeypatch.setattr(client, "_request", lambda *a, **k: [])
+    out = tmp_path / "map.json"
+    rc = m.run(["init", "w1", "--vault", str(tmp_path), "--out", str(out),
+                "--now", "2026-01-01T00:00:00+00:00"])
+    assert rc == 0
+    data = json.loads(out.read_text())
+    assert data["vaultNamespace"] == "space_game"
 
 
 def _make_vault(tmp_path):

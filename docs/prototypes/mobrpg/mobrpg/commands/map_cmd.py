@@ -29,6 +29,7 @@ import re
 import sys
 
 from mobrpg import client
+from mobrpg import node
 
 # vault entity kind -> mobRPG element kind (the KIND_EP table, data-driven here)
 KINDS = {"npc": "person", "pc": "person", "location": "political",
@@ -77,6 +78,24 @@ def predicate_type(predicate: str) -> str:
     if predicate in PREDICATE_RELATION:
         return PREDICATE_RELATION[predicate]
     return PREDICATE_EVENTTYPE.get(predicate, "Generic")
+
+
+def derive_namespace(vault: str) -> str:
+    """Derive the vault's mobRPG namespace instead of hardcoding it. A hardcoded
+    namespace is a footgun: writing e.g. `canticle:` externalRefs for a vault
+    whose nodes actually use `space_game:` breaks externalRef correlation, so
+    `suggest` can't dedupe against the existing element and risks a duplicate
+    create on `--execute`. Prefer the namespace of an existing note's `mobrpg:`
+    node `external_ref` (the substring before the first ':'); else fall back to
+    the vault directory basename."""
+    vault = os.path.expanduser(vault)
+    for folder in FOLDERS:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            nd = node.read_node(open(p, encoding="utf-8").read())
+            ref = nd.get("external_ref") if nd else None
+            if ref and ":" in ref:
+                return ref.split(":", 1)[0]
+    return os.path.basename(vault.rstrip("/")) or "default"
 
 
 def _norm(s: str) -> str:
@@ -234,7 +253,7 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
     return {
         "schema": "mobrpg-vault-map/v1",
         "world": world_meta.get("name"), "worldId": world,
-        "vault": os.path.expanduser(vault), "vaultNamespace": "canticle",
+        "vault": os.path.expanduser(vault), "vaultNamespace": derive_namespace(vault),
         "discoveredAt": now,
         "kinds": dict(KINDS),
         "locationRouting": location_routing,
