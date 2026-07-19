@@ -159,6 +159,9 @@ engagement visibly.
 - Separate immediate facts from contingent facts
 - NPC behaviour rather than dialogue scripts
 - Include failure states for every check/combat
+- Target 400-600 words per scene. A scene past ~600 words is
+  doing too much — split it or cut it. Length is not
+  thoroughness.
 
 ### Three-Stage Encounters
 

@@ -72,6 +72,12 @@ and get their first glimpse of the Brotherhood's influence."
 
 [If prior prep existed, summary of what was kept vs updated.]
 
+<!-- Preamble discipline: the Keeper must reach the first scene
+fast. Keep all pre-scene context below (Previously On, Active
+Threads, NPC Quick Reference, World State) under ~1,000 words
+combined; recap ≤150 words; NPC Quick Reference one line per NPC.
+Thousands of words of preamble is a defect, not thoroughness. -->
+
 ## Previously On...
 
 [Narrative recap from session-wrapup, presented during prep.]
