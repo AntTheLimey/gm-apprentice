@@ -26,6 +26,7 @@ from mobrpg.commands import suggest as _suggest
 from mobrpg.commands import pull_canon as _pull_canon
 from mobrpg.commands import pull_desc as _pull_desc
 from mobrpg.commands import suggest_desc as _suggest_desc
+from mobrpg.commands import whats_new as _whats_new
 from mobrpg.commands import backfill as _backfill
 from mobrpg.commands import relink as _relink
 
@@ -47,6 +48,7 @@ NATIVE: dict = {
     "pull-canon": _pull_canon.run,
     "pull-desc": _pull_desc.run,
     "suggest-desc": _suggest_desc.run,
+    "whats-new": _whats_new.run,
     "backfill": _backfill.run,
     "relink": _relink.run,
 }
@@ -77,6 +79,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("pull-canon", "pull ratified mobRPG canon down into vault mobrpg: nodes"),
     ("pull-desc", "reconcile note description prose with mobRPG canon (report | --resolve)"),
     ("suggest-desc", "suggest a linked note's authored description UP to mobRPG (UpdateElement suggestion)"),
+    ("whats-new", "read-only report: entities/types new in mobRPG, and vault notes gone upstream"),
     ("backfill", "one-time: migrate a sidecar crosswalk into mobrpg: nodes"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
     ("write", "render a JSON extract into vault markdown files"),

@@ -30,7 +30,7 @@ write (missing MOBRPG_ALLOW_PROD_WRITES).
 
 ## Read-only vs mutating
 
-Read-only (safe anywhere): whoami, worlds, pull, suggestions, catalog, map, sync, images.
+Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, sync, images.
 Mutating (need write access; on prod also need MOBRPG_ALLOW_PROD_WRITES=1):
 push, suggest, suggest-desc, submit-batch, update, types, links, review. write/merge/
 link-orphans/pull-canon/pull-desc/backfill/relink only touch local vault files,
@@ -47,6 +47,15 @@ locally; backfill and relink make no API calls at all).
                                   entities/events/counts plus a `types` section
                                   (creature/organization/political classifier
                                   types, bound or not) for "what's new" discovery.
+    mobrpg whats-new <world> --vault <path> [--extract F] [--json]
+                                  Read-only discovery report diffing mobRPG (a
+                                  live pull, or a pre-pulled --extract) against the
+                                  vault's mobrpg: nodes + type map: NEW entities
+                                  (no linked node → pull candidates), GONE (vault
+                                  nodes absent upstream → deleted/zombie notes),
+                                  and NEW classifier types (from the extract's
+                                  types section, not yet in the map). The pull-side
+                                  companion to suggest-desc/suggest (the push side).
     mobrpg suggestions <world> [--state Pending|Accepted|Dismissed] [--correlate]
                        [--vault DIR] [--fetch-elements] [--json] [--out DIR]
                                   List suggestions by review state (the return
