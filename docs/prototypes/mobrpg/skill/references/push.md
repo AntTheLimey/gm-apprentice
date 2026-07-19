@@ -122,3 +122,44 @@ If the target is **PROD**, the CLI raises exit code 3 on `--execute` unless
 and let them either set `MOBRPG_ALLOW_PROD_WRITES=1` themselves or switch to
 `MOBRPG_ENV=dev` for a non-prod run. Dry-runs never hit this guard, so nothing
 in Step 1–2 above needs it.
+
+## Relationships: two mechanisms, and target resolution
+
+`suggest` maps each vault relationship through the map's `relationshipTypes`
+(built by `map init`, see `mapping-maintenance.md`) to one of mobRPG's **two**
+relationship mechanisms:
+- a reified **Event** (eventType Membership/Leadership/Employ/Reign/War/Generic)
+  — for social/narrative predicates (`member_of`, `leads`, `owns`, …), or
+- a direct **WorldElementRelation** (Parent/Child/Link/Spouse) — for *structural*
+  predicates, so `part_of` → **Parent** (auto-creates the reverse Child),
+  `contains`/`hosts` → Child, `adjacent_to` → Link. These are NOT flattened to
+  Generic events. A structural edge emits one `AddRelation`, no reified Event.
+
+Relationship **targets** resolve from the vault's own `mobrpg:` nodes (each note's
+`element_id`), merged over any crosswalk — so a node-migrated vault resolves
+targets even with no sidecar. If the report shows `target not in crosswalk` skips,
+the target note either has no `mobrpg:` node yet (backfill/pull-canon it first) or
+its name doesn't match the `[[link]]`.
+
+## Description content up — `suggest-desc`
+
+Pushing entities is separate from pushing their *authored description prose*.
+Where a linked note carries a richer description than its mobRPG element (or the
+element is an empty stub), suggest that prose **up** as a reviewable edit:
+
+```
+mobrpg suggest-desc <world> --vault <path> [--only <ref>] [--threshold F]      # dry-run report
+mobrpg suggest-desc <world> --vault <path> --only <ref> --execute              # after confirm
+```
+
+- Default (no `--execute`) reports candidates per note: `empty` (mobRPG has no
+  description — a clear suggest-up), `differs` (real content delta above the
+  threshold), or `in-sync`. The comparison strips heading/tag/entity formatting
+  noise first, so `differs` reflects real content, not markup.
+- Each candidate submits an **UpdateElement** suggestion (sparse — description
+  only) against the element's real id via the `/suggestion` endpoint — a proposal
+  the world owner reviews, never a direct overwrite. Same dry-run → present →
+  confirm → `--execute` discipline, and the same PROD guard
+  (`MOBRPG_ALLOW_PROD_WRITES=1`) as `suggest`. Present the candidate list and get
+  an explicit yes before executing; prefer `--only` to push one at a time when
+  the GM wants to review each.

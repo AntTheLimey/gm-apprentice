@@ -24,6 +24,20 @@ exists yet at all, use `mobrpg map init <world> --vault <path>` instead
 (confirm first — it writes a new map file) — `sync` refuses to run without an
 existing file.
 
+### Relationship types (`relationshipTypes` in the map)
+
+`map init`/`sync` also proposes a `relationshipTypes` section — each vault
+relationship predicate → the mobRPG type `suggest` will push it as. Two targets:
+a reified **Event** eventType (`member_of`→Membership, `leads`→Leadership,
+`owns`→Reign, …, default Generic) for social/narrative predicates, or a direct
+**WorldElementRelation** (`part_of`→Parent, `contains`/`hosts`→Child,
+`adjacent_to`→Link) for *structural/spatial* predicates. Structural edges are NOT
+flattened to Generic events — a planet `part_of` a system becomes a real Parent
+relation. If the campaign uses a structural predicate the defaults don't cover,
+add it to `relationshipTypes` in the map with the right value (Parent/Child/Link,
+or an eventType) before pushing, or it falls back to a Generic event. See the
+"Relationships: two mechanisms" section of `push.md`.
+
 ## 2. Resolve `review` routes — one at a time
 
 For each route at `status:"review"`, don't batch-guess. Show the GM:

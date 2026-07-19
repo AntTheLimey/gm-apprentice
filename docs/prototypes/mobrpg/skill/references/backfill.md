@@ -8,13 +8,19 @@ through repeatedly — once the nodes carry `element_id` and the sidecar is
 retired, this vault never routes here again. Every write here is a
 `.venv/bin/mobrpg backfill ...` invocation — never `python -m mobrpg`.
 
-## Canticle-specific
+## When it applies (any legacy-crosswalk vault, both formats)
 
-`backfill` exists because Canticle is the only vault that ever had a
-crosswalk sidecar (IDs were kept out of frontmatter before `mobrpg:` nodes
-existed). If you're running this for a different campaign, that's a signal
-to stop and check with the GM first — there's likely no sidecar to migrate,
-and this phase probably doesn't apply.
+`backfill` applies to any vault that recorded vault↔mobRPG links in a legacy
+`*-crosswalk.json` sidecar before `mobrpg:` nodes existed — not only Canticle.
+It detects and handles **both** sidecar shapes automatically:
+- the **Regency-style** crosswalk (`{worldId, entities:[{name, mobrpg_id, …}],
+  relationships:[…]}`), resolved by entity name; and
+- the **`detect_updates` dict** crosswalk a `write`/`sync`-bootstrapped vault
+  carries (`{<element_id>: {name, kind, vault_path, canonical, …}}`) — the better
+  form, since it maps `vault_path` directly, so nodes are stamped by exact path
+  rather than a fuzzy name match.
+
+You don't specify the format; the command detects it.
 
 ## `--crosswalk` is required — unlike `suggest`
 
@@ -24,12 +30,15 @@ mobrpg backfill --vault VAULT --crosswalk CROSSWALK [--namespace NAMESPACE] [--e
 
 - `--vault` and the `<world>` positional are required, as everywhere else.
 - **`--crosswalk` is required here** — there is no packaged default. Contrast
-  with `suggest`, which falls back to a packaged Canticle crosswalk when
-  `--crosswalk` is omitted (see `push.md`). `backfill` has no such fallback:
-  the GM must supply the sidecar path explicitly.
-- `--namespace` defaults to `"canticle"`, matching the Canticle-only scope
-  above. Only override it if the GM is migrating a differently-namespaced
-  sidecar.
+  with `suggest`, which falls back to a packaged crosswalk when `--crosswalk`
+  is omitted (see `push.md`). `backfill` has no such fallback: the GM must
+  supply the sidecar path explicitly.
+- **`--namespace` is derived from the vault when omitted** — from an existing
+  note's `mobrpg:` `external_ref` prefix if one exists, else the vault directory
+  basename (e.g. `space_game`). It is **not** a hardcoded `"canticle"`. If the
+  vault has no nodes yet, confirm the derived namespace looks right — it shows in
+  the resulting `external_ref`s in the dry-run — before `--execute`. Pass
+  `--namespace` only to override the derivation.
 
 ## Flow
 
@@ -71,6 +80,21 @@ mobrpg backfill --vault VAULT --crosswalk CROSSWALK [--namespace NAMESPACE] [--e
    (outside the vault, e.g. move it to a `deprecated/` location the GM
    controls) so there is one source of truth for vault↔mobRPG links, not two
    that can silently disagree as either side changes.
+
+5. **Baseline the fresh nodes** so they're description-sync-ready. `backfill`
+   stamps identity (`element_id`, `external_ref`) but no description base, so a
+   later `pull-desc` would classify every node as `unbaselined`. Run the batch
+   baseline once, right after the migration:
+
+   ```
+   .venv/bin/mobrpg pull-desc <world> --vault <path> --resolve baseline          # dry-run
+   .venv/bin/mobrpg pull-desc <world> --vault <path> --resolve baseline --execute # after confirm
+   ```
+
+   It's non-destructive (records the current vault canon-section + the live canon
+   hash as the reference point; never edits prose) and reports `N node(s)
+   baselined`. After this, `pull-desc` reconcile classifies real drift instead of
+   "unbaselined" (see `reconcile.md`).
 
 There is no `--crosswalk` flag on `pull-canon` — don't reach for `backfill`
 as a substitute for ongoing reconcile. `backfill` is the one-time sidecar
