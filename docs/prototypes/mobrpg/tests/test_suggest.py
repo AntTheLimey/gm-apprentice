@@ -327,3 +327,35 @@ def test_write_back_writes_then_skips(tmp_path):
                                mp, str(d), "canticle", execute=True)
     assert (w2, s2) == (0, 1)
     assert f.read_text() == before
+
+
+def test_write_back_preserves_accepted_link_on_content_edit(tmp_path):
+    """Editing an already-ratified note must not wipe its canon link.
+
+    Regression: write_back rebuilt the node with build_node's defaults
+    (element_id=None, review_state="pending"), so any payload-affecting vault
+    edit silently destroyed an accepted element_id and reset the state.
+    """
+    mp = _map()
+    d = tmp_path
+    (d / "Characters/NPCs").mkdir(parents=True)
+    f = d / "Characters/NPCs/Imogen_Bellamy.md"
+    f.write_text('---\ntype: npc\noccupation: "Priest"\n---\nBody.\n', encoding="utf-8")
+
+    # Establish the node, then ratify it the way pull-canon would.
+    suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                       mp, str(d), "canticle", execute=True)
+    n = _node.read_node(f.read_text())
+    n["element_id"], n["review_state"] = "E-123", "accepted"
+    f.write_text(_node.write_node(f.read_text(), n), encoding="utf-8")
+
+    # GM edits payload-affecting content (occupation → new determined profession).
+    f.write_text(f.read_text().replace('occupation: "Priest"',
+                                        'occupation: "Linguist"'), encoding="utf-8")
+
+    w, s = suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                              mp, str(d), "canticle", execute=True)
+    assert (w, s) == (1, 0)                       # content changed → rewritten
+    after = _node.read_node(f.read_text())
+    assert after["element_id"] == "E-123"         # link preserved (was wiped to None)
+    assert after["review_state"] == "accepted"    # not reset to "pending"

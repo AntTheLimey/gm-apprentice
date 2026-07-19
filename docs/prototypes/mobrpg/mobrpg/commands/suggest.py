@@ -529,12 +529,21 @@ def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="p
 def write_back(entities, mp, vault, namespace, *, execute) -> tuple[int, int]:
     written = skipped = 0
     for ent in entities:
-        newn = build_node(ent, mp, namespace, vault)
         try:
             txt = open(ent["path"], encoding="utf-8").read()
         except OSError:
             continue
         existing = node.read_node(txt)
+        newn = build_node(ent, mp, namespace, vault)
+        # Preserve a canon link already ratified by pull-canon. build_node
+        # defaults element_id=None / review_state="pending"; without this a
+        # payload-affecting vault edit would silently wipe an accepted
+        # element_id (recoverable only via another pull-canon, and dup-prone
+        # if the GM re-suggests in the meantime).
+        if existing and existing.get("element_id"):
+            newn["element_id"] = existing["element_id"]
+            if existing.get("review_state") not in (None, "pending"):
+                newn["review_state"] = existing["review_state"]
         if existing and existing.get("content_hash") == newn["content_hash"] \
                 and existing.get("review_state") not in (None, "pending"):
             skipped += 1
