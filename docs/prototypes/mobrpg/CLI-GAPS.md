@@ -10,7 +10,28 @@ Discovered during the mobrpg-sync skill build (Plan 1, branch `mobrpg-cli`).
 
 ## Open
 
-_(none)_
+### G4 — `pull` is entity-only; it never traverses classifier `/type` endpoints
+**Found 2026-07-19** during a live pull of the Space world
+(`a254e424-…`). `pull.py` walks only entity kinds (`KINDS` = person /
+organization / political / landfeature / item / creature / culture / race /
+event) and does **not** GET the classifier endpoints
+(`creature/type`, `organization/type`, `political/type`, …). So a "what's new
+in mobRPG" report built from a `pull` extract **silently drops every classifier
+type** — e.g. two genuinely new creature types (Thideian Furry Lamprey,
+Thideian Chitinoteuthis) were missing from the entity diff until queried
+directly. New-content discovery must cover **entities + edits + classifier
+types**, not just entities.
+
+Fix direction: either (a) extend `pull` to also fetch the `/type` endpoints and
+emit them in the extract (a `types` section alongside `entities`/`events`), or
+(b) make the discovery/report path run `map init` (which already walks the
+`/type` endpoints) and fold its output into the new-content report. `map init`
+is the new-schema tool for exactly this, so (b) is likely the cleaner route —
+but the extract itself being type-blind is the underlying gap. Note the two
+creature types have no creature entities yet (`creature` count = 0), so they'd
+also be invisible to any entity-first walk. Landfeature/item have no `/type`
+endpoint (those types live on the elements), so the traversal set is
+creature/organization/political types.
 
 ## Resolved
 
