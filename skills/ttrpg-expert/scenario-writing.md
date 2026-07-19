@@ -45,6 +45,17 @@ paragraphs. GMs referencing mid-session can't parse dense prose.
 
 ## Player Agency Constraints
 
+These constraints are engineering, not etiquette. A scene engine
+built on a **predicted PC response** is fragile: the moment the
+player chooses otherwise, the hook collapses. A hook resting on
+an NPC's want survives any player choice. (A repair that assumed
+a PC would refuse food, was "visibly unwell", had "pushed away
+two meals" — all invented, all the player's decisions — broke the
+instant the player chose to eat. Rebuilt on the cook's want (she
+needs a job done, puts a tray in the PC's arms), it runs no
+matter what any PC does.) That is why the rule pays for itself,
+independent of agency ethics.
+
 ### Hooks, Not Rails
 
 ≥3 hooks pointing toward core engagement (same logic as Three
