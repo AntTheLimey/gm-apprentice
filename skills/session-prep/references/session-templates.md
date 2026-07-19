@@ -96,9 +96,18 @@ ticking clocks.]
 
 ### Scene 1: [Title]
 **Type:** investigation | social | combat | chase | horror | other
-**Objective:** What should this scene accomplish narratively?
+**Objective:** The *situation* this scene puts in front of the
+players — a thing that is happening, not a lesson to land or a
+feeling to produce. Name the pressure, not the theme. (Not "hand
+a spy the perfect operational condition"; yes "Bruyère corners
+the viscount to reminisce about a France neither has seen since
+1801.")
 **Entities:** [[NPC]], [[Location]], [[Item]]
-**Setup:** How is this scene initiated?
+**Setup:** Who brings this PC here in the first sixty seconds?
+Name the NPC who initiates and what they want from *this* PC, or
+the errand/schedule that sends them. Ensemble scenes: the
+household schedule (a shared meal, a departure) is a valid
+initiator. A scene that cannot answer this is not finished.
 **Branching:** What choices do players face? Where do different
 choices lead?
 

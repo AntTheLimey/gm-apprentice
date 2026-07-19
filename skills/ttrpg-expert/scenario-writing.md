@@ -73,6 +73,25 @@ The Alexandrian: prepare situations (locations, NPCs,
 motivations, resources, threats), not sequences. The scenario
 defines what exists; PCs determine what happens.
 
+### Why Would This PC Go There?
+
+The single highest-value question for any character scene:
+**why would this PC go there, and who is making them?** A scene
+that waits for a PC to arrive unprompted has no engine — it
+describes a condition, and a condition has no way of starting.
+
+A hook is an NPC who wants something from a specific PC and comes
+and takes it; it does not wait to be discovered. Bruyère has not
+seen France since 1801 and a viscount who was in Vienna three
+weeks ago just walked into his inn — so Bruyère pours. Nafisa
+wants a job done and puts a tray in the PC's arms. Each brings
+the scene to the player in the first sixty seconds.
+
+Do not confuse characterisation with a hook: an NPC being
+reticent, unimpressible, or hard to charm describes what happens
+once the PC is already in the room. A "hook" made of an NPC
+conspicuously not engaging is worse than no hook.
+
 ### Adventure Shapes
 
 Choose the structural skeleton before building content. The
