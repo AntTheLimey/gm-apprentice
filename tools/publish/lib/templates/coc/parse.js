@@ -159,6 +159,7 @@ function parseCoC(frontmatter, sections, system) {
       firstAppearance: fm.first_appearance || '', asOf: fm.asOfSession || '',
       era: fm.era || '',
     },
+    player: (fm && fm.player_name) || null,
     chars: parseChars(statHtml),
     derived: parseDerived(statHtml),
     reputation: parseReputation(statHtml),

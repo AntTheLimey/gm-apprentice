@@ -49,3 +49,25 @@ test('skill rows carry a stable data-skill attribute for tick serialization', ()
   });
   assert.match(html, /data-skill="Spot Hidden"/);
 });
+
+test('buildCoCLiveData carries dex and player from the model', () => {
+  const model = {
+    derived: { hp: { cur: 10, max: 10 }, mp: { cur: 12, max: 12 }, sanity: { cur: 35, max: 92, start: 60 }, luck: { cur: 80 } },
+    chars: { DEX: { reg: 70 } },
+    player: 'Missy',
+    reputation: { current: 71 },
+    conditions: { indefiniteInsanity: true },
+    skills: [{ name: 'Spot Hidden' }],
+  };
+  const blob = buildCoCLiveData(model, { campaignId: 'canticle', pcSlug: 'emma-wentworth', buildVersion: 'v1' });
+  assert.equal(blob.dex, 70);
+  assert.equal(blob.player, 'Missy');
+  assert.equal(blob.rep.cur, 71);
+  assert.equal(blob.conditions.indefiniteInsanity, true);
+});
+
+test('buildCoCLiveData null-safes a missing DEX / player', () => {
+  const blob = buildCoCLiveData({ derived: {} }, { campaignId: 'c', pcSlug: 's', buildVersion: 'v' });
+  assert.equal(blob.dex, null);
+  assert.equal(blob.player, null);
+});
