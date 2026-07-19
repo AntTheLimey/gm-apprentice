@@ -14,6 +14,18 @@ _(none)_
 
 ## Resolved
 
+### V1 — no verb for the "what's new" discovery report ✅
+**Resolved 2026-07-19.** New read-only `mobrpg whats-new <world> --vault <path>
+[--extract F] [--json]` verb, formalizing the hand-rolled discovery pass. Diffs a
+live pull (or a pre-pulled `--extract`) against the vault's `mobrpg:` nodes + type
+map via a pure `diff_world()`: **new** entities (in mobRPG, no linked node → pull
+candidates), **gone** (vault nodes whose element_id is absent upstream →
+deleted/zombie notes), **new types** (from pull's G4 `types` section, not yet in
+the map). Reuses `pull.extract()`; GET-only, never writes the vault. Live-proven
+on the Space world post-migration: `1 new (Meridian), 0 gone, 5 new type(s), 140
+linked`. Coverage: 3 tests in `test_whats_new.py`. The pull-side companion to the
+push-side `suggest-desc`/`suggest`.
+
 ### G7 — hardcoded `canticle` namespace mints mismatched externalRefs on non-Canticle vaults ✅
 **Found + resolved 2026-07-19.** `map_cmd.build_map` hardcoded
 `"vaultNamespace": "canticle"` and `backfill.run` defaulted `--namespace` to
