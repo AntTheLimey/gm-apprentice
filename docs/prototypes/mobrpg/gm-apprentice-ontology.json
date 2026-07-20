@@ -74,7 +74,7 @@
       "space station", "station", "spaceship", "ship", "city", "town", "village",
       "settlement", "colony", "district", "sector", "outpost", "venue", "territory",
       "polity", "dock", "port", "facility", "installation", "fortress", "base",
-      "gate", "trade route"
+      "gate", "starport", "trade route"
     ]
   },
   "predicates": [

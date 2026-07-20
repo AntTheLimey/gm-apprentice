@@ -658,3 +658,21 @@ def test_write_back_preserves_accepted_link_on_content_edit(tmp_path):
     after = _node.read_node(f.read_text())
     assert after["element_id"] == "E-123"         # link preserved (was wiped to None)
     assert after["review_state"] == "accepted"    # not reset to "pending"
+
+
+def test_closest_flags_qualified_near_duplicate_by_head_noun():
+    """`location_type` is uncontrolled free text, so a vault authors "hyperspace
+    gate" where the world already has "Gate". Edit distance scores that 0.55 —
+    under the cutoff — so it would mint a near-duplicate type. The head noun
+    catches it, and _bind marks it `review` with the candidate rather than
+    binding silently."""
+    from mobrpg.commands import map_cmd
+    existing = {"gate": "gate-id", "city": "city-id", "starport": "sp-id"}
+    assert map_cmd._closest("hyperspace gate", existing) == ("gate", "gate-id")
+    r = map_cmd._bind("hyperspace gate", existing, "political/type")
+    assert r["status"] == "review" and r["nearExisting"] == "gate" and r["mobrpgId"] is None
+    # must not over-reach: no existing type shares these head nouns
+    assert map_cmd._closest("trade route", existing) is None
+    assert map_cmd._closest("research facility", existing) is None
+    # an exact match still binds outright, not review
+    assert map_cmd._bind("starport", existing, "political/type")["status"] == "bound"

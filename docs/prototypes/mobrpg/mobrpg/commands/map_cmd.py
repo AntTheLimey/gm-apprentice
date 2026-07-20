@@ -240,10 +240,21 @@ _NEAR_DUP_CUTOFF = 0.85
 def _closest(n: str, existing: dict) -> tuple[str, str] | None:
     """The (normalized-name, id) of the existing type closest to `n` above the
     near-duplicate cutoff, or None. `n` is assumed already normalized and NOT an
-    exact match (callers check that first)."""
+    exact match (callers check that first).
+
+    Falls back to a head-noun match, because edit distance misses the common
+    qualifier case: `location_type` is uncontrolled free text, so a vault authors
+    "hyperspace gate" where the world already has "Gate" — similarity 0.55, well
+    under the cutoff, so it would mint a near-duplicate type. English head nouns
+    trail, so the last word is the type and the leading words qualify it. The
+    caller marks any hit `review` with the candidate attached, so this proposes a
+    binding for the GM rather than making one."""
     hit = difflib.get_close_matches(n, list(existing), n=1, cutoff=_NEAR_DUP_CUTOFF)
     if hit and hit[0] != n:
         return hit[0], existing[hit[0]]
+    words = n.split()
+    if len(words) > 1 and words[-1] in existing:
+        return words[-1], existing[words[-1]]
     return None
 
 
