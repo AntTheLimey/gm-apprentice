@@ -249,6 +249,28 @@ describe('parseGurps — Equipment section', () => {
   });
 });
 
+describe('parseGurps — Load-Outs bold-in-cell hardening (issue #106)', () => {
+  const html =
+    '<table><tr><th>Item</th><th>Weight</th><th>Cost</th></tr>' +
+    '<tr><td>Backpack</td><td>3 lb</td><td>$60</td></tr></table>' +
+    '<h3>Load-Outs</h3>' +
+    '<p><strong>Field Kit</strong></p>' +
+    '<table><tr><th>Item</th><th>Weight</th><th>Cost</th></tr>' +
+    '<tr><td><strong>Rope</strong></td><td>5 lb</td><td>$10</td></tr></table>' +
+    '<p><strong>Dress Kit</strong></p>' +
+    '<table><tr><th>Item</th><th>Weight</th><th>Cost</th></tr>' +
+    '<tr><td>Cravat</td><td>0 lb</td><td>$5</td></tr></table>';
+  const section = { title: 'Equipment', id: 'equipment', html };
+
+  it('bold inside a load-out table cell is not read as a load-out name', () => {
+    const model = parseGurps({}, [section]);
+    const names = model.equipment.loadouts.map(l => l.name);
+    // Pre-fix, the in-cell <strong>Rope</strong> was captured as a name and shifted the
+    // name->table alignment, mislabeling the second load-out.
+    assert.deepStrictEqual(names, ['Field Kit', 'Dress Kit']);
+  });
+});
+
 // parseChains: list-form parser (rendered markdown strips ** to plain text)
 describe('parseGurps — parseChains list form', () => {
   const { extractSections } = require('../../../lib/processor');

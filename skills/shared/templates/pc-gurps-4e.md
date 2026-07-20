@@ -185,6 +185,30 @@ Top 5 multi-step combat sequences for quick reference.
 |------|--------|------|----------|-------|
 | | | | | |
 
+### Load-Outs
+
+{Optional. Gear the character carries only sometimes — a returnable
+station kit, a heist loadout, a travel pack. On the published sheet
+each load-out becomes a toggle that recomputes encumbrance / Move /
+Dodge live when switched on; the main Equipment table above is always
+carried (`defaultCarried: true`), load-out items default off
+(`defaultCarried: false`). Delete this subsection if the PC has none.}
+
+{Contract the renderer parses (`tools/publish/lib/templates/gurps/parse.js`):
+this must be a `### Load-Outs` (or `### Loadouts`) subsection **under
+`## Equipment`, after the main table** — main items are read only from
+above the first `###`. Each load-out is a **bold `**Name**` heading
+immediately followed by a table** with `Item`/`Name`, `Weight`, and
+`Cost` columns. Gotchas: put no bold text before the first load-out
+heading, and no bold inside load-out table cells — either can be
+mistaken for a load-out name.}
+
+**Station-Issue Kit**
+
+| Item | Weight | Cost |
+|------|--------|------|
+| | | |
+
 ### Encumbrance
 
 | Level | Max Weight | Move | Dodge |
