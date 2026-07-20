@@ -327,3 +327,33 @@ def test_fetch_live_unknown_etype_skips_get_stays_accepted(monkeypatch):
     live = pull_canon._fetch_live("w1", "tok")
     assert live["c:X"]["state"] == "accepted"
     assert fake.element_gets == []
+
+
+def _attr(src_type, name):
+    return {"id": "r", "type": "Attribute", "sourceId": "s", "targetId": "t",
+            "source": {"type": src_type, "name": name}}
+
+
+def test_canon_determined_reads_the_relation_endpoint_not_the_element():
+    """GET /world/{id}/{kind}/{eid} returns `relations: []` for these elements —
+    an empty stub, not an empty truth. Deriving `determined` from the element
+    payload concludes every classifier was removed upstream and would wipe the
+    block on every linked node. The /relation rows carry the real edges."""
+    from mobrpg.commands import pull_canon
+    # the element payload lies
+    assert pull_canon.determined_from_element({"relations": []}) == {}
+    # the relation rows tell the truth
+    rows = [_attr("PoliticalType", "Gate")]
+    assert pull_canon.determined_from_element({"relations": rows}) == {"political_type": "Gate"}
+
+
+def test_refresh_only_overwrites_keys_canon_has_an_opinion_on(monkeypatch, tmp_path):
+    """Canon silence is not contradiction. Many elements carry no classifier
+    upstream at all, and a local value may be a proposal not yet pushed, so a
+    key canon says nothing about must survive."""
+    from mobrpg.commands import pull_canon
+    old = {"political_type": "Hyperspace Gate", "profession": "Gatekeeper"}
+    canon = pull_canon.determined_from_element({"relations": [_attr("PoliticalType", "Gate")]})
+    merged = dict(old)
+    merged.update(canon)
+    assert merged == {"political_type": "Gate", "profession": "Gatekeeper"}

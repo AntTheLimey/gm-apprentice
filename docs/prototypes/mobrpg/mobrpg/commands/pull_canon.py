@@ -196,6 +196,109 @@ def _fetch_live(world, token, *, verify=True):
     return live
 
 
+# node element_kind -> API endpoint segment, for fetching a linked element direct.
+_KIND_EP = {"Person": "person", "Organization": "organization", "Political": "political",
+            "LandFeature": "landfeature", "Item": "item", "Creature": "creature"}
+
+
+def _canon_determined(world, token, kind_ep, eid):
+    """Rebuild `determined` for one linked element from its Attribute edges.
+
+    Reads the /relation endpoint rather than the element itself: GET
+    /world/{id}/{kind}/{eid} returns `relations: []` for these elements — an
+    empty stub, not an empty truth — so deriving from the element payload would
+    conclude that every classifier had been removed upstream. The /relation rows
+    embed the full `source` object, which is what determined_from_element wants.
+    Returns None if the relations could not be read at all, so the caller can
+    distinguish "no classifiers" from "could not tell".
+    """
+    try:
+        rows = rel_baseline._get_relations(world, kind_ep, eid, token)
+    except (client.ApiError, ValueError):
+        return None
+    return determined_from_element({"relations": rows})
+
+
+def run_refresh(world, vault, token, *, execute) -> int:
+    """Refresh every linked node's `determined` block from live mobRPG canon.
+
+    `determined` records what mobRPG says a linked element IS. It was only ever
+    populated from our own proposals (backfill/suggest) or via _verify_accepted,
+    which runs solely for elements that came through the suggestion review queue.
+    Notes imported by the old `write` path therefore keep whatever WE guessed,
+    and nothing corrects it: space_game's gates recorded political_type
+    "Hyperspace Gate" — invented locally to fill a blank the importer left —
+    where canon says "Gate". Routing reads these values, so a stale guess
+    proposes a duplicate classifier in someone else's world.
+
+    CONSERVATIVE: canon only ever overwrites a key it has an opinion on. A key
+    canon is silent about is left alone and reported, because silence is not
+    contradiction — many of these elements simply carry no classifier upstream,
+    and a local value may be a proposal not yet pushed. Clearing them wholesale
+    would delete real local state to satisfy a sync. Vault-write only (dry-run
+    default); never writes to mobRPG.
+    """
+    vault = os.path.expanduser(vault)
+    corrected = local_only = scanned = in_flight = 0
+    diffs: list[str] = []
+    notes: list[str] = []
+    skipped: list[str] = []
+    for path, txt, nd in pull_desc._iter_notes(vault):
+        eid, kind = nd.get("element_id"), nd.get("element_kind")
+        ep = _KIND_EP.get(kind)
+        if not eid or not ep:
+            continue
+        # Only an ACCEPTED node's determined is canon's to own. In any other
+        # state the block holds what we PROPOSED and have not had ratified;
+        # overwriting it destroys the proposal and the drift comparison that
+        # depends on it. Canon cannot arbitrate a suggestion still in flight.
+        state = nd.get("review_state")
+        if state != "accepted":
+            in_flight += 1
+            skipped.append(f"  {os.path.relpath(path, vault)}: review_state={state!r}")
+            continue
+        scanned += 1
+        canon = _canon_determined(world, token, ep, eid)
+        if canon is None:
+            continue
+        old = dict(nd.get("determined") or {})
+        rel = os.path.relpath(path, vault)
+        merged = dict(old)
+        for k, v in canon.items():
+            if old.get(k) != v:
+                diffs.append(f"  {rel}: {k}: {old.get(k)!r} -> {v!r}")
+            merged[k] = v
+        silent = sorted(set(old) - set(canon))
+        if silent:
+            local_only += 1
+            notes.append(f"  {rel}: local-only (canon silent): {', '.join(silent)}")
+        if merged == old:
+            continue
+        corrected += 1
+        newn = dict(nd)
+        newn["determined"] = merged
+        out = node.write_node(txt, newn)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(out)
+    if diffs:
+        print("CORRECTED FROM CANON:")
+        print("\n".join(diffs[:30]))
+        if len(diffs) > 30:
+            print(f"  ... and {len(diffs) - 30} more")
+    if notes:
+        print(f"LOCAL-ONLY (left untouched): {local_only} node(s); e.g.")
+        print("\n".join(notes[:5]))
+    if skipped:
+        print(f"IN FLIGHT (not canon's to overwrite): {in_flight} node(s); e.g.")
+        print("\n".join(skipped[:5]))
+    print(f"pull-canon --refresh: {corrected} node(s) corrected from canon, "
+          f"{local_only} with local-only values left intact, "
+          f"{in_flight} skipped as in-flight, of {scanned} accepted"
+          + ("" if execute else "  [dry-run — no files changed]"))
+    return 0
+
+
 def run_baseline(world, vault, token, *, execute) -> int:
     """Relationship-baseline pass: read mobRPG's PRE-EXISTING edges among the
     vault's linked elements and stamp `event_id` onto matching node relationships,
@@ -255,6 +358,11 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--no-verify", action="store_true",
                     help="skip the accepted-element verification pass (faster / "
                          "offline; edited-drift and deleted outcomes won't be detected)")
+    ap.add_argument("--refresh", action="store_true",
+                    help="refresh every linked node's `determined` block from live "
+                         "mobRPG canon, correcting values that were written from our "
+                         "own proposals rather than pulled down. Vault-write only; "
+                         "dry-run unless --execute.")
     ap.add_argument("--baseline", action="store_true",
                     help="instead of the review-queue pass, reconcile PRE-EXISTING "
                          "mobRPG relationships against the vault's authored edges and "
@@ -266,6 +374,8 @@ def run(argv: list[str]) -> int:
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+    if args.refresh:
+        return run_refresh(args.world, args.vault, token, execute=args.execute)
     if args.baseline:
         return run_baseline(args.world, args.vault, token, execute=args.execute)
     live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)

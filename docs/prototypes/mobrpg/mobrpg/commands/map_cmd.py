@@ -326,7 +326,50 @@ def _ontology_built(value: str) -> bool:
     return any(k in LOCATION_BUILT for k in _axis_keys(value))
 
 
-def _route_location(value: str, disc: dict) -> dict:
+def canon_location_bindings(vault: str) -> dict:
+    """{normalized location_type: (target, classifier_name, element_kind)} learned
+    from linked notes' ratified `determined` blocks.
+
+    The vault's `location_type` is the GM's own free-text vocabulary and is not
+    required to match mobRPG's; a vault says "hyperspace gate" where the world
+    says "Gate". Rather than guess a mapping between them, observe it: every
+    linked note already records what its element actually IS upstream, so a
+    vocabulary term used by any linked note has a known answer. That makes the
+    mapping self-correcting — `pull-canon --refresh` updates `determined` from
+    canon, and the next `map init` picks the correction up — instead of routing
+    off a locally-invented value and proposing a duplicate type upstream.
+
+    A term whose linked notes disagree is left out, so the ordinary heuristics
+    (and the near-duplicate review) decide rather than an arbitrary winner.
+    """
+    seen: dict = {}
+    for path in glob.glob(os.path.join(os.path.expanduser(vault), "**", "*.md"),
+                          recursive=True):
+        if os.sep + "_midwife" + os.sep in path:
+            continue
+        try:
+            txt = open(path, encoding="utf-8").read()
+        except OSError:
+            continue
+        nd = node.read_node(txt)
+        if not nd or not nd.get("element_id") or nd.get("review_state") != "accepted":
+            continue
+        lt = _scalar(_frontmatter(path), "location_type")
+        if not lt:
+            continue
+        det = nd.get("determined") or {}
+        pol, land = det.get("political_type"), det.get("land_feature_type")
+        if pol:
+            hit = ("political", pol)
+        elif land:
+            hit = ("landfeature", land)
+        else:
+            continue
+        seen.setdefault(_norm(lt), set()).add(hit)
+    return {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
+
+
+def _route_location(value: str, disc: dict, canon: dict | None = None) -> dict:
     """Route a vault location_type to a mobRPG target. An existing PoliticalType
     binds; a type that IS a clean natural feature (exact LandFeatureSubType enum
     or a synonym) routes to LandFeature; a type that merely EMBEDS a feature word
@@ -335,6 +378,17 @@ def _route_location(value: str, disc: dict) -> dict:
     everything else defaults to a new PoliticalType."""
     tok = _first_token(value)
     n = _norm(tok)
+    # Canon outranks every heuristic: if linked notes using this vault term are
+    # already typed upstream, that IS the mapping — no need to infer one.
+    hit = (canon or {}).get(_norm(value))
+    if hit:
+        target, name = hit
+        if target == "landfeature":
+            return {"target": "landfeature", "landFeatureType": name,
+                    "mobrpgId": None, "status": "canon"}
+        return {"target": "political", "politicalType": name,
+                "mobrpgId": disc["political/type"].get(_norm(name)),
+                "status": "bound" if disc["political/type"].get(_norm(name)) else "canon"}
     # The ontology's natural/built axis outranks everything, including an existing
     # upstream PoliticalType: a world that already carries "Planet" as a political
     # type got it from a bad push, and binding to it would re-commit that error
@@ -375,7 +429,9 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
         "sex": {v: {"target": "person/race/sex", "name": v.title(), "status": "new"}
                 for v in vocab["gender"]},
     }
-    location_routing = {v: _route_location(v, disc) for v in vocab["location_type"]}
+    canon_loc = canon_location_bindings(vault)
+    location_routing = {v: _route_location(v, disc, canon_loc)
+                        for v in vocab["location_type"]}
     # Report every off-vocabulary predicate at once rather than dying on the
     # first: the caller needs the whole list to fix the vault in one pass.
     rel_types, off_vocab = {}, []
