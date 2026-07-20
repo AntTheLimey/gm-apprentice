@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.37] — 2026-07-19
+
+### Added
+
+- Scene skeleton gains a **Behaviours** field — what the situation and its NPCs do on their own, independent of the players, and how it escalates if the PCs do nothing ("what happens here if they never show up?"). This is the load-bearing element of situation-based design that our operational scene template had distilled away: the reference layer already taught it (Sly Flourish's situation checklist, the Alexandrian's proactive nodes, PbtA Fronts' clocks — all attributed), but the `## Planned Scenes` skeleton the GM fills in only captured how a scene opens (Slice A's situation objective + named initiator) and how players branch, never the engine that runs regardless of player choice. It is the durable form of the failure report's RC1 fix ("an engine that runs entirely on NPC behaviour and survives any player choice"). Added to the `## Planned Scenes` skeleton and the standalone scene-note template in `session-prep/references/session-templates.md`, and as a craft rule in session-prep step 14.
+- Scene skeleton also gains a **Complications** field — the 2–3 curveballs a GM holds ready to spike tension (a rival arrives, a PC is recognised, the timer is discovered), distinct from Behaviours (the situation's default motion) and Branching (the players' own choices). The standalone scene-note template already had a `## Complications` section; the operative `## Planned Scenes` skeleton did not, so it only half-carried Sly Flourish's five-field situation checklist (Location · Inhabitants · Behaviours · Goal · Complications). Together with Behaviours this completes that mapping in the skeleton the GM actually fills.
+- No new sources for either field — Sly Flourish, The Alexandrian, and Fronts (Apocalypse World) are all already in `ATTRIBUTION.md`.
+
+---
+
 ## [1.8.36] — 2026-07-19
 
 ### Changed
