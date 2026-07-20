@@ -231,6 +231,21 @@ locations, and NPC relationships.
 - **Updated entities**: Update the entity's own vault file.
   ONE file per entity. No separate "update" files.
 
+- **Cross-entity claims from shorthand**: When a play note or table-assistant
+  shorthand entry asserts something about *another existing entity* — an
+  incidental aside inside a NEW-NPC line, e.g. a new innkeeper whose rates
+  "{a distant established NPC} approves," placing that NPC somewhere they have
+  never been — do **not** silently fold the aside into the other entity's file,
+  where GM promotion would launder it into canon. The note's own review vouches
+  for the entity it is *about*; a claim about a *different* entity has had no
+  such check, and this is the only checkpoint it gets. Surface each cross-entity
+  claim to the GM for a one-time confirm. If confirmed, write it into the other
+  entity's file; if unconfirmed or deferred, record it **in the Wrap-Up file**
+  with an `<!-- UNVERIFIED: {claim} -->` marker — `reconcile` scans the Wrap-Up
+  file (not entity files) for these and blocks promotion until a human clears
+  it, so the marker only does its job there. Table shorthand is a hallucination
+  surface — do not re-verify it forever, verify it once, here.
+
 - **Timeline**: Linked events:
   `- **{in_game_date}** — [[Event_Name]] — {summary}`.
   Inline events: `- **{in_game_date}** — {description}`.
