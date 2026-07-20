@@ -1,4 +1,7 @@
 import os
+
+import pytest
+
 from mobrpg.commands import suggest
 
 
@@ -257,27 +260,22 @@ def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
 def test_predicate_type_maps_containment_to_relations_and_events():
     from mobrpg.commands import map_cmd
     assert map_cmd.predicate_type("part_of") == "Parent"
-    assert map_cmd.predicate_type("contains") == "Child"
-    assert map_cmd.predicate_type("hosts") == "Child"
-    assert map_cmd.predicate_type("adjacent_to") == "Link"
-    assert map_cmd.predicate_type("member_of") == "Membership"      # still an event
+    assert map_cmd.predicate_type("member_of") == "Membership"   # still an event
     assert map_cmd.predicate_type("owns") == "Reign"
-    assert map_cmd.predicate_type("charter_house_of") == "Generic"  # narrative -> event
+    assert map_cmd.predicate_type("knows") == "Generic"          # sanctioned, unmapped
     assert "Parent" in map_cmd.RELATION_TYPES and "Membership" not in map_cmd.RELATION_TYPES
 
 
 def test_predicate_type_covers_sanctioned_spatial_vocabulary():
     """The sanctioned spatial types must resolve to structural relations, not
-    Generic events. The map predates the vocabulary normalization and was keyed
-    on observed vault predicates (contains/hosts/adjacent_to), so a normalized
-    vault would otherwise push every spatial edge as a Generic event."""
+    Generic events. The map was keyed on observed vault predicates
+    (contains/hosts/adjacent_to), so a normalized vault would otherwise push
+    every spatial edge as a Generic event."""
     from mobrpg.commands import map_cmd
     assert map_cmd.predicate_type("located_at") == "Parent"
     assert map_cmd.predicate_type("headquartered_at") == "Parent"
     assert map_cmd.predicate_type("borders") == "Link"
     assert map_cmd.predicate_type("spouse_of") == "Spouse"
-    # legacy aliases still resolve, for vaults not yet normalized
-    assert map_cmd.predicate_type("married_to") == "Spouse"
 
 
 def test_predicate_type_covers_sanctioned_event_vocabulary():
@@ -290,35 +288,37 @@ def test_predicate_type_covers_sanctioned_event_vocabulary():
     assert map_cmd.predicate_type("commands") == "Leadership"
     assert map_cmd.predicate_type("leads") == "Leadership"
     assert map_cmd.predicate_type("rules") == "Reign"
-    # legacy aliases still resolve
-    assert map_cmd.predicate_type("led_by") == "Leadership"
-    assert map_cmd.predicate_type("reign") == "Reign"
 
 
-def test_every_mapped_predicate_is_sanctioned_or_marked_legacy():
-    """Guard against the original defect: the tables were keyed on predicates
-    observed in vault data rather than on the ontology. Every non-legacy key
-    must exist in the controlled vocabulary."""
+@pytest.mark.parametrize("predicate", [
+    "contains", "hosts", "adjacent_to", "married_to",      # ex-structural aliases
+    "led_by", "directed_by", "reign",                      # ex-eventtype aliases
+    "charter_house_of", "pattern_echo", "owned_by",        # vault drift
+])
+def test_predicate_type_rejects_off_vocabulary_predicates(predicate):
+    """Off-vocabulary predicates must fail, not resolve. Coercing them (to
+    Generic, or via a back-compat alias) is what let vault drift reach mobRPG
+    as untyped events — the vault is the thing to fix."""
     from mobrpg.commands import map_cmd
-    LEGACY = {"contains", "hosts", "adjacent_to", "married_to",
-              "led_by", "directed_by", "reign"}
-    VOCAB = {
-        "parent_of", "sibling_of", "spouse_of", "betrothed_to", "ancestor_of",
-        "knows", "friend_of", "rival_of", "mentors", "trusts", "betrayed",
-        "rules", "employs", "commands", "serves", "vassal_of", "imprisons",
-        "located_at", "headquartered_at", "part_of", "borders", "haunts",
-        "owns", "created", "wields", "seeks",
-        "discovered", "conceals", "recorded_in", "studies",
-        "enemy_of", "allied_with", "at_war_with", "conspires_against",
-        "member_of", "founded", "leads", "defected_from", "infiltrates",
-        "caused", "triggered", "participated_in", "witnessed",
-        "trades_with", "supplies", "finances", "indebted_to",
-        "murdered", "wounded", "rescued", "captured", "deceived",
-        "uploaded_to", "augmented_by", "cloned_from", "hacked",
-        "leads_to", "precedes", "alternative_to",
-    }
+    with pytest.raises(map_cmd.UnknownPredicate):
+        map_cmd.predicate_type(predicate)
+
+
+def test_unknown_predicate_aggregate_lists_every_offender():
+    """A drifted vault should be fixable in one pass, so the error names all of
+    them rather than dying on the first."""
+    from mobrpg.commands import map_cmd
+    err = map_cmd.UnknownPredicate.aggregate(["contains", "hosts"])
+    assert "contains" in str(err) and "hosts" in str(err) and "2 predicate" in str(err)
+
+
+def test_every_mapped_predicate_is_in_the_ontology():
+    """Guard against the original defect: the tables were keyed on predicates
+    observed in vault data rather than on the ontology. Every key in both
+    tables must exist in the controlled vocabulary, with no alias escape hatch."""
+    from mobrpg.commands import map_cmd
     keys = set(map_cmd.PREDICATE_RELATION) | set(map_cmd.PREDICATE_EVENTTYPE)
-    unsanctioned = keys - VOCAB - LEGACY
+    unsanctioned = keys - set(map_cmd.ONTOLOGY_PREDICATES)
     assert not unsanctioned, f"unsanctioned predicates in map: {sorted(unsanctioned)}"
 
 

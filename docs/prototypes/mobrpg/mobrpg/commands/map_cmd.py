@@ -51,19 +51,54 @@ LAND_SUBTYPES = {s.lower(): s for s in [
     "Lagoon", "Lake", "Marsh", "Oasis", "Ocean", "Pool", "Pond", "Reef", "River", "SaltMarsh", "Sea",
     "Shoal", "Sound", "Spring", "Strait", "Stream", "Swamp", "TidalMarsh", "Waterfall"]}
 
+# The controlled relationship vocabulary, loaded from the gm-apprentice ontology
+# export (source of truth: skills/shared/entity-schema.md). This is the contract
+# between the two systems: a predicate outside it is a vault-authoring defect, not
+# something to silently coerce, so predicate_type() refuses it rather than
+# defaulting to Generic. Both tables below are keyed on this vocabulary — never on
+# predicates discovered in vault data, which is how they drifted originally.
+_ONTOLOGY_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
+                              "gm-apprentice-ontology.json")
+
+
+def _load_ontology_predicates():
+    with open(_ONTOLOGY_PATH, encoding="utf-8") as fh:
+        return frozenset(p["type"] for p in json.load(fh)["predicates"])
+
+
+ONTOLOGY_PREDICATES = _load_ontology_predicates()
+
+
+class UnknownPredicate(ValueError):
+    """Raised for a predicate outside the controlled vocabulary."""
+
+    def __init__(self, predicate, message=None):
+        self.predicate = predicate
+        super().__init__(message or (
+            f"predicate {predicate!r} is not in the controlled relationship "
+            f"vocabulary (skills/shared/entity-schema.md). Normalize the vault "
+            f"before mapping or pushing — do not add an alias here."))
+
+    @classmethod
+    def aggregate(cls, predicates):
+        """One error listing every offending predicate, so a drifted vault can
+        be fixed in a single pass instead of one failure at a time."""
+        listed = ", ".join(repr(p) for p in predicates)
+        return cls(predicates, message=(
+            f"{len(predicates)} predicate(s) outside the controlled "
+            f"relationship vocabulary (skills/shared/entity-schema.md): "
+            f"{listed}. Normalize the vault before mapping or pushing — "
+            f"do not add aliases to the predicate tables."))
+
+
 # vault relationship predicate -> mobRPG Event eventType (default table; extend in the map)
 PREDICATE_EVENTTYPE = {
-    # --- controlled vocabulary (_meta/relationship-types.md) ---
     "member_of": "Membership", "serves": "Membership",
     "leads": "Leadership", "commands": "Leadership",
     "employs": "Employ",
     "owns": "Reign", "rules": "Reign",
     "enemy_of": "War", "at_war_with": "War",
     "participated_in": "Score",
-    # --- legacy / off-vocabulary aliases (back-compat only) ---
-    # NOT in the controlled vocabulary; kept for vaults not yet normalized.
-    # Do not add new entries here — map to a sanctioned type above.
-    "led_by": "Leadership", "directed_by": "Leadership", "reign": "Reign",
 }
 
 # mobRPG has a SECOND relationship mechanism besides reified Events: a direct
@@ -81,20 +116,21 @@ PREDICATE_RELATION = {
     "headquartered_at": "Parent",   # X headquartered_at Y  -> X's parent is Y
     "borders": "Link",              # symmetric spatial adjacency
     "spouse_of": "Spouse",
-    # --- legacy / off-vocabulary aliases (back-compat only) ---
-    # NOT in the controlled vocabulary. Retained because older vaults
-    # (Canticle/Regency) may still carry them; space_game has been normalized
-    # off them. Do not add new entries here — map to a sanctioned type above.
-    "contains": "Child", "hosts": "Child",   # inverse of part_of/located_at
-    "adjacent_to": "Link",                   # -> borders
-    "married_to": "Spouse",                  # -> spouse_of
 }
 
 
 def predicate_type(predicate: str) -> str:
     """Resolve a vault predicate to its mobRPG type. A WorldElementRelationType
     (Parent/Child/Link/Spouse — see RELATION_TYPES) means a direct relation;
-    anything else is an Event eventType (defaulting to Generic)."""
+    a sanctioned predicate with no specific mapping is an Event eventType,
+    defaulting to Generic.
+
+    Raises UnknownPredicate for anything outside the controlled vocabulary.
+    Coercing an unknown predicate to Generic is what let vault drift reach
+    mobRPG as a pile of untyped events; an off-vocabulary predicate is a defect
+    to fix in the vault, not a case to absorb here."""
+    if predicate not in ONTOLOGY_PREDICATES:
+        raise UnknownPredicate(predicate)
     if predicate in PREDICATE_RELATION:
         return PREDICATE_RELATION[predicate]
     return PREDICATE_EVENTTYPE.get(predicate, "Generic")
@@ -269,7 +305,16 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
                 for v in vocab["gender"]},
     }
     location_routing = {v: _route_location(v, disc) for v in vocab["location_type"]}
-    rel_types = {p: predicate_type(p) for p in vocab["predicate"]}
+    # Report every off-vocabulary predicate at once rather than dying on the
+    # first: the caller needs the whole list to fix the vault in one pass.
+    rel_types, off_vocab = {}, []
+    for p in vocab["predicate"]:
+        try:
+            rel_types[p] = predicate_type(p)
+        except UnknownPredicate:
+            off_vocab.append(p)
+    if off_vocab:
+        raise UnknownPredicate.aggregate(sorted(off_vocab))
     return {
         "schema": "mobrpg-vault-map/v1",
         "world": world_meta.get("name"), "worldId": world,

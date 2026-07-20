@@ -97,8 +97,8 @@ def test_match_node_does_not_reuse_one_upstream_event_for_two_edges():
     mp = {}
     id_by_key = {rb._key("Bravo"): "b"}
     node = {"element_id": "a", "relationships": [
-        {"predicate": "oversees", "target": "[[Bravo]]"},   # -> Generic (unmapped)
-        {"predicate": "shadows", "target": "[[Bravo]]"}]}   # -> Generic (unmapped)
+        {"predicate": "knows", "target": "[[Bravo]]"},      # sanctioned -> Generic
+        {"predicate": "trusts", "target": "[[Bravo]]"}]}    # sanctioned -> Generic
     reified = {(frozenset({"a", "b"}), "Generic"): ["ev-1"]}
     eids, reviews = rb.match_node(node, id_by_key, {}, reified, mp)
     assert list(eids.values()) == ["ev-1"] and len(eids) == 1   # only one stamped
