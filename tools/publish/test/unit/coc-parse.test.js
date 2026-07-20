@@ -106,3 +106,18 @@ describe('parseCoC backstory', () => {
     assert.deepEqual(plain.backstory, []);
   });
 });
+
+const { renderCoCSheet } = require('../../lib/templates/coc/index');
+
+describe('renderCoCSheet — legacy body-structure warning (#107)', () => {
+  it('warns when a sheet parses no characteristics (divergent legacy body)', () => {
+    const out = renderCoCSheet({ occupation: 'Antiquarian' }, [], 'coc-7e');
+    assert.ok(out.warnings.some(w => /no characteristics/i.test(w)),
+      `expected a no-characteristics warning, got: ${JSON.stringify(out.warnings)}`);
+  });
+
+  it('does not warn when the documented Stat Sheet structure parses', () => {
+    const out = renderCoCSheet(fm, [statSheet, skillsSection, weaponsSection], 'regency-cthulhu');
+    assert.deepStrictEqual(out.warnings, []);
+  });
+});

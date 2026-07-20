@@ -517,6 +517,12 @@ function build(options = {}) {
           const systemOut = (rendered && typeof rendered === 'object')
             ? rendered
             : { sheetHtml: rendered || null };
+          // A system renderer may report structural warnings (e.g. a CoC sheet whose body
+          // diverges from the contract and parses near-empty, #107). Surface them like other
+          // page warnings instead of shipping a silently-broken sheet.
+          if (systemOut.warnings && systemOut.warnings.length) {
+            logWarnings(page.outputPath, systemOut.warnings);
+          }
           if (systemOut.liveData) {
             // Root-relative output path of the PC portrait, for the party-board
             // thumbnail. Resolved the same way portraitImg does (imageMap keyed
