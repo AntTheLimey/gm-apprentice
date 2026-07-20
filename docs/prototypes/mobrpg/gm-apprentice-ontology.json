@@ -1,6 +1,6 @@
 {
-  "$comment": "gm-apprentice knowledge-graph ontology export for the mobRPG team. Reconciled from skills/shared/entity-schema.md (authoritative) and skills/ttrpg-expert/relationship-patterns.md. mobRPG stores relationships two ways and this export describes both. mobrpg_relation_type maps a predicate onto WorldElementRelationType (Parent|Child|Link|Spouse) — a backend enum, stable across worlds. mobrpg_event_type maps onto a reified event, whose eventTypes are per-world created classifiers. A predicate with a non-null mobrpg_relation_type is stored as a direct relation and its mobrpg_event_type does not apply; null means reify as an event. null/Generic predicates preserve their name on event.title.",
-  "version": "1.1",
+  "$comment": "gm-apprentice knowledge-graph ontology export for the mobRPG team. Reconciled from skills/shared/entity-schema.md (authoritative) and skills/ttrpg-expert/relationship-patterns.md. mobRPG stores relationships two ways and this export describes both. mobrpg_relation_type maps a predicate onto WorldElementRelationType (Parent|Child|Link|Spouse) — a backend enum, stable across worlds. Parent/Child/Spouse are GENEALOGY between people (their only consumer is PersonService.getSiblings: find a person's parents, then their other children) and the backend auto-creates the reciprocal row for them; (S,Parent,T) reads 'S is the parent of T'. Place containment is NOT modelled with them — it is a Link, which is a single row with no reciprocal. mobrpg_event_type maps onto a reified event, whose eventTypes are per-world created classifiers. A predicate with a non-null mobrpg_relation_type is stored as a direct relation and its mobrpg_event_type does not apply; null means reify as an event. null/Generic predicates preserve their name on event.title.",
+  "version": "1.2",
   "source_of_truth": "skills/shared/entity-schema.md",
   "entity_types": {
     "abstract": ["person", "character", "agent", "place", "artifact", "narrative", "world"],
@@ -78,7 +78,7 @@
     ]
   },
   "predicates": [
-    {"type": "parent_of", "inverse": "child_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "parent_of", "inverse": "child_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Parent", "mobrpg_event_type": "Generic"},
     {"type": "ancestor_of", "inverse": "descendant_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
     {"type": "sibling_of", "inverse": "sibling_of", "category": "kinship", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
     {"type": "spouse_of", "inverse": "spouse_of", "category": "kinship", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": "Spouse", "mobrpg_event_type": "Generic"},
@@ -98,9 +98,9 @@
     {"type": "vassal_of", "inverse": "liege_of", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Employ"},
     {"type": "imprisons", "inverse": "imprisoned_by", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
 
-    {"type": "located_at", "inverse": "location_of", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Parent", "mobrpg_event_type": "Generic"},
-    {"type": "headquartered_at", "inverse": "headquarters_of", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Parent", "mobrpg_event_type": "Generic"},
-    {"type": "part_of", "inverse": "has_part", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Parent", "mobrpg_event_type": "Generic"},
+    {"type": "located_at", "inverse": "location_of", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
+    {"type": "headquartered_at", "inverse": "headquarters_of", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
+    {"type": "part_of", "inverse": "has_part", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
     {"type": "borders", "inverse": "borders", "category": "spatial", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
     {"type": "haunts", "inverse": "haunted_by", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
 

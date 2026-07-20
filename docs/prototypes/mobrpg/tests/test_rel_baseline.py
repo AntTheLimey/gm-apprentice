@@ -50,11 +50,11 @@ def test_match_node_structural_and_reified_hits():
     id_by_key = {rb._key("Halcyon"): "h", rb._key("Thides System"): "t"}
     node = {"element_id": "corwin",
             "relationships": [
-                {"predicate": "part_of", "target": "[[Thides System]]"},    # -> Parent (structural)
+                {"predicate": "part_of", "target": "[[Thides System]]"},    # -> Link (structural)
                 {"predicate": "member_of", "target": "[[Halcyon]]"},        # -> Membership (reified)
                 {"predicate": "member_of", "target": "[[Unknown Org]]"},    # target not upstream -> skip
             ]}
-    structural = {("corwin", "Parent", "t"): "rel-1"}
+    structural = {("corwin", "Link", "t"): "rel-1"}
     reified = {(frozenset({"corwin", "h"}), "Membership"): ["ev-9"]}
     eids, reviews = rb.match_node(node, id_by_key, structural, reified, mp)
     assert eids == {"part_of|[[Thides System]]": "rel-1",

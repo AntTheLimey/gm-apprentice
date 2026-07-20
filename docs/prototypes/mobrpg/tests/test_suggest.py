@@ -259,7 +259,7 @@ def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
 
 def test_predicate_type_maps_containment_to_relations_and_events():
     from mobrpg.commands import map_cmd
-    assert map_cmd.predicate_type("part_of") == "Parent"
+    assert map_cmd.predicate_type("part_of") == "Link"
     assert map_cmd.predicate_type("member_of") == "Membership"   # still an event
     assert map_cmd.predicate_type("owns") == "Reign"
     assert map_cmd.predicate_type("knows") == "Generic"          # sanctioned, unmapped
@@ -267,14 +267,20 @@ def test_predicate_type_maps_containment_to_relations_and_events():
 
 
 def test_predicate_type_covers_sanctioned_spatial_vocabulary():
-    """The sanctioned spatial types must resolve to structural relations, not
-    Generic events. The map was keyed on observed vault predicates
-    (contains/hosts/adjacent_to), so a normalized vault would otherwise push
-    every spatial edge as a Generic event."""
+    """Spatial types resolve to structural relations, not Generic events. They
+    map to Link, NOT Parent: Parent/Child/Spouse are genealogy between people
+    (only consumer: PersonService.getSiblings) and the backend auto-creates a
+    reciprocal row for them. Place containment is a single Link row. Mapping
+    spatial predicates to Parent was wrong in domain and inverted in direction
+    -- (S, Parent, T) asserts S is the parent of T, so `Corwin IV part_of
+    Corwin System` claimed the planet parented its own star system."""
     from mobrpg.commands import map_cmd
-    assert map_cmd.predicate_type("located_at") == "Parent"
-    assert map_cmd.predicate_type("headquartered_at") == "Parent"
+    assert map_cmd.predicate_type("located_at") == "Link"
+    assert map_cmd.predicate_type("headquartered_at") == "Link"
+    assert map_cmd.predicate_type("part_of") == "Link"
     assert map_cmd.predicate_type("borders") == "Link"
+    # genealogy: the enum's actual purpose
+    assert map_cmd.predicate_type("parent_of") == "Parent"
     assert map_cmd.predicate_type("spouse_of") == "Spouse"
 
 

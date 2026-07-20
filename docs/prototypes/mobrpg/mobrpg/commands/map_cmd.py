@@ -112,9 +112,20 @@ PREDICATE_EVENTTYPE = {p["type"]: p["mobrpg_event_type"]
                        and p["mobrpg_event_type"] != "Generic"}
 
 # mobRPG has a SECOND relationship mechanism besides reified Events: a direct
-# WorldElementRelation (enum Attribute | Link | Parent | Child | Spouse), where
-# Parent/Child are auto-bidirectional. Structural/spatial predicates belong here,
-# not as Generic events — a planet `part_of` a system is the system's Child.
+# WorldElementRelation (enum Attribute | Link | Parent | Child | Spouse).
+#
+# Parent/Child/Spouse are GENEALOGY BETWEEN PEOPLE, not a containment hierarchy.
+# Their only consumer in the API is PersonService.getSiblings (find a person's
+# parents via Child, then their other children via Parent), and the backend
+# auto-creates the reciprocal row for them (CreateWorldRelationRequest
+# .toReverseModel: Parent->Child, Child->Parent, Spouse->Spouse; Link and
+# Attribute get no reciprocal). Direction reads source-first: (S, Parent, T)
+# means "S is the parent of T".
+#
+# Place containment is a Link — a single row, no reciprocal. Mapping spatial
+# predicates onto Parent was wrong twice over: wrong domain, and inverted, so
+# `Corwin IV part_of Corwin System` asserted that the planet was the parent of
+# its own star system, doubled by an auto-reciprocal.
 #
 # Unlike eventTypes, which are per-world created classifiers, this is a backend
 # enum and is therefore stable across worlds — so the mapping lives in the
