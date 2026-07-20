@@ -11,8 +11,10 @@ Discovery (mobRPG side) reuses the classifier catalog endpoints; the vault scan
 collects the distinct values of the mapping-relevant frontmatter. `map` emits a
 DRAFT: exact/ci matches bind to the existing type's real id (status "bound"),
 unmatched values propose a new type ("new"), and genuinely ambiguous location
-routes are flagged "review" for the skill / a human to resolve. Human decisions
-(any entry with "confirmed": true, or a hand-edited target) are preserved by sync.
+routes are flagged "review" for the skill / a human to resolve. Sync preserves
+resolved entries: any entry with "confirmed": true, and any entry already bound
+to a real mobrpgId. A hand-edited entry that sets neither is NOT protected — mark
+it "confirmed": true to keep it.
 
 Read-only against mobRPG; writes only the local map file (never the vault content).
 """
@@ -486,11 +488,21 @@ def _entry(old_entry: dict | None, fresh: dict, label: str, notes: list[str]) ->
         return fresh
     if old_entry.get("confirmed") or old_entry.get("status") == "confirmed":
         return old_entry  # human decision wins
+    if old_entry.get("status") == "stale":
+        return fresh  # a tombstone for a value that left the vault; let it come back
     old_id, new_id = old_entry.get("mobrpgId"), fresh.get("mobrpgId")
     if old_id and not new_id:
-        notes.append(f"{label}: kept existing binding {old_id} "
-                     f"(rediscovery proposed '{fresh.get('status')}')")
-        return old_entry
+        if fresh.get("nearId") == old_id:
+            # rediscovery is re-proposing the very binding already held: keep it
+            notes.append(f"{label}: kept existing binding {old_id} "
+                         f"(rediscovery proposed '{fresh.get('status')}')")
+            return old_entry
+        # canon has no type for this value at all, so the held id is dangling. Keep
+        # the decision -- a discovery blip must not destroy it -- but stop reporting
+        # it as `bound`, so `map check` surfaces it rather than counting it healthy.
+        notes.append(f"{label}: upstream type for binding {old_id} is no longer "
+                     f"discoverable — kept, flagged for review")
+        return {**old_entry, "status": "review"}
     if old_id and new_id and old_id != new_id:
         notes.append(f"{label}: canon now resolves to a different type "
                      f"({old_id} -> {new_id})")
@@ -518,8 +530,11 @@ def _merge(old: dict, new: dict) -> tuple[dict, list[str]]:
     merged["locationRouting"] = _merge_section(
         old.get("locationRouting", {}), new.get("locationRouting", {}),
         "locationRouting", notes)
+    # rebind rather than mutate: `dict(new)` is shallow, so writing into
+    # merged["classifiers"] in place would reach through into the caller's `new`.
+    merged["classifiers"] = {}
     for name in new.get("classifiers", {}):
-        merged.setdefault("classifiers", {})[name] = _merge_section(
+        merged["classifiers"][name] = _merge_section(
             old.get("classifiers", {}).get(name, {}), new["classifiers"][name],
             f"classifiers.{name}", notes)
     return merged, notes

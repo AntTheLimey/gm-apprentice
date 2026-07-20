@@ -180,17 +180,65 @@ def test_merge_keeps_a_resolved_binding_against_a_fresh_review():
 
 
 def test_merge_keeps_a_resolved_location_route_against_a_fresh_proposal():
-    # Same rule for locationRouting: the hand-made landfeature re-routes carry a real
-    # mobrpgId and must survive a recomputed `new`.
+    # Same rule for locationRouting: a hand-made re-route carrying a real mobrpgId
+    # survives a recomputed near-duplicate proposal.
     bound = {"target": "political", "politicalType": "Spaceship",
              "mobrpgId": "1ebccd7d", "status": "bound"}
     old = {"locationRouting": {"spaceship": bound}}
     new = {"locationRouting": {"spaceship": {"target": "political",
                                             "politicalType": "Spaceship",
-                                            "mobrpgId": None, "status": "new"}}}
+                                            "mobrpgId": None, "status": "review",
+                                            "nearExisting": "spaceship",
+                                            "nearId": "1ebccd7d"}}}
     merged, notes = m._merge(old, new)
     assert merged["locationRouting"]["spaceship"] == bound
-    assert any("spaceship" in n for n in notes)
+    assert any("spaceship" in n and "kept" in n for n in notes)
+
+
+def test_merge_downgrades_a_binding_whose_upstream_type_vanished():
+    # A fresh entry with NO id and no near-match means canon no longer has a type for
+    # this value at all -- the held id is dangling. Keep it (a discovery blip must not
+    # destroy the GM's decision) but stop claiming `bound`, so `map check` surfaces it
+    # instead of silently reporting a healthy binding.
+    old = {"classifiers": {"organizationType": {"cult": {
+        "target": "organization/type", "name": "Cult",
+        "mobrpgId": "gone-id", "status": "bound"}}}}
+    new = {"classifiers": {"organizationType": {"cult": {
+        "target": "organization/type", "name": "Cult",
+        "mobrpgId": None, "status": "new"}}}}
+    merged, notes = m._merge(old, new)
+    entry = merged["classifiers"]["organizationType"]["cult"]
+    assert entry["mobrpgId"] == "gone-id"          # decision not destroyed
+    assert entry["status"] == "review"             # but no longer claims to be bound
+    assert any("cult" in n and "no longer" in n for n in notes)
+    # and it must be stable, not oscillate on the next sync
+    again, _ = m._merge(merged, new)
+    assert again["classifiers"]["organizationType"]["cult"] == entry
+
+
+def test_merge_lets_a_stale_key_come_back_to_life():
+    # A `stale` entry is a tombstone for a value that left the vault, not a resolution.
+    # If the vault re-adds the value, the fresh entry must win -- otherwise the key is
+    # frozen as stale forever, because every later sync sees the same tombstone.
+    old = {"classifiers": {"organizationType": {"guild": {
+        "target": "organization/type", "name": "Guild",
+        "mobrpgId": "abc123", "status": "stale"}}}}
+    fresh = {"target": "organization/type", "name": "Guild",
+             "mobrpgId": None, "status": "new"}
+    merged, _ = m._merge(old, {"classifiers": {"organizationType": {"guild": fresh}}})
+    assert merged["classifiers"]["organizationType"]["guild"] == fresh
+
+
+def test_merge_does_not_mutate_its_inputs():
+    # `merged = dict(new)` is shallow, so writing merged["classifiers"][g] would reach
+    # through into the caller's `new`.
+    old = {"classifiers": {"organizationType": {"dropped": {"status": "bound",
+                                                           "mobrpgId": "x"}}}}
+    new = {"classifiers": {"organizationType": {"kept": {"status": "new",
+                                                        "mobrpgId": None}}}}
+    before = json.loads(json.dumps(new))
+    m._merge(old, new)
+    assert new == before, "merge leaked stale entries back into its `new` argument"
 
 
 def test_merge_takes_a_fresh_binding_that_resolves_differently():
