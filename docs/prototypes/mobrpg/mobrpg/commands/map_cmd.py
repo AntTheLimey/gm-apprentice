@@ -61,12 +61,13 @@ _ONTOLOGY_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
                               "gm-apprentice-ontology.json")
 
 
-def _load_ontology_predicates():
+def _load_ontology():
     with open(_ONTOLOGY_PATH, encoding="utf-8") as fh:
-        return frozenset(p["type"] for p in json.load(fh)["predicates"])
+        return json.load(fh)
 
 
-ONTOLOGY_PREDICATES = _load_ontology_predicates()
+_ONTOLOGY = _load_ontology()
+ONTOLOGY_PREDICATES = frozenset(p["type"] for p in _ONTOLOGY["predicates"])
 
 
 class UnknownPredicate(ValueError):
@@ -105,18 +106,15 @@ PREDICATE_EVENTTYPE = {
 # WorldElementRelation (enum Attribute | Link | Parent | Child | Spouse), where
 # Parent/Child are auto-bidirectional. Structural/spatial predicates belong here,
 # not as Generic events — a planet `part_of` a system is the system's Child.
-RELATION_TYPES = {"Parent", "Child", "Link", "Spouse"}
-PREDICATE_RELATION = {
-    # --- controlled vocabulary (_meta/relationship-types.md) ---
-    # The sanctioned spatial types all read child -> parent, so they resolve to
-    # Parent. Keep this table keyed on the ontology, not on whatever predicates
-    # happen to appear in a vault.
-    "part_of": "Parent",            # X part_of Y           -> X's parent is Y
-    "located_at": "Parent",         # X located_at Y        -> X's parent is Y
-    "headquartered_at": "Parent",   # X headquartered_at Y  -> X's parent is Y
-    "borders": "Link",              # symmetric spatial adjacency
-    "spouse_of": "Spouse",
-}
+#
+# Unlike eventTypes, which are per-world created classifiers, this is a backend
+# enum and is therefore stable across worlds — so the mapping lives in the
+# ontology export as `mobrpg_relation_type` and is derived here rather than
+# restated. Change the ontology, not this module.
+RELATION_TYPES = set(_ONTOLOGY["mobrpg_relation_type_enum"])
+PREDICATE_RELATION = {p["type"]: p["mobrpg_relation_type"]
+                      for p in _ONTOLOGY["predicates"]
+                      if p.get("mobrpg_relation_type")}
 
 
 def predicate_type(predicate: str) -> str:

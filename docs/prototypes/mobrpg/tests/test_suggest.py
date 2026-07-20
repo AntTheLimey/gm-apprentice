@@ -322,6 +322,32 @@ def test_every_mapped_predicate_is_in_the_ontology():
     assert not unsanctioned, f"unsanctioned predicates in map: {sorted(unsanctioned)}"
 
 
+def test_structural_relations_are_derived_from_the_ontology():
+    """WorldElementRelationType is a mobRPG backend enum, stable across worlds,
+    so the mapping belongs in the ontology export rather than in CLI code. This
+    asserts the module derives it rather than restating it — the values must
+    match the export exactly, and every value must be a member of the enum."""
+    import json
+    from mobrpg.commands import map_cmd
+    with open(map_cmd._ONTOLOGY_PATH, encoding="utf-8") as fh:
+        ontology = json.load(fh)
+    expected = {p["type"]: p["mobrpg_relation_type"] for p in ontology["predicates"]
+                if p.get("mobrpg_relation_type")}
+    assert map_cmd.PREDICATE_RELATION == expected
+    assert set(map_cmd.PREDICATE_RELATION.values()) <= set(ontology["mobrpg_relation_type_enum"])
+    # every predicate carries the field, so the export cannot silently omit one
+    assert all("mobrpg_relation_type" in p for p in ontology["predicates"])
+
+
+def test_relation_type_wins_over_event_type():
+    """A predicate with a relation type is stored as a direct relation, so its
+    eventType does not apply. Documents the precedence the ontology comment
+    describes."""
+    from mobrpg.commands import map_cmd
+    assert "spouse_of" in map_cmd.PREDICATE_RELATION
+    assert map_cmd.predicate_type("spouse_of") == "Spouse"
+
+
 def test_build_group_person_full(tmp_path):
     mp = _map()
     mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "prof-real"}}
