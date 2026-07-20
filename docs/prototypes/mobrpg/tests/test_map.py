@@ -163,6 +163,50 @@ def test_merge_classifier_review_resolution_survives_and_promotes():
     assert prof["Archaeologist"]["status"] == "bound"       # review promoted to bound
 
 
+def test_merge_keeps_a_resolved_binding_against_a_fresh_review():
+    # The real space_game case: the GM bound org type `government` to Tim's existing
+    # "Governmental". On the next run the near-duplicate matcher rediscovers that same
+    # type by fuzzy match and proposes it as `review` -- a *proposal* must never
+    # overwrite an already-*resolved* binding, and the save must not be silent.
+    bound = {"target": "organization/type", "name": "Governmental",
+             "mobrpgId": "929998de", "status": "bound"}
+    old = {"classifiers": {"organizationType": {"government": bound}}}
+    new = {"classifiers": {"organizationType": {"government": {
+        "target": "organization/type", "name": "Government", "mobrpgId": None,
+        "status": "review", "nearExisting": "governmental", "nearId": "929998de"}}}}
+    merged, notes = m._merge(old, new)
+    assert merged["classifiers"]["organizationType"]["government"] == bound
+    assert any("government" in n for n in notes), "preservation must be reported, not silent"
+
+
+def test_merge_keeps_a_resolved_location_route_against_a_fresh_proposal():
+    # Same rule for locationRouting: the hand-made landfeature re-routes carry a real
+    # mobrpgId and must survive a recomputed `new`.
+    bound = {"target": "political", "politicalType": "Spaceship",
+             "mobrpgId": "1ebccd7d", "status": "bound"}
+    old = {"locationRouting": {"spaceship": bound}}
+    new = {"locationRouting": {"spaceship": {"target": "political",
+                                            "politicalType": "Spaceship",
+                                            "mobrpgId": None, "status": "new"}}}
+    merged, notes = m._merge(old, new)
+    assert merged["locationRouting"]["spaceship"] == bound
+    assert any("spaceship" in n for n in notes)
+
+
+def test_merge_takes_a_fresh_binding_that_resolves_differently():
+    # Preservation applies only against proposals. If canon now resolves the value to a
+    # real (different) type, that is itself a resolution -- take it, and say so.
+    old = {"classifiers": {"organizationType": {"guild": {
+        "target": "organization/type", "name": "Guild",
+        "mobrpgId": "old-id", "status": "bound"}}}}
+    new = {"classifiers": {"organizationType": {"guild": {
+        "target": "organization/type", "name": "Guild",
+        "mobrpgId": "new-id", "status": "bound"}}}}
+    merged, notes = m._merge(old, new)
+    assert merged["classifiers"]["organizationType"]["guild"]["mobrpgId"] == "new-id"
+    assert any("guild" in n for n in notes)
+
+
 def test_init_then_sync(tmp_path, monkeypatch):
     vault = _make_vault(tmp_path)
     # mobRPG starts with only "District" as a political type

@@ -470,44 +470,58 @@ def _counts(m: dict) -> dict:
     return out
 
 
+def _entry(old_entry: dict | None, fresh: dict, label: str, notes: list[str]) -> dict:
+    """Reconcile one mapping entry across a sync.
+
+    A rediscovery is a *proposal*; what is already in the map may be a *resolution*.
+    A proposal never overwrites a resolution — that is the whole contract `sync`
+    offers, and breaking it silently discards GM decisions. Two things count as
+    resolved: the explicit `confirmed` idiom, and a binding that already carries a
+    real `mobrpgId`. The latter matters because the fuzzy near-duplicate matcher
+    re-proposes an already-bound value as `review` on every run (a vault
+    `government` bound to mobRPG's `Governmental` scores 0.91 and comes back as a
+    near-dup), which would silently unbind it each time.
+    """
+    if old_entry is None:
+        return fresh
+    if old_entry.get("confirmed") or old_entry.get("status") == "confirmed":
+        return old_entry  # human decision wins
+    old_id, new_id = old_entry.get("mobrpgId"), fresh.get("mobrpgId")
+    if old_id and not new_id:
+        notes.append(f"{label}: kept existing binding {old_id} "
+                     f"(rediscovery proposed '{fresh.get('status')}')")
+        return old_entry
+    if old_id and new_id and old_id != new_id:
+        notes.append(f"{label}: canon now resolves to a different type "
+                     f"({old_id} -> {new_id})")
+        return fresh
+    if old_entry.get("status") in ("new", "review") and fresh.get("status") == "bound":
+        notes.append(f"{label}: now bound to existing type")
+    return fresh
+
+
+def _merge_section(o: dict, n: dict, label: str, notes: list[str]) -> dict:
+    """Merge one section: reconcile shared keys, add new ones, flag dropped ones."""
+    res = {k: _entry(o.get(k), nv, f"{label}[{k}]", notes) for k, nv in n.items()}
+    for k in o:
+        if k not in n:
+            stale = dict(o[k]); stale["status"] = "stale"; res[k] = stale
+            notes.append(f"{label}[{k}]: no longer in vault (stale)")
+    return res
+
+
 def _merge(old: dict, new: dict) -> tuple[dict, list[str]]:
-    """Non-destructive merge: preserve confirmed/hand-edited entries; add new keys;
+    """Non-destructive merge: preserve resolved/confirmed entries; add new keys;
     promote new->bound when a matching type now exists; flag stale keys."""
     notes = []
     merged = dict(new)
-    for section in ("locationRouting",):
-        o, n = old.get(section, {}), new.get(section, {})
-        res = {}
-        for k, nv in n.items():
-            ov = o.get(k)
-            if ov and (ov.get("confirmed") or ov.get("status") == "confirmed"):
-                res[k] = ov  # human decision wins
-            elif ov and ov.get("status") in ("new", "review") and nv.get("status") == "bound":
-                res[k] = nv; notes.append(f"{section}[{k}]: now bound to existing type")
-            else:
-                res[k] = nv
-        for k in o:
-            if k not in n:
-                stale = dict(o[k]); stale["status"] = "stale"; res[k] = stale
-                notes.append(f"{section}[{k}]: no longer in vault (stale)")
-        merged[section] = res
+    merged["locationRouting"] = _merge_section(
+        old.get("locationRouting", {}), new.get("locationRouting", {}),
+        "locationRouting", notes)
     for name in new.get("classifiers", {}):
-        o = old.get("classifiers", {}).get(name, {})
-        n = new["classifiers"][name]
-        res = {}
-        for k, nv in n.items():
-            ov = o.get(k)
-            if ov and (ov.get("confirmed") or ov.get("status") == "confirmed"):
-                res[k] = ov  # human decision wins (parity with locationRouting)
-            elif ov and ov.get("status") in ("new", "review") and nv.get("status") == "bound":
-                res[k] = nv; notes.append(f"classifiers.{name}[{k}]: now bound")
-            else:
-                res[k] = nv
-        for k in o:
-            if k not in n:
-                stale = dict(o[k]); stale["status"] = "stale"; res[k] = stale
-                notes.append(f"classifiers.{name}[{k}]: stale")
-        merged.setdefault("classifiers", {})[name] = res
+        merged.setdefault("classifiers", {})[name] = _merge_section(
+            old.get("classifiers", {}).get(name, {}), new["classifiers"][name],
+            f"classifiers.{name}", notes)
     return merged, notes
 
 
