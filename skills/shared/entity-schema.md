@@ -512,7 +512,8 @@ If you record `A --[employs]--> B`, the inverse
 
 **Symmetric types** (stored once, no direction):
 knows, sibling_of, spouse_of, betrothed_to, enemy_of, allied_with,
-rival_of, friend_of, borders, trades_with, alter_ego_of, nemesis_of
+at_war_with, rival_of, friend_of, borders, trades_with, alter_ego_of,
+nemesis_of, negotiated_with
 
 **Genre tags:** Each type carries tags: `universal`, `fantasy`,
 `horror`, `scifi`, `superhero`, `historical`, `romance`. Filter

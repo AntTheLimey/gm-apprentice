@@ -11,6 +11,7 @@ human noticing.
 This check fails when:
   * the predicate set in entity-schema.md differs from the ontology export in
     either direction;
+  * the set of predicates marked symmetric differs between the two copies;
   * a predicate's `mobrpg_event_type` / `mobrpg_relation_type` is not a member
     of the corresponding enum in the export.
 
@@ -58,6 +59,14 @@ def schema_predicates(text: str) -> set[str]:
     return preds
 
 
+def schema_symmetric(text: str) -> set[str]:
+    """Parse the '**Symmetric types** …:' comma/newline list from entity-schema.md."""
+    block = re.search(r"\*\*Symmetric types\*\*[^:]*:\n(.*?)\n\n", text, re.S)
+    if not block:
+        raise SystemExit("ERROR: could not locate the Symmetric types list in entity-schema.md")
+    return {t.strip() for t in re.split(r"[,\n]", block.group(1)) if t.strip()}
+
+
 def main() -> int:
     if not SCHEMA.exists():
         raise SystemExit(f"ERROR: missing {SCHEMA}")
@@ -82,6 +91,19 @@ def main() -> int:
             "predicates in the ontology export but missing from entity-schema.md: "
             + ", ".join(missing_from_schema)
         )
+
+    # Attribute agreement: the two copies must also agree on which predicates are
+    # symmetric (a consumer that stores a symmetric edge once must not disagree with one
+    # that stores an inverse). Catches the class of drift the set check alone would miss.
+    schema_sym = schema_symmetric(SCHEMA.read_text())
+    ont_sym = {p["type"] for p in ontology["predicates"] if p.get("symmetric")}
+    if schema_sym != ont_sym:
+        sym_only_schema = sorted(schema_sym - ont_sym)
+        sym_only_ont = sorted(ont_sym - schema_sym)
+        if sym_only_schema:
+            errors.append("symmetric in entity-schema.md but not in the ontology export: " + ", ".join(sym_only_schema))
+        if sym_only_ont:
+            errors.append("symmetric in the ontology export but not in entity-schema.md: " + ", ".join(sym_only_ont))
 
     event_enum = set(ontology.get("mobrpg_event_type_enum", []))
     relation_enum = set(ontology.get("mobrpg_relation_type_enum", [])) | {None}
