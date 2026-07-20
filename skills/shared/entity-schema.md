@@ -521,6 +521,21 @@ suggestions to match the campaign's genre.
 For domain/range constraints and the full inverse name list,
 consult `relationship-patterns.md` in the ttrpg-expert skill.
 
+**This table is the authoritative vocabulary.** The machine-readable
+export `shared/gm-apprentice-ontology.json` restates these predicates
+and adds the mobRPG projection (`mobrpg_event_type` /
+`mobrpg_relation_type`) on top; it is generated *from* this table, not
+the other way round. `scripts/validate_ontology.py` fails CI if the two
+ever disagree. A vault's `_meta/relationship-types.md` is a
+genre-filtered **subset** of this table — never a superset. Predicates
+that appear only in a vault copy are drift, not vocabulary.
+
+**Not relationship predicates:** narrative-flow / sequencing concepts —
+`leads_to`, `precedes`, `alternative_to` — are **not** edges in this
+graph. `leads_to` is a Clue *frontmatter field* (see the Clue schema),
+and clue-to-clue flow belongs there, not in a `relationships:` block. A
+vault vocabulary that lists a `Sequencing` category invented it.
+
 ## Required Relationships
 
 | Entity Type | Required Relationship |
