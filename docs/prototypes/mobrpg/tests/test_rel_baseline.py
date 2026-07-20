@@ -14,7 +14,21 @@ def test_build_structural_index_keeps_only_known_both_ends():
               {"id": "r2", "sourceId": "b", "targetId": "zzz", "type": "Spouse"}],  # target not known -> excluded
     }
     idx = rb.build_structural_index(rels_by, known)
-    assert idx == {("a", "Parent", "b"): "r1"}
+    # Parent/Child are inverses, so the row is reachable from either orientation:
+    # the vault may author `located_at` (Parent) where mobRPG stored the Child row.
+    assert idx == {("a", "Parent", "b"): "r1", ("b", "Child", "a"): "r1"}
+
+
+def test_structural_index_matches_a_parent_child_inverse():
+    """(A, Child, B) upstream is the same fact as vault edge (B, Parent, A). Not
+    matching it re-pushes an existing relationship as a duplicate — this dropped
+    space_game's baseline from 33 matches to 1 when the vocabulary cleanup moved
+    spatial edges off `hosts`/`contains` (Child) onto `located_at` (Parent)."""
+    idx = rb.build_structural_index(
+        {"a": [{"id": "r9", "sourceId": "a", "targetId": "b", "type": "Child"}]},
+        {"a", "b"})
+    assert idx[("a", "Child", "b")] == "r9"
+    assert idx[("b", "Parent", "a")] == "r9"
 
 
 def test_build_reified_index_groups_by_participants_and_type():

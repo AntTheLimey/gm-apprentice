@@ -34,9 +34,17 @@ from mobrpg.commands.suggest import _key, _mapped_type
 # not in this set — a relationship predicate never maps to Attribute.
 STRUCTURAL = map_cmd.RELATION_TYPES  # {Parent, Child, Link, Spouse}
 # Symmetric structural edges: mobRPG stores one directed row, but the vault may
-# author it from either endpoint, so index both orientations for these. Parent /
-# Child are directional (child→parent) and are NOT symmetrized.
+# author it from either endpoint, so index both orientations for these.
 _SYMMETRIC = {"Link", "Spouse"}
+
+# Parent and Child are not symmetric, but they ARE each other's inverse: upstream
+# (A, Child, B) states exactly what vault edge (B, Parent, A) states. The vault
+# stores single-direction with the inverse implied, so which endpoint authored the
+# edge is arbitrary and both orientations must resolve to the same upstream row.
+# Missing this silently re-pushes existing relationships as duplicates — it only
+# surfaced when the vocabulary cleanup moved spatial edges from `hosts`/`contains`
+# (Child) onto `located_at`/`part_of` (Parent), dropping baseline matches 33 -> 1.
+_INVERSE = {"Parent": "Child", "Child": "Parent"}
 
 # node element_kind → API kind path segment for the /relation endpoint.
 KIND_PATH = {"Person": "person", "Organization": "organization", "Political": "political",
@@ -61,6 +69,8 @@ def build_structural_index(relations_by_element, known_ids) -> dict:
                 idx.setdefault((s, t, d), r.get("id"))
                 if t in _SYMMETRIC:            # match whichever end the vault authored
                     idx.setdefault((d, t, s), r.get("id"))
+                elif t in _INVERSE:            # (A,Child,B) == (B,Parent,A)
+                    idx.setdefault((d, _INVERSE[t], s), r.get("id"))
     return idx
 
 
