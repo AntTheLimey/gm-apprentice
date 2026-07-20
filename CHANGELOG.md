@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.37] — 2026-07-19
+## [1.8.38] — 2026-07-20
+
+Publish tool 1.11.13.
+
+### Fixed
+
+- Inbox CLI crashed the whole `inbox pull` on any absent/orphaned KV key: wrangler's missing-key 404 embeds the REST endpoint URL (`.../storage/kv/namespaces/<id>/values/<key>`), and the `namespaces` substring tripped the `namespace` operational signal, so every missing key threw instead of returning `null`. A single TTL-reaped or orphaned `config:req-index` id then took down the entire at-table request queue. The error is now classified on the human-readable prose only (URLs stripped first), and a regression test covers the missing-key-404 case (#118).
+- GURPS PC renderer: the Ranged Attacks table now surfaces the current skill level the way Melee does — the trailing to-hit number is wrapped in `<span class="wp-tohit">` and each row carries `data-weapon-key`, and `buildWeapons` feeds ranged weapons into the live to-hit map (parry stays `null` for them). Ranged to-hit was previously inert on every sheet; no client change was needed (#119).
 
 ### Added
 
