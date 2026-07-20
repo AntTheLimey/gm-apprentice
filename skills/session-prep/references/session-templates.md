@@ -127,8 +127,21 @@ Name the NPC who initiates and what they want from *this* PC, or
 the errand/schedule that sends them. Ensemble scenes: the
 household schedule (a shared meal, a departure) is a valid
 initiator. A scene that cannot answer this is not finished.
+**Behaviours:** What the situation and its NPCs do on their own —
+independent of the players, and how it escalates if the PCs do
+nothing. Ask "what happens here if the characters never show up?"
+The initiator opens the door; the behaviours keep it moving. This
+is the engine that lets the scene survive any player choice — a
+scene that only moves when a PC acts is fragile. (Sly Flourish's
+"Behaviours"; a Front-style clock for anything on a timer.)
 **Branching:** What choices do players face? Where do different
 choices lead?
+**Complications:** 2–3 curveballs held ready to spike tension when
+the scene sags — a rival arrives, a PC is recognised, the contact
+is being watched, the timer is discovered. Distinct from Behaviours
+(the situation's default motion) and Branching (the players' own
+choices): these are the GM's escalation toolkit, dropped when
+needed, not scripted to a beat. (Sly Flourish's "Complications.")
 
 ### Scene 2: [Title]
 [Same structure]
@@ -328,9 +341,15 @@ scene begins. 2-4 sentences. Sensory details.]
 
 How does this scene begin? What brings the investigators here?
 
-## NPC Motivations
+## NPC Motivations & Behaviours
 
-For each NPC present, what do they want and what will they do?
+For each NPC present, what do they want and what will they do —
+including what they do on their own timeline, independent of the
+players? And the situation itself: what environmental or timed
+pressure advances if no NPC acts (a fire spreading, a ritual
+completing, a tide rising)? What happens here if the PCs never
+show up? The scene should run on this behaviour, not on a
+predicted PC response.
 
 ## Complications
 

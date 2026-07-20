@@ -280,6 +280,13 @@ the **premise**, not the finished scene. For each scene:
      and what they want from *this* PC (ensemble scenes: the household
      schedule is a valid initiator). A scene that cannot answer this is not
      finished.
+   - **Behaviours** — what the situation and its NPCs do on their own,
+     independent of the players, and how it escalates if the PCs do nothing
+     ("what happens here if they never show up?"). The initiator opens the
+     door; the behaviours keep it moving. This is the engine that lets a scene
+     survive any player choice — the durable form of the "runs on NPC
+     behaviour, not a predicted PC response" fix. (Sly Flourish's situation
+     "Behaviours"; ref: `skills/ttrpg-expert/scene-encounter-patterns.md`.)
    - **Read-aloud** as a `> ` blockquote: objective sensory description,
      2–4 sentences, addressed to the table — never naming one PC or dictating
      a feeling ("you feel…").
