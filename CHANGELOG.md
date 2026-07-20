@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.37] — 2026-07-19
+## [1.8.38] — 2026-07-20
+
+Publish tool 1.11.14. A publish-site bug-sweep.
+
+### Fixed
+
+- Inbox CLI crashed the whole `inbox pull` on any absent/orphaned KV key: wrangler's missing-key 404 embeds the REST endpoint URL (`.../storage/kv/namespaces/<id>/values/<key>`), and the `namespaces` substring tripped the `namespace` operational signal, so every missing key threw instead of returning `null`. A single TTL-reaped or orphaned `config:req-index` id then took down the entire at-table request queue. The error is now classified on the human-readable prose only (URLs stripped first), and a regression test covers the missing-key-404 case (#118).
+- GURPS PC renderer: the Ranged Attacks table now surfaces the current skill level the way Melee does — the trailing to-hit number is wrapped in `<span class="wp-tohit">` and each row carries `data-weapon-key`, and `buildWeapons` feeds ranged weapons into the live to-hit map (parry stays `null` for them). Ranged to-hit was previously inert on every sheet; no client change was needed (#119).
+- A played session/chapter present in the vault but absent from `_meta/publish-manifest.md` silently never published (the manifest is an allowlist and session-wrapup never registers the files it writes), so the landing "Latest Session" block pointed at the previous session while showing the new date. The build now warns on a `session`/`session_wrap`/`chapter` file that is in neither the manifest's Publishing nor Excluded list — the manifest parser now also reads the Excluded section, so a deliberate exclusion is not mistaken for an oversight (#101).
+- GURPS Load-Outs: the `### Load-Outs` feature had no PC-template guidance and no migration, so legacy sheets used ad-hoc equipment sections that silently rendered nothing. Documented a worked `### Load-Outs` example in `pc-gurps-4e.md`, added a migration to detect and convert/flag legacy equipment sections, and hardened the load-out-name parser so bold inside a table cell can no longer be read as a load-out name (#106).
+- CoC investigator sheet: a legacy sheet whose body structure diverges from the documented contract parsed to a near-empty model and rendered mostly blank with no signal. The build now warns when a CoC PC parses no characteristics, and a migration detects divergent sheets to convert or flag (#107).
 
 ### Added
 

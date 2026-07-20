@@ -80,6 +80,47 @@ describe('parseManifest', () => {
     assert.deepStrictEqual(result.publishing, []);
     assert.deepStrictEqual(result.needsDecision, []);
     assert.deepStrictEqual(result.resolved, []);
+    assert.deepStrictEqual(result.excluded, []);
+  });
+
+  it('parses excluded file paths, skipping the Reason category bullets', () => {
+    const md = [
+      '---',
+      'generated: 2026-04-18T14:30:00Z',
+      'excluded: 2',
+      '---',
+      '',
+      '## Excluded (2 files)',
+      '',
+      '- Reason: prep',
+      '  - Sessions/Planned Session.md',
+      '- Reason: GM override',
+      '  - Characters/NPCs/Secret Villain.md — kept off-site',
+    ].join('\n');
+
+    const result = parseManifest(md);
+    assert.deepStrictEqual(result.excluded, [
+      'Sessions/Planned Session.md',
+      'Characters/NPCs/Secret Villain.md',
+    ]);
+  });
+
+  it('parses excluded paths in the documented `- [x] path — reason` checkbox format', () => {
+    // This is the format publish-site/references/content-filtering.md actually generates —
+    // the leading `- [x]` and trailing `— reason` must both be stripped to a clean path.
+    const md = [
+      '---',
+      'excluded: 2',
+      '---',
+      '',
+      '## Excluded (2 files)',
+      '',
+      '- [x] Sessions/Session 7.md — prep',
+      '- [x] Sessions/Session 8.md — prep',
+    ].join('\n');
+
+    const result = parseManifest(md);
+    assert.deepStrictEqual(result.excluded, ['Sessions/Session 7.md', 'Sessions/Session 8.md']);
   });
 });
 

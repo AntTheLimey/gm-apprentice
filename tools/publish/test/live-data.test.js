@@ -18,12 +18,15 @@ function sixModel() {
     skills: [
       { name: 'Climbing', level: '12', base: '13' },   // affected: -1 at Light
       { name: 'Judo', level: '14', base: '14' },        // Armor Familiarity: flat
+      { name: 'Beam Weapons (Pistol)', level: '15', base: '15' }, // ranged: flat
     ],
     melee: [
       { weapon: 'Vibro-axe', skill: 'Axe/Mace-17', parry: '12 (0U)' }, // Axe/Mace not affected
       { weapon: 'Judo throw', skill: 'Judo-14', parry: '11' },         // linked to flat Judo
     ],
-    ranged: [],
+    ranged: [
+      { weapon: 'Blaster pistol', skill: 'Beam Weapons (Pistol)-15' }, // no parry field
+    ],
     equipment: {
       items: [{ name: 'Vibro-axe', weight: '4 lbs' }, { name: 'Space Armor', weight: '56 lbs' }],
       loadouts: [{ name: 'Transit', items: [{ name: 'Hand thruster', weight: '4 lbs' }] }],
@@ -54,6 +57,12 @@ test('weapon parry/to-hit follow their linked skill', () => {
   // Judo throw linked to flat Judo -> flat
   assert.deepEqual(d.weapons['Judo throw'].parry, [11, 11, 11, 11, 11]);
   assert.deepEqual(d.weapons['Judo throw'].toHit, [14, 14, 14, 14, 14]);
+});
+
+test('ranged weapons join the live to-hit map (no parry)', () => {
+  const d = buildLiveData(sixModel(), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.deepEqual(d.weapons['Blaster pistol'].toHit, [15, 15, 15, 15, 15]);
+  assert.equal(d.weapons['Blaster pistol'].parry, null);
 });
 
 test('items carry weight + default carried (main on, loadout off)', () => {

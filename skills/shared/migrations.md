@@ -458,3 +458,52 @@ hidden until revealed in play, not permanently secret.
   differ, and renders old-format sheets unchanged. If
   `publish.site_dir` is set in vault-config, offer to run
   `npm update gm-apprentice-publish` in the site directory.
+
+## Migration: 1.8.12 → 1.8.38
+
+Two publish features shipped their renderers without a migration to
+teach existing sheets the structure they parse, so pre-existing PCs
+silently render incomplete. Both are opt-in per PC — the renderers are
+resilient and never crash, they just drop the unparsed content — so
+these are flags-and-conversions the GM confirms, not automatic rewrites.
+
+### Content
+
+- **GURPS Load-Outs section** — the GURPS PC renderer turns a
+  `### Load-Outs` (or `### Loadouts`) subsection under `## Equipment`
+  into toggleable, encumbrance-recomputing gear groups
+  (`defaultCarried: false`). Sheets authored before the feature use
+  ad-hoc sections instead (`## Station-Issue Equipment (Returnable)`,
+  `### Optional Loadout`, a second `## Equipment` variant, etc.), and
+  the parser only matches the exact `Load-Outs`/`Loadouts` titles, so
+  that gear silently never appears as a toggle. Detect equipment-like
+  sections on a GURPS PC that are neither the main `## Equipment` table
+  nor a `### Load-Outs`/`### Loadouts` subsection, and offer to convert
+  each to a `### Load-Outs` subsection (a `**Name**` bold heading
+  immediately followed by an `Item`/`Weight`/`Cost` table, no bold
+  before the first heading or inside table cells) — or flag it for the
+  GM if the intent is ambiguous. The documented template now carries a
+  worked `### Load-Outs` example (`shared/templates/pc-gurps-4e.md`).
+  Opt-in per PC; no frontmatter change. (#106)
+- **CoC investigator-sheet body structure** — the CoC 7e renderer reads
+  the markdown body in the structure documented at
+  `docs/file-format-standards.md §8` (`## Stat Sheet` →
+  `### Characteristics`/`### Derived`/`### Reputation`/`### Combat`/
+  `### Status`, `## Skills`, `## Combat`, `## Equipment` + Record prose).
+  It normalizes skill-name variance and injects the canonical skill
+  list, so most drift renders fine, but a sheet whose section/subsection
+  titles diverge (or that stored characteristics/skills in frontmatter
+  for the old renderer) parses to a near-empty model and renders mostly
+  blank. The publish tool now warns at build time when a CoC PC parses
+  no characteristics; for each flagged sheet, offer to convert it to the
+  documented structure (the shipped `pc-coc-7e.md` / `pc-coc-7e-regency.md`
+  templates are the target) or flag it for the GM. Opt-in per PC. (#107)
+
+### Tooling
+
+- **Publish tool:** `gm-apprentice-publish` 1.11.14 hardens the GURPS
+  load-out-name parser (bold inside a load-out table cell can no longer
+  be mistaken for a load-out name) and emits a build-time warning for a
+  CoC PC that parses no characteristics. If `publish.site_dir` is set in
+  vault-config, offer to run `npm update gm-apprentice-publish` in the
+  site directory.

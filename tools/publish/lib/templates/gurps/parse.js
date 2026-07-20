@@ -704,11 +704,16 @@ function parseEquipment(model, sections, fm) {
         // Each load-out is a sub-sub-table or bold heading + table
         // Simple approach: parse bold headings as load-out names, then the following table
         const loText = loHtml;
+        // Load-out names are standalone headings/bold that sit BETWEEN tables. Bold inside a
+        // table CELL must not be read as a name — with multiple load-outs it shifts the
+        // name->table index alignment and mislabels later groups. Scan for names in the
+        // table-stripped text so only real headings survive. (#106)
+        const loNamesText = loText.replace(/<table[\s\S]*?<\/table>/gi, '\n');
         const loNameRegex = /<(?:h4|strong|b)[^>]*>([\s\S]*?)<\/(?:h4|strong|b)>/gi;
         const loTableRegex = /<table[\s\S]*?<\/table>/gi;
         const loNames = [];
         let nm;
-        while ((nm = loNameRegex.exec(loText)) !== null) {
+        while ((nm = loNameRegex.exec(loNamesText)) !== null) {
           loNames.push(nm[1].replace(/<[^>]+>/g, '').trim());
         }
         const loTables = [];

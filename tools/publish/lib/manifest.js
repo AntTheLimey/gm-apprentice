@@ -25,6 +25,7 @@ function parseManifest(markdown) {
   const publishing = [];
   const needsDecision = [];
   const resolved = [];
+  const excluded = [];
 
   const checkedPattern = /^- \[[xX]\]\s+(.+)$/;
   const uncheckedPattern = /^- \[ \]\s+(.+)$/;
@@ -52,6 +53,21 @@ function parseManifest(markdown) {
       const checked = line.match(checkedPattern);
       if (checked) resolved.push(stripInlineComment(checked[1]));
     }
+
+    // Collect the Excluded file paths so the build can tell a *deliberately* excluded file
+    // from one that is simply absent from the manifest — only the latter is a forgot-to-register
+    // warning (#101). Two shapes appear: the documented `- [x] path — reason` checkbox lines
+    // (same as Publishing, see publish-site/references/content-filtering.md) and a grouped
+    // `- Reason: …` category with indented `  - path` bullets. Handle both; skip Reason bullets.
+    if (currentSection === 'excluded') {
+      const checkboxed = line.match(checkedPattern);
+      if (checkboxed) {
+        excluded.push(stripInlineComment(checkboxed[1]));
+      } else {
+        const bullet = line.match(/^\s+-\s+(.+)$/);
+        if (bullet && !/^reason:/i.test(bullet[1].trim())) excluded.push(stripInlineComment(bullet[1]));
+      }
+    }
   }
 
   return {
@@ -59,6 +75,7 @@ function parseManifest(markdown) {
     publishing,
     needsDecision,
     resolved,
+    excluded,
   };
 }
 
