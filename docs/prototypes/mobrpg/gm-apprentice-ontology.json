@@ -44,6 +44,39 @@
     "faction": "headquartered_at",
     "organization": "headquartered_at"
   },
+  "mobrpg_element_kind": {
+    "$comment": "gm-apprentice vault entity kind -> mobRPG element kind (endpoint family). `location` maps to political only as a DEFAULT: a location whose location_type is natural on the location_nature axis below routes to landfeature instead.",
+    "npc": "person",
+    "pc": "person",
+    "location": "political",
+    "faction": "organization",
+    "organization": "organization",
+    "item": "item",
+    "creature": "creature"
+  },
+  "location_nature": {
+    "$comment": "location_type is an OPEN vocabulary (free text authored per vault), so this cannot be exhaustive. It classifies the recurring, genre-general concepts onto the natural/built axis that decides mobRPG LandFeature vs Political -- the axis is ontology, the specific LandFeatureType/PoliticalType classifier is per-world and resolved in the map. Matching is exact on the normalised type, else on its head noun (last word), so 'icy planet' resolves via 'planet'. Values under natural are a suggested classifier name, not a closed enum: mobRPG's LandFeatureSubType enum is terrestrial and contains none of the celestial types, which exist as per-world classifiers. Unlisted types fall through to client heuristics and land in the map as review.",
+    "natural": {
+      "planet": "Planet",
+      "gas giant": "Planet",
+      "ice giant": "Planet",
+      "moon": "Moon",
+      "star": "Star",
+      "system": "System",
+      "star system": "System",
+      "asteroid": "Asteroid",
+      "asteroid belt": "Asteroid",
+      "anomaly": "Anomaly",
+      "nebula": "Nebula",
+      "comet": "Comet"
+    },
+    "built": [
+      "space station", "station", "spaceship", "ship", "city", "town", "village",
+      "settlement", "colony", "district", "sector", "outpost", "venue", "territory",
+      "polity", "dock", "port", "facility", "installation", "fortress", "base",
+      "gate", "trade route"
+    ]
+  },
   "predicates": [
     {"type": "parent_of", "inverse": "child_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
     {"type": "ancestor_of", "inverse": "descendant_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},

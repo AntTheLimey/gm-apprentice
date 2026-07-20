@@ -31,10 +31,31 @@ import sys
 from mobrpg import client
 from mobrpg import node
 
-# vault entity kind -> mobRPG element kind (the KIND_EP table, data-driven here)
-KINDS = {"npc": "person", "pc": "person", "location": "political",
-         "faction": "organization", "organization": "organization",
-         "item": "item", "creature": "creature"}
+# The gm-apprentice ontology export is the contract between the two systems: the
+# controlled predicate vocabulary, how predicates project onto mobRPG's two
+# relationship mechanisms, how entity kinds project onto element kinds, and the
+# natural/built axis for locations. Everything derived from it below is derived,
+# never restated — a client copy is how these drifted in the first place.
+_ONTOLOGY_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
+                              "gm-apprentice-ontology.json")
+
+
+def _load_ontology():
+    with open(_ONTOLOGY_PATH, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+_ONTOLOGY = _load_ontology()
+ONTOLOGY_PREDICATES = frozenset(p["type"] for p in _ONTOLOGY["predicates"])
+
+# vault entity kind -> mobRPG element kind. A projection of gm-apprentice's own
+# entity types onto mobRPG's, so it lives in the ontology rather than here.
+KINDS = {k: v for k, v in _ONTOLOGY["mobrpg_element_kind"].items()
+         if not k.startswith("$")}
+
+# location_type natural/built axis (open vocabulary — see the export's comment).
+LOCATION_NATURAL = _ONTOLOGY["location_nature"]["natural"]
+LOCATION_BUILT = frozenset(_ONTOLOGY["location_nature"]["built"])
 
 # vault folder -> vault kind (mirrors push_to_mobrpg.FOLDERS)
 FOLDERS = {"Characters/NPCs": "npc", "Characters/PCs": "pc", "Locations": "location",
@@ -57,19 +78,6 @@ LAND_SUBTYPES = {s.lower(): s for s in [
 # something to silently coerce, so predicate_type() refuses it rather than
 # defaulting to Generic. Both tables below are keyed on this vocabulary — never on
 # predicates discovered in vault data, which is how they drifted originally.
-_ONTOLOGY_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
-                              "gm-apprentice-ontology.json")
-
-
-def _load_ontology():
-    with open(_ONTOLOGY_PATH, encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-_ONTOLOGY = _load_ontology()
-ONTOLOGY_PREDICATES = frozenset(p["type"] for p in _ONTOLOGY["predicates"])
-
-
 class UnknownPredicate(ValueError):
     """Raised for a predicate outside the controlled vocabulary."""
 
@@ -266,6 +274,36 @@ def _embedded_landfeature(n: str) -> str | None:
     return None
 
 
+def _axis_keys(value: str):
+    """Keys to test against the location_nature axis: the whole normalised type,
+    then its head noun. English head nouns trail, so 'icy planet' and
+    'toxic-atmosphere planet' both resolve via 'planet' without needing an entry
+    each — location_type is free text and cannot be enumerated.
+
+    Parenthesised and dash-trailing qualifiers are dropped first, so
+    'planet (habitable — for now)' resolves as 'planet' rather than on 'now'.
+    Only the head noun is tested, never every word: 'Planet Hollywood' is a venue,
+    and matching any word would call it a planet."""
+    base = re.sub(r"\(.*?\)", " ", value)          # drop parentheticals
+    base = re.split(r"\s+[—–-]\s+", base)[0]       # drop a trailing dash qualifier
+    words = [w for w in re.split(r"[^a-z0-9]+", _norm(base)) if w]
+    keys = [" ".join(words)] if words else []
+    if len(words) > 1:
+        keys.append(words[-1])
+    return keys
+
+
+def _ontology_natural(value: str):
+    for k in _axis_keys(value):
+        if k in LOCATION_NATURAL:
+            return LOCATION_NATURAL[k]
+    return None
+
+
+def _ontology_built(value: str) -> bool:
+    return any(k in LOCATION_BUILT for k in _axis_keys(value))
+
+
 def _route_location(value: str, disc: dict) -> dict:
     """Route a vault location_type to a mobRPG target. An existing PoliticalType
     binds; a type that IS a clean natural feature (exact LandFeatureSubType enum
@@ -275,6 +313,18 @@ def _route_location(value: str, disc: dict) -> dict:
     everything else defaults to a new PoliticalType."""
     tok = _first_token(value)
     n = _norm(tok)
+    # The ontology's natural/built axis outranks everything, including an existing
+    # upstream PoliticalType: a world that already carries "Planet" as a political
+    # type got it from a bad push, and binding to it would re-commit that error
+    # (this is what would have reclassified 38 planets/moons/stars as Political).
+    nat = _ontology_natural(value)
+    if nat:
+        return {"target": "landfeature", "landFeatureType": nat,
+                "mobrpgId": None, "status": "new"}
+    if _ontology_built(value):
+        hit = disc["political/type"].get(n)
+        return {"target": "political", "politicalType": tok if hit else tok.title(),
+                "mobrpgId": hit, "status": "bound" if hit else "new"}
     hit = disc["political/type"].get(n)
     if hit:  # reuse an existing PoliticalType
         return {"target": "political", "politicalType": tok, "mobrpgId": hit, "status": "bound"}

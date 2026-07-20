@@ -297,6 +297,58 @@ def test_predicate_type_covers_sanctioned_event_vocabulary():
     assert map_cmd.predicate_type("conspires_against") == "War"
 
 
+def test_element_kinds_are_derived_from_the_ontology():
+    """Entity-kind -> element-kind is a projection of our types onto mobRPG's, so
+    it belongs in the export, not in the client."""
+    import json
+    from mobrpg.commands import map_cmd
+    with open(map_cmd._ONTOLOGY_PATH, encoding="utf-8") as fh:
+        ontology = json.load(fh)
+    expected = {k: v for k, v in ontology["mobrpg_element_kind"].items()
+                if not k.startswith("$")}
+    assert map_cmd.KINDS == expected
+    assert map_cmd.KINDS["location"] == "political"   # default; nature axis can override
+
+
+@pytest.mark.parametrize("location_type,target,classifier", [
+    ("planet", "landfeature", "Planet"),
+    ("icy planet", "landfeature", "Planet"),               # head noun
+    ("toxic-atmosphere planet", "landfeature", "Planet"),  # head noun
+    ("planet (habitable — for now)", "landfeature", "Planet"),  # parenthetical dropped
+    ("gas giant", "landfeature", "Planet"),               # exact multiword
+    ("star system", "landfeature", "System"),
+    ("asteroid belt", "landfeature", "Asteroid"),
+    ("gravitational anomaly", "landfeature", "Anomaly"),
+    ("space station", "political", None),
+    ("trade route", "political", None),
+    ("research facility", "political", None),             # head noun 'facility'
+])
+def test_location_nature_axis_routes_from_the_ontology(location_type, target, classifier):
+    """The natural/built axis is ontology, so a vault gets correct routing without
+    hand-editing its map. This is the defect that would have reclassified 38
+    planets/moons/stars as Political over existing LandFeature elements."""
+    from mobrpg.commands import map_cmd
+    r = map_cmd._route_location(location_type, {"political/type": {}})
+    assert r["target"] == target
+    if classifier:
+        assert r["landFeatureType"] == classifier
+
+
+def test_natural_axis_outranks_an_existing_political_type():
+    """A world carrying 'Planet' as a PoliticalType got it from a bad push;
+    binding to it would re-commit the error."""
+    from mobrpg.commands import map_cmd
+    r = map_cmd._route_location("planet", {"political/type": {"planet": "bad-id"}})
+    assert r["target"] == "landfeature" and r["landFeatureType"] == "Planet"
+
+
+def test_head_noun_matching_does_not_over_reach():
+    """Only the head noun is tested, so a built place named after a celestial
+    body is not mistaken for one."""
+    from mobrpg.commands import map_cmd
+    assert map_cmd._route_location("Planet Hollywood", {"political/type": {}})["target"] == "political"
+
+
 def test_event_types_are_derived_from_the_ontology():
     """Both predicate tables derive from the export, so the CLI cannot hold an
     opinion that silently contradicts the ontology — which is exactly how
