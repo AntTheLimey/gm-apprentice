@@ -222,8 +222,12 @@ grounded in what's live — but the choice is theirs. Do not proceed to
 spotlight until intent is set or explicitly deferred to `## Open Questions`.
 → Write `## Session Intent` to Plan file.
 
-**12. PC Roster + Arc Check (grounding)** — Re-read the active PC sheets so the
-conversation is grounded, not guessed. Per-PC:
+**12. PC Roster + Arc Check (grounding)** — Ground the conversation in the
+active PCs. Each PC's `## Current Status` block is already in context from the
+Step 5 bundle (`session_context.py`) — do **not** re-read that block. The
+durable arc data below (backstory, arc stage/theme, spotlight history,
+relationships) lives in *other* sheet sections the bundle does not carry, so do
+a targeted read of each PC's `## Background` and arc frontmatter for it. Per-PC:
 - Backstory hooks, stated goals, current arc stage (five-stage model), arc
   theme, relationships with other PCs and NPCs
 - `## Current Status` read: `Open threads` → decisions needing consequences /
@@ -233,7 +237,15 @@ conversation is grounded, not guessed. Per-PC:
 
 This is chore-work that *feeds* the GM's spotlight decision — it is evidence,
 not a decision.
-→ Write `## PC Roster & Arcs` to Plan file.
+
+→ Write `## PC Roster & Arcs` to Plan file — **reference, don't copy.** Capture
+only durable arc analysis (arc stage, theme, spotlight history, next beat). For
+mutable state — SAN/HP, location, conditions, current threads — point at the
+PC's live `## Current Status` block, never transcribe a snapshot of it into the
+plan. A copied value goes stale the moment the sheet changes and the plan then
+trusts the stale copy over the PC's own file; a reference cannot rot. Same
+principle as the self-documentation ban: the plan is an instrument you read
+from, not a container that duplicates state.
 
 **13. Spotlight — whose moment (elicited)** — Offer a lean plus alternatives,
 grounded in the arc/spotlight data, and let the GM choose the A/B/C split:

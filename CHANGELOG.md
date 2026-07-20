@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.36] — 2026-07-19
+
+### Changed
+
+- Session-plan quality guardrails (failure-report Slice C, reframed): the failure report's RC5 (a table-note claim laundered into an AUTHORITATIVE file) and RC6 (a plan trusting its own stale PC-state snapshot) are one problem — the plan mints a private copy of authority and then trusts the copy. The fix is single-source-of-truth plus one human checkpoint, not perpetual re-verification. session-prep step 12 no longer re-reads each PC's `## Current Status` (already carried by the `session_context.py` bundle; the durable arc/backstory data still gets a targeted read) and now writes `## PC Roster & Arcs` by **reference, not copy** — mutable state points at the PC's live `## Current Status` instead of transcribing a snapshot that goes stale. session-wrapup gains a **cross-entity claim checkpoint**: an incidental aside in table shorthand about a *different* existing entity is surfaced for a one-time GM confirm or marked `<!-- UNVERIFIED -->` (which `reconcile` already gates on), rather than silently folded into that entity's file. Recommendations 7, 8, and 10 as originally written are withdrawn (re-read/distrust is a token sink and does not catch an error that lives inside an authoritative source). Edits in `session-prep` and `session-wrapup`.
+
+---
+
 ## [1.8.35] — 2026-07-19
 
 ### Changed
