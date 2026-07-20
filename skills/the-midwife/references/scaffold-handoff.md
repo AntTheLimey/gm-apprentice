@@ -37,7 +37,11 @@ Which should I create as vault entities?"
 
 Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
-auto-promote — the GM chooses.
+auto-promote — the GM chooses. Any `relationships:` edge on a
+promoted entity takes its `type:` from the vocabulary in
+`_meta/relationship-types.md` (subset of `shared/entity-schema.md`);
+map narrative verbs and normalize inverses via
+`shared/relationship-normalization.md` — never invent a predicate.
 
 **2b. Plan promotion** — List all topic files from
 `_midwife/{adventure}/` that contain narrative planning

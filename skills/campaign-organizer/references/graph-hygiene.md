@@ -12,6 +12,14 @@ that's discoverable by traversal — don't add `associated_with`.
 **Specificity.** `employs` > `associated_with`. Always use the
 most specific relationship type. Flag generic types.
 
+**Vocabulary.** Every `type:` must be a predicate in
+`_meta/relationship-types.md` (subset of `shared/entity-schema.md`).
+To place or repair an edge from a narrative verb, map it and
+normalize its direction with `shared/relationship-normalization.md`
+(`owned_by A→B` becomes `owns B→A`; store single-direction). An
+edge that isn't entity-to-entity (`appears_in <session>`) is a log
+reference — drop it, don't graph it.
+
 ## Anti-patterns
 
 - **Hub overload** — one entity connecting to everything.

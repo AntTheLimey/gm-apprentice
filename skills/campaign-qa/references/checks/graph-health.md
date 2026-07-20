@@ -106,6 +106,35 @@ most recent `type: session_wrap` file).
 
 ### Step 5: Relationship Quality
 
+**Vocabulary conformance (strict):** Every `relationships[].type`
+in the vault must be a predicate listed in
+`_meta/relationship-types.md` (the genre-filtered projection of
+`shared/entity-schema.md`'s vocabulary). This is separate from,
+and more fundamental than, the vagueness check below — an
+invented predicate is worse than a vague one because no query,
+inverse-inference, or publish step knows about it. Flag:
+
+- **Off-vocabulary** — a `type:` not in the vocabulary at all
+  (`hosts`, `contains`, `adjacent_to`, `carved_by`, `patrols`,
+  …). Map it to the nearest sanctioned predicate via
+  `shared/relationship-normalization.md`, or drop it if it is not
+  an entity-to-entity edge.
+- **Wrong-direction / inverse stored** — an inverse form stored
+  as its own edge (`owned_by`, `employed_by`, `led_by`,
+  `works_for`). Storage is single-direction: rewrite to the base
+  predicate on the opposite endpoint (`owned_by A→B` becomes
+  `owns B→A`) and delete the duplicate.
+- **Blank or malformed** — an empty `type:`, or a mangled
+  compound like `created_owns`.
+- **Non-entity target** — an edge whose target resolves to a
+  `session_*` note or other non-entity (e.g. `appears_in`); this
+  is a log reference, not a graph edge — drop it.
+
+Report, don't auto-fix. This is the off-ontology check that a
+real vault needed (a third of one vault's edges were off-vocabulary).
+The in-repo schema↔export agreement is checked separately by
+`scripts/validate_ontology.py`.
+
 **Generic types:** Flag uses of `associated_with` or similar
 vague relationship types where a more specific type exists
 in `_meta/relationship-types.md`.
