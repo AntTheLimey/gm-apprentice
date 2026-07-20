@@ -53,9 +53,17 @@ LAND_SUBTYPES = {s.lower(): s for s in [
 
 # vault relationship predicate -> mobRPG Event eventType (default table; extend in the map)
 PREDICATE_EVENTTYPE = {
-    "member_of": "Membership", "serves": "Membership", "leads": "Leadership", "led_by": "Leadership",
-    "directed_by": "Leadership", "employs": "Employ", "owns": "Reign", "reign": "Reign",
-    "enemy_of": "War", "participated_in": "Score",
+    # --- controlled vocabulary (_meta/relationship-types.md) ---
+    "member_of": "Membership", "serves": "Membership",
+    "leads": "Leadership", "commands": "Leadership",
+    "employs": "Employ",
+    "owns": "Reign", "rules": "Reign",
+    "enemy_of": "War", "at_war_with": "War",
+    "participated_in": "Score",
+    # --- legacy / off-vocabulary aliases (back-compat only) ---
+    # NOT in the controlled vocabulary; kept for vaults not yet normalized.
+    # Do not add new entries here — map to a sanctioned type above.
+    "led_by": "Leadership", "directed_by": "Leadership", "reign": "Reign",
 }
 
 # mobRPG has a SECOND relationship mechanism besides reified Events: a direct
@@ -64,10 +72,22 @@ PREDICATE_EVENTTYPE = {
 # not as Generic events — a planet `part_of` a system is the system's Child.
 RELATION_TYPES = {"Parent", "Child", "Link", "Spouse"}
 PREDICATE_RELATION = {
-    "part_of": "Parent",          # X part_of Y  -> X's parent is Y
-    "contains": "Child", "hosts": "Child",   # X contains Y -> X's child is Y
-    "adjacent_to": "Link",        # symmetric spatial adjacency
-    "spouse_of": "Spouse", "married_to": "Spouse",
+    # --- controlled vocabulary (_meta/relationship-types.md) ---
+    # The sanctioned spatial types all read child -> parent, so they resolve to
+    # Parent. Keep this table keyed on the ontology, not on whatever predicates
+    # happen to appear in a vault.
+    "part_of": "Parent",            # X part_of Y           -> X's parent is Y
+    "located_at": "Parent",         # X located_at Y        -> X's parent is Y
+    "headquartered_at": "Parent",   # X headquartered_at Y  -> X's parent is Y
+    "borders": "Link",              # symmetric spatial adjacency
+    "spouse_of": "Spouse",
+    # --- legacy / off-vocabulary aliases (back-compat only) ---
+    # NOT in the controlled vocabulary. Retained because older vaults
+    # (Canticle/Regency) may still carry them; space_game has been normalized
+    # off them. Do not add new entries here — map to a sanctioned type above.
+    "contains": "Child", "hosts": "Child",   # inverse of part_of/located_at
+    "adjacent_to": "Link",                   # -> borders
+    "married_to": "Spouse",                  # -> spouse_of
 }
 
 

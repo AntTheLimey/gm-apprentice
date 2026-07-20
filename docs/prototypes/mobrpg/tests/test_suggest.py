@@ -266,6 +266,62 @@ def test_predicate_type_maps_containment_to_relations_and_events():
     assert "Parent" in map_cmd.RELATION_TYPES and "Membership" not in map_cmd.RELATION_TYPES
 
 
+def test_predicate_type_covers_sanctioned_spatial_vocabulary():
+    """The sanctioned spatial types must resolve to structural relations, not
+    Generic events. The map predates the vocabulary normalization and was keyed
+    on observed vault predicates (contains/hosts/adjacent_to), so a normalized
+    vault would otherwise push every spatial edge as a Generic event."""
+    from mobrpg.commands import map_cmd
+    assert map_cmd.predicate_type("located_at") == "Parent"
+    assert map_cmd.predicate_type("headquartered_at") == "Parent"
+    assert map_cmd.predicate_type("borders") == "Link"
+    assert map_cmd.predicate_type("spouse_of") == "Spouse"
+    # legacy aliases still resolve, for vaults not yet normalized
+    assert map_cmd.predicate_type("married_to") == "Spouse"
+
+
+def test_predicate_type_covers_sanctioned_event_vocabulary():
+    """Sanctioned predicates must resolve to named eventTypes rather than
+    falling through to Generic. `at_war_with`/`commands`/`rules` are the
+    vocabulary forms of predicates the map only knew by off-vocab names."""
+    from mobrpg.commands import map_cmd
+    assert map_cmd.predicate_type("at_war_with") == "War"
+    assert map_cmd.predicate_type("enemy_of") == "War"
+    assert map_cmd.predicate_type("commands") == "Leadership"
+    assert map_cmd.predicate_type("leads") == "Leadership"
+    assert map_cmd.predicate_type("rules") == "Reign"
+    # legacy aliases still resolve
+    assert map_cmd.predicate_type("led_by") == "Leadership"
+    assert map_cmd.predicate_type("reign") == "Reign"
+
+
+def test_every_mapped_predicate_is_sanctioned_or_marked_legacy():
+    """Guard against the original defect: the tables were keyed on predicates
+    observed in vault data rather than on the ontology. Every non-legacy key
+    must exist in the controlled vocabulary."""
+    from mobrpg.commands import map_cmd
+    LEGACY = {"contains", "hosts", "adjacent_to", "married_to",
+              "led_by", "directed_by", "reign"}
+    VOCAB = {
+        "parent_of", "sibling_of", "spouse_of", "betrothed_to", "ancestor_of",
+        "knows", "friend_of", "rival_of", "mentors", "trusts", "betrayed",
+        "rules", "employs", "commands", "serves", "vassal_of", "imprisons",
+        "located_at", "headquartered_at", "part_of", "borders", "haunts",
+        "owns", "created", "wields", "seeks",
+        "discovered", "conceals", "recorded_in", "studies",
+        "enemy_of", "allied_with", "at_war_with", "conspires_against",
+        "member_of", "founded", "leads", "defected_from", "infiltrates",
+        "caused", "triggered", "participated_in", "witnessed",
+        "trades_with", "supplies", "finances", "indebted_to",
+        "murdered", "wounded", "rescued", "captured", "deceived",
+        "uploaded_to", "augmented_by", "cloned_from", "hacked",
+        "leads_to", "precedes", "alternative_to",
+    }
+    keys = set(map_cmd.PREDICATE_RELATION) | set(map_cmd.PREDICATE_EVENTTYPE)
+    unsanctioned = keys - VOCAB - LEGACY
+    assert not unsanctioned, f"unsanctioned predicates in map: {sorted(unsanctioned)}"
+
+
 def test_build_group_person_full(tmp_path):
     mp = _map()
     mp["classifiers"]["profession"] = {"Priest": {"mobrpgId": "prof-real"}}
