@@ -73,7 +73,10 @@ function weaponSeries(weapon, skillsByName, model, authoredLevel) {
 
 function buildWeapons(model, skillsByName, authoredLevel) {
   const out = {};
-  const rows = model.melee || [];
+  // Melee + ranged both feed the live to-hit map so their `.wp-tohit` cells
+  // (keyed by data-weapon-key) update in step with encumbrance. Ranged rows
+  // carry no parry, so parry stays null for them.
+  const rows = [...(model.melee || []), ...(model.ranged || [])];
   for (const w of rows) {
     if (!w.weapon) continue;
     const authoredToHit = weaponToHit(w.skill);
