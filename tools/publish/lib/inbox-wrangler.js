@@ -35,7 +35,11 @@ function makeAdapter({ runWrangler, namespaceId }) {
       // namespace: "KV namespace ... not found [code: 10041]"), so those signals
       // are checked first and always throw — only a key-scoped not-found with no
       // operational signal is treated as an absent key.
-      const err = (res.stderr || '').toLowerCase();
+      // Strip any URL first: wrangler's missing-key 404 embeds the REST endpoint
+      // (".../namespaces/<id>/values/<key>"), whose "namespaces" would otherwise
+      // trip the `namespace` operational signal below and make every absent key
+      // throw instead of returning null. Classify on the human-readable prose only.
+      const err = (res.stderr || '').toLowerCase().replace(/https?:\/\/\S+/g, '');
       const operational = /namespace|authenticat|authoriz|unauthor|permission|credential|not logged in|network|fetch failed|timeout|econn|enotfound|10041|10000/.test(err);
       if (!operational && /not found|not_found|no value|does not exist/.test(err)) return null;
       throw new Error('wrangler kv get failed for "' + key + '": ' + ((res.stderr || '').trim() || 'exit ' + res.code));

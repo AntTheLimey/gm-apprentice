@@ -46,6 +46,19 @@ test('adapter.get throws on a namespace error even though it says "not found"', 
   await assert.rejects(() => kv.get('req:a'), /wrangler kv get failed/);
 });
 
+test('adapter.get returns null on a missing-key 404 whose URL embeds "namespaces"', async () => {
+  // Regression (#118): wrangler's missing-key 404 embeds the REST endpoint
+  // (.../storage/kv/namespaces/<id>/values/<key>). The "namespaces" substring
+  // must NOT trip the `namespace` operational signal — the key is simply absent,
+  // so the whole inbox pull must not crash on one orphaned index id.
+  const runWrangler = () => ({
+    code: 1, stdout: '',
+    stderr: '✘ [ERROR] Failed to fetch https://api.cloudflare.com/client/v4/accounts/acct/storage/kv/namespaces/ns/values/req%3Aa - 404: Not Found',
+  });
+  const kv = makeAdapter({ runWrangler, namespaceId: 'NS' });
+  assert.equal(await kv.get('req:a'), null);
+});
+
 test('adapter.put forwards value and optional TTL', async () => {
   const calls = [];
   const runWrangler = (args) => { calls.push(args); return { code: 0, stdout: '', stderr: '' }; };
