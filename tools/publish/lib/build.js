@@ -189,6 +189,24 @@ function build(options = {}) {
         console.warn(`  WARNING: manifest lists "${entry}" but no such page was scanned`);
       }
     }
+
+    // Reverse direction (#101): a played session/chapter present in the vault but absent from
+    // the manifest silently never publishes — session-wrapup writes canon but never registers
+    // the file, and the allowlist then drops it with no signal. The landing "Latest Session"
+    // block falls back to the previous session while showing the new date, which reads as a
+    // broken link. Warn on registrable types that are in neither the Publishing nor the
+    // Excluded list (a deliberate exclusion is a decision, not an oversight).
+    const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
+    const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
+    for (const page of corpus) {
+      const type = page.frontmatter && page.frontmatter.type;
+      if (!REGISTRABLE_TYPES.has(type)) continue;
+      const rel = vaultRelPathOf(page);
+      if (!registered.has(rel)) {
+        const kind = type === 'chapter' ? 'chapter' : 'session';
+        console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not in the publish manifest — this ${kind} will NOT publish. Add it to _meta/publish-manifest.md.`);
+      }
+    }
   }
 
   pairStoryFiles(pages, config.vaultPath);

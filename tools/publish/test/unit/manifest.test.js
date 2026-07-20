@@ -80,6 +80,29 @@ describe('parseManifest', () => {
     assert.deepStrictEqual(result.publishing, []);
     assert.deepStrictEqual(result.needsDecision, []);
     assert.deepStrictEqual(result.resolved, []);
+    assert.deepStrictEqual(result.excluded, []);
+  });
+
+  it('parses excluded file paths, skipping the Reason category bullets', () => {
+    const md = [
+      '---',
+      'generated: 2026-04-18T14:30:00Z',
+      'excluded: 2',
+      '---',
+      '',
+      '## Excluded (2 files)',
+      '',
+      '- Reason: prep',
+      '  - Sessions/Planned Session.md',
+      '- Reason: GM override',
+      '  - Characters/NPCs/Secret Villain.md — kept off-site',
+    ].join('\n');
+
+    const result = parseManifest(md);
+    assert.deepStrictEqual(result.excluded, [
+      'Sessions/Planned Session.md',
+      'Characters/NPCs/Secret Villain.md',
+    ]);
   });
 });
 

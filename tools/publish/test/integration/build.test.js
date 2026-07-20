@@ -735,6 +735,43 @@ describe('build integration', () => {
       assert.ok(!warnings.some(w => w.includes('Locations/Tavern.md')),
         'an annotated but valid entry must not warn');
     });
+
+    it('warns when a played session is in the vault but absent from the manifest (#101)', () => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-unreg-'));
+      const vault = path.join(tmp, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
+      // A played session written by wrap-up but never registered (neither Publishing nor Excluded).
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Unregistered Session.md'),
+        '---\ntype: session_wrap\nsession_number: 6\ncanon_status: AUTHORITATIVE\naliases: []\ntags: []\n---\n\n## Recap\n\nThe job went sideways.\n');
+
+      const configPath = path.join(tmp, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: vault,
+        outputDir: path.join(tmp, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Unreg',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
+      }, null, 2));
+
+      const warnings = [];
+      const realWarn = console.warn;
+      console.warn = (...args) => warnings.push(args.join(' '));
+      try {
+        build({ configPath });
+      } finally {
+        console.warn = realWarn;
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+
+      assert.ok(warnings.some(w => w.includes('Sessions/Unregistered Session.md') && w.includes('not in the publish manifest')),
+        `expected an unregistered-session warning, got: ${JSON.stringify(warnings)}`);
+      // The deliberately-excluded prep session (Reason: prep) is a decision, not an oversight — no warning.
+      assert.ok(!warnings.some(w => w.includes('Planned Session.md') && w.includes('not in the publish manifest')),
+        'a deliberately excluded session must not warn');
+    });
   });
 
   describe('with-manifest fixture', () => {

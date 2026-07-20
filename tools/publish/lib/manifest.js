@@ -25,6 +25,7 @@ function parseManifest(markdown) {
   const publishing = [];
   const needsDecision = [];
   const resolved = [];
+  const excluded = [];
 
   const checkedPattern = /^- \[[xX]\]\s+(.+)$/;
   const uncheckedPattern = /^- \[ \]\s+(.+)$/;
@@ -52,6 +53,15 @@ function parseManifest(markdown) {
       const checked = line.match(checkedPattern);
       if (checked) resolved.push(stripInlineComment(checked[1]));
     }
+
+    // The Excluded section lists a `- Reason: …` category bullet followed by indented
+    // `  - path.md` file bullets. Collect the file paths (skip the Reason categories) so the
+    // build can tell a *deliberately* excluded file from one that is simply absent from the
+    // manifest — only the latter is a forgotten-to-register warning (#101).
+    if (currentSection === 'excluded') {
+      const m = line.match(/^\s*-\s+(.+)$/);
+      if (m && !/^reason:/i.test(m[1].trim())) excluded.push(stripInlineComment(m[1]));
+    }
   }
 
   return {
@@ -59,6 +69,7 @@ function parseManifest(markdown) {
     publishing,
     needsDecision,
     resolved,
+    excluded,
   };
 }
 
