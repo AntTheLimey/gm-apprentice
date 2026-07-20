@@ -54,13 +54,19 @@ function parseManifest(markdown) {
       if (checked) resolved.push(stripInlineComment(checked[1]));
     }
 
-    // The Excluded section lists a `- Reason: …` category bullet followed by indented
-    // `  - path.md` file bullets. Collect the file paths (skip the Reason categories) so the
-    // build can tell a *deliberately* excluded file from one that is simply absent from the
-    // manifest — only the latter is a forgotten-to-register warning (#101).
+    // Collect the Excluded file paths so the build can tell a *deliberately* excluded file
+    // from one that is simply absent from the manifest — only the latter is a forgot-to-register
+    // warning (#101). Two shapes appear: the documented `- [x] path — reason` checkbox lines
+    // (same as Publishing, see publish-site/references/content-filtering.md) and a grouped
+    // `- Reason: …` category with indented `  - path` bullets. Handle both; skip Reason bullets.
     if (currentSection === 'excluded') {
-      const m = line.match(/^\s*-\s+(.+)$/);
-      if (m && !/^reason:/i.test(m[1].trim())) excluded.push(stripInlineComment(m[1]));
+      const checkboxed = line.match(checkedPattern);
+      if (checkboxed) {
+        excluded.push(stripInlineComment(checkboxed[1]));
+      } else {
+        const bullet = line.match(/^\s+-\s+(.+)$/);
+        if (bullet && !/^reason:/i.test(bullet[1].trim())) excluded.push(stripInlineComment(bullet[1]));
+      }
     }
   }
 

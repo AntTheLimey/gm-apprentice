@@ -772,6 +772,43 @@ describe('build integration', () => {
       assert.ok(!warnings.some(w => w.includes('Planned Session.md') && w.includes('not in the publish manifest')),
         'a deliberately excluded session must not warn');
     });
+
+    it('does NOT warn about an unregistered session in full/GM mode (manifest not enforced)', () => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-full-'));
+      const vault = path.join(tmp, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
+      // Flip the vault to full mode, where the manifest is loaded but NOT enforced as an allowlist,
+      // so an unregistered session still publishes — the "will NOT publish" warning would lie.
+      const vcPath = path.join(vault, '_meta', 'vault-config.md');
+      fs.writeFileSync(vcPath, fs.readFileSync(vcPath, 'utf-8').replace('mode: player', 'mode: full'));
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Unregistered Session.md'),
+        '---\ntype: session_wrap\nsession_number: 6\ncanon_status: AUTHORITATIVE\naliases: []\ntags: []\n---\n\n## Recap\n\nStill played.\n');
+
+      const configPath = path.join(tmp, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: vault,
+        outputDir: path.join(tmp, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Full',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
+      }, null, 2));
+
+      const warnings = [];
+      const realWarn = console.warn;
+      console.warn = (...args) => warnings.push(args.join(' '));
+      try {
+        build({ configPath });
+      } finally {
+        console.warn = realWarn;
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+
+      assert.ok(!warnings.some(w => w.includes('not in the publish manifest')),
+        `full mode must not emit the unregistered-session warning, got: ${JSON.stringify(warnings)}`);
+    });
   });
 
   describe('with-manifest fixture', () => {

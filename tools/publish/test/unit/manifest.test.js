@@ -104,6 +104,24 @@ describe('parseManifest', () => {
       'Characters/NPCs/Secret Villain.md',
     ]);
   });
+
+  it('parses excluded paths in the documented `- [x] path — reason` checkbox format', () => {
+    // This is the format publish-site/references/content-filtering.md actually generates —
+    // the leading `- [x]` and trailing `— reason` must both be stripped to a clean path.
+    const md = [
+      '---',
+      'excluded: 2',
+      '---',
+      '',
+      '## Excluded (2 files)',
+      '',
+      '- [x] Sessions/Session 7.md — prep',
+      '- [x] Sessions/Session 8.md — prep',
+    ].join('\n');
+
+    const result = parseManifest(md);
+    assert.deepStrictEqual(result.excluded, ['Sessions/Session 7.md', 'Sessions/Session 8.md']);
+  });
 });
 
 describe('loadManifest', () => {

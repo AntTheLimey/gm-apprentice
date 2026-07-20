@@ -195,16 +195,20 @@ function build(options = {}) {
     // the file, and the allowlist then drops it with no signal. The landing "Latest Session"
     // block falls back to the previous session while showing the new date, which reads as a
     // broken link. Warn on registrable types that are in neither the Publishing nor the
-    // Excluded list (a deliberate exclusion is a decision, not an oversight).
-    const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
-    const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
-    for (const page of corpus) {
-      const type = page.frontmatter && page.frontmatter.type;
-      if (!REGISTRABLE_TYPES.has(type)) continue;
-      const rel = vaultRelPathOf(page);
-      if (!registered.has(rel)) {
-        const kind = type === 'chapter' ? 'chapter' : 'session';
-        console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not in the publish manifest — this ${kind} will NOT publish. Add it to _meta/publish-manifest.md.`);
+    // Excluded list (a deliberate exclusion is a decision, not an oversight). Only meaningful in
+    // player mode — that is the only mode where the manifest is enforced as an allowlist (the
+    // filter below); in full/GM mode unregistered pages still publish, so the warning would lie.
+    if (publishConfig.mode === 'player') {
+      const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
+      const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
+      for (const page of corpus) {
+        const type = page.frontmatter && page.frontmatter.type;
+        if (!REGISTRABLE_TYPES.has(type)) continue;
+        const rel = vaultRelPathOf(page);
+        if (!registered.has(rel)) {
+          const kind = type === 'chapter' ? 'chapter' : 'session';
+          console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not in the publish manifest — this ${kind} will NOT publish. Add it to _meta/publish-manifest.md.`);
+        }
       }
     }
   }
