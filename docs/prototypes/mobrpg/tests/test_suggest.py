@@ -280,14 +280,35 @@ def test_predicate_type_covers_sanctioned_spatial_vocabulary():
 
 def test_predicate_type_covers_sanctioned_event_vocabulary():
     """Sanctioned predicates must resolve to named eventTypes rather than
-    falling through to Generic. `at_war_with`/`commands`/`rules` are the
-    vocabulary forms of predicates the map only knew by off-vocab names."""
+    falling through to Generic. Values come from the ontology: `commands` and
+    `serves` group under Employ (the service-hierarchy cluster) rather than
+    Leadership/Membership, which is where the hand-maintained table disagreed."""
     from mobrpg.commands import map_cmd
     assert map_cmd.predicate_type("at_war_with") == "War"
     assert map_cmd.predicate_type("enemy_of") == "War"
-    assert map_cmd.predicate_type("commands") == "Leadership"
     assert map_cmd.predicate_type("leads") == "Leadership"
     assert map_cmd.predicate_type("rules") == "Reign"
+    assert map_cmd.predicate_type("commands") == "Employ"
+    assert map_cmd.predicate_type("serves") == "Employ"
+    # previously fell through to Generic because the table omitted them
+    assert map_cmd.predicate_type("founded") == "Membership"
+    assert map_cmd.predicate_type("infiltrates") == "Membership"
+    assert map_cmd.predicate_type("supplies") == "Employ"
+    assert map_cmd.predicate_type("conspires_against") == "War"
+
+
+def test_event_types_are_derived_from_the_ontology():
+    """Both predicate tables derive from the export, so the CLI cannot hold an
+    opinion that silently contradicts the ontology — which is exactly how
+    commands/serves/participated_in drifted apart."""
+    import json
+    from mobrpg.commands import map_cmd
+    with open(map_cmd._ONTOLOGY_PATH, encoding="utf-8") as fh:
+        ontology = json.load(fh)
+    expected = {p["type"]: p["mobrpg_event_type"] for p in ontology["predicates"]
+                if p.get("mobrpg_event_type") and p["mobrpg_event_type"] != "Generic"}
+    assert map_cmd.PREDICATE_EVENTTYPE == expected
+    assert set(map_cmd.PREDICATE_EVENTTYPE.values()) <= set(ontology["mobrpg_event_type_enum"])
 
 
 @pytest.mark.parametrize("predicate", [

@@ -92,15 +92,16 @@ class UnknownPredicate(ValueError):
             f"do not add aliases to the predicate tables."))
 
 
-# vault relationship predicate -> mobRPG Event eventType (default table; extend in the map)
-PREDICATE_EVENTTYPE = {
-    "member_of": "Membership", "serves": "Membership",
-    "leads": "Leadership", "commands": "Leadership",
-    "employs": "Employ",
-    "owns": "Reign", "rules": "Reign",
-    "enemy_of": "War", "at_war_with": "War",
-    "participated_in": "Score",
-}
+# vault relationship predicate -> mobRPG Event eventType, derived from the same
+# export as PREDICATE_RELATION. Hand-maintaining this alongside the ontology let
+# the two disagree (commands/serves/participated_in) and left seven predicates
+# the ontology types falling through to Generic. A per-world map can still
+# override any entry via `relationshipTypes`; change the ontology, not this module.
+# Generic is the default, so only non-Generic entries are carried here.
+PREDICATE_EVENTTYPE = {p["type"]: p["mobrpg_event_type"]
+                       for p in _ONTOLOGY["predicates"]
+                       if p.get("mobrpg_event_type")
+                       and p["mobrpg_event_type"] != "Generic"}
 
 # mobRPG has a SECOND relationship mechanism besides reified Events: a direct
 # WorldElementRelation (enum Attribute | Link | Parent | Child | Spouse), where
