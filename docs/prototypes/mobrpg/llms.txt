@@ -16,8 +16,13 @@ share one client (mobrpg/client.py) for environment resolution and auth.
 - MOBRPG_ENV=dev|prod   Which server to hit. Default: prod. The resolved
                         target (env + BASE URL) is printed to stderr on every
                         run — never ambiguous.
-- MOBRPG_TOKEN          Bearer token (recommended). Authenticates as the token
-                        owner. Treat like a password.
+- MOBRPG_TOKEN          Bearer token. Authenticates as the token owner. Treat
+                        like a password. Overrides the managed config below.
+- Managed credentials   Preferred: run `mobrpg auth import <credentials.csv>`
+                        once to store a token in a user-level config
+                        (MOBRPG_CONFIG_DIR override; ~/.config/mobrpg on POSIX,
+                        %APPDATA%\mobrpg on Windows). get_access_token precedence:
+                        MOBRPG_TOKEN env > managed config > MOBRPG_EMAIL/PASSWORD.
 - MOBRPG_EMAIL / MOBRPG_PASSWORD   Alternative to a bearer token (local-password
                         accounts only). Works against either environment.
 - Optional per-field overrides: MOBRPG_BASE, MOBRPG_CLIENT_ID, MOBRPG_REDIRECT_URI.
@@ -40,6 +45,13 @@ vault whose entities already exist upstream but carry no node is linked with
 
 ## Commands
 
+    mobrpg auth <import|status|refresh|logout>
+                                  Manage mobRPG credentials. `import
+                                  <credentials.csv>` verifies via whoami and
+                                  stores a user-level token; `status` reports the
+                                  configured user; `refresh` renews an expired
+                                  token; `logout` removes it. Tokens are never
+                                  printed. See skill reference auth-setup.md.
     mobrpg whoami                 Print the authenticated user and their worlds.
     mobrpg worlds                 (same as whoami) list visible worlds.
     mobrpg pull <world> [--out F] Import a mobRPG world into a JSON extract

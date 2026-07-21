@@ -29,12 +29,14 @@ from mobrpg.commands import suggest_desc as _suggest_desc
 from mobrpg.commands import whats_new as _whats_new
 from mobrpg.commands import adopt as _adopt
 from mobrpg.commands import relink as _relink
+from mobrpg.commands import auth as _auth
 
 # Directory holding the legacy prototype scripts (this package's parent).
 _SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 
 # Native verbs (ported to mobrpg.commands.*).
 NATIVE: dict = {
+    "auth": _auth.run,
     "whoami": _whoami.run,
     "worlds": _whoami.run,
     "pull": _pull.run,
@@ -66,6 +68,7 @@ FALLBACK: dict[str, str] = {
 
 # Ordered help text for `mobrpg --help`.
 VERB_HELP: list[tuple[str, str]] = [
+    ("auth", "manage mobRPG credentials: import | status | refresh | logout"),
     ("whoami", "print the authenticated user and their worlds"),
     ("worlds", "list worlds visible to the authenticated user"),
     ("pull", "import a mobRPG world into a structured JSON extract"),

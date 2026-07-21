@@ -52,3 +52,19 @@ def test_fallback_returns_child_exit_code(monkeypatch):
 
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
     assert cli.main(["images", "world-1", "/vault", "/xwalk.json"]) == 7
+
+
+def test_auth_verb_is_native(monkeypatch):
+    called = {}
+
+    def fake_auth(argv):
+        called["argv"] = argv
+        return 0
+
+    monkeypatch.setitem(cli.NATIVE, "auth", fake_auth)
+    assert cli.main(["auth", "status"]) == 0
+    assert called["argv"] == ["status"]
+
+
+def test_auth_in_verb_help():
+    assert any(v == "auth" for v, _ in cli.VERB_HELP)
