@@ -16,6 +16,8 @@ verb's behavior is unclear rather than guessing flags.
 
 First, orient (all read-only — nothing here writes):
 1. Find the vault (ask if not given). Confirm the CLI runs: `.venv/bin/mobrpg whoami`.
+   If it reports no credentials, walk the GM through first-time setup —
+   `references/auth-setup.md` (one-URL download preferred, manual CSV fallback).
 2. Note the target: the client prints `mobRPG target: PROD/DEV` to stderr. If PROD,
    remember that any write needs `MOBRPG_ALLOW_PROD_WRITES=1` — you never set it.
 3. Take a discovery snapshot: `mobrpg whats-new <world> --vault <path>` reports, in
