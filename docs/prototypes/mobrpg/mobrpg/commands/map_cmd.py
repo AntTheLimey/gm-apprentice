@@ -195,12 +195,19 @@ def classifier_name(s: str) -> str:
 
     Strips, in order: the delimited suffix (`, / ;` via `_first_token`), a
     spaced-dash clause (`— …`, `- …` — the space guard preserves hyphenated words
-    like "bare-knuckle"), parentheticals, then any surviving wikilink markup as a
-    defensive last pass so `[[` can never reach mobRPG however it was embedded."""
+    like "bare-knuckle"), balanced parentheticals (looped, so nested ones fully
+    unwind), an unclosed `(` clause running to the end, and wikilink markup. A final
+    scrub of any surviving bracket/paren guarantees no such character ever reaches
+    mobRPG however malformed the input; the residual words are best-effort."""
     s = _first_token(s)
     s = re.split(r"\s+[—–-]\s+", s, maxsplit=1)[0]
-    s = re.sub(r"\s*\([^)]*\)", "", s)
+    prev = None
+    while prev != s:                                   # balanced parens, incl. nested
+        prev = s
+        s = re.sub(r"\s*\([^()]*\)", "", s)
+    s = re.sub(r"\s*\([^)]*$", "", s)                  # an unclosed '(' clause to end
     s = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("|")[-1], s)
+    s = re.sub(r"[\[\]()]", "", s)                     # defensive: never leak markup chars
     return re.sub(r"\s{2,}", " ", s).strip()
 
 

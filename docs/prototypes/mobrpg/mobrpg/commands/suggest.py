@@ -239,6 +239,12 @@ def _attach_classifier(section, raw, type_kind, entity_ref, ref_id):
         return [], None
     if mode == "bound":
         return [_relation("Attribute", val, f"suggestion:{entity_ref}", [entity_ref])], unmapped
+    # `val` is the map entry's stored name, which may predate sanitization or have
+    # been hand-edited — re-clean so the pushed create name never carries markup and
+    # a clean/dirty pair still dedupes on an identical name.
+    val = map_cmd.classifier_name(val).title()
+    if not val:                      # nothing left after cleaning → mint nothing
+        return [], None
     tref = ref_id
     return ([_create(tref, val, TYPE_DATA[type_kind]()),
              _relation("Attribute", f"suggestion:{tref}", f"suggestion:{entity_ref}",
@@ -268,7 +274,7 @@ def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[di
             gender = entity.get("gender")
             if gender:
                 entry = _lookup(cls.get("sex", {}), gender)
-                sex_name = (entry or {}).get("name") or map_cmd._first_token(gender).title()
+                sex_name = (entry or {}).get("name") or map_cmd.classifier_name(gender).title()
                 mode, bound = resolve_classifier(entry) if entry else ("create", None)
                 if mode == "bound" and bound:
                     # scope + classify the existing Sex id

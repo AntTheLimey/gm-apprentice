@@ -185,6 +185,51 @@ def test_dedupe_keeps_distinct_types_and_entities():
     assert len(creates) == 4                                       # nothing collapsed
 
 
+def test_attach_classifier_recleans_a_stale_dirty_map_name():
+    # The pushed CreateElement name comes from the map entry, which may predate
+    # sanitization or have been hand-edited. The emission path must re-clean it, or
+    # markup reaches mobRPG and a clean/dirty pair fails to dedupe.
+    section = {"recovery agent (contracted to [[corvid financial]])": {
+        "target": "person/profession",
+        "name": "Recovery Agent (Contracted To [[Corvid Financial]])",  # stale dirty name
+        "mobrpgId": None, "status": "new"}}
+    items, _ = suggest._attach_classifier(
+        section, "Recovery agent (contracted to [[Corvid Financial]])",
+        "Profession", "e1", "e1t0")
+    create = next(it for it in items if it["operation"] == "CreateElement")
+    name = create["payload"]["name"]
+    assert "[[" not in name and "(" not in name, f"leaked: {name!r}"
+    assert name == "Recovery Agent"
+
+
+def test_dedupe_leaves_a_relationship_needs_untouched():
+    # A relationship edge already carries `_needs` for its net-new target. Dedup only
+    # repoints edges that reference a removed *type* ref, so a relationship edge (whose
+    # source/target are entity/event refs, never a type ref) must keep its own `_needs`.
+    rel_edge = {"operation": "AddRelation",
+                "payload": {"operation": "AddRelation", "sourceRef": "suggestion:e1",
+                            "targetRef": "suggestion:e9", "type": "Link"},
+                "dependsOn": ["e1", "e9"], "_needs": "e9"}
+    g1 = [_entity_create("e1", "A"), _type_create("e1t0", "Guild", "OrganizationType"),
+          _attr("suggestion:e1t0", "suggestion:e1", ["e1t0", "e1"]), rel_edge]
+    g2 = [_entity_create("e2", "B"), _type_create("e2t0", "Guild", "OrganizationType"),
+          _attr("suggestion:e2t0", "suggestion:e2", ["e2t0", "e2"])]
+    groups, _ = suggest.dedupe_type_creates([g1, g2], ["e1", "e2"])
+    survived = next(it for it in groups[0]
+                    if it["operation"] == "AddRelation" and it["payload"].get("targetRef") == "suggestion:e9")
+    assert survived["_needs"] == "e9"   # relationship co-location constraint intact
+
+
+def test_dedupe_three_entities_share_one_type():
+    g = lambda n: [_entity_create(f"e{n}", f"N{n}"), _type_create(f"e{n}t0", "Territory", "PoliticalType"),
+                   _attr(f"suggestion:e{n}t0", f"suggestion:e{n}", [f"e{n}t0", f"e{n}"])]
+    groups, refs = suggest.dedupe_type_creates([g(1), g(2), g(3)], ["e1", "e2", "e3"])
+    creates = [it for gg in groups for it in gg if it["operation"] == "CreateElement" and "externalRef" not in it]
+    assert len(creates) == 1 and creates[0]["ref"] == "e1t0"
+    chunks, deferred = suggest.chunk_groups_colocated(groups, refs, cap=100)
+    assert deferred == [] and len(chunks) == 1
+
+
 def test_dedupe_repoints_a_type_referenced_as_target():
     # a Sex-style edge references the type as TARGET (race -> sex); repoint that too.
     g1 = [_entity_create("e1", "A"), _type_create("e1t0", "Female", "Sex"),

@@ -124,6 +124,20 @@ def test_classifier_name_leaves_hyphenated_words_intact():
     assert m.classifier_name("Sub-warden") == "Sub-warden"
 
 
+def test_classifier_name_never_leaks_markup_even_when_malformed():
+    # The invariant is absolute: no bracket or paren character survives, however
+    # broken the input. Best-effort on the residual words; the guarantee is no leak.
+    for raw in ["Recovery agent [[Corvid Financial",        # unclosed wikilink
+                "Agent [[Corvid]",                           # single closing bracket
+                "Assassin (Serene (elite) orbit)",           # nested parens
+                "Assassin (Serene Syndicate orbit",          # unclosed paren
+                "Guard ([[Nova]]"]:                          # mixed unbalanced
+        got = m.classifier_name(raw)
+        assert not (set("[]()") & set(got)), f"{raw!r} -> {got!r} leaked markup"
+    # nested parens still recover the clean base term
+    assert m.classifier_name("Assassin (Serene (elite) orbit)") == "Assassin"
+
+
 def test_bind_stores_a_clean_name():
     # the name minted into the map (and thence a mobRPG create) is already sanitized.
     got = m._bind("Recovery agent (contracted to [[Corvid Financial]])", {}, "person/profession")
