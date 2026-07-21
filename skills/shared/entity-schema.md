@@ -215,7 +215,7 @@ Extraction defaults:
 | clueType | string | Physical, testimonial, etc. |
 | foundAt | string | Location discovered |
 | foundBy | string | Who found it |
-| leadsTo | array | What it reveals |
+| leads_to | array | Wiki-links to the node(s) this clue reveals (node-based sequencing; shared with Plan) |
 | reliability | string | Trustworthiness |
 | discoveryState | object | Per-PC: `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}` |
 
@@ -527,10 +527,14 @@ consult `relationship-patterns.md` in the ttrpg-expert skill.
 export `shared/gm-apprentice-ontology.json` restates these predicates
 and adds the mobRPG projection (`mobrpg_event_type` /
 `mobrpg_relation_type`) on top; it is generated *from* this table, not
-the other way round. `scripts/validate_ontology.py` fails CI if the two
-ever disagree. A vault's `_meta/relationship-types.md` is a
-genre-filtered **subset** of this table — never a superset. Predicates
-that appear only in a vault copy are drift, not vocabulary.
+the other way round. `scripts/validate_ontology.py` fails CI when the
+two disagree on the **predicate set or the symmetric set**, and checks
+the mobRPG projection for internal enum-consistency — it does **not**
+cross-check the per-predicate mobRPG mapping values against this table,
+because the table does not carry them (that layer is authored in the
+export). A vault's `_meta/relationship-types.md` is a genre-filtered
+**subset** of this table — never a superset. Predicates that appear
+only in a vault copy are drift, not vocabulary.
 
 **Not relationship predicates:** narrative-flow / sequencing is **not**
 an edge in this relationship graph and never a `relationships:` block

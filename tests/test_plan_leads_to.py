@@ -7,6 +7,7 @@ accepts valid/absent forms and rejects malformed ones.
 """
 
 import importlib.util
+import os
 import pathlib
 import sys
 import tempfile
@@ -26,7 +27,9 @@ def leads_to_errors(fragment: str) -> list[str]:
     fm = "type: plan\nplan_type: scene\ncanon_status: DRAFT\nchapter: \"[[Chapter 1]]\""
     if fragment:
         fm += "\n" + fragment
-    path = pathlib.Path(tempfile.mktemp(suffix=".md"))
+    fd, name = tempfile.mkstemp(suffix=".md")
+    os.close(fd)
+    path = pathlib.Path(name)
     path.write_text(f"---\n{fm}\n---\n\nbody\n")
     try:
         return [e for e in vs.validate_file(path) if "leads_to" in e]
