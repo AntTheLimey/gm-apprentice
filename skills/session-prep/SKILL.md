@@ -113,6 +113,12 @@ already exists for the upcoming session, read it and determine
 what's already covered. Flag what needs updating vs what can
 stand. Skip gathering for sections already present unless
 Reconcile invalidated them.
+
+To find what the upcoming session should *cover*, follow the
+node graph: from the narrative-plan entity (`type: plan`) the
+last session resolved, read its `leads_to` field for the next
+plan node(s). Two or more targets are branches — surface them as
+the GM's choice, don't pick one silently.
 → Write `## Prior Prep Review` to Plan file.
 
 **7. Recap** — Present the "Previously on..." narrative recap from last

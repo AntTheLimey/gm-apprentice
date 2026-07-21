@@ -244,7 +244,9 @@ Standardizes date field names across session and event entities.
 - **New relationship types:** `leads_to`, `precedes`,
   `alternative_to` added to relationship ontology for
   expressing sequencing, causation, and branching between
-  plan entities.
+  plan entities. **(Superseded by the 1.8.38 → 1.8.39
+  migration below — these are narrative flow, not graph
+  predicates, and are removed from the relationship vocabulary.)**
 
 ### Content
 
@@ -507,3 +509,40 @@ these are flags-and-conversions the GM confirms, not automatic rewrites.
   CoC PC that parses no characteristics. If `publish.site_dir` is set in
   vault-config, offer to run `npm update gm-apprentice-publish` in the
   site directory.
+
+## Migration: 1.8.38 → 1.8.39
+
+Resolves the long-open Sequencing question. `leads_to`, `precedes`, and
+`alternative_to` were added as relationship *predicates* in 1.7.0, but
+narrative flow is not a relationship edge — it is node-based sequencing
+(Alexandrian node design; Twine's passage graph). This reverses the
+predicate addition so the relationship vocabulary is single-sourced from
+`shared/entity-schema.md` and enforced by `scripts/validate_ontology.py`,
+and re-homes sequencing onto a **`leads_to` frontmatter field** on Plan
+entities (the Clue type already carries `leads_to`).
+
+### Structural
+
+- **New Plan field `leads_to`** — an array of wiki-links to the plan
+  node(s) a plan leads to (two or more targets = a branch). Optional;
+  absent means a terminal/unlinked node. Added to `shared/templates/plan.md`
+  and the schema; existing plans work unmigrated (absent field). session-prep
+  reads it to find the next plan(s)/branches when preparing.
+
+### Content
+
+- **Remove the Sequencing predicates from the vault vocabulary** — drop
+  the `Sequencing` category (`leads_to`, `precedes`, `alternative_to`)
+  from `_meta/relationship-types.md`; it is not in the authoritative
+  schema, so a vault carrying it is a superset, not a subset. Then
+  convert any existing edges that used them to node fields:
+  - `leads_to` on a **clue** → the clue's `leads_to` *frontmatter field*
+    (clue-to-clue flow lives there, per the Clue schema).
+  - `leads_to` / `precedes` between **plans** → the plan's new `leads_to`
+    frontmatter field (`precedes A→B` becomes `B` in A's `leads_to`).
+  - `alternative_to` between **plans** → the two plans are alternative
+    targets of the *upstream* node: add both to that node's `leads_to`.
+    No dedicated field — branching is the graph structure.
+  - Report each converted edge; never silently drop graph data.
+  Opt-in per vault. `campaign-qa` graph-health now flags the off-vocabulary
+  predicates until converted.

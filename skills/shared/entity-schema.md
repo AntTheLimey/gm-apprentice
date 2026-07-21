@@ -215,7 +215,7 @@ Extraction defaults:
 | clueType | string | Physical, testimonial, etc. |
 | foundAt | string | Location discovered |
 | foundBy | string | Who found it |
-| leadsTo | array | What it reveals |
+| leads_to | array | Wiki-links to the node(s) this clue reveals (node-based sequencing; shared with Plan) |
 | reliability | string | Trustworthiness |
 | discoveryState | object | Per-PC: `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}` |
 
@@ -276,6 +276,7 @@ Extraction defaults:
 | chapter | string | Wiki-link to chapter overview (`"[[Chapter_N_Overview]]"`) |
 | participants | array | Wiki-link array to NPCs, factions, creatures involved |
 | locations | array | Wiki-link array to location entities |
+| leads_to | array | Wiki-link array to the plan node(s) this one leads to (node-based sequencing; see below) |
 
 ### Document
 
@@ -458,7 +459,7 @@ listing.
 
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),
-`locations` (wiki-links)
+`locations` (wiki-links), `leads_to` (wiki-links)
 
 **Adventure Brief:** `scope` (campaign/one-shot/few-shot),
 `sessions_estimated`, `continuation_type` (new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
@@ -512,7 +513,8 @@ If you record `A --[employs]--> B`, the inverse
 
 **Symmetric types** (stored once, no direction):
 knows, sibling_of, spouse_of, betrothed_to, enemy_of, allied_with,
-rival_of, friend_of, borders, trades_with, alter_ego_of, nemesis_of
+at_war_with, rival_of, friend_of, borders, trades_with, alter_ego_of,
+nemesis_of, negotiated_with
 
 **Genre tags:** Each type carries tags: `universal`, `fantasy`,
 `horror`, `scifi`, `superhero`, `historical`, `romance`. Filter
@@ -520,6 +522,31 @@ suggestions to match the campaign's genre.
 
 For domain/range constraints and the full inverse name list,
 consult `relationship-patterns.md` in the ttrpg-expert skill.
+
+**This table is the authoritative vocabulary.** The machine-readable
+export `shared/gm-apprentice-ontology.json` restates these predicates
+and adds the mobRPG projection (`mobrpg_event_type` /
+`mobrpg_relation_type`) on top; it is generated *from* this table, not
+the other way round. `scripts/validate_ontology.py` fails CI when the
+two disagree on the **predicate set or the symmetric set**, and checks
+the mobRPG projection for internal enum-consistency — it does **not**
+cross-check the per-predicate mobRPG mapping values against this table,
+because the table does not carry them (that layer is authored in the
+export). A vault's `_meta/relationship-types.md` is a genre-filtered
+**subset** of this table — never a superset. Predicates that appear
+only in a vault copy are drift, not vocabulary.
+
+**Not relationship predicates:** narrative-flow / sequencing is **not**
+an edge in this relationship graph and never a `relationships:` block
+entry. It is modelled the node-based way (Alexandrian node-based
+scenario design; Twine's passage graph): a **`leads_to` frontmatter
+field** — an array of wiki-links to the node(s) this one leads to — on
+both **Clue** and **Plan** entities. A node with two or more `leads_to`
+targets *is* a branch; the branching is the graph structure, so there
+is no separate `precedes` (redundant with `leads_to`) or
+`alternative_to` (emergent from multiple targets) predicate or field. A
+vault vocabulary that lists a `Sequencing` relationship category
+invented it — convert those edges to `leads_to` fields.
 
 ## Required Relationships
 

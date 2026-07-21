@@ -37,7 +37,11 @@ Which should I create as vault entities?"
 
 Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
-auto-promote — the GM chooses.
+auto-promote — the GM chooses. Any `relationships:` edge on a
+promoted entity takes its `type:` from the vocabulary in
+`_meta/relationship-types.md` (subset of `shared/entity-schema.md`);
+map narrative verbs and normalize inverses via
+`shared/relationship-normalization.md` — never invent a predicate.
 
 **2b. Plan promotion** — List all topic files from
 `_midwife/{adventure}/` that contain narrative planning
@@ -76,9 +80,14 @@ For each approved plan:
      factions, and creatures mentioned in the plan
    - Populate `locations` with wiki-links to locations
      mentioned in the plan
-   - Add `relationships` between plans where sequencing
-     or branching exists (e.g., `leads_to`, `precedes`,
-     `alternative_to`)
+   - Record sequencing/branching between plans in the plan's
+     `leads_to` frontmatter field (wiki-links to the plan node(s)
+     this one leads to; two or more targets is a branch) —
+     **not** as `relationships:` edges. Node-based flow is a
+     `leads_to` field, not a graph predicate (see
+     `shared/entity-schema.md`). A genuine `relationships:` edge
+     on a plan takes its `type:` from the controlled vocabulary
+     in `_meta/relationship-types.md`.
    - **Preserve the body prose verbatim.** Carry the full
      narrative content across unchanged; only adapt section
      headers to the plan type and add `[[wiki-links]]`. Do not

@@ -246,6 +246,19 @@ locations, and NPC relationships.
   it, so the marker only does its job there. Table shorthand is a hallucination
   surface — do not re-verify it forever, verify it once, here.
 
+- **Relationship edges**: when an entity's `relationships:` block
+  gains an edge, every `type:` must come from the controlled
+  vocabulary in `_meta/relationship-types.md` (the genre-filtered
+  subset of `shared/entity-schema.md`). Play notes give narrative
+  verbs; map each to the nearest sanctioned predicate, normalize
+  inverses to the base direction (`owned_by A→B` becomes `owns
+  B→A` — store single-direction), and **drop** facts that aren't
+  entity-to-entity edges (an `appears_in <session>` is a log
+  reference, not an edge). One table drives both this and the QA
+  repair: `shared/relationship-normalization.md`. Never invent a
+  `type:` — an off-vocabulary predicate is invisible to every
+  query and pushes to mobRPG as a junk Generic node.
+
 - **Timeline**: Linked events:
   `- **{in_game_date}** — [[Event_Name]] — {summary}`.
   Inline events: `- **{in_game_date}** — {description}`.

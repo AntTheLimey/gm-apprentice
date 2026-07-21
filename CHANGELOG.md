@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.39] — 2026-07-20
+
+The relationship-ontology cluster: land the ontology, enforce it, author against it.
+
+### Added
+
+- `skills/shared/gm-apprentice-ontology.json` — the reconciled relationship-ontology export (77 predicates + the mobRPG projection: `mobrpg_event_type` and `mobrpg_relation_type`), landed on main from the previously-gitignored prototype directory. `entity-schema.md` is the authoritative vocabulary; this export is generated from it (#124).
+- `scripts/validate_ontology.py`, wired into CI — fails the build if the predicate set in `entity-schema.md` and the ontology export ever diverge, or if a predicate's mobRPG mapping falls outside the declared enums. This is the drift check the three-copies problem needed (#123).
+- `skills/shared/relationship-normalization.md` — one narrative-verb → sanctioned-predicate and inverse-normalization table (`owned_by A→B` ⇒ `owns B→A`), shared by the skills that write relationship edges and the QA pass that repairs them.
+
+- Relationship-writing skills now author `type:` from the controlled vocabulary instead of freeform-inventing predicates (which left ~a third of a real vault's edges off-ontology and pushed junk Generic nodes to mobRPG): session-wrapup, session-play, the-midwife handoff, and campaign-organizer's repair path all point at `_meta/relationship-types.md` + the normalization map (#120).
+- campaign-qa graph-health gains a strict **vocabulary-conformance** check — off-vocabulary, inverse-stored (wrong-direction), blank/malformed, and non-entity-target edges — separate from the existing vagueness/duplication checks (#120, #123).
+- `entity-schema.md` now documents the authority relationship (schema is the source of truth; the JSON export is generated) and resolves the Sequencing question. Narrative sequencing is not a relationship predicate — it is **node-based flow** (Alexandrian node design / Twine's passage graph), modelled as a **`leads_to` frontmatter field** (an array of wiki-links; two or more targets is a branch). The Clue type already carried `leads_to`; this adds the same field to the **Plan** type (schema, `plan.md` template, `validate_schema.py`, and a migration converting legacy `precedes`/`alternative_to`/`leads_to` sequencing edges onto it). session-prep reads it to find the next plan node(s)/branches. `precedes` folds into `leads_to`; `alternative_to` is emergent from multiple targets — neither is a predicate or a field.
+
+---
+
 ## [1.8.38] — 2026-07-20
 
 Publish tool 1.11.14. A publish-site bug-sweep.

@@ -13,6 +13,8 @@ chapter: "[[]]"
 campaign: "[[Campaign_Overview_Updated]]"
 participants: []
 locations: []
+leads_to: []                # wiki-links to the plan node(s) this leads to
+                            # (node-based sequencing; 2+ targets = a branch)
 relationships:
   - target: "[[]]"
     type: ""
