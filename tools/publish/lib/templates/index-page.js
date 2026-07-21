@@ -11,14 +11,16 @@ const GENRE_SECTION_TITLES = {
     factions: 'Intelligence Briefing',
     items: 'Armory & Acquisitions',
     creatures: 'Bestiary',
+    documents: 'Dossiers & Records',
   },
-  fantasy: { creatures: 'Bestiary' },
-  horror: { creatures: 'Bestiary' },
+  fantasy: { creatures: 'Bestiary', documents: 'Records & Correspondence' },
+  horror: { creatures: 'Bestiary', documents: 'Documents & Evidence' },
   scifi: {
     locations: 'Star Charts',
     factions: 'Powers & Interests',
     items: 'Hardware & Equipment',
     creatures: 'Xenofauna',
+    documents: 'Files & Dossiers',
   },
 };
 
@@ -27,6 +29,7 @@ const DEFAULT_SECTION_TITLES = {
   factions: 'Factions & Organizations',
   items: 'Items & Artifacts',
   creatures: 'Creatures',
+  documents: 'Documents',
 };
 
 function sectionTitle(key, publishConfig) {
@@ -583,6 +586,61 @@ function renderFactions(pages, indexDir, imageMap = {}) {
   return `<div class="intel-briefing">${sections}</div>`;
 }
 
+// Every document in a handout-heavy vault is a per-character prop, so a flat A–Z grid buries
+// the one thing a reader wants: whose file is this? Pivot on `about` (narrative handouts) or
+// `practitioner` (mechanical/reference cards), resolving a [[wiki-link]] to a plain name.
+// Documents with neither land in a trailing "Other Documents" group. Character groups sort
+// alphabetically; "Other" is always last. Reuses the faction section + generic card classes,
+// so no CSS changes are needed.
+function renderDocuments(pages, indexDir, imageMap = {}) {
+  if (pages.length === 0) return '<p class="text-muted">No documents or handouts yet.</p>';
+  const OTHER = 'Other Documents';
+
+  function groupKey(fm) {
+    let raw = fm.about || fm.practitioner || '';
+    // A handout authored with a YAML list (about: [[[A]], [[B]]]) files under its first
+    // subject rather than a single garbled "A,B" group.
+    if (Array.isArray(raw)) raw = raw[0] || '';
+    const s = String(raw).replace(/\[\[|\]\]/g, '').trim();
+    if (!s) return OTHER;
+    const parts = s.split('|');            // [[Name|Display]] -> Display
+    return (parts[1] || parts[0]).trim() || OTHER;
+  }
+
+  const byChar = {};
+  for (const p of pages) {
+    const key = groupKey(p.frontmatter);
+    (byChar[key] = byChar[key] || []).push(p);
+  }
+  const names = Object.keys(byChar).filter(n => n !== OTHER).sort((a, b) => a.localeCompare(b));
+  if (byChar[OTHER]) names.push(OTHER);
+
+  function renderCard(p) {
+    const fm = p.frontmatter;
+    const subtitle = plainMetaValue(fm.doc_kind || fm.document_type || (fm.type === 'reference' ? 'reference' : '') || '');
+    return `<a class="entity-card" href="${escapeHtml(relHref(p, indexDir))}"
+  data-entity-type="${escapeHtml(fm.doc_kind || fm.type || '')}"
+  data-entity-name="${escapeHtml(p.displayTitle)}"
+  data-entity-status="${escapeHtml(getCanonStatus(fm) || '')}">
+  <h4>${escapeHtml(p.displayTitle)}</h4>
+  ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+</a>`;
+  }
+
+  const sections = names.map(name => {
+    const cards = byChar[name]
+      .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle))
+      .map(renderCard)
+      .join('\n');
+    return `<section class="intel-section">
+  <h2 class="intel-section-title">${escapeHtml(name)}</h2>
+  <div class="card-grid">${cards}</div>
+</section>`;
+  }).join('\n');
+
+  return `<div class="documents-page">${sections}</div>`;
+}
+
 function extractMdSections(markdown) {
   const sections = {};
   const lines = markdown.split('\n');
@@ -868,6 +926,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
   const isCreatures = dir === 'creatures';
   const isFactions = dir === 'factions';
   const isItems = dir === 'items';
+  const isDocuments = dir === 'documents';
   const isCampaign = dir === 'campaign';
 
   let bodyContent;
@@ -883,6 +942,8 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
     bodyContent = renderFactions(pages, dir, imageMap);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
+  } else if (isDocuments) {
+    bodyContent = renderDocuments(pages, dir, imageMap);
   } else if (isCampaign && pages.some(p => p.frontmatter.type === 'campaign_overview')) {
     // Only render the overview deep-dive (which surfaces the overview's prose) when the overview
     // is actually published. In player mode the overview is excluded as a spoiler doc, so fall
@@ -950,6 +1011,14 @@ ${bodyContent}`;
   <span class="index-count">${total} items catalogued</span>
 </div>
 ${bodyContent}`;
+  } else if (isDocuments) {
+    content = `
+<div class="index-header">
+  <h1 class="page-title">${escapeHtml(sectionTitle('documents', publishConfig))}</h1>
+  <span class="index-count">${total} document${total !== 1 ? 's' : ''}</span>
+</div>
+${nameFilterHtml}
+${bodyContent}`;
   } else if (isCampaign) {
     const overview = pages.find(p => p.frontmatter.type === 'campaign_overview');
     const campaignName = (overview && overview.frontmatter.campaign) || config.siteTitle || 'Campaign';
@@ -991,5 +1060,5 @@ ${bodyContent}`;
 
 module.exports = {
   indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage,
-  resolveLocationGrouping, partitionByPivot,
+  resolveLocationGrouping, partitionByPivot, renderDocuments,
 };
