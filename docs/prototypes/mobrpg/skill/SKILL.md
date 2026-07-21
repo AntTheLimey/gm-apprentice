@@ -29,7 +29,7 @@ canon", "fix my mapping") over the detected default.
 
 | Read-only signal | Route to |
 |---|---|
-| entities lack a `mobrpg:` node entirely — the vault was never linked, or kept links in a legacy `*-crosswalk.json` sidecar | **Backfill** → `references/backfill.md` (migrate links → nodes, then `pull-desc baseline`) |
+| entities lack a `mobrpg:` node entirely — the vault was never linked to this world | **Establish nodes** → push net-new via `references/push.md`; for entities that already exist upstream, match them to live elements by name and stamp nodes, then `pull-desc baseline`. (Legacy `*-crosswalk.json` sidecars are unsupported and untrusted — never read one; nodes are the only source of truth.) |
 | no `<vault>/_meta/mobrpg-map.json`, or `mobrpg map check` / `whats-new` shows `new`/unmapped vocab or new classifier types (map drift) | **Mapping maintenance** → `references/mapping-maintenance.md` |
 | map clean; `mobrpg suggest --write-back` (dry-run) shows entities to push, **or** the vault has authored description prose beyond what mobRPG holds (`mobrpg suggest-desc <world> --vault <path>` report) | **Push** → `references/push.md` |
 | `mobrpg suggestions <world> --state Accepted\|Dismissed --correlate --vault <path>` (two queries — one per state) shows ratified suggestions awaiting pull-back, **or** a note's description prose differs between vault and mobRPG (`mobrpg pull-desc <world> --vault <path>` report), **or** `whats-new` reports `gone`/new entities to reconcile | **Reconcile** → `references/reconcile.md` |

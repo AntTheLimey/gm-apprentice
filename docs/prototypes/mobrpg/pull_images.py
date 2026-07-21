@@ -8,27 +8,50 @@ every entity detail. For each image it downloads to
 `_attachments/<category>/<vault-basename>.png` (category by kind: person →
 characters, organization → factions, political/landfeature → locations,
 item → items) and fills the vault file's `portrait: ""` frontmatter when the
-entity is in the crosswalk. Existing attachments are never overwritten (a
-colliding name gets a " (mobRPG)" suffix) and a non-empty portrait field is
-left alone — both cases are reported instead.
+entity is linked (its element_id appears in a vault `mobrpg:` node). Existing
+attachments are never overwritten (a colliding name gets a " (mobRPG)" suffix)
+and a non-empty portrait field is left alone — both cases are reported instead.
+
+The mobRPG element_id -> vault-file map comes from the vault's own `mobrpg:`
+nodes (the single source of truth); there is no sidecar crosswalk.
 
 World-level AI art lives separately at /world/{w}/generated/images and is
 attached to no entity; it is listed at the end for manual placement.
 
 Usage:
     export MOBRPG_TOKEN="$(grep '^AccessToken,' ~/Downloads/credentials.csv | cut -d, -f2)"
-    python3 pull_images.py <worldId> <vault_dir> <crosswalk.json>            # dry-run
-    python3 pull_images.py <worldId> <vault_dir> <crosswalk.json> --execute
+    python3 pull_images.py <worldId> <vault_dir>            # dry-run
+    python3 pull_images.py <worldId> <vault_dir> --execute
 """
 from __future__ import annotations
-import json, os, re, sys, urllib.request
+import os, re, sys, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import smoketest as api
+from mobrpg import node as _node
 
 KINDS = ["person", "organization", "political", "landfeature", "item"]
 FOLDER = {"person": "characters", "organization": "factions",
           "political": "locations", "landfeature": "locations", "item": "items"}
+
+
+def node_paths(vault: str) -> dict:
+    """Map mobRPG element_id -> vault-relative path, read from the vault's own
+    `mobrpg:` nodes. Replaces the retired sidecar crosswalk as the id->file map."""
+    out = {}
+    for root, dirs, files in os.walk(vault):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]   # skip .obsidian, .git, etc.
+        for fn in files:
+            if not fn.endswith(".md"):
+                continue
+            full = os.path.join(root, fn)
+            try:
+                nd = _node.read_node(open(full, encoding="utf-8").read())
+            except OSError:
+                continue
+            if nd and nd.get("element_id"):
+                out[nd["element_id"]] = os.path.relpath(full, vault)
+    return out
 
 
 def scan(world: str, token: str) -> list[dict]:
@@ -52,23 +75,22 @@ def scan(world: str, token: str) -> list[dict]:
 
 
 def main() -> int:
-    if len(sys.argv) < 4:
+    if len(sys.argv) < 3:
         print(__doc__, file=sys.stderr)
         return 2
-    world, vault, xwalk_path = sys.argv[1], sys.argv[2], sys.argv[3]
+    world, vault = sys.argv[1], sys.argv[2]
     execute = "--execute" in sys.argv
     token = os.environ.get("MOBRPG_TOKEN")
     if not token:
         print("set MOBRPG_TOKEN", file=sys.stderr)
         return 2
-    crosswalk = json.load(open(xwalk_path)) if os.path.exists(xwalk_path) else {}
+    id_to_path = node_paths(vault)
 
     found = scan(world, token)
     print(f"{len(found)} entities with images")
     wired = occupied = saved = 0
     for ent in found:
-        xw = crosswalk.get(ent["id"])
-        vp = xw["vault_path"] if xw else None
+        vp = id_to_path.get(ent["id"])
         base = os.path.splitext(os.path.basename(vp))[0] if vp else ent["name"]
         folder = FOLDER[ent["kind"]]
         for i, img in enumerate(ent["images"]):

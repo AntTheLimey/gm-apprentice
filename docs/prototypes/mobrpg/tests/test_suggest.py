@@ -180,24 +180,20 @@ def test_person_without_race_id_skips_race_and_sex():
     assert any("race" in r.lower() for r in reports)
 
 
-def _crosswalk():
-    return {
-        "entities": [{"name": "Dr Erasmus Hume", "kind": "npc", "mobrpg_id": "hume-id"},
-                     {"name": "Nathaniel Rooke", "kind": "npc", "mobrpg_id": "rooke-id"}],
-        "relationships": [{"subject": "Imogen Bellamy", "target": "Nathaniel Rooke",
-                           "predicate": "friend_of", "mobrpg_event_id": "ev-existing"}]}
-
-
-def test_crosswalk_index():
-    idx, linked = suggest.crosswalk_index(_crosswalk())
-    assert idx[suggest._key("Dr_Erasmus_Hume")] == "hume-id"
-    assert (suggest._key("Imogen Bellamy"), "friend_of", suggest._key("Nathaniel Rooke")) in linked
+def _index():
+    """(ent_id_by_key, linked) exactly as node_index would yield — built as
+    literals so these relationship_items unit tests don't depend on any id source
+    (the sidecar crosswalk is retired; nodes are the only source)."""
+    idx = {suggest._key("Dr Erasmus Hume"): "hume-id",
+           suggest._key("Nathaniel Rooke"): "rooke-id"}
+    linked = {(suggest._key("Imogen Bellamy"), "friend_of", suggest._key("Nathaniel Rooke"))}
+    return idx, linked
 
 
 def test_relationship_items(tmp_path):
     mp = _map()
     mp["relationshipTypes"] = {"imprisoned_by": "Generic"}
-    idx, linked = suggest.crosswalk_index(_crosswalk())
+    idx, linked = _index()
     ent = {"path": str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md"), "name": "Imogen Bellamy",
            "relationships": [
                {"target": "Dr_Erasmus_Hume", "predicate": "imprisoned_by", "desc": "held"},
@@ -244,7 +240,7 @@ def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
     # a valid EventType so the event path would build an invalid payload.
     mp = _map()
     mp["relationshipTypes"] = {"part_of": "Parent"}
-    idx, linked = suggest.crosswalk_index(_crosswalk())
+    idx, linked = _index()
     ent = {"path": str(tmp_path / "Locations/Body.md"), "name": "Imogen Bellamy",
            "relationships": [{"target": "Dr_Erasmus_Hume", "predicate": "part_of", "desc": ""}]}
     items, skipped = suggest.relationship_items(ent, mp, "e1", idx, linked,
@@ -474,16 +470,13 @@ def test_run_dry_run_end_to_end(tmp_path, monkeypatch, capsys):
         '---\ntype: npc\ntags:\n  - chapter-1\noccupation: "Priest"\ngender: Female\n---\nBody.\n',
         encoding="utf-8")
     (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
-    cw = tmp_path / "cw.json"
-    cw.write_text(json.dumps(_crosswalk()), encoding="utf-8")
-
     monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     def boom(*a, **k):
         raise AssertionError("no write in dry-run")
     monkeypatch.setattr(client, "_request", boom)
 
-    rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
+    rc = suggest.run(["w1", "--vault", str(d),
                       "--chapter", "chapter-1", "--out", str(tmp_path / "out")])
     assert rc == 0
     out = capsys.readouterr().out
@@ -502,11 +495,9 @@ def test_run_namespace_and_label_not_hardcoded_canticle(tmp_path, monkeypatch, c
     mp = _map()
     del mp["vaultNamespace"]  # older map without the field
     (d / "_meta/mobrpg-map.json").write_text(json.dumps(mp), encoding="utf-8")
-    cw = tmp_path / "cw.json"
-    cw.write_text(json.dumps(_crosswalk()), encoding="utf-8")
     monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
-    rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
+    rc = suggest.run(["w1", "--vault", str(d),
                       "--out", str(tmp_path / "out")])
     assert rc == 0
     out = capsys.readouterr().out
@@ -546,13 +537,10 @@ def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):
     (d / "Characters/NPCs/Brand_New.md").write_text(
         '---\ntype: npc\noccupation: "Priest"\ngender: Female\n---\nBody.\n', encoding="utf-8")
     (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
-    cw = tmp_path / "cw.json"
-    cw.write_text(json.dumps({"entities": [], "relationships": []}), encoding="utf-8")
-
     monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
 
-    rc = suggest.run(["w1", "--vault", str(d), "--crosswalk", str(cw),
+    rc = suggest.run(["w1", "--vault", str(d),
                       "--out", str(tmp_path / "out")])
     assert rc == 0
     out = capsys.readouterr().out

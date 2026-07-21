@@ -136,10 +136,10 @@ relationship mechanisms:
   Generic events. A structural edge emits one `AddRelation`, no reified Event.
 
 Relationship **targets** resolve from the vault's own `mobrpg:` nodes (each note's
-`element_id`), merged over any crosswalk — so a node-migrated vault resolves
-targets even with no sidecar. If the report shows `target not in crosswalk` skips,
-the target note either has no `mobrpg:` node yet (backfill/pull-canon it first) or
-its name doesn't match the `[[link]]`.
+`element_id`) — the single source of truth; there is no crosswalk. If the report
+shows a target skipped for want of an id, the target note either has no `mobrpg:`
+node yet (link it first — push it, or match it to its live element by name and
+stamp the node) or its name doesn't match the `[[link]]`.
 
 ## Description content up — `suggest-desc`
 

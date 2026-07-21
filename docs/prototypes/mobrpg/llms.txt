@@ -26,12 +26,15 @@ Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured.
 
 ## Read-only vs mutating
 
-Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, sync, images.
+Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, images.
 Mutating (need write access; dry-run by default, add --execute to apply):
 push, suggest, suggest-desc, submit-batch, update, types, links, review. write/merge/
-link-orphans/pull-canon/pull-desc/backfill/relink only touch local vault files,
+link-orphans/pull-canon/pull-desc/relink only touch local vault files,
 not the API (pull-canon and pull-desc read from mobRPG but only ever write
-locally; backfill and relink make no API calls at all).
+locally; relink makes no API calls at all).
+
+Entity/event IDs live in each note's `mobrpg:` frontmatter node — the single
+source of truth. There is NO sidecar crosswalk; never read or write one.
 
 ## Commands
 
@@ -121,13 +124,6 @@ locally; backfill and relink make no API calls at all).
                                   won't mint a duplicate. Dry-run without
                                   --execute; --from guards against relinking the
                                   wrong note.
-    mobrpg backfill <world> --vault <path> --crosswalk <file.json>
-                    [--namespace NS] [--execute]
-                                  One-time: migrate a sidecar crosswalk into
-                                  per-entity mobrpg: nodes. Offline (no API
-                                  calls); only needed for a vault that kept IDs
-                                  in a separate crosswalk file instead of node
-                                  frontmatter.
     mobrpg update <world> <suggestionId> <update.json> [--execute]
                                   Replace a Pending suggestion's payload (PUT,
                                   whole-payload). Edits inline fields only (name,
@@ -145,9 +141,6 @@ locally; backfill and relink make no API calls at all).
                                   Non-destructive merge for entities in both.
     mobrpg link-orphans <extract.json> <vault> <outdir>
                                   Auto-link obvious orphan relationships.
-    mobrpg sync bootstrap <baseline_extract.json> <vault> <crosswalk.json>
-    mobrpg sync sync <fresh_extract.json> <vault> <crosswalk.json> <report_dir>
-                                  Detect mobRPG edits since the last pull.
     mobrpg push <world> --chapter <ch> [--execute] [--limit N] [--only S]
                                   Direct-create vault entities in mobRPG.
     mobrpg suggest <world> --chapter <ch> [--execute] [--limit N] [--only S]
@@ -163,8 +156,9 @@ locally; backfill and relink make no API calls at all).
                                   Set entity types via Attribute edges.
     mobrpg links <world> --chapter <ch> [--execute] [--limit N]
                                   Push vault relationships as mobRPG events.
-    mobrpg images <world> <vault> <crosswalk.json> [--execute]
-                                  Pull entity images into the vault.
+    mobrpg images <world> <vault> [--execute]
+                                  Pull entity images into the vault (id->file map
+                                  comes from the vault's own mobrpg: nodes).
 
 Mutating verbs are dry-run by default; add --execute to actually write. Run
 `mobrpg <command> --help` for a command's own options.

@@ -27,7 +27,6 @@ from mobrpg.commands import pull_canon as _pull_canon
 from mobrpg.commands import pull_desc as _pull_desc
 from mobrpg.commands import suggest_desc as _suggest_desc
 from mobrpg.commands import whats_new as _whats_new
-from mobrpg.commands import backfill as _backfill
 from mobrpg.commands import relink as _relink
 
 # Directory holding the legacy prototype scripts (this package's parent).
@@ -49,7 +48,6 @@ NATIVE: dict = {
     "pull-desc": _pull_desc.run,
     "suggest-desc": _suggest_desc.run,
     "whats-new": _whats_new.run,
-    "backfill": _backfill.run,
     "relink": _relink.run,
 }
 
@@ -58,7 +56,6 @@ FALLBACK: dict[str, str] = {
     "write": "vault_write.py",
     "merge": "merge_overlaps.py",
     "link-orphans": "orphan_link.py",
-    "sync": "detect_updates.py",
     "push": "push_to_mobrpg.py",
     "types": "assign_types.py",
     "links": "push_relationships.py",
@@ -80,12 +77,10 @@ VERB_HELP: list[tuple[str, str]] = [
     ("pull-desc", "reconcile note description prose with mobRPG canon (report | --resolve)"),
     ("suggest-desc", "suggest a linked note's authored description UP to mobRPG (UpdateElement suggestion)"),
     ("whats-new", "read-only report: entities/types new in mobRPG, and vault notes gone upstream"),
-    ("backfill", "one-time: migrate a sidecar crosswalk into mobrpg: nodes"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
     ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
-    ("sync", "detect mobRPG entities edited since the last pull (bootstrap|sync)"),
     ("push", "push vault entities to mobRPG (direct create; needs write access)"),
     ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
     ("types", "set entity types via Attribute edges"),

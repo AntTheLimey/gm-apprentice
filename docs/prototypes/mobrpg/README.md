@@ -85,34 +85,25 @@ without changing the worldId.
 | `vault_write.py` | structured JSON → vault markdown files |
 | `merge_overlaps.py` | non-destructive merge for entities that exist in both |
 | `orphan_link.py` | auto-link obvious orphan relationships post-import |
-| `detect_updates.py` | keep-up-to-date: flags mobRPG entities edited since the last sync (see below) |
 | `push_to_mobrpg.py` | vault entities → mobRPG **direct create** (one POST per entity, immediately live; needs ReadWriteDelete) |
 | `push_suggestions.py` | vault entities → mobRPG **suggestions** (`POST /world/{id}/suggestion`, batched, idempotent on `externalRef`; only needs Read — a collaborator proposes content for the GM to accept/dismiss) |
 | `assign_types.py` | set mobRPG types via `Attribute` edges (race/sex, political/type…) |
 | `push_relationships.py` | vault relationships → mobRPG `event`s + `Link` edges |
 
-## Keeping Dead End up to date (added 2026-07-04)
+## Keeping a vault up to date (node model)
 
-The import above was a one-time batch. `detect_updates.py` closes the gap: it
-tracks a sidecar crosswalk (`_meta/mobrpg-crosswalk.json` in the vault) mapping
-mobRPG entity id → vault file + a content hash, so a later pull can tell what
-Tim actually changed since last time, instead of just skipping anything that
-already has a file.
+Entity/event IDs live in each note's `mobrpg:` frontmatter node — the single
+source of truth. **There is no sidecar crosswalk** (the old
+`detect_updates.py` + `_meta/mobrpg-crosswalk.json` flow is retired: the
+hand-vendored crosswalks drifted and were untrustworthy). Reconciliation runs
+against the nodes:
 
-- **One-time seed (already done for Space → Dead End):**
-  `python3 detect_updates.py bootstrap space_extract.json ~/Documents/space_game _meta/mobrpg-crosswalk.json`
-  — seeded from the original import extract, not "whatever's live today", so
-  the baseline reflects 2026-06-28, not an arbitrary later date. Don't re-run
-  this against a fresh pull; it would discard that real baseline.
-- **Ongoing check:** pull a fresh extract (`etl_extract.py <worldId> fresh.json`),
-  then `python3 detect_updates.py sync fresh.json ~/Documents/space_game
-  _meta/mobrpg-crosswalk.json <report_dir>`. Anything genuinely new in mobRPG
-  is reported (run the normal import path to bring it in); anything changed on
-  an already-imported entity gets a `## mobRPG Update Available` section
-  appended to that vault file — never a blind overwrite — plus a
-  `sync-report.md` summary. Re-running `sync` with no new mobRPG changes is a
-  no-op; a second real change replaces the still-pending section rather than
-  stacking a duplicate.
+- **What changed upstream:** `mobrpg whats-new <world> --vault <path>` — a
+  read-only diff of the live world against the vault's nodes (new entities,
+  entities gone upstream, unmapped classifier types).
+- **Bring changes in:** `mobrpg pull-canon` (ratified canon → nodes) and
+  `mobrpg pull-desc` (description prose) apply the authority rule per node's
+  review_state — append/flag, never blind-overwrite.
 - Manual/on-demand only — no scheduled job.
 
 ## Reference docs
@@ -121,7 +112,6 @@ already has a file.
 - `schema-map.md` — how the two schemas map (incl. the reified-event relationship model)
 - `gm-apprentice-ontology-export.md` / `.json` — vault predicate ontology + eventType mapping (for Tim)
 - `FINDINGS.md` — original API reverse-engineering notes
-- `canticle-regency-crosswalk.json` — **the crosswalk** (vault↔mobRPG IDs: 42 entities + 80 relationships)
 - `push_out/`, `orphan_link_out/` — run artifacts
 
 ## ⚠️ Before you do anything when you resume — read these

@@ -2,9 +2,11 @@
 classifier Types via Attribute edges + reified relationship Events) and submit it
 as compound batches. Replaces the bare-CreateElement legacy push_suggestions.py.
 
-Reads _meta/mobrpg-map.json (type rules), the crosswalk (entity/event ids), and
-the vault .md files. Imports only clean modules — never the legacy push_*/smoketest
-scripts (which print a PROD banner on import and couple to legacy transport).
+Reads _meta/mobrpg-map.json (type rules) and the vault .md files. Entity/event
+ids come from the vault's own `mobrpg:` nodes (node_index) — the single source of
+truth; there is no sidecar crosswalk. Imports only clean modules — never the
+legacy push_*/smoketest scripts (which print a PROD banner on import and couple
+to legacy transport).
 """
 from __future__ import annotations
 
@@ -310,23 +312,12 @@ def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[di
     return items, reports
 
 
-def crosswalk_index(crosswalk) -> tuple[dict, set]:
-    idx = {}
-    for e in crosswalk.get("entities", []):
-        if e.get("mobrpg_id"):
-            idx[_key(e.get("name"))] = e["mobrpg_id"]
-    linked = set()
-    for r in crosswalk.get("relationships", []):
-        if r.get("mobrpg_event_id"):
-            linked.add((_key(r.get("subject")), r.get("predicate"), _key(r.get("target"))))
-    return idx, linked
-
-
 def node_index(vault) -> tuple[dict, set]:
     """Build the target-resolution index from the vault's own `mobrpg:` nodes —
-    the same (ent_id_by_key, linked) shape as `crosswalk_index`, for a
-    node-migrated vault that no longer relies on a sidecar crosswalk. A node
-    relationship already carrying an `event_id` is treated as already-linked."""
+    the (ent_id_by_key, linked) pair suggest resolves against. This is the single
+    source of truth: a vault entity is "already upstream" iff it carries a node
+    with an `element_id`. A node relationship already carrying an `event_id` is
+    treated as already-linked."""
     idx, linked = {}, set()
     aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
@@ -630,12 +621,6 @@ def _default_map_path(vault):
     return os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json")
 
 
-def _default_crosswalk():
-    # canticle-regency-crosswalk.json ships next to the package's parent (prototype dir)
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                        "canticle-regency-crosswalk.json")
-
-
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg suggest",
@@ -644,7 +629,6 @@ def run(argv: list[str]) -> int:
     ap.add_argument("world", help="mobRPG worldId")
     ap.add_argument("--vault", required=True, help="vault root path")
     ap.add_argument("--map", default="", help="map file (default: <vault>/_meta/mobrpg-map.json)")
-    ap.add_argument("--crosswalk", default="", help="crosswalk file (default: packaged Canticle crosswalk)")
     ap.add_argument("--chapter", default="", help="restrict to entities tagged with a chapter")
     ap.add_argument("--kind", default="", help="restrict to one vault kind")
     ap.add_argument("--only", default="", help="substring match on entity name")
@@ -663,12 +647,10 @@ def run(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     map_path = args.map or _default_map_path(args.vault)
-    cw_path = args.crosswalk or _default_crosswalk()
     try:
         mp = json.load(open(map_path, encoding="utf-8"))
-        crosswalk = json.load(open(cw_path, encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as e:
-        print(f"ERROR reading map/crosswalk: {e}", file=sys.stderr)
+        print(f"ERROR reading map: {e}", file=sys.stderr)
         return 2
 
     # Derive the namespace when the map omits it — never silently fall back to
@@ -695,13 +677,11 @@ def run(argv: list[str]) -> int:
     if race_id is None:
         print("  note: no live 'Human' race found — persons will skip Race/Sex edges.", file=sys.stderr)
 
-    # Resolve relationship targets from the crosswalk AND the vault's own
-    # mobrpg: nodes; nodes win, so a node-migrated vault resolves targets even
-    # when the (default/foreign) crosswalk doesn't know them.
-    ent_id_by_key, linked = crosswalk_index(crosswalk)
-    node_idx, node_linked = node_index(args.vault)
-    ent_id_by_key.update(node_idx)
-    linked |= node_linked
+    # Resolve relationship targets and already-linked triples from the vault's
+    # own mobrpg: nodes — the single source of truth. An entity with no node is
+    # treated as net-new; give it a node first (via the live name-match reconcile)
+    # rather than trusting any sidecar crosswalk.
+    ent_id_by_key, linked = node_index(args.vault)
 
     # An already-upstream entity must NOT be re-filed as a brand-new CreateElement
     # (that filed 140 of Space's 169 Tranche-A entities as bogus creates). Only

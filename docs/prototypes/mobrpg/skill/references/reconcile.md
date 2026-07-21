@@ -45,9 +45,9 @@ pass is on by default; `--no-verify` skips it (faster/offline, but only
 accepted/dismissed will then surface). **pending** is queried too but is a
 no-op on the vault — it just means "still under review, nothing to reconcile."
 
-There is no `--crosswalk` flag on `pull-canon` — that flag belongs to
-`backfill` (see `backfill.md`) for the one-time sidecar migration. Don't
-reach for it here.
+There is no `--crosswalk` flag anywhere — sidecar crosswalks are retired and
+untrusted. `pull-canon` reconciles against each note's `mobrpg:` node, the
+single source of truth.
 
 **Sequencing (from the foundation audit):** always run `pull-canon` after any
 re-`suggest`, so relationship `event_id`s heal and no duplicate-suggestion

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Create relationships for already-pushed vault entities, as mobRPG events, and
-write the resulting event ID back into the vault frontmatter (the crosswalk).
+write the resulting event ID back into the vault frontmatter `mobrpg:` node.
 
 mobRPG models a relationship as a reified `event` (join entity): an event with
 an `eventType` (the 7-enum) + two `Link` edges to the participants. For each
