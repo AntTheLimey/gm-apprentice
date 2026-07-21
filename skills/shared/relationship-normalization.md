@@ -68,9 +68,11 @@ Do not force them into the graph:
 - **One-off actions** with no lasting structural meaning (`threatened`,
   `marked`, `released_in`, `encountered_by`) — capture them in the
   entity's prose or a timeline event, not as an edge.
-- **Sequencing** (`leads_to`, `precedes`, `alternative_to`) — clue-to-clue
-  flow lives in the Clue's `leads_to` **frontmatter field**, never a
-  `relationships:` block (see `entity-schema.md`).
+- **Sequencing / branching** (`leads_to`, `precedes`, `alternative_to`) —
+  node-based narrative flow lives in the **`leads_to` frontmatter field** on
+  Clue and Plan entities (an array of wiki-links; two or more targets is a
+  branch), never a `relationships:` block. `precedes` folds into `leads_to`;
+  `alternative_to` is emergent from multiple targets (see `entity-schema.md`).
 
 When in doubt, a fact is an edge only if a graph query would want to
 traverse it. Otherwise it is prose.

@@ -276,6 +276,7 @@ Extraction defaults:
 | chapter | string | Wiki-link to chapter overview (`"[[Chapter_N_Overview]]"`) |
 | participants | array | Wiki-link array to NPCs, factions, creatures involved |
 | locations | array | Wiki-link array to location entities |
+| leads_to | array | Wiki-link array to the plan node(s) this one leads to (node-based sequencing; see below) |
 
 ### Document
 
@@ -458,7 +459,7 @@ listing.
 
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),
-`locations` (wiki-links)
+`locations` (wiki-links), `leads_to` (wiki-links)
 
 **Adventure Brief:** `scope` (campaign/one-shot/few-shot),
 `sessions_estimated`, `continuation_type` (new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
@@ -531,11 +532,17 @@ ever disagree. A vault's `_meta/relationship-types.md` is a
 genre-filtered **subset** of this table — never a superset. Predicates
 that appear only in a vault copy are drift, not vocabulary.
 
-**Not relationship predicates:** narrative-flow / sequencing concepts —
-`leads_to`, `precedes`, `alternative_to` — are **not** edges in this
-graph. `leads_to` is a Clue *frontmatter field* (see the Clue schema),
-and clue-to-clue flow belongs there, not in a `relationships:` block. A
-vault vocabulary that lists a `Sequencing` category invented it.
+**Not relationship predicates:** narrative-flow / sequencing is **not**
+an edge in this relationship graph and never a `relationships:` block
+entry. It is modelled the node-based way (Alexandrian node-based
+scenario design; Twine's passage graph): a **`leads_to` frontmatter
+field** — an array of wiki-links to the node(s) this one leads to — on
+both **Clue** and **Plan** entities. A node with two or more `leads_to`
+targets *is* a branch; the branching is the graph structure, so there
+is no separate `precedes` (redundant with `leads_to`) or
+`alternative_to` (emergent from multiple targets) predicate or field. A
+vault vocabulary that lists a `Sequencing` relationship category
+invented it — convert those edges to `leads_to` fields.
 
 ## Required Relationships
 

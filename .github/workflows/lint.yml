@@ -112,6 +112,9 @@ jobs:
       - name: Validate relationship-ontology copies agree
         run: python scripts/validate_ontology.py
 
+      - name: Plan leads_to field validation
+        run: python tests/test_plan_leads_to.py
+
       - name: PC entity-sheet freshness regression
         run: python tests/test_pc_freshness.py
 

@@ -206,6 +206,19 @@ def validate_file(filepath: Path) -> list[str]:
                     f"Invalid plan_type '{value}' — "
                     f"must be one of: {', '.join(sorted(PLAN_TYPES))}"
                 )
+        # leads_to: optional node-based sequencing — array of wiki-links to the
+        # plan node(s) this one leads to (2+ targets = a branch). Absent is fine.
+        if "leads_to" in frontmatter and frontmatter["leads_to"] is not None:
+            value = frontmatter["leads_to"]
+            if not isinstance(value, list):
+                errors.append("Field 'leads_to' must be an array of wiki-links")
+            else:
+                for item in value:
+                    if not isinstance(item, str) or "[[" not in item:
+                        errors.append(
+                            f"Field 'leads_to' entries must be wiki-links "
+                            f"(e.g. \"[[Plan Name]]\"), got {item!r}"
+                        )
 
     # Validate portrait field — only allowed for supported entity types
     portrait = frontmatter.get("portrait")
