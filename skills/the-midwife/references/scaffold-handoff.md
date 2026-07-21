@@ -80,9 +80,13 @@ For each approved plan:
      factions, and creatures mentioned in the plan
    - Populate `locations` with wiki-links to locations
      mentioned in the plan
-   - Add `relationships` between plans where sequencing
-     or branching exists (e.g., `leads_to`, `precedes`,
-     `alternative_to`)
+   - Express any sequencing or branching between plans (which
+     plan follows or forks from which) in the plan's narrative
+     body — **not** as `relationships:` edges.
+     `leads_to`/`precedes`/`alternative_to` are narrative flow,
+     not graph predicates (see `shared/entity-schema.md`). A
+     genuine `relationships:` edge on a plan takes its `type:`
+     from the controlled vocabulary in `_meta/relationship-types.md`.
    - **Preserve the body prose verbatim.** Carry the full
      narrative content across unchanged; only adapt section
      headers to the plan type and add `[[wiki-links]]`. Do not
