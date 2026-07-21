@@ -1,13 +1,12 @@
 # mobRPG ↔ gm-apprentice integration (prototype) — START HERE
 
 Spike work connecting **mobrpg.com** (Tim's web RPG world-builder) with
-gm-apprentice vaults. Parked 2026-06-28. This README is the front door; the
-authoritative status + open decisions live in **`integration-log.md` → the
-"📍 STATUS & OPEN DECISIONS — resume here" section.** Read that first.
+gm-apprentice vaults, now graduated into an installable `mobrpg` CLI (v1.9.0).
+This README is the front door; `llms.txt` is the agent-facing command guide.
 
-> **⚠️ Active work — `mobrpg-cli` branch (2026-07-12):** the scripts are being
-> wrapped in an installable `mobrpg` CLI via a strangler port. If you're on that
-> branch, read **`CLI-HANDOFF.md`** to pick up where it left off.
+> The historical design docs (master log, schema notes, reverse-engineering
+> findings, the suggestion/writeback specs, and the earlier CLI handoff) have
+> been archived outside the repo at `~/PROJECTS/docs/mobrpg-cli-history/`.
 
 ## What this is
 
@@ -108,11 +107,10 @@ against the nodes:
 
 ## Reference docs
 
-- `integration-log.md` — **the master log** (method, 19 gotchas, status, open decisions)
-- `schema-map.md` — how the two schemas map (incl. the reified-event relationship model)
+- `llms.txt` — the agent-facing CLI guide (auth, verbs, safe-write rules)
 - `gm-apprentice-ontology-export.md` / `.json` — vault predicate ontology + eventType mapping (for Tim)
-- `FINDINGS.md` — original API reverse-engineering notes
-- `push_out/`, `orphan_link_out/` — run artifacts
+- Historical design docs (master log, `schema-map`, `FINDINGS`, `CLI-HANDOFF`,
+  the suggestion/writeback specs) — archived at `~/PROJECTS/docs/mobrpg-cli-history/`
 
 ## ⚠️ Before you do anything when you resume — read these
 
