@@ -182,6 +182,28 @@ def _first_token(s: str) -> str:
     return re.split(r"[,/;]", s or "", maxsplit=1)[0].strip()
 
 
+def classifier_name(s: str) -> str:
+    """Clean base label for a shared-vocabulary classifier (profession, org type,
+    creature type) minted into someone else's world.
+
+    The vault's own fields are rich authorial free text — "Recovery agent
+    (contracted to [[Corvid Financial]])" — and STAY that way in the vault. What
+    gets pushed must be the base label only: no affiliation clause, no wikilink
+    markup, no parenthetical qualifier, because those turn a shared type into a
+    one-off and (for wikilinks) leak raw Obsidian syntax upstream. Casing is left
+    to the call site.
+
+    Strips, in order: the delimited suffix (`, / ;` via `_first_token`), a
+    spaced-dash clause (`— …`, `- …` — the space guard preserves hyphenated words
+    like "bare-knuckle"), parentheticals, then any surviving wikilink markup as a
+    defensive last pass so `[[` can never reach mobRPG however it was embedded."""
+    s = _first_token(s)
+    s = re.split(r"\s+[—–-]\s+", s, maxsplit=1)[0]
+    s = re.sub(r"\s*\([^)]*\)", "", s)
+    s = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("|")[-1], s)
+    return re.sub(r"\s{2,}", " ", s).strip()
+
+
 def _frontmatter(path: str) -> str:
     txt = open(path, encoding="utf-8").read()
     m = re.match(r"^---\n(.*?)\n---", txt, re.S)
@@ -263,17 +285,19 @@ def _closest(n: str, existing: dict) -> tuple[str, str] | None:
 def _bind(value: str, existing: dict, target_kind: str) -> dict:
     """Match a vault value to an existing mobRPG type, flag a near-duplicate for
     review, else propose a new one."""
+    # Match on the first-token key (consistent with scan_vault's keying), but store
+    # the sanitized base label — the name is what gets minted into mobRPG.
     tok = _first_token(value)
     n = _norm(tok)
+    name = classifier_name(value)
     hit = existing.get(n)
     if hit:
-        # recover the original-cased existing name
-        return {"target": target_kind, "name": tok, "mobrpgId": hit, "status": "bound"}
+        return {"target": target_kind, "name": name, "mobrpgId": hit, "status": "bound"}
     near = _closest(n, existing)
     if near:
-        return {"target": target_kind, "name": tok.title(), "mobrpgId": None,
+        return {"target": target_kind, "name": name.title(), "mobrpgId": None,
                 "status": "review", "nearExisting": near[0], "nearId": near[1]}
-    return {"target": target_kind, "name": tok.title(), "mobrpgId": None, "status": "new"}
+    return {"target": target_kind, "name": name.title(), "mobrpgId": None, "status": "new"}
 
 
 # natural-feature words NOT spelled exactly like a LandFeatureSubType enum value

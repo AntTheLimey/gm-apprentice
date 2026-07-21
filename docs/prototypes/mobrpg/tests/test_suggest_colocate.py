@@ -131,6 +131,71 @@ def test_chunker_three_way_component_stays_whole():
     assert len(chunks) == 1 and deferred == []
 
 
+# ---- dedupe_type_creates: one create per shared classifier type ----
+
+def _type_create(ref, name, etype="Profession"):
+    return {"ref": ref, "operation": "CreateElement",
+            "payload": {"operation": "CreateElement", "name": name,
+                        "data": {"type": etype}}, "dependsOn": []}
+
+def _entity_create(ref, name):  # entities carry an externalRef; types never do
+    return {"ref": ref, "operation": "CreateElement",
+            "payload": {"operation": "CreateElement", "name": name, "data": {"type": "Person"}},
+            "dependsOn": [], "externalRef": f"space_game:{name}"}
+
+def _attr(src, tgt, depends):
+    return {"operation": "AddRelation",
+            "payload": {"operation": "AddRelation", "sourceRef": src, "targetRef": tgt,
+                        "type": "Attribute"}, "dependsOn": list(depends)}
+
+
+def test_dedupe_collapses_a_shared_type_to_one_create():
+    # Two entities both mint "Station 45 Gang Member": one create must survive, the
+    # borrower's Attribute edge re-points at it, and the borrower co-locates with the
+    # owner so the in-batch suggestion ref resolves.
+    g1 = [_entity_create("e2", "Alphonse"),
+          _type_create("e2t0", "Station 45 Gang Member"),
+          _attr("suggestion:e2t0", "suggestion:e2", ["e2t0", "e2"])]
+    g2 = [_entity_create("e5", "Gio"),
+          _type_create("e5t0", "Station 45 Gang Member"),
+          _attr("suggestion:e5t0", "suggestion:e5", ["e5t0", "e5"])]
+    groups, refs = suggest.dedupe_type_creates([g1, g2], ["e2", "e5"])
+    creates = [it for g in groups for it in g
+               if it["operation"] == "CreateElement" and "externalRef" not in it]
+    assert len(creates) == 1 and creates[0]["ref"] == "e2t0"     # survivor is the first
+    # Gio's Attribute edge now points at the survivor and needs the owner group
+    gio_attr = next(it for it in groups[1] if it["operation"] == "AddRelation")
+    assert gio_attr["payload"]["sourceRef"] == "suggestion:e2t0"
+    assert "e5t0" not in gio_attr["dependsOn"] and "e2t0" in gio_attr["dependsOn"]
+    assert gio_attr["_needs"] == "e2"
+    # and the whole thing chunks into ONE valid batch (survivor co-located)
+    chunks, deferred = suggest.chunk_groups_colocated(groups, refs, cap=100)
+    assert deferred == []
+    flat = [it for c in chunks for it in c]
+    srcs = {it["payload"].get("sourceRef") for it in flat if it["operation"] == "AddRelation"}
+    assert srcs == {"suggestion:e2t0"}                            # no dangling e5t0
+
+
+def test_dedupe_keeps_distinct_types_and_entities():
+    # different type names, and entity creates (which carry externalRef), are untouched.
+    g1 = [_entity_create("e1", "A"), _type_create("e1t0", "Enforcer")]
+    g2 = [_entity_create("e2", "B"), _type_create("e2t0", "Assassin")]
+    groups, _ = suggest.dedupe_type_creates([g1, g2], ["e1", "e2"])
+    creates = [it for g in groups for it in g if it["operation"] == "CreateElement"]
+    assert len(creates) == 4                                       # nothing collapsed
+
+
+def test_dedupe_repoints_a_type_referenced_as_target():
+    # a Sex-style edge references the type as TARGET (race -> sex); repoint that too.
+    g1 = [_entity_create("e1", "A"), _type_create("e1t0", "Female", "Sex"),
+          _attr("race", "suggestion:e1t0", ["e1t0"])]
+    g2 = [_entity_create("e2", "B"), _type_create("e2t0", "Female", "Sex"),
+          _attr("race", "suggestion:e2t0", ["e2t0"])]
+    groups, _ = suggest.dedupe_type_creates([g1, g2], ["e1", "e2"])
+    edge = next(it for it in groups[1] if it["operation"] == "AddRelation")
+    assert edge["payload"]["targetRef"] == "suggestion:e1t0" and edge["_needs"] == "e1"
+
+
 # ---- collect_entities: skip non-entity sidecar notes (character-story) ----
 
 def test_collect_entities_exclude_kinds(tmp_path):

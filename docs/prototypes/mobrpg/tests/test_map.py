@@ -95,6 +95,41 @@ def test_bind_matches_existing_else_new():
     assert m._bind("Priest", existing, "person/profession")["status"] == "new"
 
 
+def test_classifier_name_strips_markup_that_must_never_reach_mobrpg():
+    # A classifier name is a shared-vocabulary label in someone else's world. The GM's
+    # occupation field is rich free text and stays that way in the vault; the pushed
+    # label must be the clean base profession only.
+    cases = {
+        # wikilink markup must never leak upstream, however it is embedded
+        "Recovery agent (contracted to [[Corvid Financial]])": "Recovery Agent",
+        "Senior Compliance Officer — [[Castellan Biodynamics]], Asset Recovery": "Senior Compliance Officer",
+        "Security guard, [[Nova Nexus]]": "Security Guard",
+        # parenthetical qualifiers pollute a shared vocabulary with one-offs
+        "Assassin (Serene Syndicate orbit)": "Assassin",
+        "Bare-knuckle boxing champion (Thides system)": "Bare-Knuckle Boxing Champion",
+        "Leader of Station Security (MacMillian Station IV)": "Leader Of Station Security",
+        # clean values pass through unchanged (bar title-casing at the call site)
+        "Station 45 Gang Member": "Station 45 Gang Member",
+        "Enforcer": "Enforcer",
+    }
+    for raw, want in cases.items():
+        got = m.classifier_name(raw)
+        assert "[[" not in got and "(" not in got, f"{raw!r} -> {got!r} still has markup"
+        assert got.title() == want, f"{raw!r} -> {got.title()!r}, wanted {want!r}"
+
+
+def test_classifier_name_leaves_hyphenated_words_intact():
+    # the em-dash clause stripper keys on a SPACED dash; hyphenated words have none.
+    assert m.classifier_name("Bare-knuckle boxing champion") == "Bare-knuckle boxing champion"
+    assert m.classifier_name("Sub-warden") == "Sub-warden"
+
+
+def test_bind_stores_a_clean_name():
+    # the name minted into the map (and thence a mobRPG create) is already sanitized.
+    got = m._bind("Recovery agent (contracted to [[Corvid Financial]])", {}, "person/profession")
+    assert got["name"] == "Recovery Agent"
+
+
 # --- G2: genuinely-ambiguous vocab is parked in status "review" ---------------
 
 def test_route_location_embedded_feature_word_goes_to_review():

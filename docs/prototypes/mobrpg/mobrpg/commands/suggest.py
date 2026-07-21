@@ -230,7 +230,7 @@ def _attach_classifier(section, raw, type_kind, entity_ref, ref_id):
     if entry is None:
         if not raw:
             return [], None
-        name = map_cmd._first_token(raw).title()
+        name = map_cmd.classifier_name(raw).title()
         mode, val = "create", name
         unmapped = f"{type_kind}:{name}"
     else:
@@ -470,6 +470,62 @@ def chunk_groups(groups, cap=100) -> list[list[dict]]:
     return chunks
 
 
+def _is_type_create(item) -> bool:
+    """A classifier-Type mint: a CreateElement with no externalRef. Entity elements
+    and reified relationship events always carry one, so this cleanly excludes them."""
+    return item.get("operation") == "CreateElement" and not item.get("externalRef")
+
+
+def dedupe_type_creates(groups, refs) -> tuple[list[list[dict]], list]:
+    """Collapse duplicate classifier-Type creates (same element-type + name) across
+    entity groups to a single create.
+
+    Two entities that share an unbound classifier — profession "Station 45 Gang
+    Member", political type "Territory" — each mint their own CreateElement, so a
+    push would create the type N times in the shared world. Keep the first (by group
+    order, deterministic); drop the rest; re-point every borrowing edge's
+    sourceRef/targetRef/dependsOn at the survivor, and tag it `_needs=<owner entity
+    ref>` so the co-location chunker keeps borrower and survivor in one batch (the
+    in-batch `suggestion:<ref>` must resolve). Returns `(groups, refs)` unchanged in
+    shape, mutated in place."""
+    survivor: dict = {}          # (etype, name) -> (type_ref, owner_entity_ref)
+    for gi, group in enumerate(groups):
+        for it in group:
+            if _is_type_create(it):
+                key = (it["payload"]["data"].get("type"), it["payload"].get("name"))
+                survivor.setdefault(key, (it["ref"], refs[gi]))
+
+    for gi, group in enumerate(groups):
+        remap: dict = {}         # dropped type_ref -> (survivor_ref, owner_entity_ref)
+        kept = []
+        for it in group:
+            if _is_type_create(it):
+                key = (it["payload"]["data"].get("type"), it["payload"].get("name"))
+                surv_ref, owner = survivor[key]
+                if surv_ref != it["ref"]:
+                    remap[it["ref"]] = (surv_ref, owner)
+                    continue      # drop this duplicate mint
+            kept.append(it)
+        if not remap:
+            continue
+        for it in kept:
+            for ref, (surv_ref, owner) in remap.items():
+                sref, dref = "suggestion:" + ref, "suggestion:" + surv_ref
+                p = it.get("payload", {})
+                touched = False
+                if p.get("sourceRef") == sref:
+                    p["sourceRef"] = dref; touched = True
+                if p.get("targetRef") == sref:
+                    p["targetRef"] = dref; touched = True
+                if ref in it.get("dependsOn", []):
+                    it["dependsOn"] = [surv_ref if d == ref else d for d in it["dependsOn"]]
+                    touched = True
+                if touched:
+                    it["_needs"] = owner   # co-locate borrower with the survivor's group
+        groups[gi] = kept
+    return groups, refs
+
+
 def chunk_groups_colocated(groups, refs, cap=100) -> tuple[list[list[dict]], list[tuple]]:
     """Pack per-entity groups into <=cap batches, keeping a group and every
     net-new target group it references (items tagged `_needs=<ref>`) in the SAME
@@ -663,6 +719,9 @@ def run(argv: list[str]) -> int:
         refs.append(f"e{i}")
         all_reports.extend(reports)
 
+    items_before = sum(len(g) for g in groups)
+    groups, refs = dedupe_type_creates(groups, refs)
+    collapsed = items_before - sum(len(g) for g in groups)
     try:
         chunks, deferred = chunk_groups_colocated(groups, refs, cap=100)
     except ValueError as e:
@@ -673,6 +732,9 @@ def run(argv: list[str]) -> int:
     os.makedirs(args.out, exist_ok=True)
     print(f"{len(net_new)} net-new entit(y/ies) → {sum(len(c) for c in chunks)} "
           f"items in {len(chunks)} batch(es)")
+    if collapsed:
+        print(f"  [dedup] collapsed {collapsed} duplicate classifier-type create(s) "
+              f"into shared types")
     if linked_ents:
         held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked)
         # Be precise about what "held" means: this run emits NO edges for linked
@@ -725,9 +787,11 @@ def _determined_name(section, raw):
         if mode == "drop":
             return None
         if mode == "bound":
-            return entry.get("name") or map_cmd._first_token(raw).title()
-        return val or map_cmd._first_token(raw).title()
-    return map_cmd._first_token(raw).title()
+            # a bound name is Tim's own canonical type; keep it verbatim
+            return entry.get("name") or map_cmd.classifier_name(raw).title()
+        # create: clean defensively in case the map name predates sanitization
+        return (val and map_cmd.classifier_name(val).title()) or map_cmd.classifier_name(raw).title()
+    return map_cmd.classifier_name(raw).title()
 
 
 def determined_for(entity: dict, mp: dict) -> dict:
