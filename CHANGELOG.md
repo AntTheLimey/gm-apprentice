@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.41] — 2026-07-21
+
+Ports the mobRPG node schema into the shipped entity schema and settles the
+`mobrpg:` node as the single source of truth for mobRPG sync — the sidecar
+crosswalk is retired.
+
+### Added
+
+- **`mobrpg:` node schema** documented in `skills/shared/entity-schema.md`: the
+  machine-managed, regenerable sync ledger the `mobrpg` CLI writes for entities
+  synced to a mobRPG world (identity anchors, `review_state`, `content_hash`,
+  `determined` classifiers, reified-Event relationship ids). Never
+  hand-authored; top-line frontmatter stays the source of truth. Registered as
+  a `1.8.40 → 1.8.41` migration.
+
+### Changed
+
+- **mobRPG CLI (`docs/prototypes/mobrpg/`) resolves all element/event ids from
+  the vault's own `mobrpg:` nodes** — the sole source of truth. `suggest` drops
+  `--crosswalk` and the packaged default; `images` derives its id→file map from
+  nodes.
+
+### Removed
+
+- **The legacy sidecar crosswalk and every path that read it.** Removed the
+  `backfill` and `sync` verbs, the packaged `canticle-regency-crosswalk.json`,
+  and all `--crosswalk` inputs. The hand-vendored crosswalks had drifted (wrong
+  ids/kinds/paths) and were never tied to the ontology; nodes replace them.
+
 ## [1.8.40] — 2026-07-21
 
 Publish tool 1.11.15. Documents index grouped by character (#96).

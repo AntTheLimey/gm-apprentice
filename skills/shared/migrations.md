@@ -546,3 +546,34 @@ entities (the Clue type already carries `leads_to`).
   - Report each converted edge; never silently drop graph data.
   Opt-in per vault. `campaign-qa` graph-health now flags the off-vocabulary
   predicates until converted.
+
+## Migration: 1.8.40 → 1.8.41
+
+Documents the machine-managed `mobrpg:` frontmatter node in
+[entity-schema.md](entity-schema.md) — the regenerable sync ledger the
+`mobrpg` CLI writes for entities synced to a mobRPG world — and settles the
+node as the **single source of truth** for mobRPG element/event ids. There is
+no sidecar crosswalk.
+
+### Structural
+
+- **None automatic; shipped templates unchanged.** The `mobrpg:` node is
+  never hand-authored — the `mobrpg` CLI writes it on sync
+  (`suggest --write-back`, then `pull-canon` fills accepted ids), so
+  `skills/shared/templates/` carries no scaffold for it and needs no edit.
+  Vaults with no mobRPG world attached are unaffected.
+
+### Content
+
+- **Schema Mirror Sync** picks up the new `mobrpg:` node subsection from
+  `entity-schema.md` into each vault's `_meta/entity-types.md`.
+
+### Tooling
+
+- The `mobrpg` CLI (`docs/prototypes/mobrpg/`) resolves every element/event id
+  from the vault's own `mobrpg:` nodes — the sole source of truth. The legacy
+  sidecar crosswalk is retired: the `backfill` and `sync` verbs and all
+  `--crosswalk` inputs are removed, and `images` reads its id→file map from
+  nodes. A vault whose entities already exist upstream but lack nodes is
+  linked by matching live mobRPG elements by name, never by reading a
+  crosswalk.

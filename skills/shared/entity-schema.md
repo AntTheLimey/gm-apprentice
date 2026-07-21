@@ -482,6 +482,25 @@ listing.
 
 **World Flags:** `last_reviewed`
 
+### The `mobrpg:` node (machine-managed — do not hand-edit)
+
+Entities synced to a mobRPG world carry a `mobrpg:` frontmatter node written and
+maintained by the `mobrpg` CLI. It is a regenerable sync ledger, not authored
+content — top-line frontmatter remains the single source of truth. Scalar values
+are JSON-encoded (`key: "text"`, `key: null`).
+
+| Key | Meaning |
+|-----|---------|
+| `world_id` / `external_ref` / `element_id` / `element_kind` | identity anchors (element_id is null until mobRPG accepts) |
+| `review_state` | `pending` \| `accepted` \| `dismissed` \| `edited` \| `deleted` |
+| `content_hash` / `last_synced` / `review_note` | sync bookkeeping |
+| `determined` | classifiers derived and sent (mobRPG canon overwrites on edit) |
+| `relationships[]` | reified-Event ids keyed by `(predicate, target)` |
+| `languages[]` | reserved (populated by the mobRPG skill) |
+
+Authority: mobRPG is canon. `accepted`/`edited` entities are refreshed from
+mobRPG on pull-down; `pending`/`dismissed` entities keep their vault content.
+
 ## Relationship Types
 
 Use the most specific type available. Generic types like
