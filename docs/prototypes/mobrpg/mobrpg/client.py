@@ -126,13 +126,27 @@ def create_app_token(token: str, name: str) -> dict:
     return _request("POST", "/app/token", token=token, body={"name": name})
 
 
+def refresh_app_token(refresh_token: str) -> dict:
+    """Exchange a refresh token for a fresh {accessToken, refreshToken}."""
+    return _request("GET", "/app/token/refresh",
+                    query={"refreshToken": refresh_token})
+
+
 def get_access_token() -> str:
-    """MOBRPG_TOKEN (bearer) if set, else MOBRPG_EMAIL/MOBRPG_PASSWORD login.
-    Exits the process with code 2 if neither is set."""
+    """Resolve a bearer token by precedence:
+    MOBRPG_TOKEN env → managed config → MOBRPG_EMAIL/MOBRPG_PASSWORD login.
+    Exits the process with code 2 if none is configured. Never prints the token."""
     token = os.environ.get("MOBRPG_TOKEN")
     if token:
         print("→ Using MOBRPG_TOKEN (bearer) ...")
         return token
+
+    from mobrpg import config  # lazy import avoids an import cycle
+    cred = config.read()
+    if cred and cred.get("access_token"):
+        who = (cred.get("user") or {}).get("email") or "stored credentials"
+        print(f"→ Using managed credentials ({config.credentials_path()}) — {who}")
+        return cred["access_token"]
 
     email = os.environ.get("MOBRPG_EMAIL")
     password = os.environ.get("MOBRPG_PASSWORD")
@@ -144,5 +158,6 @@ def get_access_token() -> str:
               f"email={user.get('email')} name={user.get('firstName')} {user.get('lastName')}")
         return session["accessToken"]
 
-    print("ERROR: set MOBRPG_TOKEN, or MOBRPG_EMAIL + MOBRPG_PASSWORD.", file=sys.stderr)
+    print("ERROR: no credentials. Run `mobrpg auth import <credentials.csv>`, "
+          "or set MOBRPG_TOKEN, or MOBRPG_EMAIL + MOBRPG_PASSWORD.", file=sys.stderr)
     raise SystemExit(2)
