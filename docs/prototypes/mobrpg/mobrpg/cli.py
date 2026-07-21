@@ -27,6 +27,7 @@ from mobrpg.commands import pull_canon as _pull_canon
 from mobrpg.commands import pull_desc as _pull_desc
 from mobrpg.commands import suggest_desc as _suggest_desc
 from mobrpg.commands import whats_new as _whats_new
+from mobrpg.commands import adopt as _adopt
 from mobrpg.commands import relink as _relink
 
 # Directory holding the legacy prototype scripts (this package's parent).
@@ -48,6 +49,7 @@ NATIVE: dict = {
     "pull-desc": _pull_desc.run,
     "suggest-desc": _suggest_desc.run,
     "whats-new": _whats_new.run,
+    "adopt": _adopt.run,
     "relink": _relink.run,
 }
 
@@ -77,6 +79,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("pull-desc", "reconcile note description prose with mobRPG canon (report | --resolve)"),
     ("suggest-desc", "suggest a linked note's authored description UP to mobRPG (UpdateElement suggestion)"),
     ("whats-new", "read-only report: entities/types new in mobRPG, and vault notes gone upstream"),
+    ("adopt", "stamp mobrpg: nodes onto unlinked entities, matched to live elements by name"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
     ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),

@@ -29,12 +29,14 @@ Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured.
 Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, images.
 Mutating (need write access; dry-run by default, add --execute to apply):
 push, suggest, suggest-desc, submit-batch, update, types, links, review. write/merge/
-link-orphans/pull-canon/pull-desc/relink only touch local vault files,
-not the API (pull-canon and pull-desc read from mobRPG but only ever write
-locally; relink makes no API calls at all).
+link-orphans/pull-canon/pull-desc/adopt/relink only touch local vault files,
+not the API (pull-canon, pull-desc, and adopt read from mobRPG but only ever
+write locally; relink makes no API calls at all).
 
 Entity/event IDs live in each note's `mobrpg:` frontmatter node — the single
-source of truth. There is NO sidecar crosswalk; never read or write one.
+source of truth. There is NO sidecar crosswalk; never read or write one. A
+vault whose entities already exist upstream but carry no node is linked with
+`adopt` (match live elements by name → stamp nodes), never by a crosswalk.
 
 ## Commands
 
@@ -114,6 +116,18 @@ source of truth. There is NO sidecar crosswalk; never read or write one.
                                   by default; --execute submits. Each edit carries a
                                   distinct `<ns>:desc/<relpath>` externalRef so a
                                   re-run dedupes instead of piling up.
+    mobrpg adopt <world> --vault <path> [--map F] [--kind K] [--only S] [--execute]
+                                  Stamp `mobrpg:` nodes onto vault notes that
+                                  already exist upstream but carry no node —
+                                  match each to exactly one live element of the
+                                  same kind by normalized name (aliases too) and
+                                  write an `accepted` node with the real
+                                  element_id. Ambiguous (several live matches) or
+                                  unmatched notes are reported, never guessed.
+                                  The node-establishment path for imported / pushed
+                                  vaults and the dup-safe alternative to any
+                                  crosswalk. GET-only against mobRPG; dry-run
+                                  without --execute.
     mobrpg relink --vault <path> --to <new-rel-path> [--from <old-rel-path>]
                   [--execute]
                                   Re-point a moved/renamed note's mobrpg
