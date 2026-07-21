@@ -4,6 +4,13 @@
   var cards = document.querySelectorAll('[data-entity-type]');
   var countEl = document.querySelector('.index-count');
   var totalCount = cards.length;
+  // The unfiltered header label, restored verbatim once a filter clears — so a page that
+  // opens with "15 documents" reverts to it instead of freezing on "Showing 15 of 15".
+  var initialCountText = countEl ? countEl.textContent : '';
+  // Grouped indexes (e.g. Documents pivoted by character) wrap cards in headed sections. When
+  // a filter hides every card in a section, its heading would otherwise linger over an empty
+  // grid, so collapse the whole section too.
+  var groupSections = document.querySelectorAll('.intel-section');
 
   var activeType = 'all';
 
@@ -26,8 +33,20 @@
       }
     });
 
+    groupSections.forEach(function(section) {
+      var sectionCards = section.querySelectorAll('[data-entity-type]');
+      if (sectionCards.length === 0) return;
+      var anyVisible = Array.prototype.some.call(sectionCards, function(card) {
+        return card.style.display !== 'none';
+      });
+      section.style.display = anyVisible ? '' : 'none';
+    });
+
     if (countEl) {
-      countEl.textContent = 'Showing ' + visible + ' of ' + totalCount;
+      var filterActive = activeType !== 'all' || nameQuery !== '';
+      countEl.textContent = filterActive
+        ? 'Showing ' + visible + ' of ' + totalCount
+        : initialCountText;
     }
   }
 

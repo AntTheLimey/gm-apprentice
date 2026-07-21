@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.8.39] — 2026-07-20
+## [1.8.40] — 2026-07-21
+
+Publish tool 1.11.15. Documents index grouped by character (#96).
+
+### Added
+
+- The **Documents** section index now groups handouts into headed sections, one per character the document concerns — mirroring the Factions/Locations grouped-listing pattern instead of falling through to a flat A–Z card grid. The grouping key is frontmatter `about` (narrative handouts) or `practitioner` (mechanical/reference cards), resolved from a `[[wiki-link]]` to a plain name; documents with neither land in a trailing **Other Documents** group. Character groups sort alphabetically, "Other" always last, cards alphabetical within a group. Reuses the existing `intel-section`/`card-grid` styling, so no CSS changes (#96).
+- `documents` section-title key for the genre presets — scifi "Files & Dossiers", military "Dossiers & Records", horror "Documents & Evidence", fantasy "Records & Correspondence" — with an explicit `section_titles.documents` override winning over the genre default (#96).
+
+### Fixed
+
+- Grouped index filtering: when the name filter hides every card in a group, the group's heading now collapses too instead of lingering over an empty grid (#96).
 
 The relationship-ontology cluster: land the ontology, enforce it, author against it.
 
