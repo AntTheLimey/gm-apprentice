@@ -492,7 +492,7 @@ are JSON-encoded (`key: "text"`, `key: null`).
 | Key | Meaning |
 |-----|---------|
 | `world_id` / `external_ref` / `element_id` / `element_kind` | identity anchors (element_id is null until mobRPG accepts) |
-| `review_state` | `pending` \| `accepted` \| `dismissed` \| `edited` \| `deleted` |
+| `review_state` | `pending` / `accepted` / `dismissed` / `edited` / `deleted` |
 | `content_hash` / `last_synced` / `review_note` | sync bookkeeping |
 | `determined` | classifiers derived and sent (mobRPG canon overwrites on edit) |
 | `relationships[]` | reified-Event ids keyed by `(predicate, target)` |
