@@ -1,3 +1,5 @@
+> **Historical.** The crosswalk/sidecar approach described below is retired. Per-note `mobrpg:` frontmatter nodes are the sole id source; unlinked vaults are established with `mobrpg adopt` (live name-match). This document is kept for provenance.
+
 # Complete Suggestions — prototype spec
 
 **Status:** spec (2026-07-17). Codifies what the prototype must do to send *complete* suggestions to

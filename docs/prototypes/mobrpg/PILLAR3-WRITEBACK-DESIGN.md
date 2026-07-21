@@ -1,3 +1,5 @@
+> **Historical.** The crosswalk/sidecar approach described below is retired. Per-note `mobrpg:` frontmatter nodes are the sole id source; unlinked vaults are established with `mobrpg adopt` (live name-match). This document is kept for provenance.
+
 # Pillar 3 — Vault Writeback + Canon Reconciliation (design)
 
 **Status:** design (2026-07-18). Approved via brainstorming. Implements **impl-order #4** of

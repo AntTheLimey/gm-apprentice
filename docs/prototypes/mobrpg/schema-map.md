@@ -1,3 +1,5 @@
+> **Historical.** The crosswalk/sidecar approach described below is retired. Per-note `mobrpg:` frontmatter nodes are the sole id source; unlinked vaults are established with `mobrpg adopt` (live name-match). This document is kept for provenance.
+
 # Schema comparison map: gm-apprentice ↔ mobRPG
 
 How the gm-apprentice vault schema (`skills/shared/entity-schema.md`) maps onto

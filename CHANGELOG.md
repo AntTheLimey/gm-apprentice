@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.0] — 2026-07-21
+
+Graduates the mobRPG integration CLI (`docs/prototypes/mobrpg/`) into the repo:
+the legacy crosswalk is fully excised in favour of per-note `mobrpg:` nodes, and
+two new verbs — `adopt` (establish nodes by live name-match) and `auth` (managed,
+cross-platform credentials) — complete the sync surface.
+
+### Added
+
+- **`mobrpg auth` verb** — managed credential setup replacing the hand-managed
+  `credentials.csv` + `MOBRPG_TOKEN` dance. `import <credentials.csv>` verifies a
+  website-issued token via `whoami` and stores it in a user-level config
+  (`~/.config/mobrpg` on POSIX, `%APPDATA%\mobrpg` on Windows, `0600` on POSIX);
+  `status`, `refresh`, and `logout` manage it. Tokens are never printed. New
+  `mobrpg/config.py` store and a portable `skill/references/auth-setup.md`
+  (one-URL download preferred, manual CSV fallback).
+- **`mobrpg adopt` verb** — stamps `mobrpg:` nodes onto unlinked notes by matching
+  them to live mobRPG elements by normalized name (aliases included); one match is
+  accepted with the real `element_id`, ambiguous/unmatched are reported never
+  guessed. A dup-safe replacement for the retired crosswalk/backfill flow.
+
+### Changed
+
+- **`client.get_access_token()` precedence** — `MOBRPG_TOKEN` env still wins, then
+  the managed config, then `MOBRPG_EMAIL`/`MOBRPG_PASSWORD`, else a helpful error.
+
+### Removed
+
+- **Legacy crosswalk** — the `backfill`/`sync` verbs, all `--crosswalk` inputs, and
+  the packaged `canticle-regency-crosswalk.json`. Ids resolve only from `mobrpg:`
+  nodes; `images` derives its id→file map from nodes.
+
+### Fixed
+
+- **Credential CSV gitignore gap** — `credentials*.csv` is now ignored in the
+  prototype so a stray token file can never be committed. Untracked stale run
+  artifacts (`*_out/`, `space_vault_preview/`, `space_extract.json`).
+
+---
+
 ## [1.8.41] — 2026-07-21
 
 Ports the mobRPG node schema into the shipped entity schema and settles the

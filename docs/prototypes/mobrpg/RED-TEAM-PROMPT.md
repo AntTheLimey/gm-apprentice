@@ -1,3 +1,5 @@
+> **Historical.** The crosswalk/sidecar approach described below is retired. Per-note `mobrpg:` frontmatter nodes are the sole id source; unlinked vaults are established with `mobrpg adopt` (live name-match). This document is kept for provenance.
+
 # Red-team prompt — audit the mobRPG CLI / Pillar 3 foundation before building the skill
 
 > Paste the block below into a fresh session (after a context clear) to adversarially

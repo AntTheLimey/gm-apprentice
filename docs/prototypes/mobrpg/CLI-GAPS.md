@@ -1,3 +1,5 @@
+> **Historical.** The crosswalk/sidecar approach described below is retired. Per-note `mobrpg:` frontmatter nodes are the sole id source; unlinked vaults are established with `mobrpg adopt` (live name-match). This document is kept for provenance.
+
 # mobRPG CLI — gaps to add or fix
 
 Running list of CLI shortfalls the `mobrpg-sync` skill needs closed. **The goal
