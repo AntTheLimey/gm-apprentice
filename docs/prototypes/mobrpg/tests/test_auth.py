@@ -106,6 +106,24 @@ def test_refresh_rewrites_tokens(monkeypatch, tmp_path):
     assert stored["refresh_token"] == "new-r"
 
 
+def test_refresh_failure_does_not_leak_token(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
+    config.write({"access_token": "a", "refresh_token": "SECRET-REF",
+                  "user": {}, "source": "import"})
+
+    def boom(r):
+        # even if the error carries the secret, the command must not print it
+        raise client.ApiError(
+            401, "unauthorized",
+            "https://x/api/app/token/refresh?refreshToken=SECRET-REF")
+
+    monkeypatch.setattr(client, "refresh_app_token", boom)
+    rc = auth.run(["refresh"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "SECRET-REF" not in err
+
+
 def test_refresh_without_stored_token(monkeypatch, tmp_path):
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "empty"))
     assert auth.run(["refresh"]) == 1

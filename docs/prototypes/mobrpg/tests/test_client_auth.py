@@ -50,6 +50,22 @@ def test_token_value_never_printed(monkeypatch, tmp_path, capsys):
     assert "sup3r-secret" not in captured.err
 
 
+def test_error_url_redacts_sensitive_query(monkeypatch):
+    import io
+    import urllib.error
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 401, "unauthorized", {},
+                                     io.BytesIO(b"unauthorized"))
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(client.ApiError) as ei:
+        client.refresh_app_token("SECRET-REFRESH")
+    assert "SECRET-REFRESH" not in str(ei.value)
+    assert "SECRET-REFRESH" not in ei.value.url
+    assert "REDACTED" in ei.value.url
+
+
 def test_refresh_app_token_hits_refresh_endpoint(monkeypatch):
     calls = {}
 

@@ -118,7 +118,10 @@ def _cmd_refresh(argv: list[str]) -> int:
         access = fresh["accessToken"]
         me = client.whoami(access)
     except client.ApiError as e:
-        print(f"ERROR: refresh failed: {e}", file=sys.stderr)
+        # Never interpolate the exception — the refresh token travels in the
+        # request URL and str(e) would leak it. Report status only.
+        print(f"ERROR: refresh failed (HTTP {e.status}). "
+              f"Re-run `mobrpg auth import` to re-authenticate.", file=sys.stderr)
         return 1
     cred["access_token"] = access
     cred["refresh_token"] = fresh.get("refreshToken", cred["refresh_token"])

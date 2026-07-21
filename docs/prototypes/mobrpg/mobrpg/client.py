@@ -76,6 +76,21 @@ class ApiError(Exception):
         super().__init__(f"HTTP {status} on {url}\n{body}")
 
 
+# Query parameters that carry secrets — masked in any error surfaced to the user
+# so a token passed in a URL (e.g. app-token refresh) never lands in stderr/logs.
+_SENSITIVE_QUERY = {"refreshtoken", "token", "accesstoken", "password"}
+
+
+def _redact_url(url: str) -> str:
+    """Mask sensitive query values so an error message never carries a secret."""
+    parts = urllib.parse.urlsplit(url)
+    if not parts.query:
+        return url
+    pairs = urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+    safe = [(k, "REDACTED" if k.lower() in _SENSITIVE_QUERY else v) for k, v in pairs]
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(safe)))
+
+
 def _request(method: str, path: str, *, token: str | None = None,
              query: dict | None = None, body: dict | None = None) -> dict | list | None:
     """Make a JSON request to the mobRPG API and return the parsed body."""
@@ -95,9 +110,9 @@ def _request(method: str, path: str, *, token: str | None = None,
         with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read().decode()
     except urllib.error.HTTPError as e:
-        raise ApiError(e.code, e.read().decode(errors="replace"), url) from None
+        raise ApiError(e.code, e.read().decode(errors="replace"), _redact_url(url)) from None
     except urllib.error.URLError as e:
-        raise ApiError(0, str(e.reason), url) from None
+        raise ApiError(0, str(e.reason), _redact_url(url)) from None
 
     return json.loads(raw) if raw.strip() else None
 

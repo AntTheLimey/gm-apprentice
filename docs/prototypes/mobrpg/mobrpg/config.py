@@ -38,13 +38,23 @@ def read() -> dict | None:
 
 
 def write(cred: dict) -> None:
-    """Persist the credential JSON, 0600 on POSIX."""
-    os.makedirs(config_dir(), exist_ok=True)
+    """Persist the credential JSON. On POSIX the file is created 0600 with no
+    world-readable window (mode set at open time), inside a 0700 config dir."""
+    d = config_dir()
+    os.makedirs(d, exist_ok=True)
     path = credentials_path()
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(cred, f, indent=2)
-    if os.name != "nt":
-        os.chmod(path, 0o600)
+    data = json.dumps(cred, indent=2)
+    if os.name == "nt":
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(data)
+        return
+    os.chmod(d, 0o700)
+    # O_CREAT with mode 0600 sets perms at creation (no 0644 window); the trailing
+    # chmod also tightens a pre-existing file that was created with looser perms.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(data)
+    os.chmod(path, 0o600)
 
 
 def clear() -> bool:

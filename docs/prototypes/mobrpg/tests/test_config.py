@@ -61,6 +61,28 @@ def test_write_sets_0600_on_posix(monkeypatch, tmp_path):
     assert mode == 0o600
 
 
+def test_write_sets_dir_0700_on_posix(monkeypatch, tmp_path):
+    if os.name == "nt":
+        return
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
+    config.write({"access_token": "a"})
+    mode = stat.S_IMODE(os.stat(config.config_dir()).st_mode)
+    assert mode == 0o700
+
+
+def test_write_tightens_perms_on_preexisting_loose_file(monkeypatch, tmp_path):
+    if os.name == "nt":
+        return
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
+    os.makedirs(tmp_path / "cfg", exist_ok=True)
+    loose = tmp_path / "cfg" / "credentials.json"
+    loose.write_text("{}")
+    os.chmod(loose, 0o644)
+    config.write({"access_token": "a"})
+    mode = stat.S_IMODE(os.stat(config.credentials_path()).st_mode)
+    assert mode == 0o600
+
+
 def test_clear(monkeypatch, tmp_path):
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
     config.write({"access_token": "a"})
