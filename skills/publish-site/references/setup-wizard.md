@@ -601,7 +601,13 @@ error dump.
 The Tier-1 scaffold ships a `wrangler.toml` with
 `pages_build_output_dir = "docs"`, so the deploy uses the **bare** form
 (no `docs/` argument — passing the directory positionally conflicts with
-the config and errors). Create the project once, then deploy:
+the config and errors). The bare form deploys to whichever project is
+named in `wrangler.toml`'s `name` field, not to `cloudflarePagesProject`
+— so before deploying, make sure that field matches `<project_name>`
+(edit it if the GM chose a different Cloudflare project name than the
+one the scaffold started with). Skipping this fails the deploy with
+"The Pages project '<name>' does not exist." Create the project once,
+then deploy:
 
 ```bash
 npx wrangler@4 pages project create <project_name> --production-branch=main   # once per site

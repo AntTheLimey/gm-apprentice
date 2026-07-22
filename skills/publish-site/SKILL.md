@@ -169,7 +169,9 @@ Workflow:
    c. Deploy. The scaffold ships a `wrangler.toml` with
       `pages_build_output_dir = "docs"`, so deploy with the **bare** form
       (no `docs/` argument — passing it positionally conflicts with the
-      config and errors):
+      config and errors). First ensure `wrangler.toml`'s `name` matches
+      the project from step (a) — the bare deploy targets that field,
+      not `cloudflarePagesProject` — then:
       `npx wrangler@4 pages deploy`
       Only if the site has no `wrangler.toml` (an older scaffold) use the
       explicit `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`.
