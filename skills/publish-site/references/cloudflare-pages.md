@@ -223,17 +223,26 @@ wrangler only uploads files that changed, so repeat deploys are fast.
 The change-request inbox lets players submit sheet edits from their phones. It
 needs a KV namespace bound to your Pages project. Do this once per site.
 
-New sites scaffolded after this feature already have `wrangler.toml` and a
-`functions/` directory. Existing sites: copy `wrangler.toml` and the
-`functions/` directory from a freshly `init`-ed site into your site root
-(they are not build output — they live beside `vault.config.json`, not in
-`docs/`).
+A fresh Tier-1 site scaffolds a **minimal** `wrangler.toml` — it has
+`pages_build_output_dir` (so the bare `npx wrangler@4 pages deploy` keeps
+working) but **no** `[[kv_namespaces]]` block — and **no** `functions/`
+directory. The KV binding and the `functions/` are added only when you opt
+into the inbox or the live status bar: either the streamlined
+`gm-publish setup-inbox` / `setup-status-bar` commands (coming in the next
+release) or the manual steps in this section, which add the `[[kv_namespaces]]`
+block and copy the Functions in for you. Already-deployed inbox sites are
+unaffected — this only changes what a brand-new site ships. Existing sites
+without the Functions yet: copy `wrangler.toml`'s `[[kv_namespaces]]` block
+and the `functions/` directory from a freshly `init`-ed site that has had the
+inbox set up (they are not build output — they live beside
+`vault.config.json`, not in `docs/`).
 
 The at-table **loadout** endpoint (`/api/loadout`) ships in the same
 `functions/api/` directory and **reuses this same `INBOX` KV namespace**
 (under a `loadout:` key prefix) — no new namespace, binding, or
-`wrangler.toml` change. New sites scaffold it automatically. Existing sites
-that already set up the inbox above: copy `functions/api/loadout.js` and
+`wrangler.toml` change. Once the inbox is set up, the loadout endpoint is
+already alongside it. Existing sites that set up the inbox before the loadout
+existed: copy `functions/api/loadout.js` and
 `functions/api/loadout-core.mjs` from the scaffold alongside the inbox
 files, then redeploy.
 

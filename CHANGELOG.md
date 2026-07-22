@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.45] — 2026-07-22
+
+Publish tool 1.11.18. Tier-1 sites no longer ship the change-request inbox's
+KV binding or Cloudflare Functions.
+
+### Fixed
+
+- Tier-1 (static) sites no longer scaffold or deploy the change-request inbox's
+  KV binding or Cloudflare Functions: `gm-publish init` ships a minimal
+  `wrangler.toml` (keeping `pages_build_output_dir` for a clean bare
+  `wrangler pages deploy`) with no `[[kv_namespaces]]` block and no `functions/`,
+  and the build-time Function re-sync is gated on the site's backend flags. This
+  removes a placeholder KV binding that shipped to every site. `vault.config.json`
+  (which holds a local absolute path) is now gitignored by the scaffold.
+
 ## [1.8.44] — 2026-07-22
 
 Publish tool 1.11.17. Publish-site setup is now preflight-first and
