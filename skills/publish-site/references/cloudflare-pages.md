@@ -228,9 +228,51 @@ A fresh Tier-1 site scaffolds a **minimal** `wrangler.toml` — it has
 working) but **no** `[[kv_namespaces]]` block — and **no** `functions/`
 directory. The KV binding and the `functions/` are added only when you opt
 into the inbox or the live status bar: either the streamlined
-`gm-publish setup-inbox` / `setup-status-bar` commands (coming in the next
-release) or the manual steps in this section. Already-deployed inbox sites are
+`gm-publish setup-inbox` / `setup-status-bar` commands below, or the manual
+steps further down in this section. Already-deployed inbox sites are
 unaffected — this only changes what a brand-new site ships.
+
+> **The PC roster already renders as a static initiative table at Tier 1** —
+> with no backend at all. Setting up the live status bar (`setup-status-bar`,
+> below) is what turns that static table into a live, phone-updatable board;
+> the inbox reuses the same KV namespace.
+
+### The fast way — `setup-status-bar` / `setup-inbox`
+
+These do everything the manual steps below do — create/reuse the `INBOX` KV
+namespace, align `wrangler.toml`'s `name` to the Cloudflare project, patch in
+the `[[kv_namespaces]]` block, flip the backend flag, rebuild, and deploy —
+in one command. Run from the site directory:
+
+```bash
+node "$TOOL" setup-status-bar   # live status bar (Tier 2a)
+node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
+```
+
+Each defaults to `./vault.config.json`; pass `--config <path>` if you're
+running from elsewhere. Both are:
+
+- **Preflight-gated** — beyond `doctor`'s check that wrangler is
+  authenticated, the command probes the token's KV permission before
+  touching anything. If the token can't manage KV, it stops with the fix
+  rather than half-applying anything: edit the token (My Profile → API
+  Tokens → your token → Edit) to add **Account · Workers KV Storage · Edit**
+  (Cloudflare returns `Authentication error [code: 10000]` for this case),
+  then re-run — no undo needed.
+- **Idempotent** — safe to re-run. A namespace id already in `wrangler.toml`
+  (or an existing `INBOX` namespace) is reused rather than recreated.
+
+`setup-inbox` requires and ensures the same KV namespace as the status bar
+(**inbox ⇒ KV** — you never create it separately) and is **infra-only**: it
+flips `backend.inbox` to `true` but does not open a session or set a
+`config:code`. Opening a live session is still the `inbox open <CODE>` loop
+(Part 3 / `references/change-request-loop.md`) — run that once the flag is
+live.
+
+If you'd rather see each step yourself, or the command isn't available on
+your setup, the manual path below does the same thing by hand.
+
+### Or by hand
 
 **You do not hand-copy the Functions.** Once a backend flag (`backend.inbox` or
 `backend.statusBar`) is `true` in `vault.config.json`, the next `npm run build`

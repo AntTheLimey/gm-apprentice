@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.46] — 2026-07-22
+
+Publish tool 1.11.19. The live status bar and change-request inbox are now
+one-command setups, and the PC roster ships as a static initiative table on
+every site.
+
+### Added
+
+- `gm-publish setup-status-bar` and `gm-publish setup-inbox` — idempotent,
+  preflight-gated commands that turn on the live status bar (Tier 2a) and the
+  at-table change-request inbox (Tier 2b) end-to-end: create or reuse the
+  `INBOX` KV namespace, patch `wrangler.toml` (name-alignment + the
+  `[[kv_namespaces]]` block), flip the matching `backend` flag in
+  `vault.config.json`, rebuild, and deploy — one command, no manual
+  `wrangler.toml` editing. Each probes the Cloudflare token's KV permission
+  before touching anything, mapping `code: 10000` to the one-line fix (add
+  **Account · Workers KV Storage · Edit**). `setup-inbox` requires and ensures
+  the same KV namespace (inbox ⇒ KV) and is infra-only — it does not open a
+  session. The `publish-site` skill docs (`SKILL.md`, `setup-wizard.md`,
+  `cloudflare-pages.md`) point at both commands as the primary path, with the
+  existing manual steps kept as the documented fallback.
+- The PC roster / party board now renders as a static initiative table on any
+  site, even with no backend configured — useful with zero setup, and it goes
+  live (phone-updatable, real time) once `setup-status-bar` is run.
+
+### Fixed
+
+- `wrangler.toml`'s `name` is aligned to the Cloudflare project before a bare
+  `wrangler pages deploy`, so `setup-status-bar` / `setup-inbox` (and the
+  wizard's own deploy step) never target the wrong Pages project.
+
 ## [1.8.45] — 2026-07-22
 
 Publish tool 1.11.18. Tier-1 sites no longer ship the change-request inbox's

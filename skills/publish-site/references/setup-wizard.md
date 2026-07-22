@@ -752,7 +752,9 @@ named, independent** opt-ins. Neither is required for a working site,
 and each can be set up later:
 
 - **Live status bar** — players see and update their HP/FP (and similar
-  live stats) from their phones during play, in real time.
+  live stats) from their phones during play, in real time. (The roster page
+  already shows a static initiative table at Tier 1 — this is what makes it
+  live.)
 - **At-table change-request inbox** — players submit sheet edits and
   questions from their phones during a session; you review and apply
   them.
@@ -765,26 +767,40 @@ and each can be set up later:
 > - an **at-table change-request inbox** for sheet edits during play.
 > Want to set up either now?"
 
-**Honesty constraint — do not promise a one-command setup that doesn't
-exist yet.** The streamlined `setup-status-bar` / `setup-inbox` commands
-are not built yet. So:
+**If the GM wants one now, run the real command** — Cloudflare only, and
+each is **preflight-gated** (beyond `doctor`'s check that wrangler is
+authenticated, the command probes the token's KV permission before touching
+anything, mapping Cloudflare's `code: 10000` to the one-line fix: edit the
+token to add **Account · Workers KV Storage · Edit**) and **idempotent**
+(safe to re-run — it reuses the existing `INBOX` KV namespace rather than
+recreating one):
 
-- **If the GM wants one now:** record it in `setup_progress.deferred`
-  (e.g. `deferred: [status-bar]`, `deferred: [inbox]`, or both), and
-  point them at the current manual path:
-  - **Inbox:** follow `references/cloudflare-pages.md` →
-    "Change-request inbox" (create the KV namespace, paste its id into
-    `wrangler.toml`, redeploy).
-  - **Status bar:** it reuses the **same KV namespace** as the inbox —
-    so if the inbox is set up (or the token already has the
-    **Workers KV Storage · Edit** permission from Phase A), the
-    groundwork is shared.
+```bash
+node "$TOOL" setup-status-bar   # Tier 2a — live status bar
+node "$TOOL" setup-inbox        # Tier 2b — at-table change-request inbox
+```
 
-  Tell them a one-command setup for these is coming, but this manual
-  path works today.
+Run from the site directory (each defaults to `./vault.config.json`; pass
+`--config <path>` otherwise). Either command creates or reuses the `INBOX`
+KV namespace, aligns `wrangler.toml`'s `name` to the Cloudflare project,
+flips the matching `backend.statusBar` / `backend.inbox` flag in
+`vault.config.json`, rebuilds, and deploys — one step, no manual
+`wrangler.toml` editing. `setup-inbox` requires and ensures the same KV
+namespace (**inbox ⇒ KV**) and is **infra-only** — it flips the flag but
+does not open a session; that's still "start your checking loop"
+(capability 7) once the flag is live. If the command reports the
+KV-permission fix, walk the GM through editing the token (My Profile → API
+Tokens → their token → Edit → add **Account · Workers KV Storage · Edit** →
+Save) — the same one-tick permission mentioned in Phase A — then re-run;
+it picks up right where it left off.
+
+Record whichever the GM ran (or declined) in `setup_progress.deferred`
+(e.g. `deferred: [status-bar]`, `deferred: [inbox]`, both, or `[]` if they
+defer both).
+
 - **If the GM defers both:** leave `deferred: []` and tell them:
 
   > "No problem — whenever you're ready, just say 'set up the status
-  > bar' or 'set up the inbox' and I'll walk you through it."
+  > bar' or 'set up the inbox' and I'll set it up with one command."
 
 Setup is complete.
