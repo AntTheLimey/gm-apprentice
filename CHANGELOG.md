@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.43] — 2026-07-21
+
+Publish tool 1.11.17. `gm-publish doctor` preflight + Cloudflare credential setup.
+
+### Added
+
+- `gm-publish doctor` — a preflight subcommand that checks Node ≥22, git, and
+  (per host) `gh` or `wrangler` including auth state, with an exact one-line fix
+  for each miss and a `--json` mode the publish-site skill can act on.
+  `doctor --set-cloudflare-creds` reads a Cloudflare API token from stdin and
+  writes it (plus the auto-derived Account ID from `wrangler whoami`) into the
+  correct shell file for the OS/shell — `~/.zshenv`, `~/.bashrc`, or Windows
+  `setx` — without ever echoing the token.
+
 ## [1.8.42] — 2026-07-21
 
 Publish tool 1.11.16. Backend-capability flags + graceful-hide of optional UI.

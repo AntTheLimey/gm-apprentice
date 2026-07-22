@@ -1,0 +1,51 @@
+const fs = require('fs');
+
+// Which persistent-env mechanism this OS/shell uses. Windows persists via setx;
+// zsh reads ~/.zshenv for EVERY shell (interactive or not — the reason creds go
+// there, not ~/.zshrc); bash and everything else fall back to ~/.bashrc.
+// These are POSIX-only shell files (this branch never runs on win32, which uses
+// setx), so a forward-slash separator is correct on every host.
+function resolveShellTarget({ platform, env, homedir }) {
+  if (platform === 'win32') return { kind: 'setx' };
+  const shell = (env && env.SHELL) || '';
+  if (shell.includes('zsh')) return { kind: 'file', path: `${homedir}/.zshenv` };
+  return { kind: 'file', path: `${homedir}/.bashrc` };
+}
+
+// Pure: return fileContent with `export <name>="<value>"` present exactly once.
+// This content is SOURCED by a shell, so a value carrying shell metacharacters
+// ("`$\ or a newline) is an injection vector — reject it. Callers here write only
+// [A-Za-z0-9_-] credentials, so a legitimate value never trips this; it's a
+// defense-in-depth guard for the credential-writing path. The name must be a
+// plain identifier (also keeps the RegExp below a controlled, non-ReDoS pattern).
+function upsertEnvExport(fileContent, name, value) {
+  if (!/^[A-Za-z0-9_]+$/.test(name)) {
+    throw new Error(`Refusing to write an env var with an unsafe name: ${name}`);
+  }
+  if (/["`$\\\r\n]/.test(value)) {
+    // Deliberately does NOT echo the value (it may be a secret).
+    throw new Error(`Refusing to write ${name}: value contains characters unsafe for a shell-sourced file.`);
+  }
+  const line = `export ${name}="${value}"`;
+  const re = new RegExp(`^export ${name}=.*$`, 'm');
+  if (re.test(fileContent)) return fileContent.replace(re, () => line);
+  if (fileContent === '') return line + '\n';
+  const sep = fileContent.endsWith('\n') ? '' : '\n';
+  return fileContent + sep + line + '\n';
+}
+
+// Perform the write. Returns the resolved target so the caller can report WHICH
+// file was touched — never the value. Never logs/echoes the value.
+function setPersistentEnv(name, value, { platform, env, homedir, runCommand } = {}) {
+  const target = resolveShellTarget({ platform, env, homedir });
+  if (target.kind === 'setx') {
+    const run = runCommand || require('./run-command').runCommand;
+    run('setx', [name, value]);
+    return target;
+  }
+  const existing = fs.existsSync(target.path) ? fs.readFileSync(target.path, 'utf8') : '';
+  fs.writeFileSync(target.path, upsertEnvExport(existing, name, value));
+  return target;
+}
+
+module.exports = { resolveShellTarget, upsertEnvExport, setPersistentEnv };
