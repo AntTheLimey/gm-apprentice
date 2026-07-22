@@ -51,7 +51,9 @@ describe('setPersistentEnv', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-env-'));
     const opts = { platform: 'linux', env: { SHELL: '/bin/bash' }, homedir: dir };
     const t1 = setPersistentEnv('CLOUDFLARE_API_TOKEN', 'tok1', opts);
-    assert.deepStrictEqual(t1, { kind: 'file', path: path.join(dir, '.bashrc') });
+    // resolveShellTarget uses a POSIX '/' separator (these are POSIX shell files);
+    // compare against that, not host-separator path.join, so this passes on Windows.
+    assert.deepStrictEqual(t1, { kind: 'file', path: `${dir}/.bashrc` });
     setPersistentEnv('CLOUDFLARE_API_TOKEN', 'tok2', opts);
     const content = fs.readFileSync(path.join(dir, '.bashrc'), 'utf8');
     assert.strictEqual((content.match(/export CLOUDFLARE_API_TOKEN=/g) || []).length, 1);
