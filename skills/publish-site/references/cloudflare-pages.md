@@ -252,9 +252,9 @@ files, then redeploy.
 state (`{ "<key>": {v,items,hp,fp,updatedAt}, … }`) for the roster-page party
 board. It is **read-only** — it exposes only `onRequestGet`, never a write. Bound
 to the same `INBOX` KV namespace as `/api/loadout`; no new namespace or binding is
-needed. Sites scaffolded with a newer `gm-publish init` get it automatically;
-**existing sites must hand-copy** `functions/api/loadout-list.js` (and re-deploy)
-the same way they copied `functions/api/loadout.js` for SP1.
+needed. It ships alongside the other Functions once you set up the inbox or the
+live status bar; **existing sites must hand-copy** `functions/api/loadout-list.js`
+(and re-deploy) the same way they copied `functions/api/loadout.js` for SP1.
 
 > **KV list-quota fix — existing sites must refresh the loadout + inbox Functions
 > and redeploy.** Early builds had the party board poll the list endpoint every 5
