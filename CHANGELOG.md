@@ -30,6 +30,13 @@ cross-platform credentials) — complete the sync surface.
 
 ### Changed
 
+- **README + Quickstart overhaul.** README leads with Installation, the skill
+  list, and an inline Quickstart; the long Obsidian setup walkthrough is
+  condensed to a short Vaults note. The Quickstart is rewritten to start from
+  the-midwife (which scaffolds the vault) and flow through ttrpg-expert →
+  session-prep → session-play → session-wrapup, with campaign-organizer/qa
+  reframed as as-needed upkeep. Both now list all five systems (Pathfinder 2e
+  was missing) and drop the redundant install/pick-system/Obsidian steps.
 - **`client.get_access_token()` precedence** — `MOBRPG_TOKEN` env still wins, then
   the managed config, then `MOBRPG_EMAIL`/`MOBRPG_PASSWORD`, else a helpful error.
 

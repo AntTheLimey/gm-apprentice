@@ -3,51 +3,8 @@
 [![npm: gm-apprentice-publish](https://img.shields.io/npm/v/gm-apprentice-publish)](https://www.npmjs.com/package/gm-apprentice-publish)
 
 TTRPG Game Master skills for Claude. An apprentice that helps GMs
-run tabletop role-playing games -- from rules validation and content
-generation to campaign management and session lifecycle support.
-
-## Skills
-
-| Skill | Description | Obsidian Required |
-|-------|-------------|-------------------|
-| **ttrpg-expert** | Rules engine, content generation, canon management, continuity checking, session planning, encounter design, scenario writing | Optional |
-| **the-midwife** | Guided adventure creation through creative conversation -- develops campaign concepts, one-shots, and arcs from a vague idea or nothing at all, producing an adventure brief and vault scaffold for Session 0. | Optional |
-| **campaign-organizer** | Campaign architect -- classifies, structures, cross-references, and interlinks campaign content with knowledge graph metadata. Works with Obsidian or plain filesystem. | Recommended |
-| **campaign-qa** | Campaign quality auditing -- canon audit, timeline validation, name similarity, clue redundancy, graph health checks. Works with Obsidian or plain filesystem. | Recommended |
-| **session-prep** | Between-session preparation — reconciles last session's results, reviews PC arcs, scans threads, flags gaps, builds prep package. Works with Obsidian or plain filesystem. | Recommended |
-| **session-play** | At-the-table GM support — fast lookups, rules assist, on-the-fly NPC/location generation, note capture. Speed-optimised for live play. | Optional |
-| **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward identification. Accepts raw play notes or [GM-Assistant](https://gmassistant.app) session exports. Works with Obsidian or plain filesystem. | Recommended |
-| **vault-ingest** | Ingest old campaign materials (notes, character sheets, images, transcripts) into a structured vault. Interviews the GM to recover what actually happened. | Recommended |
-| **publish-site** | Publish your campaign vault as a static website on GitHub Pages or Cloudflare Pages. Guides setup, routine rebuilds, troubleshooting, and schema migrations. | Recommended |
-
-### Skill Taxonomy
-
-**ttrpg-expert is the advisor** with zero dependencies on other skills. Everything else is a doer with a specific function.
-
-| Category | Skill | Role | Boundary |
-|----------|-------|------|----------|
-| **Advisor** | ttrpg-expert | Rules, GM craft, RPG techniques | Pure reference — no vault writes, no dependencies on other skills. Other skills read its references but it never calls them. |
-| **Campaign organization** | campaign-organizer | Vault structure, entity filing, knowledge graph | Owns the vault schema and file layout. Creates and restructures — doesn't generate narrative content. |
-| **Quality assurance** | campaign-qa | Canon auditing, timeline validation, graph health | Detects problems — doesn't fix them. Hands off to campaign-organizer (structure) or ttrpg-expert (content) for repairs. |
-| **Session lifecycle** | session-prep | Between-session preparation and reconciliation | Bridges wrap-up to next session. Reads ttrpg-expert references for creative planning. |
-| | session-play | At-the-table GM support | Speed-optimised. Short responses, no unsolicited analysis. Captures play notes for session-wrapup. |
-| | session-wrapup | Post-session processing | Turns raw play notes into canon. Creates/updates entities, events, timeline. Feeds session-prep. |
-| **Content ingestion** | vault-ingest | Old materials to structured vault | Adapter — classifies, interviews GM, synthesizes. Hands off to campaign-organizer and session-wrapup. |
-| **Content publication** | publish-site | Vault to static website | Reads vault, generates HTML. No vault writes. |
-| **Adventure creation** | the-midwife | Idea to starting adventure + vault | Creative guide — draws ideas out of the GM through conversation, shapes them into a playable starting point with adventure brief and vault scaffold. |
-
-## Supported Game Systems
-
-- Call of Cthulhu 7th Edition (CoC 7e)
-- GURPS 4th Edition — includes 7 archetype chargen kits,
-  24 topic-based reference files, and curated Basic Set content
-- Forged in the Dark (Blades in the Dark) — 14 SRD reference
-  files covering mechanics, playbooks, crew types, cohorts,
-  gathering information, GM techniques, and faction procedures
-- D&D 5th Edition (2024 Revision)
-- Pathfinder 2nd Edition (Remaster) — classes, ancestries,
-  spells by rank, curated Monster Core statblocks, feats by
-  category, and GM math tables, all from ORC-licensed sources
+run tabletop role-playing games -- from a first spark of an idea
+through content generation, live play, and campaign management.
 
 ## Installation
 
@@ -70,174 +27,130 @@ generation to campaign management and session lifecycle support.
 
 #### Individual skill upload (free / starter accounts)
 
-If your plan doesn't include plugin support, you can upload
-skills individually:
+If your plan doesn't include plugin support, upload skills individually:
 
 1. Download the `.zip` files you want from the
    [latest release](https://github.com/AntTheLimey/gm-apprentice/releases/latest)
 2. In Claude Desktop, go to **Chat > Skills**
 3. Click **+** and upload each zip file
 
-See the skill table above for what each skill does.
-
-### VS Code
+### VS Code / Cursor
 
 1. Install the [Claude Code extension](vscode:extension/anthropic.claude-code)
+   (Cursor: the [Claude Code extension for Cursor](cursor:extension/anthropic.claude-code))
 2. Open the Claude Code prompt and type `/plugins`
-3. Go to the **Discover** tab
-4. Add the marketplace: `AntTheLimey/gm-apprentice`
-5. Click **Install** and choose your scope (user, project, or local)
-
-### Cursor
-
-Cursor supports Claude Code plugins via its VS Code compatibility:
-
-1. Install the [Claude Code extension for Cursor](cursor:extension/anthropic.claude-code)
-2. Follow the same steps as VS Code above
+3. Go to the **Discover** tab, add the marketplace
+   `AntTheLimey/gm-apprentice`, and click **Install**
 
 ### JetBrains IDEs
 
-JetBrains IDEs (IntelliJ, PyCharm, WebStorm, etc.) support
-Claude Code but do not currently have a plugin management UI.
-Install via the CLI method instead:
+JetBrains IDEs (IntelliJ, PyCharm, WebStorm, etc.) have no plugin
+management UI yet — install via the CLI method above.
 
-```bash
-/plugin marketplace add AntTheLimey/gm-apprentice
-/plugin install gm-apprentice
-```
+## Skills
+
+You talk to Claude normally; skills activate automatically from what
+you ask. Say "build me an NPC" and Claude reaches for **ttrpg-expert**;
+say "help me start a new campaign" and it reaches for **the-midwife**.
+
+| Skill | Description | Obsidian |
+|-------|-------------|----------|
+| **the-midwife** | Guided adventure creation through creative conversation — develops a campaign, one-shot, or arc from a vague idea or nothing at all, then writes an adventure brief and scaffolds the vault for Session 0. | Optional |
+| **ttrpg-expert** | Rules engine, content generation, canon management, continuity checking, session planning, encounter design, scenario writing. | Optional |
+| **campaign-organizer** | Campaign architect — classifies, structures, cross-references, and interlinks campaign content with knowledge-graph metadata. | Recommended |
+| **campaign-qa** | Quality auditing — canon audit, timeline validation, name similarity, clue redundancy, graph-health checks. | Recommended |
+| **session-prep** | Between-session preparation — reconciles last session, reviews PC arcs, scans threads, flags gaps, builds a prep package. | Recommended |
+| **session-play** | At-the-table support — fast lookups, rules assist, on-the-fly NPC/location generation, note capture. Speed-optimised for live play. | Optional |
+| **session-wrapup** | Post-session processing — narrative recaps, entity creation/updates, timeline entries, carry-forward. Accepts raw notes or [GM-Assistant](https://gmassistant.app) exports. | Recommended |
+| **vault-ingest** | Ingest old campaign materials (notes, character sheets, images, transcripts) into a structured vault, interviewing the GM to recover what happened. | Recommended |
+| **publish-site** | Publish your campaign vault as a static website on GitHub Pages or Cloudflare Pages. | Recommended |
+
+**ttrpg-expert is the advisor** — pure reference, zero dependencies on
+other skills. Everything else is a doer with a specific job:
+
+| Category | Skill | Boundary |
+|----------|-------|----------|
+| **Advisor** | ttrpg-expert | Rules, GM craft, RPG techniques. No vault writes; other skills read its references but it never calls them. |
+| **Adventure creation** | the-midwife | Draws ideas out of the GM, shapes them into a playable starting point with an adventure brief and vault scaffold. |
+| **Campaign organization** | campaign-organizer | Owns the vault schema and file layout. Structures and links — doesn't generate narrative content. |
+| **Quality assurance** | campaign-qa | Detects problems — doesn't fix them. Hands off to campaign-organizer (structure) or ttrpg-expert (content). |
+| **Session lifecycle** | session-prep → play → wrapup | Prep bridges wrap-up to the next session; play is at-the-table; wrap-up turns raw notes into canon and feeds prep. |
+| **Content ingestion** | vault-ingest | Classifies old material, interviews the GM, hands off to campaign-organizer and session-wrapup. |
+| **Content publication** | publish-site | Reads the vault, generates HTML. No vault writes. |
+
+## Quickstart
+
+From a spark of an idea to your first session. The full walkthrough
+with example prompts is in the [Quickstart Guide](docs/quickstart.md).
+
+1. **Conceive it — the-midwife.** "I want to run a Call of Cthulhu game
+   in 1920s Manhattan — help me build it." The midwife draws the concept
+   out through conversation and, when you're happy, writes an adventure
+   brief and scaffolds your vault. Tell it your system up front; it won't
+   assume.
+2. **Build the world — ttrpg-expert.** "Make the main antagonist — a
+   wealthy industrialist funding occult research." Generate NPCs,
+   locations, and factions as you need them; each starts as DRAFT until
+   you accept it into canon.
+3. **Prep session 1 — session-prep.** "Help me prep session 1." It plans
+   scenes as options you choose from and flags the gaps still to fill.
+4. **Run it — session-play.** Fast lookups and note capture at the table.
+5. **Process it — session-wrapup.** Hand over your notes; it writes the
+   recap, creates entities for new NPCs, and tells you what carries
+   forward. Next time, session-prep reconciles anything skipped.
+
+As the vault grows, reach for **campaign-organizer** (file and link
+accumulated content), **campaign-qa** (periodic health checks), and
+**vault-ingest** (import old material). The midwife scaffolds the
+starting vault, so none of these are needed on day one.
+
+## Supported Game Systems
+
+- **Call of Cthulhu 7th Edition** (CoC 7e) — includes the Regency Cthulhu variant
+- **GURPS 4th Edition** — 7 archetype chargen kits, 24 topic-based
+  reference files, and curated Basic Set content
+- **Forged in the Dark** (Blades in the Dark) — 14 SRD reference files
+  covering mechanics, playbooks, crew types, cohorts, and GM procedures
+- **D&D 5th Edition** (2024 Revision)
+- **Pathfinder 2nd Edition** (Remaster) — classes, ancestries, spells by
+  rank, curated Monster Core statblocks, feats, and GM math tables, all
+  from ORC-licensed sources
+
+Tell Claude which system you're running when you start — it won't assume.
 
 ## Documentation
 
-- [Quickstart Guide](docs/quickstart.md) -- set up your first
-  campaign from scratch
-- [Campaign Lifecycle](docs/campaign-lifecycle.md) -- how the
-  nine skills work together across the life of a campaign
-- [ttrpg-expert](docs/ttrpg-expert.md) -- rules, content
-  generation, and GM assistance
-- [the-midwife](docs/the-midwife.md) -- guided adventure
-  creation from vague idea to Session 0
-- [campaign-organizer](docs/campaign-organizer.md) -- vault
-  structure and knowledge graphs
-- [campaign-qa](docs/campaign-qa.md) -- campaign quality
-  auditing
-- [session-prep](docs/session-prep.md) -- between-session
-  preparation and reconciliation
-- [session-play](docs/session-play.md) -- at-the-table GM
-  support
-- [session-wrapup](docs/session-wrapup.md) -- post-session
-  processing and recaps, including
-  [GM-Assistant](https://gmassistant.app) export support
-- [vault-ingest](docs/vault-ingest.md) -- importing old
-  campaign materials into a structured vault
-- [publish-tool](docs/publish-tool.md) -- publishing your vault
-  as a static website
-- [Personal reference files](docs/personal-reference-files.md)
-  -- adding your own rulebook content for deeper system support
-- [gm-apprentice-publish](tools/publish/README.md) -- npm package
-  reference for the publish tool
+- [Quickstart Guide](docs/quickstart.md) — your first campaign, step by step
+- [Campaign Lifecycle](docs/campaign-lifecycle.md) — how the skills work
+  together across the life of a campaign
+- Per-skill guides: [ttrpg-expert](docs/ttrpg-expert.md) ·
+  [the-midwife](docs/the-midwife.md) ·
+  [campaign-organizer](docs/campaign-organizer.md) ·
+  [campaign-qa](docs/campaign-qa.md) ·
+  [session-prep](docs/session-prep.md) ·
+  [session-play](docs/session-play.md) ·
+  [session-wrapup](docs/session-wrapup.md) ·
+  [vault-ingest](docs/vault-ingest.md) ·
+  [publish-site](docs/publish-tool.md)
+- [Personal reference files](docs/personal-reference-files.md) — add your
+  own rulebook content for deeper system support
+- [gm-apprentice-publish](tools/publish/README.md) — npm package reference
+  for the publish tool
 
-## Obsidian Setup
+## Vaults
 
-Six of the nine skills (campaign-organizer, campaign-qa,
-session-prep, session-play, session-wrapup, vault-ingest) work
-with an Obsidian vault to manage campaign content. The
-ttrpg-expert, the-midwife, and publish-site skills work standalone.
+A campaign vault is a plain folder of markdown files — no servers,
+plugins, or app dependencies. Open it in [Obsidian](https://obsidian.md)
+whenever you want the graph view, backlinks, and a vault UI at the table;
+nothing requires it.
 
-### Dependencies
-
-Every skill is fully functional on a plain folder of markdown
-files — there are no servers, plugins, or app dependencies.
-Two bundled utilities (stdlib-only Python 3, shipped with the
-plugin) give all vault skills ranked search and native graph
-queries; if `python3` is missing they fall back to plain
-search. Opening the folder in Obsidian adds the app's own
-features on top: graph view, community plugins, and a vault
-UI for review at the table.
-
-### Recommended Obsidian Community Plugins
-
-Install these from Settings > Community Plugins > Browse:
-
-1. **Smart Connections** -- Semantic search inside the
-   Obsidian app for browsing your vault. Skills do not invoke
-   it; skill-side search comes from the bundled utilities
-   below.
-
-2. **Templater** -- Template engine for entity and session file
-   creation from structured templates.
-
-### Bundled Vault Utilities
-
-Two scripts ship with the plugin under
-`skills/shared/scripts/` (Python 3 standard library only, no
-install step):
-
-- **`graph_check.py`** -- orphans, unresolved and ambiguous
-  links, dead ends, and backlinks in one deterministic pass
-  over the vault. Skills use it for graph-health audits and
-  relationship checks.
-- **`vault_search.py`** -- index-free BM25 ranked search
-  with context snippets, for prose queries where relevance
-  ranking beats literal matching.
-- **`vault_check.py`** -- entity schema validation (required
-  fields, enums, legacy fields), duplicate/confusable name
-  detection, `_meta/index.md` drift, stale-DRAFT sweeps, and
-  changed-since-session listing for incremental audits.
-  Skills run it after creating entities and during audits.
-- **`session_context.py`** -- the whole session-prep read-set
-  (last wrap-up, PC statuses, upcoming plan, world flags,
-  overview) in one call instead of a dozen-plus file reads.
-- **`stamp_entities.py`** -- batch frontmatter stamping for
-  the post-session PC refresh; dry-run by default.
-
-Skills invoke these automatically when Python 3 is on your
-PATH and fall back to plain search when it isn't. macOS and
-most Linux distributions ship it; on Windows, install from
-python.org or `winget install python` (the utilities need
-no packages beyond the standard library).
-
-**Migrating from the old MCP setup:** earlier versions
-recommended the MCP Tools and Local REST API plugins with an
-`obsidian` server entry in `.mcp.json`. That stack is
-retired: uninstall both plugins from Settings > Community
-Plugins and delete the `obsidian` entry from any `.mcp.json`.
-
-## Using Without Obsidian
-
-Every skill works without Obsidian — three are fully
-functional standalone, the rest work directly on the vault
-folder with the bundled utilities.
-
-**ttrpg-expert** is fully functional and provides:
-
-- Game system rules help and validation
-- NPC, location, faction, and item generation
-- Session planning and encounter design advice
-- Scenario writing assistance
-- Canon management guidance
-- Continuity checking (from conversation context)
-- General GM support across all four game systems
-
-**the-midwife** is fully functional standalone — adventure
-conception happens in conversation and its workspace is plain
-markdown. With an existing vault it additionally mines your
-canon for creative opportunities.
-
-**publish-site** reads vault files directly from disk to build
-the static site; Obsidian is never part of the pipeline.
-
-**campaign-organizer** works without Obsidian — it creates
-the same structured markdown files, folder hierarchy, YAML
-frontmatter, and wiki-links, just without Obsidian's graph
-visualization and semantic search. Open the folder in Obsidian
-later for the full experience.
-
-**campaign-qa**, **session-prep**, **session-play**,
-**session-wrapup**, and **vault-ingest** also work without
-Obsidian — same audit procedures and lifecycle workflows,
-reading and searching the vault folder directly, with the
-bundled utilities providing ranked search and graph queries
-everywhere.
+Bundled vault utilities under `skills/shared/scripts/` (Python 3 standard
+library, no install) give the skills ranked search, link-graph audits, and
+schema validation — `vault_search.py`, `graph_check.py`, `vault_check.py`,
+`session_context.py`, and `stamp_entities.py`. Skills invoke them
+automatically when `python3` is on your PATH and fall back to plain search
+when it isn't (macOS and most Linux ship Python 3; on Windows,
+`winget install python`).
 
 ## License
 
@@ -245,18 +158,15 @@ Original content (skills and markdown) is licensed under
 [CC-BY-SA 4.0](LICENSE). Code (scripts, hooks, and executable
 files) is licensed under [MIT](LICENSE-CODE).
 
-This project includes material from open game content
-licensed under CC-BY 4.0 (D&D SRD 5.2), CC-BY 3.0 (Blades
-in the Dark SRD), and the ORC License (Basic Roleplaying and
-Pathfinder Second Edition Remaster).
+This project includes material from open game content licensed under
+CC-BY 4.0 (D&D SRD 5.2), CC-BY 3.0 (Blades in the Dark SRD), and the
+ORC License (Basic Roleplaying and Pathfinder Second Edition Remaster).
 
-GURPS is a trademark of Steve Jackson Games, and its rules
-and art are copyrighted by Steve Jackson Games. All rights
-are reserved by Steve Jackson Games. This game aid is the
-original creation of AntTheLimey and is released for free
-distribution, and not for resale, under the permissions
-granted in the
+GURPS is a trademark of Steve Jackson Games, and its rules and art are
+copyrighted by Steve Jackson Games. All rights are reserved by Steve
+Jackson Games. This game aid is the original creation of AntTheLimey and
+is released for free distribution, and not for resale, under the
+permissions granted in the
 [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
 
-See [ATTRIBUTION.md](ATTRIBUTION.md) for full credits and
-licensing details.
+See [ATTRIBUTION.md](ATTRIBUTION.md) for full credits and licensing details.
