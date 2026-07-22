@@ -69,11 +69,6 @@ async function init(targetDir = '.', options = {}) {
     { dest: 'css/overrides.css',               tmpl: 'css/overrides.css',                    isTemplate: false },
     { dest: '.gitignore',                      tmpl: 'dot-gitignore',                         isTemplate: false },
     { dest: 'wrangler.toml',                   tmpl: 'wrangler.toml.tmpl',                    isTemplate: true  },
-    { dest: 'functions/api/inbox-core.mjs',    tmpl: 'functions/api/inbox-core.mjs',          isTemplate: false },
-    { dest: 'functions/api/request.js',        tmpl: 'functions/api/request.js',              isTemplate: false },
-    { dest: 'functions/api/loadout-core.mjs',  tmpl: 'functions/api/loadout-core.mjs',        isTemplate: false },
-    { dest: 'functions/api/loadout.js',        tmpl: 'functions/api/loadout.js',              isTemplate: false },
-    { dest: 'functions/api/loadout-list.js',   tmpl: 'functions/api/loadout-list.js',         isTemplate: false },
   ];
 
   // Check for pre-existing files before writing anything

@@ -4,3 +4,7 @@ site/
 Thumbs.db
 *.log
 npm-debug.log*
+
+# Local build config — holds an absolute vaultPath (username/campaign path);
+# used only at build time, never served. Keep it out of a public repo.
+vault.config.json
