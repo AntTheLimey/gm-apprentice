@@ -2,7 +2,7 @@
 
 ## What It Does
 
-Your rules expert, content creator, and campaign consultant rolled into one. ttrpg-expert knows the mechanics of Call of Cthulhu 7e, GURPS 4e, Forged in the Dark, and D&D 5e (2024 Revision) and can generate game-ready content for any of them.
+Your rules expert, content creator, and campaign consultant rolled into one. ttrpg-expert knows the mechanics of Call of Cthulhu 7e, GURPS 4e, Forged in the Dark, D&D 5e (2024 Revision), and Pathfinder 2e (Remaster) and can generate game-ready content for any of them.
 
 It operates in three modes: answering rules questions and validating mechanics, generating ready-to-use content (NPCs, locations, encounters, handouts), and checking your campaign for plot holes and continuity errors.
 
