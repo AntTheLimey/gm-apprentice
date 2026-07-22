@@ -21,6 +21,7 @@ describe('build integration — GURPS PC', () => {
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
         siteTitle: 'GURPS Test',
+        backend: { statusBar: true },
         excludeDirs: ['_meta', '_Templates'],
         excludeSections: [],
         folderMap: {

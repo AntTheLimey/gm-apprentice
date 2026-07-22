@@ -26,3 +26,25 @@ describe('pcTemplate chatbox gating', () => {
     assert.ok(html.includes('js/change-request.js'), 'chatbox script present');
   });
 });
+
+describe('pcTemplate status-bar gating', () => {
+  const liveCtx = (backend) => ({
+    publishConfig: { backend, system: 'gurps-4e' },
+    systemStatusPanelHtml: '<div id="probe-status-panel">hp</div>',
+    systemLiveData: { vitals: { hp: 10 } },
+  });
+
+  it('omits the status panel and live scripts when statusBar is off', () => {
+    const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined,
+      liveCtx({ inbox: false, statusBar: false }));
+    assert.ok(!html.includes('probe-status-panel'), 'no status panel');
+    assert.ok(!html.includes('gurps-live.js'), 'no live client script');
+  });
+
+  it('emits the status panel and live scripts when statusBar is on', () => {
+    const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined,
+      liveCtx({ inbox: false, statusBar: true }));
+    assert.ok(html.includes('probe-status-panel'), 'status panel present');
+    assert.ok(html.includes('gurps-live.js'), 'live client script present');
+  });
+});
