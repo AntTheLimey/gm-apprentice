@@ -38,12 +38,6 @@ describe('checkCommand', () => {
 });
 
 describe('runChecks', () => {
-  const run = fakeRunner({
-    'git --version': { code: 0, stdout: 'git version 2.44.0\n', stderr: '' },
-    'npx wrangler@4': { code: 0, stdout: 'wrangler 4.20.0\n', stderr: '' }, // version + whoami both start with npx wrangler@4
-    'gh --version': { code: 0, stdout: 'gh version 2.50.0\n', stderr: '' },
-    'gh auth': { code: 0, stdout: 'Logged in', stderr: '' },
-  });
   // wrangler version and whoami both dispatch as ('npx', ['wrangler@4', ...]); to
   // distinguish, the runner keys on arg0 === 'wrangler@4' for BOTH, so provide a
   // richer fake that inspects args[1].
@@ -80,5 +74,20 @@ describe('runChecks', () => {
     assert.deepStrictEqual(r.required, ['node', 'git', 'gh']);
     assert.strictEqual(r.gh.authed, true);
     assert.strictEqual(r.ok, true);
+  });
+
+  it('wrangler present but not authed drags overall ok false', () => {
+    const runner = (cmd, args) => {
+      const a = args || [];
+      if (cmd === 'git') return { code: 0, stdout: 'git version 2.44.0\n', stderr: '' };
+      if (cmd === 'npx' && a[0] === 'wrangler@4' && a[1] === '--version') return { code: 0, stdout: 'wrangler 4.20.0\n', stderr: '' };
+      if (cmd === 'npx' && a[0] === 'wrangler@4' && a[1] === 'whoami') return { code: 1, stdout: '', stderr: '' };
+      return { code: 1, stdout: '', stderr: 'not found' };
+    };
+    const r = runChecks({ runCommand: runner, host: 'cloudflare-pages', nodeVersion: 'v22.5.0' });
+    assert.strictEqual(r.wrangler.ok, true);
+    assert.strictEqual(r.wrangler.authed, false);
+    assert.strictEqual(r.wrangler.accountId, null);
+    assert.strictEqual(r.ok, false);
   });
 });
