@@ -1,13 +1,15 @@
 const fs = require('fs');
+const path = require('path');
 
 // Which persistent-env mechanism this OS/shell uses. Windows persists via setx;
 // zsh reads ~/.zshenv for EVERY shell (interactive or not — the reason creds go
 // there, not ~/.zshrc); bash and everything else fall back to ~/.bashrc.
+// path.join (not string concat) so the separator matches the host OS.
 function resolveShellTarget({ platform, env, homedir }) {
   if (platform === 'win32') return { kind: 'setx' };
   const shell = (env && env.SHELL) || '';
-  if (shell.includes('zsh')) return { kind: 'file', path: `${homedir}/.zshenv` };
-  return { kind: 'file', path: `${homedir}/.bashrc` };
+  if (shell.includes('zsh')) return { kind: 'file', path: path.join(homedir, '.zshenv') };
+  return { kind: 'file', path: path.join(homedir, '.bashrc') };
 }
 
 // Pure: return fileContent with `export <name>="<value>"` present exactly once.
