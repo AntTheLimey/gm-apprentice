@@ -25,8 +25,8 @@ Publish tool 1.11.16. Backend-capability flags + graceful-hide of optional UI.
 
 - Static sites no longer ship a change-request chatbox that 404s on submit, nor
   a live status bar / party board with no backend behind it. Each optional UI is
-  now emitted only when its backend is actually configured — nothing dead is
-  rendered.
+  now emitted only when its corresponding backend flag is enabled — nothing dead
+  is rendered.
 
 ---
 
