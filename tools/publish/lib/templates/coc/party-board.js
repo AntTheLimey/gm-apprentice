@@ -32,7 +32,7 @@ function buildCoCPartyManifest(campaignId, entries) {
   return { campaignId, pcs };
 }
 
-function renderCoCBoard(manifest, rosterOutputPath) {
+function renderCoCBoard(manifest, rosterOutputPath, { live = true } = {}) {
   if (!manifest || !manifest.pcs || !manifest.pcs.length) return null;
   const showRep = manifest.pcs.some((pc) => pc.rep != null);
   const rows = manifest.pcs.map((pc) => {
@@ -51,10 +51,13 @@ function renderCoCBoard(manifest, rosterOutputPath) {
   }).join('\n');
 
   const repTh = showRep ? '<th>Rep</th>' : '';
+  const liveIndicator = live
+    ? '<span class="gl-party-live"><span class="gl-party-dot"></span><span class="gl-party-live-time">live</span></span>'
+    : '';
   return `<section class="gl-party" aria-label="Live party status">
   <div class="gl-party-head">
     <h2>Party Status</h2>
-    <span class="gl-party-live"><span class="gl-party-dot"></span><span class="gl-party-live-time">live</span></span>
+    ${liveIndicator}
   </div>
   <div class="gl-party-scroll">
   <table class="gl-party-table">

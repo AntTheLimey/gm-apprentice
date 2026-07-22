@@ -72,12 +72,15 @@ function buildRosterHtml(statusBar) {
   }
 }
 
-test('build() omits the live party board on the roster when backend.statusBar is off', () => {
-  const marker = 'id="' + boardFor('gurps-4e').scriptId + '"'; // id="gurps-party-data"
-  const html = buildRosterHtml(false);
-  assert.ok(!html.includes(marker), 'no party-board island when statusBar off');
-  assert.doesNotMatch(html, /class="gl-party"/);
-  assert.doesNotMatch(html, /js\/gurps-party\.js/);
+test('build() renders a static roster table but no live layer when backend.statusBar is off', () => {
+  const html = buildRosterHtml(false);         // statusBar off
+  // Static initiative table renders (baked authored values):
+  assert.match(html, /class="gl-party"/);
+  assert.match(html, /gl-party-table/);
+  // No live layer:
+  assert.doesNotMatch(html, /id="gurps-party-data"/);   // no JSON island
+  assert.doesNotMatch(html, /js\/gurps-party\.js/);      // no client scripts
+  assert.doesNotMatch(html, /gl-party-live/);            // no "live" indicator
 });
 
 test('build() wires the live party board on the roster when backend.statusBar is on', () => {

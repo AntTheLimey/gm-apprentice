@@ -4,7 +4,7 @@ const { rowCells } = require('../../../js/gurps-party');
 const { relativeHref, escapeHtml } = require('../../processor');
 const { avatarHtml } = require('../party-avatar');
 
-function renderPartyBoard(manifest, rosterOutputPath) {
+function renderPartyBoard(manifest, rosterOutputPath, { live = true } = {}) {
   if (!manifest || !manifest.pcs || !manifest.pcs.length) return null;
   // Rows arrive pre-sorted by Basic Speed (initiative order); the Speed column
   // surfaces that ordering value, so no separate rank number is needed.
@@ -25,10 +25,13 @@ function renderPartyBoard(manifest, rosterOutputPath) {
 </tr>`;
   }).join('\n');
 
+  const liveIndicator = live
+    ? '<span class="gl-party-live"><span class="gl-party-dot"></span><span class="gl-party-live-time">live</span></span>'
+    : '';
   return `<section class="gl-party" aria-label="Live party status">
   <div class="gl-party-head">
     <h2>Party Status</h2>
-    <span class="gl-party-live"><span class="gl-party-dot"></span><span class="gl-party-live-time">live</span></span>
+    ${liveIndicator}
   </div>
   <div class="gl-party-scroll">
   <table class="gl-party-table">
