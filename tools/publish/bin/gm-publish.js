@@ -16,6 +16,8 @@ Usage:
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth, save Cloudflare creds
+  gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
+  gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -188,6 +190,19 @@ if (command === 'flush') {
 if (command === 'doctor') {
   const { runDoctor } = require('../lib/doctor-cli.js');
   runDoctor(args.slice(1))
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'setup-status-bar' || command === 'setup-inbox') {
+  let configPath = './vault.config.json';
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--config' && args[i + 1]) { configPath = args[i + 1]; i++; }
+  }
+  const feature = command === 'setup-status-bar' ? 'status-bar' : 'inbox';
+  const { runSetupBackend } = require('../lib/setup-backend.js');
+  runSetupBackend(feature, { configPath })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
