@@ -312,22 +312,28 @@ def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[di
     return items, reports
 
 
-def node_index(vault) -> tuple[dict, set]:
+def node_index(vault) -> tuple[dict, set, set]:
     """Build the target-resolution index from the vault's own `mobrpg:` nodes —
-    the (ent_id_by_key, linked) pair suggest resolves against. This is the single
-    source of truth: a vault entity is "already upstream" iff it carries a node
-    with an `element_id`. A node relationship already carrying an `event_id` is
-    treated as already-linked."""
-    idx, linked = {}, set()
+    the (ent_id_by_key, linked, submitted) triple suggest resolves against. This is
+    the single source of truth: a vault entity is "already upstream" iff it carries
+    a node with an `element_id`. A node relationship already carrying an `event_id`
+    is treated as already-linked. `submitted` is the set of entity keys whose node
+    already carries a `pending` or `dismissed` review_state — a suggestion was
+    already filed for them upstream, so they must not be re-filed as a duplicate."""
+    idx, linked, submitted = {}, set(), set()
     aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
     for folder in map_cmd.FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             txt = open(p, encoding="utf-8").read()
             nd = node.read_node(txt)
-            if not nd or not nd.get("element_id"):
+            if not nd:
                 continue
             subj = _key(_display_name(p))
+            if nd.get("review_state") in ("pending", "dismissed"):
+                submitted.add(subj)
+            if not nd.get("element_id"):
+                continue
             eid = nd["element_id"]
             idx[subj] = eid
             fm, _ = _read(p)
@@ -339,7 +345,7 @@ def node_index(vault) -> tuple[dict, set]:
                     linked.add((subj, r.get("predicate"), _key(tgt)))
     for k, eid in aliases:
         idx.setdefault(k, eid)                       # a real entity name always wins over an alias
-    return idx, linked
+    return idx, linked, submitted
 
 
 def _mapped_type(mp, predicate) -> str:
@@ -417,19 +423,29 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
     return items, skipped
 
 
-def partition_entities(entities, ent_id_by_key) -> tuple[list[dict], list[dict]]:
-    """Split entities into (net_new, linked).
+def partition_entities(entities, ent_id_by_key,
+                       submitted_keys=None) -> tuple[list[dict], list[dict], list[dict]]:
+    """Split entities into (net_new, linked, submitted).
 
     An entity whose name (or an alias, via the caller's key index) already
     resolves to an upstream element id is *linked* — it exists in mobRPG and must
-    NOT be re-filed as a brand-new CreateElement. The rest are *net-new* and get a
-    full CreateElement cluster. Linked entities' genuine relationship deltas are
-    the job of the relationship-baseline pass (which stamps event_ids so a delta
-    is computable), not of re-mirroring the whole graph on every push."""
-    net_new, linked = [], []
+    NOT be re-filed as a brand-new CreateElement. An entity whose node already
+    carries a pending/dismissed suggestion (`submitted_keys`) is *submitted* — a
+    card for it is already in the reviewer's queue (or was rejected), so re-filing
+    would duplicate it. The rest are *net-new* and get a full CreateElement
+    cluster. Linked entities' genuine relationship deltas are the job of the
+    relationship-baseline pass, not of re-mirroring the whole graph on every push."""
+    submitted_keys = submitted_keys or set()
+    net_new, linked, submitted = [], [], []
     for ent in entities:
-        (linked if _key(ent["name"]) in ent_id_by_key else net_new).append(ent)
-    return net_new, linked
+        k = _key(ent["name"])
+        if k in ent_id_by_key:
+            linked.append(ent)
+        elif k in submitted_keys:
+            submitted.append(ent)
+        else:
+            net_new.append(ent)
+    return net_new, linked, submitted
 
 
 def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples) -> int:
@@ -686,13 +702,16 @@ def run(argv: list[str]) -> int:
     # own mobrpg: nodes — the single source of truth. An entity with no node is
     # treated as net-new; give it a node first (via the live name-match reconcile)
     # rather than trusting any sidecar crosswalk.
-    ent_id_by_key, linked = node_index(args.vault)
+    ent_id_by_key, linked, submitted_keys = node_index(args.vault)
 
     # An already-upstream entity must NOT be re-filed as a brand-new CreateElement
     # (that filed 140 of Space's 169 Tranche-A entities as bogus creates). Only
     # net-new entities get a full cluster; linked entities' relationship deltas are
     # the baseline pass's job, so they're held (and reported), never silently lost.
-    net_new, linked_ents = partition_entities(entities, ent_id_by_key)
+    # Entities with a pending/dismissed suggestion already in the queue are also
+    # held — re-filing would duplicate the card the reviewer already has.
+    net_new, linked_ents, submitted_ents = partition_entities(
+        entities, ent_id_by_key, submitted_keys)
 
     # Every NET-NEW entity's in-batch group ref, so a relationship whose target is
     # itself net-new in this push resolves to that target's `suggestion:<ref>`
@@ -738,6 +757,10 @@ def run(argv: list[str]) -> int:
               + (f"; {held} of their relationship(s) not emitted here — run "
                  f"`pull-canon --baseline` to reconcile pre-existing edges; any "
                  f"genuinely-new ones await the relationship-delta pass" if held else ""))
+    if submitted_ents:
+        print(f"  [held] {len(submitted_ents)} entit(y/ies) already have a pending/dismissed "
+              f"suggestion in the queue — not re-filed (would duplicate): "
+              + ", ".join(sorted(e["name"] for e in submitted_ents)))
     for r in all_reports:
         print(f"  [note] {r}")
     if deferred:

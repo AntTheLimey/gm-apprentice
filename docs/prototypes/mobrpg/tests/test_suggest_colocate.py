@@ -306,7 +306,7 @@ def test_node_index_resolves_targets_by_alias(tmp_path):
     (tmp_path / "Locations/MacMillian Station IV.md").write_text(
         '---\ntype: location\naliases: ["Thides Station", "The Station"]\n'
         + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
-    idx, _ = suggest.node_index(str(tmp_path))
+    idx, _, _ = suggest.node_index(str(tmp_path))
     assert idx[suggest._key("MacMillian Station IV")] == "mac-id"
     assert idx[suggest._key("Thides Station")] == "mac-id"      # alias resolves to the same element
     assert idx[suggest._key("The Station")] == "mac-id"

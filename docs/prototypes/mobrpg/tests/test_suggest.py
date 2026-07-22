@@ -227,7 +227,7 @@ def test_node_index_resolves_targets_from_mobrpg_nodes(tmp_path):
             "languages": []}
     (tmp_path / "Locations/Eris II.md").write_text(
         "---\ntype: location\n" + node.emit_node(body) + "---\nBody\n", encoding="utf-8")
-    idx, linked = suggest.node_index(str(tmp_path))
+    idx, linked, _ = suggest.node_index(str(tmp_path))
     assert idx[suggest._key("Eris System")] == "eris-id"
     assert idx[suggest._key("Eris II")] == "eris2-id"
     # a node relationship already carrying an event_id is treated as already-linked
@@ -542,9 +542,46 @@ def test_partition_entities_splits_linked_from_netnew():
             {"name": "Brand New NPC", "aliases": []}]
     ent_id_by_key = {suggest._key("Imogen Bellamy"): "im-id",
                      suggest._key("British Museum"): "bm-id"}
-    netnew, linked = suggest.partition_entities(ents, ent_id_by_key)
+    netnew, linked, submitted = suggest.partition_entities(ents, ent_id_by_key)
     assert {e["name"] for e in netnew} == {"Brand New NPC"}
     assert {e["name"] for e in linked} == {"Imogen Bellamy", "British Museum"}
+    assert submitted == []
+
+
+def test_partition_entities_excludes_already_submitted():
+    # An entity whose node already carries a pending/dismissed suggestion must NOT
+    # be re-filed — that would duplicate the card already in the reviewer's queue.
+    ents = [{"name": "New Loc"}, {"name": "Linked Loc"}, {"name": "Pending Loc"}]
+    ent_id_by_key = {suggest._key("Linked Loc"): "real-id"}
+    submitted_keys = {suggest._key("Pending Loc")}
+    net_new, linked, submitted = suggest.partition_entities(
+        ents, ent_id_by_key, submitted_keys)
+    assert [e["name"] for e in net_new] == ["New Loc"]
+    assert [e["name"] for e in linked] == ["Linked Loc"]
+    assert [e["name"] for e in submitted] == ["Pending Loc"]
+
+
+def test_node_index_flags_pending_and_dismissed_as_submitted(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Locations").mkdir(parents=True)
+
+    def write(name, eid, rs):
+        nd = {"world_id": "", "external_ref": f"space_game:Locations/{name}",
+              "element_id": eid, "element_kind": "Political", "review_state": rs,
+              "relationships": [], "languages": []}
+        (tmp_path / "Locations" / f"{name}.md").write_text(
+            "---\ntype: location\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+    write("Accepted Loc", "acc-id", "accepted")
+    write("Pending Loc", None, "pending")
+    write("Dismissed Loc", None, "dismissed")
+    write("New Loc", None, "")
+    idx, linked, submitted = suggest.node_index(str(tmp_path))
+    assert suggest._key("Accepted Loc") in idx          # linked by element_id
+    assert suggest._key("Pending Loc") in submitted      # already filed, awaiting review
+    assert suggest._key("Dismissed Loc") in submitted    # already filed, rejected
+    assert suggest._key("New Loc") not in submitted
+    assert suggest._key("Accepted Loc") not in submitted
 
 
 def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):

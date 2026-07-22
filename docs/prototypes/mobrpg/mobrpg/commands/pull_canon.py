@@ -311,7 +311,7 @@ def run_baseline(world, vault, token, *, execute) -> int:
     except (OSError, json.JSONDecodeError) as e:
         print(f"ERROR reading map {map_path}: {e}", file=sys.stderr)
         return 2
-    id_by_key, _ = suggest.node_index(vault)
+    id_by_key, _, _ = suggest.node_index(vault)
     notes = list(pull_desc._iter_notes(vault))          # (path, txt, node) for every linked note
     try:
         structural, reified, _known = rel_baseline.fetch_upstream(

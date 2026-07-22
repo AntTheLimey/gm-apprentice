@@ -48,6 +48,10 @@ cross-platform credentials) — complete the sync surface.
 
 ### Fixed
 
+- **mobRPG duplicate re-push guard** — `suggest` no longer re-files entities that
+  already carry a `pending` or `dismissed` `mobrpg:` node review_state (a suggestion
+  is already in the reviewer's queue, or was rejected). `node_index` returns the
+  submitted set; `partition_entities` holds them out of net-new and reports `[held]`.
 - **mobRPG containment edge direction** — `suggest` now emits spatial containment
   relations (`part_of`/`located_at`/`headquartered_at`) container-first to match
   mobRPG's `Link` convention, instead of subordinate-first (which landed
