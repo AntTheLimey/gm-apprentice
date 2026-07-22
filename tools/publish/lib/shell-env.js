@@ -11,10 +11,12 @@ function resolveShellTarget({ platform, env, homedir }) {
 }
 
 // Pure: return fileContent with `export <name>="<value>"` present exactly once.
+// Assumes a simple env var name ([A-Za-z0-9_]); value is written verbatim (a function
+// replacer avoids $-sequence interpolation).
 function upsertEnvExport(fileContent, name, value) {
   const line = `export ${name}="${value}"`;
   const re = new RegExp(`^export ${name}=.*$`, 'm');
-  if (re.test(fileContent)) return fileContent.replace(re, line);
+  if (re.test(fileContent)) return fileContent.replace(re, () => line);
   if (fileContent === '') return line + '\n';
   const sep = fileContent.endsWith('\n') ? '' : '\n';
   return fileContent + sep + line + '\n';
