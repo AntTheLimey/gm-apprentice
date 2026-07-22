@@ -10,8 +10,20 @@ function siteDir({ request = false, loadout = false, kv = 'none' } = {}) {
   if (request || loadout) fs.mkdirSync(path.join(dir, 'functions', 'api'), { recursive: true });
   if (request) fs.writeFileSync(path.join(dir, 'functions', 'api', 'request.js'), '// fn');
   if (loadout) fs.writeFileSync(path.join(dir, 'functions', 'api', 'loadout.js'), '// fn');
-  if (kv === 'real') fs.writeFileSync(path.join(dir, 'wrangler.toml'), 'id = "abc123def456"\n');
-  else if (kv === 'placeholder') fs.writeFileSync(path.join(dir, 'wrangler.toml'), 'id = "PUT-YOUR-KV-NAMESPACE-ID-HERE"\n');
+  if (kv === 'real') fs.writeFileSync(path.join(dir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
+  else if (kv === 'placeholder') fs.writeFileSync(path.join(dir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "PUT-YOUR-KV-NAMESPACE-ID-HERE"\n');
+  return dir;
+}
+
+// A hand-edited wrangler.toml with an account_id line ABOVE the KV namespace
+// block. A loose whole-file regex for `id = "..."` would match account_id's
+// value first and falsely report the KV as configured.
+function siteDirWithAccountIdAbove(kvId) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-site-'));
+  fs.writeFileSync(
+    path.join(dir, 'wrangler.toml'),
+    `account_id = "abc123realvalue"\n\n[[kv_namespaces]]\nbinding = "INBOX"\nid = "${kvId}"\n`
+  );
   return dir;
 }
 
@@ -49,5 +61,15 @@ describe('resolveBackendFlags', () => {
   it('hasRealKvId rejects the placeholder', () => {
     assert.strictEqual(hasRealKvId(siteDir({ kv: 'placeholder' })), false);
     assert.strictEqual(hasRealKvId(siteDir({ kv: 'real' })), true);
+  });
+
+  it('an account_id line above the KV block does not count as the KV id (placeholder)', () => {
+    const dir = siteDirWithAccountIdAbove('PUT-YOUR-KV-NAMESPACE-ID-HERE');
+    assert.strictEqual(hasRealKvId(dir), false);
+  });
+
+  it('an account_id line above the KV block is ignored when the KV id is real', () => {
+    const dir = siteDirWithAccountIdAbove('abc123def456');
+    assert.strictEqual(hasRealKvId(dir), true);
   });
 });
