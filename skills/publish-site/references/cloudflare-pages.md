@@ -44,28 +44,66 @@ needs — nothing more.
 8. **Copy the token now** — Cloudflare shows it only once. If you lose
    it, delete it and make a new one.
 
+> **One optional tick now saves a trip later.** If you think you might
+> ever want the live status bar or the at-table change-request inbox, add
+> a **second** permission row while you're here — **Account** · **Workers
+> KV Storage** · **Edit** — and you'll never need to touch this token
+> again. If you only want a plain shareable site, the single **Cloudflare
+> Pages** · **Edit** row is all you need.
+
 Keeping the token to just "Cloudflare Pages: Edit" means that even if it
 leaked, it could only touch your Pages sites — not billing, DNS, or
 anything else.
 
 ---
 
-## Step 2: Find your Account ID
+## Step 2: Hand the token to the setup — it does the rest
 
-1. Go to https://dash.cloudflare.com and select your account.
-2. On the account home (or the **Workers & Pages** overview), the
-   **Account ID** is shown in the right-hand sidebar. Copy it.
+That's the whole dance now: **create the token (Step 1) → hand it to the
+setup, which saves it and figures out your Account ID for you → done.**
+You never look up the Account ID by hand, and you never edit a shell
+startup file yourself.
 
-(If your token belongs to only one account you can skip this — wrangler
-will figure it out — but setting it avoids an occasional prompt.)
+Run this from the site directory (the `$TOOL` path is the one you set at
+the top of the publish walkthrough — the plugin's `gm-publish.js`):
 
----
+```bash
+node "$TOOL" doctor --set-cloudflare-creds
+```
 
-## Step 3: Save the credentials so deploys are automatic
+Paste your token when it asks. It then:
 
-The deploy command reads two environment variables. On macOS/Linux with
-zsh (the default on modern macOS), they must go in **`~/.zshenv`**, not
-`~/.zshrc`.
+- **saves the token** to the right startup file for your shell
+  automatically — zsh, bash, or Windows; you don't need to know which,
+- **works out your Account ID from Cloudflare** and saves that too (this
+  is why you're never sent hunting for it), and
+- **confirms it worked** — all **without ever printing your token back**.
+
+> **The old foot-gun is gone.** This guide used to warn that credentials
+> put in `~/.zshrc` instead of `~/.zshenv` were the **#1 reason a deploy
+> fails** ("not authenticated" even though the token is set) — because
+> `~/.zshrc` is only read by *interactive* terminal windows, while the
+> automated shells a deploy runs in skip it. `--set-cloudflare-creds`
+> removes that trap entirely: it always writes the file **every** shell
+> reads (`~/.zshenv` on zsh, `~/.bashrc` on bash, a user environment
+> variable on Windows), so the credentials are always there.
+
+**Prefer your token never passes through the assistant?** Run the exact
+same command in **your own terminal window** and paste the token there —
+for example:
+
+```bash
+read -rs CF_TOKEN && printf '%s' "$CF_TOKEN" | node "$TOOL" doctor --set-cloudflare-creds && unset CF_TOKEN
+```
+
+(`read -rs` doesn't echo what you type and keeps the token out of your
+shell history; the tool still never prints it back either way.)
+
+### Only if you'd rather do it by hand
+
+You can skip the command above and set the two variables yourself. On
+macOS/Linux with zsh (the default on modern macOS) they must go in
+**`~/.zshenv`**, not `~/.zshrc`.
 
 > **Why `~/.zshenv` and not `~/.zshrc`?** `~/.zshrc` is only read by
 > *interactive* terminal windows. Automated/non-interactive shells — the
@@ -75,38 +113,28 @@ zsh (the default on modern macOS), they must go in **`~/.zshenv`**, not
 > authenticated" even though the token is set.
 
 Open the file in an editor (this keeps the token out of your shell
-history):
-
-```bash
-open -e ~/.zshenv        # or: nano ~/.zshenv   /   subl ~/.zshenv
-```
-
-Add these two lines, pasting your real values:
+history), and add these two lines with your real values:
 
 ```bash
 export CLOUDFLARE_API_TOKEN="paste-your-token-here"
 export CLOUDFLARE_ACCOUNT_ID="paste-your-account-id-here"
 ```
 
-Save, then load them into your current terminal:
+- **zsh (macOS default):** put them in `~/.zshenv`, then run
+  `source ~/.zshenv`.
+- **Bash (most Linux):** if your shell is Bash rather than zsh (check
+  with `echo $SHELL`), put the same two lines in `~/.bashrc` instead —
+  Bash does not read `~/.zshenv`. On some setups a login shell reads
+  `~/.bash_profile` rather than `~/.bashrc`; if verification below still
+  fails, add the lines there too. Then run `source ~/.bashrc` (or open a
+  new terminal).
+- **Windows:** set the same two variables as user environment variables
+  (System Settings → Environment Variables), then open a new terminal.
 
-```bash
-source ~/.zshenv
-```
-
-**Bash (most Linux):** if your shell is Bash rather than zsh (check with
-`echo $SHELL`), put the same two `export` lines in `~/.bashrc` instead
-of `~/.zshenv` — Bash does not read `~/.zshenv`. On some setups a login
-shell reads `~/.bash_profile` rather than `~/.bashrc`; if `whoami` below
-still fails, add the lines to `~/.bash_profile` too. Then run
-`source ~/.bashrc` (or open a new terminal).
-
-**Windows:** set the same two variables as user environment variables
-(System Settings → Environment Variables), then open a new terminal.
-
----
-
-## Step 4: Verify
+Doing it by hand means you *do* have to find your Account ID yourself:
+go to https://dash.cloudflare.com, select your account, and copy the
+**Account ID** from the right-hand sidebar (on the account home or the
+**Workers & Pages** overview). Then verify:
 
 ```bash
 npx wrangler@4 whoami
@@ -119,7 +147,7 @@ variables aren't in `~/.zshenv`, or you need a new terminal / `source`.
 
 ---
 
-## Step 5: Point the site config at Cloudflare
+## Step 3: Point the site config at Cloudflare
 
 In the site's `vault.config.json`, set two fields:
 
@@ -145,7 +173,7 @@ Project names must be lowercase letters, numbers, and hyphens.
 
 ---
 
-## Step 6: First deploy
+## Step 4: First deploy
 
 From the site directory:
 
@@ -240,7 +268,10 @@ the same way they copied `functions/api/loadout.js` for SP1.
 > from the site title, which may not match — and a mismatched `name` deploys to
 > a *different* project. If unsure, run `npx wrangler@4 pages project list`.
 
-> **Your API token needs KV permission too.** The token from Step 1 of this
+> **Your API token needs KV permission too.** If you took the optional
+> **Account · Workers KV Storage · Edit** tick when you created the token
+> (Step 1), you're already done here — skip to creating the namespace. Otherwise:
+> the token from Step 1 of this
 > guide is scoped to *Cloudflare Pages* only — enough to deploy, but **not** to
 > create or use a KV namespace. Before the steps below, edit that token (or
 > create a new one) so it also has **Account · Workers KV Storage · Edit**. In
@@ -307,8 +338,10 @@ of `<project>.pages.dev`:
 
 **"You are not authenticated. Please run `wrangler login`."**
 The token isn't reaching the command. Almost always the variables are in
-`~/.zshrc` instead of `~/.zshenv` (see Step 3), or you're in a terminal
+`~/.zshrc` instead of `~/.zshenv` (see Step 2), or you're in a terminal
 opened before you added them — open a new one or run `source ~/.zshenv`.
+Re-running `node "$TOOL" doctor --set-cloudflare-creds` fixes this by
+writing the file every shell reads.
 Confirm with `npx wrangler@4 whoami`.
 
 **A wrong path (e.g. `/nope`) returns a Cloudflare 5xx instead of the
@@ -319,7 +352,7 @@ propagates. Recheck after a few minutes. If it persists, confirm
 
 **The 404 page loads but is unstyled / links are broken.** `siteUrl` is
 still a `github.io` URL. Set it to your `.pages.dev` (or custom) URL and
-rebuild — see Step 5.
+rebuild — see Step 3.
 
 **"A project with this name already exists."** The `project create` step
 only runs once per site. Skip it and run the `deploy` command directly.
