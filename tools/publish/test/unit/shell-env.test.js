@@ -39,10 +39,15 @@ describe('upsertEnvExport', () => {
     assert.strictEqual(after, 'export A="1"\nexport FOO="new"\nexport B="2"\n');
     assert.strictEqual((after.match(/export FOO=/g) || []).length, 1);
   });
-  it('preserves $ sequences in the value on replace (no $& / $1 interpolation)', () => {
-    const before = 'export TOK="old"\n';
-    const after = upsertEnvExport(before, 'TOK', 'ab$&cd$1ef$$gh');
-    assert.strictEqual(after, 'export TOK="ab$&cd$1ef$$gh"\n');
+  it('rejects a value with shell metacharacters (injection guard)', () => {
+    assert.throws(() => upsertEnvExport('', 'TOK', 'a$(evil)b'), /unsafe/);
+    assert.throws(() => upsertEnvExport('', 'TOK', 'a"; rm -rf ~; "b'), /unsafe/);
+    assert.throws(() => upsertEnvExport('', 'TOK', 'a`whoami`b'), /unsafe/);
+    assert.throws(() => upsertEnvExport('', 'TOK', 'a\\b'), /unsafe/);
+    assert.throws(() => upsertEnvExport('', 'TOK', 'a\nb'), /unsafe/);
+  });
+  it('rejects an unsafe env var name', () => {
+    assert.throws(() => upsertEnvExport('', 'BAD NAME', 'x'), /unsafe name/);
   });
 });
 

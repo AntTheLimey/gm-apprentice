@@ -50,6 +50,12 @@ async function runDoctor(argv, deps = {}) {
     const readStdin = deps.readStdin || defaultReadStdin;
     const token = String(await readStdin()).trim();
     if (!token) { out('No token received on stdin. Nothing written.'); return 1; }
+    // A Cloudflare API token is [A-Za-z0-9_-]. Reject anything else BEFORE it can
+    // reach the shell-sourced env file. Never echo the token in the error.
+    if (!/^[A-Za-z0-9_-]+$/.test(token)) {
+      out('The token has unexpected characters — a Cloudflare API token is letters, digits, underscores, and hyphens only. Nothing written.');
+      return 1;
+    }
     env.CLOUDFLARE_API_TOKEN = token;
     const who = runCommand('npx', ['wrangler@4', 'whoami']);
     const verified = who.code === 0;

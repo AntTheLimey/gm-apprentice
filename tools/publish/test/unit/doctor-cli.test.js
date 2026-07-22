@@ -68,4 +68,18 @@ describe('runDoctor --set-cloudflare-creds', () => {
     assert.strictEqual(rc, 1);
     assert.ok(!fs.existsSync(path.join(dir, '.bashrc')), 'nothing written on empty token');
   });
+
+  it('token with shell metacharacters → rejected, no write, not echoed, return 1', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-doc3-'));
+    const lines = [];
+    const evil = 'x";$(rm -rf ~);"';
+    const rc = await runDoctor(['--set-cloudflare-creds'], {
+      out: (s) => lines.push(String(s)), runCommand: wranglerAllGood(),
+      readStdin: async () => evil + '\n',
+      env: { SHELL: '/bin/bash' }, platform: 'linux', homedir: dir,
+    });
+    assert.strictEqual(rc, 1);
+    assert.ok(!fs.existsSync(path.join(dir, '.bashrc')), 'nothing written for a malformed token');
+    assert.ok(!lines.join('\n').includes(evil), 'malformed token NEVER echoed');
+  });
 });

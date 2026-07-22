@@ -13,9 +13,19 @@ function resolveShellTarget({ platform, env, homedir }) {
 }
 
 // Pure: return fileContent with `export <name>="<value>"` present exactly once.
-// Assumes a simple env var name ([A-Za-z0-9_]); value is written verbatim (a function
-// replacer avoids $-sequence interpolation).
+// This content is SOURCED by a shell, so a value carrying shell metacharacters
+// ("`$\ or a newline) is an injection vector — reject it. Callers here write only
+// [A-Za-z0-9_-] credentials, so a legitimate value never trips this; it's a
+// defense-in-depth guard for the credential-writing path. The name must be a
+// plain identifier (also keeps the RegExp below a controlled, non-ReDoS pattern).
 function upsertEnvExport(fileContent, name, value) {
+  if (!/^[A-Za-z0-9_]+$/.test(name)) {
+    throw new Error(`Refusing to write an env var with an unsafe name: ${name}`);
+  }
+  if (/["`$\\\r\n]/.test(value)) {
+    // Deliberately does NOT echo the value (it may be a secret).
+    throw new Error(`Refusing to write ${name}: value contains characters unsafe for a shell-sourced file.`);
+  }
   const line = `export ${name}="${value}"`;
   const re = new RegExp(`^export ${name}=.*$`, 'm');
   if (re.test(fileContent)) return fileContent.replace(re, () => line);
