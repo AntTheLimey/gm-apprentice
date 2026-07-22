@@ -230,6 +230,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const pages = (context || {}).pages || [];
+  const backend = publishConfig.backend || {};
+  const showInbox = backend.inbox === true;
+  const showStatusBar = backend.statusBar === true;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
@@ -351,7 +354,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
 
   // --- Assemble ---
-  const crWidget = `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`;
+  const crWidget = showInbox
+    ? `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`
+    : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
   if (cocSheet) {
@@ -387,7 +392,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       breadcrumbsHtml,
       scripts: [
         ...clientScripts(page.outputPath),
-        rootPath(page.outputPath) + 'js/change-request.js',
+        ...(showInbox ? [rootPath(page.outputPath) + 'js/change-request.js'] : []),
         rootPath(page.outputPath) + 'js/coc-sheet.js',
         ...liveScriptHrefs(rootPath(page.outputPath), publishConfig.system),
       ],
@@ -432,7 +437,7 @@ ${tabScript()}`;
     breadcrumbsHtml,
     scripts: [
       ...clientScripts(page.outputPath),
-      rootPath(page.outputPath) + 'js/change-request.js',
+      ...(showInbox ? [rootPath(page.outputPath) + 'js/change-request.js'] : []),
       ...liveScriptHrefs(rootPath(page.outputPath), publishConfig.system),
     ],
   });
