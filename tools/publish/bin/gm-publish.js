@@ -15,6 +15,7 @@ Usage:
   gm-apprentice-publish build [options]      Build the site
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
+  gm-apprentice-publish doctor [options]     Preflight: check tools/auth, save Cloudflare creds
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -171,6 +172,14 @@ if (command === 'flush') {
   }
   const { runFlush } = require('../lib/flush-cli.js');
   runFlush({ configPath })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'doctor') {
+  const { runDoctor } = require('../lib/doctor-cli.js');
+  runDoctor(args.slice(1))
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
