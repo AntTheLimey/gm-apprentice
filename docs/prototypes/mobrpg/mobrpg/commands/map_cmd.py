@@ -138,6 +138,18 @@ PREDICATE_RELATION = {p["type"]: p["mobrpg_relation_type"]
                       for p in _ONTOLOGY["predicates"]
                       if p.get("mobrpg_relation_type")}
 
+# Spatial containment/location predicates are authored subordinate-first
+# ("X part_of Y" = Y contains X), but mobRPG's Link convention is container-
+# first — the source is the dominant/containing element. `suggest` swaps source
+# and target for these so a push emits (Y -> X) and never lands a reversed edge
+# (the bug that put `planet part_of system` in as "planet is the system's parent").
+# Derived from the ontology: the ASYMMETRIC Link predicates (borders is
+# symmetric, so its direction is immaterial). Change the ontology, not this set.
+REVERSED_PREDICATES = frozenset(
+    p["type"] for p in _ONTOLOGY["predicates"]
+    if p.get("mobrpg_relation_type") == "Link" and not p.get("symmetric", False)
+)
+
 
 def predicate_type(predicate: str) -> str:
     """Resolve a vault predicate to its mobRPG type. A WorldElementRelationType

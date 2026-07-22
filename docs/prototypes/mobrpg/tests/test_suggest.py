@@ -234,12 +234,12 @@ def test_node_index_resolves_targets_from_mobrpg_nodes(tmp_path):
     assert (suggest._key("Eris II"), "part_of", suggest._key("Eris System")) in linked
 
 
-def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
+def test_relationship_items_structural_predicate_is_a_direct_relation(tmp_path):
     # part_of is spatial hierarchy, not a reified event: it must emit a direct
-    # WorldElementRelation (Parent), NOT an Event(eventType=...) — "Parent" is not
-    # a valid EventType so the event path would build an invalid payload.
+    # WorldElementRelation, NOT an Event(eventType=...). And it emits container-
+    # first: "X part_of Y" means Y is the dominant/containing element, so the
+    # edge is (Y -> X), not (X -> Y).
     mp = _map()
-    mp["relationshipTypes"] = {"part_of": "Parent"}
     idx, linked = _index()
     ent = {"path": str(tmp_path / "Locations/Body.md"), "name": "Imogen Bellamy",
            "relationships": [{"target": "Dr_Erasmus_Hume", "predicate": "part_of", "desc": ""}]}
@@ -248,9 +248,36 @@ def test_relationship_items_structural_predicate_is_a_parent_relation(tmp_path):
     assert not any(i["operation"] == "CreateElement" for i in items)   # no reified Event
     rels = [i for i in items if i["operation"] == "AddRelation"]
     assert len(rels) == 1
-    assert rels[0]["payload"]["type"] == "Parent"
-    assert rels[0]["payload"]["sourceRef"] == "suggestion:e1"          # entity is the child
-    assert rels[0]["payload"]["targetRef"] == "hume-id"                # target is the parent
+    assert rels[0]["payload"]["type"] == "Link"                        # part_of -> Link
+    assert rels[0]["payload"]["sourceRef"] == "hume-id"               # container is the source
+    assert rels[0]["payload"]["targetRef"] == "suggestion:e1"         # entity is the target
+
+
+def test_relationship_items_reverses_spatial_containment(tmp_path):
+    # Subordinate-first predicates (part_of/located_at/headquartered_at) emit
+    # container-first Link edges so a push matches mobRPG's convention and never
+    # lands a reversed edge.
+    mp = _map()
+    idx = {suggest._key("Eris System"): "sys-id", suggest._key("The Main Line"): "line-id"}
+    ent = {"path": str(tmp_path / "Locations/Eris II.md"), "name": "Eris II",
+           "relationships": [
+               {"target": "Eris_System", "predicate": "part_of", "desc": ""},
+               {"target": "The_Main_Line", "predicate": "located_at", "desc": ""}]}
+    items, _ = suggest.relationship_items(ent, mp, "e1", idx, set(),
+                                          str(tmp_path), "space_game", "e1")
+    rels = [i for i in items if i["operation"] == "AddRelation"]
+    assert rels and all(r["payload"]["type"] == "Link" for r in rels)
+    pairs = {(r["payload"]["sourceRef"], r["payload"]["targetRef"]) for r in rels}
+    assert ("sys-id", "suggestion:e1") in pairs      # Eris System (container) -> Eris II
+    assert ("line-id", "suggestion:e1") in pairs     # The Main Line (container) -> Eris II
+
+
+def test_reversed_predicates_are_the_asymmetric_spatial_links():
+    from mobrpg.commands import map_cmd
+    assert map_cmd.REVERSED_PREDICATES == {"part_of", "located_at", "headquartered_at"}
+    # symmetric (borders) and non-Link (parent_of) predicates are NOT reversed
+    assert "borders" not in map_cmd.REVERSED_PREDICATES
+    assert "parent_of" not in map_cmd.REVERSED_PREDICATES
 
 
 def test_predicate_type_maps_containment_to_relations_and_events():

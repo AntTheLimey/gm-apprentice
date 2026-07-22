@@ -17,7 +17,7 @@ def _map():
 # ---- relationship_items: net-new target resolution ----
 
 def test_structural_netnew_target_wires_to_suggestion_ref(tmp_path):
-    mp = _map(); mp["relationshipTypes"] = {"part_of": "Parent"}
+    mp = _map()
     ref_by_key = {suggest._key("Eris System"): "e7"}
     ent = {"path": str(tmp_path / "Locations/Eris II.md"), "name": "Eris II",
            "relationships": [{"target": "Eris System", "predicate": "part_of", "desc": ""}]}
@@ -27,9 +27,10 @@ def test_structural_netnew_target_wires_to_suggestion_ref(tmp_path):
     rels = [i for i in items if i["operation"] == "AddRelation"]
     assert len(rels) == 1
     r = rels[0]
-    assert r["payload"]["type"] == "Parent"
-    assert r["payload"]["sourceRef"] == "suggestion:e1"
-    assert r["payload"]["targetRef"] == "suggestion:e7"     # net-new target, in-batch ref
+    assert r["payload"]["type"] == "Link"                  # part_of -> Link
+    # container-first: Eris System (the net-new container) is the source
+    assert r["payload"]["sourceRef"] == "suggestion:e7"
+    assert r["payload"]["targetRef"] == "suggestion:e1"
     assert set(r["dependsOn"]) == {"e1", "e7"}
     assert r["_needs"] == "e7"                              # co-location marker for the chunker
 
@@ -50,7 +51,7 @@ def test_reified_event_netnew_target_tags_whole_unit(tmp_path):
 
 
 def test_upstream_target_unchanged_and_untagged(tmp_path):
-    mp = _map(); mp["relationshipTypes"] = {"part_of": "Parent"}
+    mp = _map()
     idx = {suggest._key("Eris System"): "real-eris-id"}
     ref_by_key = {suggest._key("Eris System"): "e7"}       # also present net-new — real id wins
     ent = {"path": str(tmp_path / "Locations/Eris II.md"), "name": "Eris II",
@@ -58,7 +59,9 @@ def test_upstream_target_unchanged_and_untagged(tmp_path):
     items, skipped = suggest.relationship_items(
         ent, mp, "e1", idx, set(), str(tmp_path), "space_game", "e1", ref_by_key)
     r = [i for i in items if i["operation"] == "AddRelation"][0]
-    assert r["payload"]["targetRef"] == "real-eris-id"
+    # container-first: the upstream container resolves to its real id as the source
+    assert r["payload"]["sourceRef"] == "real-eris-id"
+    assert r["payload"]["targetRef"] == "suggestion:e1"
     assert "_needs" not in r and r["dependsOn"] == ["e1"]
 
 

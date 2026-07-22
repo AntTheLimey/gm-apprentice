@@ -48,6 +48,11 @@ cross-platform credentials) — complete the sync surface.
 
 ### Fixed
 
+- **mobRPG containment edge direction** — `suggest` now emits spatial containment
+  relations (`part_of`/`located_at`/`headquartered_at`) container-first to match
+  mobRPG's `Link` convention, instead of subordinate-first (which landed
+  `planet part_of system` as "planet is the system's parent"). The reversed-
+  predicate set is derived from the ontology (asymmetric `Link` predicates).
 - **Credential CSV gitignore gap** — `credentials*.csv` is now ignored in the
   prototype so a stray token file can never be committed. Untracked stale run
   artifacts (`*_out/`, `space_vault_preview/`, `space_extract.json`).

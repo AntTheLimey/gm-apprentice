@@ -385,9 +385,14 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         tgt_disp = tgt_raw.replace("_", " ")
         if et in map_cmd.RELATION_TYPES:
             # Structural relation (Parent/Child/Link/Spouse): a direct
-            # WorldElementRelation from the entity to the target — no reified
-            # Event. Parent/Child auto-create their reverse on the backend.
-            rel_item = _relation(et, f"suggestion:{entity_ref}", tgt_val, [entity_ref] + xdeps)
+            # WorldElementRelation — no reified Event. Parent/Child auto-create
+            # their reverse on the backend. Subordinate-first spatial predicates
+            # (part_of/located_at/headquartered_at) emit container-first: mobRPG
+            # wants the dominant element as source, so swap "X part_of Y" -> (Y, X).
+            src, tgt = f"suggestion:{entity_ref}", tgt_val
+            if pred in map_cmd.REVERSED_PREDICATES:
+                src, tgt = tgt, src
+            rel_item = _relation(et, src, tgt, [entity_ref] + xdeps)
             if tgt_ref:
                 rel_item["_needs"] = tgt_ref
             items.append(rel_item)
