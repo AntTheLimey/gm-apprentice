@@ -230,6 +230,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const pages = (context || {}).pages || [];
+  const backend = publishConfig.backend || {};
+  const showInbox = backend.inbox === true;
+  const showStatusBar = backend.statusBar === true;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
@@ -286,6 +289,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemRecordHtml = (context || {}).systemRecordHtml || null;
   const systemStatusBarHtml = (context || {}).systemStatusBarHtml || null;
 
+  // Status-bar tier off ⇒ no live vitals UI anywhere. Null out every live input
+  // so the existing null-guards below omit the panel, island, and client scripts.
+  const liveOn = showStatusBar;
+  const liveData = liveOn ? systemLiveData : null;
+  const statusPanel = liveOn ? systemStatusPanelHtml : null;
+  const statusBar = liveOn ? systemStatusBarHtml : null;
+
   // Combat-only consumed titles: only suppress when combat HTML is present.
   const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
 
@@ -320,8 +330,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   let sheetContent;
   if (systemHtml) {
-    const liveClient = systemLiveData ? clientFor(publishConfig.system) : null;
-    const island = liveClient ? '\n' + liveDataScript(systemLiveData, liveClient.domId) : '';
+    const liveClient = liveData ? clientFor(publishConfig.system) : null;
+    const island = liveClient ? '\n' + liveDataScript(liveData, liveClient.domId) : '';
     sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}${island}`;
   } else {
     sheetContent = `${sectionNav}\n${accordions}\n${processedContent.relationships}`;
@@ -351,7 +361,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
 
   // --- Assemble ---
-  const crWidget = `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`;
+  const crWidget = showInbox
+    ? `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`
+    : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
   if (cocSheet) {
@@ -362,14 +374,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const sealUrl = crestKey
       ? (((portraitImg({ portrait: crestKey }, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
       : '';
-    const cocLiveClient = systemLiveData ? clientFor(publishConfig.system) : null;
-    const cocIsland = cocLiveClient ? '\n' + liveDataScript(systemLiveData, cocLiveClient.domId) : '';
+    const cocLiveClient = liveData ? clientFor(publishConfig.system) : null;
+    const cocIsland = cocLiveClient ? '\n' + liveDataScript(liveData, cocLiveClient.domId) : '';
     const cocBody = buildCocBody({
       page, fm, publishConfig,
       displayTitle: page.displayTitle,
       sheetHtml: systemHtml,
       recordHtml: systemRecordHtml,
-      statusBarHtml: systemStatusBarHtml,
+      statusBarHtml: statusBar,
       portraitUrl, sealUrl, crWidget,
       equipmentContent, storyContent, journeyContent,
       leftoverSections: sheetSections,
@@ -387,9 +399,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       breadcrumbsHtml,
       scripts: [
         ...clientScripts(page.outputPath),
-        rootPath(page.outputPath) + 'js/change-request.js',
+        ...(showInbox ? [rootPath(page.outputPath) + 'js/change-request.js'] : []),
         rootPath(page.outputPath) + 'js/coc-sheet.js',
-        ...liveScriptHrefs(rootPath(page.outputPath), publishConfig.system),
+        ...(liveOn ? liveScriptHrefs(rootPath(page.outputPath), publishConfig.system) : []),
       ],
     });
   }
@@ -397,7 +409,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const body = `${crWidget}
 ${heroBanner}
 ${epithet}
-${systemStatusPanelHtml ? systemStatusPanelHtml + '\n' : ''}<div class="tab-bar">
+${statusPanel ? statusPanel + '\n' : ''}<div class="tab-bar">
   <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>${combatTabButton}
   <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
@@ -432,8 +444,8 @@ ${tabScript()}`;
     breadcrumbsHtml,
     scripts: [
       ...clientScripts(page.outputPath),
-      rootPath(page.outputPath) + 'js/change-request.js',
-      ...liveScriptHrefs(rootPath(page.outputPath), publishConfig.system),
+      ...(showInbox ? [rootPath(page.outputPath) + 'js/change-request.js'] : []),
+      ...(liveOn ? liveScriptHrefs(rootPath(page.outputPath), publishConfig.system) : []),
     ],
   });
 }

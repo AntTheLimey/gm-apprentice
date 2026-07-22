@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.42] — 2026-07-21
+
+Publish tool 1.11.16. Backend-capability flags + graceful-hide of optional UI.
+
+### Added
+
+- `vault.config.json` gains a `backend` block with `statusBar` and `inbox`
+  flags. The published site now renders the live status bar / status panel /
+  party board only when `statusBar` is on, and the change-request chatbox only
+  when `inbox` is on. New sites scaffold with both off (a static, Tier-1 site);
+  existing deployed sites with no explicit flags auto-detect each capability
+  from their Cloudflare Functions plus a real KV namespace id, so their UI is
+  unaffected by the upgrade.
+
+### Fixed
+
+- Static sites no longer ship a change-request chatbox that 404s on submit, nor
+  a live status bar / party board with no backend behind it. Each optional UI is
+  now emitted only when its corresponding backend flag is enabled — nothing dead
+  is rendered.
+
+---
+
 ## [1.8.41] — 2026-07-21
 
 Ports the mobRPG node schema into the shipped entity schema and settles the

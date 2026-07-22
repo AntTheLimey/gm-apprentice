@@ -15,6 +15,7 @@ describe('build integration — CoC PC', () => {
       outputDir: path.join(outputDir, 'docs'),
       attachmentsDir: '_attachments', siteTitle: 'CoC Test',
       system: 'regency-cthulhu',
+      backend: { statusBar: true },
       excludeDirs: ['_meta', '_Templates'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
     }, null, 2));

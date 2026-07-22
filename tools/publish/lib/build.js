@@ -14,6 +14,7 @@ const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
+const { resolveBackendFlags } = require('./backend-flags');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -37,6 +38,13 @@ function build(options = {}) {
   }
 
   const publishConfig = loadPublishConfig(config.vaultPath, config);
+  // Merge explicit flags (Task 1) with legacy auto-detect, keyed off the site
+  // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
+  // publishConfig.backend, so this must run before any page renders.
+  publishConfig.backend = resolveBackendFlags(
+    { statusBar: publishConfig.backend.statusBar, inbox: publishConfig.backend.inbox },
+    configDir,
+  );
   const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
@@ -630,7 +638,9 @@ function build(options = {}) {
   }
 
   if (deferredRosters.length) {
-    const board = boardFor(publishConfig.system);
+    // Status-bar tier off ⇒ no live party board (it polls /api/loadout-list, a
+    // KV backend that isn't deployed). Roster pages still render, just static.
+    const board = publishConfig.backend.statusBar ? boardFor(publishConfig.system) : null;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.

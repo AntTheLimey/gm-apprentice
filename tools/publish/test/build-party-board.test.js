@@ -1,9 +1,13 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const { wikiTemplate } = require('../lib/templates/index');
 const { buildPartyManifest, partyDataScript } = require('../lib/party-manifest');
 const { renderPartyBoard } = require('../lib/templates/gurps/party-board');
 const { boardFor } = require('../lib/party-board-registry');
+const { build } = require('../lib/build');
 
 function pcEntry(name, slug, bs, dx) {
   return { name, outputPath: 'characters/pcs/' + slug + '.html', data: {
@@ -42,6 +46,46 @@ test('wikiTemplate without party context renders no board or live scripts', () =
   const html = wikiTemplate(page, processed, () => '<nav></nav>', { siteTitle: 'X' }, {}, { publishConfig: {}, linkMap: {}, pages: [] });
   assert.doesNotMatch(html, /gurps-party-data/);
   assert.doesNotMatch(html, /js\/gurps-party\.js/);
+});
+
+// Build the with-party-roster fixture and return the rendered roster HTML.
+// Gate under test: build() only wires the live party board when backend.statusBar
+// is on — the board polls /api/loadout-list, a KV backend absent on a static site.
+function buildRosterHtml(statusBar) {
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-roster-'));
+  try {
+    const configPath = path.join(outputDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: path.join(__dirname, 'fixtures', 'with-party-roster'),
+      outputDir: path.join(outputDir, 'docs'),
+      attachmentsDir: '_attachments', siteTitle: 'Roster Test',
+      system: 'gurps-4e', backend: { statusBar },
+      excludeDirs: ['_meta', '_Templates'], excludeSections: [],
+      folderMap: { 'Characters/PCs': 'characters/pcs' },
+    }, null, 2));
+    build({ configPath });
+    const rosterPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'player-characters.html');
+    assert.ok(fs.existsSync(rosterPath), 'roster page renders regardless of statusBar');
+    return fs.readFileSync(rosterPath, 'utf-8');
+  } finally {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  }
+}
+
+test('build() omits the live party board on the roster when backend.statusBar is off', () => {
+  const marker = 'id="' + boardFor('gurps-4e').scriptId + '"'; // id="gurps-party-data"
+  const html = buildRosterHtml(false);
+  assert.ok(!html.includes(marker), 'no party-board island when statusBar off');
+  assert.doesNotMatch(html, /class="gl-party"/);
+  assert.doesNotMatch(html, /js\/gurps-party\.js/);
+});
+
+test('build() wires the live party board on the roster when backend.statusBar is on', () => {
+  const marker = 'id="' + boardFor('gurps-4e').scriptId + '"'; // id="gurps-party-data"
+  const html = buildRosterHtml(true);
+  assert.ok(html.includes(marker), 'party-board island present when statusBar on');
+  assert.match(html, /class="gl-party"/);
+  assert.match(html, /js\/gurps-party\.js/);
 });
 
 test('CoC roster injects the coc board, coc-party-data island, and ordered scripts', () => {

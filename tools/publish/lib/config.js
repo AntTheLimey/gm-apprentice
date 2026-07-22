@@ -39,6 +39,10 @@ const PUBLISH_DEFAULTS = {
     fields: {},
   },
   section_titles: {},
+  // Backend-capability gates. undefined = "not set" (the build's resolver then
+  // auto-detects from deployed Functions for legacy sites); an explicit boolean
+  // is authoritative. Both default off for new sites (set in the init scaffold).
+  backend: { statusBar: undefined, inbox: undefined },
 };
 
 // Union exclude lists from both config sources (vault-config.md and vault.config.json),
@@ -132,6 +136,13 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ...publish.overrides,
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
+    // Explicit flags win, publish block over json fallback; absent stays undefined.
+    backend: {
+      statusBar: (publish.backend && publish.backend.statusBar)
+        ?? (jsonConfigFallback.backend && jsonConfigFallback.backend.statusBar),
+      inbox: (publish.backend && publish.backend.inbox)
+        ?? (jsonConfigFallback.backend && jsonConfigFallback.backend.inbox),
+    },
     setting_year: settingYear,
   };
 
