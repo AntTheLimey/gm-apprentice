@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.44] — 2026-07-22
+
+Publish tool 1.11.17. Publish-site setup is now preflight-first and
+Cloudflare-default.
+
+### Changed
+
+- publish-site first-time setup is now preflight-first and Cloudflare-default:
+  `gm-publish doctor` clears missing tools/credentials before anything is
+  built, Cloudflare Pages is the recommended host with a token-only
+  credential dance (Account ID auto-derived), setup resumes from
+  `publish.setup_progress` if interrupted, and the flow verifies the
+  deployed URL is actually live before declaring success. GitHub Pages
+  remains fully supported.
+
 ## [1.8.43] — 2026-07-21
 
 Publish tool 1.11.17. `gm-publish doctor` preflight + Cloudflare credential setup.
