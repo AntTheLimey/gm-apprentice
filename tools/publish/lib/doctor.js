@@ -21,20 +21,29 @@ function runChecks({ runCommand, host, nodeVersion }) {
 
   const git = checkCommand(runCommand, 'git', ['--version']);
 
-  const ghVer = checkCommand(runCommand, 'gh', ['--version']);
-  const gh = { ok: ghVer.ok, version: ghVer.version, authed: runCommand('gh', ['auth', 'status']).code === 0 };
-
-  const wVer = wrangler(runCommand, ['--version']);
-  const wOk = wVer.code === 0;
-  const who = wOk ? wrangler(runCommand, ['whoami']) : { code: 1, stdout: '', stderr: '' };
-  const wrang = {
-    ok: wOk,
-    version: wOk ? ((wVer.stdout || '').split('\n')[0].trim() || null) : null,
-    authed: who.code === 0,
-    accountId: who.code === 0 ? parseAccountId(who.stdout) : null,
-  };
-
   const h = host === 'github-pages' ? 'github-pages' : 'cloudflare-pages';
+
+  // Only check the deploy tool the selected host actually uses. Spawning the
+  // other one is wasted work — for github-pages users it triggers a slow cold
+  // `npx wrangler@4` download from the npm registry for a tool they never use.
+  let gh = { ok: false, version: null, authed: false };
+  let wrang = { ok: false, version: null, authed: false, accountId: null };
+
+  if (h === 'github-pages') {
+    const ghVer = checkCommand(runCommand, 'gh', ['--version']);
+    gh = { ok: ghVer.ok, version: ghVer.version, authed: runCommand('gh', ['auth', 'status']).code === 0 };
+  } else {
+    const wVer = wrangler(runCommand, ['--version']);
+    const wOk = wVer.code === 0;
+    const who = wOk ? wrangler(runCommand, ['whoami']) : { code: 1, stdout: '', stderr: '' };
+    wrang = {
+      ok: wOk,
+      version: wOk ? ((wVer.stdout || '').split('\n')[0].trim() || null) : null,
+      authed: who.code === 0,
+      accountId: who.code === 0 ? parseAccountId(who.stdout) : null,
+    };
+  }
+
   const required = h === 'github-pages' ? ['node', 'git', 'gh'] : ['node', 'git', 'wrangler'];
   const byKey = { node, git, gh, wrangler: wrang };
   // Overall ok: every required tool present, and the host's deploy tool authed.

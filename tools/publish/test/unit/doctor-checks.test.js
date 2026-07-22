@@ -76,6 +76,37 @@ describe('runChecks', () => {
     assert.strictEqual(r.ok, true);
   });
 
+  // A spy wraps wranglerAwareRunner, recording every (cmd, args) call so a test
+  // can assert that the non-host deploy tool was never spawned.
+  function spyRunner() {
+    const base = wranglerAwareRunner();
+    const calls = [];
+    const run = (cmd, args) => {
+      calls.push({ cmd, args: args || [] });
+      return base(cmd, args);
+    };
+    return { run, calls };
+  }
+
+  it('github host: never spawns wrangler, checks gh, wrangler slot is not-checked default', () => {
+    const { run, calls } = spyRunner();
+    const r = runChecks({ runCommand: run, host: 'github-pages', nodeVersion: 'v22.5.0' });
+    const spawnedWrangler = calls.some((c) => c.cmd === 'npx' && c.args[0] === 'wrangler@4');
+    assert.strictEqual(spawnedWrangler, false, 'must not spawn npx wrangler@4 for github-pages');
+    assert.strictEqual(r.gh.authed, true);
+    assert.deepStrictEqual(r.wrangler, { ok: false, version: null, authed: false, accountId: null });
+  });
+
+  it('cloudflare host: never spawns gh, reports wrangler result, gh slot is not-checked default', () => {
+    const { run, calls } = spyRunner();
+    const r = runChecks({ runCommand: run, host: 'cloudflare-pages', nodeVersion: 'v22.5.0' });
+    const spawnedGh = calls.some((c) => c.cmd === 'gh');
+    assert.strictEqual(spawnedGh, false, 'must not spawn gh for cloudflare-pages');
+    assert.strictEqual(r.wrangler.ok, true);
+    assert.strictEqual(r.wrangler.authed, true);
+    assert.deepStrictEqual(r.gh, { ok: false, version: null, authed: false });
+  });
+
   it('wrangler present but not authed drags overall ok false', () => {
     const runner = (cmd, args) => {
       const a = args || [];
