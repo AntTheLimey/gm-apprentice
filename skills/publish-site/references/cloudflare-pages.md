@@ -252,9 +252,9 @@ node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
 Each defaults to `./vault.config.json`; pass `--config <path>` if you're
 running from elsewhere. Both are:
 
-- **Preflight-gated** — beyond `doctor`'s check that wrangler is
-  authenticated, the command probes the token's KV permission before
-  touching anything. If the token can't manage KV, it stops with the fix
+- **KV-permission probe first** — the command lists KV namespaces to
+  confirm the token can manage KV before touching anything (this is the
+  command's own check, not a `doctor` run). If the token can't manage KV, it stops with the fix
   rather than half-applying anything: edit the token (My Profile → API
   Tokens → your token → Edit) to add **Account · Workers KV Storage · Edit**
   (Cloudflare returns `Authentication error [code: 10000]` for this case),

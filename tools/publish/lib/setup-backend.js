@@ -90,6 +90,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
   const build = deps.build || ((opts) => require('./build').build(opts));
+  const syncFunctions = deps.syncFunctions || ((root) => require('./sync-functions').syncScaffoldFunctions(root));
 
   const flagKey = FLAG_KEY[feature];
   if (!flagKey) { out(`Unknown setup feature: ${feature}`); return 1; }
@@ -118,7 +119,8 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   config.backend[flagKey] = true;
   writeFile(configPath, JSON.stringify(config, null, 2) + '\n');
 
-  // Build (the flag is now on → Functions sync in) + deploy.
+  // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
+  syncFunctions(siteRoot);
   build({ configPath });
   const dep = runWrangler(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${(dep.stderr || dep.stdout || '').trim()}`); return 1; }

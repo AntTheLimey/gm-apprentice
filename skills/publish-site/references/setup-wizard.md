@@ -768,9 +768,10 @@ and each can be set up later:
 > Want to set up either now?"
 
 **If the GM wants one now, run the real command** — Cloudflare only, and
-each is **preflight-gated** (beyond `doctor`'s check that wrangler is
-authenticated, the command probes the token's KV permission before touching
-anything, mapping Cloudflare's `code: 10000` to the one-line fix: edit the
+each runs its own **KV-permission probe** (the wizard already ran `doctor`
+in its Phase A preflight; the command additionally lists KV namespaces to
+confirm the token can manage KV before touching anything, mapping
+Cloudflare's `code: 10000` to the one-line fix: edit the
 token to add **Account · Workers KV Storage · Edit**) and **idempotent**
 (safe to re-run — it reuses the existing `INBOX` KV namespace rather than
 recreating one):

@@ -20,6 +20,7 @@ function harness(overrides = {}) {
       return { code: 0, stdout: 'https://proj-x.pages.dev', stderr: '' }; // pages deploy
     },
     build: () => { calls.push('build'); },
+    syncFunctions: (root) => { calls.push('sync ' + root); },
     readFile: (p) => files[p] ?? files[require('path').basename(p)],
     writeFile: (p, c) => { files[p] = c; files[require('path').basename(p)] = c; },
     ...overrides,
@@ -36,6 +37,11 @@ test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', 
   assert.match(files['./vault.config.json'], /"statusBar":\s*true/);
   assert.ok(calls.includes('build'));
   assert.ok(calls.some((c) => c.startsWith('pages deploy')));
+  // Functions must be synced BEFORE the deploy, else /api/* 404s on a fresh site.
+  const syncIdx = calls.findIndex((c) => c.startsWith('sync '));
+  const deployIdx = calls.findIndex((c) => c.startsWith('pages deploy'));
+  assert.ok(syncIdx !== -1, 'Functions sync ran');
+  assert.ok(syncIdx < deployIdx, 'sync ran before deploy');
 });
 
 test('setup-inbox flips the inbox flag (and KV is ensured — inbox⇒KV)', async () => {
@@ -57,6 +63,7 @@ test('stops with the KV-permission fix and does not deploy when the token lacks 
   const rc = await runSetupBackend('status-bar', { configPath: './vault.config.json' }, deps);
   assert.notStrictEqual(rc, 0);
   assert.ok(!calls.some((c) => c.startsWith('pages deploy')));   // never deployed
+  assert.ok(!calls.some((c) => c.startsWith('sync ')));          // sync must not run when preflight fails
 });
 
 test('idempotent: a second run with KV already bound + flag true still succeeds and does not re-create', async () => {

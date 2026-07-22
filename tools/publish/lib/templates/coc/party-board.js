@@ -54,7 +54,7 @@ function renderCoCBoard(manifest, rosterOutputPath, { live = true } = {}) {
   const liveIndicator = live
     ? '<span class="gl-party-live"><span class="gl-party-dot"></span><span class="gl-party-live-time">live</span></span>'
     : '';
-  return `<section class="gl-party" aria-label="Live party status">
+  return `<section class="gl-party" aria-label="${live ? 'Live party status' : 'Party status'}">
   <div class="gl-party-head">
     <h2>Party Status</h2>
     ${liveIndicator}

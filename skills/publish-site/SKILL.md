@@ -277,9 +277,9 @@ status bar", "let players update HP/FP live"
 
 Cloudflare Pages only. Run `node "$TOOL" setup-status-bar` from the site
 directory (defaults to `./vault.config.json`; pass `--config <path>`
-otherwise). The command is **preflight-gated** — beyond `doctor`'s check that
-wrangler is authenticated, it probes the token's KV permission before
-touching anything, mapping Cloudflare's `code: 10000` to the one-line fix
+otherwise). The command runs its own **KV-permission probe** first — it
+lists KV namespaces to confirm the token can manage KV before touching
+anything, mapping Cloudflare's `code: 10000` to the one-line fix
 (edit the token to add **Account · Workers KV Storage · Edit**) — and
 **idempotent**: safe to re-run, it reuses an existing `INBOX` KV namespace
 instead of recreating one. On success it creates or reuses that namespace,
