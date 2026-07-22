@@ -394,15 +394,17 @@ the following structure inside `<site_dir>`:
 <site_dir>/
 ├── package.json
 ├── vault.config.json
-├── wrangler.toml
-├── functions/
-│   └── api/            # inbox + loadout endpoints (used only if you enable them)
+├── wrangler.toml        # minimal: pages_build_output_dir, no KV binding
 ├── css/
 │   └── overrides.css
 ├── README.md
 ├── .gitignore
 └── .nojekyll
 ```
+
+The scaffold is intentionally minimal — no `functions/` directory and no KV
+binding in `wrangler.toml`. Those are added only if the GM opts into the
+at-table inbox or live status bar later (Phase G).
 
 If the command fails with "command not found", explain:
 
@@ -628,15 +630,13 @@ re-run. Then continue to Phase F.
 
 Initialise git, commit, and push, then enable Pages.
 
-First keep `vault.config.json` out of the public repository — it holds the
-absolute `vaultPath` on the GM's machine (which usually includes their
-username and campaign name), and it is only needed locally at build time,
-never by the served site. Add it to `.gitignore` before the first commit:
+The scaffold's `.gitignore` already keeps `vault.config.json` (which holds
+the absolute `vaultPath` on the GM's machine) out of the repo, so no manual
+edit is needed before committing:
 
 ```bash
 git init
 git branch -M main
-printf '\nvault.config.json\n' >> .gitignore
 git add .
 git commit -m "Initial site scaffold"
 ```

@@ -1,11 +1,7 @@
-# Cloudflare Pages config. Lets `wrangler pages deploy` bundle the functions/
-# directory and bind the KV namespace the change-request inbox uses.
+# Cloudflare Pages config for a static (Tier-1) site. `pages_build_output_dir`
+# makes `wrangler pages deploy` publish the built docs/ folder. The change-request
+# inbox / live status bar add their KV namespace binding here on opt-in
+# (gm-publish setup-inbox / setup-status-bar).
 name = "{{PACKAGE_NAME}}"
 pages_build_output_dir = "docs"
 compatibility_date = "2024-11-01"
-
-# The inbox queue. After `wrangler kv namespace create INBOX`, paste the printed
-# id below (see the Cloudflare Pages setup guide, "Change-request inbox").
-[[kv_namespaces]]
-binding = "INBOX"
-id = "PUT-YOUR-KV-NAMESPACE-ID-HERE"

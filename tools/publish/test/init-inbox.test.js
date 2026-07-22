@@ -5,28 +5,22 @@ const os = require('node:os');
 const path = require('node:path');
 const { init } = require('../lib/init.js');
 
-test('init scaffolds the inbox Function and wrangler.toml', async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'inbox-init-'));
+test('init scaffolds a Tier-1 wrangler.toml with no KV binding and no Functions', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tier1-init-'));
   await init(dir, { siteTitle: 'Dead End', toolDep: 'file:../tool' });
 
-  const core = await fs.readFile(path.join(dir, 'functions/api/inbox-core.mjs'), 'utf8');
-  assert.match(core, /export const PREFIX = 'req:'/);
-
-  const request = await fs.readFile(path.join(dir, 'functions/api/request.js'), 'utf8');
-  assert.match(request, /onRequestPost/);
-
-  const loadoutCore = await fs.readFile(path.join(dir, 'functions/api/loadout-core.mjs'), 'utf8');
-  assert.match(loadoutCore, /export const PREFIX = 'loadout:'/);
-  const loadout = await fs.readFile(path.join(dir, 'functions/api/loadout.js'), 'utf8');
-  assert.match(loadout, /onRequestGet/);
-  assert.match(loadout, /onRequestPut/);
-
-  const loadoutList = await fs.readFile(path.join(dir, 'functions/api/loadout-list.js'), 'utf8');
-  assert.match(loadoutList, /onRequestGet/);
-  assert.doesNotMatch(loadoutList, /onRequestPut|onRequestPost/);   // read-only
-
+  // wrangler.toml: keeps the deploy config, drops the inbox KV binding.
   const wrangler = await fs.readFile(path.join(dir, 'wrangler.toml'), 'utf8');
-  assert.match(wrangler, /binding = "INBOX"/);
-  assert.match(wrangler, /dead-end/);            // {{PACKAGE_NAME}} substituted
   assert.match(wrangler, /pages_build_output_dir = "docs"/);
+  assert.match(wrangler, /dead-end/);                 // {{PACKAGE_NAME}} substituted
+  assert.doesNotMatch(wrangler, /\[\[kv_namespaces\]\]/);
+  assert.doesNotMatch(wrangler, /binding = "INBOX"/);
+  assert.doesNotMatch(wrangler, /PUT-YOUR-KV-NAMESPACE-ID-HERE/);
+
+  // Tier-1 ships no Functions.
+  await assert.rejects(fs.access(path.join(dir, 'functions')), /ENOENT/);
+
+  // The local build config is gitignored (it holds an absolute vaultPath).
+  const gitignore = await fs.readFile(path.join(dir, '.gitignore'), 'utf8');
+  assert.match(gitignore, /^vault\.config\.json$/m);
 });
