@@ -166,8 +166,13 @@ Workflow:
       the right shell file and auto-derives the Account ID, never echoing
       the token), then re-check with `npx wrangler@4 whoami` before
       resuming. Never leave them staring at a raw wrangler error.
-   c. Deploy the built folder:
-      `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`
+   c. Deploy. The scaffold ships a `wrangler.toml` with
+      `pages_build_output_dir = "docs"`, so deploy with the **bare** form
+      (no `docs/` argument — passing it positionally conflicts with the
+      config and errors):
+      `npx wrangler@4 pages deploy`
+      Only if the site has no `wrangler.toml` (an older scaffold) use the
+      explicit `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`.
    d. If the deploy command fails, treat it as a troubleshooting trigger
       (see `references/cloudflare-pages.md` → Troubleshooting) rather
       than surfacing the raw error.

@@ -89,8 +89,9 @@ Paste your token when it asks. It then:
 > variable on Windows), so the credentials are always there.
 
 **Prefer your token never passes through the assistant?** Run the exact
-same command in **your own terminal window** and paste the token there —
-for example:
+same command in **your own terminal window**, entering the token at the
+hidden `read` prompt (you can paste it — it stays invisible) so it never
+passes through the assistant — for example:
 
 ```bash
 read -rs CF_TOKEN && printf '%s' "$CF_TOKEN" | node "$TOOL" doctor --set-cloudflare-creds && unset CF_TOKEN
@@ -180,8 +181,15 @@ From the site directory:
 ```bash
 npm run build                                   # generate docs/
 npx wrangler@4 pages project create <project-name> --production-branch=main
-npx wrangler@4 pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true
+npx wrangler@4 pages deploy
 ```
+
+The scaffold ships a `wrangler.toml` with `pages_build_output_dir = "docs"`,
+so the deploy is the **bare** `npx wrangler@4 pages deploy` — no `docs/`
+argument; passing it positionally conflicts with the config and errors.
+Only a site with no `wrangler.toml` (an older scaffold) uses the explicit
+`pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true`
+form instead.
 
 The `project create` step is a one-time setup per site. When it finishes,
 the deploy prints two URLs:
@@ -200,7 +208,7 @@ no `project create`, no git, no browser:
 
 ```bash
 npm run build
-npx wrangler@4 pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true
+npx wrangler@4 pages deploy
 ```
 
 wrangler only uploads files that changed, so repeat deploys are fast.
@@ -297,12 +305,11 @@ the same way they copied `functions/api/loadout.js` for SP1.
    npx wrangler@4 pages deploy
    ```
 
-   > **Note — deploy command changes here.** Once `wrangler.toml` exists (it
-   > sets `pages_build_output_dir = "docs"`), deploy with a **bare**
-   > `npx wrangler@4 pages deploy` — no `docs/` argument. Passing the directory
-   > positionally now conflicts with the config and errors. This **replaces**
-   > the `pages deploy docs/` form shown earlier in this guide for any site that
-   > has adopted the inbox.
+   > **Note — same deploy command as the rest of this guide.** This is the
+   > same bare `npx wrangler@4 pages deploy` used throughout this guide — no
+   > `docs/` argument. The `wrangler.toml` (`pages_build_output_dir = "docs"`)
+   > is what makes the bare form required; there is nothing inbox-specific
+   > about it.
 
 3. **Verify the endpoint** — with no session code set yet, a submit must be
    rejected:

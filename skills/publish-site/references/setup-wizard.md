@@ -217,6 +217,7 @@ publish:
     site_title: "The Iron Crown"
     tagline: "A GURPS Special Forces campaign set in 1990s Britain."
     project_name: "iron-crown"     # Cloudflare project (or repo_name for GitHub)
+    github_username: "jsmith"      # GitHub path only
     site_dir: "/abs/path/to/site"
     deferred: []                   # e.g. [status-bar, inbox] after the tiered close
 ---
@@ -681,6 +682,8 @@ two-minute enablement steps. Then continue to Phase F.
 ---
 
 ## Phase F — Verify the site is live
+
+### Step 22: Verify the site is live
 
 Do not declare victory blind. After the deploy reports success, confirm
 the site is actually reachable by probing the **root** URL:
