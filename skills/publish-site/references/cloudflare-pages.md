@@ -88,17 +88,20 @@ Paste your token when it asks. It then:
 > reads (`~/.zshenv` on zsh, `~/.bashrc` on bash, a user environment
 > variable on Windows), so the credentials are always there.
 
-**Prefer your token never passes through the assistant?** Run the exact
-same command in **your own terminal window**, entering the token at the
+**Prefer your token never passes through the assistant?** Run the same
+command in **your own terminal window**, entering the token at the
 hidden `read` prompt (you can paste it — it stays invisible) so it never
 passes through the assistant — for example:
 
 ```bash
-read -rs CF_TOKEN && printf '%s' "$CF_TOKEN" | node "$TOOL" doctor --set-cloudflare-creds && unset CF_TOKEN
+read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | node "$TOOL" doctor --set-cloudflare-creds; unset CF_TOKEN
 ```
 
-(`read -rs` doesn't echo what you type and keeps the token out of your
-shell history; the tool still never prints it back either way.)
+Chain the three with `;` (not `&&`) so `unset CF_TOKEN` always runs and
+clears the token even if the save step exits non-zero (for example when
+`whoami` verification fails). `read -rs` doesn't echo what you type and
+keeps the token out of your shell history; the tool never prints it back
+either way.
 
 ### Only if you'd rather do it by hand
 

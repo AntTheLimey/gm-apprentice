@@ -628,12 +628,21 @@ re-run. Then continue to Phase F.
 
 Initialise git, commit, and push, then enable Pages.
 
+First keep `vault.config.json` out of the public repository — it holds the
+absolute `vaultPath` on the GM's machine (which usually includes their
+username and campaign name), and it is only needed locally at build time,
+never by the served site. Add it to `.gitignore` before the first commit:
+
 ```bash
 git init
 git branch -M main
+printf '\nvault.config.json\n' >> .gitignore
 git add .
 git commit -m "Initial site scaffold"
 ```
+
+(Only the built `docs/` folder and the scaffold's public files are
+published; the local build config stays on the GM's machine.)
 
 **Create the repository.** If `gh` is available and authenticated (from
 Phase A), ask:
@@ -686,17 +695,23 @@ two-minute enablement steps. Then continue to Phase F.
 ### Step 22: Verify the site is live
 
 Do not declare victory blind. After the deploy reports success, confirm
-the site is actually reachable by probing the **root** URL:
+the site is actually reachable by probing the **root** URL with a bounded
+request that follows redirects and prints the final status code:
 
 ```bash
-curl -sI "<siteUrl>"     # expect an HTTP 200 on the root URL
+curl -sS -L --connect-timeout 5 --max-time 15 -o /dev/null -w '%{http_code}\n' "<siteUrl>"
+# expect a 2xx (normally 200) on the root URL
 ```
 
+- This is a bounded `GET` (`--max-time 15`), not a bare `HEAD` — some
+  hosts serve the root fine on `GET` but reject `HEAD`, and `--location`
+  (`-L`) follows any redirect to the canonical URL. Treat any 2xx
+  (200–299) as live.
 - Retry with a small bound — up to 3 attempts, roughly 20 seconds apart
   — to allow for first-deploy propagation.
-- **On an HTTP 200:** tell the GM the site **is live** at `<siteUrl>`
+- **On a 2xx:** tell the GM the site **is live** at `<siteUrl>`
   and to share that URL with their players.
-- **If it never returns 200 within the retries:** give the honest
+- **If it never returns 2xx within the retries:** give the honest
   status rather than claiming it's live —
 
   > "The deploy uploaded successfully, but the host is still building
@@ -707,7 +722,7 @@ curl -sI "<siteUrl>"     # expect an HTTP 200 on the root URL
   few minutes to propagate, which is why we probe the root URL (a real
   page that goes live first), not a missing path.
 
-Only after a confirmed 200 — or the GM acknowledging the "still
+Only after a confirmed 2xx — or the GM acknowledging the "still
 building" state — set `tier1_complete: true` in
 `publish.setup_progress`. Keep the block.
 

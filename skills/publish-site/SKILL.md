@@ -176,10 +176,17 @@ Workflow:
    d. If the deploy command fails, treat it as a troubleshooting trigger
       (see `references/cloudflare-pages.md` → Troubleshooting) rather
       than surfacing the raw error.
-   e. Confirm with the live URL: "Your site is live at
-      https://<name>.pages.dev — the update is already served." (A brand-
-      new project's custom 404 route can take a few minutes to
-      propagate; real pages are live immediately.)
+   e. **Verify it is actually live before saying so.** A successful
+      wrangler upload is not proof the URL serves — probe the root the
+      same way first-time setup does (see `references/setup-wizard.md`
+      Step 22):
+      `curl -sS -L --connect-timeout 5 --max-time 15 -o /dev/null -w '%{http_code}\n' "<siteUrl>"`
+      On a 2xx, confirm: "Your site is live at https://<name>.pages.dev —
+      the update is already served." If it doesn't return 2xx within a
+      couple of tries, give the honest status instead: the deploy
+      uploaded but the host is still propagating — check `<siteUrl>` in a
+      minute. (A brand-new project's custom 404 route can take a few
+      minutes; real pages go live first.)
 
 ### 3. Troubleshooting
 
