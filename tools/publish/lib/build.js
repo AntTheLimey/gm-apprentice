@@ -638,7 +638,9 @@ function build(options = {}) {
   }
 
   if (deferredRosters.length) {
-    const board = boardFor(publishConfig.system);
+    // Status-bar tier off ⇒ no live party board (it polls /api/loadout-list, a
+    // KV backend that isn't deployed). Roster pages still render, just static.
+    const board = publishConfig.backend.statusBar ? boardFor(publishConfig.system) : null;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
