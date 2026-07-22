@@ -229,13 +229,15 @@ working) but **no** `[[kv_namespaces]]` block — and **no** `functions/`
 directory. The KV binding and the `functions/` are added only when you opt
 into the inbox or the live status bar: either the streamlined
 `gm-publish setup-inbox` / `setup-status-bar` commands (coming in the next
-release) or the manual steps in this section, which add the `[[kv_namespaces]]`
-block and copy the Functions in for you. Already-deployed inbox sites are
-unaffected — this only changes what a brand-new site ships. Existing sites
-without the Functions yet: copy `wrangler.toml`'s `[[kv_namespaces]]` block
-and the `functions/` directory from a freshly `init`-ed site that has had the
-inbox set up (they are not build output — they live beside
-`vault.config.json`, not in `docs/`).
+release) or the manual steps in this section. Already-deployed inbox sites are
+unaffected — this only changes what a brand-new site ships.
+
+**You do not hand-copy the Functions.** Once a backend flag (`backend.inbox` or
+`backend.statusBar`) is `true` in `vault.config.json`, the next `npm run build`
+copies the plugin's Cloudflare Functions into the site's `functions/` for you (a
+Tier-1 site with both flags off gets none — they live beside `vault.config.json`,
+not in `docs/`). The manual steps below do exactly that: create the namespace,
+bind it in `wrangler.toml`, flip the flag, rebuild, deploy.
 
 The at-table **loadout** endpoint (`/api/loadout`) ships in the same
 `functions/api/` directory and **reuses this same `INBOX` KV namespace**
@@ -252,9 +254,10 @@ files, then redeploy.
 state (`{ "<key>": {v,items,hp,fp,updatedAt}, … }`) for the roster-page party
 board. It is **read-only** — it exposes only `onRequestGet`, never a write. Bound
 to the same `INBOX` KV namespace as `/api/loadout`; no new namespace or binding is
-needed. It ships alongside the other Functions once you set up the inbox or the
-live status bar; **existing sites must hand-copy** `functions/api/loadout-list.js`
-(and re-deploy) the same way they copied `functions/api/loadout.js` for SP1.
+needed. On the flag-based flow below it ships with the rebuild; a legacy site
+that hand-manages `functions/` must copy `functions/api/loadout-list.js` **and
+its `functions/api/loadout-core.mjs` dependency** (`loadout-list.js` imports it —
+skip it only if the loadout endpoint already put it there), then re-deploy.
 
 > **KV list-quota fix — existing sites must refresh the loadout + inbox Functions
 > and redeploy.** Early builds had the party board poll the list endpoint every 5
@@ -306,11 +309,33 @@ live status bar; **existing sites must hand-copy** `functions/api/loadout-list.j
    npx wrangler@4 kv namespace create INBOX
    ```
 
-   It prints an `id`. Paste that id into `wrangler.toml`, replacing
-   `PUT-YOUR-KV-NAMESPACE-ID-HERE`.
+   It prints an `id`.
 
-2. **Deploy** (with `wrangler.toml` present, the deploy bundles the Function
-   and binds KV automatically):
+2. **Bind it in `wrangler.toml`.** A minimal Tier-1 `wrangler.toml` has no KV
+   block yet — add one, pasting the id from step 1:
+
+   ```toml
+   [[kv_namespaces]]
+   binding = "INBOX"
+   id = "<paste the id from step 1>"
+   ```
+
+   (If yours is an older scaffold that still has an
+   `id = "PUT-YOUR-KV-NAMESPACE-ID-HERE"` line, replace that id instead of
+   adding a second block.)
+
+3. **Turn on the inbox flag.** In `vault.config.json`, set `inbox` to `true`:
+
+   ```json
+   "backend": { "statusBar": false, "inbox": true }
+   ```
+
+   (For the live status bar / party board, set `"statusBar": true` too — it
+   reuses the same namespace.) This is what makes the next build ship the inbox
+   chatbox **and** copy the inbox Functions into `functions/`.
+
+4. **Build and deploy.** The build copies the Functions in because a backend
+   flag is now on:
 
    ```bash
    npm run build
@@ -323,7 +348,7 @@ live status bar; **existing sites must hand-copy** `functions/api/loadout-list.j
    > is what makes the bare form required; there is nothing inbox-specific
    > about it.
 
-3. **Verify the endpoint** — with no session code set yet, a submit must be
+5. **Verify the endpoint** — with no session code set yet, a submit must be
    rejected:
 
    ```bash
