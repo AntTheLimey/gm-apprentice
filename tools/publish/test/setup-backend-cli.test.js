@@ -11,10 +11,12 @@ function harness(overrides = {}) {
     'wrangler.toml': 'name = "old"\npages_build_output_dir = "docs"\n',
   };
   const calls = [];
+  const recorded = { deployCwd: undefined };
   const deps = {
     out: () => {},
-    runWrangler: (args) => {
+    runWrangler: (args, opts) => {
       calls.push(args.join(' '));
+      if (args[0] === 'pages' && args[1] === 'deploy') recorded.deployCwd = opts && opts.cwd;
       if (args[1] === 'namespace' && args[2] === 'list') return { code: 0, stdout: '[]', stderr: '' };
       if (args[1] === 'namespace' && args[2] === 'create') return { code: 0, stdout: 'id = "kv777"', stderr: '' };
       return { code: 0, stdout: 'https://proj-x.pages.dev', stderr: '' }; // pages deploy
@@ -25,11 +27,11 @@ function harness(overrides = {}) {
     writeFile: (p, c) => { files[p] = c; files[require('path').basename(p)] = c; },
     ...overrides,
   };
-  return { deps, files, calls };
+  return { deps, files, calls, recorded };
 }
 
 test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', async () => {
-  const { deps, files, calls } = harness();
+  const { deps, files, calls, recorded } = harness();
   const rc = await runSetupBackend('status-bar', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 0);
   assert.match(files['wrangler.toml'], /name = "proj-x"/);        // name aligned
@@ -37,6 +39,10 @@ test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', 
   assert.match(files['./vault.config.json'], /"statusBar":\s*true/);
   assert.ok(calls.includes('build'));
   assert.ok(calls.some((c) => c.startsWith('pages deploy')));
+  // Bare `pages deploy` must run in the site root so it finds wrangler.toml's
+  // pages_build_output_dir; otherwise it errors on a fresh checkout.
+  const siteRoot = require('path').dirname(require('path').resolve('./vault.config.json'));
+  assert.strictEqual(recorded.deployCwd, siteRoot, 'deploy ran with cwd === siteRoot');
   // Functions must be synced BEFORE the deploy, else /api/* 404s on a fresh site.
   const syncIdx = calls.findIndex((c) => c.startsWith('sync '));
   const deployIdx = calls.findIndex((c) => c.startsWith('pages deploy'));

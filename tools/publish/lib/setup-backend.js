@@ -76,8 +76,8 @@ function patchWranglerToml(tomlText, { name, kvId }) {
   return out;
 }
 
-const defaultRunWrangler = (args) => {
-  const r = spawnSync('npx', ['wrangler@4', ...args], { encoding: 'utf8' });
+const defaultRunWrangler = (args, opts = {}) => {
+  const r = spawnSync('npx', ['wrangler@4', ...args], { encoding: 'utf8', cwd: opts.cwd });
   return { code: r.status == null ? 1 : r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
 };
 
@@ -100,14 +100,18 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const tomlPath = path.join(siteRoot, 'wrangler.toml');
   const projectName = config.cloudflarePagesProject || path.basename(siteRoot);
 
+  // All wrangler calls must run from the site root so a bare `pages deploy`
+  // finds wrangler.toml's `pages_build_output_dir`. Harmless for account-level KV ops.
+  const runWranglerAt = (args) => runWrangler(args, { cwd: siteRoot });
+
   // Preflight: KV permission.
-  const perm = checkKvPermission({ runWrangler });
+  const perm = checkKvPermission({ runWrangler: runWranglerAt });
   if (!perm.ok) { out(perm.fix); return 1; }
 
   // Ensure namespace (idempotent).
   let tomlText = readFile(tomlPath);
   let kv;
-  try { kv = ensureKvNamespace({ runWrangler, tomlText }); }
+  try { kv = ensureKvNamespace({ runWrangler: runWranglerAt, tomlText }); }
   catch (e) { out(e.message); return 1; }
 
   // Patch wrangler.toml (name-align + KV block) and write back.
@@ -122,7 +126,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot);
   build({ configPath });
-  const dep = runWrangler(['pages', 'deploy']);
+  const dep = runWranglerAt(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${(dep.stderr || dep.stdout || '').trim()}`); return 1; }
 
   const url = config.siteUrl || `https://${projectName}.pages.dev`;
