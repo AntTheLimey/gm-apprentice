@@ -36,7 +36,8 @@ From the **site directory** (the one holding `vault.config.json` and
 - The campaign has no published Tier-2 site (no KV) → there is nothing to pull;
   skip silently.
 - A GURPS sheet has no Attributes block → flush can update an existing HP/FP line
-  but cannot seed a missing one (it logs a `⚠` and skips that vital).
+  but cannot seed a missing one (no max to write), so it leaves that vital alone;
+  if nothing else changed the PC just shows `· no change`.
 - No players have saved live state yet → flush reports "no live state to flush".
 
 Copyright: flush writes only the GM's own campaign data — no licensed text.
