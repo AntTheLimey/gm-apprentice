@@ -141,12 +141,13 @@ On "stop", **flush live state to the vault, then terminate the background
 watcher** and do not relaunch it:
 
 1. Run `npx gm-apprentice-publish flush` (or `node <tool>/bin/gm-publish.js
-   flush`). This snapshots each PC's current KV live-state — HP/MP/SAN/Luck,
-   Reputation, and the five Status conditions — back into their vault `.md`, so
-   the site's fallback seed stays fresh past KV's 30-day TTL. It edits the vault
-   source only (no rebuild/deploy); the values ride into the site on the next
-   `npm run build`. Report its per-PC summary. Skill experience ticks are left
-   untouched — those belong to Advancement, not the flush.
+   flush`). This snapshots each PC's current live vitals back into their vault
+   `.md` (for GURPS: current HP and FP into the `## Current Status` block; the
+   writeback is system-aware), so the site's fallback seed stays fresh past
+   KV's 30-day TTL. It edits the vault source only (no rebuild/deploy); the
+   values ride into the site on the next `npm run build`. Report its per-PC
+   summary. Skill experience ticks are left untouched — those belong to
+   Advancement, not the flush.
 2. Terminate the background watcher.
 
 The session code stays set in KV until the next "start your checking loop"
