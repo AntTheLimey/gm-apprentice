@@ -10,6 +10,8 @@ const { scanVault, slugify } = require('./scanner');
 const { readNamespaceId, makeAdapter } = require('./inbox-wrangler');
 const { latestStateByPcSlug } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
+const { applyGURPSFlush } = require('./flush/gurps-writeback');
+const { deriveGurpsMax } = require('./flush/gurps-max');
 
 const { spawnSync } = require('child_process');
 
@@ -31,6 +33,14 @@ function summarize(changes) {
     if (typeof c.to === 'boolean') return c.field + ' ' + (c.to ? 'on' : 'off');
     return c.field + ' ' + (c.from == null ? '?' : c.from) + '→' + c.to;
   }).join(', ');
+}
+
+// The only two live-state systems are GURPS and CoC. Anything not GURPS routes
+// to the CoC writeback — the historical default (legacy CoC sites carry no
+// `system` field). Frontmatter wins over campaign config.
+function resolveSystem(frontmatter, config) {
+  const s = String((frontmatter && frontmatter.system) || (config && config.system) || '').toLowerCase();
+  return s.indexOf('gurps') !== -1 ? 'gurps' : 'coc';
 }
 
 async function runFlush(deps) {
@@ -73,7 +83,14 @@ async function runFlush(deps) {
     const page = bySlug[slug];
     if (!page) { out('⚠ ' + slug + ' — in KV but no matching vault sheet (skipped)'); continue; }
     const name = page.displayTitle || page.title;
-    const res = applyCoCFlush(readFile(page.sourcePath), latest[slug]);
+    const raw = readFile(page.sourcePath);
+    let res;
+    if (resolveSystem(page.frontmatter, config) === 'gurps') {
+      const { maxHp, maxFp } = deriveGurpsMax(raw, page.frontmatter);
+      res = applyGURPSFlush(raw, latest[slug], { maxHp: maxHp, maxFp: maxFp });
+    } else {
+      res = applyCoCFlush(raw, latest[slug]);
+    }
     if (res.changes.length) {
       writeFile(page.sourcePath, res.markdown);
       out('✓ ' + name + ' — ' + summarize(res.changes));
