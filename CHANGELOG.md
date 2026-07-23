@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.47] — 2026-07-23
+
+Publish tool 1.11.20. Players' live HP/FP now sync from the site's KV store back
+into the vault sheets: the `flush` command is system-aware and gains a GURPS
+writeback, and `session-wrapup` pulls live state before processing.
+
+### Added
+
+- `publish-site`: GURPS live-state flush — `gm-publish flush` now syncs players'
+  current HP/FP from KV back into the vault `## Current Status` block, updating an
+  existing `**HP:**` / `**FP:**` line or injecting one with the sheet-derived max.
+- `publish-site`: standalone `references/live-state-flush.md` documenting the
+  Tier-2a pull; `session-wrapup` now pulls live state before processing when the
+  campaign publishes a Tier-2 site.
+
+### Changed
+
+- `publish-site`: `flush` is now system-aware — it routes each PC to the GURPS or
+  CoC writeback (previously CoC-only, a silent no-op for GURPS sheets).
+
+---
+
 ## [1.8.46] — 2026-07-22
 
 Publish tool 1.11.19. The live status bar and change-request inbox are now
