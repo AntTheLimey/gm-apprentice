@@ -219,7 +219,7 @@ publish:
     project_name: "iron-crown"     # Cloudflare project (or repo_name for GitHub)
     github_username: "jsmith"      # GitHub path only
     site_dir: "/abs/path/to/site"
-    deferred: []                   # e.g. [status-bar, inbox] after the tiered close
+    deferred: []                   # e.g. [status-bar, inbox] — features deferred for later
 ---
 ```
 
@@ -601,7 +601,13 @@ error dump.
 The Tier-1 scaffold ships a `wrangler.toml` with
 `pages_build_output_dir = "docs"`, so the deploy uses the **bare** form
 (no `docs/` argument — passing the directory positionally conflicts with
-the config and errors). Create the project once, then deploy:
+the config and errors). The bare form deploys to whichever project is
+named in `wrangler.toml`'s `name` field, not to `cloudflarePagesProject`
+— so before deploying, make sure that field matches `<project_name>`
+(edit it if the GM chose a different Cloudflare project name than the
+one the scaffold started with). Skipping this fails the deploy with
+"The Pages project '<name>' does not exist." Create the project once,
+then deploy:
 
 ```bash
 npx wrangler@4 pages project create <project_name> --production-branch=main   # once per site
@@ -746,7 +752,9 @@ named, independent** opt-ins. Neither is required for a working site,
 and each can be set up later:
 
 - **Live status bar** — players see and update their HP/FP (and similar
-  live stats) from their phones during play, in real time.
+  live stats) from their phones during play, in real time. (The roster page
+  already shows a static initiative table at Tier 1 — this is what makes it
+  live.)
 - **At-table change-request inbox** — players submit sheet edits and
   questions from their phones during a session; you review and apply
   them.
@@ -759,26 +767,43 @@ and each can be set up later:
 > - an **at-table change-request inbox** for sheet edits during play.
 > Want to set up either now?"
 
-**Honesty constraint — do not promise a one-command setup that doesn't
-exist yet.** The streamlined `setup-status-bar` / `setup-inbox` commands
-are not built yet. So:
+**If the GM wants one now, run the real command** — Cloudflare only, and
+each runs its own **KV-permission probe** (the wizard already ran `doctor`
+in its Phase A preflight; the command additionally lists KV namespaces to
+confirm the token can manage KV before touching anything, mapping
+Cloudflare's `code: 10000` to the one-line fix: edit the
+token to add **Account · Workers KV Storage · Edit**) and **idempotent**
+(safe to re-run — it reuses the existing `INBOX` KV namespace rather than
+recreating one):
 
-- **If the GM wants one now:** record it in `setup_progress.deferred`
-  (e.g. `deferred: [status-bar]`, `deferred: [inbox]`, or both), and
-  point them at the current manual path:
-  - **Inbox:** follow `references/cloudflare-pages.md` →
-    "Change-request inbox" (create the KV namespace, paste its id into
-    `wrangler.toml`, redeploy).
-  - **Status bar:** it reuses the **same KV namespace** as the inbox —
-    so if the inbox is set up (or the token already has the
-    **Workers KV Storage · Edit** permission from Phase A), the
-    groundwork is shared.
+```bash
+node "$TOOL" setup-status-bar   # Tier 2a — live status bar
+node "$TOOL" setup-inbox        # Tier 2b — at-table change-request inbox
+```
 
-  Tell them a one-command setup for these is coming, but this manual
-  path works today.
-- **If the GM defers both:** leave `deferred: []` and tell them:
+Run from the site directory (each defaults to `./vault.config.json`; pass
+`--config <path>` otherwise). Either command creates or reuses the `INBOX`
+KV namespace, aligns `wrangler.toml`'s `name` to the Cloudflare project,
+flips the matching `backend.statusBar` / `backend.inbox` flag in
+`vault.config.json`, rebuilds, and deploys — one step, no manual
+`wrangler.toml` editing. `setup-inbox` requires and ensures the same KV
+namespace (**inbox ⇒ KV**) and is **infra-only** — it flips the flag but
+does not open a session; that's still "start your checking loop"
+(capability 7) once the flag is live. If the command reports the
+KV-permission fix, walk the GM through editing the token (My Profile → API
+Tokens → their token → Edit → add **Account · Workers KV Storage · Edit** →
+Save) — the same one-tick permission mentioned in Phase A — then re-run;
+it picks up right where it left off.
+
+`setup_progress.deferred` lists the features **not yet set up** — the ones
+deferred for later. A feature the GM sets up now is **not** in `deferred`; a
+feature they defer **is**. So: set up both → `deferred: []`; set up the
+status bar but defer the inbox → `deferred: [inbox]`; defer both →
+`deferred: [status-bar, inbox]`.
+
+- **If the GM defers both:** set `deferred: [status-bar, inbox]` and tell them:
 
   > "No problem — whenever you're ready, just say 'set up the status
-  > bar' or 'set up the inbox' and I'll walk you through it."
+  > bar' or 'set up the inbox' and I'll set it up with one command."
 
 Setup is complete.

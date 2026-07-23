@@ -69,7 +69,7 @@ npm run build    # generate docs/ from the vault
 Node 22 or later is required. If the GM hits a version error,
 advise them to install Node via https://nodejs.org (LTS release).
 
-## Seven Capabilities
+## Nine Capabilities
 
 ### 1. First-time setup
 
@@ -169,7 +169,9 @@ Workflow:
    c. Deploy. The scaffold ships a `wrangler.toml` with
       `pages_build_output_dir = "docs"`, so deploy with the **bare** form
       (no `docs/` argument — passing it positionally conflicts with the
-      config and errors):
+      config and errors). First ensure `wrangler.toml`'s `name` matches
+      the project from step (a) — the bare deploy targets that field,
+      not `cloudflarePagesProject` — then:
       `npx wrangler@4 pages deploy`
       Only if the site has no `wrangler.toml` (an older scaffold) use the
       explicit `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`.
@@ -267,6 +269,37 @@ Follow `references/change-request-loop.md`. It runs an unattended, self-paced
 loop that drains player sheet-edit requests, applies clean GURPS edits to the
 vault, batches one rebuild + redeploy per tick, and flags edge cases. GURPS 4e
 only for now.
+
+### 8. Live status bar setup (Tier 2a)
+
+**Trigger:** "turn on the status bar", "enable live vitals", "set up the
+status bar", "let players update HP/FP live"
+
+Cloudflare Pages only. Run `node "$TOOL" setup-status-bar` from the site
+directory (defaults to `./vault.config.json`; pass `--config <path>`
+otherwise). The command runs its own **KV-permission probe** first — it
+lists KV namespaces to confirm the token can manage KV before touching
+anything, mapping Cloudflare's `code: 10000` to the one-line fix
+(edit the token to add **Account · Workers KV Storage · Edit**) — and
+**idempotent**: safe to re-run, it reuses an existing `INBOX` KV namespace
+instead of recreating one. On success it creates or reuses that namespace,
+aligns `wrangler.toml`'s `name` to the Cloudflare project, flips
+`backend.statusBar` to `true` in `vault.config.json`, rebuilds, and deploys —
+one command, no manual `wrangler.toml` editing. Note: the roster/party board
+already renders as a **static** initiative table at Tier 1 with no backend at
+all; this command is what makes it live and update from players' phones.
+
+### 9. At-table inbox setup (Tier 2b)
+
+**Trigger:** "set up the inbox", "let players submit changes", "turn on the
+change-request inbox"
+
+Same command family as capability 8: run `node "$TOOL" setup-inbox` — equally
+preflight-gated and idempotent, and sharing the same KV machinery
+(**inbox ⇒ KV**: the namespace is required and ensured automatically, never a
+separate manual step). It flips `backend.inbox` and is **infra-only** — it
+does not open a session or write a `config:code`. Once the flag is live, use
+capability 7 ("start your checking loop") for the actual at-table session.
 
 ## Configuration
 
