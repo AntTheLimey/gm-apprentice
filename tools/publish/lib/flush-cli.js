@@ -86,6 +86,15 @@ async function runFlush(deps) {
     const raw = readFile(page.sourcePath);
     let res;
     if (resolveSystem(page.frontmatter, config) === 'gurps') {
+      // GURPS flush edits the body `## Current Status` block, but the parser
+      // reads HP/FP from frontmatter when `status:` is authored as a YAML
+      // object — so a body rewrite would report a phantom success the build
+      // ignores. Skip and tell the GM to move the vitals out of frontmatter.
+      const fmStatus = page.frontmatter && page.frontmatter.status;
+      if (fmStatus && typeof fmStatus === 'object' && !Array.isArray(fmStatus)) {
+        out('⚠ ' + name + ' — HP/FP are pinned in frontmatter (status:); flush edits the body block, which the build ignores. Move them out of frontmatter to sync.');
+        continue;
+      }
       const { maxHp, maxFp } = deriveGurpsMax(raw, page.frontmatter);
       res = applyGURPSFlush(raw, latest[slug], { maxHp: maxHp, maxFp: maxFp });
     } else {
