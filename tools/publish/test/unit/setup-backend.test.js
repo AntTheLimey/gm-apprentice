@@ -20,6 +20,20 @@ test('patchWranglerToml replaces the placeholder id in place (no duplicate block
   assert.strictEqual((out.match(/\[\[kv_namespaces\]\]/g) || []).length, 1);
 });
 
+test('patchWranglerToml replaces a single-quoted name (no duplicate name line)', () => {
+  const single = "name = 'old'\npages_build_output_dir = \"docs\"\n";
+  const out = patchWranglerToml(single, { name: 'proj-x', kvId: 'kv999' });
+  assert.match(out, /^name = "proj-x"$/m);
+  assert.strictEqual((out.match(/^name\s*=/gm) || []).length, 1);
+});
+
+test('patchWranglerToml replaces a name line with an inline comment (no duplicate)', () => {
+  const commented = 'name = "old" # existing project\npages_build_output_dir = "docs"\n';
+  const out = patchWranglerToml(commented, { name: 'proj-x', kvId: 'kv999' });
+  assert.match(out, /^name = "proj-x"$/m);
+  assert.strictEqual((out.match(/^name\s*=/gm) || []).length, 1);
+});
+
 test('patchWranglerToml is idempotent', () => {
   const once = patchWranglerToml(WITH_REAL, { name: 'proj-x', kvId: 'kv999' });
   const twice = patchWranglerToml(once, { name: 'proj-x', kvId: 'kv999' });
@@ -46,14 +60,16 @@ test('ensureKvNamespace reuses a real id from the toml (no create)', () => {
   assert.strictEqual(called, false);   // did not shell out
 });
 
-test('ensureKvNamespace creates when only the placeholder is present', () => {
+test('ensureKvNamespace creates when only the placeholder is present (never lists)', () => {
   const calls = [];
   const runWrangler = (args) => {
-    calls.push(args.join(' '));
-    if (args[1] === 'namespace' && args[2] === 'list') return { code: 0, stdout: '[]', stderr: '' };
+    calls.push(args);
     return { code: 0, stdout: 'id = "newkv456"', stderr: '' };   // create output
   };
   const r = ensureKvNamespace({ runWrangler, tomlText: WITH_PLACEHOLDER });
   assert.strictEqual(r.created, true);
   assert.strictEqual(r.id, 'newkv456');
+  // No title-based reuse: must never enumerate other namespaces.
+  assert.ok(!calls.some((a) => a.join(' ') === 'kv namespace list'));
+  assert.deepStrictEqual(calls, [['kv', 'namespace', 'create', 'INBOX']]);
 });

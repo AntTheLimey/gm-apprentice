@@ -219,7 +219,7 @@ publish:
     project_name: "iron-crown"     # Cloudflare project (or repo_name for GitHub)
     github_username: "jsmith"      # GitHub path only
     site_dir: "/abs/path/to/site"
-    deferred: []                   # e.g. [status-bar, inbox] after the tiered close
+    deferred: []                   # e.g. [status-bar, inbox] — features deferred for later
 ---
 ```
 
@@ -795,11 +795,13 @@ Tokens → their token → Edit → add **Account · Workers KV Storage · Edit*
 Save) — the same one-tick permission mentioned in Phase A — then re-run;
 it picks up right where it left off.
 
-Record whichever the GM ran (or declined) in `setup_progress.deferred`
-(e.g. `deferred: [status-bar]`, `deferred: [inbox]`, both, or `[]` if they
-defer both).
+`setup_progress.deferred` lists the features **not yet set up** — the ones
+deferred for later. A feature the GM sets up now is **not** in `deferred`; a
+feature they defer **is**. So: set up both → `deferred: []`; set up the
+status bar but defer the inbox → `deferred: [inbox]`; defer both →
+`deferred: [status-bar, inbox]`.
 
-- **If the GM defers both:** leave `deferred: []` and tell them:
+- **If the GM defers both:** set `deferred: [status-bar, inbox]` and tell them:
 
   > "No problem — whenever you're ready, just say 'set up the status
   > bar' or 'set up the inbox' and I'll set it up with one command."

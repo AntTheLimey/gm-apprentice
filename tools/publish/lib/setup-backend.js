@@ -23,23 +23,12 @@ function parseCreatedId(stdout) {
   return m ? m[1] : null;
 }
 
-// Find an existing namespace titled INBOX in `kv namespace list` JSON output.
-function findInboxId(listStdout) {
-  try {
-    const arr = JSON.parse(listStdout);
-    const hit = Array.isArray(arr) ? arr.find((n) => n.title === 'INBOX' || /(?:^|_)INBOX$/.test(n.title || '')) : null;
-    return hit ? hit.id : null;
-  } catch { return null; }
-}
-
 function ensureKvNamespace({ runWrangler, tomlText }) {
   const existing = readNamespaceId(tomlText || '');
   if (existing && existing !== KV_PLACEHOLDER) return { id: existing, created: false };
-  const list = runWrangler(['kv', 'namespace', 'list']);
-  if (list.code === 0) {
-    const found = findInboxId(list.stdout);
-    if (found) return { id: found, created: false };
-  }
+  // Do NOT reuse a namespace by title from `kv namespace list` — KV titles are not
+  // unique per project, so a suffix/exact title match could bind another campaign's
+  // INBOX (cross-campaign data exposure). Create a fresh namespace instead.
   const created = runWrangler(['kv', 'namespace', 'create', 'INBOX']);
   const id = parseCreatedId(created.stdout);
   if (created.code !== 0 || !id) {
@@ -53,8 +42,9 @@ const INBOX_BLOCK = (kvId) => `[[kv_namespaces]]\nbinding = "INBOX"\nid = "${kvI
 function patchWranglerToml(tomlText, { name, kvId }) {
   let out = String(tomlText);
   // 1. name
-  if (/^name\s*=\s*".*"$/m.test(out)) {
-    out = out.replace(/^name\s*=\s*".*"$/m, `name = "${name}"`);
+  const NAME_LINE = /^name\s*=\s*(?:"[^"]*"|'[^']*')\s*(?:#.*)?$/m;
+  if (NAME_LINE.test(out)) {
+    out = out.replace(NAME_LINE, `name = "${name}"`);
   } else {
     out = `name = "${name}"\n${out}`;
   }
