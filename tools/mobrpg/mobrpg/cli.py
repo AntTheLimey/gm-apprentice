@@ -132,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         _print_help()
         return 0
+    if argv[0] in ("-V", "--version"):
+        from mobrpg import __version__
+        print(f"mobrpg {__version__}")
+        return 0
 
     verb, rest = argv[0], argv[1:]
     if verb in NATIVE:

@@ -24,7 +24,9 @@ from __future__ import annotations
 import argparse
 import datetime
 import difflib
+import functools
 import glob
+import importlib.resources
 import json
 import os
 import re
@@ -38,26 +40,75 @@ from mobrpg import node
 # relationship mechanisms, how entity kinds project onto element kinds, and the
 # natural/built axis for locations. Everything derived from it below is derived,
 # never restated — a client copy is how these drifted in the first place.
-_ONTOLOGY_PATH = os.path.join(os.path.dirname(__file__), "..", "..",
-                              "gm-apprentice-ontology.json")
+# The ontology JSON ships as package data (mobrpg/gm-apprentice-ontology.json)
+# and is loaded LAZILY via importlib.resources: importing this module must never
+# read the file, so a missing/broken ontology degrades only `map` and its callers
+# — not `whoami`, `auth`, or any other verb. The load and every derivation below
+# are memoized on first use.
+_ONTOLOGY_RESOURCE = "gm-apprentice-ontology.json"
+# Filesystem path to the same resource, kept for tests/tooling. Computing it does
+# not read the file; only _load_ontology() (below) opens the resource.
+_ONTOLOGY_PATH = os.path.join(os.path.dirname(__file__), "..", _ONTOLOGY_RESOURCE)
 
 
+@functools.lru_cache(maxsize=1)
 def _load_ontology():
-    with open(_ONTOLOGY_PATH, encoding="utf-8") as fh:
+    ref = importlib.resources.files("mobrpg").joinpath(_ONTOLOGY_RESOURCE)
+    with ref.open(encoding="utf-8") as fh:
         return json.load(fh)
 
 
-_ONTOLOGY = _load_ontology()
-ONTOLOGY_PREDICATES = frozenset(p["type"] for p in _ONTOLOGY["predicates"])
+@functools.lru_cache(maxsize=1)
+def _derived():
+    """All ontology-derived vocabularies, computed once on first access. Nothing
+    here runs at import time — see __getattr__ for how the public names below are
+    exposed as lazy module attributes."""
+    ont = _load_ontology()
+    return {
+        "ONTOLOGY_PREDICATES": frozenset(p["type"] for p in ont["predicates"]),
+        # vault entity kind -> mobRPG element kind. A projection of
+        # gm-apprentice's own entity types onto mobRPG's, so it lives in the
+        # ontology rather than here.
+        "KINDS": {k: v for k, v in ont["mobrpg_element_kind"].items()
+                  if not k.startswith("$")},
+        # location_type natural/built axis (open vocabulary — see the export).
+        "LOCATION_NATURAL": ont["location_nature"]["natural"],
+        "LOCATION_BUILT": frozenset(ont["location_nature"]["built"]),
+        # vault predicate -> mobRPG Event eventType (only non-Generic entries).
+        "PREDICATE_EVENTTYPE": {p["type"]: p["mobrpg_event_type"]
+                                for p in ont["predicates"]
+                                if p.get("mobrpg_event_type")
+                                and p["mobrpg_event_type"] != "Generic"},
+        # backend WorldElementRelationType enum (Attribute|Link|Parent|Child|Spouse).
+        "RELATION_TYPES": set(ont["mobrpg_relation_type_enum"]),
+        "PREDICATE_RELATION": {p["type"]: p["mobrpg_relation_type"]
+                               for p in ont["predicates"]
+                               if p.get("mobrpg_relation_type")},
+        # ASYMMETRIC Link predicates (subordinate-first authored, container-first
+        # in mobRPG) that `suggest` swaps source/target for.
+        "REVERSED_PREDICATES": frozenset(
+            p["type"] for p in ont["predicates"]
+            if p.get("mobrpg_relation_type") == "Link"
+            and not p.get("symmetric", False)),
+    }
 
-# vault entity kind -> mobRPG element kind. A projection of gm-apprentice's own
-# entity types onto mobRPG's, so it lives in the ontology rather than here.
-KINDS = {k: v for k, v in _ONTOLOGY["mobrpg_element_kind"].items()
-         if not k.startswith("$")}
 
-# location_type natural/built axis (open vocabulary — see the export's comment).
-LOCATION_NATURAL = _ONTOLOGY["location_nature"]["natural"]
-LOCATION_BUILT = frozenset(_ONTOLOGY["location_nature"]["built"])
+_LAZY_NAMES = frozenset({
+    "ONTOLOGY_PREDICATES", "KINDS", "LOCATION_NATURAL", "LOCATION_BUILT",
+    "PREDICATE_EVENTTYPE", "RELATION_TYPES", "PREDICATE_RELATION",
+    "REVERSED_PREDICATES",
+})
+
+
+def __getattr__(name):
+    # PEP 562 lazy module attributes: resolve the ontology-derived vocabularies
+    # (and the raw ontology) on first external access, so `import map_cmd` never
+    # reads the file. Internal code calls _derived()/_load_ontology() directly.
+    if name in _LAZY_NAMES:
+        return _derived()[name]
+    if name == "_ONTOLOGY":
+        return _load_ontology()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # vault folder -> vault kind (mirrors push_to_mobrpg.FOLDERS)
 FOLDERS = {"Characters/NPCs": "npc", "Characters/PCs": "pc", "Locations": "location",
@@ -102,53 +153,21 @@ class UnknownPredicate(ValueError):
             f"do not add aliases to the predicate tables."))
 
 
-# vault relationship predicate -> mobRPG Event eventType, derived from the same
-# export as PREDICATE_RELATION. Hand-maintaining this alongside the ontology let
-# the two disagree (commands/serves/participated_in) and left seven predicates
-# the ontology types falling through to Generic. A per-world map can still
-# override any entry via `relationshipTypes`; change the ontology, not this module.
-# Generic is the default, so only non-Generic entries are carried here.
-PREDICATE_EVENTTYPE = {p["type"]: p["mobrpg_event_type"]
-                       for p in _ONTOLOGY["predicates"]
-                       if p.get("mobrpg_event_type")
-                       and p["mobrpg_event_type"] != "Generic"}
-
-# mobRPG has a SECOND relationship mechanism besides reified Events: a direct
-# WorldElementRelation (enum Attribute | Link | Parent | Child | Spouse).
-#
-# Parent/Child/Spouse are GENEALOGY BETWEEN PEOPLE, not a containment hierarchy.
-# Their only consumer in the API is PersonService.getSiblings (find a person's
-# parents via Child, then their other children via Parent), and the backend
-# auto-creates the reciprocal row for them (CreateWorldRelationRequest
-# .toReverseModel: Parent->Child, Child->Parent, Spouse->Spouse; Link and
-# Attribute get no reciprocal). Direction reads source-first: (S, Parent, T)
-# means "S is the parent of T".
-#
-# Place containment is a Link — a single row, no reciprocal. Mapping spatial
-# predicates onto Parent was wrong twice over: wrong domain, and inverted, so
-# `Corwin IV part_of Corwin System` asserted that the planet was the parent of
-# its own star system, doubled by an auto-reciprocal.
-#
-# Unlike eventTypes, which are per-world created classifiers, this is a backend
-# enum and is therefore stable across worlds — so the mapping lives in the
-# ontology export as `mobrpg_relation_type` and is derived here rather than
-# restated. Change the ontology, not this module.
-RELATION_TYPES = set(_ONTOLOGY["mobrpg_relation_type_enum"])
-PREDICATE_RELATION = {p["type"]: p["mobrpg_relation_type"]
-                      for p in _ONTOLOGY["predicates"]
-                      if p.get("mobrpg_relation_type")}
-
-# Spatial containment/location predicates are authored subordinate-first
-# ("X part_of Y" = Y contains X), but mobRPG's Link convention is container-
-# first — the source is the dominant/containing element. `suggest` swaps source
-# and target for these so a push emits (Y -> X) and never lands a reversed edge
-# (the bug that put `planet part_of system` in as "planet is the system's parent").
-# Derived from the ontology: the ASYMMETRIC Link predicates (borders is
-# symmetric, so its direction is immaterial). Change the ontology, not this set.
-REVERSED_PREDICATES = frozenset(
-    p["type"] for p in _ONTOLOGY["predicates"]
-    if p.get("mobrpg_relation_type") == "Link" and not p.get("symmetric", False)
-)
+# The predicate->eventType, RELATION_TYPES, predicate->relation, and reversed-
+# predicate vocabularies are all derived from the ontology in _derived() above and
+# exposed as lazy module attributes (PREDICATE_EVENTTYPE, RELATION_TYPES,
+# PREDICATE_RELATION, REVERSED_PREDICATES). Design notes preserved there:
+#   - PREDICATE_EVENTTYPE: only non-Generic entries; a per-world map can override
+#     any entry via `relationshipTypes`. Change the ontology, not this module.
+#   - RELATION_TYPES / PREDICATE_RELATION: mobRPG's SECOND relationship mechanism,
+#     a direct WorldElementRelation (Attribute|Link|Parent|Child|Spouse). Parent/
+#     Child/Spouse are GENEALOGY BETWEEN PEOPLE (backend auto-creates the
+#     reciprocal); place containment is a Link (single row, no reciprocal). This
+#     is a stable backend enum, so it lives in the ontology, derived here.
+#   - REVERSED_PREDICATES: spatial predicates are authored subordinate-first
+#     ("X part_of Y" = Y contains X) but mobRPG's Link convention is container-
+#     first; `suggest` swaps source/target for the ASYMMETRIC Link predicates so a
+#     push never lands a reversed edge (borders is symmetric, so it is excluded).
 
 
 def predicate_type(predicate: str) -> str:
@@ -161,11 +180,12 @@ def predicate_type(predicate: str) -> str:
     Coercing an unknown predicate to Generic is what let vault drift reach
     mobRPG as a pile of untyped events; an off-vocabulary predicate is a defect
     to fix in the vault, not a case to absorb here."""
-    if predicate not in ONTOLOGY_PREDICATES:
+    d = _derived()
+    if predicate not in d["ONTOLOGY_PREDICATES"]:
         raise UnknownPredicate(predicate)
-    if predicate in PREDICATE_RELATION:
-        return PREDICATE_RELATION[predicate]
-    return PREDICATE_EVENTTYPE.get(predicate, "Generic")
+    if predicate in d["PREDICATE_RELATION"]:
+        return d["PREDICATE_RELATION"][predicate]
+    return d["PREDICATE_EVENTTYPE"].get(predicate, "Generic")
 
 
 def derive_namespace(vault: str) -> str:
@@ -387,14 +407,16 @@ def _axis_keys(value: str):
 
 
 def _ontology_natural(value: str):
+    natural = _derived()["LOCATION_NATURAL"]
     for k in _axis_keys(value):
-        if k in LOCATION_NATURAL:
-            return LOCATION_NATURAL[k]
+        if k in natural:
+            return natural[k]
     return None
 
 
 def _ontology_built(value: str) -> bool:
-    return any(k in LOCATION_BUILT for k in _axis_keys(value))
+    built = _derived()["LOCATION_BUILT"]
+    return any(k in built for k in _axis_keys(value))
 
 
 def canon_location_bindings(vault: str) -> dict:
@@ -519,7 +541,7 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
         "world": world_meta.get("name"), "worldId": world,
         "vault": os.path.expanduser(vault), "vaultNamespace": derive_namespace(vault),
         "discoveredAt": now,
-        "kinds": dict(KINDS),
+        "kinds": dict(_derived()["KINDS"]),
         "locationRouting": location_routing,
         "classifiers": classifiers,
         "relationshipTypes": rel_types,

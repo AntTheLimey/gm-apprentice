@@ -4,6 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mobrpg-cli"
+# This is the mobrpg-cli package's own version. It is INDEPENDENT of the
+# gm-apprentice marketplace plugin version (.claude-plugin/plugin.json); do not
+# sync the two. `mobrpg --version` reports this value.
 version = "0.1.0"
 description = "CLI over the mobRPG world-builder API for gm-apprentice vault sync"
 requires-python = ">=3.10"
@@ -18,3 +21,9 @@ mobrpg = "mobrpg.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["mobrpg*"]
+
+# Ship the gm-apprentice ontology as package data so it is present in the wheel
+# and loadable via importlib.resources (map_cmd loads it lazily). Without this the
+# JSON is excluded and every verb dies with FileNotFoundError under a wheel install.
+[tool.setuptools.package-data]
+mobrpg = ["gm-apprentice-ontology.json"]
