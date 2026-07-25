@@ -12,6 +12,24 @@ def test_links():
     assert md.md_to_html("[t](http://u)") == '<p><a href="http://u">t</a></p>'
 
 
+def test_link_url_ampersand_not_double_escaped():
+    # Regression: _inline() escapes the whole text, then the link substitution
+    # must NOT escape the captured URL again — a query-string '&' became
+    # '&amp;amp;' and corrupted the element description pushed to the world.
+    assert (md.md_to_html("[link](http://x?a=1&b=2)")
+            == '<p><a href="http://x?a=1&amp;b=2">link</a></p>')
+
+
+def test_link_url_round_trips_without_accreting_amp():
+    # md -> html -> md must be a fixed point on a query-string link, or the URL
+    # grows an extra 'amp;' every sync and the base-hash never matches.
+    src = "[docs](https://ex.com/p?x=1&y=2)"
+    once = md.html_to_md(md.md_to_html(src))
+    twice = md.html_to_md(md.md_to_html(once))
+    assert once == src
+    assert twice == src
+
+
 def test_table_becomes_html_table():
     src = "| A | B |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |"
     html = md.md_to_html(src)

@@ -2,6 +2,10 @@
 
 import importlib
 import os
+import subprocess
+import sys
+
+import pytest
 
 from mobrpg import cli
 from mobrpg.commands import map_cmd
@@ -51,6 +55,28 @@ def test_cli_resolves_every_fallback_to_an_existing_file():
     for name in cli.FALLBACK.values():
         p = cli._script_path(name)
         assert os.path.isfile(p), f"{name} not resolvable at {p}"
+
+
+@pytest.mark.parametrize("script", sorted(set(cli.FALLBACK.values())))
+def test_every_fallback_script_imports_without_error(script):
+    """B5/B6: it isn't enough that a fallback's .py ships — it must actually
+    load. Exec each script's module body (the way a subprocess entry would,
+    but with __name__ != '__main__' so main() stays put) from its own dir so a
+    sibling `import smoketest` resolves. Catches `links`, which loaded
+    gm-apprentice-ontology.json from _legacy/ after the JSON moved to the
+    package root — a FileNotFoundError at import that killed the whole verb."""
+    path = cli._script_path(script)
+    legacy_dir = os.path.dirname(path)
+    pkg_parent = os.path.dirname(os.path.dirname(path))  # dir that holds mobrpg/
+    # Reproduce what `python /abs/script.py` sees at runtime: the script's own
+    # dir on sys.path (sibling `import smoketest`) and the package parent
+    # (`from mobrpg import md`). run_name != '__main__' keeps main() from firing.
+    code = f"import runpy; runpy.run_path({path!r}, run_name='_fallback_import')"
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([legacy_dir, pkg_parent])
+    proc = subprocess.run([sys.executable, "-c", code], env=env,
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, f"{script} failed to import:\n{proc.stderr}"
 
 
 def test_cli_version_flag(capsys):

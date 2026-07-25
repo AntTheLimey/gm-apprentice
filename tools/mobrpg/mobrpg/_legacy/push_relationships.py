@@ -27,7 +27,10 @@ VAULT = os.path.expanduser("~/Documents/CTHULHU/Canticle")
 FOLDERS = {"Characters/NPCs": "npc", "Characters/PCs": "pc", "Locations": "location",
            "Factions & Organizations": "faction", "Items & Artifacts": "item",
            "Creatures": "creature"}
-ONTO = json.load(open(os.path.join(os.path.dirname(__file__), "gm-apprentice-ontology.json")))
+# The ontology ships at the package root (mobrpg/), one level up from this
+# _legacy/ script — not alongside it. Resolve from the parent dir.
+ONTO = json.load(open(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                                   "gm-apprentice-ontology.json")))
 PRED2ET = {p["type"]: p["mobrpg_event_type"] for p in ONTO["predicates"]}
 
 

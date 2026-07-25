@@ -66,7 +66,10 @@ def _inline(text: str) -> str:
 
     text = _INLINE_CODE.sub(stash, text)
     text = _html.escape(text)
-    text = _LINK.sub(lambda m: f'<a href="{_html.escape(m.group(2), quote=True)}">{m.group(1)}</a>', text)
+    # The whole text (URL included) was already escaped above with quote=True, so
+    # do NOT escape m.group(2) again — a second pass turns a query-string '&' into
+    # '&amp;amp;' and accretes another 'amp;' on every round-trip.
+    text = _LINK.sub(lambda m: f'<a href="{m.group(2)}">{m.group(1)}</a>', text)
     text = _BOLD.sub(r"<strong>\1</strong>", text)
     text = _ITALIC.sub(lambda m: f"<em>{m.group(1) or m.group(2)}</em>", text)
     text = re.sub(r"\x00(\d+)\x00", lambda m: f"<code>{spans[int(m.group(1))]}</code>", text)
