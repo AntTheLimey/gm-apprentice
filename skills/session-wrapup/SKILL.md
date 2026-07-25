@@ -50,6 +50,14 @@ names — not `planned_date` or `actual_date`.
 
 ### 1. Gather Sources
 
+If this campaign has a published site with live tracking (a status bar or the
+change-request inbox), pull players' final live vitals into the vault before
+gathering anything else, so the recap and sheet updates below reflect where
+the table actually ended. In the site directory, run `npx
+gm-apprentice-publish flush` and report its per-PC summary — see publish-site
+`references/live-state-flush.md`. If there is no published Tier-2 site, skip
+this and proceed directly to Play Notes.
+
 Read the session's Play Notes file (`type: session-play-notes`).
 If no Play Notes file exists, ask the GM to provide play notes
 (paste, file path, or dictation). Read PC roster. Read the
