@@ -109,7 +109,7 @@ edges / N relationships, across M batches.
 
 Only after the GM has read the report and given an explicit yes:
 
-```
+```bash
 .venv/bin/mobrpg suggest --vault <path> --write-back --out <dir> --execute <world>
 ```
 
@@ -147,7 +147,7 @@ Pushing entities is separate from pushing their *authored description prose*.
 Where a linked note carries a richer description than its mobRPG element (or the
 element is an empty stub), suggest that prose **up** as a reviewable edit:
 
-```
+```bash
 mobrpg suggest-desc <world> --vault <path> [--only <ref>] [--threshold F]      # dry-run report
 mobrpg suggest-desc <world> --vault <path> --only <ref> --execute              # after confirm
 ```

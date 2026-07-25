@@ -2,7 +2,7 @@
 
 Entered when suggestions have gone out and are awaiting pull-back:
 
-```
+```bash
 .venv/bin/mobrpg suggestions <world> --state Accepted --correlate --vault <path>
 ```
 
@@ -19,7 +19,7 @@ its originating vault note. Every write here is a
 
 mobRPG is canon; the vault is the working surface. Run
 
-```
+```bash
 .venv/bin/mobrpg pull-canon --vault <path> <world>
 ```
 
@@ -58,7 +58,7 @@ re-suggesting, this is the follow-up that closes it out.
 
 Only after the GM has read the presented outcomes and given an explicit yes:
 
-```
+```bash
 .venv/bin/mobrpg pull-canon --vault <path> --execute <world>
 ```
 
@@ -80,7 +80,7 @@ conflict one at a time. Never batch a resolution the GM hasn't seen.
 
 **Step 1 — report (read-only):**
 
-```
+```bash
 .venv/bin/mobrpg pull-desc <world> --vault <path>
 ```
 
@@ -107,7 +107,7 @@ entity, show the GM the two diffs and ask the four-way question:
 Then apply their answer to that one entity — dry-run first, show the result,
 get an explicit yes, then `--execute`:
 
-```
+```bash
 .venv/bin/mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref>
 .venv/bin/mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref> --execute
 ```

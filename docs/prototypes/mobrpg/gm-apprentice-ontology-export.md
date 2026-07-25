@@ -116,6 +116,7 @@ edge as a mobRPG join event; the specific predicate name is preserved on the
 event's `title`.
 
 ### Kinship — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | parent_of | child_of | | Generic |
@@ -125,6 +126,7 @@ event's `title`.
 | betrothed_to | betrothed_to | ✓ | Generic |
 
 ### Social — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | knows | knows | ✓ | Generic |
@@ -135,6 +137,7 @@ event's `title`.
 | betrayed | betrayed_by | | Generic |
 
 ### Power — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | rules | ruled_by | | **Reign** |
@@ -145,6 +148,7 @@ event's `title`.
 | imprisons | imprisoned_by | | Generic |
 
 ### Spatial — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | located_at | location_of | | Generic¹ |
@@ -157,6 +161,7 @@ event's `title`.
 and `person.lives`/`political.spans` DateRanges rather than an event.
 
 ### Possession — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | owns | owned_by | | **Reign** |
@@ -165,6 +170,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | seeks | sought_by | | Generic |
 
 ### Knowledge — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | discovered | discovered_by | | Generic |
@@ -173,6 +179,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | studies | studied_by | | Generic |
 
 ### Conflict — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | enemy_of | enemy_of | ✓ | **War** |
@@ -181,6 +188,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | allied_with | allied_with | ✓ | Generic |
 
 ### Affiliation — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | member_of | has_member | | **Membership** |
@@ -190,6 +198,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | infiltrates | infiltrated_by | | **Membership** |
 
 ### Supernatural — genre: fantasy, horror
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | bound_to | binds | | Generic |
@@ -199,6 +208,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | corrupted_by | corrupted | | Generic |
 
 ### Temporal — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | caused | caused_by | | Generic |
@@ -207,6 +217,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | witnessed | witnessed_by | | Generic |
 
 ### Economic — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | trades_with | trades_with | ✓ | Generic |
@@ -215,6 +226,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | indebted_to | creditor_of | | Generic |
 
 ### Event (past actions) — genre: universal
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | murdered | murdered_by | | Generic |
@@ -225,6 +237,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | deceived | deceived_by | | Generic |
 
 ### Horror — genre: horror
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | possessed_by | possesses | | Generic |
@@ -233,6 +246,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | feeds_on | fed_upon_by | | Generic |
 
 ### Romance — genre: romance
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | courts | courted_by | | Generic |
@@ -241,6 +255,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | blackmails | blackmailed_by | | Generic |
 
 ### Historical — genre: historical
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | conquered | conquered_by | | **War** |
@@ -249,6 +264,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | negotiated_with | negotiated_with | ✓ | Generic |
 
 ### Sci-Fi — genre: scifi
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | uploaded_to | upload_source_of | | Generic |
@@ -257,6 +273,7 @@ and `person.lives`/`political.spans` DateRanges rather than an event.
 | hacked | hacked_by | | Generic |
 
 ### Superhero — genre: superhero
+
 | Predicate | Inverse | Sym | → mobRPG |
 |-----------|---------|-----|----------|
 | alter_ego_of | alter_ego_of | ✓ | Generic |
@@ -312,7 +329,7 @@ Validation enforces a minimum spatial anchor per entity type:
 All examples use the real **Regency Cthulhu** world (`worldId
 4b07d8dd-3da2-45fc-9ec5-6a45d21f1adb`) and the NPC **Eleanor Finch**. Real IDs:
 
-```
+```text
 person  Eleanor Finch                6edbfe87-6283-4a18-8d05-35f9b38662fb
 org     Order of St. Ælfric          3ab9ce1c-0472-4145-877f-f397109be6a5
 place   Hartwell House (political)   74ad65d8-8836-4e89-b680-f773b4eaa158

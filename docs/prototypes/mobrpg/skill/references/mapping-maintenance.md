@@ -76,7 +76,7 @@ name-collision hazard the foundation audit flagged.
 
 Use the `relink` verb (vault-only — no API call):
 
-```
+```bash
 .venv/bin/mobrpg relink --vault <path> --to <new-vault-relative-path>
 ```
 
