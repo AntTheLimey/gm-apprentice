@@ -12,6 +12,7 @@ const { latestStateByPcSlug } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
+const { loadPublishConfig } = require('./config');
 
 const { spawnSync } = require('child_process');
 
@@ -37,9 +38,11 @@ function summarize(changes) {
 
 // The only two live-state systems are GURPS and CoC. Anything not GURPS routes
 // to the CoC writeback — the historical default (legacy CoC sites carry no
-// `system` field). Frontmatter wins over campaign config.
-function resolveSystem(frontmatter, config) {
-  const s = String((frontmatter && frontmatter.system) || (config && config.system) || '').toLowerCase();
+// system). A PC's own frontmatter.system wins; otherwise the campaign system
+// (resolved the same way build.js does — from _meta/vault-config.md via
+// loadPublishConfig, with a vault.config.json `system` fallback) decides.
+function resolveSystem(frontmatter, campaignSystem) {
+  const s = String((frontmatter && frontmatter.system) || campaignSystem || '').toLowerCase();
   return s.indexOf('gurps') !== -1 ? 'gurps' : 'coc';
 }
 
@@ -54,6 +57,8 @@ async function runFlush(deps) {
   const configDir = path.dirname(configPath);
   const config = deps.config || require(configPath);
   const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
+  const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
+  const campaignSystem = publishConfig.system || config.system;
   const campaignId = slugify(config.siteTitle || 'campaign');
 
   const adapter = deps.adapter || defaultAdapter(configDir);
@@ -85,7 +90,7 @@ async function runFlush(deps) {
     const name = page.displayTitle || page.title;
     const raw = readFile(page.sourcePath);
     let res;
-    if (resolveSystem(page.frontmatter, config) === 'gurps') {
+    if (resolveSystem(page.frontmatter, campaignSystem) === 'gurps') {
       // GURPS flush edits the body `## Current Status` block, but the parser
       // reads HP/FP from frontmatter when `status:` is authored as a YAML
       // object — so a body rewrite would report a phantom success the build
