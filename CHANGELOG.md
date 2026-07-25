@@ -9,10 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.9.0] — 2026-07-25
 
-Graduates the mobRPG integration CLI (`tools/mobrpg/`) into the repo:
-the legacy crosswalk is fully excised in favour of per-note `mobrpg:` nodes, and
-two new verbs — `adopt` (establish nodes by live name-match) and `auth` (managed,
-cross-platform credentials) — complete the sync surface.
+Graduates the mobRPG integration CLI (`tools/mobrpg/`) into the repo as a
+native Python `mobrpg` command — but only partially: most verbs (`auth`,
+`whoami`, `worlds`, `pull`, `whats-new`, `pull-canon`, `pull-desc`, `adopt`,
+`relink`, `suggest`, `suggest-desc`, `submit-batch`, `suggestions`, `catalog`,
+`review`, `update`, `map`) are native subcommands, while seven — `write`,
+`merge`, `link-orphans`, `push`, `types`, `links`, `images` — remain thin
+wrappers that shell out to the original prototype scripts shipped alongside
+the package. This is a mid-strangler state, not a finished port; the fallback
+verbs work the same from the command line, they're just not rewritten yet.
+The legacy crosswalk is fully excised in favour of per-note `mobrpg:` nodes,
+and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
+(managed, cross-platform credentials) — round out the sync surface.
 
 ### Added
 

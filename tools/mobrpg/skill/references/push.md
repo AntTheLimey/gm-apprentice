@@ -2,7 +2,7 @@
 
 Entered once the map is clean (see `mapping-maintenance.md`) and a dry-run
 `suggest --write-back` shows entities ready to go. Every write here is a
-`.venv/bin/mobrpg suggest ...` invocation — never `python -m mobrpg`.
+`mobrpg suggest ...` invocation (the installed CLI verb).
 
 ## Two flags, independent meanings
 
@@ -110,18 +110,18 @@ edges / N relationships, across M batches.
 Only after the GM has read the report and given an explicit yes:
 
 ```bash
-.venv/bin/mobrpg suggest --vault <path> --write-back --out <dir> --execute <world>
+mobrpg suggest --vault <path> --write-back --out <dir> --execute <world>
 ```
 
 (Drop `--write-back` if the GM only wants the API submission this pass, per
 the flag table above.)
 
-If the target is **PROD**, the CLI raises exit code 3 on `--execute` unless
-`MOBRPG_ALLOW_PROD_WRITES=1` is set — this is a deliberate guard, not a bug.
-**Never set it yourself.** Tell the GM the target is PROD, explain the opt-in,
-and let them either set `MOBRPG_ALLOW_PROD_WRITES=1` themselves or switch to
-`MOBRPG_ENV=dev` for a non-prod run. Dry-runs never hit this guard, so nothing
-in Step 1–2 above needs it.
+If the target is **PROD**, a `--execute` submits straight to Tim's live shared
+world — there is no extra env-var opt-in gating it. The client prints a loud
+`⚠️ THIS IS PRODUCTION` banner to stderr on every run; heed it. Tell the GM the
+target is PROD and get their explicit yes before running a PROD `--execute`, or
+switch to `MOBRPG_ENV=dev` for a non-prod run. Dry-runs (Step 1–2 above) never
+write, so they're safe against either target.
 
 ## Relationships: two mechanisms, and target resolution
 
@@ -159,7 +159,7 @@ mobrpg suggest-desc <world> --vault <path> --only <ref> --execute              #
 - Each candidate submits an **UpdateElement** suggestion (sparse — description
   only) against the element's real id via the `/suggestion` endpoint — a proposal
   the world owner reviews, never a direct overwrite. Same dry-run → present →
-  confirm → `--execute` discipline, and the same PROD guard
-  (`MOBRPG_ALLOW_PROD_WRITES=1`) as `suggest`. Present the candidate list and get
-  an explicit yes before executing; prefer `--only` to push one at a time when
-  the GM wants to review each.
+  confirm → `--execute` discipline as `suggest`, and the same PROD caution — a
+  PROD `--execute` submits to the live world, so heed the production banner and
+  get an explicit yes first. Present the candidate list before executing; prefer
+  `--only` to push one at a time when the GM wants to review each.

@@ -1,144 +1,202 @@
-# mobRPG ↔ gm-apprentice integration (prototype) — START HERE
+# mobrpg — CLI for syncing mobRPG worlds with gm-apprentice vaults
 
-Spike work connecting **mobrpg.com** (Tim's web RPG world-builder) with
-gm-apprentice vaults, now graduated into an installable `mobrpg` CLI (v1.9.0).
-This README is the front door; `llms.txt` is the agent-facing command guide.
+`mobrpg` is a command-line tool over the [mobRPG](https://www.mobrpg.com)
+world-builder REST API. It moves campaign content both ways between a mobRPG
+world and a gm-apprentice vault: importing a world into vault markdown, and
+pushing (or suggesting) vault entities back up into a world.
 
-> The historical design docs (master log, schema notes, reverse-engineering
-> findings, the suggestion/writeback specs, and the earlier CLI handoff) have
-> been archived outside the repo at `~/PROJECTS/docs/mobrpg-cli-history/`.
+I built it to keep my own vaults in sync with mobRPG worlds. It has no
+third-party dependencies — the client is stdlib `urllib` only.
 
-## What this is
+> **Native verbs plus documented fallbacks.** Most verbs are native Python
+> subcommands. Seven verbs (`write`, `merge`, `link-orphans`, `push`, `types`,
+> `links`, `images`) still shell out to the original prototype scripts that ship
+> alongside the package; they work exactly like the native verbs from the user's
+> point of view. This is a mid-migration state, not a finished port.
 
-mobRPG is a collaborative world-builder with a REST API (Spring Boot, Java).
-We proved we can drive it **both directions** and built reusable scripts for:
-- **import** mobRPG world → gm-apprentice vault, and
-- **push** vault → mobRPG world.
+## Install
 
-Tim's backend source is at `~/PROJECTS/game` (we're collaborators on
-`tdennis/game`, not a fork — pushes go to his repo). It has its own `CLAUDE.md`.
+From the package directory (`tools/mobrpg/`), an editable install puts the
+`mobrpg` command on your PATH:
 
-## Auth (how the scripts talk to mobRPG)
+```bash
+python3 -m pip install -e path/to/tools/mobrpg
+mobrpg --help
+mobrpg --version
+```
 
-Every script imports the shared config/transport module (`import smoketest as
-api`), which resolves **which environment** to hit and **how to authenticate**
-before anything else runs.
+If `mobrpg` isn't on your PATH after install, run it as a module instead:
+`python3 -m mobrpg.cli --help`.
 
-### Environment: prod vs dev
+Requires Python 3.10+.
 
-`smoketest.py` picks BASE/CLIENT_ID/REDIRECT_URI from `MOBRPG_ENV=dev|prod`
-(default `prod`, preserving this tool's original behavior of talking to the
-real site unless dev is deliberately requested). Individual fields can be
-overridden with `MOBRPG_BASE` / `MOBRPG_CLIENT_ID` / `MOBRPG_REDIRECT_URI` on
-top of whichever preset `MOBRPG_ENV` picked. The resolved environment + BASE
-is always printed to stderr on import — there is no silent ambiguity about
-which server a run is about to hit.
+## Auth
 
-**Safety:** any script that mutates data (creates, suggestion submits, app
-token minting) calls `api.assert_writes_allowed()` before doing so. Against
-`prod` that refuses and exits unless `MOBRPG_ALLOW_PROD_WRITES=1` is *also*
-set — writing to production always needs a second, deliberate opt-in on top
-of `MOBRPG_ENV=prod` (which is otherwise just the default).
+The CLI needs a mobRPG token. The simplest path is a one-URL download of a
+credentials CSV, imported once into a managed config store.
 
-### Authenticating
+1. Open **https://www.mobrpg.com/me/tokens/download** in a browser and log in
+   if prompted. A `credentials.csv` downloads automatically.
+2. Import it (use the path where the file landed):
 
-Two ways, same as before, now environment-aware:
+   ```bash
+   mobrpg auth import ~/Downloads/credentials.csv
+   ```
 
-- Durable **app token** (bearer) lives in `~/Downloads/credentials.csv`
-  (AccessToken row, prod only). Scripts read it via `MOBRPG_TOKEN`:
-  ```bash
-  export MOBRPG_TOKEN="$(grep '^AccessToken,' ~/Downloads/credentials.csv | cut -d, -f2)"
-  ```
-  It authenticates as the vault owner (antthelimey). The token is a
-  long-lived credential — treat it like a password.
-- Email + password login (works against either environment) —
-  `MOBRPG_EMAIL` / `MOBRPG_PASSWORD`. **Dev example** — the local stack seeds
-  a Read-only collaborator on both dev worlds, `suggester@localhost`
-  (password `local`), used for the suggestion demo below since the whole
-  point of suggestions is that a Read-only user can propose content:
-  ```bash
-  export MOBRPG_ENV=dev
-  export MOBRPG_EMAIL='suggester@localhost'
-  export MOBRPG_PASSWORD='local'
-  python3 smoketest.py
-  ```
+   The import verifies the token with a `whoami` call, then stores it in a
+   user-level config file — `~/.config/mobrpg` on POSIX, `%APPDATA%\mobrpg` on
+   Windows. The token is written `0600` and is never printed.
+3. Confirm it worked:
 
-## The two worlds in play
+   ```bash
+   mobrpg auth status
+   ```
 
-| Pairing | Direction done | Vault | mobRPG worldId |
-|---|---|---|---|
-| **Space** → **Dead End** | mobRPG → vault (import) | `~/Documents/space_game` | `a254e424-…` (Read-only to us) |
-| **Canticle** → **Regency Cthulhu** | vault → mobRPG (push) | `~/Documents/CTHULHU/Canticle` | `4b07d8dd-…` (we own it) |
+The downloaded CSV still holds live tokens after import — delete it, or pass
+`--delete-source` on the import to have the CLI remove it for you.
 
-`4b07d8dd-3da2-45fc-9ec5-6a45d21f1adb` is also the **dev** stack's Regency
-Cthulhu world (same id, loaded into the local Postgres) — set `MOBRPG_ENV=dev`
-to point any of these scripts at the local stack instead of the live site
-without changing the worldId.
+Other `auth` subcommands:
 
-## Scripts (all dry-run by default; `--execute` to write; idempotent)
+- `mobrpg auth refresh` — renew an expired token (run this if a command reports
+  HTTP 401).
+- `mobrpg auth logout` — remove the stored credential.
 
-| Script | Does |
-|---|---|
-| `smoketest.py` | auth + read sanity check; also the shared env/config module every other script imports |
-| `etl_extract.py` | pull a mobRPG world → structured JSON (import side) |
-| `vault_write.py` | structured JSON → vault markdown files |
-| `merge_overlaps.py` | non-destructive merge for entities that exist in both |
-| `orphan_link.py` | auto-link obvious orphan relationships post-import |
-| `push_to_mobrpg.py` | vault entities → mobRPG **direct create** (one POST per entity, immediately live; needs ReadWriteDelete) |
-| `push_suggestions.py` | vault entities → mobRPG **suggestions** (`POST /world/{id}/suggestion`, batched, idempotent on `externalRef`; only needs Read — a collaborator proposes content for the GM to accept/dismiss) |
-| `assign_types.py` | set mobRPG types via `Attribute` edges (race/sex, political/type…) |
-| `push_relationships.py` | vault relationships → mobRPG `event`s + `Link` edges |
+### Token precedence
 
-## Keeping a vault up to date (node model)
+`get_access_token` resolves a bearer token in this order:
 
-Entity/event IDs live in each note's `mobrpg:` frontmatter node — the single
-source of truth. **There is no sidecar crosswalk** (the old
-`detect_updates.py` + `_meta/mobrpg-crosswalk.json` flow is retired: the
-hand-vendored crosswalks drifted and were untrustworthy). Reconciliation runs
-against the nodes:
+1. `MOBRPG_TOKEN` in the environment (overrides everything below).
+2. The managed config from `mobrpg auth import`.
+3. `MOBRPG_EMAIL` + `MOBRPG_PASSWORD` (email/password login, local-password
+   accounts only).
 
-- **What changed upstream:** `mobrpg whats-new <world> --vault <path>` — a
-  read-only diff of the live world against the vault's nodes (new entities,
-  entities gone upstream, unmapped classifier types).
-- **Bring changes in:** `mobrpg pull-canon` (ratified canon → nodes) and
-  `mobrpg pull-desc` (description prose) apply the authority rule per node's
-  review_state — append/flag, never blind-overwrite.
-- Manual/on-demand only — no scheduled job.
+If `MOBRPG_TOKEN` is set, it wins over the imported credential — `auth status`
+warns you when that's the case.
 
-## Reference docs
+## Environment & target
 
-- `llms.txt` — the agent-facing CLI guide (auth, verbs, safe-write rules)
-- `gm-apprentice-ontology-export.md` / `.json` — vault predicate ontology + eventType mapping (for Tim)
-- Historical design docs (master log, `schema-map`, `FINDINGS`, `CLI-HANDOFF`,
-  the suggestion/writeback specs) — archived at `~/PROJECTS/docs/mobrpg-cli-history/`
+- `MOBRPG_ENV=dev|prod` picks which server to hit. **Default is `prod`.** The
+  resolved target (env name + base URL) prints to stderr on every run, and a
+  production run also prints a `⚠️ THIS IS PRODUCTION` banner — so there's never
+  any ambiguity about which world a command is about to touch.
+- Per-field overrides layer on top of the chosen preset: `MOBRPG_BASE`,
+  `MOBRPG_CLIENT_ID`, `MOBRPG_REDIRECT_URI`.
+- `MOBRPG_CONFIG_DIR` overrides where the credential is stored.
 
-## ⚠️ Before you do anything when you resume — read these
+Exit codes: `0` ok, `1` API error, `2` bad args / no auth configured.
 
-1. **Every mobRPG element create needs a non-null `description`** or it 500s
-   (`elements.description` is NOT NULL). Tim is fixing the constraint; until
-   confirmed, always send a description. This was the type-creation 500.
-2. **Types are `Attribute` edges, not fields.** Relationships are reified
-   **`event`s** (eventType enum: Employ/Membership/Leadership/Reign/War/Score/Generic).
-   See the log for exact endpoints.
-3. **Do NOT write the crosswalk back into vault frontmatter.** GM wants
-   frontmatter hand-authored only — `push_relationships.py` still has the
-   frontmatter-writeback code; **rewire it to the sidecar JSON before running again.**
-4. **Don't PR the Hibernate "fix."** The `@JdbcTypeCode(SqlTypes.ARRAY)` swap was a
-   local workaround that drops `StringListConverter`'s order-independent `equals`.
-   The clean-build boot failure is a *question for Tim*, not a blind PR.
-5. **Canticle vault is not under version control** — be careful with automated edits.
+## Read-only vs mutating
 
-## Live state at park time
+Read-only verbs are safe to run anywhere: `whoami`, `worlds`, `pull`,
+`whats-new`, `suggestions`, `catalog`, `map`, `images`.
 
-- Regency Cthulhu (mobRPG): Canticle **Chapter 1 loaded** — events 17→97,
-  people 18→45, locations 15→27, political-types 12→23, items 2→5.
-- Canticle vault frontmatter: **restored to hand-authored** (crosswalk in sidecar).
-- Remaining to push ≈ 250 entities (chapters 0, 0.5, 2, 3, 4; 0.1 already in mobRPG).
-  Chapter 2 (Lyon) dry-run = 60 entities, ready.
-- Local backend repro env: **torn down**. JDK 25 + `~/.m2` jars remain (harmless).
+Mutating verbs are **dry-run by default** — add `--execute` to actually write.
+The API-mutating verbs (`push`, `suggest`, `suggest-desc`, `submit-batch`,
+`update`, `types`, `links`, `review`) need write access on the world. The rest
+(`write`, `merge`, `link-orphans`, `pull-canon`, `pull-desc`, `adopt`, `relink`)
+only ever write local vault files; `pull-canon`, `pull-desc`, and `adopt` read
+from mobRPG but write locally, and `relink` makes no API calls at all.
 
-## Likely first moves on resume
+Entity and event IDs live in each note's `mobrpg:` frontmatter node — the single
+source of truth. There is no sidecar crosswalk. A vault whose entities already
+exist upstream but carry no node is linked with `adopt` (match live elements by
+name, then stamp nodes).
 
-1. Decide crosswalk home + sync direction/authority (see log's open decisions).
-2. Rewire `push_relationships.py` (and add entity `mobrpg_id` capture) to the sidecar.
-3. Continue the push chapter by chapter, or design two-way sync using the crosswalk IDs.
+## Verb overview
+
+Run `mobrpg <command> --help` for a command's own options.
+
+### Identity
+
+- `auth` — manage credentials: `import` | `status` | `refresh` | `logout`.
+- `whoami` — print the authenticated user and their worlds.
+- `worlds` — list worlds visible to the authenticated user (same as `whoami`).
+
+### Import (mobRPG → vault)
+
+- `pull <world>` — import a world into a structured JSON extract
+  (default `extract.json`); the entry point of the import pipeline.
+- `write <extract.json> <out_dir>` — render an extract into vault markdown.
+- `merge <extract.json> <vault>` — non-destructive merge for entities present in
+  both the extract and the vault.
+- `link-orphans <extract.json> <vault> <outdir>` — auto-link obvious orphan
+  relationships after an import.
+- `images <world> <vault>` — pull entity images into the vault.
+
+### Reconcile (keep a vault current)
+
+- `whats-new <world> --vault <path>` — read-only report of what's new upstream
+  and which vault notes have gone missing upstream.
+- `pull-canon <world> --vault <path>` — pull ratified mobRPG canon down into
+  vault `mobrpg:` nodes.
+- `pull-desc <world> --vault <path>` — reconcile note description prose with
+  mobRPG canon (report by default; `--resolve` applies a chosen outcome).
+- `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
+  already exist upstream but carry no node, matched by name.
+- `relink --vault <path> --to <new-rel-path>` — re-point a moved or renamed
+  note's external ref so a re-push won't mint a duplicate (vault-only).
+
+### Push (vault → mobRPG)
+
+- `push <world> --chapter <ch>` — direct-create vault entities in a world
+  (needs write access; immediately live).
+- `suggest <world> --chapter <ch>` — submit vault entities as review suggestions
+  (only needs Read access — a collaborator proposes content for the owner to
+  accept or dismiss).
+- `suggest-desc <world> --vault <path>` — suggest a linked note's authored
+  description up to mobRPG as an `UpdateElement` suggestion.
+- `submit-batch <world> <batch.json>` — submit a pre-built compound batch
+  (classifier types + attribute edges + reified event/link relationships).
+- `types <world>` — set entity types via `Attribute` edges.
+- `links <world> --chapter <ch>` — push vault relationships as mobRPG events.
+
+### Review & catalog
+
+- `suggestions <world>` — list suggestions by review state; `--correlate` joins
+  each accepted suggestion back to its vault file and the element it produced.
+- `catalog <world> <kind>` — list the elements of one kind (e.g. `political/type`,
+  `person`) to see what already exists before pushing.
+- `review <world> <suggestionId> <accept|dismiss|reinstate>` — GM review action
+  on one suggestion (needs write access).
+- `update <world> <suggestionId> <update.json>` — replace a pending suggestion's
+  payload (inline fields only).
+- `map <init|sync|check> <world> --vault <path>` — generate and maintain the
+  per-vault type mapping (read-only on mobRPG).
+
+## Typical workflows
+
+Import a world into a vault (read-only against mobRPG, so prod is fine):
+
+```bash
+export MOBRPG_TOKEN=...
+mobrpg pull <worldId> --out extract.json
+mobrpg write extract.json /path/to/vault
+mobrpg merge extract.json /path/to/vault
+mobrpg link-orphans extract.json /path/to/vault ./orphan_out
+```
+
+Propose a vault chapter to a world as suggestions (safe — only needs Read
+access; dry-run first):
+
+```bash
+mobrpg suggest <worldId> --chapter chapter-2            # dry-run
+mobrpg suggest <worldId> --chapter chapter-2 --execute
+```
+
+Confirm the round-trip after the owner accepts them (read-only):
+
+```bash
+mobrpg catalog <worldId> political/type
+mobrpg suggestions <worldId> --state Accepted --correlate --vault /path/to/vault
+```
+
+## Versioning
+
+`mobrpg --version` reports the package's own version. That version is
+independent of the gm-apprentice marketplace plugin version — the two are not
+kept in sync.
+
+## For AI agents
+
+`llms.txt` (next to this package) is the agent-facing command guide: the full
+command model, auth precedence, and safe-write rules in one file.

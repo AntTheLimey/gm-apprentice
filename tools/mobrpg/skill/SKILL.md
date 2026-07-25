@@ -8,18 +8,22 @@ surface. This skill keeps the two in sync by driving the `mobrpg` CLI — it is 
 judgment layer, not a second copy of the CLI. It never calls the API directly:
 it runs verbs, reads their output, and decides what to show you and what to ask.
 
-Work from `tools/mobrpg/` (the CLI lives there). Use the venv:
-`.venv/bin/mobrpg …`. The agent-facing CLI guide is `../llms.txt` — read it if a
-verb's behavior is unclear rather than guessing flags.
+Install the CLI once — `python3 -m pip install -e tools/mobrpg` — which puts a
+`mobrpg` command on PATH; every command below is a bare `mobrpg …`. (If PATH
+isn't picking it up, `python3 -m mobrpg.cli …` is equivalent.) The agent-facing
+CLI guide is `tools/mobrpg/llms.txt` — read it if a verb's behavior is unclear
+rather than guessing flags.
 
 ## On invocation: orient, then route
 
 First, orient (all read-only — nothing here writes):
-1. Find the vault (ask if not given). Confirm the CLI runs: `.venv/bin/mobrpg whoami`.
+1. Find the vault (ask if not given). Confirm the CLI runs: `mobrpg whoami`.
    If it reports no credentials, walk the GM through first-time setup —
    `references/auth-setup.md` (one-URL download preferred, manual CSV fallback).
-2. Note the target: the client prints `mobRPG target: PROD/DEV` to stderr. If PROD,
-   remember that any write needs `MOBRPG_ALLOW_PROD_WRITES=1` — you never set it.
+2. Note the target: the client prints `mobRPG target: PROD/DEV` to stderr, plus a
+   loud `⚠️ THIS IS PRODUCTION` banner when the env is prod (the default). If the
+   target is PROD, treat every `--execute` as a live write against Tim's shared
+   world — surface that before running one, and prefer `MOBRPG_ENV=dev`.
 3. Take a discovery snapshot: `mobrpg whats-new <world> --vault <path>` reports, in
    one read-only pass, what's **new** in mobRPG (entities with no linked node),
    **gone** (vault nodes deleted upstream — zombie notes to reconcile), and **new
@@ -45,9 +49,10 @@ These are short and needed every time, so they live here, not in a reference fil
 - **Dry-run → present → confirm → execute.** Every mutating verb runs dry-run
   first. Show the result, get an explicit yes, only then re-run with `--execute`.
   Never chain straight to `--execute`.
-- **Production writes need `MOBRPG_ALLOW_PROD_WRITES=1`.** If the target is PROD,
-  say so, explain the opt-in, and let the GM set it or switch to `MOBRPG_ENV=dev`.
-  Do not set it yourself.
+- **A PROD `--execute` writes to the live shared world.** There is no extra
+  env-var opt-in — `--execute` alone submits. If the target is PROD, say so
+  before running one and let the GM decide, or switch to `MOBRPG_ENV=dev` for a
+  non-prod run. Never run a PROD `--execute` on your own initiative.
 - **State detection is read-only** (`map check`, `catalog`, `suggestions`, `pull`,
   and any `--write-back`/`--execute`-less run). Reading never needs confirmation.
 - **Invariants from the foundation audit:** an accepted `element_id` is preserved

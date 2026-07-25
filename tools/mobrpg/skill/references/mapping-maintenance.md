@@ -77,7 +77,7 @@ name-collision hazard the foundation audit flagged.
 Use the `relink` verb (vault-only — no API call):
 
 ```bash
-.venv/bin/mobrpg relink --vault <path> --to <new-vault-relative-path>
+mobrpg relink --vault <path> --to <new-vault-relative-path>
 ```
 
 It reads the note now at `--to`, rewrites `external_ref` to that current path,

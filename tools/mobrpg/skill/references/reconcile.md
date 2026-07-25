@@ -3,7 +3,7 @@
 Entered when suggestions have gone out and are awaiting pull-back:
 
 ```bash
-.venv/bin/mobrpg suggestions <world> --state Accepted --correlate --vault <path>
+mobrpg suggestions <world> --state Accepted --correlate --vault <path>
 ```
 
 shows accepted review states not yet reflected in the vault's `mobrpg:`
@@ -13,14 +13,14 @@ accepted and dismissed are two separate queries (swap `--state Dismissed` for
 the second). The phase's per-entity outcomes below are built from both lists
 together. `--correlate --vault <path>` is what joins each suggestion back to
 its originating vault note. Every write here is a
-`.venv/bin/mobrpg pull-canon ...` invocation — never `python -m mobrpg`.
+`mobrpg pull-canon ...` invocation — never `python -m mobrpg`.
 
 ## Node authority rule (via `pull-canon`)
 
 mobRPG is canon; the vault is the working surface. Run
 
 ```bash
-.venv/bin/mobrpg pull-canon --vault <path> <world>
+mobrpg pull-canon --vault <path> <world>
 ```
 
 **dry-run first** (no `--execute` — this is the default; the CLI prints
@@ -59,15 +59,15 @@ re-suggesting, this is the follow-up that closes it out.
 Only after the GM has read the presented outcomes and given an explicit yes:
 
 ```bash
-.venv/bin/mobrpg pull-canon --vault <path> --execute <world>
+mobrpg pull-canon --vault <path> --execute <world>
 ```
 
 `pull-canon --execute` writes local vault files only — it never calls the
-mobRPG API, so the PROD write guard (`MOBRPG_ALLOW_PROD_WRITES=1`) does not
-gate it. It is still a vault mutation, though, so it follows the same
+mobRPG API, so it carries no live-world write risk regardless of the PROD/DEV
+target. It is still a vault mutation, though, so it follows the same
 dry-run → present → confirm → `--execute` sequence as every other mutating
-verb in this skill. Don't skip the confirm step just because the guard
-doesn't apply.
+verb in this skill. Don't skip the confirm step just because nothing leaves
+the vault.
 
 ## Description content — reconcile via `pull-desc`
 
@@ -81,7 +81,7 @@ conflict one at a time. Never batch a resolution the GM hasn't seen.
 **Step 1 — report (read-only):**
 
 ```bash
-.venv/bin/mobrpg pull-desc <world> --vault <path>
+mobrpg pull-desc <world> --vault <path>
 ```
 
 This classifies every synced note and prints, per changed entity, a
@@ -108,8 +108,8 @@ Then apply their answer to that one entity — dry-run first, show the result,
 get an explicit yes, then `--execute`:
 
 ```bash
-.venv/bin/mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref>
-.venv/bin/mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref> --execute
+mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref>
+mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref> --execute
 ```
 
 `<mode>` is `take-canon` | `keep-vault` | `merge` | `separate` | `baseline`;
@@ -124,8 +124,8 @@ get an explicit yes, then `--execute`:
   GM clears the `description_policy`.
 
 Every `pull-desc --execute` writes local vault files only — it never calls a
-mobRPG write endpoint, so the PROD write guard (`MOBRPG_ALLOW_PROD_WRITES=1`)
-does not gate it. It is still a vault mutation: same dry-run → present → confirm
+mobRPG write endpoint, so it carries no live-world write risk regardless of the
+PROD/DEV target. It is still a vault mutation: same dry-run → present → confirm
 → `--execute` sequence, per entity.
 
 *Why it's safe:* change detection compares mobRPG's raw HTML to its recorded
