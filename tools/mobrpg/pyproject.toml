@@ -22,8 +22,10 @@ mobrpg = "mobrpg.cli:main"
 where = ["."]
 include = ["mobrpg*"]
 
-# Ship the gm-apprentice ontology as package data so it is present in the wheel
-# and loadable via importlib.resources (map_cmd loads it lazily). Without this the
-# JSON is excluded and every verb dies with FileNotFoundError under a wheel install.
+# Ship as package data so it is present in the wheel and resolvable at runtime.
+# The ontology JSON loads via importlib.resources (map_cmd, lazily). The 7 legacy
+# fallback scripts (+ smoketest.py, which 4 of them import) live under _legacy/ so
+# cli._shellout can run them under a wheel install; without this they are excluded
+# by `include = ["mobrpg*"]` and every fallback verb dies with "can't open file".
 [tool.setuptools.package-data]
-mobrpg = ["gm-apprentice-ontology.json"]
+mobrpg = ["gm-apprentice-ontology.json", "_legacy/*.py"]

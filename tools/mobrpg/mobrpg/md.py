@@ -244,11 +244,16 @@ class _ToMd(HTMLParser):
         if not self.header and not self.table_rows:
             return ""
         cols = len(self.header) or (len(self.table_rows[0]) if self.table_rows else 0)
+        # A literal '|' inside a cell must be escaped as '\|' or it reads as a
+        # column separator, shifting every following cell and corrupting the row's
+        # column count (mirror of md_to_html's `\|` cell handling; _cells unescapes
+        # it back on the next parse).
+        esc = lambda c: c.replace("|", "\\|")
         head = self.header or ["" for _ in range(cols)]
-        lines = ["| " + " | ".join(head) + " |",
+        lines = ["| " + " | ".join(esc(c) for c in head) + " |",
                  "| " + " | ".join("---" for _ in range(cols)) + " |"]
         for r in self.table_rows:
-            lines.append("| " + " | ".join(r) + " |")
+            lines.append("| " + " | ".join(esc(c) for c in r) + " |")
         return "\n".join(lines)
 
 

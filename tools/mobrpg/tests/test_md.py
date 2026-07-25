@@ -101,3 +101,23 @@ def test_converter_idempotent_over_corpus():
         once = md.html_to_md(md.md_to_html(src))
         twice = md.html_to_md(md.md_to_html(once))
         assert once == twice, f"not a fixed point:\n{once!r}\n{twice!r}"
+
+
+def test_html_to_md_escapes_pipe_in_table_cells():
+    # A canon table cell containing a literal '|' must be emitted as '\|' so the
+    # row keeps its column count — an unescaped pipe becomes an extra column and
+    # corrupts the vault table (mirror of the fixed md_to_html cell path).
+    html = ("<table><thead><tr><th>A</th><th>B</th></tr></thead>"
+            "<tbody><tr><td>x | y</td><td>z</td></tr></tbody></table>")
+    out = md.html_to_md(html)
+    rows = [r for r in out.splitlines() if r.strip()]
+    assert all(len(md._cells(r)) == 2 for r in rows)   # every row is 2 columns
+    assert r"x \| y" in out
+
+
+def test_md_html_table_round_trip_preserves_escaped_pipe():
+    # md -> html -> md must not silently drop the escape and split the cell.
+    src = "| A | B |\n| --- | --- |\n| x \\| y | z |"
+    back = md.html_to_md(md.md_to_html(src))
+    last = [r for r in back.splitlines() if r.strip()][-1]
+    assert md._cells(last) == ["x | y", "z"]

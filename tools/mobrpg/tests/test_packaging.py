@@ -1,6 +1,7 @@
 """Packaging / wheel-install regressions (RELEASE-BLOCKERS B5 + --version)."""
 
 import importlib
+import os
 
 from mobrpg import cli
 from mobrpg.commands import map_cmd
@@ -30,6 +31,26 @@ def test_lazy_module_attributes_still_resolve():
     assert "Parent" in map_cmd.RELATION_TYPES
     assert map_cmd.KINDS["location"] == "political"
     assert "part_of" in map_cmd.PREDICATE_RELATION
+
+
+def test_fallback_scripts_ship_inside_package():
+    """B5/B6: every fallback verb's legacy script — plus smoketest.py, which 4 of
+    them `import smoketest as api` — must live UNDER the mobrpg package so it ships
+    in the wheel. If they sit at the package's parent (the pre-fix _SCRIPTS_DIR)
+    they are excluded by `include = ['mobrpg*']` and every fallback verb dies with
+    'can't open file … .py' exit 2 under a non-editable install."""
+    base = importlib.resources.files("mobrpg")
+    for name in set(cli.FALLBACK.values()) | {"smoketest.py"}:
+        assert base.joinpath("_legacy", name).is_file(), f"{name} not shipped in package"
+
+
+def test_cli_resolves_every_fallback_to_an_existing_file():
+    """The path cli._shellout hands to the subprocess must point at a real file
+    for every fallback verb — the tautological mock-only cli test can't catch an
+    unpackaged script, so assert the resolved path exists on disk."""
+    for name in cli.FALLBACK.values():
+        p = cli._script_path(name)
+        assert os.path.isfile(p), f"{name} not resolvable at {p}"
 
 
 def test_cli_version_flag(capsys):

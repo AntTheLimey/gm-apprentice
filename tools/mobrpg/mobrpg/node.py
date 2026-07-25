@@ -10,6 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+
+# A YAML frontmatter body's first non-blank line is a mapping key (`key:` /
+# `key: value`), a list item (`- ...`), or a comment (`# ...`). Prose lines
+# ("Some intro text", "Intro.") match none of these — that's how we tell real
+# frontmatter from a note that merely opens with a `---` thematic break.
+_YAML_KEYISH = re.compile(r"^[ \t]*(?:#|-(?:\s|$)|[^\s:#][^:]*:(?:\s|$))")
 
 _SCALARS = ["world_id", "external_ref", "previous_ref", "element_id", "element_kind",
             "review_state", "content_hash", "last_synced", "review_note",
@@ -75,17 +82,26 @@ def _split_frontmatter(md_text: str):
     end = md_text.find("\n---", 3)
     if end == -1:
         return None, None, None
-    # A note with no YAML that opens with a `---` thematic break followed by a
-    # blank line is prose (a lone leading thematic break), not frontmatter.
-    # Real frontmatter carries content on the line after the opening fence.
-    next_nl = md_text.find("\n", nl + 1)
-    next_line = md_text[nl + 1:next_nl if next_nl != -1 else len(md_text)]
-    if next_line.strip() == "":
-        return None, None, None
     pre = md_text[:nl + 1]                      # opening fence bytes, verbatim
     fm_body = md_text[nl + 1:end + 1]           # includes trailing \n
     post = md_text[end + 1:]                    # starts at "---"
-    return pre, fm_body, post
+    # An EMPTY body (fences written back-to-back, `---\n---`) is a valid empty
+    # YAML block — common in freshly scaffolded vault notes — so keep it as
+    # frontmatter. Otherwise a note that merely opens with a `---` thematic break
+    # and closes with another `---` is prose, not frontmatter: the first NON-BLANK
+    # line decides — YAML-ish (a mapping key, list item, or comment) is
+    # frontmatter, prose is not. A leading blank line is valid YAML, so scan past
+    # blanks; an all-blank (but non-empty) body is a lone thematic break, not
+    # frontmatter.
+    if fm_body == "":
+        return pre, fm_body, post
+    for line in fm_body.splitlines():
+        if not line.strip():
+            continue
+        if not _YAML_KEYISH.match(line):
+            return None, None, None
+        return pre, fm_body, post
+    return None, None, None
 
 
 def _find_node_block(fm_body: str):

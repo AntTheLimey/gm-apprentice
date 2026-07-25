@@ -10,9 +10,9 @@ ported one at a time.
 
 from __future__ import annotations
 
+import importlib.resources
 import subprocess
 import sys
-from pathlib import Path
 
 from mobrpg.commands import whoami as _whoami
 from mobrpg.commands import pull as _pull
@@ -31,8 +31,11 @@ from mobrpg.commands import adopt as _adopt
 from mobrpg.commands import relink as _relink
 from mobrpg.commands import auth as _auth
 
-# Directory holding the legacy prototype scripts (this package's parent).
-_SCRIPTS_DIR = Path(__file__).resolve().parent.parent
+# The legacy prototype scripts ship as package data under mobrpg/_legacy/ so they
+# survive a wheel install (the pre-fix parent-of-package dir was excluded by
+# `include = ["mobrpg*"]`, breaking every fallback verb). Their sibling
+# smoketest.py — imported by 4 of them — ships alongside.
+_LEGACY_PKG_DIR = "_legacy"
 
 # Native verbs (ported to mobrpg.commands.*).
 NATIVE: dict = {
@@ -120,10 +123,15 @@ def _print_help(stream=None) -> None:
     print(_HELP.format(commands=lines), file=stream)
 
 
+def _script_path(script_name: str) -> str:
+    """Filesystem path of a packaged legacy script, resolved via package
+    resources so it works under an editable OR a wheel install."""
+    return str(importlib.resources.files("mobrpg").joinpath(_LEGACY_PKG_DIR, script_name))
+
+
 def _shellout(script_name: str, argv: list[str]) -> int:
     """Run a legacy prototype script with argv passed through verbatim."""
-    script = _SCRIPTS_DIR / script_name
-    proc = subprocess.run([sys.executable, str(script), *argv])
+    proc = subprocess.run([sys.executable, _script_path(script_name), *argv])
     return proc.returncode
 
 

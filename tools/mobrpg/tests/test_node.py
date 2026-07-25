@@ -144,6 +144,45 @@ def test_split_frontmatter_ignores_leading_thematic_break():
                                    "languages": []}
 
 
+def test_split_frontmatter_valid_yaml_with_leading_blank_line():
+    # Frontmatter whose first line after the opening fence is blank is still
+    # valid YAML — it must NOT be misread as absent. (Regression from the B4
+    # "blank line after the fence => prose" guard; the old str.split('---',2)
+    # path parsed this correctly.)
+    md = "---\n\ntype: npc\nsecret_key: hush\n---\n\nReal body.\n"
+    pre, fm, post = node._split_frontmatter(md)
+    assert pre == "---\n"
+    assert "type: npc" in fm and "secret_key: hush" in fm
+    assert post.startswith("---")
+    # write_node splices the machine block INSIDE the real frontmatter (above the
+    # closing fence) — never as a second fence that demotes type:/secret_key: to
+    # prose, and the private key is never pushed up as a description.
+    out = node.write_node(md, {"world_id": "w1"})
+    assert out.startswith("---\n")
+    assert "type: npc\n" in out
+    assert "secret_key: hush\n" in out
+    assert out.count("---") == 2                 # only the opening + closing fence
+    assert out.rstrip().endswith("Real body.")
+    assert node.read_node(out) == {"world_id": "w1", "relationships": [],
+                                   "languages": []}
+
+
+def test_split_frontmatter_ignores_leading_break_before_prose_line():
+    # A note with NO frontmatter whose body opens with '---' immediately followed
+    # by a non-blank PROSE line (and a later '---') is prose, not frontmatter —
+    # otherwise write_node splices the machine block into the prose region.
+    md = "---\nSome intro text\n\n---\n\nBody paragraph.\n"
+    assert node._split_frontmatter(md) == (None, None, None)
+    assert node.read_node(md) is None
+    out = node.write_node(md, {"world_id": "w1", "element_id": "el_9",
+                               "review_state": "pending", "determined": {},
+                               "relationships": [], "languages": []})
+    # the machine block sits in a fresh fence ABOVE the untouched prose
+    assert out.endswith(md)
+    assert "mobrpg:" in out.split(md)[0]
+    assert node.read_node(out)["element_id"] == "el_9"
+
+
 def test_split_frontmatter_requires_exact_opening_fence():
     # `----` and `--- text` are prose, not a YAML fence
     assert node._split_frontmatter("----\nx\n---\n") == (None, None, None)
