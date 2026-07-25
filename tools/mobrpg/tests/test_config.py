@@ -137,6 +137,27 @@ def test_write_atomic_preserves_original_on_failure(monkeypatch, tmp_path):
     assert json.loads(dest.read_text())["access_token"] == "original"
 
 
+def test_write_windows_branch_skips_chmod(monkeypatch, tmp_path):
+    """On Windows (os.name == 'nt'), write() must take the no-chmod path: the
+    per-user %APPDATA% profile is already ACL-scoped, so neither the config dir
+    nor the credential file should ever have os.chmod() called on them, and the
+    round-trip must still succeed via the same atomic-temp-then-replace write."""
+    monkeypatch.setattr(os, "name", "nt")
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
+
+    calls = []
+    real_chmod = os.chmod
+
+    def spy_chmod(path, mode):
+        calls.append((path, mode))
+        return real_chmod(path, mode)
+
+    monkeypatch.setattr(config.os, "chmod", spy_chmod)
+    config.write({"access_token": "a"})
+    assert calls == []
+    assert config.read() == {"access_token": "a"}
+
+
 def test_clear(monkeypatch, tmp_path):
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
     config.write({"access_token": "a"})
