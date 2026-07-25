@@ -147,7 +147,11 @@ watcher** and do not relaunch it:
    KV's 30-day TTL. It edits the vault source only (no rebuild/deploy); the
    values ride into the site on the next `npm run build`. Report its per-PC
    summary. Skill experience ticks are left untouched — those belong to
-   Advancement, not the flush.
+   Advancement, not the flush. A PC whose current status is authored as a
+   YAML `status:` *object* in frontmatter (rather than the `## Current Status`
+   body block) is skipped with a warning: the build reads vitals from that
+   frontmatter and ignores the body, so a body write wouldn't take effect —
+   author current status in the body block to let flush sync it.
 2. Terminate the background watcher.
 
 The session code stays set in KV until the next "start your checking loop"

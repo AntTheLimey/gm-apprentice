@@ -38,6 +38,11 @@ From the **site directory** (the one holding `vault.config.json` and
 - A GURPS sheet has no Attributes block → flush can update an existing HP/FP line
   but cannot seed a missing one (no max to write), so it leaves that vital alone;
   if nothing else changed the PC just shows `· no change`.
+- A PC's current status is authored as a YAML `status:` *object* in frontmatter
+  (rather than the `## Current Status` body block) → flush warns and skips that PC.
+  The build reads vitals from the frontmatter object and ignores the body, so a
+  body write wouldn't take effect. Author current status in the body block (the
+  standard format) so flush can sync it.
 - No players have saved live state yet → flush reports "no live state to flush".
 
 Copyright: flush writes only the GM's own campaign data — no licensed text.
