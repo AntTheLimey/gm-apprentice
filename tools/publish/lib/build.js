@@ -14,6 +14,7 @@ const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
+const { resolveBackendFlags } = require('./backend-flags');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
 const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
@@ -37,6 +38,13 @@ function build(options = {}) {
   }
 
   const publishConfig = loadPublishConfig(config.vaultPath, config);
+  // Merge explicit flags (Task 1) with legacy auto-detect, keyed off the site
+  // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
+  // publishConfig.backend, so this must run before any page renders.
+  publishConfig.backend = resolveBackendFlags(
+    { statusBar: publishConfig.backend.statusBar, inbox: publishConfig.backend.inbox },
+    configDir,
+  );
   const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
@@ -630,7 +638,12 @@ function build(options = {}) {
   }
 
   if (deferredRosters.length) {
+    // The roster/party board always renders as a static initiative table from
+    // published values. When the status-bar tier is on it also goes live
+    // (JSON island + client poll of /api/loadout-list). When off, the same
+    // table renders without the live layer.
     const board = boardFor(publishConfig.system);
+    const live = publishConfig.backend.statusBar === true;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
@@ -645,12 +658,15 @@ function build(options = {}) {
     }
     for (const deferredRoster of deferredRosters) {
       try {
-        const boardHtml = (board && partyManifest) ? board.renderBoard(partyManifest, deferredRoster.page.outputPath) : null;
-        const islandHtml = (board && partyManifest) ? partyDataScript(partyManifest, board.scriptId) : null;
+        const boardHtml = (board && partyManifest)
+          ? board.renderBoard(partyManifest, deferredRoster.page.outputPath, { live })
+          : null;
+        const islandHtml = (live && board && partyManifest)
+          ? partyDataScript(partyManifest, board.scriptId) : null;
         const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
           publishConfig, linkMap, pages,
           partyBoardHtml: boardHtml, partyDataScript: islandHtml,
-          partyClientScripts: boardHtml ? board.clientScripts : [],
+          partyClientScripts: (live && boardHtml) ? board.clientScripts : [],
         });
         const outPath = path.join(outputDir, deferredRoster.page.outputPath);
         ensureDir(outPath);

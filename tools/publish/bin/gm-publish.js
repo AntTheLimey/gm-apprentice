@@ -15,6 +15,9 @@ Usage:
   gm-apprentice-publish build [options]      Build the site
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
+  gm-apprentice-publish doctor [options]     Preflight: check tools/auth, save Cloudflare creds
+  gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
+  gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -133,15 +136,23 @@ if (command === 'build') {
   warnIfVersionDrift();
   assertRuntimeDeps();
 
-  // Bring plugin-owned Cloudflare Functions up to date on every build, so API routes
-  // added or fixed in a newer plugin version reach sites scaffolded before they existed
-  // (init only copies them once). The site root holds functions/ alongside the config.
+  // Bring plugin-owned Cloudflare Functions up to date on every build so API routes
+  // added or fixed in a newer plugin version reach flagged sites scaffolded before they
+  // existed. A Tier-1 (static) site has no backend, so it gets no Functions re-added.
   try {
-    const { syncScaffoldFunctions } = require('../lib/sync-functions');
+    const { syncScaffoldFunctions, shouldSyncFunctions } = require('../lib/sync-functions');
     const siteRoot = path.dirname(path.resolve(configPath));
-    const { created, updated } = syncScaffoldFunctions(siteRoot);
-    for (const f of created) console.log(`  synced (new) functions/${f}`);
-    for (const f of updated) console.log(`  synced (updated) functions/${f}`);
+    let backendExplicit;
+    try {
+      backendExplicit = JSON.parse(fs.readFileSync(configPath, 'utf8')).backend;
+    } catch {
+      // Unreadable/absent config → leave undefined so resolveBackendFlags falls back to detection.
+    }
+    if (shouldSyncFunctions(siteRoot, backendExplicit)) {
+      const { created, updated } = syncScaffoldFunctions(siteRoot);
+      for (const f of created) console.log(`  synced (new) functions/${f}`);
+      for (const f of updated) console.log(`  synced (updated) functions/${f}`);
+    }
   } catch (err) {
     console.warn(`⚠️  Could not sync scaffold Functions: ${err.message}`);
   }
@@ -171,6 +182,27 @@ if (command === 'flush') {
   }
   const { runFlush } = require('../lib/flush-cli.js');
   runFlush({ configPath })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'doctor') {
+  const { runDoctor } = require('../lib/doctor-cli.js');
+  runDoctor(args.slice(1))
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'setup-status-bar' || command === 'setup-inbox') {
+  let configPath = './vault.config.json';
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--config' && args[i + 1]) { configPath = args[i + 1]; i++; }
+  }
+  const feature = command === 'setup-status-bar' ? 'status-bar' : 'inbox';
+  const { runSetupBackend } = require('../lib/setup-backend.js');
+  runSetupBackend(feature, { configPath })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;

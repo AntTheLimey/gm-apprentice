@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9.0] — 2026-07-21
+## [1.9.0] — 2026-07-25
 
 Graduates the mobRPG integration CLI (`docs/prototypes/mobrpg/`) into the repo:
 the legacy crosswalk is fully excised in favour of per-note `mobrpg:` nodes, and
@@ -60,6 +60,126 @@ cross-platform credentials) — complete the sync surface.
 - **Credential CSV gitignore gap** — `credentials*.csv` is now ignored in the
   prototype so a stray token file can never be committed. Untracked stale run
   artifacts (`*_out/`, `space_vault_preview/`, `space_extract.json`).
+
+---
+
+## [1.8.47] — 2026-07-23
+
+Publish tool 1.11.20. Players' live HP/FP now sync from the site's KV store back
+into the vault sheets: the `flush` command is system-aware and gains a GURPS
+writeback, and `session-wrapup` pulls live state before processing.
+
+### Added
+
+- `publish-site`: GURPS live-state flush — `gm-publish flush` now syncs players'
+  current HP/FP from KV back into the vault `## Current Status` block, updating an
+  existing `**HP:**` / `**FP:**` line or injecting one with the sheet-derived max.
+- `publish-site`: standalone `references/live-state-flush.md` documenting the
+  Tier-2a pull; `session-wrapup` now pulls live state before processing when the
+  campaign publishes a Tier-2 site.
+
+### Changed
+
+- `publish-site`: `flush` is now system-aware — it routes each PC to the GURPS or
+  CoC writeback (previously CoC-only, a silent no-op for GURPS sheets).
+
+---
+
+## [1.8.46] — 2026-07-22
+
+Publish tool 1.11.19. The live status bar and change-request inbox are now
+one-command setups, and the PC roster ships as a static initiative table on
+every site.
+
+### Added
+
+- `gm-publish setup-status-bar` and `gm-publish setup-inbox` — idempotent,
+  preflight-gated commands that turn on the live status bar (Tier 2a) and the
+  at-table change-request inbox (Tier 2b) end-to-end: create or reuse the
+  `INBOX` KV namespace, patch `wrangler.toml` (name-alignment + the
+  `[[kv_namespaces]]` block), flip the matching `backend` flag in
+  `vault.config.json`, rebuild, and deploy — one command, no manual
+  `wrangler.toml` editing. Each probes the Cloudflare token's KV permission
+  before touching anything, mapping `code: 10000` to the one-line fix (add
+  **Account · Workers KV Storage · Edit**). `setup-inbox` requires and ensures
+  the same KV namespace (inbox ⇒ KV) and is infra-only — it does not open a
+  session. The `publish-site` skill docs (`SKILL.md`, `setup-wizard.md`,
+  `cloudflare-pages.md`) point at both commands as the primary path, with the
+  existing manual steps kept as the documented fallback.
+- The PC roster / party board now renders as a static initiative table on any
+  site, even with no backend configured — useful with zero setup, and it goes
+  live (phone-updatable, real time) once `setup-status-bar` is run.
+
+### Fixed
+
+- `wrangler.toml`'s `name` is aligned to the Cloudflare project before a bare
+  `wrangler pages deploy`, so `setup-status-bar` / `setup-inbox` (and the
+  wizard's own deploy step) never target the wrong Pages project.
+
+## [1.8.45] — 2026-07-22
+
+Publish tool 1.11.18. Tier-1 sites no longer ship the change-request inbox's
+KV binding or Cloudflare Functions.
+
+### Fixed
+
+- Tier-1 (static) sites no longer scaffold or deploy the change-request inbox's
+  KV binding or Cloudflare Functions: `gm-publish init` ships a minimal
+  `wrangler.toml` (keeping `pages_build_output_dir` for a clean bare
+  `wrangler pages deploy`) with no `[[kv_namespaces]]` block and no `functions/`,
+  and the build-time Function re-sync is gated on the site's backend flags. This
+  removes a placeholder KV binding that shipped to every site. `vault.config.json`
+  (which holds a local absolute path) is now gitignored by the scaffold.
+
+## [1.8.44] — 2026-07-22
+
+Publish tool 1.11.17. Publish-site setup is now preflight-first and
+Cloudflare-default.
+
+### Changed
+
+- publish-site first-time setup is now preflight-first and Cloudflare-default:
+  `gm-publish doctor` clears missing tools/credentials before anything is
+  built, Cloudflare Pages is the recommended host with a token-only
+  credential dance (Account ID auto-derived), setup resumes from
+  `publish.setup_progress` if interrupted, and the flow verifies the
+  deployed URL is actually live before declaring success. GitHub Pages
+  remains fully supported.
+
+## [1.8.43] — 2026-07-21
+
+Publish tool 1.11.17. `gm-publish doctor` preflight + Cloudflare credential setup.
+
+### Added
+
+- `gm-publish doctor` — a preflight subcommand that checks Node ≥22, git, and
+  (per host) `gh` or `wrangler` including auth state, with an exact one-line fix
+  for each miss and a `--json` mode the publish-site skill can act on.
+  `doctor --set-cloudflare-creds` reads a Cloudflare API token from stdin and
+  writes it (plus the auto-derived Account ID from `wrangler whoami`) into the
+  correct shell file for the OS/shell — `~/.zshenv`, `~/.bashrc`, or Windows
+  `setx` — without ever echoing the token.
+
+## [1.8.42] — 2026-07-21
+
+Publish tool 1.11.16. Backend-capability flags + graceful-hide of optional UI.
+
+### Added
+
+- `vault.config.json` gains a `backend` block with `statusBar` and `inbox`
+  flags. The published site now renders the live status bar / status panel /
+  party board only when `statusBar` is on, and the change-request chatbox only
+  when `inbox` is on. New sites scaffold with both off (a static, Tier-1 site);
+  existing deployed sites with no explicit flags auto-detect each capability
+  from their Cloudflare Functions plus a real KV namespace id, so their UI is
+  unaffected by the upgrade.
+
+### Fixed
+
+- Static sites no longer ship a change-request chatbox that 404s on submit, nor
+  a live status bar / party board with no backend behind it. Each optional UI is
+  now emitted only when its corresponding backend flag is enabled — nothing dead
+  is rendered.
 
 ---
 

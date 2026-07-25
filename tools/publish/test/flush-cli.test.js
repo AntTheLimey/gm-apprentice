@@ -83,3 +83,94 @@ test('flush does not write when the sheet already holds the values', async () =>
   assert.equal(r.writes['/vault/PCs/Jane_Ashford.md'], undefined);
   assert.ok(r.lines.some((l) => /Jane Ashford/.test(l) && /no change/.test(l)));
 });
+
+test('routes a GURPS PC to the GURPS writeback (injects HP/FP)', async () => {
+  const KARL = [
+    '---', 'type: pc', 'system: gurps-4e', '---',
+    '## Stat Sheet', '',
+    '### Primary Attributes', '',
+    '| Attribute | Score | Modifier | Cost |', '|--|--|--|--|',
+    '| ST | 11 | — | [10] |', '| HT | 11 | — | [10] |', '',
+    '### Secondary Characteristics', '',
+    '| Characteristic | Value |', '|--|--|', '| HP | 11 |', '| FP | 11 |', '',
+    '## Current Status', '', '**Condition:** Unharmed.', '',
+  ].join('\n');
+  const writes = {};
+  const lines = [];
+  const adapter = fakeAdapter({
+    'roster:gurps-camp': JSON.stringify(['loadout:gurps-camp:karl-brenner:ABCD']),
+    'loadout:gurps-camp:karl-brenner:ABCD': JSON.stringify({ hp: 7, fp: 9, updatedAt: 5 }),
+  });
+  const rc = await runFlush({
+    config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', system: 'gurps-4e', excludeDirs: [], folderMap: {} },
+    adapter,
+    scan: () => [{ sourcePath: '/vault/PCs/Karl.md', title: 'Karl_Brenner', displayTitle: 'Karl Brenner', frontmatter: { type: 'pc', system: 'gurps-4e' } }],
+    readFile: () => KARL,
+    writeFile: (p, s) => { writes[p] = s; },
+    out: (m) => lines.push(String(m)),
+  });
+  assert.strictEqual(rc, 0);
+  assert.match(writes['/vault/PCs/Karl.md'], /\*\*HP:\*\* 7\/11/);
+  assert.match(writes['/vault/PCs/Karl.md'], /\*\*FP:\*\* 9\/11/);
+});
+
+test('routes a GURPS PC when system comes only from publishConfig (_meta/vault-config.md), not vault.config.json or frontmatter', async () => {
+  const KARL = [
+    '---', 'type: pc', '---',                       // NOTE: no `system` in frontmatter
+    '## Stat Sheet', '',
+    '### Primary Attributes', '',
+    '| Attribute | Score | Modifier | Cost |', '|--|--|--|--|',
+    '| ST | 11 | — | [10] |', '| HT | 11 | — | [10] |', '',
+    '### Secondary Characteristics', '',
+    '| Characteristic | Value |', '|--|--|', '| HP | 11 |', '| FP | 11 |', '',
+    '## Current Status', '', '**Condition:** Unharmed.', '',
+  ].join('\n');
+  const writes = {};
+  const lines = [];
+  const adapter = fakeAdapter({
+    'roster:gurps-camp': JSON.stringify(['loadout:gurps-camp:karl-brenner:ABCD']),
+    'loadout:gurps-camp:karl-brenner:ABCD': JSON.stringify({ hp: 7, fp: 9, updatedAt: 5 }),
+  });
+  const rc = await runFlush({
+    config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', excludeDirs: [], folderMap: {} }, // NOTE: no `system`
+    publishConfig: { system: 'gurps-4e' },          // system as _meta/vault-config.md would supply it
+    adapter,
+    scan: () => [{ sourcePath: '/vault/PCs/Karl.md', title: 'Karl_Brenner', displayTitle: 'Karl Brenner', frontmatter: { type: 'pc' } }],
+    readFile: () => KARL,
+    writeFile: (p, s) => { writes[p] = s; },
+    out: (m) => lines.push(String(m)),
+  });
+  assert.strictEqual(rc, 0);
+  assert.match(writes['/vault/PCs/Karl.md'], /\*\*HP:\*\* 7\/11/);
+  assert.match(writes['/vault/PCs/Karl.md'], /\*\*FP:\*\* 9\/11/);
+});
+
+test('flush skips a GURPS PC whose HP/FP are pinned in frontmatter (status object)', async () => {
+  const KARL = [
+    '---', 'type: pc', 'system: gurps-4e', '---',
+    '## Stat Sheet', '',
+    '### Primary Attributes', '',
+    '| Attribute | Score | Modifier | Cost |', '|--|--|--|--|',
+    '| ST | 11 | — | [10] |', '| HT | 11 | — | [10] |', '',
+    '### Secondary Characteristics', '',
+    '| Characteristic | Value |', '|--|--|', '| HP | 11 |', '| FP | 11 |', '',
+    '## Current Status', '', '**Condition:** Unharmed.', '',
+  ].join('\n');
+  const writes = {};
+  const lines = [];
+  const adapter = fakeAdapter({
+    'roster:gurps-camp': JSON.stringify(['loadout:gurps-camp:karl-brenner:ABCD']),
+    'loadout:gurps-camp:karl-brenner:ABCD': JSON.stringify({ hp: 5, fp: 9, updatedAt: 5 }),
+  });
+  const rc = await runFlush({
+    config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', system: 'gurps-4e', excludeDirs: [], folderMap: {} },
+    adapter,
+    scan: () => [{ sourcePath: '/vault/PCs/Karl.md', title: 'Karl_Brenner', displayTitle: 'Karl Brenner', frontmatter: { type: 'pc', system: 'gurps-4e', status: { hp: '11/11', fp: '11/11' } } }],
+    readFile: () => KARL,
+    writeFile: (p, s) => { writes[p] = s; },
+    out: (m) => lines.push(String(m)),
+  });
+  assert.strictEqual(rc, 0);
+  assert.equal(writes['/vault/PCs/Karl.md'], undefined, 'sheet must not be written');
+  assert.ok(lines.some((l) => /Karl Brenner/.test(l) && /frontmatter/.test(l)), 'warns about frontmatter-pinned vitals');
+});
