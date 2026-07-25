@@ -8,7 +8,7 @@ surface. This skill keeps the two in sync by driving the `mobrpg` CLI — it is 
 judgment layer, not a second copy of the CLI. It never calls the API directly:
 it runs verbs, reads their output, and decides what to show you and what to ask.
 
-Work from `docs/prototypes/mobrpg/` (the CLI lives there). Use the venv:
+Work from `tools/mobrpg/` (the CLI lives there). Use the venv:
 `.venv/bin/mobrpg …`. The agent-facing CLI guide is `../llms.txt` — read it if a
 verb's behavior is unclear rather than guessing flags.
 

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.9.0] — 2026-07-25
 
-Graduates the mobRPG integration CLI (`docs/prototypes/mobrpg/`) into the repo:
+Graduates the mobRPG integration CLI (`tools/mobrpg/`) into the repo:
 the legacy crosswalk is fully excised in favour of per-note `mobrpg:` nodes, and
 two new verbs — `adopt` (establish nodes by live name-match) and `auth` (managed,
 cross-platform credentials) — complete the sync surface.
@@ -200,7 +200,7 @@ crosswalk is retired.
 
 ### Changed
 
-- **mobRPG CLI (`docs/prototypes/mobrpg/`) resolves all element/event ids from
+- **mobRPG CLI (`tools/mobrpg/`) resolves all element/event ids from
   the vault's own `mobrpg:` nodes** — the sole source of truth. `suggest` drops
   `--crosswalk` and the packaged default; `images` derives its id→file map from
   nodes.

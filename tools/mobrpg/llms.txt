@@ -8,7 +8,7 @@ share one client (mobrpg/client.py) for environment resolution and auth.
 
 ## Install
 
-    python3 -m pip install -e path/to/docs/prototypes/mobrpg
+    python3 -m pip install -e path/to/tools/mobrpg
     mobrpg --help
 
 ## Environment & auth (read before running anything)

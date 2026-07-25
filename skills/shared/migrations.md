@@ -570,7 +570,7 @@ no sidecar crosswalk.
 
 ### Tooling
 
-- The `mobrpg` CLI (`docs/prototypes/mobrpg/`) resolves every element/event id
+- The `mobrpg` CLI (`tools/mobrpg/`) resolves every element/event id
   from the vault's own `mobrpg:` nodes — the sole source of truth. The legacy
   sidecar crosswalk is retired: the `backfill` and `sync` verbs and all
   `--crosswalk` inputs are removed, and `images` reads its id→file map from
