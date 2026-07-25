@@ -148,7 +148,13 @@ def _rebuild(txt: str, new_node: dict, new_body: str) -> str:
     pre, fm_body, post = node._split_frontmatter(txt2)
     if fm_body is None:
         return txt2
-    return pre + fm_body + post[:3] + new_body    # ...--- + new body
+    # post[:3] is the closing "---" fence. A body that lost its leading newline
+    # (take-canon/merge rebuild the region from html_to_md, which has none) would
+    # glue onto the fence as "---## Overview", breaking the frontmatter boundary.
+    # Guarantee exactly one line break: bodies that already start with a newline
+    # (keep-vault/baseline return the original, leading-\n body) are untouched.
+    sep = "" if new_body[:1] in ("\n", "\r") else "\n"
+    return pre + fm_body + post[:3] + sep + new_body    # ...--- + new body
 
 
 def _fetch_description(world: str, nd: dict, token: str):

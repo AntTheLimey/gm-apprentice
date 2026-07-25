@@ -170,6 +170,42 @@ def test_rebuild_survives_dashes_in_scalar_and_body():
     assert pull_desc._body_of(out) == body_with_rule
 
 
+def test_rebuild_keeps_closing_fence_on_its_own_line_when_body_lost_leading_newline():
+    # A new body that begins with content (no leading "\n") — as take-canon's
+    # html_to_md output does — must NOT be glued onto the closing "---" fence.
+    txt = ("---\ntype: npc\n" + node.emit_node(_node()) + "---" + BODY)
+    body_no_leading_nl = "## Overview\n\nNow reformed.\n"
+    out = pull_desc._rebuild(txt, _node(), body_no_leading_nl)
+    assert "---## Overview" not in out
+    fence_lines = [ln for i, ln in enumerate(out.splitlines())
+                   if ln.startswith("---") and i > 0]
+    assert fence_lines[0] == "---"          # closing fence stands alone
+    assert node.read_node(out) is not None  # frontmatter boundary intact
+
+
+def test_rebuild_take_canon_end_to_end_preserves_frontmatter_fence():
+    txt = ("---\ntype: npc\n" + node.emit_node(_node()) + "---" + BODY)
+    changed_html = "<h2>Overview</h2><p>Now a reformed smuggler.</p>"
+    body = pull_desc._body_of(txt)
+    new_node, new_body, _ = pull_desc.resolve(_node(), body, changed_html, "take-canon", NOW)
+    out = pull_desc._rebuild(txt, new_node, new_body)
+    assert "---## Overview" not in out
+    fence_lines = [ln for i, ln in enumerate(out.splitlines())
+                   if ln.startswith("---") and i > 0]
+    assert fence_lines[0] == "---"
+    assert "reformed smuggler" in pull_desc._body_of(out)
+
+
+def test_rebuild_does_not_double_leading_newline_for_unchanged_body():
+    # keep-vault/baseline return the original body (leading "\n"); the fence
+    # rebuild must not insert a second newline and shift the whole body down.
+    txt = ("---\ntype: npc\n" + node.emit_node(_node()) + "---" + BODY)
+    body = pull_desc._body_of(txt)
+    out = pull_desc._rebuild(txt, _node(), body)
+    assert "---\n\n## Overview" not in out
+    assert pull_desc._body_of(out) == body
+
+
 def test_find_note_prefers_exact_and_rejects_ambiguous():
     notes = [
         ("/v/Characters/NPCs/Silas Wren.md", "", {"external_ref": "space:npc/silas_wren"}),
