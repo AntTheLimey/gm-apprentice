@@ -58,6 +58,31 @@ def test_list_followed_by_paragraph_stays_separated():
     assert out == "- a\n- b\n\nSee more."
 
 
+def test_underscore_not_intraword():
+    # Regression B1: `_` inside a word (snake_case, file_name) or a URL must not
+    # emphasize — otherwise `_description()` feeds spurious <em> into the world.
+    assert md.md_to_html("snake_case_ident") == "<p>snake_case_ident</p>"
+    assert md.md_to_html("file_name") == "<p>file_name</p>"
+    assert md.md_to_html("see http://x/a_b_c here") == "<p>see http://x/a_b_c here</p>"
+    assert md.md_to_html("a foo_bar b") == "<p>a foo_bar b</p>"
+
+
+def test_underscore_emphasis_when_flanked():
+    # Whitespace/punctuation-flanked `_…_` still emphasizes (CommonMark).
+    assert md.md_to_html("_italic_") == "<p><em>italic</em></p>"
+    assert md.md_to_html("a _b_ c") == "<p>a <em>b</em> c</p>"
+    assert md.md_to_html("(_word_)") == "<p>(<em>word</em>)</p>"
+
+
+def test_table_cells_honor_escaped_pipe():
+    # Regression B1: an escaped \| inside a cell must not split the column, and
+    # the cell content must be unescaped to a literal pipe.
+    src = "| A | B |\n| --- | --- |\n| a \\| b | c |"
+    html = md.md_to_html(src)
+    assert "<th>A</th><th>B</th>" in html
+    assert "<td>a | b</td><td>c</td>" in html
+
+
 def test_converter_idempotent_over_corpus():
     # The base-hash for description merge must be stable: md -> html -> md must
     # be a fixed point on the shapes the vault uses, or untouched entities read

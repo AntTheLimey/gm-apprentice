@@ -87,6 +87,30 @@ def test_status_configured(monkeypatch, tmp_path, capsys):
     assert "acc" not in out  # token never printed
 
 
+def test_status_warns_when_env_token_set(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
+    config.write({"access_token": "acc", "user": {"email": "gm@x.io"},
+                  "source": "import", "created_at": "2026-07-21T00:00:00Z"})
+    monkeypatch.setenv("MOBRPG_TOKEN", "env-tok")
+    rc = auth.run(["status"])
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    assert rc == 0
+    assert "MOBRPG_TOKEN" in combined  # user warned the env var overrides config
+    assert "env-tok" not in combined  # token value never printed
+
+
+def test_status_no_warning_without_env_token(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("MOBRPG_TOKEN", raising=False)
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
+    config.write({"access_token": "acc", "user": {"email": "gm@x.io"},
+                  "source": "import", "created_at": "2026-07-21T00:00:00Z"})
+    rc = auth.run(["status"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "MOBRPG_TOKEN" not in (captured.out + captured.err)
+
+
 def test_status_not_configured(monkeypatch, tmp_path):
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "empty"))
     assert auth.run(["status"]) == 1

@@ -8,7 +8,9 @@
     git-style `<<<<<<< vault / ======= / >>>>>>> mobRPG` markers.
 
 Returns `(merged_text, had_conflict)`. Line-based on `str.splitlines()`; joins
-with "\n" (boundary spacing is the caller's concern). Stdlib `difflib` only.
+with the dominant line ending across the inputs (CRLF is preserved, matching
+`section.py`'s CRLF handling on the canon-merge path). Boundary spacing is the
+caller's concern. Stdlib `difflib` only.
 
 The sync-region algorithm is the classic Merge3: align on runs of lines present
 unchanged in all three, then resolve each differing span between syncs.
@@ -44,6 +46,18 @@ def _sync_regions(base, ours, theirs):
     yield (len(base), len(base), len(ours), len(ours), len(theirs), len(theirs))
 
 
+def _dominant_eol(*texts: str) -> str:
+    """Return the dominant line ending across `texts`: "\r\n" if CRLF outnumbers
+    bare LF, else "\n". splitlines() strips endings, so we sniff them here and
+    rejoin with the winner to avoid silently normalising CRLF -> LF."""
+    crlf = lf = 0
+    for text in texts:
+        c = text.count("\r\n")
+        crlf += c
+        lf += text.count("\n") - c   # bare LFs only
+    return "\r\n" if crlf > lf else "\n"
+
+
 def _resolve(base_span, our_span, their_span):
     """Return (lines, is_conflict) for a differing span between two syncs."""
     if our_span == their_span:
@@ -72,4 +86,5 @@ def merge3(base_text: str, ours_text: str, theirs_text: str):
             out.extend(base[b0:b1])       # unchanged in all three
         bz, oz, tz = b1, o1, t1
 
-    return "\n".join(out), conflict
+    eol = _dominant_eol(base_text, ours_text, theirs_text)
+    return eol.join(out), conflict

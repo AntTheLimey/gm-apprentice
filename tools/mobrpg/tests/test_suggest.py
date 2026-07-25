@@ -712,6 +712,70 @@ def test_write_back_preserves_accepted_link_on_content_edit(tmp_path):
     assert after["review_state"] == "accepted"    # not reset to "pending"
 
 
+def test_read_note_without_closing_fence_does_not_crash(tmp_path):
+    # B2: a note that opens with '---' but has no closing fence must be treated as
+    # body-only, NOT crash. The banned `str.split("---", 2)` raises
+    # ValueError: not enough values to unpack and aborts the whole suggest run.
+    p = tmp_path / "note.md"
+    p.write_text("---\nx\n\nbody\n", encoding="utf-8")
+    fm, body = suggest._read(str(p))
+    assert fm == ""
+    assert "body" in body
+
+
+def test_read_note_inline_dashes_not_misparsed(tmp_path):
+    # B2: a lone '--- inline ---' line has no real frontmatter fence, so
+    # str.split("---", 2) misparses it. It must be treated as body-only.
+    p = tmp_path / "n.md"
+    p.write_text("--- inline ---\nreal body\n", encoding="utf-8")
+    fm, body = suggest._read(str(p))
+    assert fm == ""
+    assert "inline" in body and "real body" in body
+
+
+def test_read_wellformed_frontmatter_still_parses(tmp_path):
+    # Regression guard: a properly-fenced note still splits into (fm, body).
+    p = tmp_path / "n.md"
+    p.write_text("---\noccupation: Priest\n---\nBody text.\n", encoding="utf-8")
+    fm, body = suggest._read(str(p))
+    assert "occupation: Priest" in fm
+    assert "Body text." in body
+    assert "occupation" not in body
+
+
+def test_sex_push_name_strips_markup_and_matches_determined():
+    # B3: the sex classifier name bypassed classifier_name(), so a map entry whose
+    # stored name predates sanitization ("Male [[Note]]") leaked wikilink markup
+    # into the pushed Sex CreateElement, and disagreed with the determined block.
+    mp = _map()
+    mp["classifiers"]["sex"] = {"male": {"name": "Male [[Note]]", "status": "new"}}
+    ent = {"kind": "npc", "occupation": None, "gender": "male", "location_type": None,
+           "faction_type": None, "creature_type": None}
+    items, _ = suggest.classifier_items(ent, mp, "e1", "race-h", "e1")
+    sex = [i for i in items if i["operation"] == "CreateElement"
+           and i["payload"]["data"]["type"] == "Sex"]
+    assert sex, "expected a Sex create"
+    pushed = sex[0]["payload"]["name"]
+    assert not (set("[]") & set(pushed)), f"markup leaked into pushed Sex name: {pushed!r}"
+    # pushed name agrees with the vault determined block (the B3 divergence)
+    assert pushed == suggest.determined_for(ent, mp)["sex"]
+
+
+def test_discover_race_id_follows_pagination(monkeypatch):
+    # The old ?size=500 single fetch had no totalPages handling, so a world with
+    # more than one page of races could miss 'Human' entirely.
+    pages = {
+        0: {"content": [{"name": "Elf", "id": "e"}], "page": {"totalPages": 2}},
+        1: {"content": [{"name": "Human", "id": "h"}], "page": {"totalPages": 2}},
+    }
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        page = (query or {}).get("page", 0)
+        return pages.get(page, {"content": [], "page": {"totalPages": 2}})
+    monkeypatch.setattr(client, "_request", stub)
+    assert suggest.discover_race_id("w1", "tok") == "h"
+
+
 def test_closest_flags_qualified_near_duplicate_by_head_noun():
     """`location_type` is uncontrolled free text, so a vault authors "hyperspace
     gate" where the world already has "Gate". Edit distance scores that 0.55 —

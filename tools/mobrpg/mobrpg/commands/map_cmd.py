@@ -261,16 +261,42 @@ def scan_vault(vault: str) -> dict:
     return vocab
 
 
+def _fetch_all(path: str, token: str) -> list:
+    """Fetch every item across pages for a catalog list endpoint.
+
+    Handles both a bare-list response and a Spring page envelope
+    ({content, page.totalPages}), following totalPages so a world with more than
+    one page is never silently truncated — the old hardcoded ?size=500 fetched a
+    single page and dropped the rest, minting duplicate types past the cap. A
+    network/decode error stops paging and returns whatever was gathered so far
+    (empty on a first-page failure), matching the previous fail-soft behaviour.
+    """
+    out, page = [], 0
+    while True:
+        try:
+            data = client._request("GET", path, token=token,
+                                   query={"page": page, "size": 200})
+        except (client.ApiError, ValueError):
+            break  # ValueError covers JSONDecodeError (some endpoints return non-JSON/empty)
+        if isinstance(data, list):
+            out.extend(data)
+            break  # a bare list is unpaged
+        if not isinstance(data, dict):
+            break
+        out.extend(data.get("content", []))
+        total = (data.get("page") or {}).get("totalPages", 1)
+        if page >= total - 1:
+            break
+        page += 1
+    return out
+
+
 def discover(world: str, token: str) -> dict:
     """Fetch existing mobRPG classifier vocab: kind -> {normalized name: id}."""
     out = {}
     for kind in ("political/type", "organization/type", "creature/type",
                  "person/race", "person/profession", "language", "landfeature"):
-        try:
-            data = client._request("GET", f"/world/{world}/{kind}?size=500", token=token)
-        except (client.ApiError, ValueError):
-            data = []  # ValueError covers JSONDecodeError (some endpoints return non-JSON/empty)
-        items = data if isinstance(data, list) else data.get("content", []) if isinstance(data, dict) else []
+        items = _fetch_all(f"/world/{world}/{kind}", token)
         out[kind] = {_norm(e.get("name")): e.get("id") for e in items if isinstance(e, dict)}
     return out
 
@@ -471,7 +497,8 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
                              for v in vocab["faction_type"]},
         "creatureType": {v: _bind(v, disc["creature/type"], "creature/type")
                          for v in vocab["creature_type"]},
-        "sex": {v: {"target": "person/race/sex", "name": v.title(), "status": "new"}
+        "sex": {v: {"target": "person/race/sex", "name": classifier_name(v).title(),
+                    "status": "new"}
                 for v in vocab["gender"]},
     }
     canon_loc = canon_location_bindings(vault)

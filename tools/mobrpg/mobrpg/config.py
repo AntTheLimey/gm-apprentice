@@ -38,23 +38,43 @@ def read() -> dict | None:
 
 
 def write(cred: dict) -> None:
-    """Persist the credential JSON. On POSIX the file is created 0600 with no
-    world-readable window (mode set at open time), inside a 0700 config dir."""
+    """Persist the credential JSON atomically.
+
+    The secret is staged in a sibling temp file created 0600 (mode set at open
+    time — never a 0644 window) and then atomically renamed onto the final path.
+    A pre-existing loose-perm credential file is therefore never truncated in
+    place: it is replaced wholesale by the already-0600 temp inode, and a failure
+    mid-write leaves the original untouched. The temp lands in the same 0700
+    config dir so the rename stays on one filesystem (atomic)."""
     d = config_dir()
     os.makedirs(d, exist_ok=True)
     path = credentials_path()
     data = json.dumps(cred, indent=2)
     if os.name == "nt":
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(data)
+        _atomic_write(d, path, data, chmod=False)
         return
     os.chmod(d, 0o700)
-    # O_CREAT with mode 0600 sets perms at creation (no 0644 window); the trailing
-    # chmod also tightens a pre-existing file that was created with looser perms.
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(data)
-    os.chmod(path, 0o600)
+    _atomic_write(d, path, data, chmod=True)
+
+
+def _atomic_write(d: str, path: str, data: str, *, chmod: bool) -> None:
+    """Write ``data`` to a temp file in dir ``d`` (0600 when ``chmod``), then
+    atomically replace ``path``. The temp is cleaned up on any failure."""
+    import tempfile
+
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".credentials-", suffix=".tmp")
+    try:
+        if chmod:
+            os.chmod(tmp, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def clear() -> bool:

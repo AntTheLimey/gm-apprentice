@@ -25,7 +25,7 @@ def _j(v) -> str:
     return json.dumps(v, ensure_ascii=False)
 
 
-def emit_node(node: dict) -> str:
+def emit_node(node: dict, eol: str = "\n") -> str:
     lines = ["mobrpg:"]
     for k in _SCALARS:
         if k in node:
@@ -49,7 +49,15 @@ def emit_node(node: dict) -> str:
                 prefix = "    - " if first else "      "
                 lines.append(f"{prefix}{k}: {_j(it[k])}")
                 first = False
-    return "\n".join(lines) + "\n"
+    return eol.join(lines) + eol
+
+
+def _dominant_eol(text: str) -> str:
+    """Return the file's dominant line ending — CRLF only if it strictly
+    outnumbers lone LFs, else LF."""
+    crlf = text.count("\r\n")
+    lf = text.count("\n") - crlf
+    return "\r\n" if crlf > lf else "\n"
 
 
 def _split_frontmatter(md_text: str):
@@ -57,13 +65,26 @@ def _split_frontmatter(md_text: str):
     `---` fences, or (None, None, None) if there is no frontmatter."""
     if not md_text.startswith("---"):
         return None, None, None
+    nl = md_text.find("\n", 3)                # end of the real opening fence line
+    if nl == -1:
+        return None, None, None
+    # The opening line must be *exactly* `---` (or `---\r`) — not `----`,
+    # not `--- text`. Anything else is ordinary prose, not a YAML fence.
+    if md_text[:nl] not in ("---", "---\r"):
+        return None, None, None
     end = md_text.find("\n---", 3)
     if end == -1:
         return None, None, None
-    nl = md_text.find("\n", 3)                # end of the real opening fence line
-    pre = md_text[:nl + 1]                     # opening fence bytes, verbatim
-    fm_body = md_text[nl + 1:end + 1]          # includes trailing \n
-    post = md_text[end + 1:]                   # starts at "---"
+    # A note with no YAML that opens with a `---` thematic break followed by a
+    # blank line is prose (a lone leading thematic break), not frontmatter.
+    # Real frontmatter carries content on the line after the opening fence.
+    next_nl = md_text.find("\n", nl + 1)
+    next_line = md_text[nl + 1:next_nl if next_nl != -1 else len(md_text)]
+    if next_line.strip() == "":
+        return None, None, None
+    pre = md_text[:nl + 1]                      # opening fence bytes, verbatim
+    fm_body = md_text[nl + 1:end + 1]           # includes trailing \n
+    post = md_text[end + 1:]                    # starts at "---"
     return pre, fm_body, post
 
 
@@ -145,10 +166,11 @@ def _parse_block(block: str) -> dict:
 
 
 def write_node(md_text: str, node: dict) -> str:
-    block = emit_node(node)
+    eol = _dominant_eol(md_text)
+    block = emit_node(node, eol)
     pre, fm_body, post = _split_frontmatter(md_text)
     if fm_body is None:                       # no frontmatter — create one
-        return f"---\n{block}---\n{md_text}"
+        return f"---{eol}{block}---{eol}{md_text}"
     span = _find_node_block(fm_body)
     if span is None:
         new_fm = fm_body + block              # append before closing fence

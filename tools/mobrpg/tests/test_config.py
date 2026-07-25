@@ -2,6 +2,8 @@ import json
 import os
 import stat
 
+import pytest
+
 from mobrpg import config
 
 
@@ -81,6 +83,58 @@ def test_write_tightens_perms_on_preexisting_loose_file(monkeypatch, tmp_path):
     config.write({"access_token": "a"})
     mode = stat.S_IMODE(os.stat(config.credentials_path()).st_mode)
     assert mode == 0o600
+
+
+def test_write_no_world_readable_window_via_temp(monkeypatch, tmp_path):
+    """The file that ends up holding the secret must be 0600 before it becomes
+    the destination — i.e. writing goes through a temp file created 0600 and an
+    atomic rename, never a truncate-in-place of a loose-perm destination."""
+    if os.name == "nt":
+        return
+    cfgdir = tmp_path / "cfg"
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(cfgdir))
+    os.makedirs(cfgdir, exist_ok=True)
+    dest = cfgdir / "credentials.json"
+    dest.write_text("{}")
+    os.chmod(dest, 0o644)
+
+    seen = {}
+    real_replace = os.replace
+
+    def spy_replace(src, dst):
+        seen["src"] = str(src)
+        seen["dst"] = str(dst)
+        seen["src_mode"] = stat.S_IMODE(os.stat(src).st_mode)
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(config.os, "replace", spy_replace)
+    config.write({"access_token": "s3cr3t"})
+    # The staged file holding the secret was already 0600 before the rename.
+    assert seen["src_mode"] == 0o600
+    # It was a temp file, not an in-place write of the destination.
+    assert seen["src"] != str(dest)
+    assert seen["dst"] == str(dest)
+    assert config.read()["access_token"] == "s3cr3t"
+
+
+def test_write_atomic_preserves_original_on_failure(monkeypatch, tmp_path):
+    """A failure at the rename step must leave the pre-existing credential file
+    untouched (no truncate-in-place)."""
+    if os.name == "nt":
+        return
+    cfgdir = tmp_path / "cfg"
+    monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(cfgdir))
+    os.makedirs(cfgdir, exist_ok=True)
+    dest = cfgdir / "credentials.json"
+    dest.write_text('{"access_token": "original"}')
+
+    def boom(src, dst):
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(config.os, "replace", boom)
+    with pytest.raises(OSError):
+        config.write({"access_token": "new"})
+    assert json.loads(dest.read_text())["access_token"] == "original"
 
 
 def test_clear(monkeypatch, tmp_path):

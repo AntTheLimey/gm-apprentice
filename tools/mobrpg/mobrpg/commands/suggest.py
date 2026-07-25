@@ -26,10 +26,15 @@ from mobrpg.commands import submit_batch
 
 def _read(path: str) -> tuple[str, str]:
     txt = open(path, encoding="utf-8").read()
-    if txt.startswith("---"):
-        _, fm, body = txt.split("---", 2)
-        return fm, body
-    return "", txt
+    # Reuse node's fence splitter rather than str.split("---", 2): the latter
+    # raises ValueError on a note that opens with '---' but has no closing fence,
+    # and misparses a lone '--- inline ---' line. A note with no real frontmatter
+    # is treated as body-only.
+    _pre, fm_body, post = node._split_frontmatter(txt)
+    if fm_body is None:
+        return "", txt
+    body = post[3:] if post.startswith("---") else post   # drop the closing fence
+    return fm_body, body
 
 
 def _aliases(fm: str) -> list[str]:
@@ -276,7 +281,10 @@ def classifier_items(entity, mp, entity_ref, race_id, ref_seed) -> tuple[list[di
             gender = entity.get("gender")
             if gender:
                 entry = _lookup(cls.get("sex", {}), gender)
-                sex_name = (entry or {}).get("name") or map_cmd.classifier_name(gender).title()
+                # Run the map name (or raw gender) through classifier_name like every
+                # other classifier — a stored sex name may predate sanitization, and
+                # skipping it leaks markup upstream + disagrees with the determined block.
+                sex_name = map_cmd.classifier_name((entry or {}).get("name") or gender).title()
                 mode, bound = resolve_classifier(entry) if entry else ("create", None)
                 if mode == "bound" and bound:
                     # scope + classify the existing Sex id
@@ -627,12 +635,9 @@ def chunk_groups_colocated(groups, refs, cap=100) -> tuple[list[list[dict]], lis
 
 
 def discover_race_id(world, token, race_name="Human") -> str | None:
-    try:
-        data = client._request("GET", f"/world/{world}/person/race?size=500", token=token)
-    except (client.ApiError, ValueError):
-        return None
-    items = data if isinstance(data, list) else data.get("content", []) if isinstance(data, dict) else []
-    for e in items:
+    # Paginate via the shared fetcher — the old ?size=500 single fetch had no
+    # totalPages handling, so a world with >one page of races could miss 'Human'.
+    for e in map_cmd._fetch_all(f"/world/{world}/person/race", token):
         if isinstance(e, dict) and (e.get("name") or "").strip().lower() == race_name.lower():
             return e.get("id")
     return None

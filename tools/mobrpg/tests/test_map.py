@@ -309,7 +309,7 @@ def test_init_then_sync(tmp_path, monkeypatch):
     # mobRPG starts with only "District" as a political type
     state = {"political/type": [{"name": "District", "id": "dist-id"}]}
 
-    def fake(method, path, *, token=None, body=None):
+    def fake(method, path, *, token=None, query=None, body=None):
         if path == "/world":
             return [{"id": "w1", "name": "Regency"}]
         for kind, items in state.items():
@@ -339,11 +339,41 @@ def test_init_then_sync(tmp_path, monkeypatch):
     assert data["locationRouting"]["Hospital"]["mobrpgId"] == "hosp-id"
 
 
+def test_build_map_sex_name_is_sanitized(tmp_path):
+    # B3: the sex classifier was built as `v.title()`, bypassing classifier_name(),
+    # so a gender value carrying markup leaked it into the map (and thence a push).
+    disc = {k: {} for k in ("political/type", "organization/type", "creature/type",
+                            "person/race", "person/profession", "language", "landfeature")}
+    vocab = {"location_type": {}, "occupation": {}, "gender": {"male [[note]]": 1},
+             "faction_type": {}, "creature_type": {}, "predicate": {}}
+    mp = m.build_map("w1", {"name": "W"}, str(tmp_path), disc, vocab, "T0")
+    entry = mp["classifiers"]["sex"]["male [[note]]"]
+    assert not (set("[]") & set(entry["name"])), f"markup leaked: {entry['name']!r}"
+
+
+def test_discover_follows_pagination(monkeypatch):
+    # The old ?size=500 single fetch had no totalPages handling: a classifier kind
+    # spanning more than one page was silently truncated (minting duplicate types).
+    pages = {
+        0: {"content": [{"name": "Priest", "id": "p1"}], "page": {"totalPages": 2}},
+        1: {"content": [{"name": "Scholar", "id": "s1"}], "page": {"totalPages": 2}},
+    }
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if "person/profession" in path:
+            page = (query or {}).get("page", 0)
+            return pages.get(page, {"content": [], "page": {"totalPages": 2}})
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+    disc = m.discover("w1", "tok")
+    assert disc["person/profession"] == {"priest": "p1", "scholar": "s1"}
+
+
 def test_sync_preserves_confirmed(tmp_path, monkeypatch):
     vault = _make_vault(tmp_path)
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "_request",
-                        lambda method, path, *, token=None, body=None:
+                        lambda method, path, *, token=None, query=None, body=None:
                         [{"id": "w1", "name": "R"}] if path == "/world" else [])
     mp = str(tmp_path / "_meta" / "mobrpg-map.json")
     m.run(["init", "w1", "--vault", vault, "--map", mp, "--now", "T0"])

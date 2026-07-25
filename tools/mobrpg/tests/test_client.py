@@ -1,6 +1,67 @@
 import os
+import urllib.error
+
 import pytest
 from mobrpg import client
+
+
+class _FakeResp:
+    """Minimal context-manager stand-in for a urllib response object."""
+
+    def __init__(self, raw: bytes):
+        self._raw = raw
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return self._raw
+
+
+def test_request_sends_authorization_bearer_header(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["req"] = req
+        return _FakeResp(b'{"ok": true}')
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", fake_urlopen)
+    out = client._request("GET", "/user/me", token="tok-abc")
+    assert out == {"ok": True}
+    assert captured["req"].get_header("Authorization") == "Bearer tok-abc"
+
+
+def test_request_no_token_sends_no_authorization_header(monkeypatch):
+    captured = {}
+
+    def fake_urlopen(req, timeout=None):
+        captured["req"] = req
+        return _FakeResp(b"{}")
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", fake_urlopen)
+    client._request("GET", "/health")
+    assert captured["req"].get_header("Authorization") is None
+
+
+def test_request_urlerror_maps_to_apierror_status_0(monkeypatch):
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(client.ApiError) as ei:
+        client._request("GET", "/user/me", token="t")
+    assert ei.value.status == 0
+
+
+def test_request_empty_body_decodes_to_none(monkeypatch):
+    def fake_urlopen(req, timeout=None):
+        return _FakeResp(b"   ")
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", fake_urlopen)
+    assert client._request("GET", "/x", token="t") is None
 
 
 def test_resolve_environment_defaults_to_prod(monkeypatch):

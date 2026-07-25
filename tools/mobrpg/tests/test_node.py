@@ -129,6 +129,41 @@ def test_previous_ref_absent_when_unset():
     assert "previous_ref" not in node.emit_node(NODE)
 
 
+def test_split_frontmatter_ignores_leading_thematic_break():
+    # A note with NO YAML frontmatter that opens with a `---` thematic break and
+    # has a later `---` must not be treated as frontmatter — otherwise write_node
+    # splices the machine block into the prose region.
+    md = "---\n\nIntro.\n\n---\n\nBody.\n"
+    assert node._split_frontmatter(md) == (None, None, None)
+    assert node.read_node(md) is None
+    out = node.write_node(md, {"world_id": "w1"})
+    # a fresh fence is created; the prose survives verbatim below it
+    assert out.startswith("---\n")
+    assert out.endswith(md)
+    assert node.read_node(out) == {"world_id": "w1", "relationships": [],
+                                   "languages": []}
+
+
+def test_split_frontmatter_requires_exact_opening_fence():
+    # `----` and `--- text` are prose, not a YAML fence
+    assert node._split_frontmatter("----\nx\n---\n") == (None, None, None)
+    assert node._split_frontmatter("--- x\ntype: npc\n---\nbody\n") == (None, None, None)
+
+
+def test_emit_node_honors_crlf_eol_argument():
+    text = node.emit_node({"world_id": "w1"}, "\r\n")
+    assert text == ('mobrpg:\r\n  world_id: "w1"\r\n'
+                    '  relationships: []\r\n  languages: []\r\n')
+
+
+def test_write_node_matches_crlf_dominant_file_no_mixed_eol():
+    md = "---\r\ntype: npc\r\n---\r\nbody\r\n"
+    out = node.write_node(md, {"world_id": "w1"})
+    # no lone LF remains once every CRLF is stripped — the block is uniform CRLF
+    assert "\r\n" in out
+    assert "\n" not in out.replace("\r\n", "")
+
+
 def test_content_hash_stable_and_order_independent():
     a = {"name": "X", "altNames": ["a", "b"], "data": {"type": "Person"}}
     b = {"data": {"type": "Person"}, "name": "X", "altNames": ["a", "b"]}

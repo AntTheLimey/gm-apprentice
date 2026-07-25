@@ -48,7 +48,11 @@ def strip_boilerplate(md_text: str | None) -> str:
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")
 _BOLD = re.compile(r"\*\*([^*]+)\*\*")
-_ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)|_([^_]+)_")
+# Underscore emphasis follows CommonMark's intraword rule: a `_` only opens/closes
+# emphasis when flanked by whitespace or punctuation, so snake_case, file_name, and
+# URLs (a_b_c) are left alone. `\w` includes `_`, so the lookarounds also reject a
+# `_` butted against another word character.
+_ITALIC = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)|(?<!\w)_([^_]+)_(?!\w)")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 
 
@@ -79,9 +83,12 @@ def _cells(row: str) -> list[str]:
     row = row.strip()
     if row.startswith("|"):
         row = row[1:]
-    if row.endswith("|"):
+    # Only strip a *delimiter* trailing pipe, never an escaped `\|` that is part
+    # of the last cell's content.
+    if row.endswith("|") and not row.endswith("\\|"):
         row = row[:-1]
-    return [c.strip() for c in row.split("|")]
+    # Split on unescaped pipes so `\|` stays inside its cell, then unescape it.
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", row)]
 
 
 def _table_html(block: list[str]) -> str:

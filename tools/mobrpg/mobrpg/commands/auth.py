@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -103,6 +104,10 @@ def _cmd_status(argv: list[str]) -> int:
     print(f"  source:     {cred.get('source')}")
     print(f"  created_at: {cred.get('created_at')}")
     print(f"  config:     {config.credentials_path()}")
+    if os.environ.get("MOBRPG_TOKEN"):
+        print("WARNING: MOBRPG_TOKEN is set in the environment and overrides the "
+              "stored credentials above — commands use that token, not this "
+              "config. Unset it to use the imported identity.", file=sys.stderr)
     return 0
 
 
