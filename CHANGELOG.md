@@ -35,6 +35,13 @@ and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
   them to live mobRPG elements by normalized name (aliases included); one match is
   accepted with the real `element_id`, ambiguous/unmatched are reported never
   guessed. A dup-safe replacement for the retired crosswalk/backfill flow.
+- **`mobrpg --version` / `-V`** — reports the package version (`0.1.0`), which is
+  intentionally independent of the marketplace plugin version.
+- **Ontology shipped as package data** — `gm-apprentice-ontology.json` now lives
+  inside `mobrpg/` and loads via `importlib.resources`, lazily: a missing file
+  affects only the `map` verb, not the whole CLI. This makes a non-editable wheel
+  install work (previously every verb died with `FileNotFoundError`).
+- **Prod-write safety banner** retained on every native-verb run.
 
 ### Changed
 
@@ -47,12 +54,21 @@ and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
   was missing) and drop the redundant install/pick-system/Obsidian steps.
 - **`client.get_access_token()` precedence** — `MOBRPG_TOKEN` env still wins, then
   the managed config, then `MOBRPG_EMAIL`/`MOBRPG_PASSWORD`, else a helpful error.
+- **Legacy fallback scripts relocated into the package** (`mobrpg/_legacy/`) so the
+  seven shell-out verbs and their `import smoketest as api` dependency install
+  correctly from a wheel instead of living outside the package.
+- **Prod-write guard promise scrubbed from the docs.** `MOBRPG_ALLOW_PROD_WRITES`
+  no longer exists for native verbs (they gate on `--execute` alone); README,
+  `skill/SKILL.md`, and `skill/references/push.md` no longer promise it. The safety
+  banner is what remains.
 
 ### Removed
 
 - **Legacy crosswalk** — the `backfill`/`sync` verbs, all `--crosswalk` inputs, and
   the packaged `canticle-regency-crosswalk.json`. Ids resolve only from `mobrpg:`
   nodes; `images` derives its id→file map from nodes.
+- **Two dead scripts** — `etl_extract.py` (superseded by `pull.py`) and
+  `push_suggestions.py` (superseded by `suggest.py`), unreferenced by any verb.
 
 ### Fixed
 
@@ -68,6 +84,43 @@ and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
 - **Credential CSV gitignore gap** — `credentials*.csv` is now ignored in the
   prototype so a stray token file can never be committed. Untracked stale run
   artifacts (`*_out/`, `space_vault_preview/`, `space_extract.json`).
+
+Release-blocker pass (data-corruption and integrity fixes found in a four-way
+adversarial review of the branch, each fixed test-first):
+
+- **Intraword `_` no longer mangles descriptions** (`md.py`) — `snake_case`,
+  `file_name`, and URLs kept their underscores instead of sprouting `<em>` spans;
+  `_` emphasis now requires flanking whitespace/punctuation (CommonMark rule).
+  Previously this malformed HTML went straight into `_create(description=...)`.
+- **`suggest._read` frontmatter split** — replaced the banned
+  `str.split("---", 2)` with the shared `_split_frontmatter`; a note opening with
+  `---` and no closing fence no longer raises `ValueError` and aborts the whole
+  `suggest` run, and `--- inline ---` notes parse correctly.
+- **`sex` classifier sanitizer bypass** (`suggest.py`, `map_cmd.py`) — the gender
+  name now runs through `classifier_name()` like every other classifier, so markup
+  (`male [[note]]`) can no longer leak upstream into a pushed `CreateElement` name.
+- **`_split_frontmatter` thematic-break misclassification** (`node.py`) — a note
+  with no YAML frontmatter whose body opens with a `---` thematic break is no
+  longer treated as having frontmatter, so `write_node` stops splicing the
+  `mobrpg:` block into prose (reachable via `suggest --write-back` and `pull-canon`).
+- **Frontmatter fence newline** (`node.py`) — a rebuilt body that lost its leading
+  newline no longer glues onto the closing `---` fence (`---## Overview`); exactly
+  one separator is guaranteed.
+- **Link href double-escape** (`md.py`) — a link URL is no longer HTML-escaped a
+  second time, which had accreted an extra `amp;` on every round-trip.
+- **`md.py` table cells honor escaped `\|`** — cells split on unescaped pipes only,
+  so escaped pipes no longer cause a column-count mismatch in pushed tables.
+- **`merge3` preserves line endings** — the canon-merge path keeps the dominant
+  EOL instead of silently converting CRLF→LF and undoing `section.py`'s preservation.
+- **`pull-desc`** — hardened against the same class of frontmatter edge cases (test
+  added).
+- **Full-page pagination warning** (`map_cmd.py`, `suggest.py`) — a world with more
+  than the `?size=500` page limit now warns rather than silently minting duplicates.
+- **Atomic, private credential write** (`config.py`) — credentials are written to a
+  `0600` temp file and renamed into place, closing the brief world-readable window
+  on a pre-existing loose-perm `credentials.json`; Windows write path now tested.
+- **`auth status` stale-token warning** — warns when a `MOBRPG_TOKEN` env var is set
+  and would override the imported identity that `status` displays.
 
 ---
 

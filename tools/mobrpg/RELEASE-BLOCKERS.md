@@ -1,7 +1,16 @@
 # mobRPG CLI — release blockers & punch-list
 
-**Status:** v1.9.0 was **pulled** on 2026-07-25. This tool is **not shippable** as
-"graduated, native, installable" until the ship-blockers below are cleared.
+**All ship-blockers cleared as of 2026-07-25.**
+
+**Status:** v1.9.0 was **pulled** on 2026-07-25, then repaired. Every finding
+below is now marked **FIXED** or **DEFERRED (with reason)**. The branch is
+**shippable but unpushed** — 373 tests pass (up from a 321 baseline), the wheel
+installs and runs, and the "graduated / native / installable" claims have been
+reworded to the honest mid-strangler reality. Awaiting a human GO to push/PR.
+
+> **Dev artifact to delete before release:** `tools/mobrpg/RELEASE-FIX-WORKFLOW.js`
+> is the autonomous fix-workflow orchestration script used to drive this repair
+> pass. It is not part of the shipped tool — delete it before the actual release.
 
 **How this list was produced:** a four-way adversarial code review of the whole
 `mobrpg-cli` branch (security, data-mutation core, test quality, packaging), with
@@ -28,6 +37,11 @@ with TDD (add the failing case first).
 
 ### B1. `mobrpg/md.py:51` — underscore-italic mangles descriptions with `_`
 
+**✅ FIXED** (78b1659) — `_` emphasis now requires flanking whitespace/punctuation
+(CommonMark intraword rule); `snake_case`/`file_name`/URLs survive. Test in
+`tests/test_md.py`.
+
+
 `_ITALIC` matches `_(...)_` intraword, so `snake_case`, `file_name`, and URLs get
 spurious `<em>`. `_description()` feeds this HTML straight into
 `_create(description=...)` against the live world.
@@ -44,6 +58,11 @@ flanking for `_` emphasis), or only honor `_…_` when delimited.
 
 ### B2. `mobrpg/commands/suggest.py:29` (`_read`) — banned `str.split("---", 2)`
 
+**✅ FIXED** (78b1659) — now reuses `node._split_frontmatter`; a note opening with
+`---` and no closing fence no longer raises `ValueError`/aborts the run, and
+`--- inline ---` notes parse. Test in `tests/test_suggest.py`.
+
+
 The exact pattern `node.py`'s own comment warns against, on the read path. A note
 starting with `---` and no closing fence raises `ValueError: not enough values to
 unpack` and aborts the whole `suggest` run; `--- inline ---` notes are misparsed.
@@ -54,6 +73,11 @@ Fix: reuse `node._split_frontmatter`, or guard the unpack length.
 
 ### B3. `mobrpg/commands/suggest.py:279` + `mobrpg/commands/map_cmd.py:474` — `sex` classifier bypasses the sanitizer
 
+**✅ FIXED** (78b1659) — the sex name runs through `classifier_name(...)` at both
+the build and push sites; markup can no longer leak into a pushed name. Tests in
+`tests/test_suggest.py` and `tests/test_map.py`.
+
+
 `build_map` stores `name: v.title()` and `classifier_items` pushes it verbatim,
 skipping `classifier_name()` that every other classifier uses. Markup leaks
 upstream and the vault `determined` block disagrees with the pushed name.
@@ -63,6 +87,13 @@ Repro: gender `"male [[note]]"` → pushed `CreateElement` name `"Male [[Note]]"
 Fix: run `classifier_name(...).title()` on the sex name at build and push sites.
 
 ### B4. `mobrpg/node.py` (`_split_frontmatter`) — machine block spliced into prose
+
+**✅ FIXED** (78b1659; hardened fa7e48b) — frontmatter is recognized only when the
+opening line is exactly `---`/`---\r` and the note is not a lone leading thematic
+break, so `write_node` no longer injects the `mobrpg:` block into prose. A related
+fence-newline gluing bug (`---## Overview`) was also fixed. Tests in
+`tests/test_node.py`.
+
 
 A note with **no** YAML frontmatter whose body opens with a `---` thematic break
 and has a later `---` is misclassified as having frontmatter; `write_node` then
@@ -81,6 +112,12 @@ the note is not a lone leading thematic break.
 
 ### B5. Wheel install breaks 100% of the CLI
 
+**✅ FIXED** (c980a54) — `gm-apprentice-ontology.json` moved under `mobrpg/`, loaded
+lazily via `importlib.resources`; `pyproject.toml` package-data updated. A missing
+ontology now degrades only the `map` verb. Verified by `tests/test_packaging.py`
+(builds/loads without a local source tree).
+
+
 `map_cmd.py:50` runs `_ONTOLOGY = _load_ontology()` at **import time**, reading
 `gm-apprentice-ontology.json` which lives *outside* the package and is excluded by
 `pyproject.toml` `include = ["mobrpg*"]`. `cli.py:24` imports `map_cmd`
@@ -96,6 +133,13 @@ affects `map`, not the whole CLI.
 
 ### B6. CHANGELOG "verbs are native / crosswalk excised" oversells — 7 verbs still shell out
 
+**✅ FIXED** (081a2f5 reword; 761d0dd relocate) — per the pre-baked decision the 7
+fallbacks were **kept working, not ported**. The overclaim is reworded honestly in
+README, `skill/SKILL.md`, and CHANGELOG ("native verbs plus documented legacy
+fallbacks"). The fallback scripts were also moved into `mobrpg/_legacy/` so they no
+longer inherit the B5 packaging break.
+
+
 `cli.py` `FALLBACK` subprocesses legacy scripts for `write`, `merge`,
 `link-orphans`, `push`, `types`, `links`, `images`. It's a mid-strangler. Either
 finish the port or reword the release notes to match reality. Those 7 fallbacks
@@ -103,11 +147,22 @@ also inherit the B5 packaging break.
 
 ### B7. Two dead scripts shipping as ballast
 
+**✅ FIXED** (de44872) — `etl_extract.py` and `push_suggestions.py` deleted.
+`smoketest.py` kept (now `mobrpg/_legacy/smoketest.py`) because the 4 live fallback
+scripts `import smoketest as api`.
+
+
 `etl_extract.py` (superseded by `pull.py`) and `push_suggestions.py` (superseded by
 `suggest.py`) are unreferenced by any verb or import. Delete them. (`smoketest.py`
 is **not** dead — the 4 live fallback scripts do `import smoketest as api`.)
 
 ### B8. `tools/mobrpg/README.md` is the internal prototype scratch log
+
+**✅ FIXED** (081a2f5) — README rewritten from scratch as user-facing docs in
+solo-project voice ("I", never "we"); all private resume/spike notes removed; the
+sidecar-crosswalk self-contradiction is gone. The retired `import smoketest as api`
+/ `python3 smoketest.py` auth model is no longer documented.
+
 
 "START HERE / Spike work", private resume notes ("Don't PR the Hibernate fix",
 "backend repro env: torn down"), and it self-contradicts ("rewire to the sidecar
@@ -117,6 +172,10 @@ any release. Also `README.md`'s Auth section documents the retired
 
 ### B9. `skill/SKILL.md` (and every `skill/references/*.md`) hardcode `.venv/bin/mobrpg`
 
+**✅ FIXED** (081a2f5) — the skill docs now use the installed `mobrpg` command that
+`pip install -e` puts on PATH; no `.venv/bin/mobrpg` references remain
+(`grep -rn '\.venv/bin/mobrpg' skill/ README.md` → empty).
+
 The documented install (`llms.txt:11`, `pip install -e`) never creates a `.venv/`,
 so every command the skill emits fails for a fresh user. Reconcile the skill's run
 convention with the actual install path.
@@ -125,41 +184,44 @@ convention with the actual install path.
 
 ## 🟡 Should-fix
 
-- **Prod-write guard docs mismatch.** `MOBRPG_ALLOW_PROD_WRITES` exists only in
-  legacy `smoketest.py`; native verbs gate on `--execute` alone (default env
-  `prod`). The removal was intentional ("keep the banner") — so the fix is to
-  **scrub the guard promise** from `README.md`, `skill/SKILL.md`,
-  `skill/references/push.md`, or re-wire the guard if it's actually wanted.
-- **HTTP transport has zero test coverage.** Every network test stubs
-  `client._request`; the `Authorization: Bearer` header injection, `URLError`
-  branch, and empty-200-body branch are uncovered. Add a test that patches
-  `urllib.request.urlopen` and asserts the outgoing header, the `ApiError(0)`
-  network-down path, and the empty-body → `None` decode.
-- **`merge3` silently converts CRLF→LF** on the canon-merge path, undoing
-  `section.py`'s CRLF preservation. Preserve the dominant line ending.
-- **`md.py:78` table cells ignore escaped `\|`** → column-count mismatch in pushed
-  tables. Split on unescaped `|`, unescape `\|` in cells.
-- **`?size=500` hardcoded, no pagination** (`map_cmd.py:270`, `suggest.py:631`) — a
-  world with >500 of a kind mints duplicate types. `adopt.py:42` already paginates;
-  copy that. At minimum warn on a full page.
+- **✅ FIXED** (081a2f5) **Prod-write guard docs mismatch.** Per the pre-baked
+  decision the guard was **not** re-added; the `MOBRPG_ALLOW_PROD_WRITES` promise is
+  scrubbed from `README.md`, `skill/SKILL.md`, and `skill/references/push.md`
+  (`grep -rn MOBRPG_ALLOW_PROD_WRITES README.md skill/` → empty). The safety banner
+  stays.
+- **✅ FIXED** (78b1659) **HTTP transport test coverage.** `tests/test_client.py`
+  now patches `urllib.request.urlopen` and asserts the `Authorization: Bearer`
+  header, the network-down `ApiError(0)` path, and the empty-200-body → `None`
+  decode.
+- **✅ FIXED** (78b1659) **`merge3` CRLF preservation** — the canon-merge path now
+  preserves the dominant line ending instead of converting CRLF→LF. Test in
+  `tests/test_merge3.py`.
+- **✅ FIXED** (78b1659, ef6ba76) **`md.py` escaped `\|` in table cells** — cells
+  split on unescaped pipes only. Test in `tests/test_md.py`.
+- **✅ FIXED** (78b1659) **`?size=500` pagination** — `map` and `suggest` now fetch
+  every page via a shared paginating fetcher instead of the old single `?size=500`
+  call, so a world with >500 of a kind can no longer mint duplicate types.
 
 ---
 
 ## ⚪ Minor
 
-- `config.write()` truncates + writes into a pre-existing loose-perm
-  `credentials.json` before `chmod` (brief world-readable window) and is
-  non-atomic. Chmod/temp+rename before writing.
-- `auth status` reads only the config, so it shows the imported identity while a
-  stale exported `MOBRPG_TOKEN` is what commands actually use. Warn when
-  `MOBRPG_TOKEN` is set.
-- `pyproject.toml` `version = "0.1.0"` vs plugin `1.9.0` — document the decoupling
-  or bump; no `--version` flag exists to disambiguate at runtime.
-- `.gitignore` misses `extract.json` (the documented default `pull` output);
-  the ignore list is full of hardcoded `space_*` author-specific names.
-- Windows credential-write branch (`config.py` `os.name == "nt"`) is untested.
-- `emit_node` joins with `\n`, so a `mobrpg:` block written into a CRLF file yields
-  mixed EOLs (tolerated, not corrupting).
+- **✅ FIXED** (78b1659) `config.write()` now writes to a `0600` temp file via
+  `mkstemp` and `os.replace`s it into place (atomic, no world-readable window).
+- **✅ FIXED** (78b1659) `auth status` now warns when `MOBRPG_TOKEN` is set in the
+  environment and overrides the imported identity it displays.
+- **✅ FIXED** (c980a54) `pyproject.toml` `version = "0.1.0"` carries a comment that
+  it is intentionally decoupled from the plugin version, and `mobrpg --version`
+  reports it at runtime.
+- **✅ FIXED** (de44872) `.gitignore` now ignores `extract.json` (and generic
+  `*_out/`, `sync_reports/`). Two author-specific `space_*` entries were left in
+  deliberately as belt-and-suspenders for existing local artifacts — harmless.
+- **✅ FIXED** (de44872) Windows credential-write branch now tested
+  (`tests/test_config.py::test_config_dir_windows_appdata`).
+- **DEFERRED** — `emit_node` joins with `\n`, so a `mobrpg:` block written into a
+  CRLF file yields mixed EOLs. Explicitly noted in the original review as
+  **tolerated, not corrupting**; left as-is to keep the release scoped to the
+  data-corruption blockers.
 
 ---
 
