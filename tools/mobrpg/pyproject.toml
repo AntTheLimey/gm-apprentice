@@ -15,7 +15,12 @@ dependencies = []
 [project.optional-dependencies]
 # `build` is required by tests/test_packaging.py, which builds a real wheel
 # and inspects its file list rather than trusting importlib.resources alone.
-test = ["pytest>=7", "build>=1.0"]
+# That test invokes `build --no-isolation`, which reuses whatever is already
+# on sys.path instead of provisioning its own build env — so setuptools must
+# be pinned here explicitly. Python 3.12+ venvs no longer bundle it by
+# default, so a fresh `pip install -e ".[test]"` would otherwise leave the
+# wheel build backend unavailable.
+test = ["pytest>=7", "build>=1.0", "setuptools>=61"]
 
 [project.scripts]
 mobrpg = "mobrpg.cli:main"
