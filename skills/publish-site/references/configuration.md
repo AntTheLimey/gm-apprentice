@@ -13,6 +13,7 @@ any equivalent in `vault.config.json`.
 |---------|----------|-------------|
 | Publish mode | `publish.mode` | `player` or `full` |
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes"]`) |
+| Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`) |
 | Campaign image | `publish.theme.campaign_image` | Vault-relative path to hero image |
@@ -162,6 +163,7 @@ display settings that are specific to the generated site.
 | Folder map | `folderMap` | Maps vault folders to site output paths |
 | Exclude directories | `excludeDirs` | Fallback if `vault-config.md` doesn't set `publish.exclude_dirs` |
 | Exclude sections | `excludeSections` | Fallback if `vault-config.md` doesn't set `publish.exclude_sections` |
+| Exclude callouts | `excludeCallouts` | Fallback if `vault-config.md` doesn't set `publish.exclude_callouts`. `true` strips all callouts, or an array of types |
 | Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
 
 ## Precedence

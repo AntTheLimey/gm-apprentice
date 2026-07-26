@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.48] — 2026-07-26
+
+Publish tool 1.11.21. Keeper callouts no longer leak onto the published site.
+
+### Fixed
+
+- `publish-site`: Obsidian callouts (`> [!type] Title`) rendered in full onto
+  the player site — the tool had no callout stripping, so Keeper-facing callouts
+  (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon State) were
+  published verbatim (#137). Added a native `exclude_callouts` option
+  (`publish.exclude_callouts` / `excludeCallouts`): `true` strips every callout,
+  an array of types strips only those. Wired through `processContent`, the PC
+  accordion path (`extractSections`), and the `publishedMarkdown` precompute so
+  callout text also stays out of search, backlinks, and excerpts. Plain
+  blockquotes carry no `[!type]` marker and are preserved.
+
+### Changed
+
+- `publish-site`: scaffolded `vault.config.json` now defaults `excludeCallouts`
+  to `true`. Documented in `content-filtering.md` and `configuration.md`.
+
+---
+
 ## [1.8.47] — 2026-07-23
 
 Publish tool 1.11.20. Players' live HP/FP now sync from the site's KV store back

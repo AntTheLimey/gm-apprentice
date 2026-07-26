@@ -5,6 +5,7 @@ const matter = require('gray-matter');
 const PUBLISH_DEFAULTS = {
   mode: 'player',
   exclude_drafts: false,
+  exclude_callouts: false,
   exclude_sections: ['GM Notes'],
   exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes'],
   exclude_dirs: ['_meta', '_Templates'],
@@ -89,6 +90,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     // publish block first then the vault.config.json fallback (see #112).
     sheet_crest: publish.sheet_crest || jsonConfigFallback.sheet_crest || null,
     exclude_drafts: publish.exclude_drafts ?? PUBLISH_DEFAULTS.exclude_drafts,
+    // Boolean (strip all callouts) or an array of types to strip — not a union list,
+    // so a bare publish-block-first / vault.config.json fallback like sheet_crest (#137).
+    exclude_callouts: publish.exclude_callouts ?? jsonConfigFallback.excludeCallouts ?? PUBLISH_DEFAULTS.exclude_callouts,
     exclude_sections: unionExcludeList(
       publish.exclude_sections,
       jsonConfigFallback.excludeSections,
