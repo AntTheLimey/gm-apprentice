@@ -24,8 +24,6 @@ from mobrpg.commands import update as _update
 from mobrpg.commands import map_cmd as _map
 from mobrpg.commands import suggest as _suggest
 from mobrpg.commands import pull_canon as _pull_canon
-from mobrpg.commands import pull_desc as _pull_desc
-from mobrpg.commands import suggest_desc as _suggest_desc
 from mobrpg.commands import whats_new as _whats_new
 from mobrpg.commands import adopt as _adopt
 from mobrpg.commands import relink as _relink
@@ -51,8 +49,6 @@ NATIVE: dict = {
     "map": _map.run,
     "suggest": _suggest.run,
     "pull-canon": _pull_canon.run,
-    "pull-desc": _pull_desc.run,
-    "suggest-desc": _suggest_desc.run,
     "whats-new": _whats_new.run,
     "adopt": _adopt.run,
     "relink": _relink.run,
@@ -82,8 +78,6 @@ VERB_HELP: list[tuple[str, str]] = [
     ("update", "replace a Pending suggestion's payload (PUT) from JSON; edits inline fields only"),
     ("map", "init | sync | check the per-vault mobRPG type mapping (discover + propose)"),
     ("pull-canon", "pull ratified mobRPG canon down into vault mobrpg: nodes"),
-    ("pull-desc", "reconcile note description prose with mobRPG canon (report | --resolve)"),
-    ("suggest-desc", "suggest a linked note's authored description UP to mobRPG (UpdateElement suggestion)"),
     ("whats-new", "read-only report: entities/types new in mobRPG, and vault notes gone upstream"),
     ("adopt", "stamp mobrpg: nodes onto unlinked entities, matched to live elements by name"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),

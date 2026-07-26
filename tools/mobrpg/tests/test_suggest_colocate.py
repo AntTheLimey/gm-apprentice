@@ -273,14 +273,11 @@ def test_strip_boilerplate_import_placeholder_and_comments():
     assert "Public." in out3 and "More public." in out3 and "SECRET" not in out3
 
 
-def test_placeholder_only_description_is_empty_in_both_paths(tmp_path):
-    from mobrpg.commands import suggest, suggest_desc
+def test_placeholder_only_description_is_empty(tmp_path):
+    from mobrpg.commands import suggest
     body = "\n\n## Overview\n\n*(No description in mobRPG yet — imported as a named entity.)*\n\n## History\n"
     # entity push: a placeholder-only body yields the empty stub, not the placeholder text
     assert suggest._description(body) == "<p></p>"
-    # suggest-desc: placeholder-only vault prose is no-prose (never suggested up), even vs an empty element
-    is_cand, reason = suggest_desc.classify_candidate(suggest_desc.vault_html(body), "")
-    assert is_cand is False and reason == "no-prose"
 
 
 def test_collect_entities_provenance_filter(tmp_path):

@@ -17,7 +17,7 @@ import sys
 from mobrpg import client
 from mobrpg import lww
 from mobrpg import node
-from mobrpg.commands import pull_desc
+from mobrpg.vault import iter_linked_notes
 from mobrpg.commands import rel_baseline
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
@@ -248,7 +248,7 @@ def run_refresh(world, vault, token, *, execute) -> int:
     diffs: list[str] = []
     notes: list[str] = []
     skipped: list[str] = []
-    for path, txt, nd in pull_desc._iter_notes(vault):
+    for path, txt, nd in iter_linked_notes(vault):
         eid, kind = nd.get("element_id"), nd.get("element_kind")
         ep = _KIND_EP.get(kind)
         if not eid or not ep:
@@ -317,7 +317,7 @@ def run_baseline(world, vault, token, *, execute) -> int:
         print(f"ERROR reading map {map_path}: {e}", file=sys.stderr)
         return 2
     id_by_key, _, _ = suggest.node_index(vault)
-    notes = list(pull_desc._iter_notes(vault))          # (path, txt, node) for every linked note
+    notes = list(iter_linked_notes(vault))          # (path, txt, node) for every linked note
     try:
         structural, reified, _known = rel_baseline.fetch_upstream(
             world, token, [nd for _, _, nd in notes])

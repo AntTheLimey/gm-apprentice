@@ -38,22 +38,13 @@ from mobrpg import lww
 from mobrpg import md as _md
 from mobrpg import node
 from mobrpg import section
-from mobrpg.vault import iter_linked_notes
+from mobrpg.vault import body_of, iter_linked_notes
 from mobrpg.commands import submit_batch
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
 
 
-# ---------------- file-text surgery (copied from pull_desc; that module dies in Task 10) ----------------
-
-def _body_of(txt: str) -> str:
-    # node._split_frontmatter anchors on a real "\n---" fence, so a --- rule in
-    # the body can't fool it. `post` starts at the closing "---" fence.
-    _, fm_body, post = node._split_frontmatter(txt)
-    if fm_body is None:
-        return txt
-    return post[3:]              # drop the closing "---", keep the rest (incl. \n)
-
+# ---------------- file-text surgery ----------------
 
 def _rebuild(txt: str, new_node: dict, new_body: str) -> str:
     """Write the updated node into the frontmatter and swap in the new body."""
@@ -149,7 +140,7 @@ def plan(notes, fetch, now: str, skew: float, *,
         # Behavior 3: the timestamp verdict.
         decision = lww.decide(mtime, nd.get("last_synced"),
                               detail.get("lastModified"), skew)
-        old_body = _body_of(txt)
+        old_body = body_of(txt)
 
         # Behavior 4: nothing to do.
         if decision == "skip":

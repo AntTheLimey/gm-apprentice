@@ -17,3 +17,15 @@ def iter_linked_notes(vault: str):
             nd = node.read_node(txt)
             if nd and nd.get("element_id"):
                 yield path, txt, nd
+
+
+def body_of(txt: str) -> str:
+    """Return the note body below the frontmatter (leading newline included).
+
+    node._split_frontmatter anchors on a real "\\n---" fence, so a --- rule in
+    the body can't fool it. `post` starts at the closing "---" fence.
+    """
+    _, fm_body, post = node._split_frontmatter(txt)
+    if fm_body is None:
+        return txt
+    return post[3:]              # drop the closing "---", keep the rest (incl. \n)
