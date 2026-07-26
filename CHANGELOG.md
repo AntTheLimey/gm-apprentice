@@ -7,23 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9.0] — 2026-07-25
+## [1.9.0] — 2026-07-26
 
 Graduates the mobRPG integration CLI (`tools/mobrpg/`) into the repo as a
-native Python `mobrpg` command — but only partially: most verbs (`auth`,
-`whoami`, `worlds`, `pull`, `whats-new`, `pull-canon`, `pull-desc`, `adopt`,
-`relink`, `suggest`, `suggest-desc`, `submit-batch`, `suggestions`, `catalog`,
-`review`, `update`, `map`) are native subcommands, while seven — `write`,
-`merge`, `link-orphans`, `push`, `types`, `links`, `images` — remain thin
-wrappers that shell out to the original prototype scripts shipped alongside
-the package. This is a mid-strangler state, not a finished port; the fallback
-verbs work the same from the command line, they're just not rewritten yet.
-The legacy crosswalk is fully excised in favour of per-note `mobrpg:` nodes,
-and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
-(managed, cross-platform credentials) — round out the sync surface.
+**fully native** Python `mobrpg` command: every verb is a native subcommand
+sharing one stdlib-only client — there is no shell-out fallback layer and no
+prototype scripts left in the package. The centrepiece is a new
+last-writer-wins (LWW) sync model that reconciles a linked note's description
+prose with its mobRPG element from timestamps alone — no content hashes, no
+frozen baselines, no three-way merges. Suggestions are the only path that
+changes mobRPG canon: the world owner accepts or dismisses each one, so the
+CLI never overwrites a live element directly.
 
 ### Added
 
+- **`mobrpg sync` verb — timestamp last-writer-wins description sync.** For each
+  linked note it compares the note file's mtime, the node's recorded
+  `last_synced`, and the server element's `lastModified`, then decides
+  skip / pull / push per note inside a ±skew window (default 120s). A **pull**
+  overwrites the note's canon prose wholesale with the converted server
+  description — preserving the `## GM Notes` tail verbatim — and stamps
+  `last_synced`. A **push** (or a both-dirty tie the GM must adjudicate) files
+  one reviewable `UpdateElement` suggestion and marks the node
+  `review_state: pending`; it never writes upstream directly. Dry-run by
+  default; `--execute` gates every file write and suggestion submit.
+- **Native `write`, `images`, and `link-orphans` verbs** — the extract→vault
+  materializer, the entity-image downloader, and the orphan auto-linker are now
+  first-class Python subcommands. `link-orphans` uses suggestions as its push
+  path and no longer emits a generated curl script.
+- **Link rewriting across the boundary.** On push, `[[wikilinks]]` to linked
+  targets become mobRPG `…/world/{world}/link/{eid}` URLs (bare text when the
+  target isn't linked); `.md` links are flattened. On pull, known element URLs
+  come back as `[[wikilinks]]`.
 - **`mobrpg auth` verb** — managed credential setup replacing the hand-managed
   `credentials.csv` + `MOBRPG_TOKEN` dance. `import <credentials.csv>` verifies a
   website-issued token via `whoami` and stores it in a user-level config
@@ -41,10 +56,21 @@ and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
   inside `mobrpg/` and loads via `importlib.resources`, lazily: a missing file
   affects only the `map` verb, not the whole CLI. This makes a non-editable wheel
   install work (previously every verb died with `FileNotFoundError`).
-- **Prod-write safety banner** retained on every native-verb run.
+- **Prod-write safety banner** retained on every run.
 
 ### Changed
 
+- **Suggestions are the only path that changes mobRPG canon.** `suggest` builds
+  the full datatype graph per entity (element + classifier Types via Attribute
+  edges + reified relationship Events); `sync` files `UpdateElement` suggestions
+  for newer vault prose. In both cases the world owner accepts or dismisses the
+  suggestion in mobRPG — accept makes the vault the new canon, dismiss leaves
+  mobRPG as canon. The CLI never overwrites a live element directly.
+- **GM Notes stay local to the vault by design.** The `## GM Notes` tail of a
+  note is never pushed to mobRPG (verification found the server's
+  `NoteableService.getNote` has no hidden-note check, so a pushed hidden note
+  would be readable). GM Notes remain vault-local until mobRPG enforces
+  hidden-note access server-side.
 - **README + Quickstart overhaul.** README leads with Installation, the skill
   list, and an inline Quickstart; the long Obsidian setup walkthrough is
   condensed to a short Vaults note. The Quickstart is rewritten to start from
@@ -54,21 +80,22 @@ and two new verbs — `adopt` (establish nodes by live name-match) and `auth`
   was missing) and drop the redundant install/pick-system/Obsidian steps.
 - **`client.get_access_token()` precedence** — `MOBRPG_TOKEN` env still wins, then
   the managed config, then `MOBRPG_EMAIL`/`MOBRPG_PASSWORD`, else a helpful error.
-- **Legacy fallback scripts relocated into the package** (`mobrpg/_legacy/`) so the
-  seven shell-out verbs and their `import smoketest as api` dependency install
-  correctly from a wheel instead of living outside the package.
-- **Prod-write guard promise scrubbed from the docs.** `MOBRPG_ALLOW_PROD_WRITES`
-  no longer exists for native verbs (they gate on `--execute` alone); README,
-  `skill/SKILL.md`, and `skill/references/push.md` no longer promise it. The safety
-  banner is what remains.
 
 ### Removed
 
-- **Legacy crosswalk** — the `backfill`/`sync` verbs, all `--crosswalk` inputs, and
-  the packaged `canticle-regency-crosswalk.json`. Ids resolve only from `mobrpg:`
-  nodes; `images` derives its id→file map from nodes.
-- **Two dead scripts** — `etl_extract.py` (superseded by `pull.py`) and
-  `push_suggestions.py` (superseded by `suggest.py`), unreferenced by any verb.
+- **The hash/baseline canon-boundary machinery** — the `pull-desc` and
+  `suggest-desc` verbs, the three-way `merge3` merge, the `content_hash` scalar
+  and the four `canon_*` node scalars, and the canon fence. The `sync` verb
+  replaces all of it with timestamp LWW.
+- **The shell-out fallback layer** — the `FALLBACK` subprocess dispatch and every
+  legacy prototype script (`smoketest.py`, `etl_extract.py`,
+  `push_suggestions.py`, and the shelled-out `write` / `merge` / `link-orphans` /
+  `push` / `types` / `links` / `images` scripts). Every verb is native; `push`,
+  `types`, and `links` are absorbed into `suggest`'s full-graph build, and
+  `merge` is gone.
+- **Legacy crosswalk** — the `backfill`/`sync` (crosswalk-era) verbs, all
+  `--crosswalk` inputs, and the packaged `canticle-regency-crosswalk.json`. Ids
+  resolve only from `mobrpg:` nodes; `images` derives its id→file map from nodes.
 
 ### Fixed
 
@@ -110,10 +137,6 @@ adversarial review of the branch, each fixed test-first):
   second time, which had accreted an extra `amp;` on every round-trip.
 - **`md.py` table cells honor escaped `\|`** — cells split on unescaped pipes only,
   so escaped pipes no longer cause a column-count mismatch in pushed tables.
-- **`merge3` preserves line endings** — the canon-merge path keeps the dominant
-  EOL instead of silently converting CRLF→LF and undoing `section.py`'s preservation.
-- **`pull-desc`** — hardened against the same class of frontmatter edge cases (test
-  added).
 - **Full-page pagination warning** (`map_cmd.py`, `suggest.py`) — a world with more
   than the `?size=500` page limit now warns rather than silently minting duplicates.
 - **Atomic, private credential write** (`config.py`) — credentials are written to a

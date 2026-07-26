@@ -141,25 +141,13 @@ shows a target skipped for want of an id, the target note either has no `mobrpg:
 node yet (link it first — push it, or match it to its live element by name and
 stamp the node) or its name doesn't match the `[[link]]`.
 
-## Description content up — `suggest-desc`
+## Description content up — `sync`
 
-Pushing entities is separate from pushing their *authored description prose*.
-Where a linked note carries a richer description than its mobRPG element (or the
-element is an empty stub), suggest that prose **up** as a reviewable edit:
-
-```bash
-mobrpg suggest-desc <world> --vault <path> [--only <ref>] [--threshold F]      # dry-run report
-mobrpg suggest-desc <world> --vault <path> --only <ref> --execute              # after confirm
-```
-
-- Default (no `--execute`) reports candidates per note: `empty` (mobRPG has no
-  description — a clear suggest-up), `differs` (real content delta above the
-  threshold), or `in-sync`. The comparison strips heading/tag/entity formatting
-  noise first, so `differs` reflects real content, not markup.
-- Each candidate submits an **UpdateElement** suggestion (sparse — description
-  only) against the element's real id via the `/suggestion` endpoint — a proposal
-  the world owner reviews, never a direct overwrite. Same dry-run → present →
-  confirm → `--execute` discipline as `suggest`, and the same PROD caution — a
-  PROD `--execute` submits to the live world, so heed the production banner and
-  get an explicit yes first. Present the candidate list before executing; prefer
-  `--only` to push one at a time when the GM wants to review each.
+Pushing entities is separate from reconciling their *authored description prose*.
+Once a note is linked, its description prose is kept in step with the mobRPG
+element by `mobrpg sync`, not by this push flow. `sync` decides per note from
+timestamps (last-writer-wins) — when the vault's prose is newer it files an
+`UpdateElement` suggestion **up** for the owner to accept or dismiss; when
+mobRPG's is newer it pulls the canon prose down. See `reconcile.md` for the full
+decision table and the dry-run → present → confirm → `--execute` walk-through.
+GM Notes are never pushed — they stay local to the vault by design.

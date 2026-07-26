@@ -69,66 +69,60 @@ dry-run → present → confirm → `--execute` sequence as every other mutating
 verb in this skill. Don't skip the confirm step just because nothing leaves
 the vault.
 
-## Description content — reconcile via `pull-desc`
+## Description content — reconcile via `sync`
 
-`pull-canon` reconciles the machine `mobrpg:` node; it does **not** merge the
-note's *description* prose. That is `pull-desc`'s job. Run it after `pull-canon`.
+`pull-canon` reconciles the machine `mobrpg:` node; it does **not** touch the
+note's *description* prose. That is `sync`'s job. Run it after `pull-canon`.
 
-**You are the interactive UI.** `pull-desc` gives you two primitives — a
-read-only report and a one-entity apply — and you walk the GM through each
-conflict one at a time. Never batch a resolution the GM hasn't seen.
+`sync` is a single timestamp last-writer-wins verb — no content hashes, no
+frozen baselines, no merges. For each linked note it compares three timestamps:
+the note file's mtime, the node's recorded `last_synced`, and the server
+element's `lastModified`. From those it decides, per note, inside a ±120s skew
+window (tune with `--skew`):
 
-**Step 1 — report (read-only):**
+- **skip** → neither side changed since the last sync. Nothing to do.
+- **pull** → only mobRPG changed. `sync` overwrites the note's canon prose
+  wholesale with the converted server description, preserving the `## GM Notes`
+  tail verbatim, and stamps `last_synced`.
+- **push** → only the vault changed. `sync` does **not** write upstream. It files
+  one reviewable `UpdateElement` suggestion and marks the node
+  `review_state: pending`. The GM adjudicates it in mobRPG — accept and the vault
+  becomes canon, dismiss and mobRPG stays canon.
+- **tie** → both sides changed within the skew window. Treated as a push (a
+  suggestion), because a human should decide.
 
-```bash
-mobrpg pull-desc <world> --vault <path>
-```
+A note already `review_state: pending` is held — it's awaiting adjudication
+upstream, so `sync` won't touch it (it isn't even fetched).
 
-This classifies every synced note and prints, per changed entity, a
-`base → vault` and `base → mobRPG` diff. States:
+**You are the interactive UI.** Run the dry-run, present the per-note decision
+table to the GM, get an explicit yes, then `--execute`. Never `--execute` a
+decision table the GM hasn't seen.
 
-- **in-sync** → nothing to do (not printed).
-- **canon-only** → only mobRPG changed. Safe to `take-canon`.
-- **vault-only** → only the vault changed. Nothing to pull; it's push territory
-  (the vault is ahead — re-`suggest` if you want mobRPG updated).
-- **conflict** → both sides changed. Ask the GM (Step 2).
-- **unbaselined** → synced before a base was recorded. Offer `baseline` to
-  capture the current state as the reference point (treats the vault as the
-  source of truth; the GM can immediately `take-canon` to flip it).
-- **deleted** → mobRPG deleted the element. Report it; do not merge.
-
-**Step 2 — present each conflict and ask, one at a time.** For each conflicted
-entity, show the GM the two diffs and ask the four-way question:
-
-> *<name>*'s description changed on both sides. Your vault says [X]; mobRPG says
-> [Y]. **Merge** them, take **mobRPG's**, keep **yours**, or keep them
-> **separate** on purpose?
-
-Then apply their answer to that one entity — dry-run first, show the result,
-get an explicit yes, then `--execute`:
+**Step 1 — decision table (read-only):**
 
 ```bash
-mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref>
-mobrpg pull-desc <world> --vault <path> --resolve <mode> --only <ref> --execute
+mobrpg sync <world> --vault <path>
 ```
 
-`<mode>` is `take-canon` | `keep-vault` | `merge` | `separate` | `baseline`;
-`<ref>` is the note's `external_ref`. Then move to the next entity.
+This prints one row per linked note with its verdict (skip / pull / push / tie)
+and the timestamps behind it. Restrict to a subset with `--only <substring>`.
 
-- **merge** does a three-way merge. Non-overlapping edits combine automatically;
-  a genuine overlap is written back with `<<<<<<< vault` / `>>>>>>> mobRPG`
-  conflict markers and the command says so — the note sits unresolved until the
-  GM cleans the markers, then re-run (a clean `merge`, or `keep-vault` once it
-  reads right, re-baselines it).
-- **separate** stops reconciling that entity's description entirely, until the
-  GM clears the `description_policy`.
+**Step 2 — present, confirm, execute:**
 
-Every `pull-desc --execute` writes local vault files only — it never calls a
-mobRPG write endpoint, so it carries no live-world write risk regardless of the
-PROD/DEV target. It is still a vault mutation: same dry-run → present → confirm
-→ `--execute` sequence, per entity.
+```bash
+mobrpg sync <world> --vault <path> --execute
+```
 
-*Why it's safe:* change detection compares mobRPG's raw HTML to its recorded
-hash and the vault prose to a frozen base — never a lossy converter round-trip —
-so an untouched entity never falsely reads as changed, and authored prose is
-never clobbered by a guess.
+`--execute` gates every file write and every suggestion submit. The **pull**
+rows write local vault files only (no live-world risk regardless of the PROD/DEV
+target). The **push/tie** rows file `UpdateElement` suggestions against the live
+world — so on a PROD target, heed the production banner and get the GM's explicit
+yes first, or switch to `MOBRPG_ENV=dev`.
+
+**GM Notes are never pushed.** The `## GM Notes` tail stays local to the vault by
+design and is stripped from anything `sync` sends upstream, until mobRPG enforces
+hidden-note access server-side.
+
+*Why it's safe:* a pull overwrites only the canon-prose region, never the GM
+Notes tail; a push never mutates a live element — it only proposes a suggestion
+the GM ratifies. Nothing is merged and no authored prose is clobbered by a guess.

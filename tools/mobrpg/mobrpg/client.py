@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 mobRPG API client — env resolution, auth, and JSON transport over Tim's
-world-builder API. Relocated from the prototype's smoketest.py so every
-mobrpg subcommand shares one transport layer (`from mobrpg import client`).
+world-builder API. The single transport layer every mobrpg subcommand shares
+(`from mobrpg import client`).
 
 Auth flow:
     POST /api/user/login?clientId=<CLIENT_ID>&redirectUri=<REDIRECT_URI>

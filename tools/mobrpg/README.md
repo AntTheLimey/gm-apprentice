@@ -6,13 +6,8 @@ world and a gm-apprentice vault: importing a world into vault markdown, and
 pushing (or suggesting) vault entities back up into a world.
 
 I built it to keep my own vaults in sync with mobRPG worlds. It has no
-third-party dependencies — the client is stdlib `urllib` only.
-
-> **Native verbs plus documented fallbacks.** Most verbs are native Python
-> subcommands. Seven verbs (`write`, `merge`, `link-orphans`, `push`, `types`,
-> `links`, `images`) still shell out to the original prototype scripts that ship
-> alongside the package; they work exactly like the native verbs from the user's
-> point of view. This is a mid-migration state, not a finished port.
+third-party dependencies — the client is stdlib `urllib` only. Every verb is a
+native Python subcommand sharing one client; there is no shell-out layer.
 
 ## Install
 
@@ -88,14 +83,17 @@ Exit codes: `0` ok, `1` API error, `2` bad args / no auth configured.
 ## Read-only vs mutating
 
 Read-only verbs are safe to run anywhere: `whoami`, `worlds`, `pull`,
-`whats-new`, `suggestions`, `catalog`, `map`, `images`.
+`whats-new`, `suggestions`, `catalog`, `map`.
 
 Mutating verbs are **dry-run by default** — add `--execute` to actually write.
-The API-mutating verbs (`push`, `suggest`, `suggest-desc`, `submit-batch`,
-`update`, `types`, `links`, `review`) need write access on the world. The rest
-(`write`, `merge`, `link-orphans`, `pull-canon`, `pull-desc`, `adopt`, `relink`)
-only ever write local vault files; `pull-canon`, `pull-desc`, and `adopt` read
-from mobRPG but write locally, and `relink` makes no API calls at all.
+`suggest`, `sync`, and `submit-batch` only ever file *suggestions* — a
+collaborator can run them with just Read access, and the world owner accepts or
+dismisses each one, so none of them overwrites a live element directly. The
+owner-side verbs `update` and `review` (and listing others' suggestions) need
+write access on the world. The rest (`write`, `images`, `link-orphans`,
+`pull-canon`, `adopt`, `relink`) only ever write local vault files;
+`pull-canon`, `adopt`, and `images` read from mobRPG but write locally, and
+`relink` makes no API calls at all.
 
 Entity and event IDs live in each note's `mobrpg:` frontmatter node — the single
 source of truth. There is no sidecar crosswalk. A vault whose entities already
@@ -116,12 +114,11 @@ Run `mobrpg <command> --help` for a command's own options.
 
 - `pull <world>` — import a world into a structured JSON extract
   (default `extract.json`); the entry point of the import pipeline.
-- `write <extract.json> <out_dir>` — render an extract into vault markdown.
-- `merge <extract.json> <vault>` — non-destructive merge for entities present in
-  both the extract and the vault.
-- `link-orphans <extract.json> <vault> <outdir>` — auto-link obvious orphan
-  relationships after an import.
-- `images <world> <vault>` — pull entity images into the vault.
+- `write <extract.json> --out <out_dir>` — materialize an extract into vault
+  markdown, one file per entity.
+- `link-orphans <extract.json> --vault <path> --out <outdir>` — auto-link obvious
+  orphan relationships after an import.
+- `images <world> --vault <path>` — pull entity images into the vault.
 
 ### Reconcile (keep a vault current)
 
@@ -129,8 +126,8 @@ Run `mobrpg <command> --help` for a command's own options.
   and which vault notes have gone missing upstream.
 - `pull-canon <world> --vault <path>` — pull ratified mobRPG canon down into
   vault `mobrpg:` nodes.
-- `pull-desc <world> --vault <path>` — reconcile note description prose with
-  mobRPG canon (report by default; `--resolve` applies a chosen outcome).
+- `sync <world> --vault <path>` — timestamp last-writer-wins sync of each linked
+  note's description prose (see "How sync decides" below).
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
   already exist upstream but carry no node, matched by name.
 - `relink --vault <path> --to <new-rel-path>` — re-point a moved or renamed
@@ -138,17 +135,12 @@ Run `mobrpg <command> --help` for a command's own options.
 
 ### Push (vault → mobRPG)
 
-- `push <world> --chapter <ch>` — direct-create vault entities in a world
-  (needs write access; immediately live).
-- `suggest <world> --chapter <ch>` — submit vault entities as review suggestions
-  (only needs Read access — a collaborator proposes content for the owner to
-  accept or dismiss).
-- `suggest-desc <world> --vault <path>` — suggest a linked note's authored
-  description up to mobRPG as an `UpdateElement` suggestion.
+- `suggest <world> --vault <path>` — build the full datatype graph per vault
+  entity (element + classifier Types via `Attribute` edges + reified
+  relationship Events) and submit it as review suggestions. The owner accepts or
+  dismisses each one, so this never creates a live element directly.
 - `submit-batch <world> <batch.json>` — submit a pre-built compound batch
   (classifier types + attribute edges + reified event/link relationships).
-- `types <world>` — set entity types via `Attribute` edges.
-- `links <world> --chapter <ch>` — push vault relationships as mobRPG events.
 
 ### Review & catalog
 
@@ -163,6 +155,35 @@ Run `mobrpg <command> --help` for a command's own options.
 - `map <init|sync|check> <world> --vault <path>` — generate and maintain the
   per-vault type mapping (read-only on mobRPG).
 
+## How sync decides
+
+`mobrpg sync` keeps a linked note's description prose and its mobRPG element in
+step with a last-writer-wins rule — no content hashes, no frozen baselines, no
+merges. For each linked note it looks at three timestamps: the note file's
+mtime, the node's recorded `last_synced`, and the server element's
+`lastModified`. From those it decides, per note, inside a ±120s skew window
+(tune with `--skew`):
+
+- **skip** — neither side changed since the last sync. Nothing to do.
+- **pull** — only mobRPG changed. I overwrite the note's canon prose wholesale
+  with the converted server description, preserving the `## GM Notes` tail
+  verbatim, and stamp `last_synced`.
+- **push** — only the vault changed. I don't write upstream directly: I file one
+  reviewable `UpdateElement` suggestion and mark the node `review_state:
+  pending`. You adjudicate it in mobRPG — accept and the vault becomes canon,
+  dismiss and mobRPG stays canon.
+- **tie** — both sides changed within the skew window. Treated as a push (a
+  suggestion), because a human should decide.
+
+A note already `review_state: pending` is held — it's awaiting your decision
+upstream, so `sync` won't touch it. `sync` is dry-run by default and prints the
+per-note decision table; `--execute` gates every file write and suggestion
+submit.
+
+**GM Notes stay local to the vault by design** — the `## GM Notes` tail of a
+note is never pushed to mobRPG, and remains vault-local until mobRPG enforces
+hidden-note access server-side.
+
 ## Typical workflows
 
 Import a world into a vault (read-only against mobRPG, so prod is fine):
@@ -170,17 +191,22 @@ Import a world into a vault (read-only against mobRPG, so prod is fine):
 ```bash
 export MOBRPG_TOKEN=...
 mobrpg pull <worldId> --out extract.json
-mobrpg write extract.json /path/to/vault
-mobrpg merge extract.json /path/to/vault
-mobrpg link-orphans extract.json /path/to/vault ./orphan_out
+mobrpg write extract.json --out /path/to/vault
+mobrpg link-orphans extract.json --vault /path/to/vault --out ./orphan_out
 ```
 
-Propose a vault chapter to a world as suggestions (safe — only needs Read
-access; dry-run first):
+Propose a vault chapter to a world as suggestions (dry-run first):
 
 ```bash
-mobrpg suggest <worldId> --chapter chapter-2            # dry-run
-mobrpg suggest <worldId> --chapter chapter-2 --execute
+mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2            # dry-run
+mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2 --execute
+```
+
+Keep a linked note's description prose in sync going forward (dry-run first):
+
+```bash
+mobrpg sync <worldId> --vault /path/to/vault            # dry-run: shows the decision table
+mobrpg sync <worldId> --vault /path/to/vault --execute  # pulls newer canon, files suggestions for newer vault edits
 ```
 
 Confirm the round-trip after the owner accepts them (read-only):

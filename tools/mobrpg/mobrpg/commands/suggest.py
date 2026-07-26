@@ -1,12 +1,11 @@
 """mobrpg suggest — build the full datatype graph per vault entity (element +
 classifier Types via Attribute edges + reified relationship Events) and submit it
-as compound batches. Replaces the bare-CreateElement legacy push_suggestions.py.
+as compound batches. This is the push path: the owner accepts or dismisses each
+suggestion, so no live element is ever created directly.
 
 Reads _meta/mobrpg-map.json (type rules) and the vault .md files. Entity/event
 ids come from the vault's own `mobrpg:` nodes (node_index) — the single source of
-truth; there is no sidecar crosswalk. Imports only clean modules — never the
-legacy push_*/smoketest scripts (which print a PROD banner on import and couple
-to legacy transport).
+truth; there is no sidecar crosswalk.
 """
 from __future__ import annotations
 

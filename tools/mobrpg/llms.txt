@@ -158,10 +158,17 @@ vault whose entities already exist upstream but carry no node is linked with
                                   review_state: pending until `review`
                                   adjudicates it. Notes already pending are
                                   skipped. Dry-run by default.
-    mobrpg suggest <world> --chapter <ch> [--execute] [--limit N] [--only S]
-                                  Submit vault entities as review suggestions
-                                  (only needs Read access on the world). Emits
-                                  bare CreateElements (no types/relationships).
+    mobrpg suggest <world> --vault <path> [--chapter CH] [--kind K] [--only S]
+                  [--limit N] [--out DIR] [--write-back] [--include-pcs]
+                  [--execute]
+                                  Build the full datatype graph per vault entity
+                                  (element + classifier Types via Attribute edges
+                                  + reified relationship Events) and submit it as
+                                  compound suggestion batches. Only needs Read
+                                  access — the owner accepts/dismisses each, so no
+                                  live element is created directly. PCs excluded
+                                  unless --include-pcs; --write-back also writes a
+                                  pending mobrpg: node into each entity's file.
     mobrpg submit-batch <world> <batch.json> [--execute]
                                   Submit a pre-built COMPOUND batch (classifier
                                   Types, Attribute edges, reified Event + Link
@@ -184,8 +191,8 @@ Import a world into a vault:
 
 Push a vault chapter to mobRPG (safe: suggestions):
     export MOBRPG_TOKEN=...
-    mobrpg suggest <worldId> --chapter chapter-2            # dry-run
-    mobrpg suggest <worldId> --chapter chapter-2 --execute
+    mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2            # dry-run
+    mobrpg suggest <worldId> --vault /path/to/vault --chapter chapter-2 --execute
 
 Confirm the round-trip after a GM accepts them in mobRPG (read-only):
     mobrpg catalog <worldId> political/type                # see existing Types first

@@ -240,3 +240,37 @@ convention with the actual install path.
 - `0600`/`0700` perm tests genuinely `os.stat`. TLS verification intact, 30s
   timeouts, tokens redacted from URLs, no token printed on traced paths, no
   `shell=True`/`eval`/`exec`, no secrets anywhere in branch history.
+
+---
+
+## 🔁 Sync-model rework — 2026-07-26 (supersedes the canon-boundary machinery)
+
+The last-writer-wins sync rework of 2026-07-26 replaced the hash/baseline canon
+boundary this punch-list was written against. Several entries above are now
+**historical** — they describe a state the branch no longer occupies:
+
+- **The mid-strangler framing is obsolete.** Every verb is now a native Python
+  subcommand. The `FALLBACK` shell-out layer and all legacy prototype scripts
+  (`smoketest.py`, `etl_extract.py`, `push_suggestions.py`, and the shelled-out
+  `write`/`merge`/`link-orphans`/`push`/`types`/`links`/`images` scripts) are
+  deleted. So the "native verbs plus documented legacy fallbacks" wording (B6),
+  the retained-`smoketest.py` note (B7), and the top-of-file status block's
+  "mid-strangler reality" / 373-test count no longer describe the branch —
+  `link-orphans` in particular is now native and files suggestions rather than
+  emitting a generated curl script.
+- **The canon-boundary machinery is gone.** `merge3`, the canon fence,
+  `content_hash` + the four `canon_*` node scalars, and the `pull-desc` /
+  `suggest-desc` verbs were deleted. The `sync` verb replaces all of it with a
+  timestamp last-writer-wins decision (skip / pull / push / tie) per note. Where
+  entries above reference `merge3` (Should-fix CRLF item, Verified-solid
+  auto-merge item) or `pull-desc` (Fixed frontmatter-hardening item), those
+  subsystems no longer exist.
+- **`SYNC-CANON-BOUNDARY-FINDINGS.md` is superseded.** Its diagnosis of the
+  hash/baseline boundary is addressed by the design in
+  `docs/plans/2026-07-25-mobrpg-sync-lww-design.md`, which the shipped `sync`
+  verb implements. (Both files live in the author's main checkout, not this
+  worktree — referenced by path only.)
+- **GM Notes stay local by design.** Verification found the server's
+  `NoteableService.getNote` has no hidden-note check, so `sync` never pushes the
+  `## GM Notes` tail upstream until mobRPG enforces hidden-note access
+  server-side.
