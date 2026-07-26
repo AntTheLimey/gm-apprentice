@@ -11,6 +11,9 @@ status: active
 
 An investigator drawn into events beyond their understanding.
 
+> [!info] Keeper Only
+> The investigator is possessed by Hastur.
+
 <!-- gm-only -->
 Secretly serves Zalgorath, an entity beyond the veil.
 <!-- /gm-only -->

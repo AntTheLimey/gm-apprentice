@@ -159,6 +159,38 @@ function stripSpoiler(markdown) {
   return stripMarkedBlocks(markdown, 'spoiler');
 }
 
+// Remove Obsidian callout blockquotes (`> [!type] Title` and their body). The gm-apprentice
+// convention treats callouts as Keeper-facing (design decisions, alert levels, keeper-only
+// notes, canon-state bookkeeping), so a player site can drop them wholesale. Plain blockquotes
+// (`> "in-world quote"`) never carry a `[!type]` marker and are preserved.
+//   exclude === true            → strip every callout
+//   exclude === ['warning', …]  → strip only callouts of those types (case-insensitive)
+//   falsy                       → unchanged
+// Matches markdown.js CALLOUT_RE on the type token (allows hyphens and a +/- fold marker),
+// then consumes the contiguous `>`-prefixed lines that form the blockquote.
+function stripCallouts(markdown, exclude) {
+  if (!exclude) return markdown;
+  const types = Array.isArray(exclude)
+    ? new Set(exclude.map(t => String(t).toLowerCase()))
+    : null; // null → strip all types
+  const lines = markdown.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
+    if (m && (!types || types.has(m[1].toLowerCase()))) {
+      i++;
+      while (i < lines.length && /^>/.test(lines[i])) i++;
+      // Swallow one blank separator the callout left behind, so removing a callout that
+      // sat between two paragraphs collapses to a single blank line rather than two.
+      if (i < lines.length && lines[i].trim() === '') i++;
+      i--; // the for-loop's ++ lands on the next real line
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  return out.join('\n');
+}
+
 // Remove every `<!-- ... -->` comment, including multi-line ones, outside fenced code
 // blocks. Authors keep private notes (UNVERIFIED flags, change logs, import provenance)
 // as comments; the renderer runs with `html: false`, so anything left here is escaped and
@@ -389,6 +421,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
     markdown = commentResult;
   }
   markdown = stripLeadingH1(markdown);
+  markdown = stripCallouts(markdown, options.excludeCallouts);
   markdown = filterSections(markdown, excludeSections);
   markdown = separateBoldLabelLines(markdown);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
@@ -434,4 +467,4 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields };

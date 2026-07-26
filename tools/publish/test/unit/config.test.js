@@ -31,6 +31,19 @@ describe('exclude_drafts', () => {
   });
 });
 
+describe('exclude_callouts (issue #137)', () => {
+  it('defaults to false', () => {
+    assert.strictEqual(PUBLISH_DEFAULTS.exclude_callouts, false);
+    const config = loadPublishConfig('/nonexistent/path');
+    assert.strictEqual(config.exclude_callouts, false);
+  });
+
+  it('reads excludeCallouts from vault.config.json fallback', () => {
+    const config = loadPublishConfig('/nonexistent/path', { excludeCallouts: true });
+    assert.strictEqual(config.exclude_callouts, true);
+  });
+});
+
 describe('loadPublishConfig', () => {
   it('returns defaults when vault-config.md has no publish section', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));

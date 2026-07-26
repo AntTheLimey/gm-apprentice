@@ -4,7 +4,7 @@ const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -49,6 +49,7 @@ function build(options = {}) {
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
+  const excludeCallouts = publishConfig.exclude_callouts;
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
 
@@ -294,7 +295,7 @@ function build(options = {}) {
     const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
     const spoilerStripped = stripSpoiler(afterGm);
     const text = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
-    page.publishedMarkdown = filterSections(text, excludeSections);
+    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections);
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -478,7 +479,7 @@ function build(options = {}) {
         const basename = String(page.frontmatter.portrait).split('/').pop();
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
-      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages });
+      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
       logWarnings(page.outputPath, processed.warnings);
       let html;
 
@@ -495,6 +496,7 @@ function build(options = {}) {
           // markdown, and its warnings were already reported.
           const commentResult = stripHtmlComments(filtered);
           filtered = typeof commentResult === 'string' ? commentResult : commentResult.text;
+          filtered = stripCallouts(filtered, excludeCallouts);
           filtered = filterSections(filtered, excludeSections);
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
@@ -511,7 +513,7 @@ function build(options = {}) {
               frontmatter: {},
               outputPath: page.outputPath,
             };
-            const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages });
+            const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
             logWarnings(page.outputPath, storyProcessed.warnings);
             storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           }
@@ -850,7 +852,7 @@ function build(options = {}) {
     for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
       const outputPath = `story/characters/${slugify(pc.title)}.html`;
       const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
-      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages });
+      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
       logWarnings(outputPath, processed.warnings);
       const story = {
         title: pc.displayTitle, outputPath, html: processed.html,

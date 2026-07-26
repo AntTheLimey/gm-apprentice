@@ -11,6 +11,15 @@ All campaign content falls into three categories:
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
 - H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
+- Obsidian callouts (`> [!type] Title` blocks) when
+  `exclude_callouts` is set — `true` strips every callout, an array
+  of types (e.g. `["warning", "danger", "info"]`) strips only those.
+  The gm-apprentice convention treats callouts as Keeper-facing
+  (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
+  State), so scaffolded sites default `excludeCallouts` to `true`.
+  Plain blockquotes (`> "in-world quote"`) carry no `[!type]` marker
+  and are always preserved — keep read-aloud text as a plain
+  blockquote, not a callout, if you want it published.
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - **Every other `<!-- ... -->` comment.** Private authoring notes
   (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are
