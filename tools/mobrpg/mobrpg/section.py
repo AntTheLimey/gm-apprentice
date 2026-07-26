@@ -42,3 +42,14 @@ def canon_section(body: str):
         return new_region.rstrip("\r\n") + sep + tail
 
     return region, reinsert
+
+
+_GM_NOTES_ONLY = re.compile(r"^##[ \t]+GM Notes[ \t\r]*$", re.M)
+
+
+def gm_notes_split(body: str) -> tuple[str, str]:
+    """Split body into (main, gm_tail); gm_tail starts at '## GM Notes' or ''."""
+    m = _GM_NOTES_ONLY.search(body)
+    if not m:
+        return body, ""
+    return body[: m.start()], body[m.start():]
