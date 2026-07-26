@@ -260,6 +260,11 @@ describe('stripCallouts (issue #137)', () => {
     const md = '> [!WARNING] Design\n> secret\n\nKeep.';
     assert.strictEqual(stripCallouts(md, ['warning']), 'Keep.');
   });
+
+  it('preserves a callout example inside a fenced code block', () => {
+    const md = 'Docs:\n\n```\n> [!warning] Example\n> body\n```\n\nAfter.';
+    assert.strictEqual(stripCallouts(md, true), md);
+  });
 });
 
 describe('filterFields', () => {

@@ -11,15 +11,6 @@ All campaign content falls into three categories:
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
 - H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
-- Obsidian callouts (`> [!type] Title` blocks) when
-  `exclude_callouts` is set — `true` strips every callout, an array
-  of types (e.g. `["warning", "danger", "info"]`) strips only those.
-  The gm-apprentice convention treats callouts as Keeper-facing
-  (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
-  State), so scaffolded sites default `excludeCallouts` to `true`.
-  Plain blockquotes (`> "in-world quote"`) carry no `[!type]` marker
-  and are always preserved — keep read-aloud text as a plain
-  blockquote, not a callout, if you want it published.
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - **Every other `<!-- ... -->` comment.** Private authoring notes
   (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are
@@ -119,6 +110,31 @@ happen to check that session (the reveal happened in dialogue that
 never made it into the wrap-up notes, or the entity wasn't obviously
 "touched"), campaign-qa also runs a full-vault open-spoilers audit on
 demand — see `campaign-qa/references/check-procedures.md`.
+
+## Excluding Callouts (opt-in)
+
+Obsidian callouts (`> [!type] Title` blocks) are **published by
+default** — `exclude_callouts` defaults to `false`, so an existing
+vault with no explicit setting still renders every callout to the
+site. Enable stripping with `publish.exclude_callouts` (or
+`excludeCallouts` in `vault.config.json`):
+
+- `true` — strip every callout
+- an array of types, e.g. `["warning", "danger", "info"]` — strip
+  only callouts of those types
+
+The gm-apprentice convention treats callouts as Keeper-facing
+(Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
+State), so **newly scaffolded** sites set `excludeCallouts: true` by
+default. Sites created before this option existed keep the default
+`false` until you set it explicitly — if you rely on callouts to hide
+Keeper content, turn it on, or move that content under a `## GM Notes`
+heading or `<!-- gm-only -->` markers, which are excluded regardless.
+
+Plain blockquotes (`> "an in-world quote"`) carry no `[!type]` marker
+and are never touched — keep read-aloud text as a plain blockquote,
+not a callout, if you want it published. Callout examples inside a
+fenced code block are preserved as documentation.
 
 ## Publish Manifest
 

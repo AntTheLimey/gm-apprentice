@@ -175,7 +175,12 @@ function stripCallouts(markdown, exclude) {
     : null; // null → strip all types
   const lines = markdown.split('\n');
   const out = [];
+  let inCodeFence = false;
   for (let i = 0; i < lines.length; i++) {
+    // A `> [!warning]` written as an example inside a fenced code block is documentation,
+    // not a real callout — copy fenced lines verbatim (matches stripMarkedBlocks).
+    if (/^```/.test(lines[i])) inCodeFence = !inCodeFence;
+    if (inCodeFence) { out.push(lines[i]); continue; }
     const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
     if (m && (!types || types.has(m[1].toLowerCase()))) {
       i++;
