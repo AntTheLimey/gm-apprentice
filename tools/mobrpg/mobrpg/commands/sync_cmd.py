@@ -30,13 +30,17 @@ import os
 import sys
 from dataclasses import dataclass
 
+import re
+
 from mobrpg import client
+from mobrpg import links
 from mobrpg import lww
 from mobrpg import md as _md
 from mobrpg import node
 from mobrpg import section
 from mobrpg.vault import iter_linked_notes
 from mobrpg.commands import submit_batch
+from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
 
 
@@ -77,12 +81,27 @@ class Action:
     suggestion: dict | None = None
 
 
-def _pull_body(old_body: str, description: str | None) -> str:
-    """Behavior 5: server prose (converted) + preserved GM Notes tail. A "\\n\\n"
-    separator is inserted only when a GM tail exists and the converted prose does
-    not already end with a blank line."""
+def _note_name(path: str, txt: str) -> str:
+    """The display name a `[[wikilink]]` should carry for this note: the
+    top-level frontmatter `name:` if present, else the filename stem. Consumed
+    only to build the pull-side {element_id: name} map."""
+    _pre, fm_body, _post = node._split_frontmatter(txt)
+    if fm_body:
+        m = re.search(r"(?m)^name:\s*(.+?)\s*$", fm_body)
+        if m:
+            return m.group(1).strip().strip('"')
+    return os.path.splitext(os.path.basename(path))[0]
+
+
+def _pull_body(old_body: str, description: str | None,
+               name_by_eid: dict | None) -> str:
+    """Behavior 5: server prose (converted, element links rewritten back to
+    wikilinks) + preserved GM Notes tail. A "\\n\\n" separator is inserted only
+    when a GM tail exists and the converted prose does not already end with a
+    blank line. The GM Notes tail is never touched by the link rewrite."""
     _main, gm_tail = section.gm_notes_split(old_body)
     converted = _md.html_to_md(description or "")
+    converted = links.rewrite_md_for_pull(converted, name_by_eid or {})
     if gm_tail and not converted.endswith("\n\n"):
         return converted + "\n\n" + gm_tail
     return converted + gm_tail
@@ -102,10 +121,16 @@ def _build_suggestion(nd: dict, cand_html: str) -> dict:
     return item
 
 
-def plan(notes, fetch, now: str, skew: float) -> list[Action]:
+def plan(notes, fetch, now: str, skew: float, *,
+         idx: dict | None = None, world: str = "",
+         url_fmt: str = links.URL_FMT,
+         name_by_eid: dict | None = None) -> list[Action]:
     """Pure decision pass. `notes` yields (path, txt, nd, mtime); `fetch(nd)`
     returns (detail, status) with status in {ok, deleted, unknown}. `now` is the
-    stamp to apply; no I/O happens here."""
+    stamp to apply; no I/O happens here. `idx`/`world`/`url_fmt` drive the push
+    wikilink->element rewrite; `name_by_eid` drives the pull element->wikilink
+    rewrite."""
+    idx = idx or {}
     actions: list[Action] = []
     for path, txt, nd, mtime in notes:
         ref = nd.get("external_ref") or path
@@ -133,7 +158,7 @@ def plan(notes, fetch, now: str, skew: float) -> list[Action]:
 
         # Behavior 5: server wins — overwrite prose, keep GM Notes, stamp.
         if decision == "pull":
-            new_body = _pull_body(old_body, detail.get("description"))
+            new_body = _pull_body(old_body, detail.get("description"), name_by_eid)
             new_node = dict(nd)
             new_node["last_synced"] = now
             actions.append(Action(path, ref, "pull",
@@ -141,7 +166,10 @@ def plan(notes, fetch, now: str, skew: float) -> list[Action]:
             continue
 
         # Behavior 6: push / tie — compare authored prose to the live description.
+        # Rewrite vault wikilinks to element links BEFORE conversion; the GM Notes
+        # tail is sliced off here so it is neither rewritten nor pushed.
         main = section.gm_notes_split(old_body)[0]
+        main = links.rewrite_md_for_push(main, idx, world, url_fmt)
         cand_html = _md.md_to_html(_md.strip_boilerplate(main))
         if (_md.normalize_html_for_compare(cand_html)
                 == _md.normalize_html_for_compare(detail.get("description") or "")):
@@ -209,9 +237,18 @@ def run(argv: list[str]) -> int:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
+    # Resolution indexes for link rewriting. `idx` (name-key -> element_id) drives
+    # the push rewrite; `name_by_eid` (element_id -> display name) drives the pull
+    # rewrite. Both are built from ALL linked notes — a --only-filtered note can
+    # still be a valid link target — so they are populated before the filter.
+    idx, _linked, _submitted = suggest.node_index(args.vault)
     try:
         notes = []
+        name_by_eid: dict[str, str] = {}
         for path, txt, nd in iter_linked_notes(args.vault):
+            eid = nd.get("element_id")
+            if eid:
+                name_by_eid[eid] = _note_name(path, txt)
             if args.only and args.only not in (nd.get("external_ref") or "") and args.only not in path:
                 continue
             notes.append((path, txt, nd, os.path.getmtime(path)))
@@ -221,7 +258,9 @@ def run(argv: list[str]) -> int:
 
     fetch = _make_fetch(args.world, token)
     try:
-        actions = plan(notes, fetch, lww.now_iso(), args.skew)
+        actions = plan(notes, fetch, lww.now_iso(), args.skew,
+                       idx=idx, world=args.world, url_fmt=links.URL_FMT,
+                       name_by_eid=name_by_eid)
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
