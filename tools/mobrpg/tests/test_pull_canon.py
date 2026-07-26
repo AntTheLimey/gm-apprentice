@@ -2,6 +2,7 @@ import pytest
 
 from mobrpg.commands import pull_canon
 from mobrpg import client
+from mobrpg import lww
 from mobrpg import node
 
 BASE = {"world_id": "w1", "external_ref": "canticle:Characters/NPCs/Imogen_Bellamy",
@@ -51,6 +52,43 @@ def test_deleted_flags_and_clears_id():
 def test_pending_left_untouched():
     live = {"state": "pending", "element_id": None, "determined": {}, "event_ids": {}}
     assert pull_canon.apply_state(BASE, live) == BASE
+
+
+def test_accept_stamps_last_synced():
+    live = {"state": "accepted", "element_id": "el-1",
+            "determined": {"profession": "Priest", "race": "Human", "sex": "Female"},
+            "event_ids": {"friend_of|Nathaniel_Rooke": "ev-1"}}
+    out = pull_canon.apply_state(BASE, live)
+    assert out["review_state"] == "accepted"
+    assert out["last_synced"] != ""
+
+
+def test_dismissed_stamps_last_synced():
+    live = {"state": "dismissed", "element_id": None, "review_note": "dup",
+            "determined": {}, "event_ids": {}}
+    out = pull_canon.apply_state(BASE, live)
+    assert out["review_state"] == "dismissed"
+    assert out["last_synced"] != ""
+
+
+def test_already_accepted_unchanged_does_not_restamp():
+    prior = dict(BASE, review_state="accepted", element_id="el-1",
+                 last_synced="2020-01-01T00:00:00Z")
+    live = {"state": "accepted", "element_id": "el-1",
+            "determined": dict(prior["determined"]), "event_ids": {}}
+    out = pull_canon.apply_state(prior, live)
+    assert out["review_state"] == "accepted"
+    assert out["last_synced"] == "2020-01-01T00:00:00Z"
+
+
+def test_already_dismissed_unchanged_does_not_restamp():
+    prior = dict(BASE, review_state="dismissed", element_id=None,
+                 review_note="dup", last_synced="2020-01-01T00:00:00Z")
+    live = {"state": "dismissed", "element_id": None, "review_note": "dup",
+            "determined": {}, "event_ids": {}}
+    out = pull_canon.apply_state(prior, live)
+    assert out["review_state"] == "dismissed"
+    assert out["last_synced"] == "2020-01-01T00:00:00Z"
 
 
 def test_scaffold_note_creates_minimal_file():

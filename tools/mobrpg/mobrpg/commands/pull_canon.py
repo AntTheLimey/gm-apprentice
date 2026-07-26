@@ -15,6 +15,7 @@ import os
 import sys
 
 from mobrpg import client
+from mobrpg import lww
 from mobrpg import node
 from mobrpg.commands import pull_desc
 from mobrpg.commands import rel_baseline
@@ -34,6 +35,8 @@ def apply_state(existing: dict, live: dict) -> dict:
     if state == "dismissed":
         out["review_state"] = "dismissed"
         out["review_note"] = live.get("review_note") or ""
+        if existing.get("review_state") != "dismissed":
+            out["last_synced"] = lww.now_iso()
         return out
     if state == "accepted":
         out["element_id"] = live.get("element_id") or existing.get("element_id")
@@ -43,6 +46,8 @@ def apply_state(existing: dict, live: dict) -> dict:
             out["determined"] = dict(live_det)
         else:
             out["review_state"] = "accepted"
+            if existing.get("review_state") != "accepted":
+                out["last_synced"] = lww.now_iso()
         eids = live.get("event_ids") or {}
         rels = []
         for r in existing.get("relationships", []):
