@@ -23,9 +23,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import glob
 import hashlib
-import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -35,7 +33,6 @@ from mobrpg import md as _md
 from mobrpg import merge3
 from mobrpg import node
 from mobrpg import section
-from mobrpg.commands import map_cmd
 from mobrpg.commands import suggestions
 
 RESOLVE_MODES = ("take-canon", "keep-vault", "merge", "separate", "baseline")
@@ -121,15 +118,7 @@ def resolve(nd: dict, body: str, live_html: str | None, mode: str, now: str):
 
 # ---------------- I/O ----------------
 
-def _iter_notes(vault: str):
-    """Yield (path, text, node_dict) for every vault note carrying an element_id."""
-    vault = os.path.expanduser(vault)
-    for folder in map_cmd.FOLDERS:
-        for path in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
-            txt = open(path, encoding="utf-8").read()
-            nd = node.read_node(txt)
-            if nd and nd.get("element_id"):
-                yield path, txt, nd
+from mobrpg.vault import iter_linked_notes as _iter_notes
 
 
 def _body_of(txt: str) -> str:
