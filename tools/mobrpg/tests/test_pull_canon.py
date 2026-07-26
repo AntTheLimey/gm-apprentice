@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from mobrpg.commands import pull_canon
@@ -110,6 +112,34 @@ def _run_execute(monkeypatch, vault, live_by_ref):
                         lambda world, token, *, verify=True: live_by_ref)
     rc = pull_canon.run(["w1", "--vault", str(vault), "--execute"])
     assert rc == 0
+
+
+def test_dismiss_transition_pins_file_mtime(monkeypatch, tmp_path):
+    # The accept/dismiss write must pin the file mtime to the fresh last_synced
+    # stamp; otherwise mtime > last_synced leaves the note perpetually vault-dirty
+    # and a dismissed suggestion gets re-filed on the next sync.
+    vault = tmp_path / "vault"
+    (vault / "Creatures").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "ns:Creatures/marsh-hag",
+          "element_id": "e-77", "element_kind": "Creature", "review_state": "accepted",
+          "last_synced": "2020-01-01T00:00:00Z", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    p = vault / "Creatures/marsh-hag.md"
+    p.write_text("---\ntype: creature\n" + node.emit_node(nd) + "---\nBody\n",
+                 encoding="utf-8")
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(
+        pull_canon, "_fetch_live",
+        lambda world, token, *, verify=True: {
+            "ns:Creatures/marsh-hag": {"state": "dismissed", "element_id": None,
+                                       "review_note": "dup", "determined": {},
+                                       "event_ids": {}}})
+    pull_canon.run(["w1", "--vault", str(vault), "--execute"])
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "dismissed"
+    stamp = lww.parse_ts(out["last_synced"])
+    assert stamp is not None
+    assert os.path.getmtime(p) == stamp          # mtime pinned to the stamp
 
 
 def test_run_baseline_stamps_matched_event_ids(monkeypatch, tmp_path, capsys):

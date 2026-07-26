@@ -10,7 +10,7 @@ mobrpg:
   world_id: "w1"
   external_ref: "ns:People/marsh-hag"
   element_id: "e-77"
-  element_kind: "creature"
+  element_kind: "Creature"
   review_state: "accepted"
   last_synced: "2026-07-20T00:00:00Z"
 ---
@@ -102,7 +102,7 @@ mobrpg:
   world_id: "w1"
   external_ref: "ns:People/marsh-hag"
   element_id: "e-77"
-  element_kind: "creature"
+  element_kind: "Creature"
   review_state: "accepted"
   last_synced: "2026-07-20T00:00:00Z"
 ---
@@ -143,6 +143,68 @@ def test_pull_rewrites_element_url_to_wikilink(tmp_path, monkeypatch):
     txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
     assert "[[Marsh Hag]]" in txt
     assert url not in txt
+
+
+def test_sync_is_idempotent_after_stamp(tmp_path, monkeypatch):
+    # After the in-sync path stamps last_synced, the file mtime is pinned to that
+    # stamp, so a second sync with the same server detail decides skip — no second
+    # write (mtime unchanged) and no suggestion filed.
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)  # vault freshly edited (mtime = now)
+    detail = {"description": "<p>Old vault prose.</p>",
+              "lastModified": "2026-07-19T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])   # in-sync: stamps + pins
+    assert submitted == []
+    mtime1 = os.path.getmtime(p)
+    content1 = p.read_text(encoding="utf-8")
+
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])   # must be skip
+    assert submitted == []                                 # nothing filed
+    assert os.path.getmtime(p) == mtime1                   # no second write
+    assert p.read_text(encoding="utf-8") == content1
+
+
+def test_dismissed_suggestion_not_refiled(tmp_path, monkeypatch):
+    # A note pushed (pending) then GM-dismissed via pull-canon must NOT get its
+    # suggestion re-filed on the next sync: the dismiss stamp pins the file mtime,
+    # so decide sees skip, not push (design §2 guarantee).
+    from mobrpg.commands import pull_canon
+    note = NOTE.replace('external_ref: "ns:People/marsh-hag"',
+                        'external_ref: "ns:Creatures/marsh-hag"')
+    v = _vault(tmp_path, note)
+    p = v / "Creatures" / "marsh-hag.md"
+
+    # 1. push: server text differs -> suggestion filed, review_state=pending
+    os.utime(p, None)  # freshly edited
+    submitted = []
+    _wire(monkeypatch, {"description": "<p>Stale server text.</p>",
+                        "lastModified": "2026-07-21T00:00:00Z"}, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert len(submitted) == 1
+    assert _node.read_node(p.read_text(encoding="utf-8"))["review_state"] == "pending"
+
+    # 2. simulate GM adjudication: dismiss via pull-canon (stamps + pins mtime)
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(
+        pull_canon, "_fetch_live",
+        lambda world, token, *, verify=True: {
+            "ns:Creatures/marsh-hag": {"state": "dismissed", "element_id": None,
+                                       "review_note": "not canon", "determined": {},
+                                       "event_ids": {}}})
+    pull_canon.run(["w1", "--vault", str(v), "--execute"])
+    assert _node.read_node(p.read_text(encoding="utf-8"))["review_state"] == "dismissed"
+
+    # 3. next sync: server still older than the dismiss stamp and still differing
+    #    -> must be skip, not a re-filed suggestion.
+    submitted2 = []
+    _wire(monkeypatch, {"description": "<p>Stale server text.</p>",
+                        "lastModified": "2026-07-21T00:00:00Z"}, submitted2)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert submitted2 == []                                        # NOT re-filed
+    assert _node.read_node(p.read_text(encoding="utf-8"))["review_state"] == "dismissed"
 
 
 def test_dry_run_writes_nothing(tmp_path, monkeypatch):

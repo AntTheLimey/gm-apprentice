@@ -184,9 +184,10 @@ def plan(notes, fetch, now: str, skew: float, *,
 
 def _kind_ep(nd: dict) -> str | None:
     """Resolve the element_kind to its detail endpoint. Nodes store the API
-    classifier type (e.g. "Creature"); tolerate a lowercased kind too."""
-    kind = nd.get("element_kind") or ""
-    return suggestions.TYPE_EP.get(kind) or suggestions.TYPE_EP.get(kind.title())
+    classifier type verbatim (e.g. "Creature", "LandFeature"); a strict lookup is
+    correct — .title() would mangle "LandFeature" to "Landfeature" and miss. An
+    unknown/blank kind returns None and the caller reports-and-skips."""
+    return suggestions.TYPE_EP.get(nd.get("element_kind") or "")
 
 
 def _make_fetch(world: str, token: str):
@@ -248,8 +249,9 @@ def run(argv: list[str]) -> int:
         return 1
 
     fetch = _make_fetch(args.world, token)
+    now = lww.now_iso()
     try:
-        actions = plan(notes, fetch, lww.now_iso(), args.skew,
+        actions = plan(notes, fetch, now, args.skew,
                        idx=idx, world=args.world, url_fmt=links.URL_FMT,
                        name_by_eid=name_by_eid)
     except client.ApiError as e:
@@ -263,10 +265,19 @@ def run(argv: list[str]) -> int:
         print(f"  {a.decision:8} {a.ref}")
 
     if args.execute:
+        # pull and in-sync writes stamp `last_synced`; pin the file mtime to that
+        # stamp so decide sees `mtime == last_synced` (skip) on the next run rather
+        # than mtime > last_synced (a spurious vault-dirty push). now_iso truncates
+        # to whole seconds, so an un-pinned sub-second mtime always reads as newer.
+        # The push write only marks review_state pending (no stamp) and is held on
+        # later runs, so it needs no pin.
+        ls = lww.parse_ts(now)
         for a in actions:
             if a.new_text is not None:
                 with open(a.path, "w", encoding="utf-8") as fh:
                     fh.write(a.new_text)
+                if a.decision in ("pull", "in-sync") and ls is not None:
+                    os.utime(a.path, (ls, ls))
 
     batch = [a.suggestion for a in actions if a.suggestion is not None]
     if batch:

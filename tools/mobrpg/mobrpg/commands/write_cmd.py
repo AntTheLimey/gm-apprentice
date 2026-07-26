@@ -11,7 +11,6 @@ import argparse
 import json
 import os
 import re
-import sys
 
 # mobRPG kind → (vault subfolder, entity type)
 KIND_MAP = {

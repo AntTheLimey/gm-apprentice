@@ -408,6 +408,15 @@ def run(argv: list[str]) -> int:
         if args.execute:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(merged)
+            # An accept/dismiss transition stamps a fresh `last_synced`; pin the
+            # file mtime to it so the note reads clean (mtime == last_synced) on
+            # the next sync instead of vault-dirty (a dismissed suggestion would
+            # otherwise be re-filed). Other transitions (deleted, edited) don't
+            # stamp, so `last_synced` is unchanged and no pin is applied.
+            if newn.get("last_synced") != existing.get("last_synced"):
+                ls = lww.parse_ts(newn.get("last_synced"))
+                if ls is not None:
+                    os.utime(path, (ls, ls))
         updated += 1
     print(f"pull-canon: {updated} node(s) updated"
           + ("" if args.execute else "  [dry-run — no files changed]"))
