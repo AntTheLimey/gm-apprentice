@@ -7,7 +7,7 @@ def test_help_lists_all_verbs_and_llms_pointer(capsys):
     rc = cli.main(["--help"])
     out = capsys.readouterr().out
     assert rc == 0
-    for verb in ("whoami", "pull", "push", "suggest", "sync", "images"):
+    for verb in ("whoami", "pull", "push", "suggest", "sync"):
         assert verb in out
     assert "llms.txt" in out
 
@@ -51,7 +51,7 @@ def test_fallback_returns_child_exit_code(monkeypatch):
         return R()
 
     monkeypatch.setattr(cli.subprocess, "run", fake_run)
-    assert cli.main(["images", "world-1", "/vault", "/xwalk.json"]) == 7
+    assert cli.main(["types", "world-1", "/vault", "/xwalk.json"]) == 7
 
 
 def test_auth_verb_is_native(monkeypatch):

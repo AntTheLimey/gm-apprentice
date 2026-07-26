@@ -61,7 +61,6 @@ FALLBACK: dict[str, str] = {
     "push": "push_to_mobrpg.py",
     "types": "assign_types.py",
     "links": "push_relationships.py",
-    "images": "pull_images.py",
 }
 
 # Ordered help text for `mobrpg --help`.
@@ -86,7 +85,6 @@ VERB_HELP: list[tuple[str, str]] = [
     ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
     ("types", "set entity types via Attribute edges"),
     ("links", "push vault relationships as mobRPG events"),
-    ("images", "pull entity images from a mobRPG world into the vault"),
 ]
 
 _HELP = """\
