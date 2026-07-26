@@ -56,7 +56,6 @@ NATIVE: dict = {
 
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
 FALLBACK: dict[str, str] = {
-    "write": "vault_write.py",
     "merge": "merge_overlaps.py",
     "link-orphans": "orphan_link.py",
     "push": "push_to_mobrpg.py",
@@ -81,7 +80,6 @@ VERB_HELP: list[tuple[str, str]] = [
     ("whats-new", "read-only report: entities/types new in mobRPG, and vault notes gone upstream"),
     ("adopt", "stamp mobrpg: nodes onto unlinked entities, matched to live elements by name"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
-    ("write", "render a JSON extract into vault markdown files"),
     ("merge", "non-destructive merge for entities present in both"),
     ("link-orphans", "auto-link obvious orphan relationships post-import"),
     ("push", "push vault entities to mobRPG (direct create; needs write access)"),

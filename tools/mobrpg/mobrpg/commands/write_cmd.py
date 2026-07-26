@@ -1,19 +1,17 @@
-#!/usr/bin/env python3
-"""
-Write a mobRPG extract (from etl_extract.py) into gm-apprentice vault markdown.
+"""mobrpg write — materialize a mobRPG extract (from `mobrpg pull`) into
+gm-apprentice vault markdown.
 
-Maps each mobRPG entity to the correct vault folder/template/type, builds
-template-conformant frontmatter + body, and writes one file per entity. Defaults
-to a PREVIEW directory so nothing touches a live vault until reviewed.
-
-Usage:
-    python3 vault_write.py space_extract.json ./space_vault_preview
+Ported from the prototype's vault_write.py: maps each mobRPG entity to the
+correct vault folder/template/type, builds template-conformant frontmatter +
+body, and writes one file per entity.
 """
 from __future__ import annotations
-import json, re, sys, os
 
-CAMPAIGN = "Dead End"
-SOURCE_DOC = "mobRPG 'Space' world (Tim) — API import"
+import argparse
+import json
+import os
+import re
+import sys
 
 # mobRPG kind → (vault subfolder, entity type)
 KIND_MAP = {
@@ -30,6 +28,7 @@ LANDFEATURE_SUBTYPE = {
     "Asteroid": "asteroid belt", "System": "star system",
 }
 
+
 # fallback: guess location_type for landfeatures from the name, used ONLY when
 # mobRPG carries no landFeatureType (e.g. routes) — the authoritative subtype
 # (captured by etl_extract as a `landfeature/subType` classifier) wins over this.
@@ -42,20 +41,14 @@ def landfeature_type(name: str) -> str:
     return "planet"
 
 
-# Per-vault naming convention. Dead End uses spaces in filenames AND wiki-links
-# ("Thides System.md", "[[Thides System]]"); other vaults (e.g. Regency) use
-# underscores. The real integration must DETECT this from the target vault.
-NAME_STYLE = "space"   # "space" | "underscore"
-
-
-def slug(name: str) -> str:
+def slug(name: str, name_style: str) -> str:
     s = re.sub(r"[^\w\s-]", "", name).strip()
     s = re.sub(r"\s+", " ", s)
-    return s if NAME_STYLE == "space" else s.replace(" ", "_")
+    return s if name_style == "space" else s.replace(" ", "_")
 
 
-def wl(name: str) -> str:
-    return f"[[{slug(name)}]]"
+def wl(name: str, name_style: str) -> str:
+    return f"[[{slug(name, name_style)}]]"
 
 
 def yaml_list(items: list[str]) -> str:
@@ -64,17 +57,17 @@ def yaml_list(items: list[str]) -> str:
     return "\n" + "\n".join(f"  - {json.dumps(i, ensure_ascii=False)}" for i in items)
 
 
-def rel_block(rels: list[dict], default_pred: str, default_target: str | None) -> str:
+def rel_block(rels: list[dict], default_pred: str, default_target: str | None,
+              name_style: str) -> str:
     if not rels and not default_target:
         return " []"
-    out = ["relationships:"] if False else []
     lines = []
     src = rels or ([{"target": default_target, "predicate": default_pred,
                      "role": None, "eventType": None}] if default_target else [])
     for r in src:
         desc = r.get("role") or ""
         lines.append(
-            f"  - target: \"{wl(r['target'])}\"\n"
+            f"  - target: \"{wl(r['target'], name_style)}\"\n"
             f"    type: {r['predicate']}\n"
             f"    tone: neutral\n"
             f"    strength: 5\n"
@@ -111,7 +104,7 @@ def classifier_of(rec: dict, kinds: tuple) -> str:
     return ""
 
 
-def build(rec: dict) -> tuple[str, str] | None:
+def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[str, str] | None:
     kind = rec["kind"]
     if kind not in KIND_MAP:
         return None
@@ -132,6 +125,7 @@ def build(rec: dict) -> tuple[str, str] | None:
     role = next((r["role"] for r in rels if r.get("role")), "")
 
     fm_common = (
+        f"name: \"{name}\"\n"
         f"source_confidence: AUTHORITATIVE\n"   # mobRPG declared canon
         f"source: prep\n"                       # TODO(integration): needs an 'api-import' source enum
         f"createdSession: \"\"\n"
@@ -139,12 +133,11 @@ def build(rec: dict) -> tuple[str, str] | None:
         f"lastUpdated: \"\"\n"
         f"aliases: {yaml_list(aliases)}\n"
         f"tags: {yaml_list(['mobrpg-import'])}\n"
-        f"campaign: \"{CAMPAIGN}\"\n"
+        f"campaign: \"{campaign}\"\n"
     )
 
     if etype == "npc":
         # split first/last for nationality? leave blank; role → occupation
-        located = next((r for r in rels if r["predicate"] == "located_at"), None)
         fm = (
             f"---\n"
             f"type: npc\n{fm_common}"
@@ -157,20 +150,18 @@ def build(rec: dict) -> tuple[str, str] | None:
             f"motivations: []\n"
             f"secrets: \"\"\n"
             f"portrait: \"\"\n"
-            f"relationships:{rel_block(rels, 'located_at', None)}\n"
+            f"relationships:{rel_block(rels, 'located_at', None, name_style)}\n"
             f"---\n"
         )
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Motivations & Secrets\n\n"
-              f"## Appearances\n\n## Source References\n\n- {SOURCE_DOC}\n\n"
+              f"## Appearances\n\n## Source References\n\n- {source_doc}\n\n"
               f"> [!info] Reconstruction Note\n> Imported from mobRPG; descriptive prose is "
               f"Tim's. Relationships derived from mobRPG event join-entities.\n\n## GM Notes\n")
 
     elif etype == "faction":
         ftype = classifier_of(rec, ("organization/type",))
-        hq = next((r["target"] for r in rels if r["predicate"] in ("located_at", "headquartered_at")), "")
         fm = (
             f"---\n"
-            f"name: \"{name}\"\n"
             f"type: faction\n{fm_common}"
             f"factionType: {json.dumps(ftype, ensure_ascii=False)}\n"
             f"goals: []\n"
@@ -185,7 +176,7 @@ def build(rec: dict) -> tuple[str, str] | None:
             f"status: active\n"
             f"part_of: \"\"\n"
             f"portrait: \"\"\n"
-            f"relationships:{rel_block(rels, 'headquartered_at', None)}\n"
+            f"relationships:{rel_block(rels, 'headquartered_at', None, name_style)}\n"
             f"---\n"
         )
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Goals & Methods\n\n## Resources\n\n"
@@ -201,17 +192,17 @@ def build(rec: dict) -> tuple[str, str] | None:
             f"---\n"
             f"type: location\n{fm_common}"
             f"location_type: {json.dumps(ltype, ensure_ascii=False)}\n"
-            f"parent_location: \"{wl(parent) if parent else ''}\"\n"
+            f"parent_location: \"{wl(parent, name_style) if parent else ''}\"\n"
             f"atmosphere: \"\"\n"
             f"inhabitants: []\n"
             f"points_of_interest: []\n"
             f"secrets: \"\"\n"
             f"portrait: \"\"\n"
-            f"relationships:{rel_block(rels, 'part_of', None)}\n"
+            f"relationships:{rel_block(rels, 'part_of', None, name_style)}\n"
             f"---\n"
         )
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Points of Interest\n\n"
-              f"## Source References\n\n- {SOURCE_DOC}\n\n"
+              f"## Source References\n\n- {source_doc}\n\n"
               f"> [!info] Reconstruction Note\n> Imported from mobRPG (canon).\n\n## GM Notes\n")
 
     elif etype == "item":
@@ -224,11 +215,11 @@ def build(rec: dict) -> tuple[str, str] | None:
             f"current_holder: \"\"\n"
             f"properties: {{}}\n"
             f"portrait: \"\"\n"
-            f"relationships:{rel_block(rels, 'owns', None)}\n"
+            f"relationships:{rel_block(rels, 'owns', None, name_style)}\n"
             f"---\n"
         )
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Properties\n\n## Source References\n\n"
-              f"- {SOURCE_DOC}\n\n> [!info] Reconstruction Note\n> Imported from mobRPG (canon).\n\n"
+              f"- {source_doc}\n\n> [!info] Reconstruction Note\n> Imported from mobRPG (canon).\n\n"
               f"## GM Notes\n")
     else:
         return None
@@ -238,30 +229,36 @@ def build(rec: dict) -> tuple[str, str] | None:
     if gm_notes:
         md = md.rstrip("\n") + "\n\n" + keeper_callout(gm_notes) + "\n"
 
-    return f"{folder}/{slug(name)}.md", md
+    return f"{folder}/{slug(name, name_style)}.md", md
 
 
-def main() -> int:
-    if len(sys.argv) < 3:
-        print("usage: vault_write.py <extract.json> <out_dir>", file=sys.stderr)
-        return 2
-    data = json.load(open(sys.argv[1]))
-    out = sys.argv[2]
-    written = {}
+def run(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(
+        prog="mobrpg write",
+        description="Materialize a mobRPG extract into gm-apprentice vault markdown.")
+    ap.add_argument("extract", help="path to the extract JSON (from `mobrpg pull`)")
+    ap.add_argument("--out", required=True, help="output vault directory")
+    ap.add_argument("--campaign", default="", help="campaign name for frontmatter")
+    ap.add_argument("--source-doc", default="mobRPG API import",
+                    help="source reference string for '## Source References'")
+    ap.add_argument("--name-style", choices=["plain", "space"], default="plain",
+                    help="filename/wiki-link naming convention (default: plain)")
+    args = ap.parse_args(argv)
+
+    with open(args.extract) as f:
+        data = json.load(f)
+
+    written: dict[str, int] = {}
     for rec in data["entities"]:
-        r = build(rec)
+        r = build(rec, args.campaign, args.source_doc, args.name_style)
         if not r:
             continue
         rel_path, md = r
-        full = os.path.join(out, rel_path)
+        full = os.path.join(args.out, rel_path)
         os.makedirs(os.path.dirname(full), exist_ok=True)
         with open(full, "w") as f:
             f.write(md)
         written.setdefault(rec["kind"], 0)
         written[rec["kind"]] += 1
-    print(f"wrote to {out}/:", written, "| total", sum(written.values()))
+    print(f"wrote to {args.out}/:", written, "| total", sum(written.values()))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
