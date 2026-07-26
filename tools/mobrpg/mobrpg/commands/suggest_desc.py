@@ -24,8 +24,6 @@ from __future__ import annotations
 
 import argparse
 import difflib
-import html as _html
-import re
 import sys
 
 from mobrpg import client
@@ -60,23 +58,10 @@ def similarity(a: str | None, b: str | None) -> float:
     return difflib.SequenceMatcher(None, a or "", b or "", autojunk=False).ratio()
 
 
-_HEADING_TAG = re.compile(r"<h[1-6][^>]*>.*?</h[1-6]>", re.I | re.S)
-_TAG = re.compile(r"<[^>]+>")
-
-
-def normalize_for_compare(html: str | None) -> str:
-    """Reduce a description to a comparable plain-text key so the threshold
-    catches genuine content deltas, not formatting noise. The vault side is
-    `md_to_html` of a canon-section that leads with a `## Overview` heading and
-    HTML-entity-encodes; mobRPG stores the same prose headingless and
-    `<span style="">`-wrapped. Left raw, otherwise-identical text scored ~0.82–
-    0.87 and mis-flagged as 'differs'. So: drop heading blocks (`<h1..h6>`, i.e.
-    the `## Overview` header), strip all remaining tags (incl. the style spans),
-    decode entities, collapse whitespace, and lowercase — applied to BOTH sides."""
-    s = _HEADING_TAG.sub(" ", html or "")
-    s = _TAG.sub(" ", s)
-    s = _html.unescape(s)
-    return re.sub(r"\s+", " ", s).strip().lower()
+# Moved to md.normalize_html_for_compare (Task 6 rescue-move ahead of this
+# module's deletion in Task 10). Kept as a delegating alias so existing
+# callers/tests are unaffected.
+normalize_for_compare = _md.normalize_html_for_compare
 
 
 def classify_candidate(cand_html: str | None, live_html: str | None,

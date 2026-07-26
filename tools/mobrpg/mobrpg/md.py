@@ -284,3 +284,24 @@ def html_to_md(html_str: str | None) -> str:
     text = "".join(p.out)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# ---------------- comparison normalization ----------------
+
+_HEADING_TAG = re.compile(r"<h[1-6][^>]*>.*?</h[1-6]>", re.I | re.S)
+_TAG = re.compile(r"<[^>]+>")
+
+
+def normalize_html_for_compare(html: str | None) -> str:
+    """Reduce a description to a comparable plain-text key so the threshold
+    catches genuine content deltas, not formatting noise. The vault side is
+    `md_to_html` of a canon-section that leads with a `## Overview` heading and
+    HTML-entity-encodes; mobRPG stores the same prose headingless and
+    `<span style="">`-wrapped. Left raw, otherwise-identical text scored ~0.82–
+    0.87 and mis-flagged as 'differs'. So: drop heading blocks (`<h1..h6>`, i.e.
+    the `## Overview` header), strip all remaining tags (incl. the style spans),
+    decode entities, collapse whitespace, and lowercase — applied to BOTH sides."""
+    s = _HEADING_TAG.sub(" ", html or "")
+    s = _TAG.sub(" ", s)
+    s = _html.unescape(s)
+    return re.sub(r"\s+", " ", s).strip().lower()

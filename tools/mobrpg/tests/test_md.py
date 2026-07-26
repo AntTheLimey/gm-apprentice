@@ -139,3 +139,10 @@ def test_md_html_table_round_trip_preserves_escaped_pipe():
     back = md.html_to_md(md.md_to_html(src))
     last = [r for r in back.splitlines() if r.strip()][-1]
     assert md._cells(last) == ["x | y", "z"]
+
+
+def test_normalize_html_for_compare_ignores_headings_tags_entities():
+    a = "<h2>Title</h2><p>Alpha &amp; beta</p>"
+    b = "<p>Alpha &amp; beta</p>"
+    assert md.normalize_html_for_compare(a) == md.normalize_html_for_compare(b)
+    assert "alpha & beta" in md.normalize_html_for_compare(a).lower()
