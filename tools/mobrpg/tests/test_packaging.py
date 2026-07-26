@@ -2,8 +2,11 @@
 
 import importlib
 import os
+import pathlib
+import shutil
 import subprocess
 import sys
+import zipfile
 
 import pytest
 
@@ -37,46 +40,42 @@ def test_lazy_module_attributes_still_resolve():
     assert "part_of" in map_cmd.PREDICATE_RELATION
 
 
-def test_fallback_scripts_ship_inside_package():
-    """B5/B6: every fallback verb's legacy script — plus smoketest.py, which 4 of
-    them `import smoketest as api` — must live UNDER the mobrpg package so it ships
-    in the wheel. If they sit at the package's parent (the pre-fix _SCRIPTS_DIR)
-    they are excluded by `include = ['mobrpg*']` and every fallback verb dies with
-    'can't open file … .py' exit 2 under a non-editable install."""
+def test_no_legacy_package_or_fallback_dispatch():
+    """Task 14: the shell-out layer is gone — no _legacy package dir, no
+    FALLBACK dict, no _shellout helper left on the cli module."""
+    assert not hasattr(cli, "FALLBACK")
+    assert not hasattr(cli, "_shellout")
     base = importlib.resources.files("mobrpg")
-    for name in set(cli.FALLBACK.values()) | {"smoketest.py"}:
-        assert base.joinpath("_legacy", name).is_file(), f"{name} not shipped in package"
+    assert not base.joinpath("_legacy").is_dir()
 
 
-def test_cli_resolves_every_fallback_to_an_existing_file():
-    """The path cli._shellout hands to the subprocess must point at a real file
-    for every fallback verb — the tautological mock-only cli test can't catch an
-    unpackaged script, so assert the resolved path exists on disk."""
-    for name in cli.FALLBACK.values():
-        p = cli._script_path(name)
-        assert os.path.isfile(p), f"{name} not resolvable at {p}"
-
-
-@pytest.mark.parametrize("script", sorted(set(cli.FALLBACK.values())))
-def test_every_fallback_script_imports_without_error(script):
-    """B5/B6: it isn't enough that a fallback's .py ships — it must actually
-    load. Exec each script's module body (the way a subprocess entry would,
-    but with __name__ != '__main__' so main() stays put) from its own dir so a
-    sibling `import smoketest` resolves. Catches `links`, which loaded
-    gm-apprentice-ontology.json from _legacy/ after the JSON moved to the
-    package root — a FileNotFoundError at import that killed the whole verb."""
-    path = cli._script_path(script)
-    legacy_dir = os.path.dirname(path)
-    pkg_parent = os.path.dirname(os.path.dirname(path))  # dir that holds mobrpg/
-    # Reproduce what `python /abs/script.py` sees at runtime: the script's own
-    # dir on sys.path (sibling `import smoketest`) and the package parent
-    # (`from mobrpg import md`). run_name != '__main__' keeps main() from firing.
-    code = f"import runpy; runpy.run_path({path!r}, run_name='_fallback_import')"
-    env = dict(os.environ)
-    env["PYTHONPATH"] = os.pathsep.join([legacy_dir, pkg_parent])
-    proc = subprocess.run([sys.executable, "-c", code], env=env,
-                          capture_output=True, text=True)
-    assert proc.returncode == 0, f"{script} failed to import:\n{proc.stderr}"
+def test_wheel_contains_no_legacy_files(tmp_path):
+    """Task 14: build the real wheel and inspect its file list directly —
+    a package-data or MANIFEST regression could resurrect _legacy without
+    any in-process check noticing, since importlib.resources only sees
+    what's on disk in this checkout, not what setuptools decides to ship."""
+    project_root = pathlib.Path(__file__).resolve().parents[1]
+    # setuptools' build_py caches copies in build/lib and doesn't prune files
+    # that were deleted from source between builds, which would leak stale
+    # _legacy/* into this wheel even after the source dir is clean. Both dirs
+    # are gitignored scratch output, safe to blow away before a fresh build.
+    for stale in ("build", "mobrpg_cli.egg-info"):
+        stale_path = project_root / stale
+        if stale_path.exists():
+            shutil.rmtree(stale_path)
+    result = subprocess.run(
+        [sys.executable, "-m", "build", "--wheel", "--no-isolation",
+         "--outdir", str(tmp_path)],
+        cwd=project_root, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"wheel build failed:\n{result.stderr}"
+    wheels = list(tmp_path.glob("*.whl"))
+    assert len(wheels) == 1, f"expected exactly one wheel, got {wheels}"
+    with zipfile.ZipFile(wheels[0]) as zf:
+        names = zf.namelist()
+    assert names, "wheel appears empty"
+    legacy_entries = [n for n in names if "_legacy" in n]
+    assert not legacy_entries, f"_legacy files leaked into the wheel: {legacy_entries}"
 
 
 def test_cli_version_flag(capsys):

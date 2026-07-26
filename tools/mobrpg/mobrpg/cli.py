@@ -2,16 +2,14 @@
 """
 mobrpg — CLI over the mobRPG world-builder API for gm-apprentice vault sync.
 
-Manual top-level dispatcher (strangler migration): native verbs call into
-mobrpg.commands.*; every other verb shells out to its legacy prototype script
-with argv passed through verbatim, so the whole surface works while verbs are
-ported one at a time.
+Top-level dispatcher: every verb is a native subcommand implemented under
+mobrpg.commands.*. (Prior to Task 14 this strangled a set of legacy prototype
+scripts via a shell-out fallback layer; that layer and the scripts it ran are
+gone — the whole surface is native now.)
 """
 
 from __future__ import annotations
 
-import importlib.resources
-import subprocess
 import sys
 
 from mobrpg.commands import whoami as _whoami
@@ -28,14 +26,12 @@ from mobrpg.commands import whats_new as _whats_new
 from mobrpg.commands import adopt as _adopt
 from mobrpg.commands import relink as _relink
 from mobrpg.commands import auth as _auth
+from mobrpg.commands import sync_cmd as _sync
+from mobrpg.commands import write_cmd as _write
+from mobrpg.commands import images as _images
+from mobrpg.commands import link_orphans as _link_orphans
 
-# The legacy prototype scripts ship as package data under mobrpg/_legacy/ so they
-# survive a wheel install (the pre-fix parent-of-package dir was excluded by
-# `include = ["mobrpg*"]`, breaking every fallback verb). Their sibling
-# smoketest.py — imported by 4 of them — ships alongside.
-_LEGACY_PKG_DIR = "_legacy"
-
-# Native verbs (ported to mobrpg.commands.*).
+# Native verbs (all of them — the CLI's whole surface).
 NATIVE: dict = {
     "auth": _auth.run,
     "whoami": _whoami.run,
@@ -52,14 +48,10 @@ NATIVE: dict = {
     "whats-new": _whats_new.run,
     "adopt": _adopt.run,
     "relink": _relink.run,
-}
-
-# Fallback verbs → legacy script filename in _SCRIPTS_DIR.
-FALLBACK: dict[str, str] = {
-    "merge": "merge_overlaps.py",
-    "push": "push_to_mobrpg.py",
-    "types": "assign_types.py",
-    "links": "push_relationships.py",
+    "sync": _sync.run,
+    "write": _write.run,
+    "images": _images.run,
+    "link-orphans": _link_orphans.run,
 }
 
 # Ordered help text for `mobrpg --help`.
@@ -78,11 +70,11 @@ VERB_HELP: list[tuple[str, str]] = [
     ("whats-new", "read-only report: entities/types new in mobRPG, and vault notes gone upstream"),
     ("adopt", "stamp mobrpg: nodes onto unlinked entities, matched to live elements by name"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
-    ("merge", "non-destructive merge for entities present in both"),
-    ("push", "push vault entities to mobRPG (direct create; needs write access)"),
+    ("sync", "LWW sync of linked notes: pull newer canon, suggest newer vault edits"),
+    ("write", "materialize a pull extract into vault markdown"),
+    ("images", "download element images into the vault _attachments"),
+    ("link-orphans", "auto-link obvious orphans after an import (report + vault edits)"),
     ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
-    ("types", "set entity types via Attribute edges"),
-    ("links", "push vault relationships as mobRPG events"),
 ]
 
 _HELP = """\
@@ -111,18 +103,6 @@ def _print_help(stream=None) -> None:
     print(_HELP.format(commands=lines), file=stream)
 
 
-def _script_path(script_name: str) -> str:
-    """Filesystem path of a packaged legacy script, resolved via package
-    resources so it works under an editable OR a wheel install."""
-    return str(importlib.resources.files("mobrpg").joinpath(_LEGACY_PKG_DIR, script_name))
-
-
-def _shellout(script_name: str, argv: list[str]) -> int:
-    """Run a legacy prototype script with argv passed through verbatim."""
-    proc = subprocess.run([sys.executable, _script_path(script_name), *argv])
-    return proc.returncode
-
-
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
@@ -136,8 +116,6 @@ def main(argv: list[str] | None = None) -> int:
     verb, rest = argv[0], argv[1:]
     if verb in NATIVE:
         return NATIVE[verb](rest)
-    if verb in FALLBACK:
-        return _shellout(FALLBACK[verb], rest)
 
     print(f"unknown command: {verb}", file=sys.stderr)
     _print_help(sys.stderr)

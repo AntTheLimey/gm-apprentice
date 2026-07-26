@@ -1,15 +1,23 @@
-import subprocess
 import pytest
 from mobrpg import cli
 
 
-def test_help_lists_all_verbs_and_llms_pointer(capsys):
+def test_help_lists_native_verbs_and_llms_pointer(capsys):
     rc = cli.main(["--help"])
     out = capsys.readouterr().out
     assert rc == 0
-    for verb in ("whoami", "pull", "push", "suggest", "sync"):
+    for verb in ("whoami", "pull", "suggest", "sync", "write", "images", "link-orphans"):
         assert verb in out
     assert "llms.txt" in out
+
+
+def test_help_does_not_list_removed_shellout_verbs(capsys):
+    rc = cli.main(["--help"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    listed = {line.strip().split()[0] for line in out.splitlines() if line.startswith("  ")}
+    for verb in ("merge", "push", "types", "links", "pull-desc", "suggest-desc"):
+        assert verb not in listed, f"{verb} should no longer be a listed command"
 
 
 def test_no_args_prints_help(capsys):
@@ -26,32 +34,18 @@ def test_unknown_verb_exits_2(capsys):
     assert "frobnicate" in err
 
 
-def test_fallback_verb_shells_out_with_argv(monkeypatch):
-    calls = {}
-
-    def fake_run(cmd, **kwargs):
-        calls["cmd"] = cmd
-
-        class R:
-            returncode = 0
-        return R()
-
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
-    rc = cli.main(["push", "world-1", "--chapter", "chapter-2", "--execute"])
-    assert rc == 0
-    # script path is the last-but-args element; args passed through verbatim
-    assert calls["cmd"][1].endswith("push_to_mobrpg.py")
-    assert calls["cmd"][2:] == ["world-1", "--chapter", "chapter-2", "--execute"]
+def test_no_fallback_dict_or_shellout():
+    """Task 14: the shell-out layer is gone entirely — every verb is native."""
+    assert not hasattr(cli, "FALLBACK")
+    assert not hasattr(cli, "_shellout")
 
 
-def test_fallback_returns_child_exit_code(monkeypatch):
-    def fake_run(cmd, **kwargs):
-        class R:
-            returncode = 7
-        return R()
-
-    monkeypatch.setattr(cli.subprocess, "run", fake_run)
-    assert cli.main(["types", "world-1", "/vault", "/xwalk.json"]) == 7
+def test_removed_verbs_are_unknown(capsys):
+    for verb in ("merge", "push", "types", "links"):
+        rc = cli.main([verb])
+        err = capsys.readouterr().err
+        assert rc == 2
+        assert verb in err
 
 
 def test_auth_verb_is_native(monkeypatch):
@@ -68,3 +62,9 @@ def test_auth_verb_is_native(monkeypatch):
 
 def test_auth_in_verb_help():
     assert any(v == "auth" for v, _ in cli.VERB_HELP)
+
+
+def test_new_native_verbs_are_registered():
+    for verb in ("sync", "write", "images", "link-orphans"):
+        assert verb in cli.NATIVE, f"{verb} missing from NATIVE"
+        assert any(v == verb for v, _ in cli.VERB_HELP), f"{verb} missing from VERB_HELP"

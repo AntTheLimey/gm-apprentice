@@ -2,8 +2,7 @@
 
 `mobrpg` is a CLI over the mobRPG world-builder REST API (Tim Dennis'
 mobrpg.com), used to sync mobRPG worlds with gm-apprentice campaign vaults.
-It is a strangler-stage tool: some verbs are native Python subcommands, the
-rest shell out to the original prototype scripts in this directory. All verbs
+Every verb is a native Python subcommand under mobrpg/commands/; all of them
 share one client (mobrpg/client.py) for environment resolution and auth.
 
 ## Install
@@ -33,10 +32,11 @@ Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured.
 
 Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, images.
 Mutating (need write access; dry-run by default, add --execute to apply):
-push, suggest, suggest-desc, submit-batch, update, types, links, review. write/merge/
-link-orphans/pull-canon/pull-desc/adopt/relink only touch local vault files,
-not the API (pull-canon, pull-desc, and adopt read from mobRPG but only ever
-write locally; relink makes no API calls at all).
+suggest, submit-batch, update, review, sync (sync only submits a suggestion on
+a push/tie decision — a pull decision just overwrites the note locally).
+write/link-orphans/pull-canon/adopt/relink only touch local vault files, not
+the API (pull-canon and adopt read from mobRPG but only ever write locally;
+relink makes no API calls at all).
 
 Entity/event IDs live in each note's `mobrpg:` frontmatter node — the single
 source of truth. There is NO sidecar crosswalk; never read or write one. A
@@ -68,7 +68,7 @@ vault whose entities already exist upstream but carry no node is linked with
                                   nodes absent upstream → deleted/zombie notes),
                                   and NEW classifier types (from the extract's
                                   types section, not yet in the map). The pull-side
-                                  companion to suggest-desc/suggest (the push side).
+                                  companion to `sync`/`suggest` (the push side).
     mobrpg suggestions <world> [--state Pending|Accepted|Dismissed] [--correlate]
                        [--vault DIR] [--fetch-elements] [--json] [--out DIR]
                                   List suggestions by review state (the return
@@ -95,39 +95,6 @@ vault whose entities already exist upstream but carry no node is linked with
                                   deleted flags, pending leaves the vault alone.
                                   Verifies each accepted element to detect drift
                                   and deletion; --no-verify skips that pass.
-    mobrpg pull-desc <world> --vault <path>
-                    [--resolve take-canon|keep-vault|merge|separate|baseline
-                     --only <ref>] [--execute]
-                                  Reconcile note *description prose* with mobRPG
-                                  canon (pull-canon only handles the machine
-                                  node). No flags = read-only report classifying
-                                  each synced note (in-sync / canon-only /
-                                  vault-only / conflict) with diffs. --resolve
-                                  applies one entity's outcome via --only: take-
-                                  canon, keep-vault, merge (diff3 — leaves conflict
-                                  markers on overlap), separate (stop reconciling
-                                  it), baseline (first-time base capture). Change
-                                  detection compares mobRPG's raw HTML hash and the
-                                  frozen canon base, never the lossy converter.
-                                  Vault-only writes, gated by --execute (dry-run
-                                  default). The mobrpg-sync skill is the interactive
-                                  UI; it walks the GM through conflicts one at a time.
-    mobrpg suggest-desc <world> --vault <path> [--only <ref>] [--threshold F]
-                        [--batch-label L] [--execute]
-                                  Suggest a linked note's authored *description*
-                                  UP to mobRPG when the element is an empty stub
-                                  or poorer than the vault (the inverse of pull-
-                                  desc). Emits one UpdateElement suggestion per
-                                  candidate (sparse edit: targetRef=real element
-                                  id + the canon-section prose as HTML) — a
-                                  reviewable proposal the world owner accepts,
-                                  never a direct element PUT. Candidate = the live
-                                  description is empty, or differs below
-                                  --threshold similarity (difflib, autojunk off;
-                                  default 0.98); --only targets one note. Dry-run
-                                  by default; --execute submits. Each edit carries a
-                                  distinct `<ns>:desc/<relpath>` externalRef so a
-                                  re-run dedupes instead of piling up.
     mobrpg adopt <world> --vault <path> [--map F] [--kind K] [--only S] [--execute]
                                   Stamp `mobrpg:` nodes onto vault notes that
                                   already exist upstream but carry no node —
@@ -161,14 +128,36 @@ vault whose entities already exist upstream but carry no node is linked with
                                   ReadWriteDelete). Dry-run without --execute.
                                   accept is irreversible; dismiss keeps the
                                   externalRef claimed (see resubmit note below).
-    mobrpg write <extract.json> <out_dir>
-                                  Render a JSON extract into vault markdown.
-    mobrpg merge <extract.json> <vault>
-                                  Non-destructive merge for entities in both.
-    mobrpg link-orphans <extract.json> <vault> <outdir>
-                                  Auto-link obvious orphan relationships.
-    mobrpg push <world> --chapter <ch> [--execute] [--limit N] [--only S]
-                                  Direct-create vault entities in mobRPG.
+    mobrpg write <extract.json> --out <vault-dir> [--campaign NAME]
+                 [--source-doc TEXT] [--name-style plain|space]
+                                  Materialize a mobRPG extract (from `pull`)
+                                  into vault markdown — one file per entity,
+                                  mapped to the correct folder/template/type.
+    mobrpg link-orphans <extract.json> --vault <path> --out <dir>
+                        [--systems NAMES] [--execute]
+                                  Auto-link obvious orphan entities after an
+                                  import, using conservative structural naming
+                                  rules (e.g. "<System> <ROMAN>" -> part_of the
+                                  system; --systems is the comma-separated list
+                                  of star system names the rules apply to).
+                                  Only links to targets that already exist in
+                                  the vault. Writes a report; vault edits
+                                  (relationships: frontmatter) gated by
+                                  --execute (dry-run default).
+    mobrpg sync <world> --vault <path> [--only S] [--skew SECONDS]
+                [--batch-label L] [--execute]
+                                  Timestamp last-writer-wins sync of every
+                                  linked note's description prose against
+                                  mtime / node last_synced / server
+                                  lastModified: a pull decision overwrites the
+                                  note's canon prose locally (GM Notes tail
+                                  preserved) and stamps last_synced; a
+                                  push/tie decision never writes upstream
+                                  directly — it files one reviewable
+                                  UpdateElement suggestion and marks the node
+                                  review_state: pending until `review`
+                                  adjudicates it. Notes already pending are
+                                  skipped. Dry-run by default.
     mobrpg suggest <world> --chapter <ch> [--execute] [--limit N] [--only S]
                                   Submit vault entities as review suggestions
                                   (only needs Read access on the world). Emits
@@ -178,11 +167,7 @@ vault whose entities already exist upstream but carry no node is linked with
                                   Types, Attribute edges, reified Event + Link
                                   relationships, in-batch ref/dependsOn wiring).
                                   Dry-run by default.
-    mobrpg types <world> [--chapter <ch>] [--execute]
-                                  Set entity types via Attribute edges.
-    mobrpg links <world> --chapter <ch> [--execute] [--limit N]
-                                  Push vault relationships as mobRPG events.
-    mobrpg images <world> <vault> [--execute]
+    mobrpg images <world> --vault <path> [--execute]
                                   Pull entity images into the vault (id->file map
                                   comes from the vault's own mobrpg: nodes).
 
@@ -194,9 +179,8 @@ Mutating verbs are dry-run by default; add --execute to actually write. Run
 Import a world into a vault:
     export MOBRPG_TOKEN=...            # read-only, prod is fine
     mobrpg pull <worldId> --out extract.json
-    mobrpg write extract.json /path/to/vault
-    mobrpg merge extract.json /path/to/vault
-    mobrpg link-orphans extract.json /path/to/vault ./orphan_out
+    mobrpg write extract.json --out /path/to/vault
+    mobrpg link-orphans extract.json --vault /path/to/vault --out ./orphan_out
 
 Push a vault chapter to mobRPG (safe: suggestions):
     export MOBRPG_TOKEN=...
@@ -207,3 +191,8 @@ Confirm the round-trip after a GM accepts them in mobRPG (read-only):
     mobrpg catalog <worldId> political/type                # see existing Types first
     mobrpg suggestions <worldId> --state Accepted --correlate --vault /path/to/vault
                                                             # externalRef -> vault file -> new element id
+
+Keep a linked note's description prose in sync going forward:
+    export MOBRPG_TOKEN=...
+    mobrpg sync <worldId> --vault /path/to/vault            # dry-run: shows the decision table
+    mobrpg sync <worldId> --vault /path/to/vault --execute  # pulls newer canon, files suggestions for newer vault edits
