@@ -57,7 +57,6 @@ NATIVE: dict = {
 # Fallback verbs → legacy script filename in _SCRIPTS_DIR.
 FALLBACK: dict[str, str] = {
     "merge": "merge_overlaps.py",
-    "link-orphans": "orphan_link.py",
     "push": "push_to_mobrpg.py",
     "types": "assign_types.py",
     "links": "push_relationships.py",
@@ -80,7 +79,6 @@ VERB_HELP: list[tuple[str, str]] = [
     ("adopt", "stamp mobrpg: nodes onto unlinked entities, matched to live elements by name"),
     ("relink", "re-point a moved/renamed note's mobrpg external_ref (vault-only)"),
     ("merge", "non-destructive merge for entities present in both"),
-    ("link-orphans", "auto-link obvious orphan relationships post-import"),
     ("push", "push vault entities to mobRPG (direct create; needs write access)"),
     ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
     ("types", "set entity types via Attribute edges"),
