@@ -659,7 +659,7 @@ def test_build_node_person(tmp_path):
     assert n["relationships"][0] == {
         "predicate": "friend_of", "target": "Nathaniel_Rooke",
         "event_type": "Generic", "event_id": None, "review_state": "pending"}
-    assert n["content_hash"].startswith("sha256:")
+    assert "content_hash" not in n
 
 
 def test_write_back_writes_then_skips(tmp_path):
@@ -680,12 +680,10 @@ def test_write_back_writes_then_skips(tmp_path):
     assert f.read_text() == before
 
 
-def test_write_back_preserves_accepted_link_on_content_edit(tmp_path):
-    """Editing an already-ratified note must not wipe its canon link.
-
-    Regression: write_back rebuilt the node with build_node's defaults
-    (element_id=None, review_state="pending"), so any payload-affecting vault
-    edit silently destroyed an accepted element_id and reset the state.
+def test_write_back_leaves_accepted_note_to_pull_paths(tmp_path):
+    """An already-ratified note (accepted + element_id) is owned by the pull
+    paths — write_back must skip it outright, so a payload-affecting vault edit
+    can neither rewrite it nor wipe its canon link.
     """
     mp = _map()
     d = tmp_path
@@ -703,13 +701,41 @@ def test_write_back_preserves_accepted_link_on_content_edit(tmp_path):
     # GM edits payload-affecting content (occupation → new determined profession).
     f.write_text(f.read_text().replace('occupation: "Priest"',
                                         'occupation: "Linguist"'), encoding="utf-8")
+    before = f.read_text()
 
     w, s = suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
                               mp, str(d), "canticle", execute=True)
-    assert (w, s) == (1, 0)                       # content changed → rewritten
+    assert (w, s) == (0, 1)                        # accepted+id → skipped
+    assert f.read_text() == before                 # file untouched, link intact
     after = _node.read_node(f.read_text())
-    assert after["element_id"] == "E-123"         # link preserved (was wiped to None)
-    assert after["review_state"] == "accepted"    # not reset to "pending"
+    assert after["element_id"] == "E-123"
+    assert after["review_state"] == "accepted"
+
+
+def test_write_back_skips_pending_and_dismissed_by_state(tmp_path):
+    # A note whose existing node is "pending" (or "dismissed") is owned by the
+    # review/pull paths — write_back must count it skipped on review_state alone,
+    # even when a fresh build would produce different content.
+    # (_vault's Imogen carries an off-vocabulary predicate that build_node rejects,
+    # so this seeds a minimal note the way the sibling write_back tests do.)
+    mp = _map()
+    d = tmp_path
+    (d / "Characters/NPCs").mkdir(parents=True)
+    f = d / "Characters/NPCs/Imogen_Bellamy.md"
+    f.write_text('---\ntype: npc\noccupation: "Priest"\n---\nBody.\n', encoding="utf-8")
+    w, s = suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                              mp, str(d), "canticle", execute=True)
+    assert (w, s) == (1, 0)                                # fresh node stamped, "pending"
+    # Make the stored content diverge from what a fresh build would produce.
+    n = _node.read_node(f.read_text())
+    assert n["review_state"] == "pending"
+    n["determined"] = {"profession": "STALE"}
+    f.write_text(_node.write_node(f.read_text(), n), encoding="utf-8")
+    before = f.read_text()
+    w2, s2 = suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                               mp, str(d), "canticle", execute=True)
+    assert (w2, s2) == (0, 1)                              # skipped on state alone
+    assert f.read_text() == before                         # file untouched
 
 
 def test_read_note_without_closing_fence_does_not_crash(tmp_path):

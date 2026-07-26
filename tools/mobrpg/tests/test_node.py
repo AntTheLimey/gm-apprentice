@@ -1,4 +1,5 @@
 from mobrpg import node
+from mobrpg.node import emit_node
 
 FM = ('---\n'
       'type: npc\n'
@@ -10,7 +11,7 @@ FM = ('---\n'
 NODE = {
     "world_id": "w1", "external_ref": "canticle:Characters/NPCs/Imogen_Bellamy",
     "element_id": None, "element_kind": "Person", "review_state": "pending",
-    "content_hash": "sha256:abc", "last_synced": "2026-07-18", "review_note": "",
+    "last_synced": "2026-07-18", "review_note": "",
     "determined": {"profession": "Priest", "race": "Human", "sex": "Female"},
     "relationships": [
         {"predicate": "imprisoned_by", "target": "[[Dr_Erasmus_Hume]]",
@@ -87,26 +88,6 @@ def test_write_preserves_blank_line_before_following_key():
     # and the node still round-trips as the updated node
     assert node.read_node(out) == {"world_id": "w2", "relationships": [],
                                    "languages": []}
-
-
-def test_canon_base_scalars_round_trip_with_embedded_newlines():
-    # The description-merge base: an HTML hash, the frozen canon-section markdown
-    # (multi-line, JSON-encoded onto one line), a sync timestamp, and the
-    # maintain-separately policy flag.
-    n = dict(NODE,
-             canon_html_hash="sha256:9f98",
-             canon_base_md="## Background\n\nA ruthless smuggler.",
-             canon_synced_at="2026-07-19T14:02:00Z",
-             description_policy="separate")
-    text = node.emit_node(n)
-    assert '  canon_html_hash: "sha256:9f98"\n' in text
-    assert '  canon_synced_at: "2026-07-19T14:02:00Z"\n' in text
-    assert '  description_policy: "separate"\n' in text
-    # the multi-line base is emitted on a single JSON-encoded line
-    assert '  canon_base_md: "## Background\\n\\nA ruthless smuggler."\n' in text
-    back = node.read_node("---\n" + text + "---\n")
-    assert back["canon_base_md"] == "## Background\n\nA ruthless smuggler."
-    assert back == n
 
 
 def test_canon_base_scalars_absent_when_unset():
@@ -203,9 +184,17 @@ def test_write_node_matches_crlf_dominant_file_no_mixed_eol():
     assert "\n" not in out.replace("\r\n", "")
 
 
-def test_content_hash_stable_and_order_independent():
-    a = {"name": "X", "altNames": ["a", "b"], "data": {"type": "Person"}}
-    b = {"data": {"type": "Person"}, "name": "X", "altNames": ["a", "b"]}
-    assert node.content_hash(a) == node.content_hash(b)         # key order irrelevant
-    assert node.content_hash(a).startswith("sha256:")
-    assert node.content_hash(a) != node.content_hash(dict(a, name="Y"))
+def test_emit_node_strips_dead_scalars():
+    node = {"element_id": "e1", "content_hash": "sha256:x", "canon_html_hash": "y",
+            "canon_base_md": "z", "canon_synced_at": "t", "description_policy": "p",
+            "last_synced": "2026-07-25T00:00:00Z"}
+    out = emit_node(node)
+    for dead in ("content_hash", "canon_html_hash", "canon_base_md",
+                 "canon_synced_at", "description_policy"):
+        assert dead not in out
+    assert "last_synced" in out
+
+
+def test_content_hash_removed():
+    import mobrpg.node as n
+    assert not hasattr(n, "content_hash")

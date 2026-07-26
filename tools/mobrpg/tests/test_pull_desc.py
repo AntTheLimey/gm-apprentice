@@ -143,10 +143,10 @@ def test_rebuild_writes_node_scalars_and_body_preserving_frontmatter():
     out = pull_desc._rebuild(txt, new_node, new_body)
     # authored frontmatter survives
     assert 'occupation: "Broker"   # hand comment\n' in out
-    # new node scalar landed and re-reads
+    # canon_* baseline scalars are no longer emitted onto the node (Task 5)
     reread = node.read_node(out)
-    assert reread["canon_html_hash"] == pull_desc.html_hash(changed_html)
-    assert "reformed smuggler" in reread["canon_base_md"]
+    assert "canon_html_hash" not in reread
+    assert "canon_base_md" not in reread
     # new body prose landed, GM tail preserved
     assert "reformed smuggler" in pull_desc._body_of(out)
     assert "## GM Notes\n\nSecretly the informant." in out
@@ -165,8 +165,10 @@ def test_rebuild_survives_dashes_in_scalar_and_body():
     out = pull_desc._rebuild(txt, new_node, body_with_rule)
     reread = node.read_node(out)
     assert reread is not None
-    assert reread["canon_html_hash"] == "sha256:new"
-    assert reread["canon_base_md"] == "| C | D |\n| --- | --- |\n| 3 | 4 |"
+    # canon_* baseline scalars are no longer emitted (Task 5); the body's --- rule
+    # must still not confuse the frontmatter split.
+    assert "canon_html_hash" not in reread
+    assert "canon_base_md" not in reread
     assert pull_desc._body_of(out) == body_with_rule
 
 

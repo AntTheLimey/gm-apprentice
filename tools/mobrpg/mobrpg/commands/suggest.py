@@ -850,9 +850,6 @@ def determined_for(entity: dict, mp: dict) -> dict:
 def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="pending"):
     ek, data, _ = element_spec(entity, mp)
     det = determined_for(entity, mp)
-    payload = {"name": entity["name"], "altNames": sorted(entity.get("aliases") or []),
-               "description": entity.get("description") or "<p></p>",
-               "data": data, "determined": det}
     rels = [{"predicate": r["predicate"], "target": r["target"],
              "event_type": _mapped_type(mp, r["predicate"]),
              "event_id": None, "review_state": review_state}
@@ -865,7 +862,6 @@ def build_node(entity, mp, namespace, vault, *, element_id=None, review_state="p
         "element_id": element_id,
         "element_kind": kind_name.get(ek, ek.title()),
         "review_state": review_state,
-        "content_hash": node.content_hash(payload),
         "last_synced": "",
         "review_note": "",
         "determined": det,
@@ -892,11 +888,12 @@ def write_back(entities, mp, vault, namespace, *, execute) -> tuple[int, int]:
             newn["element_id"] = existing["element_id"]
             if existing.get("review_state") not in (None, "pending"):
                 newn["review_state"] = existing["review_state"]
-        if existing and existing.get("content_hash") == newn["content_hash"] \
-                and existing.get("review_state") not in (None, "pending"):
-            skipped += 1
-            continue
-        if existing and existing.get("content_hash") == newn["content_hash"]:
+        # Review-state-only guard: a node under active review (pending/dismissed)
+        # or already ratified against a canon element (accepted + element_id) is
+        # owned by the review/pull paths — write_back must never overwrite it.
+        state = existing.get("review_state") if existing else None
+        if state in ("pending", "dismissed") or (
+                state == "accepted" and existing.get("element_id")):
             skipped += 1
             continue
         merged = node.write_node(txt, newn)

@@ -6,7 +6,7 @@ from mobrpg import node
 
 BASE = {"world_id": "w1", "external_ref": "canticle:Characters/NPCs/Imogen_Bellamy",
         "element_id": None, "element_kind": "Person", "review_state": "pending",
-        "content_hash": "sha256:x", "last_synced": "", "review_note": "",
+        "last_synced": "", "review_note": "",
         "determined": {"profession": "Priest", "race": "Human", "sex": "Female"},
         "relationships": [{"predicate": "friend_of", "target": "Nathaniel_Rooke",
                            "event_type": "Generic", "event_id": None,

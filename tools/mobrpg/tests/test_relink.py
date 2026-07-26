@@ -4,7 +4,7 @@ from mobrpg.commands import relink
 BASE_NODE = {
     "world_id": "w1", "external_ref": "canticle:Characters/NPCs/Imogen_Bellamy",
     "element_id": "el-1", "element_kind": "Person", "review_state": "accepted",
-    "content_hash": "sha256:x", "last_synced": "", "review_note": "",
+    "last_synced": "", "review_note": "",
     "determined": {"sex": "Female"}, "relationships": [], "languages": [],
 }
 

@@ -1,4 +1,4 @@
-"""The mobrpg: frontmatter node — read / merge / emit + content_hash.
+"""The mobrpg: frontmatter node — read / merge / emit.
 
 Machine-managed projection of a vault entity into mobRPG (identity anchors,
 determined classifiers, reified-relationship ids, sync state). Scalar values
@@ -8,7 +8,6 @@ and NEVER reparse or reformat the GM's hand-authored frontmatter. Stdlib only.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 
@@ -19,11 +18,7 @@ import re
 _YAML_KEYISH = re.compile(r"^[ \t]*(?:#|-(?:\s|$)|[^\s:#][^:]*:(?:\s|$))")
 
 _SCALARS = ["world_id", "external_ref", "previous_ref", "element_id", "element_kind",
-            "review_state", "content_hash", "last_synced", "review_note",
-            # Description-merge base (Plan 2): raw-HTML hash for canon-change
-            # detection, the frozen canon-section markdown ancestor, the sync
-            # timestamp, and the maintain-separately policy flag.
-            "canon_html_hash", "canon_base_md", "canon_synced_at", "description_policy"]
+            "review_state", "last_synced", "review_note"]
 _REL_KEYS = ["predicate", "target", "event_type", "event_id", "review_state"]
 _LANG_KEYS = ["language", "language_id", "type", "mastery", "review_state"]
 
@@ -193,9 +188,3 @@ def write_node(md_text: str, node: dict) -> str:
     else:
         new_fm = fm_body[:span[0]] + block + fm_body[span[1]:]
     return pre + new_fm + post
-
-
-def content_hash(payload: dict) -> str:
-    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False,
-                           separators=(",", ":"))
-    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()

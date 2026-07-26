@@ -70,7 +70,7 @@ def scaffold_note(external_ref, live, namespace):
         "world_id": "", "external_ref": external_ref,
         "element_id": live.get("element_id"),
         "element_kind": live.get("element_kind") or "Person",
-        "review_state": "accepted", "content_hash": "", "last_synced": "",
+        "review_state": "accepted", "last_synced": "",
         "review_note": "", "determined": dict(live.get("determined") or {}),
         "relationships": [], "languages": [],
     }
