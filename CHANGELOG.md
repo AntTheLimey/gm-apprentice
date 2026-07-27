@@ -99,6 +99,28 @@ CLI never overwrites a live element directly.
 
 ### Fixed
 
+- **Interposing a new container no longer leaves it childless.** Creating an
+  entity that sits *between* an existing parent and its existing children — a
+  district between a station and its venues, a cell between a faction and its
+  members — never prompted anyone to re-point the children, so the container
+  landed as a leaf at the same level as the things it contains. Nothing surfaced
+  it either: the children's own files were untouched and still said what they
+  said yesterday. `shared/relationship-normalization.md` gains the re-point
+  procedure (list candidates → GM confirms each → update the child), and
+  session-wrapup routes new container entities through it.
+- **Containment is two fields and they must agree.** `parent_location:` (the
+  frontmatter scalar the site groups by) and the `part_of` edge (the graph edge
+  every query, campaign-qa, and the mobRPG sync read) are independent; neither
+  implies the other. Writing only the scalar leaves a note correctly nested on
+  the published site while being an orphan in the graph — the state all three
+  Entertainment District venues were in. Documented in
+  `shared/relationship-normalization.md`, with a campaign-qa graph-health check
+  for each direction of the mismatch plus one for childless interposed
+  containers.
+- **campaign-qa now flags an affiliation authored from both sides** — `A serves
+  B` on A and `B employs A` on B are both in-vocabulary base predicates, so the
+  off-vocabulary and stored-inverse checks miss them, but it is one fact written
+  twice and it pushes as two events.
 - **Person↔group affiliation events now follow mobRPG's own construct.** mobRPG
   derives an affiliation's event type from what the edge points AT — its GUI
   offers Reign/Employ only on a Political element and Leadership/Membership only

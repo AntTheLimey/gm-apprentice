@@ -135,12 +135,56 @@ real vault needed (a third of one vault's edges were off-vocabulary).
 The in-repo schema↔export agreement is checked separately by
 `scripts/validate_ontology.py`.
 
+**Containment recorded in only one place:** A location's
+containment lives in two fields with two different consumers —
+the `parent_location:` scalar (groups the published Locations
+listing) and a `part_of` edge in `relationships:` (the graph
+edge every query, this audit, and the mobRPG sync read).
+Neither implies the other. For every entity, flag:
+
+- a `parent_location:` with no matching `part_of` edge — the
+  note looks correctly nested on the site while being an orphan
+  in the graph. This is the common direction, because the scalar
+  is the visible one.
+- a `part_of` edge with no matching `parent_location:`, or the
+  two naming *different* parents — a contradiction, not an
+  omission.
+
+Severity: Warning. Proposed fix: write the missing half on the
+**child's** file (containment is stored child → parent,
+single-direction). Same pairing applies to a Faction's
+`territory:` / `headquartered_at`.
+
+**Childless containers beside their would-be children:** An
+entity whose prose or `points_of_interest` names entities that
+are not its graph children, while those entities sit at the same
+level as it under a shared parent, is an interposed container
+whose children were never re-pointed. Detect it as: X has a
+`part_of` parent P; X's body or `points_of_interest` links
+[[A]], [[B]]; A and B have no `part_of` edge to X (and are
+either unparented or also `part_of` P). Report X with its
+candidate children — this is the shape the Dead End vault's
+Entertainment District left behind. Severity: Warning; the fix
+is `shared/relationship-normalization.md`'s re-point procedure,
+one GM confirmation per candidate.
+
 **Generic types:** Flag uses of `associated_with` or similar
 vague relationship types where a more specific type exists
 in `_meta/relationship-types.md`.
 
 **Redundant edges:** Two entities connected by multiple
 relationship types that mean essentially the same thing.
+
+Include the case where **both endpoints authored the same fact
+from their own side** using two different in-vocabulary base
+predicates — `A serves B` on A and `B employs A` on B. Neither
+edge is off-vocabulary and neither is a stored inverse, so the
+checks above miss it, but storage is single-direction and this
+is one fact written twice. It reaches mobRPG as two separate
+events (it did, on the 2026-07-20 Dead End push). Flag the pair
+and keep whichever side the GM prefers. The predicate pairs to
+watch: `serves`/`employs`, `member_of`/`has_member`,
+`leads`/`led_by`, `owns`/`owned_by`, `rules`/`ruled_by`.
 
 **Traversal edges:** Direct relationships that add no
 information beyond what's discoverable by a short graph
