@@ -125,15 +125,59 @@ write, so they're safe against either target.
 
 ## Relationships: two mechanisms, and target resolution
 
-`suggest` maps each vault relationship through the map's `relationshipTypes`
-(built by `map init`, see `mapping-maintenance.md`) to one of mobRPG's **two**
-relationship mechanisms:
+`suggest` maps each vault relationship to one of mobRPG's **two** relationship
+mechanisms:
+
 - a reified **Event** (eventType Membership/Leadership/Employ/Reign/War/Generic)
   — for social/narrative predicates (`member_of`, `leads`, `owns`, …), or
-- a direct **WorldElementRelation** (Parent/Child/Link/Spouse) — for *structural*
-  predicates, so `part_of` → **Parent** (auto-creates the reverse Child),
-  `contains`/`hosts` → Child, `adjacent_to` → Link. These are NOT flattened to
-  Generic events. A structural edge emits one `AddRelation`, no reified Event.
+- a direct **WorldElementRelation** (Attribute/Link/Parent/Child/Spouse) — for
+  *structural* predicates. Spatial containment is **Link**, not Parent:
+  Parent/Child/Spouse are genealogy between people and the backend auto-creates
+  the reciprocal row. `part_of`/`located_at`/`headquartered_at` emit one
+  container-first `AddRelation` Link and no reified Event.
+
+### Person ↔ group affiliations follow mobRPG's own grid
+
+mobRPG never asks which event type you want. Its GUI hangs relation tabs off an
+element and derives the type from which tab you were on — Reign/Employ on a
+Political, Leadership/Membership on an Organization — so the same vault
+predicate means different things depending on **what it points at**:
+
+| | target is a **Political** | target is an **Organization** |
+|---|---|---|
+| the person runs it (`leads`, `owns`, `rules`, `commands`, `employs`) | `Reign` | `Leadership` |
+| the person belongs to it (`serves`, `member_of`, `founded`, `vassal_of`) | `Employ` | `Membership` |
+
+`suggest` resolves each affiliation through that grid using what the endpoints
+actually are (canon `element_kind` for a linked note, the proposed kind for a
+net-new one), and names the event the way mobRPG does — the **person always
+leads**: `"{Person}, Member of {Org}"`, `"{Person}, Employment at {Political}"`.
+A vault edge authored group-first (`Corvid Financial employs Marek Solano`) is
+still named person-first. A **title** (Boss, Marshal, Underling) is the
+reviewer's to pick from the target's title vocabulary — the push deliberately
+doesn't guess one, since the vault's `occupation` already goes up as a
+Profession classifier.
+
+Two things the report will tell you, and both are worth reading:
+
+- **`Membership -> Employ` style regrades.** The grid disagreed with the flat
+  predicate mapping. Usually that is the fix, but it can also mean the *target*
+  is the wrong entity: `Alphonse member_of Station 45` regrades to Employ
+  because Station 45 is authored as a location, and mobRPG has no "member of a
+  Political". If the gang deserves its own faction note, that's the real fix.
+- **`… is not a person/group pair`.** The predicate map produced an affiliation
+  type for endpoints mobRPG's GUI could not pair — `Beam Pistol owns Kinetic
+  Logistics` is an inverse stored the wrong way round, not a Reign event. It
+  still pushes (unchanged behaviour), but fix the vault edge.
+
+An affiliation authored on **both** endpoints is one fact, not two: the
+duplicate half is collapsed before submit and reported, because storage is
+single-direction by rule (`shared/relationship-normalization.md`).
+
+A per-world `relationshipTypes` entry in `_meta/mobrpg-map.json` overrides the
+grid only when it **differs** from the ontology default — `map init`/`map sync`
+write an entry for every predicate they discover, and those just restate the
+default.
 
 Relationship **targets** resolve from the vault's own `mobrpg:` nodes (each note's
 `element_id`) — the single source of truth; there is no crosswalk. If the report

@@ -362,9 +362,65 @@ def _mapped_type(mp, predicate) -> str:
     return rt.get(predicate) or map_cmd.predicate_type(predicate)
 
 
+def node_kind_index(vault) -> dict:
+    """{entity key: mobRPG element kind} from the vault's own `mobrpg:` nodes.
+
+    A node's `element_kind` is what canon says the element IS, which is what
+    decides an affiliation edge's eventType (see map_cmd.affiliation). Aliases
+    resolve too, and a real entity name always wins over an alias — same rule as
+    node_index, so the two indexes agree on what a target name refers to."""
+    idx: dict = {}
+    aliases: list[tuple[str, str]] = []
+    vault = os.path.expanduser(vault)
+    for folder in map_cmd.FOLDERS:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            txt = open(p, encoding="utf-8").read()
+            nd = node.read_node(txt)
+            if not nd or not nd.get("element_kind"):
+                continue
+            idx[_key(_display_name(p))] = nd["element_kind"]
+            fm, _ = _read(p)
+            for al in _aliases(fm):
+                aliases.append((_key(al), nd["element_kind"]))
+    for k, kind in aliases:
+        idx.setdefault(k, kind)
+    return idx
+
+
+def _is_override(mp, pred) -> bool:
+    """True only for a map `relationshipTypes` entry that DIFFERS from the
+    ontology default — a deliberate per-world decision.
+
+    `map init`/`map sync` write an entry for every predicate they discover, and
+    those entries just restate `predicate_type()`. Treating any entry at all as
+    an override would mean a real vault (space_game maps all 25 of its predicates
+    this way) never reaches the affiliation grid. An entry for an off-vocabulary
+    predicate counts as an override, because it is the only mapping that exists.
+    """
+    mapped = (mp.get("relationshipTypes") or {}).get(pred)
+    if not mapped:
+        return False
+    try:
+        return mapped != map_cmd.predicate_type(pred)
+    except map_cmd.UnknownPredicate:
+        return True
+
+
+def _affiliation_for(pred, subj_key, tgt_key, kind_by_key):
+    """(eventType, person_is_subject) for a person<->group edge, or None.
+
+    None means "keep the flat predicate mapping" — the endpoints aren't a
+    person/group pair, or their kinds aren't resolvable here. Unknown kinds
+    degrade to today's behaviour rather than guess."""
+    if not kind_by_key:
+        return None
+    return map_cmd.affiliation(pred, kind_by_key.get(subj_key),
+                               kind_by_key.get(tgt_key))
+
+
 def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
                        vault, namespace, ref_seed,
-                       ref_by_key=None) -> tuple[list[dict], list[str]]:
+                       ref_by_key=None, kind_by_key=None) -> tuple[list[dict], list[str]]:
     """Build the relationship items for one entity.
 
     Targets resolve in three tiers: (1) an already-upstream element → its real
@@ -394,8 +450,37 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         # Reference the target by real id (upstream) or in-batch suggestion ref (net-new).
         tgt_val = tgt_id if tgt_id else f"suggestion:{tgt_ref}"
         xdeps = [] if tgt_id else [tgt_ref]
-        et = _mapped_type(mp, pred)
-        tgt_disp = tgt_raw.replace("_", " ")
+        tgt_disp = re.sub(r"^\[\[|\]\]$", "", tgt_raw).split("|")[0].replace("_", " ")
+        overridden = _is_override(mp, pred)
+        aff = None if overridden else _affiliation_for(pred, subj_key, tgt_key,
+                                                       kind_by_key)
+        et = aff[0] if aff else _mapped_type(mp, pred)
+        if aff and et != _mapped_type(mp, pred):
+            # The grid disagreed with the predicate map. Usually that IS the fix
+            # (`serves` an Organization is Membership, not Employ), but it also
+            # exposes vault modelling: `Alphonse member_of Station 45` becomes
+            # Employ because Station 45 is authored as a location, and mobRPG
+            # offers no "member of a Political". Say which, so the GM can decide
+            # whether the target is the wrong entity rather than the wrong type.
+            gk = kind_by_key.get(tgt_key if aff[1] else subj_key)
+            offered = "/".join(map_cmd.event_types_for_kind(gk))
+            article = "an" if gk and gk[0] in "AEIOU" else "a"
+            skipped.append(
+                f"{entity['name']} --{pred}--> {tgt_disp}: {_mapped_type(mp, pred)}"
+                f" -> {et} (the group endpoint is {article} {gk}; mobRPG offers "
+                f"only {offered} there)")
+        if kind_by_key and not aff and not overridden \
+                and et in map_cmd.AFFILIATION_EVENT_TYPES:
+            # The flat map produced an affiliation type but the endpoints aren't
+            # a person/group pair mobRPG's GUI could build. It still pushes (this
+            # is today's behaviour), but say so — an Item that `owns` an
+            # Organization is a reversed edge, not a Reign event.
+            sk = kind_by_key.get(subj_key) or "?"
+            tk = kind_by_key.get(tgt_key) or "?"
+            skipped.append(
+                f"{entity['name']} --{pred}--> {tgt_disp}: emitted as {et} from "
+                f"the predicate map, but {sk}->{tk} is not a person/group pair — "
+                f"mobRPG's GUI could not build this event")
         if et in map_cmd.RELATION_TYPES:
             # Structural relation (Parent/Child/Link/Spouse): a direct
             # WorldElementRelation — no reified Event. Parent/Child auto-create
@@ -412,10 +497,26 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
             continue
         eref = f"{ref_seed}v{n}"; n += 1
         desc = f"<p>{rel.get('desc') or pred}</p>"
+        # The rel/ ref is the edge's identity across re-pushes — keyed on the
+        # authored predicate and target, never on the emitted name, so renaming
+        # an event can't make it re-file as net-new.
         ext = f"{namespace}:rel/" + external_ref(entity["path"], vault, namespace).split(":", 1)[1] \
               + f"/{pred}/{tgt_key}"
+        if aff:
+            # mobRPG's own naming: the person always leads, and the title word
+            # and preposition come from formatEventName. A real title is the
+            # reviewer's to pick from the target's title vocabulary — we don't
+            # guess one (the vault's `occupation` is already pushed as a
+            # Profession classifier, so reusing it here would double-encode it
+            # and read as "Alphonse, Station 45 Gang Member of Station 45").
+            title, prep = map_cmd.AFFILIATION_NAMING[et]
+            person, group = ((entity["name"], tgt_disp) if aff[1]
+                             else (tgt_disp, entity["name"]))
+            ev_name = f"{person}, {title} {prep} {group}"
+        else:
+            ev_name = f"{entity['name']}, {pred} {tgt_disp}"
         unit = [
-            _create(eref, f"{entity['name']}, {pred} {tgt_disp}",
+            _create(eref, ev_name,
                     {"type": "Event", "eventType": et},
                     description=desc, external_ref=ext),
             _relation("Link", f"suggestion:{eref}", f"suggestion:{entity_ref}", [eref, entity_ref]),
@@ -473,12 +574,14 @@ def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples) -
 
 
 def build_group(entity, mp, ent_id_by_key, linked_triples, race_id,
-                vault, namespace, seq, ref_by_key=None) -> tuple[list[dict], list[str]]:
+                vault, namespace, seq, ref_by_key=None,
+                kind_by_key=None) -> tuple[list[dict], list[str]]:
     ref = f"e{seq}"
     items = element_items(entity, mp, ref, vault, namespace)
     cls_items, reports = classifier_items(entity, mp, ref, race_id, ref)
     rel_items, skipped = relationship_items(entity, mp, ref, ent_id_by_key, linked_triples,
-                                            vault, namespace, ref, ref_by_key)
+                                            vault, namespace, ref, ref_by_key,
+                                            kind_by_key)
     return items + cls_items + rel_items, reports + skipped
 
 
@@ -549,6 +652,75 @@ def dedupe_type_creates(groups, refs) -> tuple[list[list[dict]], list]:
                     it["_needs"] = owner   # co-locate borrower with the survivor's group
         groups[gi] = kept
     return groups, refs
+
+
+def _affiliation_event_key(group, item):
+    """(eventType, frozenset of the event's two endpoints) for an affiliation
+    Event, or None. Endpoints come from the event's own Link items, so a real
+    upstream id and an in-batch `suggestion:<ref>` key the same way they resolve."""
+    p = item.get("payload", {})
+    data = p.get("data") or {}
+    if p.get("operation") != "CreateElement" or data.get("type") != "Event":
+        return None
+    et = data.get("eventType")
+    if et not in map_cmd.AFFILIATION_EVENT_TYPES:
+        return None
+    me = "suggestion:" + item["ref"]
+    ends = set()
+    for it in group:
+        q = it.get("payload", {})
+        if q.get("operation") != "AddRelation" or q.get("type") != "Link":
+            continue
+        if q.get("sourceRef") == me and q.get("targetRef"):
+            ends.add(q["targetRef"])
+        elif q.get("targetRef") == me and q.get("sourceRef"):
+            ends.add(q["sourceRef"])
+    return (et, frozenset(ends)) if len(ends) == 2 else None
+
+
+def dedupe_affiliation_events(groups, refs) -> tuple[list[list[dict]], list[str]]:
+    """Collapse duplicate person<->group affiliation events across entity groups.
+
+    An affiliation is one fact with two authored halves: the vault holds
+    `Marek Solano serves Corvid Financial` on the person and
+    `Corvid Financial employs Marek Solano` on the organization. Both now resolve
+    to the same (eventType, endpoints), and both landed in Tim's world as separate
+    Employ events on the 2026-07-20 push. Storage is single-direction by rule
+    (`shared/relationship-normalization.md`), so the second half is redundant, not
+    a second fact — keep the first by group order (deterministic) and drop the
+    duplicate's create together with its two Link items.
+
+    Scoped to Reign/Employ/Membership/Leadership on purpose: for a Generic event
+    the eventType says nothing, so two Generic events between the same pair are
+    two different facts (`knows` and `trusts`) and must both survive.
+
+    Returns `(groups, dropped_reports)`; groups are mutated in place.
+    """
+    seen: dict = {}
+    reports: list[str] = []
+    for gi, group in enumerate(groups):
+        drop_refs = set()
+        for it in group:
+            key = _affiliation_event_key(group, it)
+            if key is None:
+                continue
+            first = seen.get(key)
+            if first is None:
+                seen[key] = it["payload"].get("name")
+                continue
+            drop_refs.add(it["ref"])
+            reports.append(
+                f"[dedup] dropped duplicate {key[0]} event "
+                f"{it['payload'].get('name')!r} — already emitted as {first!r}")
+        if not drop_refs:
+            continue
+        dropped = {"suggestion:" + r for r in drop_refs}
+        groups[gi] = [
+            it for it in group
+            if it.get("ref") not in drop_refs
+            and it.get("payload", {}).get("sourceRef") not in dropped
+            and it.get("payload", {}).get("targetRef") not in dropped]
+    return groups, reports
 
 
 def chunk_groups_colocated(groups, refs, cap=100) -> tuple[list[list[dict]], list[tuple]]:
@@ -725,15 +897,32 @@ def run(argv: list[str]) -> int:
     for i, ent in enumerate(net_new, 1):           # aliases resolve too; names already set win
         for al in ent.get("aliases", []):
             ref_by_key.setdefault(_key(al), f"e{i}")
+    # What each endpoint IS upstream, which is what decides an affiliation edge's
+    # eventType (map_cmd.affiliation). Canon first — a linked note's node records
+    # the ratified element kind — then the kind this run PROPOSES for anything
+    # net-new, so an edge between two entities created in the same push resolves
+    # too. A name in neither keeps the flat predicate mapping and is reported.
+    kind_by_key = node_kind_index(args.vault)
+    for ent in entities:
+        proposed = element_spec(ent, mp)[1].get("type")
+        if not proposed:
+            continue
+        kind_by_key.setdefault(_key(ent["name"]), proposed)
+        for al in ent.get("aliases", []):
+            kind_by_key.setdefault(_key(al), proposed)
+
     groups, refs, all_reports = [], [], []
     for i, ent in enumerate(net_new, 1):
         items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,
-                                     args.vault, namespace, i, ref_by_key)
+                                     args.vault, namespace, i, ref_by_key,
+                                     kind_by_key)
         groups.append(items)
         refs.append(f"e{i}")
         all_reports.extend(reports)
 
     items_before = sum(len(g) for g in groups)
+    groups, dup_affiliations = dedupe_affiliation_events(groups, refs)
+    all_reports.extend(dup_affiliations)
     groups, refs = dedupe_type_creates(groups, refs)
     collapsed = items_before - sum(len(g) for g in groups)
     try:

@@ -99,6 +99,31 @@ CLI never overwrites a live element directly.
 
 ### Fixed
 
+- **Person↔group affiliation events now follow mobRPG's own construct.** mobRPG
+  derives an affiliation's event type from what the edge points AT — its GUI
+  offers Reign/Employ only on a Political element and Leadership/Membership only
+  on an Organization. `suggest` used a flat predicate→eventType table that knew
+  nothing about the endpoints, so `serves` fired `Employ` at Corvid Financial and
+  Kinetic Logistics, both Organizations: a pairing the GUI cannot produce. Events
+  are now resolved through that grid from the endpoints' real kinds (canon
+  `element_kind` for a linked note, the proposed kind for a net-new one) and named
+  the way mobRPG names them — person first, mobRPG's own title word and
+  preposition (`"Marek Solano, Member of Corvid Financial"`, not
+  `"Marek Solano, serves Corvid Financial"`), including for edges authored
+  group-first like `Corvid Financial employs Marek Solano`. A per-world
+  `relationshipTypes` entry overrides the grid only when it *differs* from the
+  ontology default, since `map init`/`map sync` write an entry for every predicate
+  they discover. The rel/ externalRef is unchanged, so nothing re-files as net-new.
+- **Duplicate affiliation halves collapse before submit** — an affiliation
+  authored on both endpoints (`Marek serves Corvid` on the person, `Corvid employs
+  Marek` on the organization) pushed as two separate Employ events. Storage is
+  single-direction by rule, so the second half is now dropped and reported.
+  Scoped to Reign/Employ/Membership/Leadership: two `Generic` events between the
+  same pair are two different facts and both survive.
+- **The push report says when the grid disagrees with the predicate map** —
+  regrades (`Membership -> Employ` because the target is a Political) and
+  endpoint pairs mobRPG could not build (`Item -> Organization` for an `owns`
+  edge stored inverse) are both surfaced instead of silently emitted.
 - **`pull-canon` no longer scaffolds junk vault notes** — `_scaffoldable`
   rejected reified-relationship refs (`rel/`) but let description-suggestion refs
   (`desc/`, minted by the retired `suggest-desc`) through, so an accepted

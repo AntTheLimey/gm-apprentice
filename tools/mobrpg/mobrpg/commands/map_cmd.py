@@ -170,6 +170,83 @@ class UnknownPredicate(ValueError):
 #     push never lands a reversed edge (borders is symmetric, so it is excluded).
 
 
+# --- person <-> group affiliation ------------------------------------------
+#
+# mobRPG never asks a user to choose an eventType. The GUI hangs relation tabs
+# off an element and derives the type from which tab you were on: Reign and
+# Employ live on a Political element, Leadership and Membership on an
+# Organization (site/src/component/world/elements/info/{person,political,
+# organization}-info.tsx, via event-type-elements.tsx). So the SAME vault
+# predicate means different things depending on what it points at, and a flat
+# predicate->eventType table cannot express that: `serves` -> Employ fired
+# against Corvid Financial and Kinetic Logistics, both Organizations — a pairing
+# the GUI itself cannot produce.
+#
+# _PERSON_STANCE records what the SUBJECT is relative to the object. When the
+# person is the object instead, the stance inverts: "Corvid employs Marek" makes
+# Marek the subordinate, i.e. the same event as "Marek serves Corvid".
+_PERSON_STANCE = {
+    "rules": "superior", "owns": "superior", "leads": "superior",
+    "employs": "superior", "commands": "superior",
+    "serves": "subordinate", "member_of": "subordinate", "vassal_of": "subordinate",
+    "founded": "subordinate", "infiltrates": "subordinate",
+    "defected_from": "subordinate",
+}
+
+# (person's stance, the group's element kind) -> Event eventType. From
+# EventType.java and the tab wiring above.
+_AFFILIATION_EVENTTYPE = {
+    ("superior", "Political"): "Reign",
+    ("superior", "Organization"): "Leadership",
+    ("subordinate", "Political"): "Employ",
+    ("subordinate", "Organization"): "Membership",
+}
+
+# Default title word + preposition per eventType, mirroring formatEventName in
+# site/src/helpers/event.helper.ts so a pushed event reads the same as one made
+# in the GUI. The title itself is the reviewer's to set — mobRPG offers a title
+# picker (GET /world/{id}/{kind}/{id}/titles) that we deliberately don't guess
+# at; these are its fallbacks.
+AFFILIATION_NAMING = {
+    "Reign": ("Owner", "of"),
+    "Employ": ("Employment", "at"),
+    "Membership": ("Member", "of"),
+    "Leadership": ("Leader", "of"),
+}
+
+AFFILIATION_EVENT_TYPES = frozenset(AFFILIATION_NAMING)
+
+
+def event_types_for_kind(group_kind) -> list:
+    """The affiliation eventTypes mobRPG offers against one group element kind —
+    Reign/Employ on a Political, Leadership/Membership on an Organization."""
+    return sorted(et for (_stance, kind), et in _AFFILIATION_EVENTTYPE.items()
+                  if kind == group_kind)
+
+
+def affiliation(predicate: str, subject_kind, target_kind):
+    """Resolve a person<->group edge to `(eventType, person_is_subject)`.
+
+    Returns None when the edge is not one of these — neither endpoint is a
+    Person, the other endpoint is not a Political/Organization, or the predicate
+    carries no stance — in which case the caller keeps the flat predicate
+    mapping. Declining is deliberate: this grid describes what mobRPG's GUI can
+    build, and an edge outside it is not something to force into the nearest fit.
+    """
+    stance = _PERSON_STANCE.get(predicate)
+    if stance is None:
+        return None
+    if subject_kind == "Person" and target_kind in ("Political", "Organization"):
+        person_is_subject, group_kind = True, target_kind
+    elif target_kind == "Person" and subject_kind in ("Political", "Organization"):
+        person_is_subject, group_kind = False, subject_kind
+        stance = "subordinate" if stance == "superior" else "superior"
+    else:
+        return None
+    et = _AFFILIATION_EVENTTYPE.get((stance, group_kind))
+    return None if et is None else (et, person_is_subject)
+
+
 def predicate_type(predicate: str) -> str:
     """Resolve a vault predicate to its mobRPG type. A WorldElementRelationType
     (Parent/Child/Link/Spouse — see RELATION_TYPES) means a direct relation;
