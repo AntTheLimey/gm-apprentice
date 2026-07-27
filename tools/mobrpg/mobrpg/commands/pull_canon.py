@@ -386,6 +386,9 @@ def run_baseline(world, vault, token, *, execute) -> int:
         print(f"ERROR reading map {map_path}: {e}", file=sys.stderr)
         return 2
     id_by_key, _, _ = suggest.node_index(vault)
+    # What each endpoint IS upstream, so an affiliation the person/group grid
+    # regrades is looked up under the type it was actually pushed as.
+    kind_by_key = suggest.node_kind_index(vault)
     notes = list(iter_linked_notes(vault))          # (path, txt, node) for every linked note
     try:
         structural, reified, _known = rel_baseline.fetch_upstream(
@@ -397,11 +400,15 @@ def run_baseline(world, vault, token, *, execute) -> int:
     stamped_nodes = matched = 0
     reviews: list[str] = []
     for path, txt, nd in notes:
-        eids, revs = rel_baseline.match_node(nd, id_by_key, structural, reified, mp)
+        eids, revs = rel_baseline.match_node(
+            nd, id_by_key, structural, reified, mp,
+            subject_kind=nd.get("element_kind"), kind_by_key=kind_by_key)
         reviews += [f"{os.path.relpath(path, vault)}: {r}" for r in revs]
         if not eids:
             continue
-        newn = rel_baseline.stamp_baseline(nd, eids)
+        newn = rel_baseline.stamp_baseline(
+            nd, eids, mp=mp, kind_by_key=kind_by_key,
+            subject_kind=nd.get("element_kind"))
         if newn == nd:
             continue
         merged = node.write_node(txt, newn)

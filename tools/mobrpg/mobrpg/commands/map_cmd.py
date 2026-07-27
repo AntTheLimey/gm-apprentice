@@ -217,6 +217,48 @@ AFFILIATION_NAMING = {
 AFFILIATION_EVENT_TYPES = frozenset(AFFILIATION_NAMING)
 
 
+def is_map_override(mp, predicate) -> bool:
+    """True only for a `relationshipTypes` entry that DIFFERS from the ontology
+    default — a deliberate per-world decision.
+
+    `map init`/`map sync` write an entry for every predicate they discover, and
+    those entries just restate `predicate_type()`. Treating any entry at all as
+    an override would mean a real vault (space_game maps all 25 of its
+    predicates this way) never reaches the affiliation grid. An entry for an
+    off-vocabulary predicate counts as an override, because it is the only
+    mapping that exists.
+    """
+    mapped = (mp.get("relationshipTypes") or {}).get(predicate)
+    if not mapped:
+        return False
+    try:
+        return mapped != predicate_type(predicate)
+    except UnknownPredicate:
+        return True
+
+
+def resolve_event_type(mp, predicate, subject_kind=None, target_kind=None):
+    """Resolve one authored edge to `(mobrpg_type, affiliation_or_None)`.
+
+    `mobrpg_type` is either a structural WorldElementRelationType or an Event
+    eventType; `affiliation_or_None` is `(eventType, person_is_subject)` when the
+    person/group grid decided it.
+
+    This is the SINGLE entry point both directions must use. `suggest` emits the
+    type and `pull-canon --baseline` looks the type up again to match what is
+    already upstream — if they disagree, the edge never reconciles, so every
+    later run re-proposes an event mobRPG already holds. Passing no kinds
+    degrades to the flat predicate mapping.
+    """
+    mapped = (mp.get("relationshipTypes") or {}).get(predicate)
+    if is_map_override(mp, predicate):
+        return mapped, None
+    aff = affiliation(predicate, subject_kind, target_kind)
+    if aff:
+        return aff[0], aff
+    return mapped or predicate_type(predicate), None
+
+
 def event_types_for_kind(group_kind) -> list:
     """The affiliation eventTypes mobRPG offers against one group element kind —
     Reign/Employ on a Political, Leadership/Membership on an Organization."""

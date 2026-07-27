@@ -91,7 +91,8 @@ def _target_name(raw: str) -> str:
     return re.sub(r"^\[\[|\]\]$", "", (raw or "")).split("|")[0].strip()
 
 
-def match_node(node, id_by_key, structural_idx, reified_idx, mp) -> tuple[dict, list]:
+def match_node(node, id_by_key, structural_idx, reified_idx, mp,
+               subject_kind=None, kind_by_key=None) -> tuple[dict, list]:
     """Match one node's relationships against the upstream indexes.
 
     Returns (event_ids, reviews). `event_ids` is keyed the way pull-canon's node
@@ -115,7 +116,13 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp) -> tuple[dict, 
         tgt = id_by_key.get(_key(name))
         if not tgt:
             continue
-        et = _mapped_type(mp, pred)
+        # Resolve through the SAME entry point `suggest` emits with. An
+        # affiliation the grid regrades (`serves` an Organization is Membership,
+        # not Employ) is stored upstream under the regraded type, so looking it
+        # up under the flat mapping finds nothing and the edge is re-proposed on
+        # every run instead of reconciling.
+        et, _aff = map_cmd.resolve_event_type(
+            mp, pred, subject_kind, (kind_by_key or {}).get(_key(name)))
         key = f"{pred}|{r.get('target')}"
         if et in STRUCTURAL:
             hits = [structural_idx[(src, et, tgt)]] if (src, et, tgt) in structural_idx else []
@@ -134,14 +141,23 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp) -> tuple[dict, 
     return event_ids, reviews
 
 
-def stamp_baseline(node, event_ids) -> dict:
+def stamp_baseline(node, event_ids, mp=None, kind_by_key=None,
+                   subject_kind=None) -> dict:
     """Return the node with `event_id` + rel-level `review_state='accepted'` set on
     each relationship whose key is in `event_ids`; every node-level field and every
     other relationship is left exactly as-is. Returns the input unchanged when
-    there is nothing to stamp."""
+    there is nothing to stamp.
+
+    Given `mp`, the stamped rows' `event_type` is also refreshed to the resolved
+    type. That field records what the edge IS upstream, so leaving
+    `event_type: Employ` beside the id of a Membership event would write a fact
+    the match just disproved. Only stamped rows are touched — an unstamped row's
+    type is still a proposal, not canon.
+    """
     if not event_ids:
         return node
     out = dict(node)
+    subject_kind = subject_kind or node.get("element_kind")
     rels = []
     for r in node.get("relationships", []):
         r2 = dict(r)
@@ -149,6 +165,12 @@ def stamp_baseline(node, event_ids) -> dict:
         if key in event_ids and not r2.get("event_id"):
             r2["event_id"] = event_ids[key]
             r2["review_state"] = "accepted"
+            if mp is not None:
+                tgt = _key(_target_name(r.get("target")))
+                et, _aff = map_cmd.resolve_event_type(
+                    mp, r.get("predicate"), subject_kind,
+                    (kind_by_key or {}).get(tgt))
+                r2["event_type"] = et
         rels.append(r2)
     out["relationships"] = rels
     return out

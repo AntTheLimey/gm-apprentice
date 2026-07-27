@@ -314,6 +314,75 @@ def test_generic_events_between_the_same_pair_both_survive(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# push and reconcile must resolve the SAME type
+# --------------------------------------------------------------------------
+
+def test_baseline_matches_an_affiliation_the_grid_regraded():
+    """If `suggest` emits Membership and `pull-canon --baseline` looks for Employ,
+    the edge never reconciles: it stays event_id-less, so every later suggest run
+    re-proposes an event mobRPG already holds. Both sides resolve through
+    map_cmd.resolve_event_type for exactly this reason."""
+    from mobrpg.commands import rel_baseline as rb
+    node = {"element_id": "marek-id", "relationships": [
+        {"predicate": "serves", "target": "[[Corvid Financial]]", "event_id": None}]}
+    id_by_key = {suggest._key("Corvid Financial"): "corvid-id"}
+    kinds = {suggest._key("Corvid Financial"): "Organization"}
+    # upstream holds it as Membership, because that is what mobRPG's GUI builds
+    reified = {(frozenset({"marek-id", "corvid-id"}), "Membership"): ["ev-membership"]}
+    eids, reviews = rb.match_node(node, id_by_key, {}, reified, _map(),
+                                  subject_kind="Person", kind_by_key=kinds)
+    assert eids == {"serves|[[Corvid Financial]]": "ev-membership"}
+    assert reviews == []
+
+
+def test_baseline_without_a_kind_index_keeps_the_flat_mapping():
+    from mobrpg.commands import rel_baseline as rb
+    node = {"element_id": "marek-id", "relationships": [
+        {"predicate": "serves", "target": "[[Corvid Financial]]", "event_id": None}]}
+    id_by_key = {suggest._key("Corvid Financial"): "corvid-id"}
+    reified = {(frozenset({"marek-id", "corvid-id"}), "Employ"): ["ev-employ"]}
+    eids, _ = rb.match_node(node, id_by_key, {}, reified, _map())
+    assert eids == {"serves|[[Corvid Financial]]": "ev-employ"}
+
+
+def test_stamping_a_baseline_corrects_the_recorded_event_type():
+    """The node's `event_type` records what the edge IS upstream. Stamping an
+    event_id we just matched against canon while leaving `event_type: Employ`
+    next to a Membership event writes a fact we have already disproved."""
+    from mobrpg.commands import rel_baseline as rb
+    node = {"element_id": "marek-id", "element_kind": "Person", "relationships": [
+        {"predicate": "serves", "target": "[[Corvid Financial]]",
+         "event_type": "Employ", "event_id": None, "review_state": "pending"},
+        {"predicate": "seeks", "target": "[[Someone]]",
+         "event_type": "Generic", "event_id": None, "review_state": "pending"}]}
+    kinds = {suggest._key("Corvid Financial"): "Organization"}
+    out = rb.stamp_baseline(node, {"serves|[[Corvid Financial]]": "ev-1"},
+                            mp=_map(), kind_by_key=kinds, subject_kind="Person")
+    assert out["relationships"][0]["event_id"] == "ev-1"
+    assert out["relationships"][0]["event_type"] == "Membership"
+    assert out["relationships"][0]["review_state"] == "accepted"
+    # an unstamped row is a proposal, not canon — leave it alone
+    assert out["relationships"][1] == node["relationships"][1]
+
+
+def test_stamping_without_a_map_leaves_the_recorded_type_alone():
+    from mobrpg.commands import rel_baseline as rb
+    node = {"element_id": "x", "relationships": [
+        {"predicate": "serves", "target": "[[Y]]", "event_type": "Employ",
+         "event_id": None}]}
+    out = rb.stamp_baseline(node, {"serves|[[Y]]": "ev-1"})
+    assert out["relationships"][0]["event_type"] == "Employ"
+
+
+def test_resolve_event_type_is_the_one_shared_entry_point():
+    # Same inputs, same answer, whichever side asks.
+    kinds_args = (_map(), "serves", "Person", "Organization")
+    assert map_cmd.resolve_event_type(*kinds_args)[0] == "Membership"
+    assert map_cmd.resolve_event_type(_map(), "serves", None, None)[0] == "Employ"
+    assert map_cmd.resolve_event_type(_map(), "part_of", "Political", "Political")[0] == "Link"
+
+
+# --------------------------------------------------------------------------
 # the kind index
 # --------------------------------------------------------------------------
 

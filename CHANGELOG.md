@@ -136,6 +136,14 @@ CLI never overwrites a live element directly.
   `relationshipTypes` entry overrides the grid only when it *differs* from the
   ontology default, since `map init`/`map sync` write an entry for every predicate
   they discover. The rel/ externalRef is unchanged, so nothing re-files as net-new.
+- **Push and reconcile resolve an edge's type through one entry point.**
+  `suggest` emitted the grid's type while `pull-canon --baseline` still looked the
+  edge up under the flat predicate mapping, so any affiliation the grid regraded
+  could never reconcile: it stayed `event_id`-less and every later run re-proposed
+  an event mobRPG already held. Both now call `map_cmd.resolve_event_type`.
+  Stamping a baseline also refreshes the row's recorded `event_type`, since
+  leaving `event_type: Employ` beside the id of a Membership event writes a fact
+  the match just disproved.
 - **Duplicate affiliation halves collapse before submit** — an affiliation
   authored on both endpoints (`Marek serves Corvid` on the person, `Corvid employs
   Marek` on the organization) pushed as two separate Employ events. Storage is

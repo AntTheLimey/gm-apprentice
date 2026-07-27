@@ -387,35 +387,14 @@ def node_kind_index(vault) -> dict:
     return idx
 
 
-def _is_override(mp, pred) -> bool:
-    """True only for a map `relationshipTypes` entry that DIFFERS from the
-    ontology default — a deliberate per-world decision.
+def _resolve(mp, pred, subj_key, tgt_key, kind_by_key):
+    """(mobrpg_type, affiliation_or_None) for one authored edge.
 
-    `map init`/`map sync` write an entry for every predicate they discover, and
-    those entries just restate `predicate_type()`. Treating any entry at all as
-    an override would mean a real vault (space_game maps all 25 of its predicates
-    this way) never reaches the affiliation grid. An entry for an off-vocabulary
-    predicate counts as an override, because it is the only mapping that exists.
-    """
-    mapped = (mp.get("relationshipTypes") or {}).get(pred)
-    if not mapped:
-        return False
-    try:
-        return mapped != map_cmd.predicate_type(pred)
-    except map_cmd.UnknownPredicate:
-        return True
-
-
-def _affiliation_for(pred, subj_key, tgt_key, kind_by_key):
-    """(eventType, person_is_subject) for a person<->group edge, or None.
-
-    None means "keep the flat predicate mapping" — the endpoints aren't a
-    person/group pair, or their kinds aren't resolvable here. Unknown kinds
-    degrade to today's behaviour rather than guess."""
-    if not kind_by_key:
-        return None
-    return map_cmd.affiliation(pred, kind_by_key.get(subj_key),
-                               kind_by_key.get(tgt_key))
+    Delegates to map_cmd.resolve_event_type so the push and `pull-canon
+    --baseline` can never disagree about what an edge's type is."""
+    kind_by_key = kind_by_key or {}
+    return map_cmd.resolve_event_type(mp, pred, kind_by_key.get(subj_key),
+                                      kind_by_key.get(tgt_key))
 
 
 def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
@@ -451,10 +430,8 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         tgt_val = tgt_id if tgt_id else f"suggestion:{tgt_ref}"
         xdeps = [] if tgt_id else [tgt_ref]
         tgt_disp = re.sub(r"^\[\[|\]\]$", "", tgt_raw).split("|")[0].replace("_", " ")
-        overridden = _is_override(mp, pred)
-        aff = None if overridden else _affiliation_for(pred, subj_key, tgt_key,
-                                                       kind_by_key)
-        et = aff[0] if aff else _mapped_type(mp, pred)
+        overridden = map_cmd.is_map_override(mp, pred)
+        et, aff = _resolve(mp, pred, subj_key, tgt_key, kind_by_key)
         if aff and et != _mapped_type(mp, pred):
             # The grid disagreed with the predicate map. Usually that IS the fix
             # (`serves` an Organization is Membership, not Employ), but it also
