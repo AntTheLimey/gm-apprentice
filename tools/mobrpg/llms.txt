@@ -95,6 +95,18 @@ vault whose entities already exist upstream but carry no node is linked with
                                   deleted flags, pending leaves the vault alone.
                                   Verifies each accepted element to detect drift
                                   and deletion; --no-verify skips that pass.
+                                  Scaffolds a note only for a ref that names a
+                                  real vault note path under a folder the vault
+                                  already has; reserved handles (rel/, desc/) and
+                                  unrecognised roots are reported, never created.
+    mobrpg pull-canon <world> --vault <path> --reconcile-deletions [--execute]
+                                  Flag linked nodes whose element is gone from
+                                  mobRPG — the write side of whats-new's GONE
+                                  list. The review-queue pass only sees deletions
+                                  of elements it reviewed, so an element deleted
+                                  directly upstream is otherwise never reconciled.
+                                  Aborts rather than act on an unreadable or
+                                  empty world. Vault-write only.
     mobrpg adopt <world> --vault <path> [--map F] [--kind K] [--only S] [--execute]
                                   Stamp `mobrpg:` nodes onto vault notes that
                                   already exist upstream but carry no node —

@@ -99,6 +99,26 @@ CLI never overwrites a live element directly.
 
 ### Fixed
 
+- **`pull-canon` no longer scaffolds junk vault notes** — `_scaffoldable`
+  rejected reified-relationship refs (`rel/`) but let description-suggestion refs
+  (`desc/`, minted by the retired `suggest-desc`) through, so an accepted
+  `space_game:desc/Items & Artifacts/Type II3-A` card scaffolded a stub at a
+  spurious top-level `desc/` folder for an element that was already linked. Both
+  reserved roots are now rejected, and scaffolding additionally requires the ref's
+  first path segment to be a directory the vault already has — so the next verb to
+  mint a new ref namespace can't repeat this. Refs that don't qualify are printed
+  under `NOT SCAFFOLDED`, never silently created (#140).
+- **`pull-canon` scaffolded every note as a Person** — `_fetch_live` never carried
+  the element kind or name into its live summaries, so `scaffold_note` fell through
+  to its `Person`/`npc` defaults and a name derived from the ref path for *every*
+  note it created. Both now come from the accepted card's own payload.
+- **Upstream deletions outside the review queue are reconcilable** — the
+  accepted-element verification only ever saw elements that came through review, so
+  an element deleted directly in mobRPG was reported by `whats-new` under GONE and
+  then never flagged on its node. New `pull-canon --reconcile-deletions` is that
+  report's write side. It reads live ids through a strict paginated fetcher that
+  raises rather than fail soft, and aborts on an unreadable or empty world instead
+  of flagging every linked node deleted off a failed read (#141).
 - **mobRPG duplicate re-push guard** — `suggest` no longer re-files entities that
   already carry a `pending` or `dismissed` `mobrpg:` node review_state (a suggestion
   is already in the reviewer's queue, or was rejected). `node_index` returns the

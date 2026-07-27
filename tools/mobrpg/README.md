@@ -126,6 +126,12 @@ Run `mobrpg <command> --help` for a command's own options.
   and which vault notes have gone missing upstream.
 - `pull-canon <world> --vault <path>` — pull ratified mobRPG canon down into
   vault `mobrpg:` nodes.
+- `pull-canon <world> --vault <path> --reconcile-deletions` — flag linked notes
+  whose element has gone from mobRPG. This is the write side of `whats-new`'s
+  GONE list: the review-queue pass only learns about deletions of elements that
+  came through review, so an element deleted directly upstream leaves its note
+  reading as linked forever. Aborts rather than act on an unreadable or empty
+  world, since either is indistinguishable from "canon deleted everything".
 - `sync <world> --vault <path>` — timestamp last-writer-wins sync of each linked
   note's description prose (see "How sync decides" below).
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that

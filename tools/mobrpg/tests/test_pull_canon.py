@@ -397,6 +397,188 @@ def test_fetch_live_unknown_etype_skips_get_stays_accepted(monkeypatch):
     assert fake.element_gets == []
 
 
+# ---------------------------------------------------------------------------
+# #140 — scaffolding must not mint junk notes, and must not mis-kind real ones.
+# ---------------------------------------------------------------------------
+
+def test_run_does_not_scaffold_desc_suggestion_ref(monkeypatch, tmp_path, capsys):
+    """A `desc/` ref is a description-suggestion handle, not a note path.
+
+    Observed 2026-07-26 against the Dead End vault: an accepted `suggest-desc`
+    suggestion (`space_game:desc/Items & Artifacts/Type II3-A`) scaffolded a junk
+    stub at `desc/Items & Artifacts/Type II3-A.md` for an element whose real note
+    was already linked. `suggest-desc` is gone, but its accepted cards live in the
+    review queue forever, so pull-canon keeps meeting them.
+    """
+    vault = tmp_path / "vault"
+    (vault / "desc").mkdir(parents=True)          # even if the root exists, reject it
+    ref = "space_game:desc/Items & Artifacts/Type II3-A"
+    live = {ref: {"state": "accepted", "element_id": "el-d", "element_kind": "Item",
+                  "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert list(vault.rglob("*.md")) == []
+    assert "0 node(s) updated" in capsys.readouterr().out
+
+
+def test_run_does_not_scaffold_into_an_unknown_root(monkeypatch, tmp_path, capsys):
+    """Fail closed on ref namespaces we don't recognise.
+
+    A prefix blocklist only rejects the shapes we already know about, so the next
+    verb that mints a new ref namespace repeats #140. Scaffolding therefore
+    requires the ref's first path segment to be a directory that already exists
+    in the vault; anything else is reported, not created.
+    """
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    ref = "space_game:sidecar/Characters/NPCs/Someone"
+    live = {ref: {"state": "accepted", "element_id": "el-s", "element_kind": "Person",
+                  "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert list(vault.rglob("*.md")) == []
+    out = capsys.readouterr().out
+    assert "0 node(s) updated" in out
+    assert ref in out                             # surfaced, not silently dropped
+
+
+def test_run_scaffolds_a_known_root_with_the_canon_kind(monkeypatch, tmp_path):
+    """The scaffolded note takes its kind from canon, not from a Person default."""
+    vault = tmp_path / "vault"
+    (vault / "Items & Artifacts").mkdir(parents=True)
+    ref = "space_game:Items & Artifacts/Stolen Transport"
+    live = {ref: {"state": "accepted", "element_id": "el-i", "element_kind": "Item",
+                  "name": "Stolen Transport", "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    p = vault / "Items & Artifacts" / "Stolen Transport.md"
+    assert p.exists()
+    text = p.read_text(encoding="utf-8")
+    assert text.startswith("---\ntype: item\n")
+    assert node.read_node(text)["element_kind"] == "Item"
+
+
+def test_fetch_live_carries_element_kind_and_name_into_the_summary(monkeypatch):
+    """`_fetch_live` never populated kind or name, so every scaffolded note fell
+    through `scaffold_note`'s defaults to Person/npc and an underscore-mangled
+    name derived from the ref — regardless of what canon actually accepted."""
+    fake = _FakeApi(
+        by_state={"Accepted": [dict(_sug("c:Items/Relic", "el-r", etype="Item"),
+                                    payload={"data": {"type": "Item"},
+                                             "name": "The Relic"})]},
+        elements={"el-r": {"type": "item", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    live = pull_canon._fetch_live("w1", "tok")
+    assert live["c:Items/Relic"]["element_kind"] == "Item"
+    assert live["c:Items/Relic"]["name"] == "The Relic"
+
+
+# ---------------------------------------------------------------------------
+# #141 (second half) — deletions that happen OUTSIDE the suggestion queue.
+# `_fetch_live` only sees elements that came through review, so an element Tim
+# deletes directly is reported by `whats-new` and then never flagged on its node.
+# ---------------------------------------------------------------------------
+
+def _linked_vault(tmp_path, *pairs):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    for name, eid in pairs:
+        nd = {"world_id": "w1", "external_ref": f"ns:Characters/NPCs/{name}",
+              "element_id": eid, "element_kind": "Person", "review_state": "accepted",
+              "last_synced": "", "review_note": "", "determined": {},
+              "relationships": [], "languages": []}
+        (vault / "Characters" / "NPCs" / f"{name}.md").write_text(
+            "---\ntype: npc\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+    return vault
+
+
+def test_reconcile_deletions_flags_a_node_gone_from_upstream(monkeypatch, tmp_path, capsys):
+    vault = _linked_vault(tmp_path, ("Alive", "el-live"), ("Six Field Sundries", "el-gone"))
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: {"el-live"})
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions", "--execute"])
+    assert rc == 0
+    gone = node.read_node(
+        (vault / "Characters/NPCs/Six Field Sundries.md").read_text(encoding="utf-8"))
+    assert gone["review_state"] == "deleted" and gone["element_id"] is None
+    still = node.read_node((vault / "Characters/NPCs/Alive.md").read_text(encoding="utf-8"))
+    assert still["review_state"] == "accepted" and still["element_id"] == "el-live"
+    assert "Six Field Sundries" in capsys.readouterr().out
+
+
+def test_reconcile_deletions_is_dry_run_by_default(monkeypatch, tmp_path, capsys):
+    vault = _linked_vault(tmp_path, ("Ghost", "el-gone"))
+    before = (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8")
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: {"el-other"})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions"]) == 0
+    assert (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8") == before
+    assert "dry-run" in capsys.readouterr().out
+
+
+def test_reconcile_deletions_aborts_rather_than_flag_everything(monkeypatch, tmp_path, capsys):
+    """A failed or truncated read looks exactly like "canon deleted everything".
+
+    `pull._list_all` swallows every exception and returns [], so a transient
+    failure on one kind would otherwise flag every note of that kind deleted.
+    The pass must abort on an unreadable world, not act on it.
+    """
+    vault = _linked_vault(tmp_path, ("Ghost", "el-1"))
+    before = (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8")
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+
+    def _boom(world, token):
+        raise client.ApiError(503, "upstream down", "/world/w1/person")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", _boom)
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions", "--execute"])
+    assert rc == 1
+    assert (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8") == before
+
+
+def test_reconcile_deletions_refuses_an_empty_world(monkeypatch, tmp_path):
+    vault = _linked_vault(tmp_path, ("Ghost", "el-1"))
+    before = (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8")
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: set())
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions", "--execute"])
+    assert rc == 1
+    assert (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8") == before
+
+
+def test_reconcile_deletions_is_idempotent(monkeypatch, tmp_path, capsys):
+    vault = _linked_vault(tmp_path, ("Ghost", "el-1"))
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: {"el-other"})
+    pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions", "--execute"])
+    after = (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8")
+    # element_id is cleared, so the note is no longer "linked" — a second pass is a no-op.
+    pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions", "--execute"])
+    assert (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8") == after
+
+
+def test_live_element_ids_raises_instead_of_returning_a_short_set(monkeypatch):
+    from mobrpg.commands import pull as pull_mod
+    calls = []
+
+    def fake(method, path, *, token=None, query=None, **kw):
+        calls.append(path)
+        if path.endswith("/organization"):
+            raise client.ApiError(500, "boom", path)
+        return {"content": [{"id": "e1"}], "page": {"totalPages": 1}}
+    monkeypatch.setattr(pull_mod.client, "_request", fake)
+    with pytest.raises(client.ApiError):
+        pull_mod.live_element_ids("w1", "tok")
+
+
+def test_live_element_ids_follows_pagination(monkeypatch):
+    from mobrpg.commands import pull as pull_mod
+
+    def fake(method, path, *, token=None, query=None, **kw):
+        page = (query or {}).get("page", 0)
+        return {"content": [{"id": f"{path.rsplit('/', 1)[1]}-{page}"}],
+                "page": {"totalPages": 2}}
+    monkeypatch.setattr(pull_mod.client, "_request", fake)
+    ids = pull_mod.live_element_ids("w1", "tok")
+    assert "person-0" in ids and "person-1" in ids
+
+
 def _attr(src_type, name):
     return {"id": "r", "type": "Attribute", "sourceId": "s", "targetId": "t",
             "source": {"type": src_type, "name": name}}

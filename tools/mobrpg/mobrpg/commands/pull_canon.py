@@ -18,6 +18,7 @@ from mobrpg import client
 from mobrpg import lww
 from mobrpg import node
 from mobrpg.vault import iter_linked_notes
+from mobrpg.commands import pull
 from mobrpg.commands import rel_baseline
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
@@ -91,20 +92,36 @@ def _vault_file(external_ref, vault):
     return p if os.path.exists(p) else None
 
 
-def _scaffoldable(external_ref):
-    """True only for refs that safely map to a new vault note. Rejects:
-    colon-less refs (scaffold_note would ValueError), reified-relationship Event
-    refs (rel-path starts with `rel/` — Events are not notes), and any rel-path
-    that would escape the vault via `..`/absolute traversal."""
+# Ref namespaces that are handles, not note paths: `rel/` for reified
+# relationship Events, `desc/` for the description suggestions the retired
+# `suggest-desc` verb minted. Their accepted cards stay in the review queue
+# forever, so pull-canon keeps meeting them long after the verb is gone.
+_RESERVED_REF_ROOTS = ("rel/", "desc/")
+
+
+def _scaffoldable(external_ref, vault):
+    """True only for refs that safely map to a new vault note.
+
+    Rejects colon-less refs (scaffold_note would ValueError), the reserved
+    non-note namespaces, any rel-path that would escape the vault via
+    `..`/absolute traversal, and — the fail-closed rule — any rel-path whose
+    first segment is not already a directory in the vault. A prefix blocklist
+    alone only rejects the shapes we know about today, so the next verb to mint
+    a new ref namespace would repeat #140; requiring a known note root means an
+    unrecognised namespace is reported rather than scaffolded.
+    """
     if not external_ref or ":" not in external_ref:
         return False
     rel = external_ref.split(":", 1)[1]
-    if rel.startswith("rel/"):
+    if rel.startswith(_RESERVED_REF_ROOTS):
         return False
     norm = os.path.normpath(rel)
     if os.path.isabs(norm) or norm == ".." or norm.startswith(".." + os.sep):
         return False
-    return True
+    if os.sep not in norm:
+        return True                            # a root-level note; the root is the vault
+    root = norm.split(os.sep, 1)[0]
+    return os.path.isdir(os.path.join(os.path.expanduser(vault), root))
 
 
 # Live-element classifier -> vault `determined` key. Attribute relations carry
@@ -190,10 +207,17 @@ def _fetch_live(world, token, *, verify=True):
             ext = s.get("externalRef")
             if not ext or ext in live:
                 continue
+            pl = s.get("payload") or {}
             summary = {
                 "state": state.lower(),
                 "element_id": s.get("resultElementId"),
                 "review_note": s.get("reviewNote") or "",
+                # The accepted card's own payload is the only place the element's
+                # kind and name are available here. Without them scaffold_note
+                # falls through to Person/npc and a name derived from the ref, so
+                # every scaffolded note was mis-kinded and underscore-mangled.
+                "element_kind": (pl.get("data") or {}).get("type") or s.get("typeName"),
+                "name": pl.get("name"),
                 "determined": {}, "event_ids": {}}
             if state == "Accepted" and verify:
                 _verify_accepted(world, token, s, summary)
@@ -304,6 +328,51 @@ def run_refresh(world, vault, token, *, execute) -> int:
     return 0
 
 
+def run_reconcile_deletions(world, vault, token, *, execute) -> int:
+    """Flag linked nodes whose element no longer exists upstream.
+
+    The review-queue pass only ever learns about deletions of elements that came
+    through review (`_verify_accepted`'s 404). An element deleted directly in
+    mobRPG — "Six — Field Sundries & Reloads", 2026-07-26 — is reported by
+    `whats-new` and then never reconciled: its node keeps a dangling element_id
+    and reads as linked forever. This is that report's write side, using the same
+    id-set comparison so the two can't disagree.
+
+    Vault-write only (dry-run default); never writes to mobRPG.
+    """
+    vault = os.path.expanduser(vault)
+    try:
+        live_ids = pull.live_element_ids(world, token)
+    except (client.ApiError, ValueError) as e:
+        print(f"ERROR reading world elements: {e}", file=sys.stderr)
+        print("ABORTED — an unreadable world is indistinguishable from an empty one; "
+              "no node was flagged.", file=sys.stderr)
+        return 1
+    if not live_ids:
+        print("ERROR: the world reports zero elements — refusing to flag every linked "
+              "node deleted off that reading.", file=sys.stderr)
+        return 1
+    flagged = 0
+    scanned = 0
+    for path, txt, nd in iter_linked_notes(vault):
+        scanned += 1
+        if nd.get("element_id") in live_ids:
+            continue
+        newn = dict(nd)
+        newn["review_state"] = "deleted"
+        newn["element_id"] = None
+        out = node.write_node(txt, newn)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(out)
+        flagged += 1
+        print(f"  GONE {os.path.relpath(path, vault)}  (was {nd.get('element_id')})")
+    print(f"pull-canon --reconcile-deletions: {flagged} of {scanned} linked node(s) "
+          f"flagged deleted"
+          + ("" if execute else "  [dry-run — no files changed]"))
+    return 0
+
+
 def run_baseline(world, vault, token, *, execute) -> int:
     """Relationship-baseline pass: read mobRPG's PRE-EXISTING edges among the
     vault's linked elements and stamp `event_id` onto matching node relationships,
@@ -368,6 +437,11 @@ def run(argv: list[str]) -> int:
                          "mobRPG canon, correcting values that were written from our "
                          "own proposals rather than pulled down. Vault-write only; "
                          "dry-run unless --execute.")
+    ap.add_argument("--reconcile-deletions", action="store_true",
+                    help="flag linked nodes whose element no longer exists upstream "
+                         "(the write side of `whats-new`'s GONE list — the review "
+                         "queue only sees deletions of elements it reviewed). "
+                         "Vault-write only; dry-run unless --execute.")
     ap.add_argument("--baseline", action="store_true",
                     help="instead of the review-queue pass, reconcile PRE-EXISTING "
                          "mobRPG relationships against the vault's authored edges and "
@@ -381,14 +455,18 @@ def run(argv: list[str]) -> int:
         return 1
     if args.refresh:
         return run_refresh(args.world, args.vault, token, execute=args.execute)
+    if args.reconcile_deletions:
+        return run_reconcile_deletions(args.world, args.vault, token,
+                                       execute=args.execute)
     if args.baseline:
         return run_baseline(args.world, args.vault, token, execute=args.execute)
     live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)
     updated = 0
+    unscaffoldable: list[str] = []
     for ext, live in live_by_ref.items():
         path = _vault_file(ext, args.vault)
         if not path:
-            if live.get("state") == "accepted" and _scaffoldable(ext):
+            if live.get("state") == "accepted" and _scaffoldable(ext, args.vault):
                 rel, text = scaffold_note(ext, live, os.path.basename(args.vault))
                 dest = os.path.join(os.path.expanduser(args.vault), rel)
                 if args.execute and not os.path.exists(dest):
@@ -396,6 +474,8 @@ def run(argv: list[str]) -> int:
                     with open(dest, "w", encoding="utf-8") as fh:
                         fh.write(text)
                 updated += 1
+            elif live.get("state") == "accepted":
+                unscaffoldable.append(ext)
             continue
         txt = open(path, encoding="utf-8").read()
         existing = node.read_node(txt)
@@ -418,6 +498,16 @@ def run(argv: list[str]) -> int:
                 if ls is not None:
                     os.utime(path, (ls, ls))
         updated += 1
+    if unscaffoldable:
+        # Accepted, no vault note, and not a scaffoldable note path: a reserved
+        # handle (rel/, desc/) or an unrecognised ref root. Report rather than
+        # mint a stub in the wrong place — silence is how #140 went unnoticed.
+        print(f"NOT SCAFFOLDED ({len(unscaffoldable)} accepted ref(s) that are not "
+              f"vault note paths):")
+        for ext in unscaffoldable[:20]:
+            print(f"  {ext}")
+        if len(unscaffoldable) > 20:
+            print(f"  ... and {len(unscaffoldable) - 20} more")
     print(f"pull-canon: {updated} node(s) updated"
           + ("" if args.execute else "  [dry-run — no files changed]"))
     return 0

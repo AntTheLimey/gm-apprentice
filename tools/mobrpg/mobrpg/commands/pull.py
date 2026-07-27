@@ -47,6 +47,33 @@ def _list_all(world: str, kind: str, token: str) -> list:
         return []
 
 
+def live_element_ids(world: str, token: str) -> set:
+    """Every element id currently live in the world, across all entity kinds.
+
+    Deliberately STRICT where `_list_all` is fail-soft: it follows `totalPages`
+    and lets `ApiError`/`ValueError` propagate. A caller deciding which vault
+    notes to flag `deleted` cannot tell a truncated or failed read apart from
+    "canon deleted everything", so a short answer here must be an exception, not
+    a smaller set.
+    """
+    ids: set = set()
+    for kind in KINDS:
+        page = 0
+        while True:
+            r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                query={"page": page, "size": 200})
+            rows = r.get("content", []) if isinstance(r, dict) else (
+                r if isinstance(r, list) else [])
+            ids.update(it["id"] for it in rows if isinstance(it, dict) and it.get("id"))
+            if not isinstance(r, dict):
+                break                                    # a bare list is unpaged
+            total = (r.get("page") or {}).get("totalPages", 1)
+            if page >= total - 1:
+                break
+            page += 1
+    return ids
+
+
 def _get_one(world: str, kind: str, eid: str, token: str) -> dict:
     try:
         return client._request("GET", f"/world/{world}/{kind}/{eid}", token=token) or {}

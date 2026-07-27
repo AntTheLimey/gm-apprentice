@@ -49,6 +49,20 @@ There is no `--crosswalk` flag anywhere — sidecar crosswalks are retired and
 untrusted. `pull-canon` reconciles against each note's `mobrpg:` node, the
 single source of truth.
 
+**Deletions outside the review queue.** The verification pass above only covers
+elements that came *through* review. When the world owner deletes an element
+directly, `whats-new` lists it under GONE and nothing ever flags its node — the
+note keeps a dangling `element_id` and reads as linked forever. Close that with:
+
+```bash
+mobrpg pull-canon --vault <path> --reconcile-deletions <world>
+```
+
+Same dry-run → present → confirm → `--execute` sequence; vault-only. The pass
+aborts if the world reads as unreadable or empty rather than flagging every
+linked node deleted off a failed read, so an abort means "try again", not "the
+world is gone". Run it whenever `whats-new` reports a non-zero GONE count.
+
 **Sequencing (from the foundation audit):** always run `pull-canon` after any
 re-`suggest`, so relationship `event_id`s heal and no duplicate-suggestion
 window stays open. If a push report flagged a `pending`-state node before
