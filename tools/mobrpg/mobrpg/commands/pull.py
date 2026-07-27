@@ -51,17 +51,24 @@ def live_element_ids(world: str, token: str) -> set:
     """Every element id currently live in the world, across all entity kinds.
 
     Deliberately STRICT where `_list_all` is fail-soft: it follows `totalPages`
-    and lets `ApiError`/`ValueError` propagate. A caller deciding which vault
-    notes to flag `deleted` cannot tell a truncated or failed read apart from
-    "canon deleted everything", so a short answer here must be an exception, not
-    a smaller set.
+    and lets `ApiError` propagate. A caller deciding which vault notes to flag
+    `deleted` cannot tell a truncated or failed read apart from "canon deleted
+    everything", so a short answer must be an exception, not a smaller set.
+
+    The one tolerated case is a kind whose endpoint answers with an empty or
+    non-JSON body (surfaced as ValueError). That is how this API reports a kind
+    holding no elements — the Space world's `/race` does it — and treating it as
+    a failure would abort every run. It contributes no ids, which is the truth.
     """
     ids: set = set()
     for kind in KINDS:
         page = 0
         while True:
-            r = client._request("GET", f"/world/{world}/{kind}", token=token,
-                                query={"page": page, "size": 200})
+            try:
+                r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                    query={"page": page, "size": 200})
+            except ValueError:
+                break                                    # empty body == no rows of this kind
             rows = r.get("content", []) if isinstance(r, dict) else (
                 r if isinstance(r, list) else [])
             ids.update(it["id"] for it in rows if isinstance(it, dict) and it.get("id"))

@@ -567,6 +567,26 @@ def test_live_element_ids_raises_instead_of_returning_a_short_set(monkeypatch):
         pull_mod.live_element_ids("w1", "tok")
 
 
+def test_live_element_ids_tolerates_a_kind_with_an_empty_body(monkeypatch):
+    """A kind holding no elements answers with an empty/non-JSON body, which the
+    client surfaces as ValueError. That is "no rows", not "the world is
+    unreadable" — the Space world's /race endpoint does exactly this, and
+    treating it as a failure aborted `--reconcile-deletions` on every run.
+    An ApiError still propagates, because that IS a failed read.
+    """
+    from mobrpg.commands import pull as pull_mod
+
+    def fake(method, path, *, token=None, query=None, **kw):
+        if path.endswith("/race"):
+            raise ValueError("Expecting value: line 1 column 1 (char 0)")
+        return {"content": [{"id": f"{path.rsplit('/', 1)[1]}-1"}],
+                "page": {"totalPages": 1}}
+    monkeypatch.setattr(pull_mod.client, "_request", fake)
+    ids = pull_mod.live_element_ids("w1", "tok")
+    assert "person-1" in ids and "item-1" in ids
+    assert not any(i.startswith("race") for i in ids)
+
+
 def test_live_element_ids_follows_pagination(monkeypatch):
     from mobrpg.commands import pull as pull_mod
 

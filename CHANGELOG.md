@@ -183,7 +183,9 @@ CLI never overwrites a live element directly.
   then never flagged on its node. New `pull-canon --reconcile-deletions` is that
   report's write side. It reads live ids through a strict paginated fetcher that
   raises rather than fail soft, and aborts on an unreadable or empty world instead
-  of flagging every linked node deleted off a failed read (#141).
+  of flagging every linked node deleted off a failed read. A kind whose endpoint
+  answers with an empty body (how this API reports "no elements of this kind")
+  contributes no ids rather than aborting (#141).
 - **mobRPG duplicate re-push guard** — `suggest` no longer re-files entities that
   already carry a `pending` or `dismissed` `mobrpg:` node review_state (a suggestion
   is already in the reviewer's queue, or was rejected). `node_index` returns the
