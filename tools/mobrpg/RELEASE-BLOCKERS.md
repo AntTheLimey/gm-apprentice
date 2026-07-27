@@ -8,9 +8,6 @@ below is now marked **FIXED** or **DEFERRED (with reason)**. The branch is
 installs and runs, and the "graduated / native / installable" claims have been
 reworded to the honest mid-strangler reality. Awaiting a human GO to push/PR.
 
-> **Dev artifact to delete before release:** `tools/mobrpg/RELEASE-FIX-WORKFLOW.js`
-> is the autonomous fix-workflow orchestration script used to drive this repair
-> pass. It is not part of the shipped tool — delete it before the actual release.
 
 **How this list was produced:** a four-way adversarial code review of the whole
 `mobrpg-cli` branch (security, data-mutation core, test quality, packaging), with
