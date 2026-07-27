@@ -136,6 +136,16 @@ CLI never overwrites a live element directly.
   `relationshipTypes` entry overrides the grid only when it *differs* from the
   ontology default, since `map init`/`map sync` write an entry for every predicate
   they discover. The rel/ externalRef is unchanged, so nothing re-files as net-new.
+- **Edges to accented entities are no longer silently dropped.** `suggest._key`
+  stripped `[^a-z0-9]`, which treats the two unicode normal forms differently: a
+  combining accent is removed but its base letter survives (NFD `Róbert` →
+  `robert`), while a precomposed letter is removed whole (NFC `Róbert` →
+  `rbert`). macOS stores filenames NFD-decomposed and a `[[wikilink]]` typed into
+  a note is NFC, so every edge pointing at an accented entity failed to resolve
+  and was reported "target not a world element" — 5 of the Dead End vault's
+  entities, including Opeyemi Tichá, who is already linked upstream. Keys now
+  decompose and drop combining marks, so both forms fold to the same value. This
+  is the same root cause as the publish-side issue #139.
 - **Push and reconcile resolve an edge's type through one entry point.**
   `suggest` emitted the grid's type while `pull-canon --baseline` still looked the
   edge up under the flat predicate mapping, so any affiliation the grid regraded

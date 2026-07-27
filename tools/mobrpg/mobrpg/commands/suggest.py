@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 from mobrpg import client
 from mobrpg import md as _md
@@ -87,7 +88,19 @@ def _description(body: str) -> str:
 
 
 def _key(name: str) -> str:
-    n = re.sub(r"\.md$", "", name or "").replace("_", " ").lower().replace("æ", "ae")
+    """Fold a name to its match key.
+
+    Accents are decomposed and their combining marks dropped, so a name reaches
+    one key whichever normal form it arrives in. macOS stores filenames
+    NFD-decomposed while a `[[wikilink]]` typed into a note is NFC, and the old
+    `[^a-z0-9]` strip treated the two differently — it removed a combining accent
+    but kept its base letter (NFD "Róbert" -> "robert") and removed a precomposed
+    letter outright (NFC "Róbert" -> "rbert"). Every edge pointing at an accented
+    entity was reported "target not a world element" and dropped from the push.
+    """
+    n = unicodedata.normalize("NFKD", re.sub(r"\.md$", "", name or ""))
+    n = "".join(c for c in n if not unicodedata.combining(c))
+    n = n.replace("_", " ").lower().replace("æ", "ae")
     n = re.sub(r"\b(mr|mrs|miss|dr|lord|lady|sir|the|of|st)\b", "", n)
     return re.sub(r"[^a-z0-9]", "", n)
 

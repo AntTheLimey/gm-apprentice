@@ -383,6 +383,52 @@ def test_resolve_event_type_is_the_one_shared_entry_point():
 
 
 # --------------------------------------------------------------------------
+# unicode: a wikilink must resolve to its own note
+# --------------------------------------------------------------------------
+
+def test_key_folds_nfc_and_nfd_to_the_same_value():
+    """macOS stores filenames NFD-decomposed while a `[[wikilink]]` typed in the
+    note is NFC. `_key` stripped `[^a-z0-9]`, which drops a combining accent but
+    keeps its base letter (NFD -> 'robertjeanes') and drops a precomposed letter
+    whole (NFC -> 'rbertjeanes'). Every edge pointing at an accented entity was
+    therefore reported "target not a world element" and silently dropped from the
+    push — 5 of the Dead End vault's entities, including Opeyemi Tichá, who is
+    already linked upstream.
+    """
+    import unicodedata
+    for nfc in ("Róbert Jeanes", "Opeyemi Tichá", "Alena González",
+                "Vita Ó Taidhg", "Vanadís Baumhauer"):
+        nfd = unicodedata.normalize("NFD", nfc)
+        assert nfc != nfd                                  # they really do differ
+        assert suggest._key(nfc) == suggest._key(nfd)
+
+
+def test_key_folds_accents_to_their_base_letter():
+    assert suggest._key("Róbert Jeanes") == "robertjeanes"
+    assert suggest._key("Opeyemi Tichá") == "opeyemiticha"
+    assert suggest._key("Vita Ó Taidhg") == "vitaotaidhg"
+
+
+def test_key_still_handles_the_existing_cases():
+    assert suggest._key("Ædric_the Bold.md") == "aedricbold"   # ae, underscores, stopwords
+    assert suggest._key("The Comets Tail") == "cometstail"
+
+
+def test_a_wikilink_to_an_accented_target_resolves(tmp_path):
+    import unicodedata
+    ent = {"path": str(tmp_path / "Items & Artifacts/Watch.md"), "name": "Watch",
+           "kind": "item",
+           "relationships": [{"target": "[[Róbert Jeanes]]", "predicate": "created",
+                              "desc": ""}]}
+    # the index is keyed off the NFD filename, as node_index builds it on macOS
+    idx = {suggest._key(unicodedata.normalize("NFD", "Róbert Jeanes")): "robert-id"}
+    items, skipped = _rel_items(tmp_path, ent, idx, {})
+    assert any(i["payload"].get("targetRef") == "robert-id"
+               or i["payload"].get("sourceRef") == "robert-id" for i in items)
+    assert not any("not a world element" in s for s in skipped)
+
+
+# --------------------------------------------------------------------------
 # the kind index
 # --------------------------------------------------------------------------
 
