@@ -338,8 +338,11 @@ def node_index(vault) -> tuple[dict, set, set]:
     the single source of truth: a vault entity is "already upstream" iff it carries
     a node with an `element_id`. A node relationship already carrying an `event_id`
     is treated as already-linked. `submitted` is the set of entity keys whose node
-    already carries a `pending` or `dismissed` review_state — a suggestion was
-    already filed for them upstream, so they must not be re-filed as a duplicate."""
+    already carries a `pending`, `dismissed` or `deleted` review_state — the GM has
+    already ruled on them upstream, so they must not be re-filed. `deleted` belongs
+    here for the same reason a dismissal does: pull-canon stamps it when the element
+    is gone from the live world, which is the GM deleting it. Re-suggesting would
+    silently undo that decision on every run."""
     idx, linked, submitted = {}, set(), set()
     aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
@@ -350,7 +353,7 @@ def node_index(vault) -> tuple[dict, set, set]:
             if not nd:
                 continue
             subj = _key(_display_name(p))
-            if nd.get("review_state") in ("pending", "dismissed"):
+            if nd.get("review_state") in ("pending", "dismissed", "deleted"):
                 submitted.add(subj)
             if not nd.get("element_id"):
                 continue
@@ -941,8 +944,8 @@ def run(argv: list[str]) -> int:
                  f"`pull-canon --baseline` to reconcile pre-existing edges; any "
                  f"genuinely-new ones await the relationship-delta pass" if held else ""))
     if submitted_ents:
-        print(f"  [held] {len(submitted_ents)} entit(y/ies) already have a pending/dismissed "
-              f"suggestion in the queue — not re-filed (would duplicate): "
+        print(f"  [held] {len(submitted_ents)} entit(y/ies) already ruled on upstream "
+              f"(pending/dismissed suggestion, or deleted element) — not re-filed: "
               + ", ".join(sorted(e["name"] for e in submitted_ents)))
     for r in all_reports:
         print(f"  [note] {r}")
@@ -1066,11 +1069,13 @@ def write_back(entities, mp, vault, namespace, *, execute) -> tuple[int, int]:
             newn["element_id"] = existing["element_id"]
             if existing.get("review_state") not in (None, "pending"):
                 newn["review_state"] = existing["review_state"]
-        # Review-state-only guard: a node under active review (pending/dismissed)
-        # or already ratified against a canon element (accepted + element_id) is
-        # owned by the review/pull paths — write_back must never overwrite it.
+        # Review-state-only guard: a node under active review (pending/dismissed),
+        # recording an element deleted upstream, or already ratified against a canon
+        # element (accepted + element_id) is owned by the review/pull paths —
+        # write_back must never overwrite it. `deleted` carries no element_id, so
+        # only this check stops a fresh pending node erasing the deletion record.
         state = existing.get("review_state") if existing else None
-        if state in ("pending", "dismissed") or (
+        if state in ("pending", "dismissed", "deleted") or (
                 state == "accepted" and existing.get("element_id")):
             skipped += 1
             continue

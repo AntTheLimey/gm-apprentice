@@ -584,6 +584,25 @@ def test_node_index_flags_pending_and_dismissed_as_submitted(tmp_path):
     assert suggest._key("Accepted Loc") not in submitted
 
 
+def test_node_index_holds_elements_deleted_upstream(tmp_path):
+    """A note pull-canon stamped `deleted` — the element is gone from the live
+    world because the GM removed it — must never be re-suggested. It clears the
+    element_id check (the id was dropped with the element), so without an explicit
+    hold it reads as net-new and the deletion is silently undone on every run."""
+    from mobrpg import node
+    (tmp_path / "Items & Artifacts").mkdir(parents=True)
+    nd = {"world_id": "", "external_ref": "space_game:Items & Artifacts/Gone Item",
+          "element_id": None, "element_kind": "Item", "review_state": "deleted",
+          "review_note": "Element deleted upstream in mobRPG.",
+          "relationships": [], "languages": []}
+    (tmp_path / "Items & Artifacts" / "Gone Item.md").write_text(
+        "---\ntype: item\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+    idx, _linked, submitted = suggest.node_index(str(tmp_path))
+    assert suggest._key("Gone Item") not in idx          # no live element to link to
+    assert suggest._key("Gone Item") in submitted        # ...but still not re-filed
+
+
 def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):
     # The central fix: `suggest` must NOT re-file an already-upstream entity as a
     # brand-new CreateElement. A note carrying a mobrpg: node with an element_id is
@@ -736,6 +755,29 @@ def test_write_back_skips_pending_and_dismissed_by_state(tmp_path):
                                mp, str(d), "canticle", execute=True)
     assert (w2, s2) == (0, 1)                              # skipped on state alone
     assert f.read_text() == before                         # file untouched
+
+
+def test_write_back_preserves_a_node_deleted_upstream(tmp_path):
+    # A `deleted` node records the GM removing the element upstream. It carries no
+    # element_id, so the accepted-branch guard does not cover it — only the state
+    # check stops write_back stamping a fresh "pending" node over the deletion and
+    # its review_note, which would re-open a question the GM already closed.
+    mp = _map()
+    d = tmp_path
+    (d / "Characters/NPCs").mkdir(parents=True)
+    f = d / "Characters/NPCs/Imogen_Bellamy.md"
+    f.write_text('---\ntype: npc\noccupation: "Priest"\n---\nBody.\n', encoding="utf-8")
+    suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                       mp, str(d), "canticle", execute=True)
+    n = _node.read_node(f.read_text())
+    n["review_state"] = "deleted"
+    n["review_note"] = "Element deleted upstream in mobRPG."
+    f.write_text(_node.write_node(f.read_text(), n), encoding="utf-8")
+    before = f.read_text()
+    w, s = suggest.write_back(suggest.collect_entities(str(d), only="imogen"),
+                              mp, str(d), "canticle", execute=True)
+    assert (w, s) == (0, 1)
+    assert f.read_text() == before                         # deletion record intact
 
 
 def test_read_note_without_closing_fence_does_not_crash(tmp_path):

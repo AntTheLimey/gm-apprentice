@@ -99,6 +99,14 @@ CLI never overwrites a live element directly.
 
 ### Fixed
 
+- **An element deleted upstream stays deleted.** `suggest` held a note whose node
+  carried a `pending` or `dismissed` review_state, but not a `deleted` one — and
+  `deleted` carries no `element_id`, so the note read as net-new and was re-filed
+  on every run, silently reversing the GM's decision to remove the element. It is
+  the same class of durable "no" as a dismissal and is now held alongside them.
+  `write_back`'s guard had the same gap from the other side: with no `element_id`
+  the accepted branch never covered a `deleted` node, so a fresh `pending` node
+  would erase the deletion record and its `review_note`.
 - **Interposing a new container no longer leaves it childless.** Creating an
   entity that sits *between* an existing parent and its existing children — a
   district between a station and its venues, a cell between a faction and its
