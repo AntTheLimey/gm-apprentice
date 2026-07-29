@@ -107,6 +107,17 @@ CLI never overwrites a live element directly.
   `write_back`'s guard had the same gap from the other side: with no `element_id`
   the accepted branch never covered a `deleted` node, so a fresh `pending` node
   would erase the deletion record and its `review_note`.
+- **An affiliation eventType off the person/group grid degrades to `Generic`.**
+  `Reign`/`Employ`/`Membership`/`Leadership` *are* mobRPG's person↔group join —
+  the GUI builds them from a Person plus a Political or Organization and offers
+  no other shape. When the grid declined an edge, `resolve_event_type` still fell
+  through to the flat predicate table, which maps `owns`/`serves` by predicate
+  alone and cannot see the endpoints; a `Person owns Item` edge was pushed as a
+  `Reign` event nothing in a world could have produced. Off-grid affiliation
+  types now resolve to `Generic`, which is how mobRPG already carries every
+  non-group edge, with the predicate on the event title. Both directions share
+  `resolve_event_type`, so `pull-canon --baseline` looks up the same answer and
+  the edges still reconcile. With no kinds to judge by, the flat mapping stands.
 - **Interposing a new container no longer leaves it childless.** Creating an
   entity that sits *between* an existing parent and its existing children — a
   district between a station and its venues, a cell between a faction and its

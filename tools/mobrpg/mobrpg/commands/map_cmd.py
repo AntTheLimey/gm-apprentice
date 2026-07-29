@@ -256,7 +256,18 @@ def resolve_event_type(mp, predicate, subject_kind=None, target_kind=None):
     aff = affiliation(predicate, subject_kind, target_kind)
     if aff:
         return aff[0], aff
-    return mapped or predicate_type(predicate), None
+    et = mapped or predicate_type(predicate)
+    # The grid declined, but the flat predicate table still names an affiliation
+    # eventType — it maps `owns`/`serves` by predicate alone and cannot see the
+    # endpoints. Those four types ARE the person/group join; mobRPG builds them
+    # from a person and a Political/Organization and nothing else, so an edge the
+    # grid rejected has no business wearing one. Degrade to Generic, which is how
+    # mobRPG already carries every non-group edge (the predicate rides on the
+    # title). Only when both kinds are known: no kinds means no judgement, and the
+    # flat mapping stays the documented degraded behaviour.
+    if et in AFFILIATION_EVENT_TYPES and subject_kind and target_kind:
+        return "Generic", None
+    return et, None
 
 
 def event_types_for_kind(group_kind) -> list:

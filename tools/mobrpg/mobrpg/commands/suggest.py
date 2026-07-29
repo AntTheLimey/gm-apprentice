@@ -462,18 +462,22 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
                 f"{entity['name']} --{pred}--> {tgt_disp}: {_mapped_type(mp, pred)}"
                 f" -> {et} (the group endpoint is {article} {gk}; mobRPG offers "
                 f"only {offered} there)")
+        # Test the FLAT mapping, not `et` — resolve_event_type has already turned
+        # `et` into Generic, so keying off it would silence this note entirely.
         if kind_by_key and not aff and not overridden \
-                and et in map_cmd.AFFILIATION_EVENT_TYPES:
-            # The flat map produced an affiliation type but the endpoints aren't
-            # a person/group pair mobRPG's GUI could build. It still pushes (this
-            # is today's behaviour), but say so — an Item that `owns` an
-            # Organization is a reversed edge, not a Reign event.
+                and _mapped_type(mp, pred) in map_cmd.AFFILIATION_EVENT_TYPES:
+            # The flat map named an affiliation type but the endpoints aren't a
+            # person/group pair mobRPG's GUI could build, so resolve_event_type
+            # degraded it to Generic. Report it: Generic is the right carrier, but
+            # a surprising one here often means the vault edge is wrong — an Item
+            # that `owns` an Organization is a reversed edge, and a person who
+            # `serves` another person usually serves that person's venue.
             sk = kind_by_key.get(subj_key) or "?"
             tk = kind_by_key.get(tgt_key) or "?"
             skipped.append(
-                f"{entity['name']} --{pred}--> {tgt_disp}: emitted as {et} from "
-                f"the predicate map, but {sk}->{tk} is not a person/group pair — "
-                f"mobRPG's GUI could not build this event")
+                f"{entity['name']} --{pred}--> {tgt_disp}: {_mapped_type(mp, pred)}"
+                f" -> Generic ({sk}->{tk} is not a person/group pair, so mobRPG's "
+                f"GUI could not build a {_mapped_type(mp, pred)} event here)")
         if et in map_cmd.RELATION_TYPES:
             # Structural relation (Parent/Child/Link/Spouse): a direct
             # WorldElementRelation — no reified Event. Parent/Child auto-create

@@ -382,6 +382,26 @@ def test_resolve_event_type_is_the_one_shared_entry_point():
     assert map_cmd.resolve_event_type(_map(), "part_of", "Political", "Political")[0] == "Link"
 
 
+def test_affiliation_type_degrades_to_generic_off_the_person_group_grid():
+    """Reign/Employ/Membership/Leadership ARE the person<->group join — mobRPG
+    builds them from a Person and a Political/Organization and offers no other
+    shape. The flat predicate table maps `owns`/`serves` by predicate alone and
+    cannot see the endpoints, so off-grid it names a type the GUI could never
+    produce. Generic is how mobRPG already carries every non-group edge."""
+    mp = _map()
+    # Person -> Person and Person -> Item: flat table says Employ / Reign.
+    assert map_cmd.resolve_event_type(mp, "serves", "Person", "Person")[0] == "Generic"
+    assert map_cmd.resolve_event_type(mp, "owns", "Person", "Item")[0] == "Generic"
+    # On the grid, the affiliation type still wins.
+    assert map_cmd.resolve_event_type(mp, "owns", "Person", "Political")[0] == "Reign"
+    assert map_cmd.resolve_event_type(mp, "serves", "Person", "Political")[0] == "Employ"
+    # Non-affiliation types are untouched off-grid...
+    assert map_cmd.resolve_event_type(mp, "enemy_of", "Political", "Organization")[0] == "War"
+    assert map_cmd.resolve_event_type(mp, "knows", "Person", "Person")[0] == "Generic"
+    # ...and with no kinds there is nothing to judge, so the flat mapping stands.
+    assert map_cmd.resolve_event_type(mp, "owns", None, None)[0] == "Reign"
+
+
 # --------------------------------------------------------------------------
 # unicode: a wikilink must resolve to its own note
 # --------------------------------------------------------------------------
