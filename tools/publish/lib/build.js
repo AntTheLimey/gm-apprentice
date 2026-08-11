@@ -4,7 +4,7 @@ const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -781,7 +781,7 @@ function build(options = {}) {
   for (const [dir, label] of Object.entries(DIR_LABELS)) {
     if (dir === 'characters/pcs' && pcRedirectTarget) {
       const depth = dir.split('/').length;
-      const rel = '../'.repeat(depth) + pcRedirectTarget;
+      const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
       const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
       const outPath = path.join(outputDir, dir, 'index.html');
       ensureDir(outPath);
@@ -792,7 +792,7 @@ function build(options = {}) {
     // Redirect events/ at the timeline only when one exists; with no timeline the redirect
     // would dangle, so fall through and give events its own index.
     if (dir === 'events' && timelineHref) {
-      const rel = relativePath(dir, timelineHref);
+      const rel = encodeHref(relativePath(dir, timelineHref));
       const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
       const outPath = path.join(outputDir, dir, 'index.html');
       ensureDir(outPath);
@@ -837,12 +837,12 @@ function build(options = {}) {
     const items = [];
     for (const p of refs.participants) {
       const out = linkMap[p.target];
-      items.push(out ? `<li><a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(p.label)}</a></li>`
+      items.push(out ? `<li><a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(p.label)}</a></li>`
                      : `<li>${escapeHtml(p.label)}</li>`);
     }
     if (refs.location) {
       const out = linkMap[refs.location.target];
-      items.push(out ? `<li>Location: <a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(refs.location.label)}</a></li>`
+      items.push(out ? `<li>Location: <a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(refs.location.label)}</a></li>`
                      : `<li>Location: ${escapeHtml(refs.location.label)}</li>`);
     }
     return items.length ? `<ul>${items.join('')}</ul>` : '';

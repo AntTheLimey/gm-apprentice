@@ -60,7 +60,10 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
     const targetPath = linkMap[target];
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
-    const relative = relativePath(currentDir, targetPath);
+    // A raw space (or other unsafe char) in the destination is not valid markdown link
+    // syntax — markdown-it falls back to literal `[text](path)` text, and the typographer
+    // then mangles a leading `../` into `…/`. Encode it into a real link destination (B7 / #145).
+    const relative = encodeHref(relativePath(currentDir, targetPath));
     return `[${display}](${relative})`;
   });
 }
@@ -280,7 +283,7 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
     const targetPath = linkMap[targetName];
     const escapedName = escapeHtml(targetName.replace(/_/g, ' '));
     const link = targetPath
-      ? `<a href="${relativePath(currentDir, targetPath)}" class="entity-link">${escapedName}</a>`
+      ? `<a href="${encodeHref(relativePath(currentDir, targetPath))}" class="entity-link">${escapedName}</a>`
       : escapedName;
     const typeRaw = String(r.type).replace(/_/g, ' ');
     const typeCapitalized = typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1);
@@ -294,17 +297,25 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
 
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
 
-// Percent-encode each path segment. A destination containing a raw space — which vault
-// attachments routinely do ("Chrome Jockey.png") — is not a valid markdown link, so
-// markdown-it emits the whole `![alt](path)` as literal text and the typographer then
-// rewrites the leading `../` into a `…/` ellipsis. Parens are encoded too: markdown-it
-// only tolerates balanced ones inside a destination.
-function encodeImageUrl(imagePath) {
-  return String(imagePath)
+// Percent-encode each path segment of an output-path-derived href/src. A destination
+// containing a raw space — which vault attachments and subfolder names routinely do
+// ("Chrome Jockey.png", "Sessions/Session 02/") — is not a valid markdown or HTML
+// destination: markdown-it emits the whole `[text](path)`/`![alt](path)` as literal text
+// and the typographer then rewrites a leading `../` into a `…/` ellipsis. Parens are
+// encoded too: markdown-it only tolerates balanced ones inside a destination.
+//
+// Generalized from the image-only `encodeImageUrl` (#145) — every hand-built href or
+// markdown-destination that interpolates a computed output path routes through this one
+// helper, so a future render path can't reintroduce the same bug in a new file.
+function encodeHref(hrefPath) {
+  return String(hrefPath)
     .split('/')
     .map(segment => encodeURIComponent(segment).replace(/\(/g, '%28').replace(/\)/g, '%29'))
     .join('/');
 }
+
+// Alias retained for the image call sites that already named it this way.
+const encodeImageUrl = encodeHref;
 
 function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, options = {}) {
   // The entity's `portrait:` frontmatter. An inline embed of the same file exists so the
@@ -353,7 +364,7 @@ function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
     const { target, label } = parseWikiRef(match[0]);
     const targetPath = linkMap[target];
     out.push(targetPath
-      ? `<a href="${relativeHref(currentOutputPath, targetPath)}" class="entity-link">${escapeHtml(label)}</a>`
+      ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}" class="entity-link">${escapeHtml(label)}</a>`
       : escapeHtml(label));
     last = match.index + match[0].length;
   }
@@ -472,4 +483,4 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields };
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields };

@@ -1,6 +1,6 @@
 const { createRenderer } = require('../markdown');
 const mdRenderer = createRenderer();
-const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue } = require('../processor');
+const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -42,8 +42,8 @@ function sectionTitle(key, publishConfig) {
 function relHref(page, indexDir) {
   const out = page.outputPath;
   const prefix = indexDir + '/';
-  if (out.startsWith(prefix)) return out.substring(prefix.length);
-  return out.split('/').pop();
+  const rel = out.startsWith(prefix) ? out.substring(prefix.length) : out.split('/').pop();
+  return encodeHref(rel);
 }
 
 function buildPillFilters(pages, dir) {

@@ -1,4 +1,4 @@
-const { escapeHtml, relativeHref, parseWikiRef, publishedSource } = require('../processor');
+const { escapeHtml, relativeHref, parseWikiRef, publishedSource, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -25,7 +25,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
     parentLocation: parent.label,
     // Breadcrumb hrefs are relative to the current page; linkMap holds the root-relative
     // output path, so make it relative or it resolves under the current dir and 404s.
-    parentLocationHref: parentTarget ? relativeHref(page.outputPath, parentTarget) : null,
+    parentLocationHref: parentTarget ? encodeHref(relativeHref(page.outputPath, parentTarget)) : null,
   } : {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
@@ -69,7 +69,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let subLocationsHtml = '';
   if (childLocations.length > 0) {
     const cards = childLocations.map(child => {
-      const href = relativeHref(page.outputPath, child.outputPath);
+      const href = encodeHref(relativeHref(page.outputPath, child.outputPath));
       const excerpt = excerptFromMarkdown(publishedSource(child),
         { excludeSections: (publishConfig && publishConfig.exclude_sections) || [] });
       return `<a class="entity-card" href="${href}">
@@ -91,7 +91,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let whosHereHtml = '';
   if (locNPCs.length > 0) {
     const npcCards = locNPCs.map(npc => {
-      const href = relativeHref(page.outputPath, npc.outputPath);
+      const href = encodeHref(relativeHref(page.outputPath, npc.outputPath));
       const initials = getInitials(npc.displayTitle);
       const role = npc.frontmatter.occupation || '';
       return `<a class="npc-card" href="${href}">
@@ -116,7 +116,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   let timelineHtml = '';
   if (locEvents.length > 0) {
     const nodes = locEvents.map(ev => {
-      const href = relativeHref(page.outputPath, ev.outputPath);
+      const href = encodeHref(relativeHref(page.outputPath, ev.outputPath));
       const date = ev.frontmatter.in_game_date || ev.frontmatter.date || '';
       const outcome = ev.frontmatter.outcome || '';
       return `<div class="timeline-node">

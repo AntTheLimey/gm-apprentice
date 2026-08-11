@@ -1,4 +1,4 @@
-const { escapeHtml } = require('./processor');
+const { escapeHtml, encodeHref } = require('./processor');
 
 const SHAPE_MAP = {
   pc: 'circle',
@@ -153,7 +153,8 @@ function renderRelationshipSVG(graph, options = {}) {
     const fill = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--bg-card, #232830)';
     const stroke = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--border, #30363d)';
 
-    const href = (node.outputPath && options.currentOutputPath) ? relPath(options.currentOutputPath, node.outputPath) : node.outputPath;
+    const rawHref = (node.outputPath && options.currentOutputPath) ? relPath(options.currentOutputPath, node.outputPath) : node.outputPath;
+    const href = rawHref ? encodeHref(rawHref) : rawHref;
     const linkOpen = href ? `<a href="${escapeHtml(href)}">` : '';
     const linkClose = href ? '</a>' : '';
 

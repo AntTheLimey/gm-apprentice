@@ -1,11 +1,11 @@
-const { escapeHtml, relativeHref } = require('../processor');
+const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts } = require('./base');
 
 function storyNav(unit) {
   const prev = unit.prevHref
-    ? `<a href="${relativeHref(unit.outputPath, unit.prevHref)}">&larr; Previous</a>` : '<span></span>';
+    ? `<a href="${encodeHref(relativeHref(unit.outputPath, unit.prevHref))}">&larr; Previous</a>` : '<span></span>';
   const next = unit.nextHref
-    ? `<a href="${relativeHref(unit.outputPath, unit.nextHref)}">Next &rarr;</a>` : '<span></span>';
+    ? `<a href="${encodeHref(relativeHref(unit.outputPath, unit.nextHref))}">Next &rarr;</a>` : '<span></span>';
   return `<div class="story-nav">${prev}${next}</div>`;
 }
 
@@ -37,7 +37,7 @@ function storyPage(unit, config, publishConfig, navFor) {
 
 function characterStoryPage(story, config, publishConfig, navFor) {
   const sheetLink = story.sheetOutputPath
-    ? `<p class="story-sheet-link"><a href="${relativeHref(story.outputPath, story.sheetOutputPath)}">View character sheet &rarr;</a></p>` : '';
+    ? `<p class="story-sheet-link"><a href="${encodeHref(relativeHref(story.outputPath, story.sheetOutputPath))}">View character sheet &rarr;</a></p>` : '';
   const content = `
     <article class="story-prose">
       <h1 class="page-title">${escapeHtml(story.title)}</h1>

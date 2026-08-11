@@ -1,7 +1,7 @@
 'use strict';
 const { cocRowCells } = require('../../../js/coc-party');
 const { avatarHtml } = require('../party-avatar');
-const { relativeHref, escapeHtml } = require('../../processor');
+const { relativeHref, escapeHtml, encodeHref } = require('../../processor');
 
 // Sort: DEX desc, then name asc. Missing DEX sorts last (−Infinity).
 function dexCmp(a, b) {
@@ -37,7 +37,7 @@ function renderCoCBoard(manifest, rosterOutputPath, { live = true } = {}) {
   const showRep = manifest.pcs.some((pc) => pc.rep != null);
   const rows = manifest.pcs.map((pc) => {
     const c = cocRowCells(pc, null);   // authored-default initial render
-    const href = relativeHref(rosterOutputPath, pc.outputPath);
+    const href = encodeHref(relativeHref(rosterOutputPath, pc.outputPath));
     const repTd = showRep ? `\n  <td data-gl-party-field="rep">${c.rep}</td>` : '';
     return `<tr class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
   <td class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub">${c.player}</span></span></a></td>
