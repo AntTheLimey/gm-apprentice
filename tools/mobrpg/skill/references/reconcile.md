@@ -168,20 +168,35 @@ buried the world owner's review queue in churn. Both directions treat them as th
 vault's own: a push strips them, a pull preserves them verbatim. A vault can
 replace that list with a top-level `"vaultOnlySections": ["...", ...]` array in
 `_meta/mobrpg-map.json`. The array **replaces** the default rather than adding to
-it, so a list that omits `GM Notes` opts GM secrets into the push — `sync` obeys
-the config but prints a `WARNING: vaultOnlySections does not include "GM Notes"`
-line to stderr when it does. Headings left with no body (empty scaffold prompts
+it, so a list that omits `GM Notes` opts GM secrets into the push — both push
+paths obey the config but print a `WARNING: vaultOnlySections does not include
+"GM Notes"` line to stderr when they do. The same list drives `suggest`'s
+`CreateElement` descriptions, so a section is stripped whether the entity is
+being created or updated. Headings left with no body (empty scaffold prompts
 like a bare `## Properties`) are dropped from the push candidate too — they're
 writing prompts for the vault, not description content.
 
 **Before the first `--execute` after upgrading, look for canon H2s below a
 vault-only section.** A vault-only section now ends at the next `##` heading
 rather than at end-of-file, so an authored heading that happens to sit *after*
-`## GM Notes` (a `## Timeline`, say) is canon-facing — earlier versions preserved
-everything below `## GM Notes` on a pull, and those sections are now overwritten
-by one. Grep the vault for headings following a vault-only section, move any that
-are real canon above it, and always read the dry-run table first: every **pull**
-row prints the canon line count it is about to trade, e.g.
+`## GM Notes` (a `## Timeline`, say) is canon-facing. That cuts **both ways**,
+and the push side is the one with the wider blast radius:
+
+- **Pull:** earlier versions preserved everything below `## GM Notes`; those
+  sections are now overwritten by a pull, because they are inside the canon
+  region it replaces.
+- **Push:** the same sections are now *sent upstream* — a `## Timeline` under
+  `## GM Notes` goes into the `UpdateElement` suggestion (and into a
+  `CreateElement` description) instead of staying local. Anything below a
+  vault-only heading that is secret needs to be *inside* a vault-only section,
+  not merely after one.
+
+A `##` heading inside a fenced ``` block is code, not a heading, and does not end
+a section — so a stat block quoted under `## GM Notes` keeps everything after it
+vault-only. Grep the vault for headings following a vault-only section, move any
+that are real canon above it (and any that are secret into `## GM Notes` or the
+vault's own `vaultOnlySections` list), and always read the dry-run table first:
+every **pull** row prints the canon line count it is about to trade, e.g.
 `pull  ns:People/marsh-hag  (canon -8/+1 lines, SHRINKS)`. A `SHRINKS` row is the
 one to open before you say yes.
 

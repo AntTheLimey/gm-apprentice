@@ -209,11 +209,17 @@ decision table (including the `baseline` verdict for a never-synced note) and
 the dry-run → present → confirm → `--execute` walk-through. `## GM Notes` and
 the other vault-only sections (`## Notes`, `## Appearances`,
 `## Source References`, or a vault's own `vaultOnlySections` list) are never
-pushed — they stay local to the vault by design.
+pushed — they stay local to the vault by design. The same list is stripped from
+the `CreateElement` descriptions this push flow sends, so a section a vault has
+opted out of never reaches the world by either route.
 
 Descriptions push as raw Markdown, not HTML — every non-empty description
 `suggest`/`sync` sends carries `descriptionType: "Markdown"`, so mobRPG stores
 the authored prose verbatim instead of the CLI's own lossy markdown→HTML
-conversion. The one exception is the empty-description stub for an entity with
-no authored prose at all (`<p></p>`, no `descriptionType`), which stays HTML —
-see the "Missing/blank description" risk flag above.
+conversion. There are two exceptions, both HTML fragments the CLI builds itself
+and both sent with no `descriptionType` (so the backend stores them as Html):
+the empty-description stub for an entity with no authored prose at all
+(`<p></p>` — see the "Missing/blank description" risk flag above), and the
+one-line blurb on a reified relationship Event (`<p>…</p>`, from the edge's
+`description:` or its predicate). Neither carries authored vault prose, so
+nothing is lost to the conversion.

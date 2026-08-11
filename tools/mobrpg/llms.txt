@@ -190,6 +190,8 @@ vault whose entities already exist upstream but carry no node is linked with
                                   live element is created directly. PCs excluded
                                   unless --include-pcs; --write-back also writes a
                                   pending mobrpg: node into each entity's file.
+                                  Create descriptions strip the same vault-only
+                                  sections `sync` does (see "vaultOnlySections").
     mobrpg submit-batch <world> <batch.json> [--execute]
                                   Submit a pre-built COMPOUND batch (classifier
                                   Types, Attribute edges, reified Event + Link

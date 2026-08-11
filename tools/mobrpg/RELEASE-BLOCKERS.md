@@ -283,9 +283,9 @@ boundary this punch-list was written against. Several entries above are now
 
 A four-way adversarial review of the post-LWW-rework `sync`/`suggest` path
 surfaced nine open GitHub issues. Each was fixed test-first on
-`mobrpg-release-fixes` (cut from `mobrpg-cli` @ `2d1017b`); the full suite
-(including these fixes' new tests) is reported in this file's task-8 record.
-One line per issue:
+`mobrpg-release-fixes` (cut from `mobrpg-cli` @ `2d1017b`). The full suite —
+including these fixes' new tests — is green: `cd tools/mobrpg && python3 -m
+pytest tests/ -q`. One line per issue:
 
 - **#140 — already fixed pre-plan** (`36fc6c5`, before this plan started).
   `pull-canon`'s `_scaffoldable` rejects `rel/`/`desc/` refs and is fail-closed
@@ -330,10 +330,14 @@ One line per issue:
 **Operational note before the first post-upgrade `sync --execute` against the
 live world:** run dry-run first and read the pull canon-delta lines (#146
 above) — confirm any `SHRINKS` row is expected before saying yes. Separately,
-any open Pending row filed *before* this upgrade whose note isn't currently
-locally pending won't match anything under the new `upd/<relpath>#<hash>`
-scheme (#151); the next time that note's push/tie decision fires, `sync` mints
-a fresh `upd/`-namespaced ref rather than reusing the old plain one, leaving
-the pre-upgrade row an orphaned, permanent stale entry in the queue. It's a
-one-time cost per such note, not an ongoing one — safe to leave, or dismiss by
-hand in mobRPG.
+any description-update row filed *before* this upgrade carries the note's plain
+create ref rather than an `upd/<relpath>#<hash>` one (#151). The next time that
+note's push/tie decision fires, `sync` mints a fresh `upd/`-namespaced ref and
+records it in the node's `pending_ref`, leaving the pre-upgrade row an orphaned,
+permanent stale entry in the queue. `pull-canon` will not adjudicate the note
+from that stale row: while a node holds a `pending_ref`, a row at the note's
+plain create ref stands down rather than stamping a verdict the GM gave to
+different content. The one exception is deletion — with the element gone no
+update can ever land, so the node is still flagged `deleted`. It's a one-time
+cost per such note, not an ongoing one — safe to leave, or dismiss by hand in
+mobRPG.

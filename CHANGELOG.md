@@ -300,6 +300,25 @@ Second fix round (a four-way adversarial review of the post-LWW-rework
   `--reconcile-deletions` had already flagged deleted; the main pass now
   checks the same live element-id set and treats absence as authoritative
   (#153).
+- **A note's create ref no longer hijacks the update it is waiting on** — a
+  terminal Accepted/Dismissed row at the note's plain create ref ran the
+  element-level adjudication over a node holding a `pending_ref`, stamping a
+  verdict the GM gave to different content and stranding the claim. While a
+  push is in flight the create row stands down; deletion stays authoritative.
+- **Section boundaries are fence-aware** — a ``` block under `## GM Notes`
+  whose first line began `## ` (a quoted stat block) ended the vault-only
+  section early and leaked every GM line below it into the push candidate. A
+  `##` line inside a fence is code, not a heading, in both the vault-only
+  split and the empty-heading strip.
+- **`map sync` preserves hand-authored top-level map keys** — the merge
+  rebuilt the map from the fresh discovery alone, silently deleting a vault's
+  `vaultOnlySections` list; the next `sync` then reverted to the default
+  sections with no warning.
+- **`suggest` strips the vault's configured sections from create
+  descriptions** — the create path hardcoded the four default headings, so a
+  custom vault-only section that `sync` kept local was published verbatim the
+  first time an entity was pushed. Both push paths now read the same
+  `vaultOnlySections` loader.
 
 ---
 
