@@ -297,3 +297,52 @@ describe('sheet_crest', () => {
     assert.strictEqual(result.sheet_crest, null);
   });
 });
+
+describe('overrides.fields unicode normalization (#139)', () => {
+  const { canonicalPath } = require('../../lib/manifest');
+
+  // Built with explicit \u escapes (never a literal accented character) so the test
+  // file itself cannot be silently re-normalized by an editor or formatter. NFC types
+  // the accent as one precomposed codepoint; NFD types the same visible character as
+  // base letter + a separate combining acute accent codepoint. build.js looks up
+  // overrides via fieldOverrides[vaultRelPathOf(page)], and vaultRelPathOf() now
+  // canonicalizes the scanned page path to NFC (#139) — so an overrides.fields key
+  // must land in the same NFC form at config-load time, or it silently stops matching
+  // whenever the config author's normal form differs from the page's.
+  const NFC_PATH = 'Characters/PCs/Alena Gonz\u00e1lez.md';
+  const NFD_PATH = 'Characters/PCs/Alena Gonza\u0301lez.md';
+
+  function writeVaultConfig(tmpDir, fieldKey) {
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    const yaml = [
+      '---',
+      'publish:',
+      '  overrides:',
+      '    fields:',
+      `      "${fieldKey}":`,
+      '        some_field: "override value"',
+      '---',
+    ].join('\n');
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+  }
+
+  it('canonicalizes an NFD-keyed overrides.fields entry to NFC, matching an NFC page path', () => {
+    assert.notStrictEqual(NFC_PATH, NFD_PATH); // sanity: the two source strings really do differ byte-for-byte
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    writeVaultConfig(tmpDir, NFD_PATH);
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(Object.keys(result.overrides.fields), [NFC_PATH]);
+    assert.strictEqual(result.overrides.fields[canonicalPath(NFC_PATH)].some_field, 'override value');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('canonicalizes an NFC-keyed overrides.fields entry, matching an NFD page path (vice versa)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    writeVaultConfig(tmpDir, NFC_PATH);
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(Object.keys(result.overrides.fields), [NFC_PATH]);
+    assert.strictEqual(result.overrides.fields[canonicalPath(NFD_PATH)].some_field, 'override value');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});

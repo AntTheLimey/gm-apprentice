@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
+const { canonicalPath } = require('./manifest');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
@@ -63,6 +64,19 @@ function unionExcludeList(primary, fallback, defaults) {
         out.push(item);
       }
     }
+  }
+  return out;
+}
+
+// build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
+// and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
+// key typed by the config author in a different normal form (e.g. an NFD-decomposed
+// accented filename) would otherwise never match — canonicalize once here, at load, so
+// build.js's single query-side normalization is enough.
+function canonicalizeOverrideFieldKeys(fields) {
+  const out = {};
+  for (const [key, value] of Object.entries(fields || {})) {
+    out[canonicalPath(key)] = value;
   }
   return out;
 }
@@ -138,6 +152,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     overrides: {
       ...PUBLISH_DEFAULTS.overrides,
       ...publish.overrides,
+      fields: canonicalizeOverrideFieldKeys(
+        (publish.overrides && publish.overrides.fields) || PUBLISH_DEFAULTS.overrides.fields
+      ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
     // Explicit flags win, publish block over json fallback; absent stays undefined.
