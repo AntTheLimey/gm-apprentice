@@ -168,10 +168,25 @@ display settings that are specific to the generated site.
 
 ## Precedence
 
-When both files define the same setting (e.g. `excludeSections`
-in `vault.config.json` and `publish.exclude_sections` in
-`vault-config.md`), the vault-config.md value wins. The JSON
-file values are used only as fallbacks.
+Two different rules apply, depending on the setting.
+
+**List settings** — `exclude_sections`, `exclude_fields`, `exclude_dirs`
+— are **unioned**, not overridden. If `publish.exclude_sections` (etc.)
+in `vault-config.md` and the matching `excludeSections`/`excludeFields`/
+`excludeDirs` in `vault.config.json` both supply a list, the two lists
+are merged (case-insensitively deduplicated, first-seen casing kept), so
+a section/field/directory named in only one file is still excluded —
+neither file shadows the other. The built-in default list is used only
+when **neither** file provides a list for that setting; as soon as
+either does, the default stops applying on its own (it is not unioned
+in alongside them).
+
+**Scalar and passthrough settings** — `sheet_crest`, `exclude_callouts`,
+`backend.statusBar`/`backend.inbox`, and the per-key settings inside
+`images`, `banners`, and `locations` — follow simple precedence: the
+`vault-config.md` `publish.*` value wins when set, `vault.config.json`
+is used only as a fallback when `vault-config.md` doesn't set it, and
+the built-in default applies only when neither file sets it.
 
 ---
 

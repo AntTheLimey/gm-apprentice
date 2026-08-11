@@ -62,6 +62,36 @@ describe('exclude_sections default (issue #144)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it('unions vault-config.md with a stale vault.config.json excludeSections list, with no default injection', () => {
+    // Regression for the exact upgrade scenario #144 leaves unfixed: a site
+    // scaffolded before this change has a stale 4-item excludeSections in
+    // vault.config.json. Adding a vault-config.md list must union with that
+    // stale list (neither shadows the other, per the existing union
+    // semantics), and the six-item built-in default must not sneak in on
+    // top of either explicit source.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_sections:\n    - "Custom Section"\n---\n',
+    );
+    const staleFallback = {
+      excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
+    };
+    const result = loadPublishConfig(tmpDir, staleFallback);
+    assert.deepStrictEqual(result.exclude_sections, [
+      'Custom Section',
+      'GM Notes',
+      'DM Notes',
+      'Player Notes',
+      'Source References',
+    ]);
+    assert.ok(!result.exclude_sections.includes('Reconciliation Context'));
+    assert.ok(!result.exclude_sections.includes('Handoff to Reconcile'));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
   it('scaffold template excludeSections stays in sync with PUBLISH_DEFAULTS.exclude_sections', () => {
     const tmplPath = path.join(__dirname, '../../templates-scaffold/vault.config.json.tmpl');
     const parsed = JSON.parse(fs.readFileSync(tmplPath, 'utf8'));
