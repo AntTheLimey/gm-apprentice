@@ -202,6 +202,9 @@ def test_dismissed_suggestion_not_refiled(tmp_path, monkeypatch):
             upd_ref: {"state": "dismissed", "element_id": None,
                       "review_note": "not canon", "determined": {},
                       "event_ids": {}}})
+    # Keep the #153 liveness gate off the network — this fixture has no
+    # element_id for the gate to consult.
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: set())
     pull_canon.run(["w1", "--vault", str(v), "--execute"])
     assert _node.read_node(p.read_text(encoding="utf-8"))["review_state"] == "dismissed"
 

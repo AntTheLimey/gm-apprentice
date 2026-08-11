@@ -474,6 +474,22 @@ def run(argv: list[str]) -> int:
     if args.baseline:
         return run_baseline(args.world, args.vault, token, execute=args.execute)
     live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)
+    if not args.no_verify:
+        try:
+            live_ids = pull.live_element_ids(args.world, token)
+        except (client.ApiError, ValueError) as e:
+            live_ids = None
+            print(f"WARNING: could not read live element ids ({e}); "
+                  f"deletion gating skipped this run", file=sys.stderr)
+        if live_ids:
+            # Element absence is authoritative over suggestion state: a
+            # still-Accepted create whose element left the world must flag the
+            # node deleted, not re-stamp a dead id (#153). An empty id set is
+            # refused, same as --reconcile-deletions.
+            for live in live_by_ref.values():
+                if (live.get("state") == "accepted" and live.get("element_id")
+                        and live["element_id"] not in live_ids):
+                    live["state"] = "deleted"
     updated = 0
     orphan_updates = 0
     unscaffoldable: list[str] = []

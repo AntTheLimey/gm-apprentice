@@ -110,6 +110,12 @@ def _run_execute(monkeypatch, vault, live_by_ref):
     monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(pull_canon, "_fetch_live",
                         lambda world, token, *, verify=True: live_by_ref)
+    # The #153 liveness gate calls pull.live_element_ids separately from
+    # _fetch_live; treat every element_id already in the fake queue as live so
+    # it never runs against the network and never perturbs these tests' own
+    # scaffold/traversal assertions.
+    live_ids = {v.get("element_id") for v in live_by_ref.values() if v.get("element_id")}
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: live_ids)
     rc = pull_canon.run(["w1", "--vault", str(vault), "--execute"])
     assert rc == 0
 
@@ -134,6 +140,8 @@ def test_dismiss_transition_pins_file_mtime(monkeypatch, tmp_path):
             "ns:Creatures/marsh-hag": {"state": "dismissed", "element_id": None,
                                        "review_note": "dup", "determined": {},
                                        "event_ids": {}}})
+    # Keep the #153 liveness gate off the network for this dismissed-only fixture.
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: {"e-77"})
     pull_canon.run(["w1", "--vault", str(vault), "--execute"])
     out = node.read_node(p.read_text(encoding="utf-8"))
     assert out["review_state"] == "dismissed"
@@ -551,6 +559,100 @@ def test_reconcile_deletions_is_idempotent(monkeypatch, tmp_path, capsys):
     # element_id is cleared, so the note is no longer "linked" — a second pass is a no-op.
     pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions", "--execute"])
     assert (vault / "Characters/NPCs/Ghost.md").read_text(encoding="utf-8") == after
+
+
+# ---------------------------------------------------------------------------
+# #153 — the main review-queue pass gates `live_by_ref` on world liveness
+# before apply_state runs, so a still-Accepted create row whose element left
+# the world can't re-stamp a dead id onto a node `--reconcile-deletions`
+# already flagged deleted.
+# ---------------------------------------------------------------------------
+
+def test_accepted_row_with_dead_element_flags_deleted(monkeypatch, tmp_path):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+
+    # Node already correctly flagged: review_state deleted, element_id null.
+    dead_nd = {"world_id": "w1", "external_ref": "ns:Characters/NPCs/Dead_Guy",
+               "element_id": None, "element_kind": "Person", "review_state": "deleted",
+               "last_synced": "", "review_note": "", "determined": {},
+               "relationships": [], "languages": []}
+    dead_path = vault / "Characters" / "NPCs" / "Dead_Guy.md"
+    dead_path.write_text("---\ntype: npc\n" + node.emit_node(dead_nd) + "---\nBody\n",
+                         encoding="utf-8")
+
+    # A node whose element IS in the live set: stays accepted.
+    live_nd = {"world_id": "w1", "external_ref": "ns:Characters/NPCs/Live_Guy",
+               "element_id": "e-live", "element_kind": "Person", "review_state": "accepted",
+               "last_synced": "2020-01-01T00:00:00Z", "review_note": "", "determined": {},
+               "relationships": [], "languages": []}
+    live_path = vault / "Characters" / "NPCs" / "Live_Guy.md"
+    live_path.write_text("---\ntype: npc\n" + node.emit_node(live_nd) + "---\nBody\n",
+                         encoding="utf-8")
+
+    # Queue still holds the Accepted create with resultElementId e-dead for the
+    # deleted node, and an Accepted row for the live node.
+    live_by_ref = {
+        "ns:Characters/NPCs/Dead_Guy": {"state": "accepted", "element_id": "e-dead",
+                                        "element_kind": "Person", "determined": {},
+                                        "event_ids": {}},
+        "ns:Characters/NPCs/Live_Guy": {"state": "accepted", "element_id": "e-live",
+                                        "element_kind": "Person", "determined": {},
+                                        "event_ids": {}},
+    }
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon, "_fetch_live",
+                        lambda world, token, *, verify=True: live_by_ref)
+    # live_element_ids returns a non-empty set NOT containing e-dead.
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: {"e-live"})
+
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--execute"])
+    assert rc == 0
+
+    # The node must STAY deleted (not resurrect).
+    dead_out = node.read_node(dead_path.read_text(encoding="utf-8"))
+    assert dead_out["review_state"] == "deleted"
+    assert dead_out["element_id"] is None
+
+    live_out = node.read_node(live_path.read_text(encoding="utf-8"))
+    assert live_out["review_state"] == "accepted"
+    assert live_out["element_id"] == "e-live"
+
+
+def test_unreadable_live_ids_skips_gate_with_warning(monkeypatch, tmp_path, capsys):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "ns:Characters/NPCs/Maybe_Dead",
+          "element_id": "e-old", "element_kind": "Person", "review_state": "accepted",
+          "last_synced": "2020-01-01T00:00:00Z", "review_note": "", "determined": {},
+          "relationships": [], "languages": []}
+    path = vault / "Characters" / "NPCs" / "Maybe_Dead.md"
+    path.write_text("---\ntype: npc\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+    live_by_ref = {
+        "ns:Characters/NPCs/Maybe_Dead": {"state": "accepted", "element_id": "e-new",
+                                          "element_kind": "Person", "determined": {},
+                                          "event_ids": {}},
+    }
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon, "_fetch_live",
+                        lambda world, token, *, verify=True: live_by_ref)
+
+    def _boom(world, token):
+        raise client.ApiError(503, "upstream down", "/world/w1/person")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", _boom)
+
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--execute"])
+    assert rc == 0
+
+    # pull.live_element_ids raises ApiError -> pass runs as before (no
+    # deletion gating), and a WARNING line is printed to stderr.
+    err = capsys.readouterr().err
+    assert "WARNING" in err
+
+    out = node.read_node(path.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out["element_id"] == "e-new"
 
 
 def test_live_element_ids_raises_instead_of_returning_a_short_set(monkeypatch):
