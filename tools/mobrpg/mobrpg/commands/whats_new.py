@@ -32,10 +32,18 @@ def _norm(s) -> str:
     return (s or "").strip().lower()
 
 
-def diff_world(extract: dict, vault_nodes: dict, vault_type_names: set) -> dict:
+def diff_world(extract: dict, vault_nodes: dict, vault_type_names: set,
+               discovered_vocab: dict | None = None) -> dict:
     """Pure. `vault_nodes` = {element_id: {name, path}} from the vault's nodes;
-    `vault_type_names` = normalized classifier-type names the vault already knows.
-    Returns {new_entities, gone, new_types, linked}."""
+    `vault_type_names` = normalized classifier-type names the vault already knows;
+    `discovered_vocab` = the map's `_discoveredVocab` ({kind: [names]}), the
+    vocab mobRPG-side discovery already recorded on a prior `map init`/`sync`.
+
+    Returns {new_entities, gone, new_types, unbound_types, linked}. A type not yet
+    in `vault_type_names` is genuinely new UNLESS it is already present in
+    `discovered_vocab` (matched via #148's `_merge_key` fold) — in that case the
+    map already knows about it and it is simply unbound (no vault note uses it
+    yet), not unfinished `map` work, so it is reported separately."""
     ex_ids = {e.get("id") for e in extract.get("entities", [])}
     new_entities, linked = [], 0
     for e in extract.get("entities", []):
@@ -45,13 +53,21 @@ def diff_world(extract: dict, vault_nodes: dict, vault_type_names: set) -> dict:
             new_entities.append({"id": e.get("id"), "kind": e.get("kind"), "name": e.get("name")})
     gone = [{"element_id": eid, "name": v.get("name"), "path": v.get("path")}
             for eid, v in vault_nodes.items() if eid not in ex_ids]
-    new_types = []
+    discovered = {kind: {map_cmd._merge_key(v) for v in vals}
+                  for kind, vals in (discovered_vocab or {}).items()}
+    new_types, unbound_types = [], []
     for kind, items in (extract.get("types") or {}).items():
         for t in items:
-            if _norm(t.get("name")) not in vault_type_names:
-                new_types.append({"kind": kind, "name": t.get("name"), "id": t.get("id")})
-    return {"new_entities": new_entities, "gone": gone,
-            "new_types": new_types, "linked": linked}
+            name = t.get("name")
+            if _norm(name) in vault_type_names:
+                continue
+            entry = {"kind": kind, "name": name, "id": t.get("id")}
+            if map_cmd._merge_key(name) in discovered.get(kind, set()):
+                unbound_types.append(entry)
+            else:
+                new_types.append(entry)
+    return {"new_entities": new_entities, "gone": gone, "new_types": new_types,
+            "unbound_types": unbound_types, "linked": linked}
 
 
 def _vault_nodes(vault: str) -> dict:
@@ -93,8 +109,22 @@ def _vault_type_names(vault: str) -> set:
     return names
 
 
+def _discovered_vocab(vault: str) -> dict:
+    """The map's `_discoveredVocab` ({kind: [names]}) — mobRPG-side vocab already
+    recorded by a prior `map init`/`sync`. Empty dict if there is no map yet."""
+    mp_path = os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json")
+    if not os.path.exists(mp_path):
+        return {}
+    try:
+        mp = json.load(open(mp_path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return mp.get("_discoveredVocab") or {}
+
+
 def _report(diff: dict) -> None:
     n = diff["new_entities"]; g = diff["gone"]; t = diff["new_types"]
+    u = diff.get("unbound_types", [])
     print(f"whats-new: {len(n)} new, {len(g)} gone, {len(t)} new type(s); "
           f"{diff['linked']} linked/in-sync")
     if n:
@@ -109,6 +139,10 @@ def _report(diff: dict) -> None:
         print("\nNEW classifier types (run `map` to bind/create):")
         for x in t:
             print(f"  · {x['kind']:18} {x['name']}")
+    if u:
+        print("\nRECORDED classifier types, still unbound (no vault note uses them yet):")
+        for x in u:
+            print(f"  · {x['kind']:18} {x['name']}  — recorded, unbound (no vault note uses it yet)")
 
 
 def run(argv: list[str]) -> int:
@@ -136,7 +170,8 @@ def run(argv: list[str]) -> int:
             print(f"ERROR: {e}", file=sys.stderr)
             return 1
 
-    diff = diff_world(extract, _vault_nodes(args.vault), _vault_type_names(args.vault))
+    diff = diff_world(extract, _vault_nodes(args.vault), _vault_type_names(args.vault),
+                      _discovered_vocab(args.vault))
     if args.json:
         print(json.dumps(diff, indent=2, ensure_ascii=False))
     else:

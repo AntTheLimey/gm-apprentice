@@ -31,6 +31,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 from mobrpg import client
 from mobrpg import node
@@ -734,12 +735,41 @@ def _entry(old_entry: dict | None, fresh: dict, label: str, notes: list[str]) ->
     return fresh
 
 
+def _merge_key(s: str) -> str:
+    """Fold a map/vocab key for cross-side matching: unicode NFC, whitespace
+    runs, surrounding whitespace, case. A casing or whitespace difference must
+    never split one term into a stale entry plus an unbound duplicate (#148)."""
+    s = unicodedata.normalize("NFC", s or "")
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
 def _merge_section(o: dict, n: dict, label: str, notes: list[str]) -> dict:
-    """Merge one section: reconcile shared keys, add new ones, flag dropped ones."""
-    res = {k: _entry(o.get(k), nv, f"{label}[{k}]", notes) for k, nv in n.items()}
-    for k in o:
-        if k not in n:
-            stale = dict(o[k]); stale["status"] = "stale"; res[k] = stale
+    """Merge one section: reconcile shared keys (matched case/space-insensitively,
+    output keyed on the new side's casing), add new ones, flag dropped ones."""
+    old_by_norm: dict = {}
+    for k, v in o.items():
+        old_by_norm.setdefault(_merge_key(k), (k, v))
+    res, seen = {}, set()
+    for k, nv in n.items():
+        nk = _merge_key(k)
+        seen.add(nk)
+        old_key, old_val = old_by_norm.get(nk, (None, None))
+        if (old_val is not None and old_key != k and old_val.get("mobrpgId")
+                and not nv.get("mobrpgId") and not nv.get("nearId")):
+            # Fold-matched but the literal key differs (#148): this is a vault-side
+            # recase/whitespace edit, not a rediscovery reporting the type gone.
+            # `_entry`'s "old_id and not new_id" branch exists for genuine resync
+            # loss under an UNCHANGED key (see test_merge_downgrades_a_binding_
+            # whose_upstream_type_vanished) and would otherwise misfire here,
+            # demoting an untouched binding to "review" on a mere casing change.
+            # The fold match is itself the evidence nothing upstream changed, so
+            # keep the resolved entry wholesale under the new (vault) casing.
+            res[k] = old_val
+            continue
+        res[k] = _entry(old_val, nv, f"{label}[{k}]", notes)
+    for k, v in o.items():
+        if _merge_key(k) not in seen:
+            stale = dict(v); stale["status"] = "stale"; res[k] = stale
             notes.append(f"{label}[{k}]: no longer in vault (stale)")
     return res
 

@@ -304,6 +304,37 @@ def test_merge_takes_a_fresh_binding_that_resolves_differently():
     assert any("guild" in n for n in notes)
 
 
+# --- #148: fold case/whitespace/unicode when matching vocab keys -----------
+
+def test_merge_section_folds_case_no_stale_no_duplicate():
+    old = {"chitinoteuthis": {"target": "creature/type", "mobrpgId": "id-1",
+                              "status": "bound"}}
+    new = {"Chitinoteuthis": {"target": "creature/type", "mobrpgId": None,
+                              "status": "new"}}
+    notes = []
+    res = m._merge_section(old, new, "classifiers.creatureType", notes)
+    assert list(res) == ["Chitinoteuthis"]           # vault casing wins, one entry
+    assert res["Chitinoteuthis"]["mobrpgId"] == "id-1"
+    assert res["Chitinoteuthis"]["status"] == "bound"
+    assert not any("stale" in n for n in notes)
+
+
+def test_merge_section_folds_whitespace_and_nfc():
+    old = {"thideian chitinoteuthis ": {"mobrpgId": "id-1", "status": "bound"}}
+    new = {"Thideian  Chitinoteuthis": {"mobrpgId": None, "status": "new"}}
+    res = m._merge_section(old, new, "x", [])
+    assert list(res) == ["Thideian  Chitinoteuthis"]
+    assert res["Thideian  Chitinoteuthis"]["mobrpgId"] == "id-1"
+
+
+def test_merge_section_still_flags_genuinely_gone_keys_stale():
+    old = {"lamprey": {"mobrpgId": "id-2", "status": "bound"}}
+    notes = []
+    res = m._merge_section(old, {}, "x", notes)
+    assert res["lamprey"]["status"] == "stale"
+    assert any("stale" in n for n in notes)
+
+
 def test_init_then_sync(tmp_path, monkeypatch):
     vault = _make_vault(tmp_path)
     # mobRPG starts with only "District" as a political type
