@@ -7,7 +7,13 @@ const PUBLISH_DEFAULTS = {
   mode: 'player',
   exclude_drafts: false,
   exclude_callouts: false,
-  exclude_sections: ['GM Notes'],
+  // Keep in sync with templates-scaffold/vault.config.json.tmpl's
+  // "excludeSections" — the scaffold ships this same list as the JSON
+  // fallback for new sites. Reconciliation Context / Handoff to Reconcile
+  // are written automatically by reconcile and session-wrapup and carry GM
+  // plot state; they must never reach a published player-mode site (#144).
+  // test/unit/config.test.js has a sync check that fails if these drift apart.
+  exclude_sections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
   exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes'],
   exclude_dirs: ['_meta', '_Templates'],
   theme: {

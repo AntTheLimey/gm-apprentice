@@ -10,7 +10,7 @@ All campaign content falls into three categories:
 - All prep files: sessions/scenes with `status: planned | prepped`,
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
-- H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
+- H2 sections listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - **Every other `<!-- ... -->` comment.** Private authoring notes
   (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are

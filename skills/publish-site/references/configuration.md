@@ -12,7 +12,7 @@ any equivalent in `vault.config.json`.
 | Setting | Key path | Description |
 |---------|----------|-------------|
 | Publish mode | `publish.mode` | `player` or `full` |
-| Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes"]`) |
+| Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`) |

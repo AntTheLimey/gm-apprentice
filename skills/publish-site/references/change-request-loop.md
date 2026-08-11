@@ -91,6 +91,7 @@ submission order (`timestamp` ascending), tracking **running unspent points**
 3. **Question → answer** using **player-safe scope only** — the published
    sheet/site + GURPS rules + the character's own non-GM sections. NEVER use
    `GM Notes`, `DM Notes`, `Player Notes`, `Source References`,
+   `Reconciliation Context`, `Handoff to Reconcile`,
    `<!-- gm-only -->` regions, other PCs' private data, or hidden plot/secret.
    If a good answer would need GM-only info, reply that it's beyond what you
    can see — never the hidden info itself. Answer as a brief bullet list, then

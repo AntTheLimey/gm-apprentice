@@ -24,6 +24,51 @@ describe('PUBLISH_DEFAULTS', () => {
   });
 });
 
+describe('exclude_sections default (issue #144)', () => {
+  // Reconcile / session-wrapup write '## Reconciliation Context' and
+  // '## Handoff to Reconcile' straight into vault files — GM plot state that
+  // must never reach a published player-mode site. The built-in default and
+  // the scaffold template (templates-scaffold/vault.config.json.tmpl) had
+  // drifted apart; this guards both independently, plus a sync check so they
+  // can't drift again.
+  const EXPECTED = [
+    'GM Notes',
+    'DM Notes',
+    'Player Notes',
+    'Source References',
+    'Reconciliation Context',
+    'Handoff to Reconcile',
+  ];
+
+  it('includes the six reconcile-bookkeeping sections by default', () => {
+    assert.deepStrictEqual(PUBLISH_DEFAULTS.exclude_sections, EXPECTED);
+  });
+
+  it('loadPublishConfig uses the six-item default when no vault config is present', () => {
+    const config = loadPublishConfig('/nonexistent/path');
+    assert.deepStrictEqual(config.exclude_sections, EXPECTED);
+  });
+
+  it('a vault-config.md exclude_sections list fully replaces the default (no default leakage)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_sections:\n    - "Custom Section"\n---\n',
+    );
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(result.exclude_sections, ['Custom Section']);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('scaffold template excludeSections stays in sync with PUBLISH_DEFAULTS.exclude_sections', () => {
+    const tmplPath = path.join(__dirname, '../../templates-scaffold/vault.config.json.tmpl');
+    const parsed = JSON.parse(fs.readFileSync(tmplPath, 'utf8'));
+    assert.deepStrictEqual(parsed.excludeSections, PUBLISH_DEFAULTS.exclude_sections);
+  });
+});
+
 describe('exclude_drafts', () => {
   it('defaults to false', () => {
     const config = loadPublishConfig('/nonexistent/path');
