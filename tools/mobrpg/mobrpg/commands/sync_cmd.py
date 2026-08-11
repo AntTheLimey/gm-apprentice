@@ -4,18 +4,23 @@ Replaces the hash/baseline machinery (pull-desc / suggest-desc, deleted in
 Task 10) with a single verb driven by three timestamps: the note file's mtime,
 the node's recorded `last_synced`, and the server element's `lastModified`
 (Task 1 verdict — NOT `updatedDate`). `lww.decide` maps those to one of
-skip / pull / push / tie inside a ±skew window; this command acts on the verdict.
+skip / pull / push / tie / baseline inside a ±skew window; this command acts on
+the verdict.
 
 Directions:
   pull  — server is newer: overwrite the note's canon prose with the converted
-          server description, preserving the GM Notes tail verbatim, and stamp
+          server description, preserving the vault-only tail verbatim, and stamp
           `last_synced`.
   push/ — the vault is newer (or a tie the GM must adjudicate): compare the
   tie     authored canon prose to the live description; if they normalize equal
           the note is already in sync (stamp only), otherwise file one reviewable
           `UpdateElement` suggestion and mark the node `review_state: pending`
-          (the stamp lands later, on accept/dismiss — Task 9). GM Notes are never
-          pushed.
+          (the stamp lands later, on accept/dismiss — Task 9). Vault-only
+          sections are never pushed.
+  base-   never synced: there is no baseline, so timestamps decide nothing.
+  line    Content decides instead — equal is in-sync, an empty local stub pulls,
+          and an authored body just adopts a baseline stamp with the body left
+          alone. A never-synced note never manufactures a push (#147).
 
 A `review_state == "pending"` note is held (already awaiting adjudication) and is
 not even fetched. Dry-run by default: it prints the per-note decision table and
@@ -27,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -68,7 +74,8 @@ class Action:
     `suggestion` (if set) is batched into the submit under --execute."""
     path: str
     ref: str
-    decision: str                       # hold | deleted | unknown | skip | pull | in-sync | push
+    decision: str                       # hold | deleted | unknown | skip | pull
+                                        # | in-sync | push | baseline
     new_text: str | None = None
     suggestion: dict | None = None
 
@@ -86,23 +93,63 @@ def _note_name(path: str, txt: str) -> str:
 
 
 def _pull_body(old_body: str, description: str | None, desc_type: str | None,
-               name_by_eid: dict | None) -> str:
+               name_by_eid: dict | None,
+               vault_only: tuple = section.DEFAULT_VAULT_ONLY) -> str:
     """Behavior 5: server prose (converted, element links rewritten back to
-    wikilinks) + preserved GM Notes tail. When the server stores the
+    wikilinks) + preserved vault-only tail. When the server stores the
     description as Markdown it is used verbatim — no `html_to_md` round-trip,
     which is lossy; otherwise it is converted from HTML (legacy Html-typed
-    elements). A "\\n\\n" separator is inserted only when a GM tail exists and
-    the converted prose does not already end with a blank line. The GM Notes
-    tail is never touched by the link rewrite."""
-    _main, gm_tail = section.gm_notes_split(old_body)
+    elements). A "\\n\\n" separator is inserted only when a vault tail exists and
+    the converted prose does not already end with a blank line. The vault-only
+    tail (GM Notes plus the play-log sections — #146) is never touched by the
+    link rewrite and never overwritten by a pull."""
+    _main, vault_tail = section.split_vault_only(old_body, vault_only)
     if (desc_type or "").lower() == "markdown":
         converted = description or ""
     else:
         converted = _md.html_to_md(description or "")
     converted = links.rewrite_md_for_pull(converted, name_by_eid or {})
-    if gm_tail and not converted.endswith("\n\n"):
-        return converted + "\n\n" + gm_tail
-    return converted + gm_tail
+    if vault_tail and not converted.endswith("\n\n"):
+        return converted + "\n\n" + vault_tail
+    return converted + vault_tail
+
+
+def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
+                    vault_only: tuple) -> str:
+    """The markdown mobRPG should hold as this note's description: authored canon
+    prose and nothing else. Vault-only sections are sliced off first so they are
+    neither rewritten nor pushed (#146/#147), then machine boilerplate is
+    stripped, then any heading left with no body is dropped — an empty
+    `## Properties` is a vault writing prompt, not canon — and finally
+    `[[wikilinks]]` become element links."""
+    main = section.split_vault_only(old_body, vault_only)[0]
+    main = _md.strip_boilerplate(main)
+    main = section.drop_empty_sections(main)
+    main = links.rewrite_md_for_push(main, idx, world, url_fmt)
+    return main.strip()
+
+
+def _matches_server(cand_md: str, detail: dict) -> bool:
+    """True when the push candidate and the live description hold the same
+    content. The compare always happens in HTML space — raw markdown vs
+    html_to_md(server_html) produced 170 false positives on a real vault — so the
+    server side is folded to HTML when it is stored as Markdown. Only the PUSHED
+    PAYLOAD switches to raw Markdown (#150)."""
+    server_desc = detail.get("description") or ""
+    if (detail.get("descriptionType") or "").lower() == "markdown":
+        server_html = _md.md_to_html(server_desc)
+    else:
+        server_html = server_desc
+    return (_md.normalize_html_for_compare(_md.md_to_html(cand_md))
+            == _md.normalize_html_for_compare(server_html))
+
+
+def _stamped(path: str, ref: str, decision: str, txt: str, nd: dict,
+             body: str, now: str) -> Action:
+    """An action that writes `body` back with `last_synced` advanced to `now`."""
+    new_node = dict(nd)
+    new_node["last_synced"] = now
+    return Action(path, ref, decision, new_text=_rebuild(txt, new_node, body))
 
 
 def _build_suggestion(nd: dict, cand_md: str) -> dict:
@@ -138,12 +185,13 @@ def _build_suggestion(nd: dict, cand_md: str) -> dict:
 def plan(notes, fetch, now: str, skew: float, *,
          idx: dict | None = None, world: str = "",
          url_fmt: str = links.URL_FMT,
-         name_by_eid: dict | None = None) -> list[Action]:
+         name_by_eid: dict | None = None,
+         vault_only: tuple = section.DEFAULT_VAULT_ONLY) -> list[Action]:
     """Pure decision pass. `notes` yields (path, txt, nd, mtime); `fetch(nd)`
     returns (detail, status) with status in {ok, deleted, unknown}. `now` is the
     stamp to apply; no I/O happens here. `idx`/`world`/`url_fmt` drive the push
     wikilink->element rewrite; `name_by_eid` drives the pull element->wikilink
-    rewrite."""
+    rewrite; `vault_only` names the H2 sections that belong to the vault alone."""
     idx = idx or {}
     actions: list[Action] = []
     for path, txt, nd, mtime in notes:
@@ -165,44 +213,43 @@ def plan(notes, fetch, now: str, skew: float, *,
                               detail.get("lastModified"), skew)
         old_body = body_of(txt)
 
+        # Behavior 3b: never synced — there is no baseline, so neither side can
+        # win on timestamps and a push here would be a manufactured one (#147).
+        # Content decides: equal is already in sync; an empty local stub has
+        # nothing to lose so it takes the server's prose; anything else keeps the
+        # authored body and just adopts a baseline, leaving real drift to surface
+        # on the next edit of either side.
+        if decision == "baseline":
+            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
+            if _matches_server(cand_md, detail):
+                actions.append(_stamped(path, ref, "in-sync", txt, nd,
+                                        old_body, now))
+                continue
+            if cand_md.strip():
+                actions.append(_stamped(path, ref, "baseline", txt, nd,
+                                        old_body, now))
+                continue
+            decision = "pull"                      # scaffolded stub: fill it
+
         # Behavior 4: nothing to do.
         if decision == "skip":
             actions.append(Action(path, ref, "skip"))
             continue
 
-        # Behavior 5: server wins — overwrite prose, keep GM Notes, stamp.
+        # Behavior 5: server wins — overwrite prose, keep the vault-only tail,
+        # stamp.
         if decision == "pull":
             new_body = _pull_body(old_body, detail.get("description"),
-                                  detail.get("descriptionType"), name_by_eid)
-            new_node = dict(nd)
-            new_node["last_synced"] = now
-            actions.append(Action(path, ref, "pull",
-                                  new_text=_rebuild(txt, new_node, new_body)))
+                                  detail.get("descriptionType"), name_by_eid,
+                                  vault_only)
+            actions.append(_stamped(path, ref, "pull", txt, nd, new_body, now))
             continue
 
         # Behavior 6: push / tie — compare authored prose to the live description.
-        # Rewrite vault wikilinks to element links BEFORE conversion; the GM Notes
-        # tail is sliced off here so it is neither rewritten nor pushed. The
-        # compare always happens in HTML space — raw markdown vs
-        # html_to_md(server_html) produced 170 false positives on a real vault —
-        # so the server side is folded to HTML when it is stored as Markdown.
-        # Only the PUSHED PAYLOAD switches to raw Markdown (#150).
-        main = section.gm_notes_split(old_body)[0]
-        main = links.rewrite_md_for_push(main, idx, world, url_fmt)
-        cand_md = _md.strip_boilerplate(main).strip()
-        cand_html = _md.md_to_html(cand_md)
-        server_desc = detail.get("description") or ""
-        if (detail.get("descriptionType") or "").lower() == "markdown":
-            server_html = _md.md_to_html(server_desc)
-        else:
-            server_html = server_desc
-        if (_md.normalize_html_for_compare(cand_html)
-                == _md.normalize_html_for_compare(server_html)):
+        cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
+        if _matches_server(cand_md, detail):
             # Already in sync — stamp last_synced only (no suggestion).
-            new_node = dict(nd)
-            new_node["last_synced"] = now
-            actions.append(Action(path, ref, "in-sync",
-                                  new_text=_rebuild(txt, new_node, old_body)))
+            actions.append(_stamped(path, ref, "in-sync", txt, nd, old_body, now))
             continue
         # File a reviewable suggestion; mark pending, do NOT stamp last_synced
         # (the stamp lands on accept/dismiss — Task 9). Record the update's ref in
@@ -220,6 +267,26 @@ def plan(notes, fetch, now: str, skew: float, *,
 
 
 # ---------------- I/O ----------------
+
+def _vault_only_sections(vault: str) -> tuple:
+    """The H2 titles this vault keeps to itself. An optional top-level
+    `vaultOnlySections` list in `<vault>/_meta/mobrpg-map.json` REPLACES the
+    default set. A missing/unreadable map, a missing key, or a non-list/empty
+    value falls back to the default — an empty list would push `## GM Notes`
+    into a public world, which is never what a bad config should buy you. A
+    malformed map is not fatal here: sync's other 99% still works, and
+    `map`/`suggest` report the parse error properly."""
+    path = os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            mp = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return section.DEFAULT_VAULT_ONLY
+    titles = mp.get("vaultOnlySections") if isinstance(mp, dict) else None
+    if not isinstance(titles, list) or not titles:
+        return section.DEFAULT_VAULT_ONLY
+    return tuple(str(t) for t in titles)
+
 
 def _kind_ep(nd: dict) -> str | None:
     """Resolve the element_kind to its detail endpoint. Nodes store the API
@@ -292,7 +359,8 @@ def run(argv: list[str]) -> int:
     try:
         actions = plan(notes, fetch, now, args.skew,
                        idx=idx, world=args.world, url_fmt=links.URL_FMT,
-                       name_by_eid=name_by_eid)
+                       name_by_eid=name_by_eid,
+                       vault_only=_vault_only_sections(args.vault))
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
@@ -304,10 +372,10 @@ def run(argv: list[str]) -> int:
         print(f"  {a.decision:8} {a.ref}")
 
     if args.execute:
-        # pull and in-sync writes stamp `last_synced`; pin the file mtime to that
-        # stamp so decide sees `mtime == last_synced` (skip) on the next run rather
-        # than mtime > last_synced (a spurious vault-dirty push). now_iso truncates
-        # to whole seconds, so an un-pinned sub-second mtime always reads as newer.
+        # pull, in-sync and baseline writes stamp `last_synced`; pin the file mtime
+        # to that stamp so decide sees `mtime == last_synced` (skip) on the next run
+        # rather than mtime > last_synced (a spurious vault-dirty push). now_iso
+        # truncates to whole seconds, so an un-pinned sub-second mtime reads newer.
         # The push write only marks review_state pending (no stamp) and is held on
         # later runs, so it needs no pin.
         ls = lww.parse_ts(now)
@@ -315,7 +383,7 @@ def run(argv: list[str]) -> int:
             if a.new_text is not None:
                 with open(a.path, "w", encoding="utf-8") as fh:
                     fh.write(a.new_text)
-                if a.decision in ("pull", "in-sync") and ls is not None:
+                if a.decision in ("pull", "in-sync", "baseline") and ls is not None:
                     os.utime(a.path, (ls, ls))
 
     batch = [a.suggestion for a in actions if a.suggestion is not None]

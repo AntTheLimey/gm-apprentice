@@ -96,7 +96,7 @@ window (tune with `--skew`):
 
 - **skip** → neither side changed since the last sync. Nothing to do.
 - **pull** → only mobRPG changed. `sync` overwrites the note's canon prose
-  wholesale with the converted server description, preserving the `## GM Notes`
+  wholesale with the converted server description, preserving the vault-only
   tail verbatim, and stamps `last_synced`.
 - **push** → only the vault changed. `sync` does **not** write upstream. It files
   one reviewable `UpdateElement` suggestion and marks the node
@@ -104,6 +104,12 @@ window (tune with `--skew`):
   becomes canon, dismiss and mobRPG stays canon.
 - **tie** → both sides changed within the skew window. Treated as a push (a
   suggestion), because a human should decide.
+- **baseline** → the note has never synced (`last_synced` empty), so there is no
+  baseline and timestamps decide nothing. Content decides instead: prose that
+  already matches is stamped in sync; an empty scaffold stub takes the server's
+  prose (a pull); anything else keeps the authored body untouched and just adopts
+  a `last_synced` stamp. A never-synced note never manufactures a push — real
+  drift surfaces on the next edit of either side.
 
 A note already `review_state: pending` is held — it's awaiting adjudication
 upstream, so `sync` won't touch it (it isn't even fetched).
@@ -135,8 +141,8 @@ decision table the GM hasn't seen.
 mobrpg sync <world> --vault <path>
 ```
 
-This prints one row per linked note with its verdict (skip / pull / push / tie)
-and the timestamps behind it. Restrict to a subset with `--only <substring>`.
+This prints one row per linked note with its verdict (skip / pull / push / tie /
+baseline) and the timestamps behind it. Restrict to a subset with `--only <substring>`.
 
 **Step 2 — present, confirm, execute:**
 
@@ -150,10 +156,18 @@ target). The **push/tie** rows file `UpdateElement` suggestions against the live
 world — so on a PROD target, heed the production banner and get the GM's explicit
 yes first, or switch to `MOBRPG_ENV=dev`.
 
-**GM Notes are never pushed.** The `## GM Notes` tail stays local to the vault by
-design and is stripped from anything `sync` sends upstream, until mobRPG enforces
-hidden-note access server-side.
+**Vault-only sections are never pushed and never pulled over.** `## GM Notes`
+stays local by design (until mobRPG enforces hidden-note access server-side), and
+so do the play-log sections `## Notes`, `## Appearances` and
+`## Source References` — session bookkeeping, not canon prose, and pushing them
+buried the world owner's review queue in churn. Both directions treat them as the
+vault's own: a push strips them, a pull preserves them verbatim. A vault can
+replace that list with a top-level `"vaultOnlySections": ["...", ...]` array in
+`_meta/mobrpg-map.json`. Headings left with no body (empty scaffold prompts like
+a bare `## Properties`) are dropped from the push candidate too — they're writing
+prompts for the vault, not description content.
 
-*Why it's safe:* a pull overwrites only the canon-prose region, never the GM
-Notes tail; a push never mutates a live element — it only proposes a suggestion
-the GM ratifies. Nothing is merged and no authored prose is clobbered by a guess.
+*Why it's safe:* a pull overwrites only the canon-prose region, never the
+vault-only tail; a push never mutates a live element — it only proposes a
+suggestion the GM ratifies. Nothing is merged and no authored prose is clobbered
+by a guess.

@@ -1,3 +1,4 @@
+import json
 import os
 
 from mobrpg import client, node as _node
@@ -314,6 +315,136 @@ def test_pull_markdown_description_skips_html_conversion(tmp_path, monkeypatch):
     sync_cmd.run(["w1", "--vault", str(v), "--execute"])
     txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
     assert "New **canon** prose." in txt               # verbatim, not round-tripped
+
+
+def test_pull_preserves_vault_only_sections(tmp_path, monkeypatch):
+    text = NOTE.replace(
+        "Old vault prose.",
+        "Old vault prose.\n\n## Appearances\n\nSession 3 block.\n\n"
+        "## Source References\n\n- wrapup 03")
+    v = _vault(tmp_path, text=text, mtime=1_700_000_000)
+    detail = {"description": "<p>New canon prose.</p>",
+              "lastModified": "2026-07-24T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
+    assert "New canon prose." in txt
+    assert "Session 3 block." in txt                 # #146: no longer destroyed
+    assert "wrapup 03" in txt
+    assert "Secret plans." in txt                    # GM Notes still preserved
+
+
+def test_push_candidate_excludes_vault_only_sections(tmp_path, monkeypatch):
+    text = NOTE.replace(
+        "Old vault prose.",
+        "Old vault prose.\n\n## Appearances\n\nSession 3 block.")
+    v = _vault(tmp_path, text=text)
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    detail = {"description": "<p>Server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    desc = submitted[0]["suggestions"][0]["payload"]["description"]
+    assert "Session 3 block" not in desc             # #147: bookkeeping stays home
+    assert "Old vault prose." in desc
+
+
+def test_vault_superset_of_only_bookkeeping_is_in_sync(tmp_path, monkeypatch):
+    # Server desc == vault canon prose; vault also has Appearances. No suggestion.
+    text = NOTE.replace(
+        "Old vault prose.",
+        "Same prose.\n\n## Appearances\n\nSession 3 block.")
+    v = _vault(tmp_path, text=text)
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    detail = {"description": "<p>Same prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert not submitted                             # the #147 storm case, killed
+
+
+def test_vault_only_sections_config_replaces_default(tmp_path, monkeypatch):
+    # A map file listing vaultOnlySections REPLACES the default list: "Lore" is
+    # now vault-only and "GM Notes" is not (so it pushes).
+    text = NOTE.replace(
+        "Old vault prose.",
+        "Old vault prose.\n\n## Lore\n\nLocal lore block.")
+    v = _vault(tmp_path, text=text)
+    (v / "_meta").mkdir()
+    (v / "_meta" / "mobrpg-map.json").write_text(
+        json.dumps({"vaultOnlySections": ["Lore"]}), encoding="utf-8")
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    detail = {"description": "<p>Server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    desc = submitted[0]["suggestions"][0]["payload"]["description"]
+    assert "Local lore block" not in desc            # configured vault-only
+    assert "Secret plans." in desc                   # default list no longer applies
+
+
+def test_never_synced_divergent_note_baselines_not_pushes(tmp_path, monkeypatch):
+    text = NOTE.replace('last_synced: "2026-07-20T00:00:00Z"', 'last_synced: ""')
+    v = _vault(tmp_path, text=text)
+    detail = {"description": "<p>Different server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert not submitted                             # no storm
+    nd = _node.read_node((v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8"))
+    assert nd["last_synced"]                         # stamped
+    assert nd.get("review_state") != "pending"       # not queued for adjudication
+    assert not nd.get("pending_ref")                 # no suggestion to wait on
+    txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
+    assert "Old vault prose." in txt                 # body untouched
+
+
+def test_never_synced_matching_note_is_in_sync(tmp_path, monkeypatch):
+    # Never synced but content already agrees: stamp, no suggestion, no pending_ref.
+    text = NOTE.replace('last_synced: "2026-07-20T00:00:00Z"', 'last_synced: ""')
+    v = _vault(tmp_path, text=text)
+    detail = {"description": "<p>Old vault prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert not submitted
+    nd = _node.read_node((v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8"))
+    assert nd["last_synced"]
+    assert not nd.get("pending_ref")
+
+
+def test_never_synced_empty_stub_pulls_server_prose(tmp_path, monkeypatch):
+    text = NOTE.replace('last_synced: "2026-07-20T00:00:00Z"', 'last_synced: ""')
+    text = text.replace("Old vault prose.\n\n## GM Notes\n\nSecret plans.\n", "")
+    v = _vault(tmp_path, text=text)
+    detail = {"description": "<p>Server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
+    assert "Server prose." in txt                    # scaffold stub filled
+
+
+def test_baseline_stamp_is_idempotent(tmp_path, monkeypatch):
+    # The baseline stamp pins the mtime, so the next run decides skip rather than
+    # re-reading as a dirty vault and pushing.
+    text = NOTE.replace('last_synced: "2026-07-20T00:00:00Z"', 'last_synced: ""')
+    v = _vault(tmp_path, text=text)
+    p = v / "Creatures" / "marsh-hag.md"
+    detail = {"description": "<p>Different server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    mtime1 = os.path.getmtime(p)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert not submitted                             # still no suggestion
+    assert os.path.getmtime(p) == mtime1             # no second write
 
 
 def test_markdown_server_description_compares_in_html_space(tmp_path, monkeypatch):

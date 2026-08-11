@@ -37,8 +37,9 @@ def decide(mtime: float, last_synced, updated, skew: float = SKEW_SECONDS) -> st
     ls = parse_ts(last_synced) if not isinstance(last_synced, float) else last_synced
     up = parse_ts(updated) if not isinstance(updated, float) else updated
     if ls is None:
-        # Never synced: if the server side exists at all, a human adjudicates.
-        return "tie" if up is not None else "push"
+        # Never synced: no baseline exists, so neither side can win on
+        # timestamps. The caller compares content and stamps (#147).
+        return "baseline"
     vault_dirty = mtime > ls
     server_dirty = up is not None and up > ls
     if not vault_dirty and not server_dirty:

@@ -10,9 +10,11 @@ def test_parse_ts_epoch_millis_and_seconds_and_empty():
     assert lww.parse_ts(1784980800) == pytest.approx(1784980800.0)
     assert lww.parse_ts("") is None and lww.parse_ts(None) is None
 
-def test_decide_never_synced_is_tie_when_both_exist():
-    # No last_synced: both sides "dirty" -> human adjudicates via suggestion
-    assert lww.decide(mtime=1000.0, last_synced=None, updated=900.0) == "tie"
+def test_never_synced_is_baseline():
+    # No last_synced: no LWW baseline exists, so neither side can win on
+    # timestamps. The caller compares content and stamps (#147).
+    assert lww.decide(1e9, "", "2026-07-01T00:00:00Z") == "baseline"
+    assert lww.decide(1e9, None, None) == "baseline"
 
 def test_decide_matrix():
     ls = 1000.0
