@@ -108,6 +108,15 @@ window (tune with `--skew`):
 A note already `review_state: pending` is held — it's awaiting adjudication
 upstream, so `sync` won't touch it (it isn't even fetched).
 
+**Update suggestions carry a synthetic ref.** Each filed `UpdateElement` gets its
+own `<namespace>:upd/<note-path>#<content-hash>` externalRef rather than the
+note's plain `<namespace>:<note-path>`, because a ref is claimed for good once
+its suggestion is accepted or dismissed — reusing the note's ref meant only the
+first update ever reached the GM. Re-pushing identical prose mints the identical
+ref (so it corrects an open proposal in place instead of duplicating it), and
+edited prose mints a new one. `suggestions --correlate` and `pull-canon` both
+strip the `upd/` wrapper, so an update still resolves to the note it came from.
+
 **You are the interactive UI.** Run the dry-run, present the per-note decision
 table to the GM, get an explicit yes, then `--execute`. Never `--execute` a
 decision table the GM hasn't seen.

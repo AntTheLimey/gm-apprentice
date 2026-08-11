@@ -14,7 +14,9 @@ Note on dismiss+resubmit: a dismissed suggestion KEEPS its externalRef claimed
 (unique index on (world_id, external_ref) over all live rows), so re-pushing the
 same vault entity under the same externalRef resolves to the dismissed row rather
 than creating a fresh Pending one. To genuinely re-propose a corrected version,
-`reinstate` it (then edit), or push under a different externalRef.
+`reinstate` it (then edit), or push under a different externalRef. `sync`'s
+description updates do the latter automatically: each carries a content-hashed
+`<ns>:upd/<relpath>#<hash>` ref (#151), so edited prose always re-proposes.
 
 Examples:
     mobrpg review <worldId> <suggestionId> dismiss --note "needs a type" --execute

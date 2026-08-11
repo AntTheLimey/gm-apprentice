@@ -190,14 +190,18 @@ def test_dismissed_suggestion_not_refiled(tmp_path, monkeypatch):
     assert len(submitted) == 1
     assert _node.read_node(p.read_text(encoding="utf-8"))["review_state"] == "pending"
 
-    # 2. simulate GM adjudication: dismiss via pull-canon (stamps + pins mtime)
+    # 2. simulate GM adjudication: dismiss via pull-canon (stamps + pins mtime).
+    #    The queue answers under the ref the push actually claimed — an `upd/`
+    #    content-hashed one (#151) — which pull-canon maps back to this note.
+    upd_ref = submitted[0]["suggestions"][0]["externalRef"]
+    assert upd_ref.startswith("ns:upd/Creatures/marsh-hag#")
     monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(
         pull_canon, "_fetch_live",
         lambda world, token, *, verify=True: {
-            "ns:Creatures/marsh-hag": {"state": "dismissed", "element_id": None,
-                                       "review_note": "not canon", "determined": {},
-                                       "event_ids": {}}})
+            upd_ref: {"state": "dismissed", "element_id": None,
+                      "review_note": "not canon", "determined": {},
+                      "event_ids": {}}})
     pull_canon.run(["w1", "--vault", str(v), "--execute"])
     assert _node.read_node(p.read_text(encoding="utf-8"))["review_state"] == "dismissed"
 
@@ -235,6 +239,52 @@ def test_push_suggestion_carries_markdown_descriptiontype(tmp_path, monkeypatch)
     assert pl["descriptionType"] == "Markdown"
     assert "<p>" not in pl["description"]              # raw markdown, not HTML
     assert "Old vault prose." in pl["description"]
+
+
+def test_update_ref_uses_upd_namespace_with_content_hash(tmp_path, monkeypatch):
+    # #151: an update's externalRef is its own namespaced, content-hashed key —
+    # NOT the note's `<ns>:<relpath>` create ref, which accept-once semantics
+    # would burn on the first adjudication.
+    v = _vault(tmp_path)
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    detail = {"description": "<p>Server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    ref = submitted[0]["suggestions"][0]["externalRef"]
+    assert ref.startswith("ns:upd/People/marsh-hag#")
+    assert len(ref.rsplit("#", 1)[1]) == 12            # sha256[:12]
+
+
+def test_update_ref_is_stable_for_identical_content(tmp_path, monkeypatch):
+    # Same markdown re-pushed -> same ref, so the server corrects the caller's own
+    # Pending row in place instead of stacking duplicates.
+    refs = []
+    for i in range(2):
+        v = _vault(tmp_path / f"run{i}")
+        os.utime(v / "Creatures" / "marsh-hag.md", None)
+        submitted = []
+        _wire(monkeypatch, {"description": "<p>Server prose.</p>",
+                            "lastModified": "2026-07-01T00:00:00Z"}, submitted)
+        sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+        refs.append(submitted[0]["suggestions"][0]["externalRef"])
+    assert refs[0] == refs[1]
+
+
+def test_update_ref_changes_when_content_changes(tmp_path, monkeypatch):
+    # New content -> new ref, so a terminal (Accepted/Dismissed) old row can never
+    # swallow the new proposal.
+    refs = []
+    for i, prose in enumerate(("Old vault prose.", "Rewritten vault prose.")):
+        v = _vault(tmp_path / f"run{i}", NOTE.replace("Old vault prose.", prose))
+        os.utime(v / "Creatures" / "marsh-hag.md", None)
+        submitted = []
+        _wire(monkeypatch, {"description": "<p>Server prose.</p>",
+                            "lastModified": "2026-07-01T00:00:00Z"}, submitted)
+        sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+        refs.append(submitted[0]["suggestions"][0]["externalRef"])
+    assert refs[0] != refs[1]
 
 
 def test_pull_markdown_description_skips_html_conversion(tmp_path, monkeypatch):

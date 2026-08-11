@@ -26,6 +26,7 @@ Design: docs/plans/2026-07-25-mobrpg-sync-lww-design.md.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import sys
 from dataclasses import dataclass
@@ -107,8 +108,17 @@ def _pull_body(old_body: str, description: str | None, desc_type: str | None,
 def _build_suggestion(nd: dict, cand_md: str) -> dict:
     """One UpdateElement suggestion item, sent as raw Markdown (mobRPG supports
     it natively; omitting descriptionType silently selects Html — #150).
-    externalRef stays the note's own `<ns>:<relpath>` element join key (what
-    `suggestions --correlate` resolves)."""
+
+    externalRef gets its OWN namespace, `<ns>:upd/<relpath>#<sha256[:12] of the
+    pushed markdown>` (#151). The note's plain `<ns>:<relpath>` ref is the
+    create-time element join key, and a ref is claimed for good once its
+    suggestion goes terminal — reusing it meant the second update the GM ever
+    accepted was silently swallowed by the first one's Accepted row. A per-content
+    hash keeps both halves: identical content re-pushed mints the identical ref,
+    so our own still-Pending row is corrected in place (idempotent), while edited
+    content mints a new ref that no terminal row can claim. The relpath stays
+    recoverable, so `suggestions --correlate` and `pull-canon` (via
+    `node.note_ref`) still join the suggestion back to its note."""
     item = {"operation": "UpdateElement",
             "payload": {"operation": "UpdateElement",
                         "targetRef": nd["element_id"],
@@ -116,7 +126,11 @@ def _build_suggestion(nd: dict, cand_md: str) -> dict:
                         "descriptionType": "Markdown"},
             "dependsOn": []}
     xref = nd.get("external_ref")
-    if xref:
+    if xref and ":" in xref:
+        ns, rel = xref.split(":", 1)
+        digest = hashlib.sha256(cand_md.encode("utf-8")).hexdigest()[:12]
+        item["externalRef"] = f"{ns}:upd/{rel}#{digest}"
+    elif xref:
         item["externalRef"] = xref
     return item
 

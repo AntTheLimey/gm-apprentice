@@ -3,8 +3,9 @@
 The return leg of the suggestion round-trip. `mobrpg suggest` (push_suggestions.py)
 submits vault entities as suggestions; this reads them back by review state and,
 with --correlate, joins each one to its originating vault file via the externalRef
-convention (`<namespace>:<vault-relative path without .md>`) and reports the
-mobRPG element id that an Accepted suggestion produced (resultElementId).
+convention (`<namespace>:<vault-relative path without .md>`, or
+`<namespace>:upd/<same path>#<content hash>` for a `sync` description update) and
+reports the mobRPG element id that an Accepted suggestion produced (resultElementId).
 
 Needs ReadWriteDelete on the world (the list/get suggestion endpoints are
 reviewer-gated server-side) — a plain Read token gets 400/403 here.
@@ -26,6 +27,7 @@ import os
 import sys
 
 from mobrpg import client
+from mobrpg import node
 
 STATES = ("Pending", "Accepted", "Dismissed")
 # mobRPG element discriminator -> the /world/{id}/{kind} sub-resource used to GET it.
@@ -45,10 +47,14 @@ TYPE_EP = {
 
 def _resolve_vault_file(external_ref: str, vault: str | None) -> str | None:
     """`<ns>:<relpath>` -> <vault>/<relpath>.md, flagged (MISSING) if absent.
-    Returns None when there is no externalRef or no --vault to resolve against."""
+    Returns None when there is no externalRef or no --vault to resolve against.
+
+    An update suggestion's ref carries its own namespace and content hash
+    (`<ns>:upd/<relpath>#<hash>`, #151); `node.note_ref` strips that back to the
+    note it came from, so updates correlate like anything else."""
     if not external_ref or ":" not in external_ref or not vault:
         return None
-    _, rel = external_ref.split(":", 1)
+    _, rel = node.note_ref(external_ref).split(":", 1)
     p = os.path.join(os.path.expanduser(vault), rel + ".md")
     return p if os.path.exists(p) else f"(MISSING) {p}"
 

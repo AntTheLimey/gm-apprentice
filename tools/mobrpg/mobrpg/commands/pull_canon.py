@@ -94,9 +94,15 @@ def _vault_file(external_ref, vault):
 
 # Ref namespaces that are handles, not note paths: `rel/` for reified
 # relationship Events, `desc/` for the description suggestions the retired
-# `suggest-desc` verb minted. Their accepted cards stay in the review queue
-# forever, so pull-canon keeps meeting them long after the verb is gone.
-_RESERVED_REF_ROOTS = ("rel/", "desc/")
+# `suggest-desc` verb minted, `upd/` for `sync`'s content-hashed description
+# updates. Their accepted cards stay in the review queue forever, so pull-canon
+# keeps meeting them long after the verb is gone.
+_RESERVED_REF_ROOTS = ("rel/", "desc/", "upd/")
+
+# `<ns>:upd/<relpath>#<hash>` -> `<ns>:<relpath>`; anything else unchanged.
+# Defined in `node` so `suggestions` can share it — `pull_canon` imports
+# `suggestions`, so the dependency can't run the other way.
+_note_ref = node.note_ref
 
 
 def _scaffoldable(external_ref, vault):
@@ -471,6 +477,45 @@ def run(argv: list[str]) -> int:
     updated = 0
     unscaffoldable: list[str] = []
     for ext, live in live_by_ref.items():
+        if ext != _note_ref(ext):
+            # An update-suggestion ref (`<ns>:upd/<relpath>#<hash>`, #151). It
+            # names no element of its own — it adjudicates the note that `sync`
+            # left `review_state: pending` when it filed the update.
+            #
+            # One note can carry several upd rows (one per pushed revision, each
+            # with its own hash, hence its own ref). `_fetch_live` iterates
+            # Accepted, Dismissed, Pending with first-write-wins, so each ref
+            # already holds its own most authoritative outcome; here the first
+            # accepted/dismissed row flips the note out of `pending` and every
+            # later row for the same note then finds it non-pending and skips.
+            path = _vault_file(_note_ref(ext), args.vault)
+            if not path:
+                continue
+            txt = open(path, encoding="utf-8").read()
+            existing = node.read_node(txt)
+            if not existing or existing.get("review_state") != "pending":
+                continue
+            newn = dict(existing)
+            if live.get("state") == "accepted":
+                newn["review_state"] = "accepted"
+                newn["last_synced"] = lww.now_iso()
+            elif live.get("state") == "dismissed":
+                newn["review_state"] = "dismissed"
+                newn["review_note"] = live.get("review_note") or ""
+                newn["last_synced"] = lww.now_iso()
+            else:
+                continue                          # still pending — hold the note
+            merged = node.write_node(txt, newn)
+            if args.execute:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(merged)
+                # Pin mtime to the fresh stamp, same as the note-ref branch, so
+                # the note doesn't read vault-dirty and re-file on the next sync.
+                ls = lww.parse_ts(newn["last_synced"])
+                if ls is not None:
+                    os.utime(path, (ls, ls))
+            updated += 1
+            continue
         path = _vault_file(ext, args.vault)
         if not path:
             if live.get("state") == "accepted" and _scaffoldable(ext, args.vault):

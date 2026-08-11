@@ -22,6 +22,26 @@ _SCALARS = ["world_id", "external_ref", "previous_ref", "element_id", "element_k
 _REL_KEYS = ["predicate", "target", "event_type", "event_id", "review_state"]
 _LANG_KEYS = ["language", "language_id", "type", "mastery", "review_state"]
 
+_UPD_PREFIX = "upd/"
+
+
+def note_ref(ext: str | None) -> str | None:
+    """Map an update-suggestion ref (`<ns>:upd/<relpath>#<hash>`) back to the
+    note's canonical ref (`<ns>:<relpath>`). Any other ref is returned unchanged.
+
+    `sync` mints a fresh content-hashed `upd/` ref per update (#151) because
+    accept-once semantics burn a ref on first adjudication — but the relpath is
+    still recoverable, which is what keeps vault correlation working. Lives here,
+    not in a command module, because both `pull_canon` and `suggestions` need it
+    and `pull_canon` already imports `suggestions`.
+    """
+    if not ext or ":" not in ext:
+        return ext
+    ns, rel = ext.split(":", 1)
+    if not rel.startswith(_UPD_PREFIX):
+        return ext
+    return f"{ns}:{rel[len(_UPD_PREFIX):].rsplit('#', 1)[0]}"
+
 
 def _j(v) -> str:
     return json.dumps(v, ensure_ascii=False)

@@ -75,3 +75,23 @@ def test_api_error_returns_1(monkeypatch, capsys):
     rc = suggestions.run(["world-1", "--state", "Accepted"])
     assert rc == 1
     assert "ReadWriteDelete" in capsys.readouterr().err
+
+
+def test_correlate_resolves_an_upd_ref_to_its_note(monkeypatch, capsys, tmp_path):
+    # #151: an update suggestion's ref is `<ns>:upd/<relpath>#<hash>`; --correlate
+    # must still join it to the note the update came from.
+    (tmp_path / "People").mkdir()
+    (tmp_path / "People" / "marsh-hag.md").write_text("x")
+    ref = "ns:upd/People/marsh-hag#abc123def456"
+    row = _accepted_row(operation="UpdateElement", externalRef=ref,
+                        payload={"name": "Marsh Hag", "data": {"type": "Creature"}})
+
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda *a, **k: [row])
+    rc = suggestions.run(["world-1", "--state", "Accepted", "--correlate",
+                          "--vault", str(tmp_path), "--json"])
+    assert rc == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report[0]["externalRef"] == ref             # reported verbatim
+    assert report[0]["vaultFile"].endswith("People/marsh-hag.md")
+    assert "(MISSING)" not in report[0]["vaultFile"]

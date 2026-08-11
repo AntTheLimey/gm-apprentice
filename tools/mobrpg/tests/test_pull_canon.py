@@ -627,3 +627,124 @@ def test_refresh_only_overwrites_keys_canon_has_an_opinion_on(monkeypatch, tmp_p
     merged = dict(old)
     merged.update(canon)
     assert merged == {"political_type": "Gate", "profession": "Gatekeeper"}
+
+
+# ---------------------------------------------------------------------------
+# #151 — updates carry their own `upd/<relpath>#<hash>` ref namespace, so an
+# accept/dismiss of one update never burns the note's create ref. pull-canon
+# must map such a ref back to its note and adjudicate the pending push.
+# ---------------------------------------------------------------------------
+
+def test_upd_ref_never_scaffolds(tmp_path):
+    assert not pull_canon._scaffoldable("ns:upd/People/x#abc123def456", str(tmp_path))
+
+
+def test_note_ref_strips_upd_namespace():
+    assert pull_canon._note_ref("ns:upd/People/x#abc123def456") == "ns:People/x"
+    assert pull_canon._note_ref("ns:People/x") == "ns:People/x"
+    assert pull_canon._note_ref("ns:rel/People/x") == "ns:rel/People/x"
+
+
+def _pending_push_vault(tmp_path, name="marsh-hag"):
+    """A note in the state `sync` leaves behind after filing an update: a linked
+    node marked review_state pending, awaiting the GM's adjudication."""
+    vault = tmp_path / "vault"
+    (vault / "Creatures").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": f"ns:Creatures/{name}",
+          "element_id": "e-77", "element_kind": "Creature", "review_state": "pending",
+          "last_synced": "2020-01-01T00:00:00Z", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    p = vault / "Creatures" / f"{name}.md"
+    p.write_text("---\ntype: creature\n" + node.emit_node(nd) + "---\nBody\n",
+                 encoding="utf-8")
+    return vault, p
+
+
+def test_accepted_upd_suggestion_adjudicates_pending_note(tmp_path, monkeypatch):
+    vault, p = _pending_push_vault(tmp_path)
+    fake = _FakeApi(
+        by_state={"Accepted": [_sug("ns:upd/Creatures/marsh-hag#abc123def456", "e-77",
+                                    etype="Creature")]},
+        elements={"e-77": {"type": "creature", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out["last_synced"] not in ("", "2020-01-01T00:00:00Z")
+    stamp = lww.parse_ts(out["last_synced"])
+    assert stamp is not None and os.path.getmtime(p) == stamp   # mtime pinned
+
+
+def test_dismissed_upd_suggestion_clears_pending(tmp_path, monkeypatch):
+    vault, p = _pending_push_vault(tmp_path)
+    fake = _FakeApi(by_state={
+        "Dismissed": [_sug("ns:upd/Creatures/marsh-hag#0123456789ab", None,
+                           etype="Creature", note="not canon")]})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "dismissed"
+    assert out["review_note"] == "not canon"
+    assert out["last_synced"] not in ("", "2020-01-01T00:00:00Z")
+
+
+def test_pending_upd_suggestion_leaves_the_note_alone(tmp_path, monkeypatch, capsys):
+    vault, p = _pending_push_vault(tmp_path)
+    before = p.read_text(encoding="utf-8")
+    fake = _FakeApi(by_state={
+        "Pending": [_sug("ns:upd/Creatures/marsh-hag#0123456789ab", None,
+                         etype="Creature")]})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    assert p.read_text(encoding="utf-8") == before
+    assert "0 node(s) updated" in capsys.readouterr().out
+
+
+def test_second_upd_row_does_not_re_adjudicate_the_note(tmp_path, monkeypatch):
+    # Two updates for one note (distinct hashes = distinct refs): the first
+    # accepted row flips the note; the later dismissed one finds it no longer
+    # pending and leaves it alone.
+    vault, p = _pending_push_vault(tmp_path)
+    fake = _FakeApi(
+        by_state={"Accepted": [_sug("ns:upd/Creatures/marsh-hag#aaaaaaaaaaaa", "e-77",
+                                    etype="Creature")],
+                  "Dismissed": [_sug("ns:upd/Creatures/marsh-hag#bbbbbbbbbbbb", None,
+                                     etype="Creature", note="stale")]},
+        elements={"e-77": {"type": "creature", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out["review_note"] == ""
+
+
+def test_upd_ref_dry_run_writes_nothing(tmp_path, monkeypatch, capsys):
+    vault, p = _pending_push_vault(tmp_path)
+    before = p.read_text(encoding="utf-8")
+    fake = _FakeApi(by_state={
+        "Dismissed": [_sug("ns:upd/Creatures/marsh-hag#0123456789ab", None,
+                           etype="Creature", note="not canon")]})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault)]) == 0
+    assert p.read_text(encoding="utf-8") == before
+    assert "dry-run" in capsys.readouterr().out
+
+
+def test_upd_ref_for_a_missing_note_is_not_reported_unscaffoldable(tmp_path,
+                                                                   monkeypatch, capsys):
+    vault = tmp_path / "vault"
+    (vault / "Creatures").mkdir(parents=True)
+    fake = _FakeApi(
+        by_state={"Accepted": [_sug("ns:upd/Creatures/ghost#abc123def456", "e-9",
+                                    etype="Creature")]},
+        elements={"e-9": {"type": "creature", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    assert list(vault.rglob("*.md")) == []
+    assert "0 node(s) updated" in capsys.readouterr().out
