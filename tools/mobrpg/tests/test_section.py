@@ -97,6 +97,32 @@ def test_tilde_fences_and_longer_fences_are_honoured():
     assert tail == "" and canon == body
 
 
+def test_unclosed_fence_does_not_swallow_the_vault_only_sections():
+    # An unbalanced ``` marker in canon prose opens a fence that never closes.
+    # Treating the rest of the note as code left NO H2 boundary below it, so the
+    # tail came back empty: GM Notes fell into the canon (push) slice, and a pull
+    # had nothing to preserve. An unbalanced document must degrade to the
+    # fence-blind behavior, not to a leak.
+    body = ("## Overview\n\nProse with a stray marker:\n\n"
+            "```\nnever closed\n\n"
+            "## GM Notes\n\nSecret.\n")
+    canon, tail = section.split_vault_only(body)
+    assert canon + tail == body
+    assert tail == "## GM Notes\n\nSecret.\n"
+    assert "Secret." not in canon
+
+
+def test_fence_whose_closer_is_indented_four_spaces_is_unterminated_not_a_trap():
+    # A ``` opened at 0-3 spaces whose "closer" sits at 4+ (a code block nested
+    # in a list) is unterminated by CommonMark — the same EOF trap.
+    body = ("## Overview\n\n- item:\n\n  ```\n  code\n      ```\n\n"
+            "## GM Notes\n\nSecret.\n")
+    canon, tail = section.split_vault_only(body)
+    assert canon + tail == body
+    assert tail == "## GM Notes\n\nSecret.\n"
+    assert "Secret." not in canon
+
+
 def test_drop_empty_sections_ignores_fenced_headings():
     md = ("## Overview\n\n"
           "```\n## Properties\n```\n\n"

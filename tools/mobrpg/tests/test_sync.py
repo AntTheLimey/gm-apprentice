@@ -98,6 +98,24 @@ def test_fenced_heading_in_gm_notes_never_leaks_into_the_push(tmp_path, monkeypa
         assert secret not in desc
 
 
+def test_unclosed_fence_in_canon_never_leaks_gm_notes_into_the_push(tmp_path, monkeypatch):
+    # The other half of the fence rule: an unbalanced ``` marker ABOVE the
+    # vault-only section must not turn the rest of the note into "code" and
+    # hand ## GM Notes to the push candidate.
+    text = NOTE.replace(
+        "Old vault prose.",
+        "Old vault prose.\n\n```\nan opener nobody closed")
+    v = _vault(tmp_path, text=text)
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    submitted = []
+    _wire(monkeypatch, {"description": "<p>Stale server text.</p>",
+                        "lastModified": "2026-07-21T00:00:00Z"}, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    desc = submitted[0]["suggestions"][0]["payload"]["description"]
+    assert "Old vault prose." in desc
+    assert "GM Notes" not in desc and "Secret plans." not in desc
+
+
 def test_identical_content_stamps_without_suggestion(tmp_path, monkeypatch):
     v = _vault(tmp_path)
     os.utime(v / "Creatures" / "marsh-hag.md", None)

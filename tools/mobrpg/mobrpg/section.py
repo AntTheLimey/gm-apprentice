@@ -35,18 +35,26 @@ def _h2_spans(body: str) -> list[tuple[int, int, str]]:
 
     Offsets are into the ORIGINAL body, so every caller's slices still
     reconstruct it byte-for-byte. A closing fence must use the opening fence's
-    character, be at least as long, and carry no info string; an unclosed fence
-    runs to EOF (also CommonMark), so nothing after it is ever a heading.
+    character, be at least as long, and carry no info string.
+
+    CommonMark runs an unclosed fence to EOF, but obeying that here fails in the
+    DANGEROUS direction: a stray unbalanced ``` in canon prose (or an opener
+    whose closer is indented four spaces inside a list) would hide every heading
+    below it, so `split_vault_only` returns an empty tail — `## GM Notes` lands
+    in the canon slice and gets PUSHED, and a pull has no tail left to preserve.
+    So an unterminated region is re-scanned fence-blind: an unbalanced document
+    degrades to the pre-fence behavior (headings detected, secrets still
+    stripped) instead of degrading to a leak.
     """
     spans: list[tuple[int, int, str]] = []
-    fence_char, fence_len = "", 0
+    fence_char, fence_len, fence_at = "", 0, 0
     pos = 0
     for line in body.splitlines(keepends=True):
         f = _FENCE.match(line)
         if f:
             mark = f.group("mark")
             if not fence_char:
-                fence_char, fence_len = mark[0], len(mark)
+                fence_char, fence_len, fence_at = mark[0], len(mark), pos
             elif (mark[0] == fence_char and len(mark) >= fence_len
                   and not f.group("info").strip()):
                 fence_char, fence_len = "", 0
@@ -55,6 +63,12 @@ def _h2_spans(body: str) -> list[tuple[int, int, str]]:
             if m:
                 spans.append((pos, pos + m.end(), m.group("title").strip()))
         pos += len(line)
+    if fence_char:
+        # `fence_at` is a line start, so re.M's `^` still anchors correctly from
+        # it, and every span found here sits after the ones already collected —
+        # the list stays in document order.
+        spans += [(m.start(), m.end(), m.group("title").strip())
+                  for m in _H2.finditer(body, fence_at)]
     return spans
 
 
