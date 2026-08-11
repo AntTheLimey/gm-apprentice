@@ -163,9 +163,23 @@ so do the play-log sections `## Notes`, `## Appearances` and
 buried the world owner's review queue in churn. Both directions treat them as the
 vault's own: a push strips them, a pull preserves them verbatim. A vault can
 replace that list with a top-level `"vaultOnlySections": ["...", ...]` array in
-`_meta/mobrpg-map.json`. Headings left with no body (empty scaffold prompts like
-a bare `## Properties`) are dropped from the push candidate too — they're writing
-prompts for the vault, not description content.
+`_meta/mobrpg-map.json`. The array **replaces** the default rather than adding to
+it, so a list that omits `GM Notes` opts GM secrets into the push — `sync` obeys
+the config but prints a `WARNING: vaultOnlySections does not include "GM Notes"`
+line to stderr when it does. Headings left with no body (empty scaffold prompts
+like a bare `## Properties`) are dropped from the push candidate too — they're
+writing prompts for the vault, not description content.
+
+**Before the first `--execute` after upgrading, look for canon H2s below a
+vault-only section.** A vault-only section now ends at the next `##` heading
+rather than at end-of-file, so an authored heading that happens to sit *after*
+`## GM Notes` (a `## Timeline`, say) is canon-facing — earlier versions preserved
+everything below `## GM Notes` on a pull, and those sections are now overwritten
+by one. Grep the vault for headings following a vault-only section, move any that
+are real canon above it, and always read the dry-run table first: every **pull**
+row prints the canon line count it is about to trade, e.g.
+`pull  ns:People/marsh-hag  (canon -8/+1 lines, SHRINKS)`. A `SHRINKS` row is the
+one to open before you say yes.
 
 *Why it's safe:* a pull overwrites only the canon-prose region, never the
 vault-only tail; a push never mutates a live element — it only proposes a

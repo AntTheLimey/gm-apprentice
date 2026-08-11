@@ -1,7 +1,7 @@
 import json
 import os
 
-from mobrpg import client, node as _node
+from mobrpg import client, node as _node, section
 from mobrpg.commands import sync_cmd, submit_batch
 
 
@@ -384,6 +384,91 @@ def test_vault_only_sections_config_replaces_default(tmp_path, monkeypatch):
     desc = submitted[0]["suggestions"][0]["payload"]["description"]
     assert "Local lore block" not in desc            # configured vault-only
     assert "Secret plans." in desc                   # default list no longer applies
+
+
+def test_vault_only_config_without_gm_notes_warns(tmp_path, monkeypatch, capsys):
+    # Replace semantics let a partial list opt GM secrets into the push. Sync
+    # obeys the config, but says so loudly on stderr.
+    v = _vault(tmp_path)
+    (v / "_meta").mkdir()
+    (v / "_meta" / "mobrpg-map.json").write_text(
+        json.dumps({"vaultOnlySections": ["Lore"]}), encoding="utf-8")
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    _wire(monkeypatch, {"description": "<p>Server prose.</p>",
+                        "lastModified": "2026-07-01T00:00:00Z"}, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    err = capsys.readouterr().err
+    assert "vaultOnlySections" in err and "GM Notes" in err and "PUSHED" in err
+
+
+def test_vault_only_config_with_gm_notes_does_not_warn(tmp_path, monkeypatch, capsys):
+    v = _vault(tmp_path)
+    (v / "_meta").mkdir()
+    (v / "_meta" / "mobrpg-map.json").write_text(
+        json.dumps({"vaultOnlySections": ["GM Notes", "Lore"]}), encoding="utf-8")
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    _wire(monkeypatch, {"description": "<p>Server prose.</p>",
+                        "lastModified": "2026-07-01T00:00:00Z"}, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert "WARNING" not in capsys.readouterr().err
+
+
+def test_vault_only_sections_falls_back_on_bad_map(tmp_path):
+    # Unreadable, malformed and non-dict maps all fall back to the default list.
+    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    meta = tmp_path / "_meta"
+    meta.mkdir()
+    (meta / "mobrpg-map.json").write_text("{ not json", encoding="utf-8")
+    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    (meta / "mobrpg-map.json").write_text("[1, 2]", encoding="utf-8")
+    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    (meta / "mobrpg-map.json").write_text(
+        json.dumps({"vaultOnlySections": []}), encoding="utf-8")
+    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+
+
+def test_pull_row_prints_canon_line_delta(tmp_path, monkeypatch, capsys):
+    # #146 guardrail: a pull replaces the canon region wholesale, so the operator
+    # sees what it costs — including a canon H2 that sat after a vault-only
+    # section — in the dry-run table, before --execute.
+    text = NOTE.replace(
+        "Old vault prose.",
+        "Old vault prose.\n\nMore prose.\n\n## Timeline\n\n- day one\n- day two")
+    v = _vault(tmp_path, text=text, mtime=1_700_000_000)
+    detail = {"description": "<p>Short.</p>", "lastModified": "2026-07-24T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v)])                # dry-run
+    out = capsys.readouterr().out
+    assert "pull" in out
+    assert "canon -" in out and "/+1 lines" in out
+    assert "SHRINKS" in out                                # visibly a losing trade
+
+
+def test_pull_keeps_empty_vault_only_heading(tmp_path, monkeypatch):
+    # drop_empty_sections is a PUSH-candidate filter only: the vault's own empty
+    # scaffold heading is a writing prompt and must survive a pull untouched.
+    text = NOTE.replace("Old vault prose.", "Old vault prose.\n\n## Appearances\n")
+    v = _vault(tmp_path, text=text, mtime=1_700_000_000)
+    detail = {"description": "<p>New canon prose.</p>",
+              "lastModified": "2026-07-24T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
+    assert "## Appearances" in txt and "New canon prose." in txt
+
+
+def test_baseline_keeps_empty_headings_in_vault_body(tmp_path, monkeypatch):
+    # The baseline stamp writes the body back verbatim — empty scaffold headings
+    # included — even though they are stripped from the push candidate.
+    text = NOTE.replace('last_synced: "2026-07-20T00:00:00Z"', 'last_synced: ""')
+    text = text.replace("Old vault prose.", "Old vault prose.\n\n## Properties\n")
+    v = _vault(tmp_path, text=text)
+    detail = {"description": "<p>Different server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
+    assert "## Properties" in txt and "Old vault prose." in txt
 
 
 def test_never_synced_divergent_note_baselines_not_pushes(tmp_path, monkeypatch):

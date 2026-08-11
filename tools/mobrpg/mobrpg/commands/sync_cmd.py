@@ -78,6 +78,7 @@ class Action:
                                         # | in-sync | push | baseline
     new_text: str | None = None
     suggestion: dict | None = None
+    delta: str = ""                     # decision-table suffix (pull cost line)
 
 
 def _note_name(path: str, txt: str) -> str:
@@ -145,11 +146,27 @@ def _matches_server(cand_md: str, detail: dict) -> bool:
 
 
 def _stamped(path: str, ref: str, decision: str, txt: str, nd: dict,
-             body: str, now: str) -> Action:
+             body: str, now: str, delta: str = "") -> Action:
     """An action that writes `body` back with `last_synced` advanced to `now`."""
     new_node = dict(nd)
     new_node["last_synced"] = now
-    return Action(path, ref, decision, new_text=_rebuild(txt, new_node, body))
+    return Action(path, ref, decision, new_text=_rebuild(txt, new_node, body),
+                  delta=delta)
+
+
+def _canon_delta(old_body: str, new_body: str, vault_only: tuple) -> str:
+    """The cost line printed against a `pull` row.
+
+    A pull replaces the canon region WHOLESALE, and the canon region is now
+    section-bounded: an H2 the vault authored AFTER a vault-only section (say a
+    `## Timeline` below `## GM Notes`) is canon-facing, so a pull discards it.
+    The old GM-Notes split preserved everything to EOF and hid that cost. #146
+    asked for the guardrail rather than a merge: show the operator the line count
+    being traded, in the dry-run table, before `--execute` can act on it."""
+    before = section.split_vault_only(old_body, vault_only)[0].strip()
+    after = section.split_vault_only(new_body, vault_only)[0].strip()
+    n, m = len(before.splitlines()), len(after.splitlines())
+    return f"  (canon -{n}/+{m} lines{', SHRINKS' if m < n else ''})"
 
 
 def _build_suggestion(nd: dict, cand_md: str) -> dict:
@@ -242,7 +259,8 @@ def plan(notes, fetch, now: str, skew: float, *,
             new_body = _pull_body(old_body, detail.get("description"),
                                   detail.get("descriptionType"), name_by_eid,
                                   vault_only)
-            actions.append(_stamped(path, ref, "pull", txt, nd, new_body, now))
+            actions.append(_stamped(path, ref, "pull", txt, nd, new_body, now,
+                                    _canon_delta(old_body, new_body, vault_only)))
             continue
 
         # Behavior 6: push / tie — compare authored prose to the live description.
@@ -285,7 +303,14 @@ def _vault_only_sections(vault: str) -> tuple:
     titles = mp.get("vaultOnlySections") if isinstance(mp, dict) else None
     if not isinstance(titles, list) or not titles:
         return section.DEFAULT_VAULT_ONLY
-    return tuple(str(t) for t in titles)
+    out = tuple(str(t) for t in titles)
+    # Replace semantics mean a partial list silently opts GM secrets INTO the
+    # push. Explicit config is explicit — sync proceeds — but the foot-gun says
+    # so out loud, because the blast radius is a shared world, not a local file.
+    if not any(t.strip().lower() == "gm notes" for t in out):
+        print('WARNING: vaultOnlySections does not include "GM Notes" — '
+              'GM Notes will be PUSHED to the shared world', file=sys.stderr)
+    return out
 
 
 def _kind_ep(nd: dict) -> str | None:
@@ -369,7 +394,7 @@ def run(argv: list[str]) -> int:
     counts: dict[str, int] = {}
     for a in actions:
         counts[a.decision] = counts.get(a.decision, 0) + 1
-        print(f"  {a.decision:8} {a.ref}")
+        print(f"  {a.decision:8} {a.ref}{a.delta}")
 
     if args.execute:
         # pull, in-sync and baseline writes stamp `last_synced`; pin the file mtime
