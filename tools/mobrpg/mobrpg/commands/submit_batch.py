@@ -55,13 +55,34 @@ def submit(world: str, request: dict, *, execute: bool, index: int | None = None
     token = client.get_access_token()
     print(f"→ {tag}POST /world/{world}/suggestion  n={n} ...")
     resp = client._request("POST", f"/world/{world}/suggestion", token=token, body=request)
-    stored = resp.get("suggestions", []) if isinstance(resp, dict) else []
+    rows = resp.get("suggestions", []) if isinstance(resp, dict) else []
     resolved = resp.get("resolvedRefs", {}) if isinstance(resp, dict) else {}
-    print(f"  ✓ {len(stored)} suggestion(s) stored")
-    for s in stored:
+    updated = set(resp.get("updatedIds") or []) if isinstance(resp, dict) else set()
+    stored, corrected, claimed = [], [], []
+    for s in rows:
+        if s.get("id") in updated:
+            corrected.append(s)
+        elif (s.get("reviewState") or "").lower() in ("accepted", "dismissed"):
+            claimed.append(s)
+        else:
+            stored.append(s)
+    parts = [f"{len(stored)} stored"]
+    if corrected:
+        parts.append(f"{len(corrected)} corrected in place")
+    if claimed:
+        parts.append(f"{len(claimed)} already claimed (NOT submitted)")
+    print(f"  ✓ {', '.join(parts)}")
+    for s in stored + corrected:
         pl = s.get("payload") or {}
         print(f"      - {s.get('reviewState','?'):8} {s.get('operation',''):14} "
               f"id={s.get('id')} {pl.get('name') or ''}")
+    if claimed:
+        print(f"  ⚠ {len(claimed)} externalRef(s) already claimed by a terminal "
+              f"(Accepted/Dismissed) suggestion — these proposals were NOT stored "
+              f"and the GM will never see them:")
+        for s in claimed:
+            print(f"      - {s.get('externalRef') or '?'}  "
+                  f"(claimed by a {s.get('reviewState','?')} row)")
     if resolved:
         print(f"  resolvedRefs (deduped/swallowed → existing element id): {resolved}")
     return resp if isinstance(resp, dict) else {}
