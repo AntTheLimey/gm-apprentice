@@ -154,7 +154,11 @@ mobrpg sync <world> --vault <path> --execute
 rows write local vault files only (no live-world risk regardless of the PROD/DEV
 target). The **push/tie** rows file `UpdateElement` suggestions against the live
 world — so on a PROD target, heed the production banner and get the GM's explicit
-yes first, or switch to `MOBRPG_ENV=dev`.
+yes first, or switch to `MOBRPG_ENV=dev`. Each submitted batch prints
+`N stored, N corrected in place, N already claimed (NOT submitted)` — read
+"corrected in place" as expected (the `upd/` ref's own still-Pending row got a
+fresh payload) and "already claimed" as a proposal that did **not** reach the
+GM (see `push.md`'s "Reading the execute output" for the full breakdown).
 
 **Vault-only sections are never pushed and never pulled over.** `## GM Notes`
 stays local by design (until mobRPG enforces hidden-note access server-side), and

@@ -123,6 +123,18 @@ target is PROD and get their explicit yes before running a PROD `--execute`, or
 switch to `MOBRPG_ENV=dev` for a non-prod run. Dry-runs (Step 1–2 above) never
 write, so they're safe against either target.
 
+**Reading the execute output.** Each submitted batch prints
+`N stored, N corrected in place, N already claimed (NOT submitted)` — the
+per-batch source of truth, not the pre-submit report above. *Stored* are
+newly-filed rows; *corrected in place* are the caller's own still-Pending rows
+whose payload the resubmit just replaced (expected on a re-push of the same
+entity); *already claimed* means the externalRef was already resolved by a
+terminal Accepted/Dismissed suggestion, so that proposal was **not** stored
+and the GM will never see it in their queue — the CLI lists the claimed
+externalRefs so you can tell the GM which entities silently didn't go through
+and need a fresh push (a re-`suggest`/`sync` after `pull-canon` mints a new
+ref, see `reconcile.md`).
+
 ## Relationships: two mechanisms, and target resolution
 
 `suggest` maps each vault relationship to one of mobRPG's **two** relationship
@@ -193,5 +205,15 @@ element by `mobrpg sync`, not by this push flow. `sync` decides per note from
 timestamps (last-writer-wins) — when the vault's prose is newer it files an
 `UpdateElement` suggestion **up** for the owner to accept or dismiss; when
 mobRPG's is newer it pulls the canon prose down. See `reconcile.md` for the full
-decision table and the dry-run → present → confirm → `--execute` walk-through.
-GM Notes are never pushed — they stay local to the vault by design.
+decision table (including the `baseline` verdict for a never-synced note) and
+the dry-run → present → confirm → `--execute` walk-through. `## GM Notes` and
+the other vault-only sections (`## Notes`, `## Appearances`,
+`## Source References`, or a vault's own `vaultOnlySections` list) are never
+pushed — they stay local to the vault by design.
+
+Descriptions push as raw Markdown, not HTML — every non-empty description
+`suggest`/`sync` sends carries `descriptionType: "Markdown"`, so mobRPG stores
+the authored prose verbatim instead of the CLI's own lossy markdown→HTML
+conversion. The one exception is the empty-description stub for an entity with
+no authored prose at all (`<p></p>`, no `descriptionType`), which stays HTML —
+see the "Missing/blank description" risk flag above.

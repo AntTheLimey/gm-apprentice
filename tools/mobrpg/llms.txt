@@ -161,12 +161,21 @@ vault whose entities already exist upstream but carry no node is linked with
                                   Timestamp last-writer-wins sync of every
                                   linked note's description prose against
                                   mtime / node last_synced / server
-                                  lastModified: a pull decision overwrites the
-                                  note's canon prose locally (GM Notes tail
-                                  preserved) and stamps last_synced; a
-                                  push/tie decision never writes upstream
-                                  directly — it files one reviewable
-                                  UpdateElement suggestion and marks the node
+                                  lastModified. Per-note verdict is one of
+                                  skip / pull / push / tie / baseline (a
+                                  never-synced note with no LWW baseline —
+                                  content decides instead of timestamps). A
+                                  pull overwrites the note's canon prose
+                                  locally (vault-only tail preserved — GM
+                                  Notes plus session-bookkeeping sections by
+                                  default, configurable via
+                                  "vaultOnlySections" in
+                                  _meta/mobrpg-map.json) and stamps
+                                  last_synced; a push/tie decision never
+                                  writes upstream directly — it files one
+                                  reviewable UpdateElement suggestion (raw
+                                  Markdown, own upd/<relpath>#<hash>
+                                  externalRef) and marks the node
                                   review_state: pending until `review`
                                   adjudicates it. Notes already pending are
                                   skipped. Dry-run by default.

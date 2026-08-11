@@ -80,6 +80,15 @@ CLI never overwrites a live element directly.
   was missing) and drop the redundant install/pick-system/Obsidian steps.
 - **`client.get_access_token()` precedence** — `MOBRPG_TOKEN` env still wins, then
   the managed config, then `MOBRPG_EMAIL`/`MOBRPG_PASSWORD`, else a helpful error.
+- **`sync`'s never-synced verdict is `baseline`, and vault-only sections are
+  configurable via `vaultOnlySections`.** A note whose `last_synced` is still
+  empty has no LWW baseline, so timestamps decide nothing — content decides
+  instead: matching prose just stamps in sync, an empty scaffold pulls the
+  server description, anything else keeps the authored body and only adopts
+  the stamp. This replaces a manufactured push on every newly-linked note. The
+  vault-only section list (`## GM Notes` plus session-bookkeeping headings)
+  keeps its default but a vault can replace it with a top-level
+  `"vaultOnlySections"` array in `_meta/mobrpg-map.json`.
 
 ### Removed
 
@@ -250,6 +259,47 @@ adversarial review of the branch, each fixed test-first):
   on a pre-existing loose-perm `credentials.json`; Windows write path now tested.
 - **`auth status` stale-token warning** — warns when a `MOBRPG_TOKEN` env var is set
   and would override the imported identity that `status` displays.
+
+Second fix round (a four-way adversarial review of the post-LWW-rework
+`sync`/`suggest` path, 2026-08-11, each fixed test-first):
+
+- **Vault-only sections generalize past `## GM Notes`** — `## Notes`,
+  `## Appearances`, and `## Source References` are session bookkeeping, not
+  canon prose, and pushing them buried the world owner's review queue in
+  churn; they're now vault-only by default too, and every `pull` dry-run row
+  prints the canon line-count it's about to trade so a shrinking pull gets
+  read before it's confirmed (#146).
+- **A never-synced note no longer manufactures a push** — with no LWW
+  baseline to compare against, `sync` now decides from content instead of
+  timestamps (match → stamp in sync, empty scaffold → pull, else → stamp
+  only), and a heading left with no body (`## Properties` with nothing under
+  it) is dropped from the push candidate rather than sent as description
+  content (#147).
+- **`map sync` folds case/whitespace/unicode when matching vocab keys** — a
+  casing or whitespace-only difference (`Chitinoteuthis` vs
+  `chitinoteuthis `) previously split one vault term into a stale map entry
+  plus an unbound duplicate; `whats-new` also distinguishes vocab that's
+  recorded-but-unbound from genuinely new (#148).
+- **`sync`/`suggest` send raw Markdown, not lossy HTML** — omitting
+  `descriptionType` silently selected Html, forcing every pushed description
+  through the CLI's own `md_to_html`; both verbs now set
+  `descriptionType: "Markdown"` and send the cleaned markdown verbatim (the
+  drift compare still happens in HTML space to avoid false positives) (#150).
+- **Update suggestions get their own `upd/<relpath>#<hash>` externalRef** —
+  reusing the note's create-time ref meant only the first `UpdateElement` a
+  GM ever accepted actually reached them; a per-content-hash ref under its
+  own namespace lets identical re-pushed prose correct an open proposal in
+  place while edited prose mints a fresh one, and `pull-canon` now
+  adjudicates only the row matching the node's `pending_ref` (#151).
+- **`submit-batch` reports stored/corrected/already-claimed distinctly** —
+  a plain aggregate "N stored" count hid rows a terminal (Accepted/Dismissed)
+  suggestion had already swallowed; those are now named and flagged as
+  proposals the GM will never see (#152).
+- **`pull-canon` gates accepted element_ids on world liveness** — a
+  still-Accepted create could re-stamp a dead `element_id` onto a node
+  `--reconcile-deletions` had already flagged deleted; the main pass now
+  checks the same live element-id set and treats absence as authoritative
+  (#153).
 
 ---
 

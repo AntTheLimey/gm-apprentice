@@ -1,12 +1,19 @@
 # mobRPG CLI — release blockers & punch-list
 
-**All ship-blockers cleared as of 2026-07-25.**
+**All ship-blockers cleared as of 2026-07-25.** A second round of issues
+(#140-#153, mostly found in `sync`/`suggest` after the LWW rework) was fixed
+on `mobrpg-release-fixes` — see the dated disposition list below.
 
 **Status:** v1.9.0 was **pulled** on 2026-07-25, then repaired. Every finding
-below is now marked **FIXED** or **DEFERRED (with reason)**. The branch is
-**shippable but unpushed** — 373 tests pass (up from a 321 baseline), the wheel
-installs and runs, and the "graduated / native / installable" claims have been
-reworded to the honest mid-strangler reality. Awaiting a human GO to push/PR.
+below is now marked **FIXED** or **DEFERRED (with reason)**. The wheel installs
+and runs, and the "graduated / native / installable" claims have been reworded
+to the honest mid-strangler reality.
+
+**Branch state (verified 2026-08-11):** `git rev-list --left-right --count
+mobrpg-cli...origin/mobrpg-cli` → `0 0` — `mobrpg-cli` and `origin/mobrpg-cli`
+are in sync; the "branch is unpushed" claim below is stale. The current work
+(#140-#153) is on `mobrpg-release-fixes`, cut from `mobrpg-cli`, and is not yet
+merged back or pushed. Awaiting a human GO to push/PR that branch.
 
 
 **How this list was produced:** a four-way adversarial code review of the whole
@@ -22,8 +29,6 @@ of the review; re-confirm before fixing.
   path reference.
 - Added a pytest CI job (`.github/workflows/mobrpg-cli-ci.yml`, ubuntu+macos,
   py3.10/3.12) — verified green via a clean editable install.
-
-The branch is **not pushed**. `origin/mobrpg-cli` is still at `84a3abb`.
 
 ---
 
@@ -271,3 +276,64 @@ boundary this punch-list was written against. Several entries above are now
   `NoteableService.getNote` has no hidden-note check, so `sync` never pushes the
   `## GM Notes` tail upstream until mobRPG enforces hidden-note access
   server-side.
+
+---
+
+## 🔧 Second fix round — 2026-08-11 (#140-#153, branch `mobrpg-release-fixes`)
+
+A four-way adversarial review of the post-LWW-rework `sync`/`suggest` path
+surfaced nine open GitHub issues. Each was fixed test-first on
+`mobrpg-release-fixes` (cut from `mobrpg-cli` @ `2d1017b`); the full suite
+(including these fixes' new tests) is reported in this file's task-8 record.
+One line per issue:
+
+- **#140 — already fixed pre-plan** (`36fc6c5`, before this plan started).
+  `pull-canon`'s `_scaffoldable` rejects `rel/`/`desc/` refs and is fail-closed
+  on unknown ref roots; this round added regression coverage confirming the
+  guard, the NOT-SCAFFOLDED report, and correct kind/name on a scaffolded note.
+- **#141 — moot.** `pull-desc` and the hash/baseline canon-boundary scalars are
+  deleted; `grep -rn "canon_base_md\|canon_html_hash\|canon_synced_at\|content_hash" tools/mobrpg/mobrpg/`
+  returns zero production hits.
+- **#146 — fixed.** Vault-only sections generalize past `## GM Notes` to
+  `## Notes`, `## Appearances`, and `## Source References` (session bookkeeping,
+  not canon prose); configurable via a `vaultOnlySections` array in
+  `_meta/mobrpg-map.json`; a `pull` row now prints the canon line-count it is
+  about to trade so a `SHRINKS` row gets read before it's confirmed.
+- **#147 — fixed.** A never-synced note (`last_synced` empty) has no LWW
+  baseline, so it gets a new `baseline` verdict — content decides (match →
+  stamp, empty scaffold → pull, else → stamp only) instead of manufacturing a
+  push into the world owner's queue. Empty scaffold headings (`## Properties`
+  with no body) are stripped from push candidates.
+- **#148 — fixed.** `map sync` folds NFC/whitespace/case when matching vocab
+  keys, so a casing or whitespace-only difference can no longer split one vault
+  term into a stale map entry plus an unbound duplicate; collisions collapse
+  with a documented priority, and `whats-new` distinguishes vocab that's
+  recorded-but-unbound from genuinely new.
+- **#150 — fixed.** `sync`/`suggest` send raw Markdown with
+  `descriptionType: "Markdown"` instead of running every pushed description
+  through the CLI's own lossy `md_to_html` converter; the drift compare still
+  happens in HTML space to avoid false positives.
+- **#151 — fixed.** Each filed `UpdateElement` gets its own
+  `<namespace>:upd/<relpath>#<content-hash>` externalRef, separate from the
+  note's create-time ref; `pull-canon` adjudicates only the row matching the
+  node's `pending_ref`, so an accept→re-edit→re-push cycle no longer loses
+  later updates to an already-terminal ref.
+- **#152 — fixed.** `submit-batch` (shared by `suggest` and `sync`) reports
+  stored / corrected-in-place / already-claimed distinctly instead of one
+  aggregate "N stored" count, and names the externalRefs a terminal
+  Accepted/Dismissed row silently swallowed.
+- **#153 — fixed.** `pull-canon`'s main pass now checks the same live
+  element-id set `--reconcile-deletions` uses and treats absence as
+  authoritative, so a still-Accepted create can no longer re-stamp a dead
+  `element_id` onto a node that was already correctly flagged deleted.
+
+**Operational note before the first post-upgrade `sync --execute` against the
+live world:** run dry-run first and read the pull canon-delta lines (#146
+above) — confirm any `SHRINKS` row is expected before saying yes. Separately,
+any open Pending row filed *before* this upgrade whose note isn't currently
+locally pending won't match anything under the new `upd/<relpath>#<hash>`
+scheme (#151); the next time that note's push/tie decision fires, `sync` mints
+a fresh `upd/`-namespaced ref rather than reusing the old plain one, leaving
+the pre-upgrade row an orphaned, permanent stale entry in the queue. It's a
+one-time cost per such note, not an ongoing one — safe to leave, or dismiss by
+hand in mobRPG.
