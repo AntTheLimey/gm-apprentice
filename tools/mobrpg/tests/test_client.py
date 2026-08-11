@@ -21,7 +21,7 @@ class _FakeResp:
         return self._raw
 
 
-def test_request_sends_authorization_bearer_header(monkeypatch):
+def test_request_sends_authorization_bearer_header(monkeypatch, unblock_client_network):
     captured = {}
 
     def fake_urlopen(req, timeout=None):
@@ -34,7 +34,7 @@ def test_request_sends_authorization_bearer_header(monkeypatch):
     assert captured["req"].get_header("Authorization") == "Bearer tok-abc"
 
 
-def test_request_no_token_sends_no_authorization_header(monkeypatch):
+def test_request_no_token_sends_no_authorization_header(monkeypatch, unblock_client_network):
     captured = {}
 
     def fake_urlopen(req, timeout=None):
@@ -46,7 +46,7 @@ def test_request_no_token_sends_no_authorization_header(monkeypatch):
     assert captured["req"].get_header("Authorization") is None
 
 
-def test_request_urlerror_maps_to_apierror_status_0(monkeypatch):
+def test_request_urlerror_maps_to_apierror_status_0(monkeypatch, unblock_client_network):
     def fake_urlopen(req, timeout=None):
         raise urllib.error.URLError("connection refused")
 
@@ -56,7 +56,7 @@ def test_request_urlerror_maps_to_apierror_status_0(monkeypatch):
     assert ei.value.status == 0
 
 
-def test_request_empty_body_decodes_to_none(monkeypatch):
+def test_request_empty_body_decodes_to_none(monkeypatch, unblock_client_network):
     def fake_urlopen(req, timeout=None):
         return _FakeResp(b"   ")
 
@@ -96,7 +96,7 @@ def test_resolve_environment_field_override(monkeypatch):
     assert base == "http://example.test/api"
 
 
-def test_get_access_token_requires_auth(monkeypatch):
+def test_get_access_token_requires_auth(monkeypatch, unblock_client_network):
     for k in ("MOBRPG_TOKEN", "MOBRPG_EMAIL", "MOBRPG_PASSWORD"):
         monkeypatch.delenv(k, raising=False)
     with pytest.raises(SystemExit) as exc:
@@ -104,6 +104,6 @@ def test_get_access_token_requires_auth(monkeypatch):
     assert exc.value.code == 2
 
 
-def test_get_access_token_bearer(monkeypatch):
+def test_get_access_token_bearer(monkeypatch, unblock_client_network):
     monkeypatch.setenv("MOBRPG_TOKEN", "tok-123")
     assert client.get_access_token() == "tok-123"

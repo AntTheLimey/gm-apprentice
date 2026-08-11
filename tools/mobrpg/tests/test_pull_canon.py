@@ -655,6 +655,44 @@ def test_unreadable_live_ids_skips_gate_with_warning(monkeypatch, tmp_path, caps
     assert out["element_id"] == "e-new"
 
 
+def test_no_verify_never_calls_live_element_ids(monkeypatch, tmp_path):
+    # Guards a future refactor moving the #153 liveness-gate call outside the
+    # `if not args.no_verify:` guard: with --no-verify, pull.live_element_ids
+    # must not even be asked.
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "ns:Characters/NPCs/Some_Guy",
+          "element_id": "e-old", "element_kind": "Person", "review_state": "accepted",
+          "last_synced": "2020-01-01T00:00:00Z", "review_note": "", "determined": {},
+          "relationships": [], "languages": []}
+    path = vault / "Characters" / "NPCs" / "Some_Guy.md"
+    path.write_text("---\ntype: npc\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+    live_by_ref = {
+        "ns:Characters/NPCs/Some_Guy": {"state": "accepted", "element_id": "e-new",
+                                        "element_kind": "Person", "determined": {},
+                                        "event_ids": {}},
+    }
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon, "_fetch_live",
+                        lambda world, token, *, verify=True: live_by_ref)
+
+    calls = []
+
+    def _spy(w, t):
+        calls.append((w, t))
+        raise AssertionError("live_element_ids must not be called under --no-verify")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", _spy)
+
+    rc = pull_canon.run(["w1", "--vault", str(vault), "--no-verify", "--execute"])
+    assert rc == 0
+    assert calls == []
+
+    out = node.read_node(path.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out["element_id"] == "e-new"
+
+
 def test_live_element_ids_raises_instead_of_returning_a_short_set(monkeypatch):
     from mobrpg.commands import pull as pull_mod
     calls = []

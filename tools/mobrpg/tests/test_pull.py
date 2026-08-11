@@ -59,7 +59,7 @@ def test_extract_builds_relationship(monkeypatch):
 
 
 def test_run_writes_json(monkeypatch, tmp_path):
-    monkeypatch.setenv("MOBRPG_TOKEN", "tok")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "_request", _fake_request_factory())
     monkeypatch.setattr(client, "whoami", lambda token: {"id": "u1"})
     out = tmp_path / "extract.json"
@@ -206,7 +206,7 @@ def test_extract_types_section_survives_non_json_endpoint(monkeypatch):
 
 
 def test_run_reports_api_error_and_writes_nothing(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv("MOBRPG_TOKEN", "tok")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
 
     def raise_api_error(token):
         raise client.ApiError(401, "bad token", "/user/me")

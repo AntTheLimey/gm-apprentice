@@ -3,7 +3,7 @@ from mobrpg.commands import whoami
 
 
 def test_whoami_prints_identity_and_worlds(monkeypatch, capsys):
-    monkeypatch.setenv("MOBRPG_TOKEN", "tok")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
     monkeypatch.setattr(client, "whoami",
                         lambda t: {"id": "u1", "email": "gm@x.io",
                                    "firstName": "Ada", "lastName": "L"})
@@ -18,7 +18,7 @@ def test_whoami_prints_identity_and_worlds(monkeypatch, capsys):
 
 
 def test_whoami_reports_api_error(monkeypatch, capsys):
-    monkeypatch.setenv("MOBRPG_TOKEN", "tok")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
 
     def boom(t):
         raise client.ApiError(500, "kaboom", "/user/me")

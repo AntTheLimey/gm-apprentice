@@ -3,14 +3,14 @@ import pytest
 from mobrpg import client, config
 
 
-def test_env_token_wins_over_config(monkeypatch, tmp_path):
+def test_env_token_wins_over_config(monkeypatch, tmp_path, unblock_client_network):
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
     config.write({"access_token": "from-config"})
     monkeypatch.setenv("MOBRPG_TOKEN", "from-env")
     assert client.get_access_token() == "from-env"
 
 
-def test_config_used_when_no_env(monkeypatch, tmp_path):
+def test_config_used_when_no_env(monkeypatch, tmp_path, unblock_client_network):
     monkeypatch.delenv("MOBRPG_TOKEN", raising=False)
     monkeypatch.delenv("MOBRPG_EMAIL", raising=False)
     monkeypatch.delenv("MOBRPG_PASSWORD", raising=False)
@@ -19,7 +19,7 @@ def test_config_used_when_no_env(monkeypatch, tmp_path):
     assert client.get_access_token() == "from-config"
 
 
-def test_falls_back_to_email_password(monkeypatch, tmp_path):
+def test_falls_back_to_email_password(monkeypatch, tmp_path, unblock_client_network):
     monkeypatch.delenv("MOBRPG_TOKEN", raising=False)
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "empty"))
     monkeypatch.setenv("MOBRPG_EMAIL", "gm@x.io")
@@ -29,7 +29,7 @@ def test_falls_back_to_email_password(monkeypatch, tmp_path):
     assert client.get_access_token() == "logged-in"
 
 
-def test_error_when_nothing_configured(monkeypatch, tmp_path, capsys):
+def test_error_when_nothing_configured(monkeypatch, tmp_path, capsys, unblock_client_network):
     monkeypatch.delenv("MOBRPG_TOKEN", raising=False)
     monkeypatch.delenv("MOBRPG_EMAIL", raising=False)
     monkeypatch.delenv("MOBRPG_PASSWORD", raising=False)
@@ -40,7 +40,7 @@ def test_error_when_nothing_configured(monkeypatch, tmp_path, capsys):
     assert "mobrpg auth import" in capsys.readouterr().err
 
 
-def test_token_value_never_printed(monkeypatch, tmp_path, capsys):
+def test_token_value_never_printed(monkeypatch, tmp_path, capsys, unblock_client_network):
     monkeypatch.delenv("MOBRPG_TOKEN", raising=False)
     monkeypatch.setenv("MOBRPG_CONFIG_DIR", str(tmp_path / "cfg"))
     config.write({"access_token": "sup3r-secret"})
@@ -50,7 +50,7 @@ def test_token_value_never_printed(monkeypatch, tmp_path, capsys):
     assert "sup3r-secret" not in captured.err
 
 
-def test_error_url_redacts_sensitive_query(monkeypatch):
+def test_error_url_redacts_sensitive_query(monkeypatch, unblock_client_network):
     import io
     import urllib.error
 
