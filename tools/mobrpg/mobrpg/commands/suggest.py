@@ -76,15 +76,17 @@ def _description(body: str) -> str:
     body = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", lambda m: m.group(2).replace("_", " "), body)
     body = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).replace("_", " "), body)
     body = re.sub(r"^#\s+.*$", "", body, flags=re.M)
-    html = _md.md_to_html(body.strip()) or "<p></p>"
+    body = body.strip()
     # A body with only section headings and no real prose (e.g. an imported
-    # named-entity scaffold) has no authored content — emit the empty stub, not
-    # bare heading tags, so nothing junky lands as the element description. Drop
-    # heading elements entirely (incl. their text), then check what's left.
-    no_headings = re.sub(r"<h[1-6][^>]*>.*?</h[1-6]>", "", html, flags=re.I | re.S)
-    if not re.sub(r"<[^>]+>", "", no_headings).strip():
-        return "<p></p>"
-    return html
+    # named-entity scaffold) has no authored content — emit "" (the caller
+    # falls back to the empty stub), not a bare heading line, so nothing junky
+    # lands as the element description. Drop heading lines, then check what's
+    # left. #150: this is now the cleaned MARKDOWN, not md_to_html'd HTML —
+    # mobRPG supports Markdown natively.
+    no_headings = re.sub(r"(?m)^#{1,6}\s.*$", "", body)
+    if not no_headings.strip():
+        return ""
+    return body
 
 
 def _key(name: str) -> str:
@@ -174,12 +176,18 @@ TYPE_DATA = {
 }
 
 
-def _create(ref, name, data, *, description="<p></p>", altNames=None, external_ref=None) -> dict:
+def _create(ref, name, data, *, description="<p></p>", description_type=None,
+           altNames=None, external_ref=None) -> dict:
+    """`description_type` is left unset (backend defaults to Html) for the
+    HTML fragments this module still hand-builds (empty stub, reified-event
+    blurbs); callers passing real vault Markdown (#150) set it explicitly."""
     item = {"ref": ref, "operation": "CreateElement",
             "payload": {"operation": "CreateElement", "name": name,
                         "description": description, "altNames": list(altNames or []),
                         "data": data},
             "dependsOn": []}
+    if description_type:
+        item["payload"]["descriptionType"] = description_type
     if external_ref:
         item["externalRef"] = external_ref
     return item
@@ -235,8 +243,10 @@ def element_spec(entity, mp) -> tuple[str, dict, dict | None]:
 
 def element_items(entity, mp, ref, vault, namespace) -> list[dict]:
     _, data, _ = element_spec(entity, mp)
+    desc = entity.get("description") or ""
     return [_create(ref, entity["name"], data,
-                    description=entity.get("description") or "<p></p>",
+                    description=desc or "<p></p>",
+                    description_type="Markdown" if desc else None,
                     altNames=entity.get("aliases"),
                     external_ref=external_ref(entity["path"], vault, namespace))]
 

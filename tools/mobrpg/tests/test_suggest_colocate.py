@@ -276,8 +276,10 @@ def test_strip_boilerplate_import_placeholder_and_comments():
 def test_placeholder_only_description_is_empty(tmp_path):
     from mobrpg.commands import suggest
     body = "\n\n## Overview\n\n*(No description in mobRPG yet — imported as a named entity.)*\n\n## History\n"
-    # entity push: a placeholder-only body yields the empty stub, not the placeholder text
-    assert suggest._description(body) == "<p></p>"
+    # entity push: a placeholder-only body yields "" (#150: _description now
+    # returns raw markdown, not the empty stub — element_items/_create fall
+    # back to the "<p></p>" Html stub for an empty description).
+    assert suggest._description(body) == ""
 
 
 def test_collect_entities_provenance_filter(tmp_path):

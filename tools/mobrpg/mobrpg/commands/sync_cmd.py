@@ -84,27 +84,36 @@ def _note_name(path: str, txt: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def _pull_body(old_body: str, description: str | None,
+def _pull_body(old_body: str, description: str | None, desc_type: str | None,
                name_by_eid: dict | None) -> str:
     """Behavior 5: server prose (converted, element links rewritten back to
-    wikilinks) + preserved GM Notes tail. A "\\n\\n" separator is inserted only
-    when a GM tail exists and the converted prose does not already end with a
-    blank line. The GM Notes tail is never touched by the link rewrite."""
+    wikilinks) + preserved GM Notes tail. When the server stores the
+    description as Markdown it is used verbatim — no `html_to_md` round-trip,
+    which is lossy; otherwise it is converted from HTML (legacy Html-typed
+    elements). A "\\n\\n" separator is inserted only when a GM tail exists and
+    the converted prose does not already end with a blank line. The GM Notes
+    tail is never touched by the link rewrite."""
     _main, gm_tail = section.gm_notes_split(old_body)
-    converted = _md.html_to_md(description or "")
+    if (desc_type or "").lower() == "markdown":
+        converted = description or ""
+    else:
+        converted = _md.html_to_md(description or "")
     converted = links.rewrite_md_for_pull(converted, name_by_eid or {})
     if gm_tail and not converted.endswith("\n\n"):
         return converted + "\n\n" + gm_tail
     return converted + gm_tail
 
 
-def _build_suggestion(nd: dict, cand_html: str) -> dict:
-    """One UpdateElement suggestion item. externalRef stays the note's own
-    `<ns>:<relpath>` element join key (what `suggestions --correlate` resolves)."""
+def _build_suggestion(nd: dict, cand_md: str) -> dict:
+    """One UpdateElement suggestion item, sent as raw Markdown (mobRPG supports
+    it natively; omitting descriptionType silently selects Html — #150).
+    externalRef stays the note's own `<ns>:<relpath>` element join key (what
+    `suggestions --correlate` resolves)."""
     item = {"operation": "UpdateElement",
             "payload": {"operation": "UpdateElement",
                         "targetRef": nd["element_id"],
-                        "description": cand_html},
+                        "description": cand_md,
+                        "descriptionType": "Markdown"},
             "dependsOn": []}
     xref = nd.get("external_ref")
     if xref:
@@ -149,7 +158,8 @@ def plan(notes, fetch, now: str, skew: float, *,
 
         # Behavior 5: server wins — overwrite prose, keep GM Notes, stamp.
         if decision == "pull":
-            new_body = _pull_body(old_body, detail.get("description"), name_by_eid)
+            new_body = _pull_body(old_body, detail.get("description"),
+                                  detail.get("descriptionType"), name_by_eid)
             new_node = dict(nd)
             new_node["last_synced"] = now
             actions.append(Action(path, ref, "pull",
@@ -158,12 +168,22 @@ def plan(notes, fetch, now: str, skew: float, *,
 
         # Behavior 6: push / tie — compare authored prose to the live description.
         # Rewrite vault wikilinks to element links BEFORE conversion; the GM Notes
-        # tail is sliced off here so it is neither rewritten nor pushed.
+        # tail is sliced off here so it is neither rewritten nor pushed. The
+        # compare always happens in HTML space — raw markdown vs
+        # html_to_md(server_html) produced 170 false positives on a real vault —
+        # so the server side is folded to HTML when it is stored as Markdown.
+        # Only the PUSHED PAYLOAD switches to raw Markdown (#150).
         main = section.gm_notes_split(old_body)[0]
         main = links.rewrite_md_for_push(main, idx, world, url_fmt)
-        cand_html = _md.md_to_html(_md.strip_boilerplate(main))
+        cand_md = _md.strip_boilerplate(main).strip()
+        cand_html = _md.md_to_html(cand_md)
+        server_desc = detail.get("description") or ""
+        if (detail.get("descriptionType") or "").lower() == "markdown":
+            server_html = _md.md_to_html(server_desc)
+        else:
+            server_html = server_desc
         if (_md.normalize_html_for_compare(cand_html)
-                == _md.normalize_html_for_compare(detail.get("description") or "")):
+                == _md.normalize_html_for_compare(server_html)):
             # Already in sync — stamp last_synced only (no suggestion).
             new_node = dict(nd)
             new_node["last_synced"] = now
@@ -176,7 +196,7 @@ def plan(notes, fetch, now: str, skew: float, *,
         new_node["review_state"] = "pending"
         actions.append(Action(path, ref, "push",
                               new_text=_rebuild(txt, new_node, old_body),
-                              suggestion=_build_suggestion(nd, cand_html)))
+                              suggestion=_build_suggestion(nd, cand_md)))
     return actions
 
 

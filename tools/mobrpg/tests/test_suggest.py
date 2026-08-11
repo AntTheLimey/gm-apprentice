@@ -30,7 +30,7 @@ def test_collect_entities_parses_and_filters(tmp_path):
     assert im["aliases"] == ["Bells", "Agent Bellamy"]
     assert im["occupation"].startswith("Order Field Agent")
     assert im["gender"] == "Female"
-    assert im["description"].startswith("<p>") and "Body text" in im["description"]
+    assert im["description"] == "Body text."   # raw markdown (#150), not HTML
     assert im["relationships"] == [
         {"target": "Dr_Erasmus_Hume", "predicate": "imprisoned_by", "desc": "Held captive"},
         {"target": "Nathaniel_Rooke", "predicate": "friend_of", "desc": ""}]
@@ -108,6 +108,19 @@ def test_element_items(tmp_path):
     assert items[0]["payload"]["data"]["type"] == "Political"
     assert items[0]["externalRef"] == "canticle:Locations/British_Museum"
     assert items[0]["payload"]["altNames"] == ["BM"]
+
+
+def test_create_description_is_markdown_with_type(tmp_path):
+    # #150: a create's description is sent as native Markdown (with an explicit
+    # descriptionType), not lossy-converted HTML. Built from the same _vault
+    # fixture + collect_entities/element_items pipeline test_element_items uses.
+    v = _vault(tmp_path)
+    mp = _map()
+    ents = suggest.collect_entities(v, only="imogen")
+    im = ents[0]
+    items = suggest.element_items(im, mp, "e1", v, "canticle")
+    assert items[0]["payload"]["descriptionType"] == "Markdown"
+    assert "<p>" not in items[0]["payload"]["description"]
 
 
 def test_classifier_items_profession_bound_and_create():

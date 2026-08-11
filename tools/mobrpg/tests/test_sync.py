@@ -116,8 +116,9 @@ The twist about [[Marsh Hag]] is secret.
 
 
 def test_push_rewrites_body_wikilinks_not_gm_notes(tmp_path, monkeypatch):
-    # A wikilink in the pushed body becomes an element <a href>; the GM Notes tail
-    # (with its own wikilink) is never pushed and never rewritten.
+    # A wikilink in the pushed body becomes a markdown element link; the GM Notes
+    # tail (with its own wikilink) is never pushed and never rewritten. The
+    # payload is raw Markdown (#150), not an HTML-converted anchor.
     v = _vault(tmp_path, NOTE_LINKS)
     os.utime(v / "Creatures" / "marsh-hag.md", None)  # vault freshly edited
     detail = {"description": "<p>Stale server text.</p>",
@@ -125,8 +126,11 @@ def test_push_rewrites_body_wikilinks_not_gm_notes(tmp_path, monkeypatch):
     submitted = []
     _wire(monkeypatch, detail, submitted)
     sync_cmd.run(["w1", "--vault", str(v), "--execute"])
-    desc = submitted[0]["suggestions"][0]["payload"]["description"]
-    assert '<a href="https://www.mobrpg.com/world/w1/link/e-77">Marsh Hag</a>' in desc
+    payload = submitted[0]["suggestions"][0]["payload"]
+    assert payload["descriptionType"] == "Markdown"
+    desc = payload["description"]
+    assert "[Marsh Hag](https://www.mobrpg.com/world/w1/link/e-77)" in desc
+    assert "<a href" not in desc
     assert "[[" not in desc
     assert "GM Notes" not in desc and "is secret" not in desc
 
@@ -214,3 +218,45 @@ def test_dry_run_writes_nothing(tmp_path, monkeypatch):
                         "lastModified": "2026-07-24T00:00:00Z"}, [])
     sync_cmd.run(["w1", "--vault", str(v)])
     assert (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8") == before
+
+
+def test_push_suggestion_carries_markdown_descriptiontype(tmp_path, monkeypatch):
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)                                  # vault newer than server
+    detail = {"description": "<p>Server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert submitted, "expected an UpdateElement batch"
+    item = submitted[0]["suggestions"][0]
+    pl = item["payload"]
+    assert pl["descriptionType"] == "Markdown"
+    assert "<p>" not in pl["description"]              # raw markdown, not HTML
+    assert "Old vault prose." in pl["description"]
+
+
+def test_pull_markdown_description_skips_html_conversion(tmp_path, monkeypatch):
+    v = _vault(tmp_path, mtime=1_700_000_000)          # server newer
+    detail = {"description": "New **canon** prose.",
+              "descriptionType": "Markdown",
+              "lastModified": "2026-07-24T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
+    assert "New **canon** prose." in txt               # verbatim, not round-tripped
+
+
+def test_markdown_server_description_compares_in_html_space(tmp_path, monkeypatch):
+    # Same content both sides, server stored as Markdown → in-sync, no suggestion.
+    text = NOTE.replace("Old vault prose.", "Same prose.")
+    v = _vault(tmp_path, text=text)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)
+    detail = {"description": "Same prose.", "descriptionType": "Markdown",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert not submitted                               # in-sync, nothing filed
