@@ -463,6 +463,30 @@ def test_run_scaffolds_a_known_root_with_the_canon_kind(monkeypatch, tmp_path):
     assert node.read_node(text)["element_kind"] == "Item"
 
 
+def test_run_scaffolds_a_known_root_with_the_canon_name(monkeypatch, tmp_path):
+    """The scaffolded note takes its title from canon's `name`, not from an
+    underscore-mangled guess off the ref path.
+
+    `test_run_scaffolds_a_known_root_with_the_canon_kind` happens to use a ref
+    segment and a canon name that are textually identical once the ref's
+    underscores are swapped for spaces, so it can't tell a real `name` lookup
+    apart from the mangled-ref fallback. This uses a ref segment that mangles
+    to something else entirely, so only the payload's `name` can produce the
+    right title.
+    """
+    vault = tmp_path / "vault"
+    (vault / "Items & Artifacts").mkdir(parents=True)
+    ref = "space_game:Items & Artifacts/Stolen_Transport"
+    live = {ref: {"state": "accepted", "element_id": "el-i", "element_kind": "Item",
+                  "name": "The Purloined Skiff", "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    p = vault / "Items & Artifacts" / "Stolen_Transport.md"
+    assert p.exists()
+    text = p.read_text(encoding="utf-8")
+    assert "# The Purloined Skiff" in text
+    assert "# Stolen Transport" not in text     # not the mangled-ref fallback
+
+
 def test_fetch_live_carries_element_kind_and_name_into_the_summary(monkeypatch):
     """`_fetch_live` never populated kind or name, so every scaffolded note fell
     through `scaffold_note`'s defaults to Person/npc and an underscore-mangled
