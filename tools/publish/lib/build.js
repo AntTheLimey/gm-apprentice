@@ -294,7 +294,9 @@ function build(options = {}) {
     const gmStripped = stripGmOnly(page.markdown || '');
     const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
     const spoilerStripped = stripSpoiler(afterGm);
-    const text = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
+    const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
+    const commentStripped = stripHtmlComments(afterSpoiler);
+    const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
     page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections);
   }
 

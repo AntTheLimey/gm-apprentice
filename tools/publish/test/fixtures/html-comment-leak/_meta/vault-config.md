@@ -1,0 +1,4 @@
+---
+publish:
+  mode: full
+---
