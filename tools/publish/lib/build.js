@@ -7,7 +7,7 @@ const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
-const { loadManifest } = require('./manifest');
+const { loadManifest, canonicalPath } = require('./manifest');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -185,8 +185,13 @@ function build(options = {}) {
   // fields stripped from a *published* page.
   const corpus = pages.slice();
 
+  // NFC-normalized (#139): manifest.publishing/excluded entries are already canonicalized
+  // by manifest.js's stripInlineComment, so every Set.has()/lookup comparison against them
+  // below needs the scanned path in the same normal form — otherwise an NFD-typed filename
+  // (e.g. from an editor or OS that decomposes accents) silently fails to match its NFC
+  // manifest entry, or vice versa.
   function vaultRelPathOf(page) {
-    return path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
+    return canonicalPath(path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/'));
   }
 
   // A Publishing entry that matches no scanned file silently removes nothing and publishes

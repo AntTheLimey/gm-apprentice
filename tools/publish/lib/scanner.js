@@ -5,6 +5,13 @@ const { getCanonStatus } = require('./templates/base');
 
 function slugify(name) {
   const slug = name
+    // Decompose accented characters (NFD) and drop the resulting combining marks (#139)
+    // so "González" slugifies to "gonzalez" instead of falling through to the
+    // catch-all replace and turning each accent into a stray hyphen ("gonz-lez"). Also
+    // makes NFC- and NFD-typed filenames — which look identical but differ byte-for-byte
+    // — produce the same slug regardless of which normal form the source file used.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/['']/g, '')
     .replace(/&/g, 'and')

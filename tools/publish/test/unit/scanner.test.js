@@ -31,6 +31,28 @@ describe('slugify', () => {
   });
 });
 
+describe('slugify unicode normalization (#139)', () => {
+  // Built with explicit \u escapes (never a literal accented character) so the test
+  // file itself cannot be silently re-normalized by an editor or formatter. NFC types
+  // the accent as one precomposed codepoint; NFD types the same visible character as
+  // base letter + a separate combining acute accent codepoint.
+  const NFC = 'Gonz\u00e1lez';
+  const NFD = 'Gonza\u0301lez';
+
+  it('strips combining marks rather than hyphenating them, for NFC input', () => {
+    assert.strictEqual(slugify(NFC), 'gonzalez');
+  });
+
+  it('strips combining marks rather than hyphenating them, for NFD input', () => {
+    assert.strictEqual(slugify(NFD), 'gonzalez');
+  });
+
+  it('produces the same slug for two names differing only in normal form', () => {
+    assert.notStrictEqual(NFC, NFD); // sanity: the two source strings really do differ byte-for-byte
+    assert.strictEqual(slugify(NFC), slugify(NFD));
+  });
+});
+
 describe('mapFolder', () => {
   const folderMap = {
     'Characters/PCs': 'characters/pcs',

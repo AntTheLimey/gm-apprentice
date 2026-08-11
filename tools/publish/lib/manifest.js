@@ -14,10 +14,21 @@ const matter = require('gray-matter');
 // both "Six — Field Sundries.md" and "Foo.md — see Bar.md" resolve correctly.
 const ENTRY_RE = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$/;
 
+// Normalize a vault-relative path to NFC for equality comparisons (#139). A filename
+// typed with precomposed accents ("González", NFC) and the "same" filename decomposed
+// into base letter + combining marks (NFD) are visually identical but different strings
+// byte-for-byte — different editors, OSes, and even git checkouts round-trip Unicode
+// differently. build.js compares manifest entries against scanned paths with exact-string
+// `Set.has()`, so without a shared normal form a manifest entry can silently fail to match
+// the page it names. Both sides of every such comparison must run through this helper.
+function canonicalPath(entry) {
+  return String(entry).normalize('NFC');
+}
+
 function stripInlineComment(entry) {
   const trimmed = String(entry).trim();
   const match = ENTRY_RE.exec(trimmed);
-  return match ? match[1] : trimmed;
+  return canonicalPath(match ? match[1] : trimmed);
 }
 
 function parseManifest(markdown) {
@@ -86,4 +97,4 @@ function loadManifest(vaultPath) {
   return parseManifest(raw);
 }
 
-module.exports = { parseManifest, loadManifest, stripInlineComment };
+module.exports = { parseManifest, loadManifest, stripInlineComment, canonicalPath };
