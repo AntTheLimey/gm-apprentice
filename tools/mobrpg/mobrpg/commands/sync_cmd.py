@@ -205,12 +205,17 @@ def plan(notes, fetch, now: str, skew: float, *,
                                   new_text=_rebuild(txt, new_node, old_body)))
             continue
         # File a reviewable suggestion; mark pending, do NOT stamp last_synced
-        # (the stamp lands on accept/dismiss — Task 9).
+        # (the stamp lands on accept/dismiss — Task 9). Record the update's ref in
+        # `pending_ref`: terminal suggestion rows live in the review queue forever,
+        # so this is how pull-canon tells THIS episode's verdict from a stale
+        # accept/dismiss of some earlier update to the same note (#151).
+        sug = _build_suggestion(nd, cand_md)
         new_node = dict(nd)
         new_node["review_state"] = "pending"
+        new_node["pending_ref"] = sug.get("externalRef", "")
         actions.append(Action(path, ref, "push",
                               new_text=_rebuild(txt, new_node, old_body),
-                              suggestion=_build_suggestion(nd, cand_md)))
+                              suggestion=sug))
     return actions
 
 

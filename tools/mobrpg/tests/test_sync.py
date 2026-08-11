@@ -257,6 +257,21 @@ def test_update_ref_uses_upd_namespace_with_content_hash(tmp_path, monkeypatch):
     assert len(ref.rsplit("#", 1)[1]) == 12            # sha256[:12]
 
 
+def test_push_records_the_minted_ref_as_pending_ref(tmp_path, monkeypatch):
+    # The node records exactly which update it is waiting on, so pull-canon can
+    # tell this episode's verdict from a stale terminal row for the same note.
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)
+    submitted = []
+    _wire(monkeypatch, {"description": "<p>Server prose.</p>",
+                        "lastModified": "2026-07-01T00:00:00Z"}, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    nd = _node.read_node(p.read_text(encoding="utf-8"))
+    assert nd["review_state"] == "pending"
+    assert nd["pending_ref"] == submitted[0]["suggestions"][0]["externalRef"]
+
+
 def test_update_ref_is_stable_for_identical_content(tmp_path, monkeypatch):
     # Same markdown re-pushed -> same ref, so the server corrects the caller's own
     # Pending row in place instead of stacking duplicates.

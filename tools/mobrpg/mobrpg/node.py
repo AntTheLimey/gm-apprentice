@@ -17,8 +17,12 @@ import re
 # frontmatter from a note that merely opens with a `---` thematic break.
 _YAML_KEYISH = re.compile(r"^[ \t]*(?:#|-(?:\s|$)|[^\s:#][^:]*:(?:\s|$))")
 
+# `pending_ref` records the externalRef of the update suggestion this note is
+# currently awaiting (`sync` writes it with `review_state: pending`; pull-canon
+# clears it on adjudication). Optional — absent on a node that has never been
+# pushed as an update, and never emitted when unset.
 _SCALARS = ["world_id", "external_ref", "previous_ref", "element_id", "element_kind",
-            "review_state", "last_synced", "review_note"]
+            "review_state", "pending_ref", "last_synced", "review_note"]
 _REL_KEYS = ["predicate", "target", "event_type", "event_id", "review_state"]
 _LANG_KEYS = ["language", "language_id", "type", "mastery", "review_state"]
 

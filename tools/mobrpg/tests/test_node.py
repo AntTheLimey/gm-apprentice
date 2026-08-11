@@ -198,3 +198,17 @@ def test_emit_node_strips_dead_scalars():
 def test_content_hash_removed():
     import mobrpg.node as n
     assert not hasattr(n, "content_hash")
+
+
+def test_pending_ref_round_trips_when_present():
+    n = dict(NODE, pending_ref="canticle:upd/Characters/NPCs/Imogen_Bellamy#abc123def456")
+    text = node.emit_node(n)
+    assert ('  pending_ref: '
+            '"canticle:upd/Characters/NPCs/Imogen_Bellamy#abc123def456"\n') in text
+    assert node.read_node("---\n" + text + "---\n")["pending_ref"] == \
+        "canticle:upd/Characters/NPCs/Imogen_Bellamy#abc123def456"
+
+
+def test_pending_ref_absent_when_unset():
+    # a node that has never been pushed as an update must not emit the key
+    assert "pending_ref" not in node.emit_node(NODE)

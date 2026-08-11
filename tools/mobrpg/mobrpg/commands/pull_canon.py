@@ -475,6 +475,7 @@ def run(argv: list[str]) -> int:
         return run_baseline(args.world, args.vault, token, execute=args.execute)
     live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)
     updated = 0
+    orphan_updates = 0
     unscaffoldable: list[str] = []
     for ext, live in live_by_ref.items():
         if ext != _note_ref(ext):
@@ -482,18 +483,26 @@ def run(argv: list[str]) -> int:
             # names no element of its own — it adjudicates the note that `sync`
             # left `review_state: pending` when it filed the update.
             #
-            # One note can carry several upd rows (one per pushed revision, each
-            # with its own hash, hence its own ref). `_fetch_live` iterates
-            # Accepted, Dismissed, Pending with first-write-wins, so each ref
-            # already holds its own most authoritative outcome; here the first
-            # accepted/dismissed row flips the note out of `pending` and every
-            # later row for the same note then finds it non-pending and skips.
+            # A note accumulates one row per pushed revision, each with its own
+            # hash and so its own ref, and Accepted/Dismissed rows stay in the
+            # queue forever. Matching on the note path alone therefore lets an
+            # OLD terminal row adjudicate a NEWER pending push — stamping a
+            # verdict (and, when dismissed, a review note) the GM never gave to
+            # this content, while the row actually under review never lands. So
+            # the ONLY row that may adjudicate is the one whose full ref equals
+            # the `pending_ref` the note recorded when it filed the push; the
+            # claim is released on adjudication. A pending note with no
+            # `pending_ref` predates this scheme and is left to the create-ref
+            # path below rather than adjudicated from a guess.
             path = _vault_file(_note_ref(ext), args.vault)
             if not path:
+                orphan_updates += 1
                 continue
             txt = open(path, encoding="utf-8").read()
             existing = node.read_node(txt)
             if not existing or existing.get("review_state") != "pending":
+                continue
+            if existing.get("pending_ref") != ext:
                 continue
             newn = dict(existing)
             if live.get("state") == "accepted":
@@ -505,6 +514,7 @@ def run(argv: list[str]) -> int:
                 newn["last_synced"] = lww.now_iso()
             else:
                 continue                          # still pending — hold the note
+            newn["pending_ref"] = ""
             merged = node.write_node(txt, newn)
             if args.execute:
                 with open(path, "w", encoding="utf-8") as fh:
@@ -560,6 +570,14 @@ def run(argv: list[str]) -> int:
             print(f"  {ext}")
         if len(unscaffoldable) > 20:
             print(f"  ... and {len(unscaffoldable) - 20} more")
+    if orphan_updates:
+        # An update ref must never scaffold (it is not a note path), but it must
+        # not vanish either: its note has been moved, renamed or deleted since the
+        # push, so a verdict the GM gave has nowhere to land. Reported, not listed
+        # — these rows are terminal and would otherwise repeat every run.
+        print(f"{orphan_updates} update suggestion(s) skipped — no vault note for "
+              f"their ref (note moved, renamed or deleted since the push; "
+              f"`relink` re-points a moved note)")
     print(f"pull-canon: {updated} node(s) updated"
           + ("" if args.execute else "  [dry-run — no files changed]"))
     return 0

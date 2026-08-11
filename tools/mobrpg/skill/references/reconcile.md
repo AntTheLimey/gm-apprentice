@@ -117,6 +117,14 @@ ref (so it corrects an open proposal in place instead of duplicating it), and
 edited prose mints a new one. `suggestions --correlate` and `pull-canon` both
 strip the `upd/` wrapper, so an update still resolves to the note it came from.
 
+The push also records that ref on the node as `pending_ref`, alongside
+`review_state: pending`. Accepted and dismissed rows stay in the review queue
+forever, so after an accept → re-edit → re-push cycle several rows answer for the
+same note; `pull-canon` adjudicates only the row whose ref matches the note's
+`pending_ref`, and clears it once the verdict lands. A note whose update ref no
+longer resolves to any file (renamed, moved or deleted since the push) is
+reported as a skipped update suggestion — `relink` re-points a moved note.
+
 **You are the interactive UI.** Run the dry-run, present the per-note decision
 table to the GM, get an explicit yes, then `--execute`. Never `--execute` a
 decision table the GM hasn't seen.
