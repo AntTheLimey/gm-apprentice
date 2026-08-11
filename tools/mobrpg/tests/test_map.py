@@ -495,3 +495,27 @@ def test_sync_preserves_confirmed(tmp_path, monkeypatch):
     data = json.load(open(mp))
     assert data["locationRouting"]["Hospital"] == {"target": "landfeature",
                                                    "landFeatureType": "Hill", "confirmed": True}
+
+
+def test_merge_preserves_unknown_top_level_keys():
+    # `map sync` rebuilds the map from build_map's output, which knows nothing
+    # about hand-authored top-level config. Dropping it silently deleted a GM's
+    # `vaultOnlySections` list, and the very next `sync` reverted to the default
+    # vault-only sections — pushing sections the vault had opted out — with no
+    # warning anywhere.
+    old = {"schema": "mobrpg-vault-map/v1",
+           "vaultOnlySections": ["GM Notes", "Secrets"],
+           "someFutureKey": {"a": 1},
+           "classifiers": {}, "locationRouting": {}}
+    new = {"schema": "mobrpg-vault-map/v1", "classifiers": {}, "locationRouting": {}}
+    merged, _ = m._merge(old, new)
+    assert merged["vaultOnlySections"] == ["GM Notes", "Secrets"]
+    assert merged["someFutureKey"] == {"a": 1}
+
+
+def test_merge_lets_a_rediscovered_value_win_over_the_old_one():
+    # The carry-over is for keys build_map does NOT produce; a key it does
+    # produce must still come from the fresh discovery.
+    old = {"world": "Old Name", "classifiers": {}, "locationRouting": {}}
+    new = {"world": "New Name", "classifiers": {}, "locationRouting": {}}
+    assert m._merge(old, new)[0]["world"] == "New Name"

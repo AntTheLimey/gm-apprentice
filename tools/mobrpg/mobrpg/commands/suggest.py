@@ -20,8 +20,10 @@ import unicodedata
 from mobrpg import client
 from mobrpg import md as _md
 from mobrpg import node
+from mobrpg import section
 from mobrpg.commands import map_cmd
 from mobrpg.commands import submit_batch
+from mobrpg.vault import vault_only_sections
 
 
 def _read(path: str) -> tuple[str, str]:
@@ -63,14 +65,17 @@ def _relationships(fm: str) -> list[dict]:
     return out
 
 
-def _description(body: str) -> str:
+def _description(body: str, vault_only: tuple = section.DEFAULT_VAULT_ONLY) -> str:
+    """The CreateElement description for a note body.
+
+    `vault_only` names the H2 sections this vault keeps to itself; it comes from
+    `vault_only_sections` so a create strips exactly what `sync`'s update strips
+    (the four defaults, or whatever `vaultOnlySections` replaces them with).
+    Stripping is delegated to `section.split_vault_only` for the same reason —
+    one stripper, both push paths, and the fence-aware section boundaries come
+    with it."""
     body = _md.strip_boilerplate(body)   # drop import placeholders / gm-only / comments
-    for h in ["## Appearances", "## Source References", "## GM Notes", "## Notes"]:
-        i = body.find(h)
-        if i != -1:
-            nxt = body.find("\n## ", i + 3)
-            keep_tail = h in ("## Appearances", "## Source References")
-            body = body[:i] + (body[nxt:] if nxt != -1 and keep_tail else "")
+    body = section.split_vault_only(body, vault_only)[0]
     body = re.sub(r"```.*?```", "", body, flags=re.S)
     body = re.sub(r"!\[\[[^\]]+\]\]", "", body)
     body = re.sub(r"\[\[([^\]|]+)\|([^\]]+)\]\]", lambda m: m.group(2).replace("_", " "), body)
@@ -116,6 +121,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
                      exclude_provenance=None) -> list[dict]:
     vault = os.path.expanduser(vault)
     exclude_kinds = exclude_kinds or set()
+    vault_only = vault_only_sections(vault)
     out = []
     for folder, vkind in map_cmd.FOLDERS.items():
         if kind and vkind != kind:
@@ -144,7 +150,8 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
                 continue
             out.append({
                 "path": p, "kind": vkind, "name": name, "provenance": prov,
-                "aliases": _aliases(fm), "description": _description(body),
+                "aliases": _aliases(fm),
+                "description": _description(body, vault_only),
                 "location_type": map_cmd._scalar(fm, "location_type"),
                 "occupation": map_cmd._scalar(fm, "occupation"),
                 "gender": map_cmd._scalar(fm, "gender"),
@@ -177,7 +184,7 @@ TYPE_DATA = {
 
 
 def _create(ref, name, data, *, description="<p></p>", description_type=None,
-           altNames=None, external_ref=None) -> dict:
+            altNames=None, external_ref=None) -> dict:
     """`description_type` is left unset (backend defaults to Html) for the
     HTML fragments this module still hand-builds (empty stub, reified-event
     blurbs); callers passing real vault Markdown (#150) set it explicitly."""

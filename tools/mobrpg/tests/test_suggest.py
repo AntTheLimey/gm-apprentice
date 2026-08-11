@@ -873,3 +873,41 @@ def test_closest_flags_qualified_near_duplicate_by_head_noun():
     assert map_cmd._closest("research facility", existing) is None
     # an exact match still binds outright, not review
     assert map_cmd._bind("starport", existing, "political/type")["status"] == "bound"
+
+
+def test_create_description_honours_vault_only_sections_config(tmp_path):
+    # `sync` strips a vault's configured vaultOnlySections from its push; the
+    # create path hardcoded the four defaults, so a custom section that sync
+    # kept local was published verbatim in the CreateElement description.
+    import json as _json
+
+    v = _vault(tmp_path)
+    (tmp_path / "_meta").mkdir()
+    (tmp_path / "_meta" / "mobrpg-map.json").write_text(
+        _json.dumps({"vaultOnlySections": ["GM Notes", "Secrets"]}), encoding="utf-8")
+    p = tmp_path / "Characters/NPCs/Imogen_Bellamy.md"
+    p.write_text(p.read_text(encoding="utf-8")
+                 + "\n## Secrets\n\nShe is the traitor.\n", encoding="utf-8")
+    im = suggest.collect_entities(v, only="imogen")[0]
+    assert "Body text." in im["description"]
+    assert "## Secrets" not in im["description"]
+    assert "She is the traitor." not in im["description"]
+
+
+def test_create_description_config_replaces_the_default_list(tmp_path, capsys):
+    # Replace semantics, identical to sync's: a list omitting "GM Notes" opts GM
+    # secrets into the push (with the loader's stderr warning), and a default
+    # section not on the list is no longer stripped.
+    import json as _json
+
+    v = _vault(tmp_path)
+    (tmp_path / "_meta").mkdir()
+    (tmp_path / "_meta" / "mobrpg-map.json").write_text(
+        _json.dumps({"vaultOnlySections": ["Secrets"]}), encoding="utf-8")
+    p = tmp_path / "Characters/NPCs/Imogen_Bellamy.md"
+    p.write_text(p.read_text(encoding="utf-8")
+                 + "\n## GM Notes\n\nShe is the traitor.\n", encoding="utf-8")
+    im = suggest.collect_entities(v, only="imogen")[0]
+    assert "She is the traitor." in im["description"]
+    err = capsys.readouterr().err
+    assert "vaultOnlySections" in err and "GM Notes" in err and "PUSHED" in err

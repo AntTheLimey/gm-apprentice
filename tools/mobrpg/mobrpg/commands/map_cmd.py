@@ -819,6 +819,15 @@ def _merge(old: dict, new: dict) -> tuple[dict, list[str]]:
     promote new->bound when a matching type now exists; flag stale keys."""
     notes = []
     merged = dict(new)
+    # Carry over top-level keys `build_map` does not produce. The map file is
+    # also the vault's hand-authored config surface (`vaultOnlySections`, and
+    # whatever the next release adds); rebuilding from the fresh discovery alone
+    # deleted those keys on every `map sync`, and `sync` then silently reverted
+    # to the default vault-only sections. A key build_map DOES produce still
+    # comes from the fresh discovery — this only fills gaps.
+    for key, value in old.items():
+        if key not in merged:
+            merged[key] = value
     merged["locationRouting"] = _merge_section(
         old.get("locationRouting", {}), new.get("locationRouting", {}),
         "locationRouting", notes)

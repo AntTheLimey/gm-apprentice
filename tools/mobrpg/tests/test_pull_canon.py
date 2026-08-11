@@ -957,3 +957,77 @@ def test_upd_row_without_a_note_is_reported_not_silently_dropped(tmp_path, monke
     assert "0 node(s) updated" in out
     assert "NOT SCAFFOLDED" not in out
     assert "1 update suggestion(s) skipped" in out
+
+
+# ---------------------------------------------------------------------------
+# The note's plain CREATE ref answers for the element, not for the update the
+# note is waiting on. A terminal Accepted/Dismissed row at that ref used to run
+# apply_state over a note holding a `pending_ref`, stamping a verdict the GM
+# never gave to this push and stranding the claim.
+# ---------------------------------------------------------------------------
+
+CREATE_REF = "ns:Creatures/marsh-hag"
+
+
+def test_create_ref_does_not_adjudicate_a_note_awaiting_an_upd_row(tmp_path, monkeypatch,
+                                                                   capsys):
+    # (a) Accepted create + still-Pending upd: the note stays pending on its ref.
+    vault, p = _pending_push_vault(tmp_path)
+    before = p.read_text(encoding="utf-8")
+    _queue(monkeypatch,
+           {"Accepted": [_sug(CREATE_REF, "e-77", etype="Creature")],
+            "Pending": [_sug(REF_A, None, etype="Creature")]},
+           elements={"e-77": {"type": "creature", "relations": []}})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    assert p.read_text(encoding="utf-8") == before
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "pending" and out["pending_ref"] == REF_A
+    assert "0 node(s) updated" in capsys.readouterr().out
+
+
+def test_upd_verdict_wins_over_the_create_ref_row(tmp_path, monkeypatch):
+    # (b) Accepted create + Dismissed upd: the UPD row's verdict and review note
+    # land, not the create row's accept.
+    vault, p = _pending_push_vault(tmp_path)
+    _queue(monkeypatch,
+           {"Accepted": [_sug(CREATE_REF, "e-77", etype="Creature")],
+            "Dismissed": [_sug(REF_A, None, etype="Creature", note="not canon")]},
+           elements={"e-77": {"type": "creature", "relations": []}})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "dismissed"
+    assert out["review_note"] == "not canon"
+    assert out.get("pending_ref", "") == ""
+
+
+def test_create_ref_row_does_not_overwrite_a_verdict_applied_this_run(tmp_path,
+                                                                      monkeypatch):
+    # (c) Accepted upd + Dismissed create. The Accepted queue is read first, so
+    # the upd branch adjudicates (and, under --execute, rewrites) the note before
+    # the create row is reached; re-reading the file would show the claim already
+    # released and let the stale create row flip the accept to dismissed.
+    vault, p = _pending_push_vault(tmp_path)
+    _queue(monkeypatch,
+           {"Accepted": [_sug(REF_A, "e-77", etype="Creature")],
+            "Dismissed": [_sug(CREATE_REF, None, etype="Creature", note="dup")]},
+           elements={"e-77": {"type": "creature", "relations": []}})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out["review_note"] == ""
+    assert out.get("pending_ref", "") == ""
+
+
+def test_deleted_create_ref_still_applies_to_a_note_awaiting_an_upd_row(tmp_path,
+                                                                        monkeypatch):
+    # Deletion stays authoritative: the element is gone, so no pending update can
+    # ever land and the node must be flagged rather than held forever.
+    vault, p = _pending_push_vault(tmp_path)
+    _queue(monkeypatch,
+           {"Accepted": [_sug(CREATE_REF, "e-77", etype="Creature")],
+            "Pending": [_sug(REF_A, None, etype="Creature")]},
+           elements={})                    # e-77 404s -> summary state "deleted"
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "deleted"
+    assert out["element_id"] is None

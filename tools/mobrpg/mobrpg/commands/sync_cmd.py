@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import os
 import sys
 from dataclasses import dataclass
@@ -45,7 +44,7 @@ from mobrpg import lww
 from mobrpg import md as _md
 from mobrpg import node
 from mobrpg import section
-from mobrpg.vault import body_of, iter_linked_notes
+from mobrpg.vault import body_of, iter_linked_notes, vault_only_sections
 from mobrpg.commands import submit_batch
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
@@ -286,33 +285,6 @@ def plan(notes, fetch, now: str, skew: float, *,
 
 # ---------------- I/O ----------------
 
-def _vault_only_sections(vault: str) -> tuple:
-    """The H2 titles this vault keeps to itself. An optional top-level
-    `vaultOnlySections` list in `<vault>/_meta/mobrpg-map.json` REPLACES the
-    default set. A missing/unreadable map, a missing key, or a non-list/empty
-    value falls back to the default — an empty list would push `## GM Notes`
-    into a public world, which is never what a bad config should buy you. A
-    malformed map is not fatal here: sync's other 99% still works, and
-    `map`/`suggest` report the parse error properly."""
-    path = os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json")
-    try:
-        with open(path, encoding="utf-8") as fh:
-            mp = json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return section.DEFAULT_VAULT_ONLY
-    titles = mp.get("vaultOnlySections") if isinstance(mp, dict) else None
-    if not isinstance(titles, list) or not titles:
-        return section.DEFAULT_VAULT_ONLY
-    out = tuple(str(t) for t in titles)
-    # Replace semantics mean a partial list silently opts GM secrets INTO the
-    # push. Explicit config is explicit — sync proceeds — but the foot-gun says
-    # so out loud, because the blast radius is a shared world, not a local file.
-    if not any(t.strip().lower() == "gm notes" for t in out):
-        print('WARNING: vaultOnlySections does not include "GM Notes" — '
-              'GM Notes will be PUSHED to the shared world', file=sys.stderr)
-    return out
-
-
 def _kind_ep(nd: dict) -> str | None:
     """Resolve the element_kind to its detail endpoint. Nodes store the API
     classifier type verbatim (e.g. "Creature", "LandFeature"); a strict lookup is
@@ -385,7 +357,7 @@ def run(argv: list[str]) -> int:
         actions = plan(notes, fetch, now, args.skew,
                        idx=idx, world=args.world, url_fmt=links.URL_FMT,
                        name_by_eid=name_by_eid,
-                       vault_only=_vault_only_sections(args.vault))
+                       vault_only=vault_only_sections(args.vault))
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1

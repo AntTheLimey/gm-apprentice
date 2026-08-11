@@ -3,6 +3,7 @@ import os
 
 from mobrpg import client, node as _node, section
 from mobrpg.commands import sync_cmd, submit_batch
+from mobrpg.vault import vault_only_sections
 
 
 NOTE = """---
@@ -73,6 +74,28 @@ def test_push_files_update_suggestion_and_marks_pending(tmp_path, monkeypatch):
     nd = _node.read_node(p.read_text(encoding="utf-8"))
     assert nd["review_state"] == "pending"
     assert nd["last_synced"] == "2026-07-20T00:00:00Z"             # NOT stamped
+
+
+def test_fenced_heading_in_gm_notes_never_leaks_into_the_push(tmp_path, monkeypatch):
+    # A ``` block under ## GM Notes whose first line starts with "## " used to
+    # end the vault-only section early, so every GM line below it was pushed to
+    # the shared world as canon.
+    text = NOTE.replace(
+        "Secret plans.\n",
+        "The hag's real numbers:\n\n"
+        "```\n## Stat block\nSTR 14, HP 22\n```\n\n"
+        "She betrays the party in act three.\n")
+    v = _vault(tmp_path, text=text)
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    submitted = []
+    _wire(monkeypatch, {"description": "<p>Stale server text.</p>",
+                        "lastModified": "2026-07-21T00:00:00Z"}, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    desc = submitted[0]["suggestions"][0]["payload"]["description"]
+    assert "Old vault prose." in desc
+    for secret in ("GM Notes", "real numbers", "Stat block", "STR 14",
+                   "betrays the party"):
+        assert secret not in desc
 
 
 def test_identical_content_stamps_without_suggestion(tmp_path, monkeypatch):
@@ -415,16 +438,18 @@ def test_vault_only_config_with_gm_notes_does_not_warn(tmp_path, monkeypatch, ca
 
 def test_vault_only_sections_falls_back_on_bad_map(tmp_path):
     # Unreadable, malformed and non-dict maps all fall back to the default list.
-    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    # The loader itself now lives in mobrpg.vault (both push paths need it); sync
+    # keeps its own coverage that it is the list sync actually acts on.
+    assert vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
     meta = tmp_path / "_meta"
     meta.mkdir()
     (meta / "mobrpg-map.json").write_text("{ not json", encoding="utf-8")
-    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    assert vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
     (meta / "mobrpg-map.json").write_text("[1, 2]", encoding="utf-8")
-    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    assert vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
     (meta / "mobrpg-map.json").write_text(
         json.dumps({"vaultOnlySections": []}), encoding="utf-8")
-    assert sync_cmd._vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
+    assert vault_only_sections(str(tmp_path)) == section.DEFAULT_VAULT_ONLY
 
 
 def test_pull_row_prints_canon_line_delta(tmp_path, monkeypatch, capsys):

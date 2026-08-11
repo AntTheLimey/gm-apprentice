@@ -493,6 +493,11 @@ def run(argv: list[str]) -> int:
     updated = 0
     orphan_updates = 0
     unscaffoldable: list[str] = []
+    # Notes an `upd/` row already answered for THIS run. The upd branch writes
+    # the file and releases `pending_ref`, so a create-ref row reached later in
+    # the same pass would re-read a note that no longer looks pending and flip
+    # the verdict it just applied.
+    adjudicated: set[str] = set()
     for ext, live in live_by_ref.items():
         if ext != _note_ref(ext):
             # An update-suggestion ref (`<ns>:upd/<relpath>#<hash>`, #151). It
@@ -520,6 +525,7 @@ def run(argv: list[str]) -> int:
                 continue
             if existing.get("pending_ref") != ext:
                 continue
+            adjudicated.add(path)
             newn = dict(existing)
             if live.get("state") == "accepted":
                 newn["review_state"] = "accepted"
@@ -558,6 +564,18 @@ def run(argv: list[str]) -> int:
         txt = open(path, encoding="utf-8").read()
         existing = node.read_node(txt)
         if not existing:
+            continue
+        # This is the note's CREATE ref: it answers for the ELEMENT, not for the
+        # description update the note is waiting on. A note holding a
+        # `pending_ref` has one specific `upd/` row's verdict outstanding (#151),
+        # and terminal create rows live in the review queue forever — letting one
+        # adjudicate here stamped accepted/dismissed off the wrong row, buried
+        # the real verdict, and stranded the claim. So the create row stands down
+        # while a push is in flight (or was already answered this run). Deletion
+        # is the exception and stays authoritative: with the element gone, no
+        # pending update can ever land, so the node must still be flagged.
+        if live.get("state") != "deleted" and (
+                path in adjudicated or existing.get("pending_ref")):
             continue
         newn = apply_state(existing, live)
         if newn == existing:
