@@ -1,5 +1,6 @@
 import json
 import os
+import unicodedata
 
 from mobrpg import client
 from mobrpg import node
@@ -333,6 +334,83 @@ def test_merge_section_still_flags_genuinely_gone_keys_stale():
     res = m._merge_section(old, {}, "x", notes)
     assert res["lamprey"]["status"] == "stale"
     assert any("stale" in n for n in notes)
+
+
+def test_merge_section_stale_old_entry_revives_as_fresh_under_new_casing():
+    # C1 (review): the fold-match shortcut must be gated to status=="bound" only.
+    # A stale tombstone under the old casing must still revive as the fresh
+    # proposal per _entry's stale rule, not get stuck as "stale" forever just
+    # because the new casing folds to the same key.
+    old = {"chitinoteuthis": {"target": "creature/type", "mobrpgId": "id-1",
+                              "status": "stale"}}
+    new = {"Chitinoteuthis": {"target": "creature/type", "mobrpgId": None,
+                              "status": "new"}}
+    res = m._merge_section(old, new, "x", [])
+    assert list(res) == ["Chitinoteuthis"]
+    assert res["Chitinoteuthis"]["status"] == "new"
+    assert res["Chitinoteuthis"]["mobrpgId"] is None
+
+
+def test_merge_section_confirmed_old_entry_wins_under_fold_mismatched_key():
+    # C1 (review): a confirmed (human) decision must still win via _entry's
+    # confirmed rule even when it is only reached via a fold-matched, not
+    # literal, key -- the "bound" shortcut must not bypass this.
+    old = {"chitinoteuthis": {"target": "creature/type", "mobrpgId": "id-1",
+                              "confirmed": True}}
+    new = {"Chitinoteuthis": {"target": "creature/type", "mobrpgId": None,
+                              "status": "new"}}
+    res = m._merge_section(old, new, "x", [])
+    assert res["Chitinoteuthis"] == old["chitinoteuthis"]
+
+
+def test_merge_section_collapses_old_side_case_variant_duplicates():
+    # Important 2 (review): a pre-#148 sync could already have split one term
+    # into a stale tombstone plus a bound duplicate under the old (unfolded)
+    # matching. A later sync must collapse both old keys onto ONE output entry
+    # (the bound one wins) and report the cleanup, not let iteration order
+    # silently decide which survives.
+    old = {
+        "chitinoteuthis": {"target": "creature/type", "mobrpgId": "id-1", "status": "stale"},
+        "CHITINOTEUTHIS": {"target": "creature/type", "mobrpgId": "id-1", "status": "bound"},
+    }
+    new = {"Chitinoteuthis": {"target": "creature/type", "mobrpgId": None, "status": "new"}}
+    notes = []
+    res = m._merge_section(old, new, "x", notes)
+    assert list(res) == ["Chitinoteuthis"]
+    assert res["Chitinoteuthis"]["status"] == "bound"
+    assert res["Chitinoteuthis"]["mobrpgId"] == "id-1"
+    assert any("collapsed duplicate" in n for n in notes)
+
+
+def test_merge_section_second_new_side_duplicate_does_not_reuse_old_binding():
+    # Minor 4 (review): two DISTINCT vault-side keys that both fold to the same
+    # term must not both claim the same old mobrpgId. The first wins the
+    # binding; the second is treated as its own (unbound) entry, with a note.
+    old = {"chitinoteuthis": {"target": "creature/type", "mobrpgId": "id-1", "status": "bound"}}
+    new = {
+        "Chitinoteuthis": {"target": "creature/type", "mobrpgId": None, "status": "new"},
+        "CHITINOTEUTHIS": {"target": "creature/type", "mobrpgId": None, "status": "new"},
+    }
+    notes = []
+    res = m._merge_section(old, new, "x", notes)
+    assert res["Chitinoteuthis"]["mobrpgId"] == "id-1"          # first match wins the binding
+    assert res["Chitinoteuthis"]["status"] == "bound"
+    assert res["CHITINOTEUTHIS"]["mobrpgId"] is None             # second match gets its own entry
+    assert res["CHITINOTEUTHIS"]["status"] == "new"
+    assert any("duplicate" in n for n in notes)
+
+
+def test_merge_section_folds_unicode_nfc_vs_nfd():
+    # Minor 6 (review): a real NFC-vs-NFD pair, not just an ASCII case/space
+    # difference -- the same visible term encoded two different ways.
+    nfd_key = unicodedata.normalize("NFD", "Tichá Chitinoteuthis")  # decomposed accent
+    nfc_key = "Tichá Chitinoteuthis"                                 # precomposed
+    old = {nfd_key: {"target": "creature/type", "mobrpgId": "id-7", "status": "bound"}}
+    new = {nfc_key: {"target": "creature/type", "mobrpgId": None, "status": "new"}}
+    res = m._merge_section(old, new, "x", [])
+    assert list(res) == [nfc_key]
+    assert res[nfc_key]["mobrpgId"] == "id-7"
+    assert res[nfc_key]["status"] == "bound"
 
 
 def test_init_then_sync(tmp_path, monkeypatch):

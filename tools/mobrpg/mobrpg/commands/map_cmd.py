@@ -737,38 +737,78 @@ def _entry(old_entry: dict | None, fresh: dict, label: str, notes: list[str]) ->
 
 def _merge_key(s: str) -> str:
     """Fold a map/vocab key for cross-side matching: unicode NFC, whitespace
-    runs, surrounding whitespace, case. A casing or whitespace difference must
-    never split one term into a stale entry plus an unbound duplicate (#148)."""
+    runs, surrounding whitespace, case (via casefold, stronger than lower() for
+    non-ASCII). A casing or whitespace difference must never split one term into
+    a stale entry plus an unbound duplicate (#148)."""
     s = unicodedata.normalize("NFC", s or "")
-    return re.sub(r"\s+", " ", s).strip().lower()
+    return re.sub(r"\s+", " ", s).strip().casefold()
+
+
+def _old_priority(v: dict) -> int:
+    """Rank a candidate old-side entry when two-or-more old keys collapse onto
+    the same folded key (#148) — e.g. a pre-fix sync already split one term into
+    a stale tombstone plus a bound duplicate. A confirmed (human) decision
+    outranks a real bound id, which outranks anything else (a stale tombstone,
+    an unresolved review/new proposal)."""
+    if v.get("confirmed") or v.get("status") == "confirmed":
+        return 2
+    if v.get("status") == "bound" and v.get("mobrpgId"):
+        return 1
+    return 0
 
 
 def _merge_section(o: dict, n: dict, label: str, notes: list[str]) -> dict:
     """Merge one section: reconcile shared keys (matched case/space-insensitively,
     output keyed on the new side's casing), add new ones, flag dropped ones."""
-    old_by_norm: dict = {}
+    old_groups: dict = {}
     for k, v in o.items():
-        old_by_norm.setdefault(_merge_key(k), (k, v))
+        old_groups.setdefault(_merge_key(k), []).append((k, v))
+    old_by_norm = {}
+    for nk, group in old_groups.items():
+        if len(group) == 1:
+            old_by_norm[nk] = group[0]
+            continue
+        # Multiple old keys fold onto one term: keep the single most
+        # authoritative entry (see _old_priority) instead of letting dict
+        # iteration order silently decide which survives, and say so.
+        ranked = sorted(group, key=lambda kv: _old_priority(kv[1]), reverse=True)
+        winner_k, winner_v = ranked[0]
+        dupes = ", ".join(repr(k) for k, _ in ranked[1:])
+        notes.append(f"{label}[{winner_k}]: collapsed duplicate old key(s) {dupes} "
+                     f"onto one entry after case/whitespace fold")
+        old_by_norm[nk] = (winner_k, winner_v)
+
     res, seen = {}, set()
     for k, nv in n.items():
         nk = _merge_key(k)
+        if nk in seen:
+            # A second vault-side key also folds to an already-claimed term: do
+            # not duplicate the same binding under two output keys — the first
+            # match keeps it, this one is its own (empty) entry.
+            res[k] = _entry(None, nv, f"{label}[{k}]", notes)
+            notes.append(f"{label}[{k}]: duplicate vault key after case/whitespace "
+                         f"fold — treated as its own new entry")
+            continue
         seen.add(nk)
         old_key, old_val = old_by_norm.get(nk, (None, None))
-        if (old_val is not None and old_key != k and old_val.get("mobrpgId")
-                and not nv.get("mobrpgId") and not nv.get("nearId")):
-            # Fold-matched but the literal key differs (#148): this is a vault-side
+        if (old_val is not None and old_key != k and old_val.get("status") == "bound"
+                and old_val.get("mobrpgId") and not nv.get("mobrpgId") and not nv.get("nearId")):
+            # Fold-matched but the literal key differs (#148): a vault-side
             # recase/whitespace edit, not a rediscovery reporting the type gone.
             # `_entry`'s "old_id and not new_id" branch exists for genuine resync
             # loss under an UNCHANGED key (see test_merge_downgrades_a_binding_
             # whose_upstream_type_vanished) and would otherwise misfire here,
             # demoting an untouched binding to "review" on a mere casing change.
-            # The fold match is itself the evidence nothing upstream changed, so
-            # keep the resolved entry wholesale under the new (vault) casing.
+            # Gated to status == "bound" only: a stale tombstone must still
+            # revive as fresh (_entry's stale rule) and a confirmed entry must
+            # still win via _entry's confirmed rule, not this shortcut.
+            notes.append(f"{label}[{k}]: kept existing binding {old_val['mobrpgId']} "
+                         f"(fold-matched key {old_key!r} -> {k!r})")
             res[k] = old_val
             continue
         res[k] = _entry(old_val, nv, f"{label}[{k}]", notes)
-    for k, v in o.items():
-        if _merge_key(k) not in seen:
+    for nk, (k, v) in old_by_norm.items():
+        if nk not in seen:
             stale = dict(v); stale["status"] = "stale"; res[k] = stale
             notes.append(f"{label}[{k}]: no longer in vault (stale)")
     return res
