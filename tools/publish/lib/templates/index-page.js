@@ -374,7 +374,10 @@ function renderChapterList(pages, indexDir) {
   function sessionsForChapter(chapter) {
     // The third copy of the chapter matcher (story-spine.js and build.js hold the others).
     // Author-typed ref vs filename-derived title on both substring tests, so both sides are
-    // canonicalized to NFC (#139) or an accented chapter lists none of its sessions.
+    // canonicalized to NFC (#139) — but the two ref clauses are UNREACHABLE TODAY: this
+    // function only ever sees the pages of a single output dir, so the folder-prefix clause
+    // below is true for every session it is given and always decides first. Kept in the same
+    // normal form as its two live siblings so the three cannot drift.
     const chTitle = canonicalNfc(chapter.displayTitle).toLowerCase();
     const chFrontTitle = chapter.frontmatter.title ? canonicalNfc(chapter.frontmatter.title).toLowerCase() : '___';
     const chFolder = chapter.outputPath.split('/').slice(0, -1).join('/');

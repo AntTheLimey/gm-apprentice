@@ -14,6 +14,12 @@ const { build } = require('../../lib/build');
 // that replaces that method. It covers boundaries no lookup-table wrapper can reach (Map,
 // Set, bare ===) and any new one a future template introduces.
 //
+// What it does NOT cover: filenames are pinned to NFC in every variant, so the mirror
+// direction — NFC refs against NFD *filenames* — is out of scope here and is guarded instead
+// by test/unit/unicode-lookup.test.js. Reverting buildLinkMap (scanner.js), recency.js's
+// entity names, or story-spine.js's unit-title reads leaves this file green, so "byte-
+// identical across three variants" means the ref-vs-title class is closed, not all of #139.
+//
 // Every name is written with precomposed \u escapes, never a literal accented character, so
 // the constants are NFC by construction and no editor can silently re-normalize this file.
 const NPC = 'Alena Gonz\u00e1lez';

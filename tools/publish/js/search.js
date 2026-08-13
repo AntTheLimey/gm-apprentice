@@ -19,8 +19,20 @@
       .join('/');
   }
 
+  // Fold a query into the index's normal form (#139). lib/search-index.js indexes NFC, so a
+  // query typed with decomposed accents can never match an NFC index unless it is folded the
+  // same way. Guarded for pre-ES6 engines, where it degrades to the old exact-match behavior
+  // rather than throwing. Exported (and asserted in test/search.test.js) because deleting it
+  // breaks accented search in the browser while every server-side test stays green.
+  function normalizeQuery(raw) {
+    var q = String(raw == null ? '' : raw);
+    return q.normalize ? q.normalize('NFC') : q;
+  }
+
   if (typeof document === 'undefined') {
-    if (typeof module !== 'undefined' && module.exports) module.exports = { esc: esc, encodeHref: encodeHref };
+    if (typeof module !== 'undefined' && module.exports) {
+      module.exports = { esc: esc, encodeHref: encodeHref, normalizeQuery: normalizeQuery };
+    }
     return;
   }
 
@@ -63,10 +75,7 @@
   }
 
   function search(rawQuery) {
-    // Match the index's normal form (#139): the index is built NFC, so a query typed with
-    // decomposed accents must be folded the same way or it can never match.
-    var query = String(rawQuery == null ? '' : rawQuery);
-    query = query.normalize ? query.normalize('NFC') : query;
+    var query = normalizeQuery(rawQuery);
     if (!idx || !query.trim()) {
       resultsDiv.innerHTML = query.trim() ? '<div class="search-results-empty">Loading...</div>' : '';
       return;
