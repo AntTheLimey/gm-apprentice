@@ -1,17 +1,34 @@
 // Guarded lifecycle helper for ephemeral E2E test resources (Cloudflare KV
 // namespaces, Pages projects). Built after issue #142: a session-driven
 // cleanup sweep ran ad-hoc wrangler commands and deleted the *production*
-// INBOX KV namespace. This module makes that incident inexpressible:
+// INBOX KV namespace.
+//
+// What this module actually guarantees:
 //
 //   - every resource this module creates is named `e2e-<runId>-<label>`;
 //     there is no way to construct a bare production-shaped name (e.g.
 //     "INBOX") through the factory.
-//   - cleanup() only ever deletes ids it recorded itself, in reverse
-//     creation order — there is no list-and-delete or delete-by-title API.
-//   - cleanup() independently refuses (throws) to delete any recorded
-//     resource whose name lacks the `e2e-` prefix, even if the tracked
-//     records were somehow polluted. This is a second, unconditional guard
-//     on top of the naming scheme, not a substitute for it.
+//   - cleanup() only ever considers resources it tracked itself, and for
+//     each one independently checks (a) the recorded name carries the
+//     `e2e-` prefix, and (b) the record is the *same object* this instance
+//     minted via createKvNamespace/createPagesProject — an internal Set
+//     checks identity, not just field content. A record hand-pushed onto
+//     `_records` with a spoofed `e2e-`-looking name and a real (e.g.
+//     production) id is still refused, because it was never minted here.
+//   - there is no list-and-delete or delete-by-title API: the only inputs
+//     to a deletion are records this instance itself created.
+//   - every tracked record is frozen at the moment it's created, so neither
+//     `_records` (kept exposed for inspection) nor cleanup()'s return value
+//     can be mutated afterwards to redirect a later delete at a different
+//     id — a dry-run report can't be tampered with and then fed back in to
+//     change what a real cleanup deletes.
+//
+// `_records` stays a live, writable array (rather than a defensive copy)
+// specifically so callers — including this module's own tests — can
+// exercise the identity guard above by pushing a foreign record onto it.
+// It is the guard, not read-only-ness, that makes this safe: appending to
+// the array cannot bypass the checks above, and the frozen record objects
+// already in it cannot be edited in place.
 //
 // `runWrangler` is always injected — see tools/publish/lib/setup-backend.js
 // for the same pattern. Real wrangler must never run from a test.
@@ -25,21 +42,31 @@ function trackedName(runId, label) {
 function assertPrefixed(name) {
   if (typeof name !== 'string' || !name.startsWith('e2e-')) {
     throw new Error(
-      `Refusing to delete "${name}": recorded resource name does not carry the e2e- prefix. ` +
-        'This guard exists so a polluted tracking record can never reach a real delete call.'
+      `Refusing to delete "${name}": recorded resource name does not carry the e2e- prefix.`
     );
   }
 }
 
 function createE2eResources({ runWrangler, runId }) {
   if (!runId) throw new Error('createE2eResources requires a runId');
+  if (typeof runWrangler !== 'function') throw new Error('createE2eResources requires a runWrangler function');
 
-  // Creation-ordered list of resources this instance has created. Exposed
-  // (as `_records`) only so tests can exercise the second delete guard by
-  // hand-injecting a malformed record; production code should never write
-  // to it directly — createKvNamespace/createPagesProject are the only
-  // supported way to add a tracked resource.
+  // Creation-ordered list of resources this instance has created. See the
+  // header comment for why this stays live/writable rather than a copy.
   const _records = [];
+
+  // Identity provenance: only record objects that came out of `track()`
+  // (i.e. were actually returned by createKvNamespace/createPagesProject)
+  // are ever valid deletion targets — regardless of what a record pushed
+  // directly onto `_records` claims about its own `name`/`id` fields.
+  const minted = new Set();
+
+  function track(record) {
+    Object.freeze(record);
+    _records.push(record);
+    minted.add(record);
+    return record;
+  }
 
   function createKvNamespace(label) {
     const name = trackedName(runId, label);
@@ -48,8 +75,7 @@ function createE2eResources({ runWrangler, runId }) {
     if (r.code !== 0 || !id) {
       throw new Error(`Could not create KV namespace "${name}": ${(r.stderr || r.stdout || '').trim()}`);
     }
-    _records.push({ type: 'kv', name, id });
-    return id;
+    return track({ type: 'kv', name, id }).id;
   }
 
   function createPagesProject(label) {
@@ -62,16 +88,24 @@ function createE2eResources({ runWrangler, runId }) {
     // create output doesn't reliably print one. Reuse parseCreatedId in
     // case a future version does, and fall back to the name otherwise.
     const id = parseCreatedId(r.stdout) || name;
-    _records.push({ type: 'pages', name, id });
-    return id;
+    return track({ type: 'pages', name, id }).id;
   }
 
   function cleanup({ dryRun = false } = {}) {
     const toDelete = _records.slice().reverse();
 
-    // Guard: refuse the whole cleanup if any recorded name lacks the
-    // e2e- prefix — checked before anything is deleted, dry-run or not.
-    toDelete.forEach((record) => assertPrefixed(record.name));
+    // Validate every record before deleting anything, dry-run or not: a
+    // single polluted/foreign record aborts the whole cleanup rather than
+    // being silently skipped or, worse, silently deleted.
+    toDelete.forEach((record) => {
+      assertPrefixed(record.name);
+      if (!minted.has(record)) {
+        throw new Error(
+          `Refusing to delete "${record.name}": this record was not created by this ` +
+            'createE2eResources instance (tracking looks polluted).'
+        );
+      }
+    });
 
     if (dryRun) return toDelete;
 
@@ -84,6 +118,7 @@ function createE2eResources({ runWrangler, runId }) {
         throw new Error(`Could not delete ${record.type} "${record.name}": ${(r.stderr || r.stdout || '').trim()}`);
       }
       _records.splice(_records.indexOf(record), 1);
+      minted.delete(record);
     }
     return toDelete;
   }

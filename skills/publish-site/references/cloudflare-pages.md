@@ -364,7 +364,9 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    > `wrangler pages project delete` typed by hand or matched by listing.
    > A plain `INBOX` (or any other production-shaped name) is never a valid
    > deletion target, and cleanup always runs dry-run first to confirm the
-   > deletion list before anything is actually deleted.
+   > deletion list before anything is actually deleted. Each test run must
+   > pick its own unique `runId` — two runs sharing one would let one run's
+   > cleanup delete the other's still-in-use resources.
 
 2. **Bind it in `wrangler.toml`.** A minimal Tier-1 `wrangler.toml` has no KV
    block yet — add one, pasting the id from step 1:
