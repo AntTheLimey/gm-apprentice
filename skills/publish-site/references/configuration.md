@@ -23,7 +23,7 @@ each other — see § Precedence.
 | Theme fonts | `publish.theme.fonts` | Heading and body font families |
 | Theme genre | `publish.theme.genre` | Genre tag for theming hints |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
-| Overrides | `publish.overrides` | Per-file include/exclude/field overrides |
+| Per-file field overrides | `publish.overrides.fields` | Re-admit an excluded frontmatter field for one named file (see § Per-file field overrides) |
 | Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Image optimization | `publish.images` | Opt-in WebP re-encoding of copied images (default: off) |
@@ -146,6 +146,34 @@ scaffolding above the pivot (the Republic, the Sector) is demoted to a
 small context caption rather than rendered as tree rows. Grouping is
 skipped — falling back to the flat view — when fewer than two locations
 match the pivot, since one section is not a grouping.
+
+### Per-file field overrides
+
+`exclude_fields` strips a frontmatter field from every page. When one
+page needs a stripped field back, name that page under
+`publish.overrides.fields` and list the fields to re-admit:
+
+```yaml
+publish:
+  exclude_fields: [secrets, gm_notes]
+  overrides:
+    fields:
+      "Characters/NPCs/Vex Ambrose.md":
+        include: [secrets]
+```
+
+The key is the **vault-relative path** of the note, extension included —
+not its title, and not a glob. `include` is an allowlist checked against
+`exclude_fields`: it re-admits a field that would otherwise be stripped,
+and naming a field that isn't excluded does nothing. There is no
+per-file `exclude`; to strip a field from one page only, remove it from
+that page's frontmatter.
+
+`fields` is the only key under `overrides` that the build reads. Whole
+files are included or excluded through the publish manifest
+(`_meta/publish-manifest.md`), not here — see
+`content-filtering.md`. A build warns on any other
+`publish.overrides.*` key rather than ignoring it silently.
 
 ## `vault.config.json` (in the site repo)
 

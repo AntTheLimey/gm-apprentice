@@ -421,3 +421,56 @@ describe('overrides.fields unicode normalization (#139)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe('overrides surface (dead top-level keys)', () => {
+  // `overrides.fields` is the only override the build reads: build.js takes
+  // `publishConfig.overrides.fields[vaultRelPath]` and hands that per-file object to
+  // filterFields, which reads `.include` off it. A top-level `overrides.exclude` or
+  // `overrides.include` was declared in the defaults but never read anywhere, so a GM who
+  // wrote one got a silent no-op.
+  function writeConfig(tmpDir, yamlBody) {
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), `---\n${yamlBody}---\n`);
+  }
+
+  function captureWarns(fn) {
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try { return { result: fn(), warns }; } finally { console.warn = orig; }
+  }
+
+  it('declares only the override the build actually reads', () => {
+    assert.deepStrictEqual(Object.keys(PUBLISH_DEFAULTS.overrides), ['fields']);
+  });
+
+  it('warns instead of silently ignoring an unread top-level override key', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    try {
+      writeConfig(tmpDir, 'publish:\n  overrides:\n    exclude:\n      - "Notes/Secret.md"\n');
+      const { warns } = captureWarns(() => loadPublishConfig(tmpDir));
+      const hits = warns.filter(w => w.includes('overrides.exclude'));
+      assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+      assert.match(hits[0], /overrides\.fields/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stays quiet for the supported overrides.fields block', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    try {
+      writeConfig(tmpDir, 'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include:\n          - secrets\n');
+      const { result, warns } = captureWarns(() => loadPublishConfig(tmpDir));
+      assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
+      assert.deepStrictEqual(result.overrides.fields['Characters/NPCs/Vex.md'].include, ['secrets']);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves overrides.fields as the only key when nothing is configured', () => {
+    assert.deepStrictEqual(loadPublishConfig('/nonexistent/path').overrides, { fields: {} });
+  });
+});

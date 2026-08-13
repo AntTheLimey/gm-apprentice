@@ -261,7 +261,8 @@ Workflow:
      files that don't match clear conventions.
 3. Write the publish manifest to `_meta/publish-manifest.md`.
 4. Present a summary and walk through ambiguous items.
-5. Save GM decisions to `vault-config.md` overrides.
+5. Record each decision in the manifest itself — checked under
+   `## Publishing`, or moved to `## Excluded` with a reason.
 6. Confirm the manifest is ready for the build tool.
 
 For subsequent publishes, the manifest delta check in

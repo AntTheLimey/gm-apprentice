@@ -41,9 +41,13 @@ const PUBLISH_DEFAULTS = {
     max_width: 1600,
     quality: 82,
   },
+  // Per-file frontmatter overrides, keyed by vault-relative path:
+  //   fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }
+  // `include` re-admits a field that exclude_fields strips, for that one file. `fields` is
+  // the only override the build reads — top-level `exclude`/`include` keys were declared
+  // here for years and read by nothing, so a GM who wrote one got a silent no-op. They are
+  // gone rather than implemented; loadPublishConfig warns if a config still carries one.
   overrides: {
-    exclude: [],
-    include: [],
     fields: {},
   },
   section_titles: {},
@@ -87,6 +91,20 @@ function canonicalizeOverrideFieldKeys(fields) {
   return out;
 }
 
+// A key under `publish.overrides` that the build never reads changes nothing about the
+// published site, and the GM has no way to tell that from "the override didn't match".
+// Name it, and say where the real one lives.
+function warnUnreadOverrideKeys(overrides) {
+  for (const key of Object.keys(overrides || {})) {
+    if (key === 'fields') continue;
+    console.warn(
+      `config: publish.overrides.${key} is not read by the build and has no effect. ` +
+      'The only supported override is publish.overrides.fields, keyed by vault-relative ' +
+      'path: fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }.'
+    );
+  }
+}
+
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
@@ -102,6 +120,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       settingYear = data.setting_year;
     }
   }
+
+  warnUnreadOverrideKeys(publish.overrides);
 
   const merged = {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
@@ -155,9 +175,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     // "group_by never mentioned" (fall back to the genre's pivot) apart from
     // "group_by explicitly falsy" (grouping off), and a default would erase that.
     locations: { ...jsonConfigFallback.locations, ...publish.locations },
+    // Only `fields` is carried through: nothing downstream reads any other override key, so
+    // passing one along would just relocate the silent no-op into publishConfig.
     overrides: {
-      ...PUBLISH_DEFAULTS.overrides,
-      ...publish.overrides,
       fields: canonicalizeOverrideFieldKeys(
         (publish.overrides && publish.overrides.fields) || PUBLISH_DEFAULTS.overrides.fields
       ),
