@@ -90,13 +90,33 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 }
 
 
+# A complete quoted scalar and nothing else after it but blanks or a comment.
+# The closing quote is the *unescaped* one (`\"` inside double quotes, `''`
+# inside single), so `"5'4\" - 6'0\""` is one value rather than a truncated
+# prefix. Content after the closing quote means the line is not a valid quoted
+# scalar at all — see scalar_value.
+QUOTED_SCALAR_RE = re.compile(
+    r"""^(?:"((?:\\.|[^"\\])*)"|'((?:''|[^'])*)')\s*(?:\#.*)?$"""
+)
+
+
 def scalar_value(value: str) -> str:
-    """Unwrap a YAML scalar: quoted content, or unquoted up to a comment."""
-    m = re.match(r"""^(['"])(.*?)\1""", value.strip())
+    """Unwrap a YAML scalar: quoted content, or unquoted up to a comment.
+
+    A quoted scalar with trailing content (`type: "npc" trailing`) is not
+    valid YAML. Unwrapping it would hand a clean-looking `npc` to the type
+    and predicate checks and pass malformed frontmatter silently, so the raw
+    text is returned instead and the caller reports it.
+    """
+    text = value.strip()
+    m = QUOTED_SCALAR_RE.match(text)
     if m:
-        return m.group(2)
+        # Escapes are left as authored — nothing downstream compares against
+        # an unescaped form, and decoding them here would be a second guess
+        # at YAML this parser is deliberately not implementing.
+        return m.group(1) if m.group(1) is not None else m.group(2)
     # Unquoted: a ' #' starts a YAML comment.
-    return re.split(r"\s+#", value.strip(), maxsplit=1)[0].strip()
+    return re.split(r"\s+#", text, maxsplit=1)[0].strip()
 
 
 def extract_frontmatter(content: str) -> dict | None:
@@ -185,6 +205,11 @@ ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology
 # authored frontmatter, `predicate` in the machine-managed `mobrpg:` node.
 RELATIONSHIP_KEY_RE = re.compile(r"^(?:-\s+)?(type|predicate):\s*(.*)$")
 FRONTMATTER_KEY_RE = re.compile(r"^([\w-]+):\s*(.*)$")
+# A key whose value is a YAML block scalar header (`|`, `>`, with optional
+# indentation/chomping indicators and a trailing comment). Matched against the
+# *raw* line so group 1 gives the key's own column — content belonging to the
+# block is indented past it, and the next sibling key is not.
+BLOCK_SCALAR_OPEN_RE = re.compile(r"^(\s*(?:-\s+)?)[\w-]+:\s*[|>][0-9+-]*\s*(?:#.*)?$")
 
 
 def _ontology_predicates() -> list[dict]:
@@ -245,11 +270,20 @@ def iter_relationship_predicates(content: str):
     if not match:
         return
     block_indent = None
+    scalar_indent = None
     for offset, line in enumerate(match.group(1).split("\n")):
         stripped = line.strip()
         if not stripped:
             continue
         indent = len(line) - len(line.lstrip())
+        # Inside a block scalar (`description: |`), every more-indented line is
+        # literal text, not YAML. A relationship description whose prose begins
+        # `type:` is not an edge, and a folded note that quotes a whole
+        # `relationships:` block does not open one.
+        if scalar_indent is not None:
+            if indent > scalar_indent:
+                continue
+            scalar_indent = None
         # The block ends at the next key at or above its own indent.
         if block_indent is not None and indent <= block_indent \
                 and not stripped.startswith("-"):
@@ -260,6 +294,10 @@ def iter_relationship_predicates(content: str):
             # still opens a block whose edges follow.
             value = key.group(2).strip()
             block_indent = indent if not value or value.startswith("#") else None
+            continue
+        opener = BLOCK_SCALAR_OPEN_RE.match(line)
+        if opener:
+            scalar_indent = len(opener.group(1))
             continue
         if block_indent is None:
             continue

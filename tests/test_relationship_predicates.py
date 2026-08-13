@@ -147,6 +147,28 @@ class IterRelationshipPredicatesTests(unittest.TestCase):
         self.assertEqual(list(sr.iter_relationship_predicates(text)),
                          [(5, "type", "bogus_thing")])
 
+    def test_block_scalar_prose_is_not_scanned_for_predicates(self):
+        # `description: |` opens literal text; a line of prose that happens to
+        # begin `type:` is not an edge. Regression: it was reported as an
+        # off-vocabulary predicate, failing both validators on a valid note.
+        found = self.predicates("Block Scalar Description.md")
+        self.assertEqual([(k, p) for _, k, p in found],
+                         [("type", "member_of"), ("type", "located_at")])
+
+    def test_a_folded_block_scalar_ends_at_the_next_sibling_key(self):
+        # `>` folds the same way `|` does, and the edge *after* it must still
+        # be read — the skip has to stop at the dedent, not swallow the rest.
+        text = ("---\ntype: npc\nrelationships:\n"
+                "  - target: \"[[X]]\"\n    description: >\n"
+                "      type: of thing\n    type: bogus_thing\n---\n")
+        self.assertEqual(list(sr.iter_relationship_predicates(text)),
+                         [(7, "type", "bogus_thing")])
+
+    def test_a_top_level_block_scalar_cannot_open_the_relationships_block(self):
+        text = ("---\ntype: npc\nsummary: |\n  relationships:\n"
+                "    - type: not_an_edge\n---\n")
+        self.assertEqual(list(sr.iter_relationship_predicates(text)), [])
+
     def test_no_frontmatter_yields_nothing(self):
         self.assertEqual(list(sr.iter_relationship_predicates("# Just a body\n")), [])
 
@@ -188,6 +210,7 @@ class CheckRelationshipsTests(unittest.TestCase):
     def test_sanctioned_edges_are_silent(self):
         self.assertFalse(rows_for(self.rows, "Clean NPC.md"))
         self.assertFalse(rows_for(self.rows, "Empty Edges.md"))
+        self.assertFalse(rows_for(self.rows, "Block Scalar Description.md"))
 
     def test_mobrpg_node_predicate_is_validated_too(self):
         mobrpg = rows_for(self.rows, "Mobrpg Sync.md")
