@@ -141,10 +141,15 @@ function createE2eResources({ runWrangler, runId }) {
       while (_records.indexOf(record) !== -1) _records.splice(_records.indexOf(record), 1);
 
       try {
+        // Both deletes prompt interactively by default, and cleanup runs unattended
+        // (CI, a trap on exit) with nothing on stdin — the prompt would hang or read
+        // EOF as "no" and leak the resource. The two commands spell the same
+        // non-interactive answer differently: `wrangler kv namespace delete` takes
+        // `--skip-confirmation`, `wrangler pages project delete` takes `--yes`.
         const r =
           record.type === 'kv'
-            ? runWrangler(['kv', 'namespace', 'delete', '--namespace-id', record.id])
-            : runWrangler(['pages', 'project', 'delete', record.name]);
+            ? runWrangler(['kv', 'namespace', 'delete', '--namespace-id', record.id, '--skip-confirmation'])
+            : runWrangler(['pages', 'project', 'delete', record.name, '--yes']);
         if (r.code !== 0) {
           throw new Error(`Could not delete ${record.type} "${record.name}": ${(r.stderr || r.stdout || '').trim()}`);
         }

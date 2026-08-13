@@ -52,6 +52,16 @@ does the waiting, and you only wake when a request actually arrives.
    file lands somewhere the Stop-section check can find it:
 
    ```bash
+   # WATCHER_SLEEP is GM-supplied: a non-numeric value would make `sleep` fail
+   # without stopping the loop, and 0 would poll flat out against Cloudflare KV.
+   # Clamp it once, up front, rather than trusting it each pass.
+   sleep_for=${WATCHER_SLEEP:-30}
+   case "$sleep_for" in
+     ''|*[!0-9]*) sleep_for=30 ;;
+   esac
+   [ "$sleep_for" -lt 1 ] && sleep_for=1
+   [ "$sleep_for" -gt 300 ] && sleep_for=300
+
    fail=0
    while :; do
      out=$(npx gm-apprentice-publish inbox pull 2>/dev/null)
@@ -69,9 +79,15 @@ does the waiting, and you only wake when a request actually arrives.
      else
        fail=0
      fi
-     sleep "${WATCHER_SLEEP:-30}"
+     sleep "$sleep_for"
    done
    ```
+
+   The poll itself needs no timeout wrapper: `inbox pull` bounds every
+   wrangler call it makes at 60s internally, so a hung network turn comes back
+   as a failed poll (counted toward the streak above) rather than freezing the
+   loop before it can tick the heartbeat. That holds for the primitive path in
+   Start step 4 too — same command, same bound.
 
    Run it as a **background command** (`run_in_background: true`). The
    harness re-invokes you when it exits, either with a pending batch or with

@@ -37,8 +37,8 @@ test('create then cleanup deletes exactly the created ids, in reverse creation o
 
   // Only the two create calls plus two delete calls happened, in reverse order.
   assert.strictEqual(calls.length, 4);
-  assert.deepStrictEqual(calls[2], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid2']);
-  assert.deepStrictEqual(calls[3], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1']);
+  assert.deepStrictEqual(calls[2], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid2', '--skip-confirmation']);
+  assert.deepStrictEqual(calls[3], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1', '--skip-confirmation']);
 });
 
 test('cleanup deletes a Pages project by name, reverse-ordered alongside a KV namespace', () => {
@@ -55,8 +55,8 @@ test('cleanup deletes a Pages project by name, reverse-ordered alongside a KV na
 
   resources.cleanup({ dryRun: false });
 
-  assert.deepStrictEqual(calls[2], ['pages', 'project', 'delete', 'e2e-run1-site']);
-  assert.deepStrictEqual(calls[3], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1']);
+  assert.deepStrictEqual(calls[2], ['pages', 'project', 'delete', 'e2e-run1-site', '--yes']);
+  assert.deepStrictEqual(calls[3], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1', '--skip-confirmation']);
 });
 
 test('dry-run cleanup deletes nothing and reports the pending deletion list', () => {
@@ -94,7 +94,7 @@ test('mutating a dry-run report cannot redirect a later real cleanup (records ar
 
   resources.cleanup({ dryRun: false });
 
-  assert.deepStrictEqual(calls[1], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1']);
+  assert.deepStrictEqual(calls[1], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1', '--skip-confirmation']);
 });
 
 test('cleanup refuses to delete a hand-injected record whose name lacks the e2e- prefix', () => {
@@ -140,7 +140,7 @@ test('cleanup deletes a duplicated record only once, not twice', () => {
 
   const deleteCalls = calls.filter((a) => a[2] === 'delete');
   assert.strictEqual(deleteCalls.length, 1, 'exactly one delete call, despite the duplicate entry');
-  assert.deepStrictEqual(deleteCalls[0], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1']);
+  assert.deepStrictEqual(deleteCalls[0], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1', '--skip-confirmation']);
   assert.strictEqual(resources._records.length, 0, 'tracking left clean, no stray leftover entry');
 });
 
@@ -176,8 +176,8 @@ test('a cleanup() call re-entered from inside runWrangler does not double-delete
   resources.cleanup({ dryRun: false });
 
   const deleteArgv = calls.filter((a) => a[2] === 'delete').map((a) => a.join(' '));
-  const deleteA = `kv namespace delete --namespace-id ${idA}`;
-  const deleteB = `kv namespace delete --namespace-id ${idB}`;
+  const deleteA = `kv namespace delete --namespace-id ${idA} --skip-confirmation`;
+  const deleteB = `kv namespace delete --namespace-id ${idB} --skip-confirmation`;
 
   assert.strictEqual(deleteArgv.filter((s) => s === deleteA).length, 1, 'A deleted exactly once');
   assert.strictEqual(deleteArgv.filter((s) => s === deleteB).length, 1, 'B deleted exactly once');
