@@ -147,8 +147,13 @@ The build tool reads this file directly — no rescanning needed.
 ### Manifest Format
 
 The manifest is a markdown file with YAML frontmatter and three
-H2 sections. The build tool's parser (`lib/manifest.js`) reads
-the sections by heading prefix and checkbox state.
+H2 sections. The build tool's parser (`lib/manifest.js`) uses the
+heading to bucket each entry into Publishing/Excluded/Needs
+Decision, and only the Publishing bucket ever reaches the build —
+so a file publishes if and only if it's a **checked** entry there.
+Checking the box under `## Excluded` or `## Needs Decision` records
+that the GM confirmed the categorization; it does not publish the
+file, because those buckets are never read for inclusion.
 
 **Frontmatter** (metadata, not used by the build tool):
 
