@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.49] — 2026-08-12
+
+Publish tool 1.11.22. Six published-site content-leak and encoding bugs
+fixed, relationship-predicate validation added to the vault-authoring gate,
+and a guarded lifecycle helper for ephemeral e2e test resources.
+
+### Fixed
+
+- `publish-site`: HTML comments (`<!-- ... -->`) were never stripped from
+  `publishedMarkdown`, so authoring notes leaked onto the homepage's
+  "Latest Session" teaser and into every story-spine page body. Added
+  `stripHtmlComments` to that chain, plus a site-wide regression test
+  asserting no generated `.html` contains a comment (#149).
+- `publish-site`: hand-built link destinations were not percent-encoded, so
+  any output path containing a space or parenthesis (vault subfolder names,
+  attachment filenames) rendered as literal bracket text instead of a link,
+  and the typographer separately mangled a leading `../` into `…/`.
+  Generalized the image-only `encodeImageUrl` into `encodeHref` and routed
+  every hand-built href through it across templates, the relationship
+  graph, breadcrumbs, and the context sidebar; `encodeImageUrl` stays as an
+  alias so existing image call sites are unchanged. Also fixed the
+  client-side search overlay (`js/search.js`), which built result links
+  from the same raw, unencoded path — there a stray `#` or `?` could
+  truncate or corrupt the link rather than just look odd (#145).
+- `publish-site`: manifest matching and slugs were Unicode-normalization-
+  naive, so an NFC manifest entry never matched an NFD-decomposed scanned
+  path and accented pages silently never rendered. Canonicalized to NFC at
+  the manifest/scanner comparison boundary and strip combining marks in
+  `slugify`; `overrides.fields` keys are now canonicalized the same way at
+  config load. **Slugs for previously-broken accented pages change as a
+  result** — those pages never rendered before, so nothing that worked
+  breaks. Vaults with manually-pinned NFD manifest entries should update
+  them to NFC now that matching no longer needs the workaround (#139).
+- `publish-site`: the built-in default `exclude_sections` had drifted from
+  the scaffold template, and `## Reconciliation Context` /
+  `## Handoff to Reconcile` — written automatically by `reconcile` and
+  `session-wrapup` — were publishing GM plot state to players. Both lists
+  now carry the same six entries (`GM Notes`, `DM Notes`, `Player Notes`,
+  `Source References`, `Reconciliation Context`, `Handoff to Reconcile`).
+  **Existing sites with an explicit `excludeSections` list in
+  `vault.config.json` do not pick this up automatically** — add the two
+  new entries by hand, or re-run `gm-publish init` to re-scaffold. Also
+  corrected `configuration.md`'s Precedence section, which described
+  strict shadowing when list settings actually union across both config
+  sources (#144).
+
+### Added
+
+- `campaign-organizer` / `campaign-qa`: relationship predicates are now
+  validated against the authoritative vocabulary in
+  `skills/shared/gm-apprentice-ontology.json`. `vault_check.py
+  relationships` (also folded into `vault_check.py all`) and a parallel
+  check in `scripts/validate_schema.py` flag off-vocabulary predicates
+  with nearest-match suggestions; campaign-qa's graph-health checks now
+  run the audit. `skills/shared/templates/plan.md`'s example relationship
+  swaps its blank `type: ""` for a real predicate (`located_at`), which
+  the new check would otherwise flag on day one (#130).
+- `tools/publish/lib/e2e-resources.js`: a guarded lifecycle helper for
+  ephemeral test resources used by the Cloudflare setup flow's e2e tests.
+  Names are always `e2e-<runId>-<label>`; cleanup deletes only records the
+  factory itself minted (checked by object identity, not name-prefix
+  matching); there is no list-and-delete or delete-by-title API at all;
+  dry-run reports without calling `wrangler`. Motivated by an incident
+  where an ad-hoc cleanup sweep deleted a production KV namespace. Policy
+  documented in `cloudflare-pages.md` (#142).
+
+### Changed
+
+- `publish-site` skill docs: added watcher-resilience guidance for the
+  change-request loop (persistent monitor primitive preferred, a
+  documented shell-loop fallback, a heartbeat liveness artifact, failure
+  emission, request-id dedup, capped backoff) and pointers to the
+  manifest spec at the top of the relevant `SKILL.md` capability entries
+  (#143, #136).
+
+---
+
 ## [1.8.48] — 2026-07-26
 
 Publish tool 1.11.21. Keeper callouts no longer leak onto the published site.
