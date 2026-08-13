@@ -4,6 +4,7 @@ const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaVa
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
+const { canonicalNfc, nfcLookupTable } = require('../unicode');
 
 const GENRE_SECTION_TITLES = {
   military: {
@@ -70,11 +71,16 @@ function buildPillFilters(pages, dir) {
 
 function buildLocationTree(pages) {
   const nodes = pages.map(p => ({ page: p, children: [] }));
-  const lookup = {};
-  for (const n of nodes) lookup[n.page.title] = n;
+  // Keyed NFC and wrapped (#139): the parent_location ref read below is author-typed while
+  // these keys come from filenames, so a mismatch silently renders the child as a root
+  // sibling instead of nesting it.
+  const byTitle = {};
+  for (const n of nodes) byTitle[canonicalNfc(n.page.title)] = n;
   for (const n of nodes) {
-    if (!(n.page.displayTitle in lookup)) lookup[n.page.displayTitle] = n;
+    const display = canonicalNfc(n.page.displayTitle);
+    if (!(display in byTitle)) byTitle[display] = n;
   }
+  const lookup = nfcLookupTable(byTitle);
   const roots = [];
   for (const n of nodes) {
     const parentRef = n.page.frontmatter.parent_location;
@@ -298,8 +304,10 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = nul
     const p = node.page;
     const parentRef = p.frontmatter.parent_location;
     const locType = String(p.frontmatter.location_type || '').trim();
+    // NFC (#139): this is a grouping key built from an author-typed ref, so two spellings of
+    // one parent name would otherwise render as two separate regions with the same heading.
     const region = parentRef
-      ? String(parentRef).replace(/\[\[|\]\]/g, '').trim()
+      ? canonicalNfc(String(parentRef).replace(/\[\[|\]\]/g, '').trim())
       : (locType || 'Other');
     if (!byRegion[region]) byRegion[region] = [];
     byRegion[region].push(node);
@@ -364,12 +372,16 @@ function renderChapterList(pages, indexDir) {
   if (chapters.length === 0 && sessions.length === 0) return '';
 
   function sessionsForChapter(chapter) {
-    const chTitle = chapter.displayTitle.toLowerCase();
+    // The third copy of the chapter matcher (story-spine.js and build.js hold the others).
+    // Author-typed ref vs filename-derived title on both substring tests, so both sides are
+    // canonicalized to NFC (#139) or an accented chapter lists none of its sessions.
+    const chTitle = canonicalNfc(chapter.displayTitle).toLowerCase();
+    const chFrontTitle = chapter.frontmatter.title ? canonicalNfc(chapter.frontmatter.title).toLowerCase() : '___';
     const chFolder = chapter.outputPath.split('/').slice(0, -1).join('/');
     return sessions.filter(s => {
-      const ref = String(s.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').toLowerCase();
+      const ref = canonicalNfc(String(s.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '')).toLowerCase();
       if (ref && chTitle.includes(ref.replace(/^chapter \d+\s*[-–—]\s*/i, '').trim().toLowerCase())) return true;
-      if (ref && ref.includes(chapter.frontmatter.title ? chapter.frontmatter.title.toLowerCase() : '___')) return true;
+      if (ref && ref.includes(chFrontTitle)) return true;
       if (s.outputPath.startsWith(chFolder + '/')) return true;
       return false;
     });

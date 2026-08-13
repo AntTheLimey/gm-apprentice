@@ -2,6 +2,7 @@ const { escapeHtml, relativePath, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
+const { canonicalNfc } = require('../unicode');
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
   const fm = page.frontmatter;
@@ -52,12 +53,14 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   }
 
   // Member rollup: find entities with member_of or assigned_to relationships pointing to this faction
-  const factionTitle = page.title;
+  // NFC on both sides (#139): the relationship target is author-typed, the faction title is
+  // the filename. A mismatch empties the members rollup on an accented faction page.
+  const factionTitle = canonicalNfc(page.title);
   const members = (allPages || []).filter(p => {
     const rels = p.frontmatter.relationships;
     if (!rels || !Array.isArray(rels)) return false;
     return rels.some(r => {
-      const target = String(r.target || '').replace(/\[\[|\]\]/g, '').trim();
+      const target = canonicalNfc(String(r.target || '').replace(/\[\[|\]\]/g, '').trim());
       return target === factionTitle && (r.type === 'member_of' || r.type === 'assigned_to');
     });
   });

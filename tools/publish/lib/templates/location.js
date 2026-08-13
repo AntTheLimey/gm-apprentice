@@ -4,11 +4,15 @@ const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
+const { canonicalNfc } = require('../unicode');
 
+// The ref is author-typed, the title comes from a filename: canonicalize both to NFC (#139)
+// or "Places Within", "Known Figures" and "What Happened Here" all vanish from an accented
+// location page. Bare `===`, so no lookup-table wrapper can cover this.
 function matchesRef(refValue, title) {
   if (!refValue) return false;
-  const cleaned = String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].replace(/_/g, ' ').trim();
-  const normalTitle = String(title || '').replace(/_/g, ' ').trim();
+  const cleaned = canonicalNfc(String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].replace(/_/g, ' ').trim());
+  const normalTitle = canonicalNfc(String(title || '').replace(/_/g, ' ').trim());
   return cleaned === normalTitle;
 }
 

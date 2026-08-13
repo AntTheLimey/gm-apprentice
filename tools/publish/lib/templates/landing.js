@@ -4,6 +4,7 @@ const {
   getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
+const { canonicalNfc } = require('../unicode');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -32,9 +33,11 @@ function statusLabel(status) {
 // page's source filename (page.title). Returns null when no matching session page is present.
 function resolveSessionLink(link, pages) {
   if (!link) return null;
-  const target = String(link).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+  // NFC both sides (#139). A miss here is masked by the getLatestSession fallback, so the
+  // landing quietly features a DIFFERENT session than the overview names — worse than blank.
+  const target = canonicalNfc(String(link).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
   if (!target) return null;
-  return pages.find(p => p.frontmatter.type === 'session' && p.title === target) || null;
+  return pages.find(p => p.frontmatter.type === 'session' && canonicalNfc(p.title) === target) || null;
 }
 
 function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus) {

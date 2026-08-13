@@ -1,3 +1,5 @@
+const { canonicalNfc } = require('../unicode');
+
 function getLatestSession(pages) {
   const played = pages.filter(
     p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
@@ -233,10 +235,12 @@ function getLatestWrapUp(pages, session) {
       if (wu.frontmatter.session_number === num) return wu;
     }
   }
-  const sessionTitle = session.title || '';
+  // NFC both sides (#139): the wrap-up's session ref is author-typed, the session title is a
+  // filename. A mismatch drops the landing page's narrative recap back to the session body.
+  const sessionTitle = canonicalNfc(session.title || '');
   if (sessionTitle) {
     for (const wu of wrapUps) {
-      const ref = String(wu.frontmatter.session || wu.title || '');
+      const ref = canonicalNfc(String(wu.frontmatter.session || wu.title || ''));
       if (ref === sessionTitle || ref.includes(sessionTitle)) return wu;
     }
   }
