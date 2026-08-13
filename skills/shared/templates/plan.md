@@ -17,7 +17,7 @@ leads_to: []                # wiki-links to the plan node(s) this leads to
                             # (node-based sequencing; 2+ targets = a branch)
 relationships:
   - target: "[[]]"
-    type: ""
+    type: located_at
     tone: neutral
     strength: 5
     bidirectional: false

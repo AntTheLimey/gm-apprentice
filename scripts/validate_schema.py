@@ -45,14 +45,19 @@ from schema_rules import (  # noqa: E402
 )
 
 
-def validate_file(filepath: Path) -> list[str]:
-    """Validate a single markdown file. Returns list of errors."""
+def validate_file(filepath: Path, content: str | None = None) -> list[str]:
+    """Validate a single markdown file. Returns list of errors.
+
+    Pass `content` when the caller has already read the file, so a run
+    that applies several checks reads each note exactly once.
+    """
     errors = []
 
-    try:
-        content = filepath.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as e:
-        return [f"Could not read file: {e}"]
+    if content is None:
+        try:
+            content = filepath.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as e:
+            return [f"Could not read file: {e}"]
 
     frontmatter = extract_frontmatter(content)
     if frontmatter is None:
@@ -251,19 +256,13 @@ def validate_file(filepath: Path) -> list[str]:
     return errors
 
 
-def validate_relationships(filepath: Path) -> list[str]:
+def validate_relationships(content: str, vocabulary: frozenset[str]) -> list[str]:
     """Check every relationship predicate against the sanctioned vocabulary.
 
     Runs beside validate_file rather than inside it: an off-vocabulary
-    edge is a defect whatever the entity type is, including on the files
+    edge is a defect whatever the entity type is, including in the files
     validate_file bails out of early.
     """
-    try:
-        content = filepath.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return []  # validate_file already reports the unreadable file
-
-    vocabulary = predicate_vocabulary()
     errors = []
     for lineno, key, predicate in iter_relationship_predicates(content):
         if predicate in vocabulary:
@@ -442,11 +441,25 @@ def validate_campaign(campaign_dir: Path) -> int:
         print(f"Warning: No markdown files found in {campaign_dir}")
         return 0
 
+    try:
+        vocabulary = predicate_vocabulary()
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"Error: cannot read the predicate vocabulary from the "
+              f"ontology export: {e}")
+        return 1
+
     total_errors = 0
     files_with_errors = 0
 
     for filepath in sorted(md_files):
-        errors = validate_file(filepath) + validate_relationships(filepath)
+        # One read per note, shared by every check below.
+        try:
+            content = filepath.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as e:
+            errors = [f"Could not read file: {e}"]
+        else:
+            errors = (validate_file(filepath, content)
+                      + validate_relationships(content, vocabulary))
         if errors:
             files_with_errors += 1
             rel_path = filepath.relative_to(campaign_dir.parent) if campaign_dir.parent != Path(".") else filepath

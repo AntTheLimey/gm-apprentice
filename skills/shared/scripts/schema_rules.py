@@ -256,7 +256,10 @@ def iter_relationship_predicates(content: str):
             block_indent = None
         key = FRONTMATTER_KEY_RE.match(stripped)
         if key and key.group(1) == "relationships":
-            block_indent = indent if not key.group(2).strip() else None
+            # A trailing comment is not a value: `relationships:  # later`
+            # still opens a block whose edges follow.
+            value = key.group(2).strip()
+            block_indent = indent if not value or value.startswith("#") else None
             continue
         if block_indent is None:
             continue

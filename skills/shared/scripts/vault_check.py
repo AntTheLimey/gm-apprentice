@@ -41,6 +41,7 @@ from schema_rules import (
     SCENE_TYPES,
     SESSION_STATUS,
     extract_frontmatter,
+    inverse_predicates,
     iter_relationship_predicates,
     parse_session_number,
     predicate_problem,
@@ -507,6 +508,9 @@ def check_relationships(vault: Path) -> list[str]:
     sanctioned predicates so the fix is a rename, not a hunt."""
     try:
         vocabulary = predicate_vocabulary()
+        # Warm the inverse map here too: predicate_problem() reads it through
+        # a second cache, and an unguarded load there would abort `all`.
+        inverse_predicates()
     except (OSError, ValueError, KeyError, TypeError) as e:
         return [f"ERROR\t(vault)\tcannot read the predicate vocabulary "
                 f"from shared/gm-apprentice-ontology.json: {e}"]
