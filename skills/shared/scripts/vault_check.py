@@ -14,6 +14,7 @@ Usage:
   vault_check.py VAULT tables
   vault_check.py VAULT timeline
   vault_check.py VAULT read-aloud
+  vault_check.py VAULT relationships
   vault_check.py VAULT all
 
 Skips hidden directories, `_Templates/`, and `_inbox/` (staging).
@@ -40,7 +41,10 @@ from schema_rules import (
     SCENE_TYPES,
     SESSION_STATUS,
     extract_frontmatter,
+    iter_relationship_predicates,
     parse_session_number,
+    predicate_problem,
+    predicate_vocabulary,
 )
 
 SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
@@ -493,12 +497,37 @@ def check_read_aloud(vault: Path) -> list[str]:
     return rows
 
 
+def check_relationships(vault: Path) -> list[str]:
+    """Every relationship predicate must come from the sanctioned vocabulary.
+
+    An invented `type:` is worse than a vague one: no query, no
+    inverse-inference and no publish step knows about it, so the edge is
+    written and then silently ignored (issue #130 — one session's entity
+    generation invented eleven of them). ERROR, with the nearest
+    sanctioned predicates so the fix is a rename, not a hunt."""
+    try:
+        vocabulary = predicate_vocabulary()
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return [f"ERROR\t(vault)\tcannot read the predicate vocabulary "
+                f"from shared/gm-apprentice-ontology.json: {e}"]
+    rows = []
+    for rel, text in vault_files(vault):
+        for lineno, key, predicate in iter_relationship_predicates(text):
+            if predicate in vocabulary:
+                continue
+            rows.append(f"ERROR\t{rel}:{lineno}\t"
+                        f"{predicate_problem(key, predicate)} "
+                        f"(map it via shared/relationship-normalization.md)")
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
-                                        "timeline", "read-aloud", "all"])
+                                        "timeline", "read-aloud",
+                                        "relationships", "all"])
     ap.add_argument("--folder", help="restrict frontmatter check to subfolder")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
@@ -530,6 +559,8 @@ def main() -> int:
         emit("timeline", check_timeline(args.vault))
     if args.command in ("read-aloud", "all"):
         emit("read-aloud", check_read_aloud(args.vault))
+    if args.command in ("relationships", "all"):
+        emit("relationships", check_relationships(args.vault))
     return 0
 
 

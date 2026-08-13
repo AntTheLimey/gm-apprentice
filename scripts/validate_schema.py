@@ -39,6 +39,9 @@ from schema_rules import (  # noqa: E402
     SESSION_STATUS,
     WORLD_DOMAIN_STATUS,
     extract_frontmatter,
+    iter_relationship_predicates,
+    predicate_problem,
+    predicate_vocabulary,
 )
 
 
@@ -248,6 +251,30 @@ def validate_file(filepath: Path) -> list[str]:
     return errors
 
 
+def validate_relationships(filepath: Path) -> list[str]:
+    """Check every relationship predicate against the sanctioned vocabulary.
+
+    Runs beside validate_file rather than inside it: an off-vocabulary
+    edge is a defect whatever the entity type is, including on the files
+    validate_file bails out of early.
+    """
+    try:
+        content = filepath.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return []  # validate_file already reports the unreadable file
+
+    vocabulary = predicate_vocabulary()
+    errors = []
+    for lineno, key, predicate in iter_relationship_predicates(content):
+        if predicate in vocabulary:
+            continue
+        errors.append(
+            f"Line {lineno}: {predicate_problem(key, predicate)} "
+            f"(map it via skills/shared/relationship-normalization.md)"
+        )
+    return errors
+
+
 # Content filtering rules — scenes that should be auto-excluded or auto-included
 FILTERING_EXCLUDE_STATUSES = {"cut", "skipped"}
 FILTERING_INCLUDE_STATUSES = {"played", "modified"}
@@ -419,7 +446,7 @@ def validate_campaign(campaign_dir: Path) -> int:
     files_with_errors = 0
 
     for filepath in sorted(md_files):
-        errors = validate_file(filepath)
+        errors = validate_file(filepath) + validate_relationships(filepath)
         if errors:
             files_with_errors += 1
             rel_path = filepath.relative_to(campaign_dir.parent) if campaign_dir.parent != Path(".") else filepath

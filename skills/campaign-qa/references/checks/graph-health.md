@@ -112,7 +112,22 @@ in the vault must be a predicate listed in
 `shared/entity-schema.md`'s vocabulary). This is separate from,
 and more fundamental than, the vagueness check below — an
 invented predicate is worse than a vague one because no query,
-inverse-inference, or publish step knows about it. Flag:
+inverse-inference, or publish step knows about it.
+
+**Preferred procedure:** run the bundled check rather than
+eyeballing frontmatter — it reads the sanctioned vocabulary from
+`shared/gm-apprentice-ontology.json` and reports every off-vocabulary
+predicate (top-level `type:` and `mobrpg:` node `predicate:` alike)
+with its note, line, and the nearest sanctioned predicates:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> relationships
+```
+
+Walk each ERROR row with the GM fix-or-dismiss: rename to the
+suggested predicate, re-store an inverse on the other endpoint, or
+drop the edge if it is not entity-to-entity. Flag:
 
 - **Off-vocabulary** — a `type:` not in the vocabulary at all
   (`hosts`, `contains`, `adjacent_to`, `carved_by`, `patrols`,

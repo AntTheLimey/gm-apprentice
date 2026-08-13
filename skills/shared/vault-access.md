@@ -62,7 +62,9 @@ required fields, enums, legacy fields, unquoted frontmatter
 links), `names` (duplicate and confusable entity names and
 aliases), `index` (`_meta/index.md` drift, both directions),
 `stale-drafts`, `changed --since N` (entities touched at or
-after session N — the incremental-audit scope), `all`.
+after session N — the incremental-audit scope),
+`relationships` (every `relationships[].type` checked against
+the sanctioned predicate vocabulary), `all`.
 Findings are `LEVEL<TAB>path<TAB>message`; fix every ERROR,
 triage WARNINGs with the GM, treat INFO as context.
 
