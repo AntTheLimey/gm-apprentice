@@ -165,6 +165,7 @@ display settings that are specific to the generated site.
 | Folder map | `folderMap` | Maps vault folders to site output paths |
 | Exclude directories | `excludeDirs` | Unioned with `publish.exclude_dirs` in `vault-config.md` (see § Precedence) |
 | Exclude sections | `excludeSections` | Unioned with `publish.exclude_sections` in `vault-config.md` (see § Precedence) |
+| Exclude fields | `excludeFields` | Unioned with `publish.exclude_fields` in `vault-config.md` (see § Precedence) |
 | Exclude callouts | `excludeCallouts` | Fallback if `vault-config.md` doesn't set `publish.exclude_callouts`. `true` strips all callouts, or an array of types |
 | Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
 
@@ -183,20 +184,30 @@ when **neither** file provides a list for that setting; as soon as
 either does, the default stops applying on its own (it is not unioned
 in alongside them).
 
-**`vault-config.md`-only settings** — `mode`, `system`,
-`exclude_drafts`, `theme`, `four_oh_four`, `overrides`,
-`section_titles`, and `setting_year` — are never read from
-`vault.config.json` at all: the `vault-config.md` value applies when
-set, otherwise the built-in default (`system` and `setting_year` have
-none — unset just means unset). Putting them in the JSON file does
-nothing.
+**`vault-config.md`-only settings** — `mode`, `exclude_drafts`,
+`theme`, `four_oh_four`, `overrides`, `section_titles`, and
+`setting_year` — are never read from `vault.config.json` at all: the
+`vault-config.md` value applies when set, otherwise the built-in
+default (`setting_year` has none — unset just means unset). Putting
+them in the JSON file does nothing.
+
+`publish.system` is *almost* one of them: the build reads it from
+`vault-config.md` only, but the `flush` command falls back to a
+top-level `system` in `vault.config.json` when `publish.system` is
+unset, to pick the GURPS vs CoC writeback. Set it in `vault-config.md`
+and both agree; if a legacy site has it only in the JSON, leave it
+there — deleting it would change what `flush` writes back.
 
 **Scalar and passthrough settings** — `sheet_crest`, `exclude_callouts`,
 `backend.statusBar`/`backend.inbox`, and the per-key settings inside
 `images`, `banners`, and `locations` — follow simple precedence: the
 `vault-config.md` `publish.*` value wins when set, `vault.config.json`
 is used only as a fallback when `vault-config.md` doesn't set it, and
-the built-in default applies only when neither file sets it.
+where the setting has a built-in default (`exclude_callouts` and the
+`images` keys) that default applies only when neither file sets it.
+`sheet_crest`, `banners`, `locations` and `backend.*` have no built-in
+default at all — unset stays unset, deliberately, so the build can tell
+"never configured" apart from "configured off".
 
 ---
 

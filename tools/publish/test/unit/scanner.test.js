@@ -339,7 +339,7 @@ describe('scanVault page slug collision warning (#139)', () => {
   });
 
   it('still returns both colliding pages so the caller decides what to do', () => {
-    const tmpDir = makeVault(['Renée', 'Renee']);
+    const tmpDir = makeVault([ACCENTED, 'Renee']);
     try {
       const { result: pages } = captureWarns(() => scanVault(config(tmpDir)));
       assert.strictEqual(pages.length, 2);
