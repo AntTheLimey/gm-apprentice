@@ -129,10 +129,11 @@ Workflow:
    d. If everything matches, continue silently.
 3. **Check manifest freshness.** Compare the vault's publishable
    files against `_meta/publish-manifest.md`. Read
-   `references/content-filtering.md` § Manifest Format first — a file
-   publishes only as a **checked** entry under `## Publishing`; checking
-   the box under `## Excluded` or `## Needs Decision` doesn't publish it.
-   Look for:
+   `references/content-filtering.md` § Manifest Format first — in
+   `mode: player`, a file publishes only as a **checked** entry under
+   `## Publishing`; checking the box under `## Excluded` or
+   `## Needs Decision` doesn't publish it. `mode: full` doesn't filter
+   by the manifest at all. Look for:
    - **New files:** vault files not in the manifest. Apply the
      same categorization rules as capability 6 (always-exclude
      directories, prep files, etc.). Present new publishable
@@ -237,9 +238,11 @@ individually before pushing.
 "filter my campaign for players", "set up player view",
 "what will players see", "publish without spoilers"
 
-Read `references/content-filtering.md` § Manifest Format first — a file
-publishes only as a **checked** entry under `## Publishing`; checking the
-box under `## Excluded` or `## Needs Decision` doesn't publish it.
+Read `references/content-filtering.md` § Manifest Format first — in
+`mode: player`, a file publishes only as a **checked** entry under
+`## Publishing`; checking the box under `## Excluded` or
+`## Needs Decision` doesn't publish it. `mode: full` doesn't filter by
+the manifest at all.
 
 Workflow:
 1. Read `_meta/vault-config.md` for existing publish settings.
