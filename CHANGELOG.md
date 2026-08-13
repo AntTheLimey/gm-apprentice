@@ -36,7 +36,13 @@ guarded lifecycle helper for ephemeral e2e test resources.
   path and accented pages silently never rendered. Canonicalized to NFC at
   the manifest/scanner comparison boundary and strip combining marks in
   `slugify`; `overrides.fields` keys are now canonicalized the same way at
-  config load. **Slugs change for every page with accented characters.**
+  config load. **Slugs change for every page whose name carries an accent
+  that decomposes into a combining mark** (`é`, `á`, `ñ`, `ü`, …);
+  characters with no such decomposition (`ø`, `ł`, `đ`, `ß`) are
+  unaffected and keep their old slug — `Bjørn` still slugs to `bj-rn`.
+  Two pages in one folder can now collide where they used to slug apart
+  (`Renée` and `Renee` both give `renee.html`); the scan warns when that
+  happens, and the later page wins.
   The manifest only ever filtered pages on `mode: player` sites, so on
   `mode: full` sites (and on `mode: player` sites where the manifest and
   scanned path already agreed) accented pages always rendered — just at
@@ -54,6 +60,14 @@ guarded lifecycle helper for ephemeral e2e test resources.
   `session-wrapup` — were publishing GM plot state to players. Both lists
   now carry the same six entries (`GM Notes`, `DM Notes`, `Player Notes`,
   `Source References`, `Reconciliation Context`, `Handoff to Reconcile`).
+  The built-in default was previously just `GM Notes`, so a hand-configured
+  site with **no** exclude-sections list in either config file also stops
+  publishing `## DM Notes`, `## Player Notes` and `## Source References`
+  from this release — not only the two reconcile sections. Sites
+  scaffolded before this release already carry those four in
+  `vault.config.json`'s `excludeSections`, so the default never applied
+  to them and nothing changes for them until the reconcile pair is added
+  by hand; new scaffolds get all six.
   **Existing sites with an explicit exclude-sections list do not pick
   this up automatically** — add `Reconciliation Context` and `Handoff to
   Reconcile` by hand, either to `excludeSections` in `vault.config.json`
@@ -72,7 +86,12 @@ guarded lifecycle helper for ephemeral e2e test resources.
   with nearest-match suggestions; campaign-qa's graph-health checks now
   run the audit. `skills/shared/templates/plan.md`'s example relationship
   swaps its blank `type: ""` for a real predicate (`located_at`), which
-  the new check would otherwise flag on day one (#130).
+  the new check would otherwise flag on day one. **Expect a burst of
+  errors on the first run after upgrading:** every plan note already
+  scaffolded from the old template carries that blank `type: ""` and
+  reports as a `blank relationship type` ERROR. That is the check working
+  — fill each one in with a sanctioned predicate from the ontology, or
+  drop the placeholder edge (#130).
 - `tools/publish/lib/e2e-resources.js`: a guarded lifecycle helper for
   ephemeral test resources used by the Cloudflare setup flow's e2e tests.
   Names are always `e2e-<runId>-<label>`; cleanup deletes only records the
