@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
+const { canonicalNfc } = require('./unicode');
 
 // Manifest entries are vault-relative paths, optionally annotated with an inline
 // `— comment` (the Excluded section uses these throughout). Keep only the path, so an
@@ -14,15 +15,13 @@ const matter = require('gray-matter');
 // both "Six — Field Sundries.md" and "Foo.md — see Bar.md" resolve correctly.
 const ENTRY_RE = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$/;
 
-// Normalize a vault-relative path to NFC for equality comparisons (#139). A filename
-// typed with precomposed accents ("González", NFC) and the "same" filename decomposed
-// into base letter + combining marks (NFD) are visually identical but different strings
-// byte-for-byte — different editors, OSes, and even git checkouts round-trip Unicode
-// differently. build.js compares manifest entries against scanned paths with exact-string
-// `Set.has()`, so without a shared normal form a manifest entry can silently fail to match
-// the page it names. Both sides of every such comparison must run through this helper.
+// Normalize a vault-relative path to NFC for equality comparisons (#139). build.js compares
+// manifest entries against scanned paths with exact-string `Set.has()`, so without a shared
+// normal form a manifest entry can silently fail to match the page it names. Both sides of
+// every such comparison must run through this helper. See lib/unicode.js for why the two
+// normal forms of one visible name differ, and for the other comparison boundaries.
 function canonicalPath(entry) {
-  return String(entry).normalize('NFC');
+  return canonicalNfc(entry);
 }
 
 function stripInlineComment(entry) {

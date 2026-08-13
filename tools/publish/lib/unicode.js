@@ -1,0 +1,49 @@
+// Unicode normal form is the hidden variable behind every string comparison this tool
+// makes (#139). A name typed with precomposed accents ("González", NFC) and the same
+// visible name decomposed into base letter + combining marks (NFD) are identical on
+// screen and different byte-for-byte — and which form a given string arrives in depends
+// on the editor, the OS, and the filesystem that round-tripped it. Both sides of a
+// comparison must therefore be put into one normal form first, or the match silently
+// misses and the failure surfaces as "the link didn't render" rather than as an error.
+//
+// NFC is the canonical form throughout: it is what the web, git, and most editors emit.
+function canonicalNfc(value) {
+  return String(value).normalize('NFC');
+}
+
+// Wrap a lookup table so that reads canonicalize their key.
+//
+// The two big tables — linkMap (page titles and aliases) and imageMap (attachment
+// basenames) — are indexed from build.js, processor.js, and a dozen entity templates,
+// and the query string is always author-typed text: the words inside a `[[wikilink]]`,
+// a `portrait:` value, a relationship target, a `parent`/`holder`/`leader` name. The keys
+// come from filenames and frontmatter. Key and query are typed on different keyboards in
+// different apps, so they routinely disagree on normal form.
+//
+// Normalizing at the table rather than at each call site is deliberate: the guarantee then
+// holds by construction for every present and future lookup, instead of depending on some
+// forty call sites each remembering to normalize — the failure this codebase keeps
+// rediscovering, where one call site is fixed and its siblings are left behind.
+// Keys are stored already canonicalized, so enumeration (Object.keys /
+// entries / values) is unchanged, and the stored VALUES — output paths, attachment
+// relPaths — are never touched. That is what keeps #139's normalization orthogonal to
+// #145's percent-encoding: only comparison keys are canonicalized, never emitted paths.
+function nfcLookupTable(map) {
+  return new Proxy(map, {
+    get(target, prop, receiver) {
+      if (typeof prop === 'string') {
+        const key = canonicalNfc(prop);
+        if (Object.prototype.hasOwnProperty.call(target, key)) return target[key];
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+    has(target, prop) {
+      if (typeof prop === 'string' && Object.prototype.hasOwnProperty.call(target, canonicalNfc(prop))) {
+        return true;
+      }
+      return Reflect.has(target, prop);
+    },
+  });
+}
+
+module.exports = { canonicalNfc, nfcLookupTable };

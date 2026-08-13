@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { getCanonStatus } = require('./templates/base');
+const { canonicalNfc, nfcLookupTable } = require('./unicode');
 
 function slugify(name) {
   const slug = name
@@ -111,26 +112,32 @@ function scanVault(config) {
   return pages;
 }
 
+// Titles/aliases in, output paths out. Keys are canonicalized to NFC (#139) and the table is
+// wrapped so lookups canonicalize too: the wikilink text a GM types inside a note and the
+// filename it names are authored in different apps and routinely disagree on normal form,
+// which used to render the link as plain text with no warning. Values — the output paths —
+// are stored exactly as given; nothing here rewrites an emitted path or URL.
 function buildLinkMap(pages) {
   const map = {};
 
   // Pass 1: add all canonical titles (non-superseded first so they claim their own names)
   for (const page of pages) {
     if (getCanonStatus(page.frontmatter) !== 'SUPERSEDED') {
-      map[page.title] = page.outputPath;
+      map[canonicalNfc(page.title)] = page.outputPath;
     }
   }
 
   // Pass 2: add superseded titles, redirecting to their superseded_by target if possible
   for (const page of pages) {
     if (getCanonStatus(page.frontmatter) === 'SUPERSEDED') {
-      if (page.title in map) continue;
+      const title = canonicalNfc(page.title);
+      if (title in map) continue;
       const supersededBy = page.frontmatter.superseded_by;
       if (supersededBy) {
-        const targetName = String(supersededBy).replace(/\[\[|\]\]/g, '').trim();
-        map[page.title] = map[targetName] || page.outputPath;
+        const targetName = canonicalNfc(String(supersededBy).replace(/\[\[|\]\]/g, '').trim());
+        map[title] = map[targetName] || page.outputPath;
       } else {
-        map[page.title] = page.outputPath;
+        map[title] = page.outputPath;
       }
     }
   }
@@ -139,14 +146,15 @@ function buildLinkMap(pages) {
   for (const page of pages) {
     if (Array.isArray(page.frontmatter.aliases)) {
       for (const alias of page.frontmatter.aliases) {
-        if (!(alias in map)) {
-          map[alias] = page.outputPath;
+        const key = canonicalNfc(alias);
+        if (!(key in map)) {
+          map[key] = page.outputPath;
         }
       }
     }
   }
 
-  return map;
+  return nfcLookupTable(map);
 }
 
 function scanAttachments(config) {
@@ -166,13 +174,17 @@ function scanAttachments(config) {
         walk(full);
       } else if (IMAGE_EXTS.test(entry.name)) {
         const relPath = toPosix(path.relative(attachmentsPath, full));
-        if (entry.name in map) {
+        // Key canonicalized to NFC (#139) so a `portrait:` value or `![[embed]]` typed in the
+        // other normal form still finds the file. sourcePath and relPath keep the filesystem's
+        // own bytes — they name a real file and become the copied output path.
+        const key = canonicalNfc(entry.name);
+        if (key in map) {
           console.warn(
             `scanner: attachment basename collision — "${entry.name}" found at both ` +
-            `"${map[entry.name].relPath}" and "${relPath}". The latter will be used.`
+            `"${map[key].relPath}" and "${relPath}". The latter will be used.`
           );
         }
-        map[entry.name] = {
+        map[key] = {
           sourcePath: full,
           relPath,
         };
@@ -181,7 +193,7 @@ function scanAttachments(config) {
   }
 
   walk(attachmentsPath);
-  return map;
+  return nfcLookupTable(map);
 }
 
 function pairStoryFiles(pages, vaultPath) {

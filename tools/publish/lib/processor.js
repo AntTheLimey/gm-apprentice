@@ -1,4 +1,5 @@
 const { createRenderer } = require('./markdown');
+const { canonicalNfc } = require('./unicode');
 const md = createRenderer();
 
 function escapeHtml(str) {
@@ -325,21 +326,28 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
   // Safe because every entity template renders `portrait:` (world-domain.js was the last
   // holdout). A new template that skips the portrait must not be given a portraitBasename.
   const portrait = options.portraitBasename;
-  const dedupeBasename = portrait && imageMap[portrait] ? portrait.toLowerCase() : null;
+  // NFC throughout (#139): the `portrait:` value, the embed text, and the imageMap keys are
+  // authored in three different places and need not agree on normal form. Comparing the
+  // embed against the portrait — and registering it in usedImages, which build.js matches
+  // against imageMap's own keys when pruning in player mode — must use the canonical form,
+  // or a resolved image is dropped from the copy pass and renders as a broken <img>.
+  const portraitKey = portrait ? canonicalNfc(portrait) : null;
+  const dedupeKey = portraitKey && imageMap[portraitKey] ? portraitKey.toLowerCase() : null;
 
   // Match ![[filename.ext]] or ![[filename.ext|alt text]]
   return markdown.replace(/!\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/g, (match, target, alt) => {
     const basename = target.trim();
     if (!IMAGE_EXT_REGEX.test(basename)) return match; // not an image, leave as-is
 
-    const entry = imageMap[basename];
+    const key = canonicalNfc(basename);
+    const entry = imageMap[key];
     if (!entry) {
       console.warn(`processor: image embed not found — "${basename}" (${currentOutputPath})`);
       return '';
     }
 
-    if (usedImages) usedImages.add(basename);
-    if (dedupeBasename && basename.toLowerCase() === dedupeBasename) return '';
+    if (usedImages) usedImages.add(key);
+    if (dedupeKey && key.toLowerCase() === dedupeKey) return '';
 
     // Output goes to docs/images/{relPath}. Compute relative path from current page.
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));

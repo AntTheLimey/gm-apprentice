@@ -8,6 +8,7 @@ const { processContent, extractSections, filterSections, stripDataview, stripGmO
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
+const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -472,7 +473,11 @@ function build(options = {}) {
   // The CoC sheet masthead renders a campaign-level crest (publishConfig.sheet_crest);
   // register it so the image-manifest pruning below doesn't drop it from the output.
   if (publishConfig.sheet_crest) {
-    const crestBase = String(publishConfig.sheet_crest).split('/').pop();
+    // Canonical NFC (#139): usedImages is matched against imageMap's own (NFC) keys by the
+    // player-mode prune below, so a crest named in the other normal form must register the
+    // key the map actually holds — otherwise the crest resolves on the page and is then
+    // never copied.
+    const crestBase = canonicalNfc(String(publishConfig.sheet_crest).split('/').pop());
     if (crestBase && imageMap[crestBase]) usedImages.add(crestBase);
   }
   let errorCount = 0;
@@ -483,7 +488,7 @@ function build(options = {}) {
     try {
       if (page.frontmatter.type === 'world_flags') continue;
       if (page.frontmatter.portrait) {
-        const basename = String(page.frontmatter.portrait).split('/').pop();
+        const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
       const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
