@@ -353,6 +353,19 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
 
    It prints an `id`.
 
+   > **This command is for a real site's namespace only — never for test or
+   > session cleanup.** Issue #142: an ad-hoc cleanup sweep ran hand-typed
+   > `wrangler` commands and deleted a **production** `INBOX` namespace by
+   > matching on its title. Ephemeral resources for E2E/session test work
+   > must be created and torn down only through
+   > `tools/publish/lib/e2e-resources.js`, which names everything
+   > `e2e-<runId>-<label>` and refuses to delete anything without that
+   > prefix — never `wrangler kv namespace delete` /
+   > `wrangler pages project delete` typed by hand or matched by listing.
+   > A plain `INBOX` (or any other production-shaped name) is never a valid
+   > deletion target, and cleanup always runs dry-run first to confirm the
+   > deletion list before anything is actually deleted.
+
 2. **Bind it in `wrangler.toml`.** A minimal Tier-1 `wrangler.toml` has no KV
    block yet — add one, pasting the id from step 1:
 
