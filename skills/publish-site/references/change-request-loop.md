@@ -238,9 +238,18 @@ stale by more than a tick or two (60-90s) means it died silently. But if
 you last relaunched it with a longer `WATCHER_SLEEP` for a stuck batch or a
 failing inbox (see the backoff notes in Start step 4 and "When the watcher
 reports failure"), a heartbeat that old is exactly what a *healthy* watcher
-looks like — check against roughly 2-3× whatever interval you set, and
-don't relaunch on top of a live watcher just because it looks stale by the
-30s yardstick.
+looks like — check against roughly 2-3× whatever interval you set before
+concluding it's dead.
+
+Once staleness is actually confirmed, act on it the same way "When the
+watcher reports failure" does:
+
+- **Fallback:** relaunch it (Start step 4) before assuming the queue is
+  simply empty.
+- **Primitive:** there's nothing to relaunch on your end — a supervised
+  task dying silently means the supervision itself failed, so ask the host
+  whether the task is still running rather than starting a second poller
+  on top of a primitive you can't directly restart.
 
 On "stop", **flush live state to the vault, then terminate the background
 watcher** and do not relaunch it:
