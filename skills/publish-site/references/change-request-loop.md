@@ -20,23 +20,57 @@ does the waiting, and you only wake when a request actually arrives.
    (or `node <tool>/bin/gm-publish.js inbox open WOLF`).
 3. Print it prominently for the GM to read to the table:
    `╔═══════════════╗  SESSION CODE: WOLF  ╚═══════════════╝`
-4. Launch the **background watcher** (below), then leave the session idle. The
-   watcher is a plain shell loop that polls the queue every ~30s and **sleeps
-   while it is empty — spending no model tokens**. It exits (waking you) only
-   when a request arrives.
+4. Launch the **watcher**, then leave the session idle. **If the host offers
+   a supervised or persistent monitor primitive — something that runs a task
+   for the whole session and notifies you as it produces output, rather than
+   only when the process exits — prefer it over a bare background shell
+   command.** That was the live-session workaround that actually held up: a
+   plain background shell loop can die without anyone noticing, and a dead
+   watcher looks exactly like a quiet table. Under a primitive like that, run
+   the poll continuously (no `break`, no relaunching) for the rest of the
+   session, and make it:
+   - **fail loud, not silent** — after N (e.g. 5) consecutive `inbox pull`
+     failures, emit a visible failure line instead of staying quiet, so a
+     broken inbox looks different from an empty one.
+   - **dedup by request id** — track which ids it has already surfaced, so
+     a batch that's still pending on the next poll (e.g. a deploy failure
+     left it unresolved) notifies you once, not again every ~30s.
+
+   **Fallback — plain background shell loop** (use this where the host has
+   no such primitive; it can only notify you when the command exits, so it
+   has to break out on purpose — on a batch *or* on a failure streak — and
+   get relaunched each time):
 
    ```bash
+   fail=0
    while :; do
      out=$(npx gm-apprentice-publish inbox pull 2>/dev/null)
-     if [ -n "$out" ] && [ "$out" != "[]" ]; then printf '%s\n' "$out"; break; fi
+     status=$?
+     date +%s > .watcher-heartbeat
+     if [ "$status" -ne 0 ]; then
+       fail=$((fail + 1))
+       if [ "$fail" -ge 5 ]; then
+         printf 'WATCHER: inbox pull failed %d times in a row\n' "$fail"
+         break
+       fi
+     elif [ -n "$out" ] && [ "$out" != "[]" ]; then
+       printf '%s\n' "$out"
+       break
+     else
+       fail=0
+     fi
      sleep 30
    done
    ```
 
-   Run it as a **background command** (`run_in_background: true`). The harness
-   re-invokes you when it exits — i.e. when the queue is non-empty — handing you
-   the pending JSON. Idle time between requests therefore costs no model tokens;
-   you only think when there is real work.
+   Run it as a **background command** (`run_in_background: true`). The
+   harness re-invokes you when it exits, either with a pending batch or with
+   a failure-streak line — that covers the loop reporting its own trouble.
+   What it can't self-report is dying outright (terminal closed, process
+   killed) with no exit notification at all; that's what `.watcher-heartbeat`
+   is for — see Stop below for the mid-session check. Idle time between
+   requests still costs no model tokens; you only think when there is real
+   work or a failure to report.
 
 ## When a batch arrives
 
@@ -117,8 +151,10 @@ submission order (`timestamp` ascending), tracking **running unspent points**
    - **On deploy failure:** do **not** reply — the entries stay `pending`
      (nothing else marks them) and are pulled again on the next watcher cycle.
      Log the failure.
-5. **Relaunch the background watcher** (the same command as in Start step 4) so
-   the next request wakes you. Idle resumes at zero model-token cost.
+5. **Get the watcher running again for the next request**, per Start step 4:
+   if you're on a persistent monitor primitive it's still running — nothing
+   to do. On the plain-shell fallback, relaunch the same loop. Idle resumes
+   at zero model-token cost either way.
 
 Once a request reaches a terminal outcome it returns exactly one response to
 the chat log: `applied` (sheet redeployed), `rejected` (with the point-math
@@ -137,6 +173,15 @@ One line per request so a glance tells the whole story:
 ```
 
 ## Stop
+
+**Mid-session liveness check.** A dead watcher and a quiet table look
+identical — no output either way. If a GM asks "is it still checking?", or a
+player says they submitted something and nothing happened, check
+`.watcher-heartbeat` (fallback loop) or ask the host whether the persistent
+monitor task is still running: `cat .watcher-heartbeat` shows the Unix
+timestamp of the last poll tick, written every ~30s. Stale by more than a
+tick or two (60-90s) means it died silently — relaunch it (Start step 4)
+before assuming the queue is simply empty.
 
 On "stop", **flush live state to the vault, then terminate the background
 watcher** and do not relaunch it:

@@ -128,7 +128,10 @@ Workflow:
         {old version} to {new version}."
    d. If everything matches, continue silently.
 3. **Check manifest freshness.** Compare the vault's publishable
-   files against `_meta/publish-manifest.md`. Look for:
+   files against `_meta/publish-manifest.md`. Read
+   `references/content-filtering.md` § Manifest Format first — the H2
+   section (`## Publishing` / `## Excluded` / `## Needs Decision`), not
+   the checkbox state, determines inclusion. Look for:
    - **New files:** vault files not in the manifest. Apply the
      same categorization rules as capability 6 (always-exclude
      directories, prep files, etc.). Present new publishable
@@ -232,6 +235,10 @@ individually before pushing.
 **Trigger:** "only publish player content", "hide GM notes",
 "filter my campaign for players", "set up player view",
 "what will players see", "publish without spoilers"
+
+Read `references/content-filtering.md` § Manifest Format first — the H2
+section (`## Publishing` / `## Excluded` / `## Needs Decision`), not the
+checkbox state, determines inclusion.
 
 Workflow:
 1. Read `_meta/vault-config.md` for existing publish settings.
