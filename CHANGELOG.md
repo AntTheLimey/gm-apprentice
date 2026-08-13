@@ -72,6 +72,19 @@ guarded lifecycle helper for ephemeral e2e test resources.
   `recency.js` and `story-spine.js` (a session's narrative recap silently
   vanished from the Story page), the flat-vault chapter↔session match, and
   the chapter page's constituent-sessions sidebar (#139).
+  The same sweep then ran over `lib/templates/`, where eight more
+  comparisons of the same shape were fixed: an accented location page lost
+  its "Places Within", "Known Figures" and "What Happened Here" rollups; an
+  accented faction page lost its members list; the locations index rendered
+  a child as a root sibling instead of nesting it, and split one parent
+  region into two headings; the landing page featured a *different* session
+  than the campaign overview names, recap and link included; and a PC's
+  route map listed one location twice. The search index is built NFC and
+  the search box normalizes its query to match, so a note typed with
+  decomposed accents is findable. A three-way differential build test
+  (all-NFD, all-NFC, and the two forms mixed in one vault) now asserts the
+  generated site is byte-identical across all three, which is what proves
+  the class closed rather than a reading of the code (#139).
 - `publish-site`: the built-in default `exclude_sections` had drifted from
   the scaffold template, and `## Reconciliation Context` /
   `## Handoff to Reconcile` — written automatically by `reconcile` and
