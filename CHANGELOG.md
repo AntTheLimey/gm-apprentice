@@ -54,6 +54,17 @@ guarded lifecycle helper for ephemeral e2e test resources.
   rendering for the first time, at the same corrected slug. Vaults with
   manually-pinned NFD manifest entries should update them to NFC now that
   matching no longer needs the workaround (#139).
+  The same normalization now covers every other table keyed by
+  author-typed text, not just the manifest: `buildLinkMap` (page titles
+  and aliases), `scanAttachments` (attachment basenames), `buildBacklinks`,
+  and the relationship graph's title map. A `[[wikilink]]`, `portrait:`
+  value, relationship target, or `![[embed]]` typed in a different normal
+  form than the file it names used to render as plain text or vanish
+  silently; each of those tables now canonicalizes keys and lookups, so
+  the whole boundary is covered rather than the manifest alone. Only
+  comparison keys are canonicalized — stored output paths and attachment
+  `relPath`s keep their exact bytes, so this stays orthogonal to the
+  `encodeHref` percent-encoding above (#139).
 - `publish-site`: the built-in default `exclude_sections` had drifted from
   the scaffold template, and `## Reconciliation Context` /
   `## Handoff to Reconcile` — written automatically by `reconcile` and
@@ -75,6 +86,14 @@ guarded lifecycle helper for ephemeral e2e test resources.
   two union, so either works). Also corrected `configuration.md`'s
   Precedence section, which described strict shadowing when list settings
   actually union across both config sources (#144).
+- `publish-site`: `publish.overrides` advertised three keys but the build
+  only ever read `overrides.fields`; a top-level `overrides.exclude` or
+  `overrides.include` was a silent no-op. Dropped both from the defaults,
+  and a config that still carries one now warns instead of ignoring it.
+  `configuration.md` documents the real shape — per-file field
+  re-admission keyed by vault-relative path — with a copyable example,
+  and no longer implies whole-file include/exclude lives there (it lives
+  in the publish manifest).
 
 ### Added
 
