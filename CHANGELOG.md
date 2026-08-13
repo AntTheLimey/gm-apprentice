@@ -123,6 +123,49 @@ guarded lifecycle helper for ephemeral e2e test resources.
   `configuration.md` also drops its claim that a per-PC `crest`
   frontmatter value overrides `publish.sheet_crest` — nothing reads
   `frontmatter.crest`; the crest is campaign-wide.
+  A malformed *per-file* entry under `overrides.fields` is now caught the
+  same way: an `include` written as a bare string made `filterFields` do
+  substring matching (`include: sec` re-admitting `secrets`), and any
+  other truthy non-list threw mid-build. Each bad entry is named, warned
+  about once, and dropped, so the exclusions stay in force. An explicitly
+  falsy `fields:` value reaches that validator now too — `||` used to swap
+  `fields: false` for the default before anything could report it.
+- `publish-site`: a relationship whose `description:` is a YAML block
+  scalar (`description: |`) put its indented prose back into the
+  predicate scan, so a line of narration beginning `type:` was reported as
+  an off-vocabulary predicate and failed both `validate_schema.py` and
+  `vault_check.py` on a perfectly valid note. Block-scalar content is now
+  skipped by column across the whole frontmatter walk. `scalar_value`
+  separately accepted a quoted scalar with trailing junk (`type: "npc"
+  trailing` validated as an `npc`); the closing quote must now be the last
+  thing on the line apart from blanks or a comment, and it is found past
+  `\"`/`''` escapes so a value like `"5'4\" - 6'0\""` survives whole
+  instead of truncating at the first inner quote.
+- `publish-site`: the landing page picked its "Latest Session" recap with
+  a substring test, so `[[Session 10]]` answered a lookup for `Session 1`
+  and the wrong session's narrative recap went out. The wrap-up's
+  `session:` ref is now parsed as a wikilink and compared for exact
+  equality, and that lookup runs *before* the `session_number` fallback,
+  which chapters make ambiguous by restarting the count. The looser
+  "ref mentions the session inside longer prose" match is kept as a last
+  resort but can no longer run on into a longer number. NFC
+  canonicalization at the comparison boundary is unchanged (#139).
+- `publish-site`: `inbox pull` spawned `wrangler` with no timeout, so a
+  hung network turn froze the change-request watcher before it could tick
+  `.watcher-heartbeat` — a live-but-stalled loop looked exactly like a
+  dead one, which is the single thing the heartbeat exists to tell apart.
+  Every wrangler call the inbox CLI makes is now bounded at 60s via the
+  shared `runCommand`, so a hang surfaces as a failed poll and the loop's
+  existing failure streak reports it. The documented fallback loop also
+  clamps `WATCHER_SLEEP` once up front: `${WATCHER_SLEEP:-30}` covered
+  unset and empty but not `0` (a flat-out poll against Cloudflare KV) or a
+  non-numeric value (`sleep` fails, loop keeps polling).
+- `publish-site`: the e2e resource helper's cleanup called `wrangler kv
+  namespace delete` and `wrangler pages project delete` without their
+  non-interactive confirmation flags. Both prompt by default, and cleanup
+  runs unattended, so the prompt would hang or read EOF as "no" and leak
+  the resource it was meant to remove. Added `--skip-confirmation` and
+  `--yes` respectively (the two commands spell it differently).
 
 ### Added
 
