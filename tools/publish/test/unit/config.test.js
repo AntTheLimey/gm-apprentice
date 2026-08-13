@@ -517,4 +517,55 @@ describe('malformed publish.overrides blocks', () => {
     assert.deepStrictEqual(result.overrides.fields, {});
     assert.ok(warns.some(w => w.includes('overrides.fields')), `no warning in: ${warns.join(' | ')}`);
   });
+
+  it('reaches the validator for an explicitly falsy fields value', () => {
+    // `||` swapped `false` for the default before it could be reported, so a
+    // GM who wrote `fields: false` got silence and no overrides.
+    const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: false\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('overrides.fields') && w.includes('boolean')),
+      `no boolean warning in: ${warns.join(' | ')}`);
+  });
+
+  it('drops a per-file override whose include is a string, not a list', () => {
+    // filterFields does `overrides.include.includes(field)`; on a string that is
+    // substring matching, so `include: sec` would re-admit `secrets`.
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include: sec\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('Characters/NPCs/Vex.md') && w.includes('include')),
+      `no include warning in: ${warns.join(' | ')}`);
+  });
+
+  it('drops a per-file override that is not a map at all', () => {
+    // A truthy non-array `include` (or a scalar override) makes filterFields throw.
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md": secrets\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('Characters/NPCs/Vex.md')),
+      `no per-file warning in: ${warns.join(' | ')}`);
+  });
+
+  it('drops a per-file override whose include list holds a non-string', () => {
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include:\n          - 7\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('Characters/NPCs/Vex.md')),
+      `no per-file warning in: ${warns.join(' | ')}`);
+  });
+
+  it('keeps a well-formed per-file override untouched', () => {
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include:\n          - secrets\n');
+    assert.deepStrictEqual(result.overrides.fields['Characters/NPCs/Vex.md'], { include: ['secrets'] });
+    assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
+  });
+
+  it('keeps a per-file override with no include key', () => {
+    // `{}` is a legal entry — it just re-admits nothing. Warning here would be noise.
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md": {}\n');
+    assert.deepStrictEqual(result.overrides.fields['Characters/NPCs/Vex.md'], {});
+    assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
+  });
 });

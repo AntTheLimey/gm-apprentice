@@ -96,9 +96,38 @@ function canonicalizeOverrideFieldKeys(fields) {
   }
   const out = {};
   for (const [key, value] of Object.entries(fields)) {
+    const problem = overrideEntryProblem(value);
+    if (problem) {
+      // Dropping the entry leaves the exclusions in force, which is the safe
+      // direction: a malformed `include` must never re-admit a field by accident.
+      console.warn(
+        `config: publish.overrides.fields["${key}"] ${problem}. That override is ignored. ` +
+        'Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.'
+      );
+      continue;
+    }
     out[canonicalPath(key)] = value;
   }
   return out;
+}
+
+// build.js hands each per-file entry straight to filterFields, which does
+// `overrides.include.includes(field)`. A string there is substring matching
+// (`include: sec` would re-admit `secrets`); any other truthy non-array throws.
+// Say which it is rather than letting the build guess or crash.
+function overrideEntryProblem(value) {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return `must be a map, but is ${Array.isArray(value) ? 'a list' : typeof value}`;
+  }
+  if (!('include' in value)) return null;
+  if (!Array.isArray(value.include)) {
+    return `has an "include" that must be a list of field names, but is ` +
+      `${typeof value.include}`;
+  }
+  if (!value.include.every((f) => typeof f === 'string')) {
+    return 'has an "include" list holding something that is not a field name';
+  }
+  return null;
 }
 
 // A key under `publish.overrides` that the build never reads changes nothing about the
@@ -201,7 +230,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     // passing one along would just relocate the silent no-op into publishConfig.
     overrides: {
       fields: canonicalizeOverrideFieldKeys(
-        (publish.overrides && publish.overrides.fields) || PUBLISH_DEFAULTS.overrides.fields
+        // `??`, not `||`: an explicitly falsy `fields: false` is malformed config the
+        // validator must see and report, not something to silently swap for the default.
+        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields
       ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
