@@ -22,6 +22,17 @@
 //     can be mutated afterwards to redirect a later delete at a different
 //     id — a dry-run report can't be tampered with and then fed back in to
 //     change what a real cleanup deletes.
+//   - a record is removed from tracking *before* its delete call is issued,
+//     so a duplicate entry in `_records`, or a cleanup() re-entered from
+//     inside `runWrangler` (e.g. an adversarial test mock), can never see
+//     the same record as still deletable and delete it twice. A failed
+//     delete restores the record so a retry can still find it.
+//
+// None of this can protect against a `runWrangler` that lies about what it
+// created — provenance here means "this instance's own create call returned
+// this id," not "this id is actually safe." The guarantee is only as good
+// as the injected runner; it's real wrangler in production and a mock that
+// must never touch the network in tests.
 //
 // `_records` stays a live, writable array (rather than a defensive copy)
 // specifically so callers — including this module's own tests — can
@@ -110,15 +121,33 @@ function createE2eResources({ runWrangler, runId }) {
     if (dryRun) return toDelete;
 
     for (const record of toDelete) {
+      // Already handled earlier in this same pass — either a duplicate
+      // entry in `_records`, or a cleanup() re-entered from inside an
+      // earlier iteration's `runWrangler` call already deleted it (see
+      // the pre-call removal below).
+      if (!minted.has(record)) continue;
+
+      // Remove from tracking *before* issuing the delete call, not after,
+      // so a re-entrant cleanup() triggered synchronously from inside this
+      // very `runWrangler` call can never see this record as still valid
+      // and attempt to delete it again. Use a while-loop over indexOf
+      // (rather than a single splice) so a missing/duplicated entry can
+      // never splice the wrong element.
+      minted.delete(record);
+      let idx;
+      while ((idx = _records.indexOf(record)) !== -1) _records.splice(idx, 1);
+
       const r =
         record.type === 'kv'
           ? runWrangler(['kv', 'namespace', 'delete', '--namespace-id', record.id])
           : runWrangler(['pages', 'project', 'delete', record.name]);
+
       if (r.code !== 0) {
+        // Deletion failed — restore tracking so a retry can find it again.
+        minted.add(record);
+        _records.push(record);
         throw new Error(`Could not delete ${record.type} "${record.name}": ${(r.stderr || r.stdout || '').trim()}`);
       }
-      _records.splice(_records.indexOf(record), 1);
-      minted.delete(record);
     }
     return toDelete;
   }

@@ -123,6 +123,85 @@ test('cleanup refuses to delete a hand-injected record even with a spoofed e2e- 
   assert.strictEqual(calls.length, 0);
 });
 
+test('cleanup deletes a duplicated record only once, not twice', () => {
+  const { runWrangler, calls } = fakeRunWrangler([
+    { code: 0, stdout: 'id = "kvid1"', stderr: '' }, // create
+    { code: 0, stdout: '', stderr: '' },              // the single real delete
+  ]);
+  const resources = createE2eResources({ runWrangler, runId: 'run1' });
+  resources.createKvNamespace('inbox');
+
+  // Polluted tracking: the same minted record object pushed onto _records
+  // a second time (e.g. accidental double-tracking, not a foreign object).
+  resources._records.push(resources._records[0]);
+  assert.strictEqual(resources._records.length, 2);
+
+  resources.cleanup({ dryRun: false });
+
+  const deleteCalls = calls.filter((a) => a[2] === 'delete');
+  assert.strictEqual(deleteCalls.length, 1, 'exactly one delete call, despite the duplicate entry');
+  assert.deepStrictEqual(deleteCalls[0], ['kv', 'namespace', 'delete', '--namespace-id', 'kvid1']);
+  assert.strictEqual(resources._records.length, 0, 'tracking left clean, no stray leftover entry');
+});
+
+test('a cleanup() call re-entered from inside runWrangler does not double-delete or corrupt tracking', () => {
+  // Simulates a buggy/adversarial session or test mock that calls
+  // cleanup() again while a delete call from an earlier cleanup() is still
+  // in flight — not something real wrangler would ever do, but exactly the
+  // "caller mutated our tracking mid-run" class this module defends
+  // against. Provenance removal happens *before* the delete call is made,
+  // so the nested cleanup() can never see a record the outer call already
+  // committed to deleting.
+  const calls = [];
+  let reentered = false;
+  let resources;
+
+  const runWrangler = (args) => {
+    calls.push(args);
+    if (args[2] === 'create') {
+      const label = args[3].split('-').pop();
+      return { code: 0, stdout: `id = "id-${label}"`, stderr: '' };
+    }
+    if (args[2] === 'delete' && !reentered) {
+      reentered = true;
+      resources.cleanup({ dryRun: false }); // re-entrant, mid-delete
+    }
+    return { code: 0, stdout: '', stderr: '' };
+  };
+
+  resources = createE2eResources({ runWrangler, runId: 'run1' });
+  const idA = resources.createKvNamespace('a');
+  const idB = resources.createKvNamespace('b');
+
+  resources.cleanup({ dryRun: false });
+
+  const deleteArgv = calls.filter((a) => a[2] === 'delete').map((a) => a.join(' '));
+  const deleteA = `kv namespace delete --namespace-id ${idA}`;
+  const deleteB = `kv namespace delete --namespace-id ${idB}`;
+
+  assert.strictEqual(deleteArgv.filter((s) => s === deleteA).length, 1, 'A deleted exactly once');
+  assert.strictEqual(deleteArgv.filter((s) => s === deleteB).length, 1, 'B deleted exactly once');
+  assert.strictEqual(resources._records.length, 0, 'tracking left clean, no stray entries');
+});
+
+test('a failed delete restores tracking so a retry can find the record again', () => {
+  const { runWrangler, calls } = fakeRunWrangler([
+    { code: 0, stdout: 'id = "kvid1"', stderr: '' },        // create
+    { code: 1, stdout: '', stderr: 'first attempt fails' }, // delete attempt 1: fails
+    { code: 0, stdout: '', stderr: '' },                     // delete attempt 2 (retry): succeeds
+  ]);
+  const resources = createE2eResources({ runWrangler, runId: 'run1' });
+  resources.createKvNamespace('inbox');
+
+  assert.throws(() => resources.cleanup({ dryRun: false }), /first attempt fails/);
+  assert.strictEqual(resources._records.length, 1, 'record restored for a retry, not lost');
+
+  resources.cleanup({ dryRun: false }); // retry succeeds
+
+  assert.strictEqual(resources._records.length, 0);
+  assert.strictEqual(calls.length, 3);
+});
+
 test('production-shaped names are impossible to construct via the factory', () => {
   const { runWrangler } = fakeRunWrangler([
     { code: 0, stdout: 'id = "kvid1"', stderr: '' },
