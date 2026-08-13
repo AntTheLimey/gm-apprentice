@@ -474,3 +474,47 @@ describe('overrides surface (dead top-level keys)', () => {
     assert.deepStrictEqual(loadPublishConfig('/nonexistent/path').overrides, { fields: {} });
   });
 });
+
+describe('malformed publish.overrides blocks', () => {
+  function writeConfig(tmpDir, yamlBody) {
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), `---\n${yamlBody}---\n`);
+  }
+
+  function loadWithWarns(yamlBody) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try {
+      writeConfig(tmpDir, yamlBody);
+      return { result: loadPublishConfig(tmpDir), warns };
+    } finally {
+      console.warn = orig;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  it('warns once, not per character index, when overrides is a bare string', () => {
+    // Object.keys('fields') is ['0'..'5'], which would invent six override keys.
+    const { result, warns } = loadWithWarns('publish:\n  overrides: fields\n');
+    const hits = warns.filter(w => w.includes('publish.overrides'));
+    assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+    assert.match(hits[0], /must be a map/);
+    assert.deepStrictEqual(result.overrides, { fields: {} });
+  });
+
+  it('warns once when overrides is a list', () => {
+    const { warns } = loadWithWarns('publish:\n  overrides:\n    - fields\n');
+    const hits = warns.filter(w => w.includes('publish.overrides'));
+    assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+    assert.match(hits[0], /a list/);
+  });
+
+  it('ignores a non-map overrides.fields instead of inventing per-character keys', () => {
+    const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: secrets\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('overrides.fields')), `no warning in: ${warns.join(' | ')}`);
+  });
+});

@@ -84,8 +84,18 @@ function unionExcludeList(primary, fallback, defaults) {
 // accented filename) would otherwise never match — canonicalize once here, at load, so
 // build.js's single query-side normalization is enough.
 function canonicalizeOverrideFieldKeys(fields) {
+  if (fields == null) return {};
+  // Same trap as the block above: Object.entries on a string yields per-character keys, which
+  // would become override entries no page path can ever match.
+  if (typeof fields !== 'object' || Array.isArray(fields)) {
+    console.warn(
+      `config: publish.overrides.fields must be a map keyed by vault-relative path, but is ` +
+      `${Array.isArray(fields) ? 'a list' : typeof fields}. No field overrides applied.`
+    );
+    return {};
+  }
   const out = {};
-  for (const [key, value] of Object.entries(fields || {})) {
+  for (const [key, value] of Object.entries(fields)) {
     out[canonicalPath(key)] = value;
   }
   return out;
@@ -95,7 +105,19 @@ function canonicalizeOverrideFieldKeys(fields) {
 // published site, and the GM has no way to tell that from "the override didn't match".
 // Name it, and say where the real one lives.
 function warnUnreadOverrideKeys(overrides) {
-  for (const key of Object.keys(overrides || {})) {
+  if (overrides == null) return;
+  // A malformed block — `overrides: fields` (a bare string), or a list — must not be walked
+  // as a key/value map: Object.keys('fields') is ['0'..'5'], which would report six invented
+  // keys and bury the real problem.
+  if (typeof overrides !== 'object' || Array.isArray(overrides)) {
+    console.warn(
+      `config: publish.overrides must be a map, but is ${Array.isArray(overrides) ? 'a list' : typeof overrides}. ` +
+      'Nothing under it is being read. Expected shape: overrides: { fields: ' +
+      '{ "Characters/NPCs/Vex.md": { include: ["secrets"] } } }.'
+    );
+    return;
+  }
+  for (const key of Object.keys(overrides)) {
     if (key === 'fields') continue;
     console.warn(
       `config: publish.overrides.${key} is not read by the build and has no effect. ` +
