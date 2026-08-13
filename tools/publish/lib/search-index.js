@@ -1,4 +1,5 @@
 const { publishedSource } = require('./processor');
+const { canonicalNfc } = require('./unicode');
 const lunr = require('lunr');
 
 function stripMarkdown(md) {
@@ -45,10 +46,12 @@ function buildSearchIndex(pages) {
       const fm = page.frontmatter;
       this.add({
         id: page.outputPath,
-        title: page.displayTitle,
-        aliases: Array.isArray(fm.aliases) ? fm.aliases.join(' ') : '',
+        title: canonicalNfc(page.displayTitle),
+        aliases: Array.isArray(fm.aliases) ? canonicalNfc(fm.aliases.join(' ')) : '',
         type: fm.type || '',
-        body: stripMarkdown(publishedText(page)).slice(0, 500),
+        // NFC before slicing (#139): the cut lands on a different character otherwise, so two
+        // spellings of one vault index different amounts of text as well as different terms.
+        body: canonicalNfc(stripMarkdown(publishedText(page))).slice(0, 500),
       });
     }
   });

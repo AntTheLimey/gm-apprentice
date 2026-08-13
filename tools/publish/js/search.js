@@ -62,7 +62,11 @@
     document.head.appendChild(script);
   }
 
-  function search(query) {
+  function search(rawQuery) {
+    // Match the index's normal form (#139): the index is built NFC, so a query typed with
+    // decomposed accents must be folded the same way or it can never match.
+    var query = String(rawQuery == null ? '' : rawQuery);
+    query = query.normalize ? query.normalize('NFC') : query;
     if (!idx || !query.trim()) {
       resultsDiv.innerHTML = query.trim() ? '<div class="search-results-empty">Loading...</div>' : '';
       return;
