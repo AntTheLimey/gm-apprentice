@@ -6,8 +6,10 @@ which file owns which setting prevents confusion.
 ## `_meta/vault-config.md` (in the vault)
 
 YAML frontmatter under `publish:`. This is the authoritative
-source for content filtering and theming. Values here override
-any equivalent in `vault.config.json`.
+source for content filtering and theming. Values here take
+precedence over `vault.config.json` for scalar settings; the
+exclude **lists** union across both files rather than shadowing
+each other — see § Precedence.
 
 | Setting | Key path | Description |
 |---------|----------|-------------|
@@ -161,14 +163,14 @@ display settings that are specific to the generated site.
 | Cloudflare project | `cloudflarePagesProject` | Optional. Cloudflare Pages project name for deploys. Defaults to the site directory's folder name. |
 | Attachments directory | `attachmentsDir` | Subfolder in vault holding images |
 | Folder map | `folderMap` | Maps vault folders to site output paths |
-| Exclude directories | `excludeDirs` | Fallback if `vault-config.md` doesn't set `publish.exclude_dirs` |
-| Exclude sections | `excludeSections` | Fallback if `vault-config.md` doesn't set `publish.exclude_sections` |
+| Exclude directories | `excludeDirs` | Unioned with `publish.exclude_dirs` in `vault-config.md` (see § Precedence) |
+| Exclude sections | `excludeSections` | Unioned with `publish.exclude_sections` in `vault-config.md` (see § Precedence) |
 | Exclude callouts | `excludeCallouts` | Fallback if `vault-config.md` doesn't set `publish.exclude_callouts`. `true` strips all callouts, or an array of types |
 | Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
 
 ## Precedence
 
-Two different rules apply, depending on the setting.
+Three different rules apply, depending on the setting.
 
 **List settings** — `exclude_sections`, `exclude_fields`, `exclude_dirs`
 — are **unioned**, not overridden. If `publish.exclude_sections` (etc.)
@@ -180,6 +182,14 @@ neither file shadows the other. The built-in default list is used only
 when **neither** file provides a list for that setting; as soon as
 either does, the default stops applying on its own (it is not unioned
 in alongside them).
+
+**`vault-config.md`-only settings** — `mode`, `system`,
+`exclude_drafts`, `theme`, `four_oh_four`, `overrides`,
+`section_titles`, and `setting_year` — are never read from
+`vault.config.json` at all: the `vault-config.md` value applies when
+set, otherwise the built-in default (`system` and `setting_year` have
+none — unset just means unset). Putting them in the JSON file does
+nothing.
 
 **Scalar and passthrough settings** — `sheet_crest`, `exclude_callouts`,
 `backend.statusBar`/`backend.inbox`, and the per-key settings inside

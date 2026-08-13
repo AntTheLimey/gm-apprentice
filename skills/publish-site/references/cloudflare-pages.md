@@ -354,7 +354,10 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    It prints an `id`.
 
    > **This command is for a real site's namespace only — never for test or
-   > session cleanup.** Issue #142: an ad-hoc cleanup sweep ran hand-typed
+   > session cleanup.** The "never hand-delete" rule applies to everyone; the
+   > tooling paragraph below is *for contributors and agent-driven test
+   > sessions* — it names a file in the gm-apprentice repo, not something a
+   > marketplace install has. Issue #142: an ad-hoc cleanup sweep ran hand-typed
    > `wrangler` commands and deleted a **production** `INBOX` namespace by
    > matching on its title. Ephemeral resources for E2E/session test work
    > must be created and torn down only through

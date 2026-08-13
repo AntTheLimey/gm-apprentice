@@ -38,10 +38,12 @@ does the waiting, and you only wake when a request actually arrives.
    - **dedup by request id** — track which ids it has already surfaced, so
      a batch that's still pending on the next poll (e.g. a deploy failure
      left it unresolved) notifies you once, not again every ~30s.
-   - **tick a heartbeat** — write something the GM can check in seconds to
-     confirm the loop is alive right now, not just when it has news (see
-     the Stop section's mid-session check — same file, same check, either
-     mode).
+   - **tick a heartbeat** — on every poll, write the current Unix timestamp
+     (`date +%s`) to `<site_dir>/.watcher-heartbeat`, overwriting it each
+     time, so the GM can confirm in seconds that the loop is alive right
+     now and not just when it has news. Same path and same format as the
+     shell fallback below, so the Stop section's mid-session check
+     (`cat <site_dir>/.watcher-heartbeat`) reads either mode identically.
 
    **Fallback — plain background shell loop** (use this where the host has
    no such primitive; it can only notify you when the command exits, so it
