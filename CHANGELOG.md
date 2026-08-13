@@ -65,6 +65,13 @@ guarded lifecycle helper for ephemeral e2e test resources.
   comparison keys are canonicalized — stored output paths and attachment
   `relPath`s keep their exact bytes, so this stays orthogonal to the
   `encodeHref` percent-encoding above (#139).
+  The `Map`/`Set`/`===` comparisons that no lookup table can cover are
+  normalized at their call sites too: recency scoring (an accented NPC
+  mentioned in the latest session never scored, so it never reached the
+  landing page's recent cards), wrap-up↔session pairing in both
+  `recency.js` and `story-spine.js` (a session's narrative recap silently
+  vanished from the Story page), the flat-vault chapter↔session match, and
+  the chapter page's constituent-sessions sidebar (#139).
 - `publish-site`: the built-in default `exclude_sections` had drifted from
   the scaffold template, and `## Reconciliation Context` /
   `## Handoff to Reconcile` — written automatically by `reconcile` and
@@ -93,7 +100,12 @@ guarded lifecycle helper for ephemeral e2e test resources.
   `configuration.md` documents the real shape — per-file field
   re-admission keyed by vault-relative path — with a copyable example,
   and no longer implies whole-file include/exclude lives there (it lives
-  in the publish manifest).
+  in the publish manifest). A malformed block (`overrides: fields`, or a
+  non-map `overrides.fields`) is now reported once with the expected
+  shape instead of being walked per character into invented keys.
+  `configuration.md` also drops its claim that a per-PC `crest`
+  frontmatter value overrides `publish.sheet_crest` — nothing reads
+  `frontmatter.crest`; the crest is campaign-wide.
 
 ### Added
 
