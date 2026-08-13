@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.49] — 2026-08-12
 
-Publish tool 1.11.22. Six published-site content-leak and encoding bugs
-fixed, relationship-predicate validation added to the vault-authoring gate,
-and a guarded lifecycle helper for ephemeral e2e test resources.
+Publish tool 1.11.22. Published-site content-leak and encoding bugs fixed,
+relationship-predicate validation added to the vault-authoring gate, and a
+guarded lifecycle helper for ephemeral e2e test resources.
 
 ### Fixed
 
@@ -36,27 +36,36 @@ and a guarded lifecycle helper for ephemeral e2e test resources.
   path and accented pages silently never rendered. Canonicalized to NFC at
   the manifest/scanner comparison boundary and strip combining marks in
   `slugify`; `overrides.fields` keys are now canonicalized the same way at
-  config load. **Slugs for previously-broken accented pages change as a
-  result** — those pages never rendered before, so nothing that worked
-  breaks. Vaults with manually-pinned NFD manifest entries should update
-  them to NFC now that matching no longer needs the workaround (#139).
+  config load. **Slugs change for every page with accented characters.**
+  The manifest only ever filtered pages on `mode: player` sites, so on
+  `mode: full` sites (and on `mode: player` sites where the manifest and
+  scanned path already agreed) accented pages always rendered — just at
+  the mangled slug the old naive `slugify` produced (`gonz-lez` for
+  "González"). Every one of those pages now renders at the corrected slug
+  (`gonzalez`) instead, so existing links and bookmarks to them break.
+  Pages that never rendered at all (`mode: player` sites where the
+  manifest and scanned path normalization forms mismatched) start
+  rendering for the first time, at the same corrected slug. Vaults with
+  manually-pinned NFD manifest entries should update them to NFC now that
+  matching no longer needs the workaround (#139).
 - `publish-site`: the built-in default `exclude_sections` had drifted from
   the scaffold template, and `## Reconciliation Context` /
   `## Handoff to Reconcile` — written automatically by `reconcile` and
   `session-wrapup` — were publishing GM plot state to players. Both lists
   now carry the same six entries (`GM Notes`, `DM Notes`, `Player Notes`,
   `Source References`, `Reconciliation Context`, `Handoff to Reconcile`).
-  **Existing sites with an explicit `excludeSections` list in
-  `vault.config.json` do not pick this up automatically** — add the two
-  new entries by hand, or re-run `gm-publish init` to re-scaffold. Also
-  corrected `configuration.md`'s Precedence section, which described
-  strict shadowing when list settings actually union across both config
-  sources (#144).
+  **Existing sites with an explicit exclude-sections list do not pick
+  this up automatically** — add `Reconciliation Context` and `Handoff to
+  Reconcile` by hand, either to `excludeSections` in `vault.config.json`
+  or to `publish.exclude_sections` in the vault's `vault-config.md` (the
+  two union, so either works). Also corrected `configuration.md`'s
+  Precedence section, which described strict shadowing when list settings
+  actually union across both config sources (#144).
 
 ### Added
 
-- `campaign-organizer` / `campaign-qa`: relationship predicates are now
-  validated against the authoritative vocabulary in
+- `campaign-qa`: relationship predicates are now validated against the
+  authoritative vocabulary in
   `skills/shared/gm-apprentice-ontology.json`. `vault_check.py
   relationships` (also folded into `vault_check.py all`) and a parallel
   check in `scripts/validate_schema.py` flag off-vocabulary predicates
@@ -79,7 +88,11 @@ and a guarded lifecycle helper for ephemeral e2e test resources.
   change-request loop (persistent monitor primitive preferred, a
   documented shell-loop fallback, a heartbeat liveness artifact, failure
   emission, request-id dedup, capped backoff) and pointers to the
-  manifest spec at the top of the relevant `SKILL.md` capability entries
+  manifest spec at the top of the relevant `SKILL.md` capability entries.
+  Also clarified the manifest's actual semantics in
+  `content-filtering.md`: it's an inclusion filter only on `mode: player`
+  sites — checking a box under `## Excluded` or `## Needs Decision` never
+  publishes a file — and `mode: full` ignores the manifest entirely
   (#143, #136).
 
 ---
