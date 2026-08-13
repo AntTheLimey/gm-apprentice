@@ -298,18 +298,35 @@ class ValidateSchemaRelationshipTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("Could not read file", out)
 
-    def test_missing_ontology_reports_instead_of_tracebacking(self):
-        # Raising here would fail this test outright — that is the point.
+    def missing_ontology_campaign(self, *caches_to_clear) -> tuple[int, str]:
+        """Validate the fixture vault with the export gone and caches cold.
+
+        Raising instead of returning fails the calling test — that is the point.
+        """
         original = sr.ONTOLOGY_PATH
+        sr.predicate_vocabulary()  # warm both caches from the real export
+        sr.inverse_predicates()
+        for cache in caches_to_clear:
+            cache.cache_clear()
         sr.ONTOLOGY_PATH = original.with_name("no-such-ontology.json")
-        sr.predicate_vocabulary.cache_clear()
-        sr.inverse_predicates.cache_clear()
         try:
-            code, out = self.run_campaign(FIXTURE)
+            return self.run_campaign(FIXTURE)
         finally:
             sr.ONTOLOGY_PATH = original
             sr.predicate_vocabulary.cache_clear()
             sr.inverse_predicates.cache_clear()
+
+    def test_missing_ontology_reports_instead_of_tracebacking(self):
+        code, out = self.missing_ontology_campaign(sr.predicate_vocabulary,
+                                                   sr.inverse_predicates)
+        self.assertEqual(code, 1)
+        self.assertIn("predicate vocabulary", out)
+
+    def test_missing_ontology_caught_even_with_the_vocabulary_cached(self):
+        # The asymmetry case: the vocabulary loads fine up front, then the
+        # export goes away before the loop reaches its first bad predicate
+        # and needs the inverse map through its own separate cache.
+        code, out = self.missing_ontology_campaign(sr.inverse_predicates)
         self.assertEqual(code, 1)
         self.assertIn("predicate vocabulary", out)
 

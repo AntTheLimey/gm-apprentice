@@ -39,6 +39,7 @@ from schema_rules import (  # noqa: E402
     SESSION_STATUS,
     WORLD_DOMAIN_STATUS,
     extract_frontmatter,
+    inverse_predicates,
     iter_relationship_predicates,
     predicate_problem,
     predicate_vocabulary,
@@ -443,6 +444,10 @@ def validate_campaign(campaign_dir: Path) -> int:
 
     try:
         vocabulary = predicate_vocabulary()
+        # Warm the inverse map here too: validate_relationships reaches it
+        # through predicate_problem() on a second cache, and an unguarded
+        # load there would abort the run mid-loop.
+        inverse_predicates()
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"Error: cannot read the predicate vocabulary from the "
               f"ontology export: {e}")
