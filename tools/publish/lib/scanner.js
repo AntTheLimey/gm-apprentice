@@ -162,7 +162,8 @@ function scanAttachments(config) {
   const attachmentsPath = path.join(vaultPath, attachmentsDir || '_attachments');
   const map = {};
 
-  if (!fs.existsSync(attachmentsPath)) return map;
+  // Wrapped on this path too: the returned type must not depend on whether _attachments/ exists.
+  if (!fs.existsSync(attachmentsPath)) return nfcLookupTable(map);
 
   const IMAGE_EXTS = /\.(jpe?g|png|webp|gif|svg|avif)$/i;
 

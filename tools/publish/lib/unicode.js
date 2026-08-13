@@ -28,6 +28,20 @@ function canonicalNfc(value) {
 // entries / values) is unchanged, and the stored VALUES — output paths, attachment
 // relPaths — are never touched. That is what keeps #139's normalization orthogonal to
 // #145's percent-encoding: only comparison keys are canonicalized, never emitted paths.
+//
+// What this does NOT cover — read before relying on it:
+//   * `set` and `delete` are untrapped. Writing through the wrapper with a non-canonical key
+//     stores that key verbatim, creating a duplicate entry that reads can never reach.
+//     Build tables fully as a plain object, canonicalizing keys yourself, then wrap once.
+//   * `Object.prototype.hasOwnProperty.call(map, k)` and `Object.keys(map).includes(k)`
+//     bypass the traps and see only the stored keys; `k in map` and `map[k]` go through them.
+//     Prefer the latter two.
+//   * A copy loses the guarantee. Spread, `Object.assign({}, map)`, and a JSON round-trip all
+//     produce a plain object again; re-wrap if the copy is going to be looked up.
+//   * `Map` and `Set` cannot be wrapped at all — their lookups are method calls, not property
+//     access. Every `Map`/`Set` keyed on author-typed text is therefore call-site-dependent
+//     and must canonicalize at both the write and the read. `recency.js`, `story-spine.js`,
+//     and the chapter matcher in `build.js` are the ones that exist today.
 function nfcLookupTable(map) {
   return new Proxy(map, {
     get(target, prop, receiver) {

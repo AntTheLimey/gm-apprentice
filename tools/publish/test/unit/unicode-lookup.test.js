@@ -222,3 +222,123 @@ describe('derived title tables across unicode normal forms (#139)', () => {
     assert.ok(graph.nodes.every(n => n.outputPath), JSON.stringify(graph.nodes));
   });
 });
+
+// Map/Set boundaries. nfcLookupTable only guarantees plain-object tables; these four sites
+// compare author-typed text against filenames through `Map.get`, `Set.has`, or bare `===`,
+// so each one needs canonicalization at both the write and the read.
+describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
+  const { scoreByRecency } = require('../../lib/recency');
+  const { buildStorySpine } = require('../../lib/story-spine');
+
+  const SESSION_NFC = 'Session Ren\u00e9e';
+  const SESSION_NFD = 'Session Rene\u0301e';
+  const CHAPTER_NFC = 'Chapter Ren\u00e9e';
+  const CHAPTER_NFD = 'Chapter Rene\u0301e';
+  assert.notStrictEqual(SESSION_NFC, SESSION_NFD);
+  assert.notStrictEqual(CHAPTER_NFC, CHAPTER_NFD);
+
+  const npcPage = () => ({ title: NFC, displayTitle: NFC, outputPath: OUT, frontmatter: { type: 'npc' } });
+
+  it('scores an entity mentioned in the latest session under the other normal form', () => {
+    const session = {
+      title: 'Session_1', displayTitle: 'Session 1', outputPath: 'sessions/session-1.html',
+      frontmatter: { type: 'session', status: 'played', play_date: '2026-01-02', session_number: 1 },
+      markdown: `The party met [[${NFD}]] at the docks.`,
+    };
+    const scored = scoreByRecency([npcPage()], [session], [], { type: 'npc' });
+    assert.strictEqual(scored.length, 1, 'accented NPC never scores, so it never reaches the landing page');
+  });
+
+  it('scores an entity named only in a frontmatter participant ref in the other normal form', () => {
+    const session = {
+      title: 'Session_1', displayTitle: 'Session 1', outputPath: 'sessions/session-1.html',
+      frontmatter: {
+        type: 'session', status: 'played', play_date: '2026-01-02', session_number: 1,
+        participants: [`[[${NFD}]]`],
+      },
+      markdown: 'No wiki-links in the body.',
+    };
+    assert.strictEqual(scoreByRecency([npcPage()], [session], [], { type: 'npc' }).length, 1);
+  });
+
+  it('counts wrap-up mentions when the wrap-up session ref differs in normal form', () => {
+    const session = {
+      title: SESSION_NFC, displayTitle: SESSION_NFC, outputPath: 'sessions/session-renee.html',
+      frontmatter: { type: 'session', status: 'played', play_date: '2026-01-02', session_number: 1 },
+      markdown: 'The session stub carries no mentions.',
+    };
+    const wrapUp = {
+      title: 'Session_Wrap', displayTitle: 'Session Wrap', outputPath: 'sessions/wrap.html',
+      frontmatter: { type: 'session_wrap', session: `[[${SESSION_NFD}]]` },
+      markdown: `The recap names [[${NFC}]] throughout.`,
+    };
+    const scored = scoreByRecency([npcPage()], [session], [], { type: 'npc', wrapUps: [wrapUp] });
+    assert.strictEqual(scored.length, 1, 'wrap-up never pairs with its session, so its mentions are lost');
+  });
+
+  it('pairs a session with a wrap-up whose session ref differs in normal form', () => {
+    // The wrap-up lives outside the session's folder, so the same-folder fallback cannot
+    // rescue the pairing and only the ref match is under test.
+    const pages = [
+      { title: 'Chapter_1', displayTitle: 'Chapter 1', sourcePath: '/v/Chapters/Chapter_1.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' },
+      { title: SESSION_NFC, displayTitle: SESSION_NFC, sourcePath: '/v/Chapters/Chapter_1/S1.md', frontmatter: { type: 'session', session_number: 1 }, markdown: '' },
+      { title: 'S1_Wrap', displayTitle: 'S1 Wrap', sourcePath: '/v/Wrapups/S1_Wrap.md', frontmatter: { type: 'session_wrap', session: `[[${SESSION_NFD}]]` }, markdown: '## Narrative Recap\n\nThe vault burned.\n' },
+    ];
+    const units = buildStorySpine(pages);
+    assert.ok(
+      units.some(u => u.kind === 'session' && u.recapHtml.includes('vault burned')),
+      `session recap missing from story spine: ${JSON.stringify(units.map(u => u.kind))}`,
+    );
+  });
+
+  it('groups a flat-vault session under a chapter whose ref differs in normal form', () => {
+    // Separate folders, so chapterOwnsSession falls through to the title/ref match.
+    const pages = [
+      { title: CHAPTER_NFC, displayTitle: CHAPTER_NFC, sourcePath: '/v/Chapters/Chapter.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' },
+      { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Sessions/S1.md', frontmatter: { type: 'session', session_number: 1, chapter: `[[${CHAPTER_NFD}]]` }, markdown: '## Narrative Recap\n\nThe bridge fell.\n' },
+    ];
+    const units = buildStorySpine(pages);
+    assert.ok(
+      units.some(u => u.kind === 'session' && u.chapterTitle === CHAPTER_NFC),
+      `session not grouped under its chapter: ${JSON.stringify(units.map(u => [u.kind, u.chapterTitle]))}`,
+    );
+  });
+});
+
+describe('chapter page constituent sessions across unicode normal forms (#139)', () => {
+  const { build } = require('../../lib/build');
+  const CHAPTER_NFC = 'Chapter Ren\u00e9e';
+  const CHAPTER_NFD = 'Chapter Rene\u0301e';
+
+  it('lists a session whose chapter ref differs in normal form from the chapter filename', () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'unicode-chapter-'));
+    try {
+      const vault = path.join(work, 'vault');
+      fs.mkdirSync(path.join(vault, 'Chapters'), { recursive: true });
+      fs.mkdirSync(path.join(vault, 'Sessions'), { recursive: true });
+      fs.writeFileSync(
+        path.join(vault, 'Chapters', `${CHAPTER_NFC}.md`),
+        `---\ntype: chapter\ntitle: "${CHAPTER_NFC}"\nsort_order: 1\n---\n\nChapter body.\n`,
+      );
+      fs.writeFileSync(
+        path.join(vault, 'Sessions', 'Session 1.md'),
+        `---\ntype: session\nchapter: "[[${CHAPTER_NFD}]]"\nsession_number: 1\nstatus: played\n---\n\nSession body.\n`,
+      );
+
+      const docs = path.join(work, 'docs');
+      const configPath = path.join(work, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments',
+        siteTitle: 'Unicode Chapters', siteUrl: 'https://example.github.io/unicode',
+        excludeDirs: ['_meta', '_Templates'],
+        folderMap: { Chapters: 'chapters', Sessions: 'sessions' },
+      }));
+      build({ configPath });
+
+      const html = fs.readFileSync(path.join(docs, 'chapters', 'chapter-renee.html'), 'utf8');
+      assert.match(html, /sessions\/session-1\.html/, 'chapter page lists no constituent sessions');
+    } finally {
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+});

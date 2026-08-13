@@ -1,4 +1,5 @@
 const { publishedSource } = require('./processor');
+const { canonicalNfc } = require('./unicode');
 const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
 const TERMINAL_STATUSES = new Set(['dead', 'deceased', 'destroyed', 'kia', 'dissolved']);
 // A session counts as "played" once it has been run — including the post-wrap-up, pre-reconcile
@@ -9,12 +10,16 @@ const PLAYED_STATUSES = new Set(['played', 'reviewed', 'wrap-up']);
 // view (gm-only + excluded sections stripped) over its raw markdown when available (B6).
 const publishedText = publishedSource;
 
+// Mention names are NFC (#139) on the way in, and every membership test below compares them
+// against a canonicalized entity title. These are Set/Map comparisons, which `nfcLookupTable`
+// cannot wrap, so both sides are normalized at the call site: an accented NPC mentioned in the
+// latest session would otherwise never score, and never appear on the landing page.
 function extractMentions(markdown) {
   const mentions = new Set();
   let match;
   WIKI_LINK_RE.lastIndex = 0;
   while ((match = WIKI_LINK_RE.exec(markdown)) !== null) {
-    mentions.add(match[1].trim());
+    mentions.add(canonicalNfc(match[1].trim()));
   }
   return mentions;
 }
@@ -28,14 +33,14 @@ function sessionMentions(session, wrapUpByTitle) {
   if (Array.isArray(fm.participants)) {
     for (const p of fm.participants) {
       const m = String(p).match(/\[\[([^\]|]+)/);
-      if (m) names.add(m[1].trim());
+      if (m) names.add(canonicalNfc(m[1].trim()));
     }
   }
   if (fm.location) {
     const m = String(fm.location).match(/\[\[([^\]|]+)/);
-    if (m) names.add(m[1].trim());
+    if (m) names.add(canonicalNfc(m[1].trim()));
   }
-  const wu = wrapUpByTitle.get(session.title);
+  const wu = wrapUpByTitle.get(canonicalNfc(session.title));
   if (wu) {
     for (const n of extractMentions(publishedText(wu))) names.add(n);
   }
@@ -68,7 +73,8 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
   for (const w of wrapUps) {
     const ref = w.frontmatter && w.frontmatter.session;
     if (!ref) continue;
-    const target = String(ref).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+    // Keyed NFC: the ref is author-typed, the `get` above uses the session's filename.
+    const target = canonicalNfc(String(ref).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
     if (target && !wrapUpByTitle.has(target)) wrapUpByTitle.set(target, w);
   }
 
@@ -86,7 +92,7 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
 
   const scored = entities.map(entity => {
     if (type && entity.frontmatter.type !== type) return null;
-    const names = [entity.title, ...(entity.frontmatter.aliases || [])];
+    const names = [entity.title, ...(entity.frontmatter.aliases || [])].map(canonicalNfc);
 
     // Terminal-status entities (dead, destroyed, …) are retired from "in play" — unless they
     // feature in the latest session (e.g. an NPC who died there is still current news).

@@ -617,15 +617,20 @@ function build(options = {}) {
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
           }
           if (page.frontmatter.type === 'chapter') {
-            const chapterTitle = String(page.frontmatter.title || page.displayTitle || '');
+            // All three comparisons below are author-typed `chapter:` ref vs filename-derived
+            // title, matched with `===`/`includes` rather than through a lookup table, so both
+            // sides are canonicalized to NFC here (#139) — otherwise an accented chapter shows
+            // an empty constituent-sessions sidebar.
+            const chapterTitle = canonicalNfc(String(page.frontmatter.title || page.displayTitle || ''));
             const chapterTitleNorm = chapterTitle.toLowerCase();
-            const chapterFilename = page.title.replace(/_/g, ' ');
+            const chapterFileTitle = canonicalNfc(page.title);
+            const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
             const chapterSessions = (pages || []).filter(p => {
               if (p.frontmatter.type !== 'session') return false;
-              const chapterRef = String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim();
+              const chapterRef = canonicalNfc(String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim());
               if (!chapterRef) return false;
               // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
-              if (chapterRef === page.title) return true;
+              if (chapterRef === chapterFileTitle) return true;
               // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
               if (chapterRef === chapterFilename) return true;
               // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
