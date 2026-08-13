@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles } = require('../../lib/scanner');
 const { getCanonStatus } = require('../../lib/templates/base');
 
@@ -278,5 +279,72 @@ describe('scanVault unmapped-directory warning', () => {
     };
     const warns = captureWarns(() => scanVault(config));
     assert.strictEqual(warns.filter(w => w.includes('folderMap')).length, 0);
+  });
+});
+
+describe('scanVault page slug collision warning (#139)', () => {
+  // Stripping combining marks makes "Renée" and "Renee" in one folder slug to the
+  // same renee.html, where the old naive slugify kept them apart ("ren-e"/"renee").
+  // The second page silently overwrites the first on disk, so the scan has to say so.
+  function captureWarns(fn) {
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try { return { result: fn(), warns }; } finally { console.warn = orig; }
+  }
+
+  function makeVault(fileNames) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scanner-collision-'));
+    const npcDir = path.join(tmpDir, 'Characters', 'NPCs');
+    fs.mkdirSync(npcDir, { recursive: true });
+    for (const name of fileNames) {
+      fs.writeFileSync(path.join(npcDir, name + '.md'), '---\ntype: npc\n---\n\nBody.\n');
+    }
+    return tmpDir;
+  }
+
+  const config = (vaultPath) => ({
+    vaultPath,
+    excludeDirs: ['_meta', '_Templates'],
+    folderMap: { 'Characters/NPCs': 'characters/npcs' },
+  });
+
+  // é written as an escape so no editor can silently re-normalize this source file.
+  const ACCENTED = 'Ren\u00e9e';
+
+  it('warns when two pages in the same folder produce the same output path', () => {
+    const tmpDir = makeVault([ACCENTED, 'Renee']);
+    try {
+      const { warns } = captureWarns(() => scanVault(config(tmpDir)));
+      const collisionWarns = warns.filter(w => w.includes('page slug collision'));
+      assert.strictEqual(collisionWarns.length, 1, `expected one collision warning, got: ${warns.join(' | ')}`);
+      // Normalized before matching: the filesystem may hand readdir back either normal form.
+      const warning = collisionWarns[0].normalize('NFC');
+      assert.ok(warning.includes('characters/npcs/renee.html'), warning);
+      assert.ok(warning.includes(ACCENTED + '.md'), warning);
+      assert.ok(warning.includes('Renee.md'), warning);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not warn when slugs are distinct', () => {
+    const tmpDir = makeVault([ACCENTED, 'Bjorn']);
+    try {
+      const { warns } = captureWarns(() => scanVault(config(tmpDir)));
+      assert.strictEqual(warns.filter(w => w.includes('page slug collision')).length, 0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('still returns both colliding pages so the caller decides what to do', () => {
+    const tmpDir = makeVault(['Renée', 'Renee']);
+    try {
+      const { result: pages } = captureWarns(() => scanVault(config(tmpDir)));
+      assert.strictEqual(pages.length, 2);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

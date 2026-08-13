@@ -39,6 +39,10 @@ function scanVault(config) {
   const { vaultPath, excludeDirs, folderMap } = config;
   const pages = [];
   const warnedDirs = new Set();
+  // Output path -> the vault-relative source that first claimed it. Stripping combining
+  // marks (#139) collapses names that used to slug apart ("Renée"/"Renee" both give
+  // renee.html), and the later page silently overwrites the earlier one on disk.
+  const claimedOutputPaths = new Map();
 
   function walk(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -78,6 +82,16 @@ function scanVault(config) {
         const outputPath = outputDir
           ? outputDir + '/' + slug + '.html'
           : slug + '.html';
+
+        if (claimedOutputPaths.has(outputPath)) {
+          console.warn(
+            `scanner: page slug collision — "${outputPath}" is produced by both ` +
+            `"${claimedOutputPaths.get(outputPath)}" and "${relPath}". The latter will be used. ` +
+            `Rename one of the files so they slugify apart.`
+          );
+        } else {
+          claimedOutputPaths.set(outputPath, relPath);
+        }
 
         pages.push({
           sourcePath: fullPath,
