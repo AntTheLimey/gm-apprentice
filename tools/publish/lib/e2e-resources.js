@@ -25,8 +25,11 @@
 //   - a record is removed from tracking *before* its delete call is issued,
 //     so a duplicate entry in `_records`, or a cleanup() re-entered from
 //     inside `runWrangler` (e.g. an adversarial test mock), can never see
-//     the same record as still deletable and delete it twice. A failed
-//     delete restores the record so a retry can still find it.
+//     the same record as still deletable and delete it twice. Whether the
+//     delete fails (non-zero code) or the runner throws outright, the
+//     record is put back at its original position — not the array's tail —
+//     so it's retryable and a retry still processes survivors in true
+//     reverse-creation order.
 //
 // None of this can protect against a `runWrangler` that lies about what it
 // created — provenance here means "this instance's own create call returned
@@ -130,23 +133,29 @@ function createE2eResources({ runWrangler, runId }) {
       // Remove from tracking *before* issuing the delete call, not after,
       // so a re-entrant cleanup() triggered synchronously from inside this
       // very `runWrangler` call can never see this record as still valid
-      // and attempt to delete it again. Use a while-loop over indexOf
-      // (rather than a single splice) so a missing/duplicated entry can
-      // never splice the wrong element.
+      // and attempt to delete it again. Capture its position first so a
+      // failed delete can restore it there — not at the array's tail —
+      // preserving reverse-creation order for the next retry.
+      const originalIdx = _records.indexOf(record);
       minted.delete(record);
-      let idx;
-      while ((idx = _records.indexOf(record)) !== -1) _records.splice(idx, 1);
+      while (_records.indexOf(record) !== -1) _records.splice(_records.indexOf(record), 1);
 
-      const r =
-        record.type === 'kv'
-          ? runWrangler(['kv', 'namespace', 'delete', '--namespace-id', record.id])
-          : runWrangler(['pages', 'project', 'delete', record.name]);
-
-      if (r.code !== 0) {
-        // Deletion failed — restore tracking so a retry can find it again.
+      try {
+        const r =
+          record.type === 'kv'
+            ? runWrangler(['kv', 'namespace', 'delete', '--namespace-id', record.id])
+            : runWrangler(['pages', 'project', 'delete', record.name]);
+        if (r.code !== 0) {
+          throw new Error(`Could not delete ${record.type} "${record.name}": ${(r.stderr || r.stdout || '').trim()}`);
+        }
+      } catch (err) {
+        // The delete failed, or the runner itself threw instead of
+        // returning — either way, restore tracking (at its original
+        // position) so a retry can find it again, rather than silently
+        // leaking it.
         minted.add(record);
-        _records.push(record);
-        throw new Error(`Could not delete ${record.type} "${record.name}": ${(r.stderr || r.stdout || '').trim()}`);
+        _records.splice(Math.min(originalIdx, _records.length), 0, record);
+        throw err;
       }
     }
     return toDelete;

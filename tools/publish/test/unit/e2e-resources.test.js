@@ -202,6 +202,63 @@ test('a failed delete restores tracking so a retry can find the record again', (
   assert.strictEqual(calls.length, 3);
 });
 
+test('a runWrangler that throws instead of returning still leaves the record tracked and retryable', () => {
+  const calls = [];
+  let shouldThrow = true;
+  const runWrangler = (args) => {
+    calls.push(args);
+    if (args[2] === 'create') return { code: 0, stdout: 'id = "kvid1"', stderr: '' };
+    if (args[2] === 'delete' && shouldThrow) throw new Error('spawn ENOENT');
+    return { code: 0, stdout: '', stderr: '' };
+  };
+  const resources = createE2eResources({ runWrangler, runId: 'run1' });
+  resources.createKvNamespace('inbox');
+
+  assert.throws(() => resources.cleanup({ dryRun: false }), /spawn ENOENT/);
+  assert.strictEqual(resources._records.length, 1, 'record restored for a retry, not leaked');
+  assert.strictEqual(resources._records[0].id, 'kvid1');
+
+  // A retry finds it and can succeed once the runner stops throwing —
+  // it must not have been silently forgotten as "already handled."
+  shouldThrow = false;
+  resources.cleanup({ dryRun: false });
+  assert.strictEqual(resources._records.length, 0);
+  assert.strictEqual(calls.filter((a) => a[2] === 'delete').length, 2, 'first attempt (threw) + retry (succeeded)');
+});
+
+test('a resource created during cleanup, followed by a failed delete, retries in true reverse creation order', () => {
+  let createdD = false;
+  let resources;
+  const runWrangler = (args) => {
+    if (args[2] === 'create') {
+      const label = args[3].split('-').pop();
+      return { code: 0, stdout: `id = "id-${label}"`, stderr: '' };
+    }
+    if (args[2] === 'delete') {
+      const id = args[4];
+      if (id === 'id-b' && !createdD) {
+        createdD = true;
+        resources.createKvNamespace('d'); // a resource created mid-cleanup, as a side effect
+        return { code: 0, stdout: '', stderr: '' }; // b's own delete still succeeds
+      }
+      if (id === 'id-a') return { code: 1, stdout: '', stderr: 'a delete fails' };
+    }
+    return { code: 0, stdout: '', stderr: '' };
+  };
+
+  resources = createE2eResources({ runWrangler, runId: 'run1' });
+  resources.createKvNamespace('a');
+  resources.createKvNamespace('b');
+
+  assert.throws(() => resources.cleanup({ dryRun: false }), /a delete fails/);
+
+  // b succeeded (gone); a failed (restored); d was created mid-run. True
+  // reverse-creation order among the survivors (a created 1st, d created
+  // 3rd) deletes the newer one, d, before the older one, a.
+  const retryOrder = resources.cleanup({ dryRun: true }).map((r) => r.id);
+  assert.deepStrictEqual(retryOrder, ['id-d', 'id-a']);
+});
+
 test('production-shaped names are impossible to construct via the factory', () => {
   const { runWrangler } = fakeRunWrangler([
     { code: 0, stdout: 'id = "kvid1"', stderr: '' },
