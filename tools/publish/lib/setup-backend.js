@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
+const { runCommand, WRANGLER_TIMEOUT_MS, failureDetail } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
@@ -13,7 +13,7 @@ function checkKvPermission({ runWrangler }) {
   if (r.code === 0) return { ok: true };
   const blob = `${r.stdout || ''}\n${r.stderr || ''}`;
   if (/10000|Authentication/i.test(blob)) return { ok: false, fix: KV_PERMISSION_FIX };
-  return { ok: false, fix: `wrangler could not list KV namespaces: ${(r.stderr || '').trim()}` };
+  return { ok: false, fix: `wrangler could not list KV namespaces: ${failureDetail(r)}` };
 }
 
 // Parse the id from `wrangler kv namespace create` output (prints an `id = "..."`
@@ -32,7 +32,7 @@ function ensureKvNamespace({ runWrangler, tomlText }) {
   const created = runWrangler(['kv', 'namespace', 'create', 'INBOX']);
   const id = parseCreatedId(created.stdout);
   if (created.code !== 0 || !id) {
-    throw new Error(`Could not create the INBOX KV namespace: ${(created.stderr || created.stdout || '').trim()}`);
+    throw new Error(`Could not create the INBOX KV namespace: ${failureDetail(created)}`);
   }
   return { id, created: true };
 }
@@ -71,7 +71,7 @@ function patchWranglerToml(tomlText, { name, kvId }) {
 // setup with nothing on screen to explain it.
 const defaultRunWrangler = (args, opts = {}, run = runCommand) => {
   const r = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS, cwd: opts.cwd });
-  return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '' };
+  return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error || null };
 };
 
 const FLAG_KEY = { 'status-bar': 'statusBar', inbox: 'inbox' };
@@ -120,7 +120,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   syncFunctions(siteRoot);
   build({ configPath });
   const dep = runWranglerAt(['pages', 'deploy']);
-  if (dep.code !== 0) { out(`Deploy failed: ${(dep.stderr || dep.stdout || '').trim()}`); return 1; }
+  if (dep.code !== 0) { out(`Deploy failed: ${failureDetail(dep)}`); return 1; }
 
   const url = config.siteUrl || `https://${projectName}.pages.dev`;
   out(`Your ${LABEL[feature]} is set up and deployed. Live at ${url}.`);

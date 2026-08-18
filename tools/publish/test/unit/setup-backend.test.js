@@ -93,3 +93,19 @@ test('the wrangler call backend setup runs through is bounded by a timeout', () 
     `expected a finite positive timeoutMs, got ${JSON.stringify(seen[0].opts)}`);
   assert.equal(seen[0].opts.timeoutMs, WRANGLER_TIMEOUT_MS);
 });
+
+// #161 review: the wrappers dropped run-command's `error`, so a timed-out or
+// un-spawnable wrangler produced "wrangler could not list KV namespaces: " with
+// nothing after the colon — indistinguishable from a silent success.
+test('a permission check on a timed-out wrangler names the failure', () => {
+  const res = checkKvPermission({ runWrangler: () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }) });
+  assert.equal(res.ok, false);
+  assert.match(res.fix, /ETIMEDOUT/);
+});
+
+test('the backend-setup wrapper passes the process error through', () => {
+  const { defaultRunWrangler } = require('../../lib/setup-backend');
+  const res = defaultRunWrangler(['kv', 'namespace', 'list'], {},
+    () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }));
+  assert.equal(res.error, 'ETIMEDOUT');
+});

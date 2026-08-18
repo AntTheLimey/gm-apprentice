@@ -20,4 +20,18 @@ function runCommand(cmd, args, { timeoutMs = 30000, cwd } = {}) {
   };
 }
 
-module.exports = { runCommand, WRANGLER_TIMEOUT_MS };
+// Best available description of a failed run, for a message a human will read.
+//
+// spawnSync reports a timeout or an un-spawnable command through `error`, leaving
+// stdout and stderr empty — so a diagnostic assembled from those two alone renders
+// blank, which reads exactly like a silent success. That makes the timeouts above
+// worse than useless: the call stops hanging but says nothing about why. Prefer real
+// output, fall back to the process error, then to the exit code.
+function failureDetail(res) {
+  return (res.stderr || '').trim()
+    || (res.stdout || '').trim()
+    || (res.error ? String(res.error) : '')
+    || ('exit ' + res.code);
+}
+
+module.exports = { runCommand, WRANGLER_TIMEOUT_MS, failureDetail };

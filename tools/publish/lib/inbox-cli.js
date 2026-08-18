@@ -15,7 +15,7 @@ const { readNamespaceId, makeAdapter } = require('./inbox-wrangler.js');
 
 function defaultRunWrangler(args, run = runCommand) {
   const res = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS });
-  return { code: res.code, stdout: res.stdout || '', stderr: res.stderr || '' };
+  return { code: res.code, stdout: res.stdout || '', stderr: res.stderr || '', error: res.error || null };
 }
 
 function defaultAdapter(cwd) {

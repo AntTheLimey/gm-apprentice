@@ -21,7 +21,7 @@ const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
 // but an unbounded spawn still blocks the flush with no exit and no signal.
 function defaultRunWrangler(args, run = runCommand) {
   const res = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS });
-  return { code: res.code, stdout: res.stdout || '', stderr: res.stderr || '' };
+  return { code: res.code, stdout: res.stdout || '', stderr: res.stderr || '', error: res.error || null };
 }
 
 function defaultAdapter(cwd) {

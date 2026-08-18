@@ -193,3 +193,10 @@ test('the wrangler call flush runs through is bounded by a timeout', () => {
     `expected a finite positive timeoutMs, got ${JSON.stringify(seen[0].opts)}`);
   assert.equal(seen[0].opts.timeoutMs, WRANGLER_TIMEOUT_MS);
 });
+
+test('the flush wrapper passes the process error through', () => {
+  const { defaultRunWrangler } = require('../lib/flush-cli');
+  const res = defaultRunWrangler(['kv', 'key', 'get', 'x'],
+    () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }));
+  assert.equal(res.error, 'ETIMEDOUT');
+});
