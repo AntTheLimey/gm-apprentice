@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.50] — 2026-08-17
+
+Publish tool 1.11.23. The five follow-up bugs left open by the 1.8.49
+review, closed as one pass.
+
+### Fixed
+
+- `publish-site`: `data-character` was emitted without unicode
+  normalization, so an accented PC's change requests could fail to match
+  back to their vault note — the one place a normal-form mismatch survived
+  #139's sweep into a runtime comparison rather than a build-time one. The
+  flush side was suspected too and turns out to be safe already: it keys on
+  `slugify(title)`, which strips combining marks (#158).
+- `publish-site`: `flush` and backend setup still spawned wrangler with no
+  timeout, so a hung call blocked them indefinitely. Both now route through
+  `runCommand` on the same 60s bound the inbox poll received in 1.8.49, and
+  the constant moved to `run-command.js` instead of being copied a third
+  time. `runCommand` gained a `cwd` passthrough, which is why backend setup
+  had its own raw spawn (#160). The wrappers also dropped `runCommand`'s
+  `error`, and a timed-out spawn leaves stdout and stderr empty — so the new
+  bound turned a hang into a blank message indistinguishable from a silent
+  success. All three now carry it, and the KV adapter and setup diagnostics
+  fall back to it through a shared `failureDetail`.
+- `publish-site`: card initials and relationship-graph labels counted UTF-16
+  code units, so a decomposed accent dropped off an initial ("Bestia Ñu"
+  showed "BN") and cost a label one of its fifteen characters, truncating
+  names that fit composed. Both now measure graphemes, which also keeps
+  astral characters whole (#157).
+- `publish-site`: a session filed in one chapter's folder while its
+  `chapter:` ref named another was listed under **both** chapters. Each
+  session now resolves to exactly one chapter — an exact title beats a loose
+  containment, longest title breaks a tie — and that ref outranks the
+  folder, with folder grouping still the fallback when a ref names no
+  chapter on the page. The ref test that compared ref-inside-chapter-title
+  is gone: it ran opposite to both sibling copies of this matcher and let
+  `[[Vienna]]` claim "Vienna" and "The Vienna Files" at once. Filed as
+  unreachable dead code (#156) — the clauses are reachable, and deleting
+  them left the suite green, so the gap was coverage.
+
+### Removed
+
+- `publish-site`: `scoreNPCs` and its only reader `IMPORTANCE_TAGS`. Nothing
+  but its own test called it — `scoreByRecency` superseded it — and it
+  carried an unfixed copy of the #139 ref-matching bug, so reviving it would
+  have reintroduced a defect the rest of the tool no longer has (#155).
+
+---
+
 ## [1.8.49] — 2026-08-12
 
 Publish tool 1.11.22. Published-site content-leak and encoding bugs fixed,

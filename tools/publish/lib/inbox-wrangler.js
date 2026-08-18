@@ -1,6 +1,7 @@
 // KV-like adapter that reaches the site's INBOX namespace from the GM's laptop
 // via `wrangler kv key` commands. Same shape inbox-core.mjs expects, so the
 // loop reuses the exact Part 1 queue logic locally.
+const { failureDetail } = require('./run-command');
 
 // Pull the INBOX namespace id straight out of wrangler.toml (unambiguous —
 // we pass --namespace-id rather than relying on binding resolution).
@@ -42,12 +43,12 @@ function makeAdapter({ runWrangler, namespaceId }) {
       const err = (res.stderr || '').toLowerCase().replace(/https?:\/\/\S+/g, '');
       const operational = /namespace|authenticat|authoriz|unauthor|permission|credential|not logged in|network|fetch failed|timeout|econn|enotfound|10041|10000/.test(err);
       if (!operational && /not found|not_found|no value|does not exist/.test(err)) return null;
-      throw new Error('wrangler kv get failed for "' + key + '": ' + ((res.stderr || '').trim() || 'exit ' + res.code));
+      throw new Error('wrangler kv get failed for "' + key + '": ' + failureDetail(res));
     },
     async put(key, value, opts) {
       const extra = opts && opts.expirationTtl ? ['--ttl', String(opts.expirationTtl)] : [];
       const res = runWrangler(['kv', 'key', 'put', key, value, ...ns, ...extra]);
-      if (res.code !== 0) throw new Error(`wrangler put failed: ${res.stderr}`);
+      if (res.code !== 0) throw new Error(`wrangler put failed: ${failureDetail(res)}`);
     },
     async delete(key) {
       runWrangler(['kv', 'key', 'delete', key, ...ns]);
@@ -56,7 +57,7 @@ function makeAdapter({ runWrangler, namespaceId }) {
       const args = ['kv', 'key', 'list', ...ns];
       if (prefix) args.push('--prefix', prefix);
       const res = runWrangler(args);
-      if (res.code !== 0) throw new Error(`wrangler list failed: ${res.stderr}`);
+      if (res.code !== 0) throw new Error(`wrangler list failed: ${failureDetail(res)}`);
       const parsed = JSON.parse(res.stdout || '[]');
       return { keys: parsed.map(k => ({ name: k.name })) };
     },

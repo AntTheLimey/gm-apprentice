@@ -17,3 +17,24 @@ describe('runCommand', () => {
     assert.ok(res.error, 'error code surfaced on timeout');
   });
 });
+
+// A bounded wrangler call that times out has NOTHING in stdout/stderr — spawnSync
+// reports it via `error`. Diagnostics built from stdout/stderr alone therefore come
+// out blank, which is the same blank a caller sees on success-with-no-output. The
+// timeouts added in #160 are only useful if the resulting failure says something.
+describe('failureDetail', () => {
+  const { failureDetail } = require('../../lib/run-command');
+
+  it('falls back to the process error when there is no output', () => {
+    assert.equal(failureDetail({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }), 'ETIMEDOUT');
+  });
+
+  it('prefers real output over the process error', () => {
+    assert.equal(failureDetail({ code: 1, stdout: '', stderr: 'boom', error: 'ETIMEDOUT' }), 'boom');
+    assert.equal(failureDetail({ code: 1, stdout: 'out', stderr: '', error: 'ETIMEDOUT' }), 'out');
+  });
+
+  it('falls back to the exit code when there is nothing else', () => {
+    assert.equal(failureDetail({ code: 3, stdout: '', stderr: '', error: null }), 'exit 3');
+  });
+});
