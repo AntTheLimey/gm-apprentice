@@ -105,6 +105,55 @@ describe('getLatestWrapUp', () => {
     assert.strictEqual(result.title, 'Session_05_Wrap_Up');
   });
 
+  it('does not let Session 1 match the Session 10 wrap-up', () => {
+    // Regression: `ref.includes(sessionTitle)` matched "[[Session 10]]" for
+    // "Session 1", so the landing page ran the wrong session's recap.
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session: '[[Session 10]]' }, title: 'Session_10_Wrap_Up' },
+      { frontmatter: { type: 'session_wrap', session: '[[Session 1]]' }, title: 'Session_01_Wrap_Up' },
+    ];
+    const s1 = { title: 'Session 1', frontmatter: { type: 'session' } };
+    assert.strictEqual(getLatestWrapUp(pages, s1).title, 'Session_01_Wrap_Up');
+  });
+
+  it('returns null rather than a longer-numbered wrap-up', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session: '[[Session 10]]' }, title: 'Session_10_Wrap_Up' },
+    ];
+    const s1 = { title: 'Session 1', frontmatter: { type: 'session' } };
+    assert.strictEqual(getLatestWrapUp(pages, s1), null);
+  });
+
+  it('parses the wiki-link target, alias and all', () => {
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session: '[[Session 05|the Vienna night]]' }, title: 'WU' },
+    ];
+    const s5 = { title: 'Session 05', frontmatter: { type: 'session' } };
+    assert.strictEqual(getLatestWrapUp(pages, s5).title, 'WU');
+  });
+
+  it('prefers an exact session ref over a colliding session_number', () => {
+    // Chapters restart numbering, so `session_number: 4` alone is ambiguous.
+    // An explicit ref names one session and must win.
+    const pages = [
+      { frontmatter: { type: 'session_wrap', session_number: 4 }, title: 'Vienna_S4_Wrap_Up' },
+      { frontmatter: { type: 'session_wrap', session: '[[Session 04 - Calcutta]]', session_number: 4 }, title: 'Calcutta_S4_Wrap_Up' },
+    ];
+    const session = { title: 'Session 04 - Calcutta', frontmatter: { type: 'session', session_number: 4 } };
+    assert.strictEqual(getLatestWrapUp(pages, session).title, 'Calcutta_S4_Wrap_Up');
+  });
+
+  it('still matches an NFD-typed session ref against an NFC title', () => {
+    // #139: the ref is author-typed, the title comes from a filename. Exact
+    // equality must stay normalization-insensitive.
+    const nfc = '[[Session 05 - Caf\u00e9 Central]]';
+    const nfd = nfc.normalize('NFD');
+    assert.notStrictEqual(nfd, nfc, 'fixture must actually differ by normal form');
+    const pages = [{ frontmatter: { type: 'session_wrap', session: nfd }, title: 'WU' }];
+    const session = { title: 'Session 05 - Caf\u00e9 Central', frontmatter: { type: 'session' } };
+    assert.strictEqual(getLatestWrapUp(pages, session).title, 'WU');
+  });
+
   it('recognizes all wrap-up type variants', () => {
     const variants = ['session-wrap-up', 'session_wrap', 'session-wrapup'];
     for (const type of variants) {

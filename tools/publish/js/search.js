@@ -3,6 +3,39 @@
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // Percent-encode each segment of a search result's href. Mirrors lib/processor.js's
+  // encodeHref (#145) — duplicated rather than imported because this file ships to the
+  // browser as a static asset and can't `require('../lib/processor')`. doc.href is the raw
+  // page.outputPath from search-index.json (lib/search-index.js deliberately stores it
+  // unencoded — lunr ref keys and the documents map must match). A raw space merely looked
+  // wrong via browser leniency; "#" or "?" in a vault folder/file name actively truncates or
+  // corrupts the link.
+  function encodeHref(hrefPath) {
+    return String(hrefPath)
+      .split('/')
+      .map(function(segment) {
+        return encodeURIComponent(segment).replace(/\(/g, '%28').replace(/\)/g, '%29');
+      })
+      .join('/');
+  }
+
+  // Fold a query into the index's normal form (#139). lib/search-index.js indexes NFC, so a
+  // query typed with decomposed accents can never match an NFC index unless it is folded the
+  // same way. Guarded for pre-ES6 engines, where it degrades to the old exact-match behavior
+  // rather than throwing. Exported (and asserted in test/search.test.js) because deleting it
+  // breaks accented search in the browser while every server-side test stays green.
+  function normalizeQuery(raw) {
+    var q = String(raw == null ? '' : raw);
+    return q.normalize ? q.normalize('NFC') : q;
+  }
+
+  if (typeof document === 'undefined') {
+    if (typeof module !== 'undefined' && module.exports) {
+      module.exports = { esc: esc, encodeHref: encodeHref, normalizeQuery: normalizeQuery };
+    }
+    return;
+  }
+
   var searchOverlay = document.createElement('div');
   searchOverlay.className = 'search-overlay';
   searchOverlay.innerHTML =
@@ -41,7 +74,8 @@
     document.head.appendChild(script);
   }
 
-  function search(query) {
+  function search(rawQuery) {
+    var query = normalizeQuery(rawQuery);
     if (!idx || !query.trim()) {
       resultsDiv.innerHTML = query.trim() ? '<div class="search-results-empty">Loading...</div>' : '';
       return;
@@ -75,7 +109,7 @@
     for (var type in grouped) {
       html += '<div class="search-result-group"><h4>' + esc(type) + '</h4>';
       grouped[type].forEach(function(doc) {
-        html += '<a class="search-result-item" href="' + esc(base + doc.href) + '">' +
+        html += '<a class="search-result-item" href="' + esc(base + encodeHref(doc.href)) + '">' +
           '<strong>' + esc(doc.title) + '</strong>' +
           (doc.subtitle ? ' <span style="opacity:0.6">' + esc(doc.subtitle) + '</span>' : '') +
           '</a>';

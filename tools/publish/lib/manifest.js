@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
+const { canonicalNfc } = require('./unicode');
 
 // Manifest entries are vault-relative paths, optionally annotated with an inline
 // `— comment` (the Excluded section uses these throughout). Keep only the path, so an
@@ -14,10 +15,19 @@ const matter = require('gray-matter');
 // both "Six — Field Sundries.md" and "Foo.md — see Bar.md" resolve correctly.
 const ENTRY_RE = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$/;
 
+// Normalize a vault-relative path to NFC for equality comparisons (#139). build.js compares
+// manifest entries against scanned paths with exact-string `Set.has()`, so without a shared
+// normal form a manifest entry can silently fail to match the page it names. Both sides of
+// every such comparison must run through this helper. See lib/unicode.js for why the two
+// normal forms of one visible name differ, and for the other comparison boundaries.
+function canonicalPath(entry) {
+  return canonicalNfc(entry);
+}
+
 function stripInlineComment(entry) {
   const trimmed = String(entry).trim();
   const match = ENTRY_RE.exec(trimmed);
-  return match ? match[1] : trimmed;
+  return canonicalPath(match ? match[1] : trimmed);
 }
 
 function parseManifest(markdown) {
@@ -86,4 +96,4 @@ function loadManifest(vaultPath) {
   return parseManifest(raw);
 }
 
-module.exports = { parseManifest, loadManifest, stripInlineComment };
+module.exports = { parseManifest, loadManifest, stripInlineComment, canonicalPath };

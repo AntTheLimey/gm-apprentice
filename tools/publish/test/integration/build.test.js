@@ -1188,6 +1188,59 @@ describe('build integration', () => {
     });
   });
 
+  describe('excludeCallouts (issue #137)', () => {
+    let outputDir;
+    let configPath;
+
+    before(() => {
+      outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-callouts-'));
+      configPath = path.join(outputDir, 'config.json');
+      const config = {
+        vaultPath: path.join(fixturesDir, 'with-gm-only-markers'),
+        outputDir: path.join(outputDir, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Callout Test',
+        siteUrl: 'https://example.github.io/test-callouts',
+        excludeDirs: ['_meta'],
+        excludeSections: [],
+        excludeCallouts: true,
+        folderMap: {
+          'Locations': 'locations',
+          'Characters/PCs': 'characters/pcs',
+        },
+      };
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      build({ configPath });
+    });
+
+    after(() => {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    });
+
+    it('strips a Keeper callout from a Location page (processContent path)', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'market.html'), 'utf-8');
+      assert.ok(!html.includes('Nyarlathotep'));
+      assert.ok(!html.includes('callout'));
+    });
+
+    it('strips a Keeper callout from a PC page (accordion path — the Emma_Wentworth case)', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'pcs', 'test-pc.html'), 'utf-8');
+      assert.ok(!html.includes('Hastur'));
+      assert.ok(!html.includes('callout'));
+    });
+
+    it('preserves plain in-world blockquotes', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'market.html'), 'utf-8');
+      assert.ok(html.includes('Buy fresh apples here'));
+    });
+
+    it('keeps callout text out of the search index', () => {
+      const indexJson = fs.readFileSync(path.join(outputDir, 'docs', 'search-index.json'), 'utf-8').toLowerCase();
+      assert.ok(!indexJson.includes('nyarlathotep'));
+      assert.ok(!indexJson.includes('hastur'));
+    });
+  });
+
   describe('with-story fixture', () => {
     let outputDir;
     let configPath;

@@ -212,6 +212,40 @@ for value, expected, label in [
     check(f"parse_session_number: {label}",
           [parse_session_number(value)], [expected])
 
+# --- schema_rules.scalar_value quoting ---
+
+from schema_rules import scalar_value  # noqa: E402
+
+for raw, expected, label in [
+    ('"npc"', "npc", "plain double-quoted scalar unwraps"),
+    ("'npc'", "npc", "plain single-quoted scalar unwraps"),
+    ('"npc"  # legacy', "npc", "a trailing comment is not content"),
+    ("'npc' # legacy", "npc", "single-quoted, trailing comment"),
+    ("npc # legacy", "npc", "unquoted value stops at the comment"),
+    # A quoted scalar with anything else after the closing quote is not a
+    # valid YAML scalar. Unwrapping it would hand `npc` to the type check and
+    # pass malformed frontmatter silently; the raw text fails loudly instead.
+    ('"npc" trailing', '"npc" trailing', "trailing text is not unwrapped"),
+    ('"npc",', '"npc",', "a stray flow comma is not unwrapped"),
+    ('"unterminated', '"unterminated', "an unclosed quote stays raw"),
+    # Escapes belong to the scalar: the closing quote is the unescaped one,
+    # so a value like a height range survives whole instead of truncating.
+    ('"5\'4\\" - 6\'0\\""', "5'4\\\" - 6'0\\\"", "escaped inner quote is kept"),
+    ("'O''Brien'", "O''Brien", "single-quote escape is kept"),
+]:
+    check(f"scalar_value: {label}", [scalar_value(raw)], [expected])
+
+sys.path.insert(0, str(ROOT / "scripts"))
+from validate_schema import validate_file  # noqa: E402
+
+# Otherwise-complete npc frontmatter, so the only thing that can fail is the
+# malformed type. Unwrapping the quoted prefix used to make this note valid.
+check("validate_file: malformed quoted type is reported, not accepted",
+      [[e.split(" —")[0] for e in validate_file(
+          Path("Trailing.md"),
+          '---\ntype: "npc" trailing\ncanon_status: AUTHORITATIVE\n---\n')]],
+      [["Unknown type '\"npc\" trailing'"]])
+
 # --- stamp_entities.py ---
 
 dry = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",

@@ -20,23 +20,98 @@ does the waiting, and you only wake when a request actually arrives.
    (or `node <tool>/bin/gm-publish.js inbox open WOLF`).
 3. Print it prominently for the GM to read to the table:
    `╔═══════════════╗  SESSION CODE: WOLF  ╚═══════════════╝`
-4. Launch the **background watcher** (below), then leave the session idle. The
-   watcher is a plain shell loop that polls the queue every ~30s and **sleeps
-   while it is empty — spending no model tokens**. It exits (waking you) only
-   when a request arrives.
+4. Launch the **watcher**, then leave the session idle. **If the host offers
+   a supervised or persistent monitor primitive — something that runs a task
+   for the whole session and notifies you as it produces output, rather than
+   only when the process exits — prefer it over a bare background shell
+   command.** That was the live-session workaround that actually held up: a
+   plain background shell loop can die without anyone noticing, and a dead
+   watcher looks exactly like a quiet table. Under a primitive like that, run
+   the poll continuously (no `break`, no relaunching) for the rest of the
+   session, and make it:
+   - **fail loud, not silent** — after N (e.g. 5) consecutive `inbox pull`
+     failures, emit a visible failure line instead of staying quiet, so a
+     broken inbox looks different from an empty one. Keep re-alerting every
+     N failures for as long as the outage lasts, not just once — it never
+     exits, so a single alert followed by silence would be the same dead
+     end this whole section exists to avoid.
+   - **dedup by request id** — track which ids it has already surfaced, so
+     a batch that's still pending on the next poll (e.g. a deploy failure
+     left it unresolved) notifies you once, not again every ~30s.
+   - **tick a heartbeat** — on every poll, write the current Unix timestamp
+     (`date +%s`) to `<site_dir>/.watcher-heartbeat`, overwriting it each
+     time, so the GM can confirm in seconds that the loop is alive right
+     now and not just when it has news. Same path and same format as the
+     shell fallback below, so the Stop section's mid-session check
+     (`cat <site_dir>/.watcher-heartbeat`) reads either mode identically.
+
+   **Fallback — plain background shell loop** (use this where the host has
+   no such primitive; it can only notify you when the command exits, so it
+   has to break out on purpose — on a batch *or* on a failure streak — and
+   get relaunched each time). Run it **from `<site_dir>`** so the heartbeat
+   file lands somewhere the Stop-section check can find it:
 
    ```bash
+   # WATCHER_SLEEP is GM-supplied: a non-numeric value would make `sleep` fail
+   # without stopping the loop, and 0 would poll flat out against Cloudflare KV.
+   # Clamp it once, up front, rather than trusting it each pass.
+   sleep_for=${WATCHER_SLEEP:-30}
+   case "$sleep_for" in
+     ''|*[!0-9]*) sleep_for=30 ;;
+   esac
+   [ "$sleep_for" -lt 1 ] && sleep_for=1
+   [ "$sleep_for" -gt 300 ] && sleep_for=300
+
+   fail=0
    while :; do
      out=$(npx gm-apprentice-publish inbox pull 2>/dev/null)
-     if [ -n "$out" ] && [ "$out" != "[]" ]; then printf '%s\n' "$out"; break; fi
-     sleep 30
+     status=$?
+     date +%s > .watcher-heartbeat
+     if [ "$status" -ne 0 ]; then
+       fail=$((fail + 1))
+       if [ "$fail" -ge 5 ]; then
+         printf 'WATCHER: inbox pull failed %d times in a row\n' "$fail"
+         break
+       fi
+     elif [ -n "$out" ] && [ "$out" != "[]" ]; then
+       printf '%s\n' "$out"
+       break
+     else
+       fail=0
+     fi
+     sleep "$sleep_for"
    done
    ```
 
-   Run it as a **background command** (`run_in_background: true`). The harness
-   re-invokes you when it exits — i.e. when the queue is non-empty — handing you
-   the pending JSON. Idle time between requests therefore costs no model tokens;
-   you only think when there is real work.
+   The poll itself needs no timeout wrapper: `inbox pull` bounds every
+   wrangler call it makes at 60s internally, so a hung network turn comes back
+   as a failed poll (counted toward the streak above) rather than freezing the
+   loop before it can tick the heartbeat. That holds for the primitive path in
+   Start step 4 too — same command, same bound.
+
+   Run it as a **background command** (`run_in_background: true`). The
+   harness re-invokes you when it exits, either with a pending batch or with
+   a failure-streak line — that covers the loop reporting its own trouble.
+   What it can't self-report is dying outright (terminal closed, process
+   killed) with no exit notification at all; that's what
+   `<site_dir>/.watcher-heartbeat` is for — see Stop below for the
+   mid-session check. Idle time between requests still costs no model
+   tokens; you only think when there is real work or a failure to report.
+
+   Because the fallback exits and gets relaunched fresh each time, it has no
+   memory of its own — dedup here is **your** job, not the script's: keep
+   track (in your own working context, across the session) of which request
+   ids you've already surfaced. If a relaunch immediately hands you back the
+   exact same id set (a batch still stuck on a failed deploy, see "When a
+   batch arrives" step 4), that's not news — don't re-run the full
+   classify-and-apply flow, just retry the deploy, and relaunch with a
+   longer `WATCHER_SLEEP` (e.g. `120`, doubling on each repeat but never
+   past `300`) instead of the default 30s so a stuck batch doesn't wake you
+   every half-minute while you wait it out. Cap it — a player's request
+   submitted after the deploy gets fixed still has to wait out whatever
+   interval is currently active before you see it, so don't let the backoff
+   run away past a few minutes. Reset to the default 30s once a relaunch
+   turns up a genuinely new id.
 
 ## When a batch arrives
 
@@ -91,6 +166,7 @@ submission order (`timestamp` ascending), tracking **running unspent points**
 3. **Question → answer** using **player-safe scope only** — the published
    sheet/site + GURPS rules + the character's own non-GM sections. NEVER use
    `GM Notes`, `DM Notes`, `Player Notes`, `Source References`,
+   `Reconciliation Context`, `Handoff to Reconcile`,
    `<!-- gm-only -->` regions, other PCs' private data, or hidden plot/secret.
    If a good answer would need GM-only info, reply that it's beyond what you
    can see — never the hidden info itself. Answer as a brief bullet list, then
@@ -116,14 +192,46 @@ submission order (`timestamp` ascending), tracking **running unspent points**
    - **On deploy failure:** do **not** reply — the entries stay `pending`
      (nothing else marks them) and are pulled again on the next watcher cycle.
      Log the failure.
-5. **Relaunch the background watcher** (the same command as in Start step 4) so
-   the next request wakes you. Idle resumes at zero model-token cost.
+5. **Get the watcher running again for the next request**, per Start step 4:
+   if you're on a persistent monitor primitive it's still running — nothing
+   to do. On the plain-shell fallback, relaunch the same loop — with a
+   longer `WATCHER_SLEEP` if you're relaunching because a deploy failed
+   and the same ids are still pending (see Start step 4's dedup note), the
+   default 30s otherwise. Idle resumes at zero model-token cost either way.
 
 Once a request reaches a terminal outcome it returns exactly one response to
 the chat log: `applied` (sheet redeployed), `rejected` (with the point-math
 reason), or `advice`. A deploy failure leaves the applied items `pending` to
 retry next tick, unreplied for now. `reply` is the single finalizer for every
 item — it supersedes the old `handled`/`flag` commands.
+
+## When the watcher reports failure
+
+Either mode can wake you with a failure signal instead of a batch — the
+fallback with a `WATCHER: inbox pull failed N times in a row` line before
+it exits, the primitive by emitting the same kind of line without exiting
+(see Start step 4). Either way that's the inbox itself in trouble (KV
+outage, bad credentials, a network blip), not "nothing to do," and it
+needs diagnosis before you do anything else:
+
+1. Run `npx gm-apprentice-publish inbox pull` once by hand and read the
+   actual error.
+2. **Fixable now** (e.g. re-authenticate, stale `wrangler` credentials):
+   fix it, confirm with one more manual pull.
+   - **Fallback:** relaunch at the normal 30s interval (Start step 4) —
+     the process actually exited and stays dead until you do.
+   - **Primitive:** nothing to relaunch. It never exited; it picks up
+     cleanly on its next poll now that the inbox is healthy.
+3. **Not fixable immediately** (e.g. a Cloudflare outage): tell the GM the
+   change-request loop is degraded.
+   - **Fallback:** relaunch anyway so it keeps trying, but with a longer
+     `WATCHER_SLEEP` (see Start step 4's backoff, capped at `300`) so a
+     still-broken inbox doesn't wake you again every 30s while you wait it
+     out. Drop back to the default once a pull succeeds.
+   - **Primitive:** still running on its own — expect a repeat alert every
+     N failures until the inbox recovers; there's nothing to relaunch or
+     back off, just don't mistake the repeat alerts for a new problem each
+     time.
 
 ## Terminal log format
 
@@ -136,6 +244,30 @@ One line per request so a glance tells the whole story:
 ```
 
 ## Stop
+
+**Mid-session liveness check.** A dead watcher and a quiet table look
+identical — no output either way. If a GM asks "is it still checking?", or a
+player says they submitted something and nothing happened, run
+`cat <site_dir>/.watcher-heartbeat` — it shows the Unix timestamp of the
+last poll tick, written every poll in both modes (Start step 4's primitive
+path and the fallback both tick it). Judge staleness against the interval
+that's **currently active**, not a fixed number: at the default 30s cadence,
+stale by more than a tick or two (60-90s) means it died silently. But if
+you last relaunched it with a longer `WATCHER_SLEEP` for a stuck batch or a
+failing inbox (see the backoff notes in Start step 4 and "When the watcher
+reports failure"), a heartbeat that old is exactly what a *healthy* watcher
+looks like — check against roughly 2-3× whatever interval you set before
+concluding it's dead.
+
+Once staleness is actually confirmed, act on it the same way "When the
+watcher reports failure" does:
+
+- **Fallback:** relaunch it (Start step 4) before assuming the queue is
+  simply empty.
+- **Primitive:** there's nothing to relaunch on your end — a supervised
+  task dying silently means the supervision itself failed, so ask the host
+  whether the task is still running rather than starting a second poller
+  on top of a primitive you can't directly restart.
 
 On "stop", **flush live state to the vault, then terminate the background
 watcher** and do not relaunch it:
@@ -152,7 +284,9 @@ watcher** and do not relaunch it:
    body block) is skipped with a warning: the build reads vitals from that
    frontmatter and ignores the body, so a body write wouldn't take effect —
    author current status in the body block to let flush sync it.
-2. Terminate the background watcher.
+2. Terminate the background watcher, then `rm -f <site_dir>/.watcher-heartbeat`
+   — it's session-scoped scratch state, not something to leave behind in
+   the GM's site repo between sessions.
 
 The session code stays set in KV until the next "start your checking loop"
 replaces it. `flush` is also safe to run ad hoc at any time — it is idempotent,

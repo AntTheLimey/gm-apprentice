@@ -124,4 +124,12 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   return 0;
 }
 
-module.exports = { checkKvPermission, ensureKvNamespace, patchWranglerToml, INBOX_BLOCK, KV_PERMISSION_FIX, runSetupBackend };
+module.exports = {
+  checkKvPermission,
+  ensureKvNamespace,
+  patchWranglerToml,
+  INBOX_BLOCK,
+  KV_PERMISSION_FIX,
+  runSetupBackend,
+  parseCreatedId,
+};

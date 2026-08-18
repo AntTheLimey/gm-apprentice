@@ -1,7 +1,8 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativePath, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
+const { canonicalNfc } = require('../unicode');
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
   const fm = page.frontmatter;
@@ -30,7 +31,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     const leaderPath = linkMap?.[leaderName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     if (leaderPath) {
-      const href = relativePath(currentDir, leaderPath);
+      const href = encodeHref(relativePath(currentDir, leaderPath));
       leadershipHtml = `<p class="faction-leadership"><strong>Leadership:</strong> <a href="${href}">${escapeHtml(leaderName)}</a></p>`;
     } else {
       leadershipHtml = `<p class="faction-leadership"><strong>Leadership:</strong> ${escapeHtml(leaderName)}</p>`;
@@ -44,7 +45,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     const territoryPath = linkMap?.[territoryName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     if (territoryPath) {
-      const href = relativePath(currentDir, territoryPath);
+      const href = encodeHref(relativePath(currentDir, territoryPath));
       territoryHtml = `<p class="faction-territory"><strong>Territory:</strong> <a href="${href}">${escapeHtml(territoryName)}</a></p>`;
     } else {
       territoryHtml = `<p class="faction-territory"><strong>Territory:</strong> ${escapeHtml(territoryName)}</p>`;
@@ -52,12 +53,14 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   }
 
   // Member rollup: find entities with member_of or assigned_to relationships pointing to this faction
-  const factionTitle = page.title;
+  // NFC on both sides (#139): the relationship target is author-typed, the faction title is
+  // the filename. A mismatch empties the members rollup on an accented faction page.
+  const factionTitle = canonicalNfc(page.title);
   const members = (allPages || []).filter(p => {
     const rels = p.frontmatter.relationships;
     if (!rels || !Array.isArray(rels)) return false;
     return rels.some(r => {
-      const target = String(r.target || '').replace(/\[\[|\]\]/g, '').trim();
+      const target = canonicalNfc(String(r.target || '').replace(/\[\[|\]\]/g, '').trim());
       return target === factionTitle && (r.type === 'member_of' || r.type === 'assigned_to');
     });
   });
@@ -66,7 +69,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   if (members.length > 0) {
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     const memberLinks = members.map(m => {
-      const href = relativePath(currentDir, m.outputPath);
+      const href = encodeHref(relativePath(currentDir, m.outputPath));
       return `<li><a href="${href}">${escapeHtml(m.displayTitle)}</a></li>`;
     }).join('\n');
     membersHtml = `<div class="members"><h3>Members</h3><ul>${memberLinks}</ul></div>`;

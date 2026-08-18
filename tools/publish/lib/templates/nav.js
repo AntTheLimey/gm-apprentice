@@ -1,4 +1,4 @@
-const { relativePath, escapeHtml } = require('../processor');
+const { relativePath, escapeHtml, encodeHref } = require('../processor');
 const { DIR_LABELS } = require('./base');
 
 const NAV_GROUPS = [
@@ -64,16 +64,16 @@ function renderTopNav(pages, currentOutputPath, config, options = {}) {
 
   const hasStoryGroup = groups.some(g => g.name === 'Story');
   const standaloneStory = options.hasStory && !hasStoryGroup;
-  const storyHref = relativePath(currentDir, 'story.html');
+  const storyHref = encodeHref(relativePath(currentDir, 'story.html'));
 
   const desktopGroupsHtml = groups.map(group => {
     const linksHtml = group.links.map(link => {
-      const href = relativePath(currentDir, link.href);
+      const href = encodeHref(relativePath(currentDir, link.href));
       return `        <a href="${href}">${escapeHtml(link.label)}</a>`;
     }).join('\n');
 
     const toggle = options.hasStory && group.name === 'Story'
-      ? `<a class="nav-group-toggle" href="${relativePath(currentDir, 'story.html')}">${escapeHtml(group.name)}</a>`
+      ? `<a class="nav-group-toggle" href="${encodeHref(relativePath(currentDir, 'story.html'))}">${escapeHtml(group.name)}</a>`
       : `<button class="nav-group-toggle">${escapeHtml(group.name)}</button>`;
 
     return `      <div class="nav-group">
@@ -92,11 +92,11 @@ ${linksHtml}
     ? [standaloneDesktop, desktopGroupsHtml].filter(Boolean).join('\n')
     : desktopGroupsHtml;
 
-  const rootHref = relativePath(currentDir, 'index.html') || './index.html';
+  const rootHref = encodeHref(relativePath(currentDir, 'index.html')) || './index.html';
 
   const mobileGroupsHtml = groups.map(group => {
     const links = group.links.map(link => {
-      const href = relativePath(currentDir, link.href);
+      const href = encodeHref(relativePath(currentDir, link.href));
       return `    <li><a href="${href}">${escapeHtml(link.label)}</a></li>`;
     }).join('\n');
     // Mirror the desktop behavior: when a Story section exists, the Story heading links to

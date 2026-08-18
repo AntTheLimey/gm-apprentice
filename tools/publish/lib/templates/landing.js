@@ -1,9 +1,10 @@
-const { escapeHtml, plainMetaValue } = require('../processor');
+const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
 const {
   getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
+const { canonicalNfc } = require('../unicode');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -32,9 +33,11 @@ function statusLabel(status) {
 // page's source filename (page.title). Returns null when no matching session page is present.
 function resolveSessionLink(link, pages) {
   if (!link) return null;
-  const target = String(link).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+  // NFC both sides (#139). A miss here is masked by the getLatestSession fallback, so the
+  // landing quietly features a DIFFERENT session than the overview names — worse than blank.
+  const target = canonicalNfc(String(link).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
   if (!target) return null;
-  return pages.find(p => p.frontmatter.type === 'session' && p.title === target) || null;
+  return pages.find(p => p.frontmatter.type === 'session' && canonicalNfc(p.title) === target) || null;
 }
 
 function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus) {
@@ -88,7 +91,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
     const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const linkTarget = latestWrapUp || latestSession;
-    const recapLink = `<a class="recap-link" href="${escapeHtml(linkTarget.outputPath)}">Read full session &rarr;</a>`;
+    const recapLink = `<a class="recap-link" href="${escapeHtml(encodeHref(linkTarget.outputPath))}">Read full session &rarr;</a>`;
     recapZone = `<div class="dashboard-section">
   <h2>Latest Session${dateBadge}</h2>
   <div class="recap">${recap ? escapeHtml(recap) : '<em>No recap available.</em>'}
@@ -115,7 +118,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
       const traits = fm.key_traits
         ? `<div class="pc-traits">${escapeHtml(Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits))}</div>`
         : '';
-      return `<a class="pc-card" href="${escapeHtml(pc.outputPath)}">
+      return `<a class="pc-card" href="${escapeHtml(encodeHref(pc.outputPath))}">
   ${portraitHtml}
   <h3>${escapeHtml(pc.displayTitle)}</h3>
   ${occupation}${traits}
@@ -134,7 +137,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
       const status = statusLabel(pc.frontmatter.status);
       const context = pc.frontmatter.death_context || pc.frontmatter.retirement_context || '';
       const contextHtml = context ? ` <span class="memorial-context">${escapeHtml(context)}</span>` : '';
-      return `<a href="${escapeHtml(pc.outputPath)}">${escapeHtml(pc.displayTitle)} (${escapeHtml(status)})</a>${contextHtml}`;
+      return `<a href="${escapeHtml(encodeHref(pc.outputPath))}">${escapeHtml(pc.displayTitle)} (${escapeHtml(status)})</a>${contextHtml}`;
     }).join('\n');
     memoriamZone = `<div class="dashboard-section">
   <h2>In Memoriam</h2>
@@ -155,7 +158,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
         ? `<div class="npc-icon">${portraitTag}</div>`
         : `<div class="npc-icon">${escapeHtml(initials)}</div>`;
       const role = fm.occupation ? `<div class="npc-role">${escapeHtml(plainMetaValue(fm.occupation))}</div>` : '';
-      return `<a class="npc-card" href="${escapeHtml(page.outputPath)}">
+      return `<a class="npc-card" href="${escapeHtml(encodeHref(page.outputPath))}">
   ${iconHtml}
   <div><h4>${escapeHtml(page.displayTitle)}</h4>${role}</div>
 </a>`;
@@ -174,7 +177,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
     const locCards = recentLocations.map(({ page }) => {
       const fm = page.frontmatter;
       const subtitle = fm.location_type || '';
-      return `<a class="entity-card" href="${escapeHtml(page.outputPath)}">
+      return `<a class="entity-card" href="${escapeHtml(encodeHref(page.outputPath))}">
   <h4>${escapeHtml(page.displayTitle)}</h4>
   ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}
 </a>`;
@@ -194,7 +197,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
       const date = formatDate(fm.date) || '';
       const location = fm.location ? String(fm.location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' ') : '';
       const outcome = fm.outcome || '';
-      return `<a class="entity-card" href="${escapeHtml(page.outputPath)}">
+      return `<a class="entity-card" href="${escapeHtml(encodeHref(page.outputPath))}">
   <h4>${escapeHtml(page.displayTitle)}</h4>
   ${date ? `<div class="card-subtitle">${escapeHtml(date)}${location ? ' — ' + escapeHtml(location) : ''}</div>` : ''}
   ${outcome ? `<div class="card-excerpt">${escapeHtml(outcome)}</div>` : ''}

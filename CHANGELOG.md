@@ -322,6 +322,229 @@ Second fix round (a four-way adversarial review of the post-LWW-rework
 
 ---
 
+## [1.8.49] — 2026-08-12
+
+Publish tool 1.11.22. Published-site content-leak and encoding bugs fixed,
+relationship-predicate validation added to the vault-authoring gate, and a
+guarded lifecycle helper for ephemeral e2e test resources.
+
+### Fixed
+
+- `publish-site`: HTML comments (`<!-- ... -->`) were never stripped from
+  `publishedMarkdown`, so authoring notes leaked onto the homepage's
+  "Latest Session" teaser and into every story-spine page body. Added
+  `stripHtmlComments` to that chain, plus a site-wide regression test
+  asserting no generated `.html` contains a comment (#149).
+- `publish-site`: hand-built link destinations were not percent-encoded, so
+  any output path containing a space or parenthesis (vault subfolder names,
+  attachment filenames) rendered as literal bracket text instead of a link,
+  and the typographer separately mangled a leading `../` into `…/`.
+  Generalized the image-only `encodeImageUrl` into `encodeHref` and routed
+  every hand-built href through it across templates, the relationship
+  graph, breadcrumbs, and the context sidebar; `encodeImageUrl` stays as an
+  alias so existing image call sites are unchanged. Also fixed the
+  client-side search overlay (`js/search.js`), which built result links
+  from the same raw, unencoded path — there a stray `#` or `?` could
+  truncate or corrupt the link rather than just look odd (#145).
+- `publish-site`: manifest matching and slugs were Unicode-normalization-
+  naive, so an NFC manifest entry never matched an NFD-decomposed scanned
+  path and accented pages silently never rendered. Canonicalized to NFC at
+  the manifest/scanner comparison boundary and strip combining marks in
+  `slugify`; `overrides.fields` keys are now canonicalized the same way at
+  config load. **Slugs change for every page whose name carries an accent
+  that decomposes into a combining mark** (`é`, `á`, `ñ`, `ü`, …);
+  characters with no such decomposition (`ø`, `ł`, `đ`, `ß`) are
+  unaffected and keep their old slug — `Bjørn` still slugs to `bj-rn`.
+  Two pages in one folder can now collide where they used to slug apart
+  (`Renée` and `Renee` both give `renee.html`); the scan warns when that
+  happens, and the later page wins.
+  The manifest only ever filtered pages on `mode: player` sites, so on
+  `mode: full` sites (and on `mode: player` sites where the manifest and
+  scanned path already agreed) accented pages always rendered — just at
+  the mangled slug the old naive `slugify` produced (`gonz-lez` for
+  "González"). Every one of those pages now renders at the corrected slug
+  (`gonzalez`) instead, so existing links and bookmarks to them break.
+  Pages that never rendered at all (`mode: player` sites where the
+  manifest and scanned path normalization forms mismatched) start
+  rendering for the first time, at the same corrected slug. Vaults with
+  manually-pinned NFD manifest entries should update them to NFC now that
+  matching no longer needs the workaround (#139).
+  The same normalization now covers every other table keyed by
+  author-typed text, not just the manifest: `buildLinkMap` (page titles
+  and aliases), `scanAttachments` (attachment basenames), `buildBacklinks`,
+  and the relationship graph's title map. A `[[wikilink]]`, `portrait:`
+  value, relationship target, or `![[embed]]` typed in a different normal
+  form than the file it names used to render as plain text or vanish
+  silently; each of those tables now canonicalizes keys and lookups, so
+  the whole boundary is covered rather than the manifest alone. Only
+  comparison keys are canonicalized — stored output paths and attachment
+  `relPath`s keep their exact bytes, so this stays orthogonal to the
+  `encodeHref` percent-encoding above (#139).
+  The `Map`/`Set`/`===` comparisons that no lookup table can cover are
+  normalized at their call sites too: recency scoring (an accented NPC
+  mentioned in the latest session never scored, so it never reached the
+  landing page's recent cards), wrap-up↔session pairing in both
+  `recency.js` and `story-spine.js` (a session's narrative recap silently
+  vanished from the Story page), the flat-vault chapter↔session match, and
+  the chapter page's constituent-sessions sidebar (#139).
+  The same sweep then ran over `lib/templates/`, where seven more live
+  comparisons of the same shape were fixed: an accented location page lost
+  its "Places Within", "Known Figures" and "What Happened Here" rollups; an
+  accented faction page lost its members list; the locations index rendered
+  a child as a root sibling instead of nesting it, and split one parent
+  region into two headings; the landing page featured a *different* session
+  than the campaign overview names, recap and link included; and a PC's
+  route map listed one location twice. An eighth copy of the chapter
+  matcher (`sessionsForChapter`) was normalized alongside its two live
+  siblings so the three cannot drift, but its ref clauses are unreachable
+  today and nothing about the rendered site changes. The search index is
+  built NFC and the search box normalizes its query to match, so a note
+  typed with decomposed accents is findable. A three-way differential build
+  test
+  (all-NFD, all-NFC, and the two forms mixed in one vault) now asserts the
+  generated site is byte-identical across all three, which is what proves
+  the class closed rather than a reading of the code (#139).
+- `publish-site`: the built-in default `exclude_sections` had drifted from
+  the scaffold template, and `## Reconciliation Context` /
+  `## Handoff to Reconcile` — written automatically by `reconcile` and
+  `session-wrapup` — were publishing GM plot state to players. Both lists
+  now carry the same six entries (`GM Notes`, `DM Notes`, `Player Notes`,
+  `Source References`, `Reconciliation Context`, `Handoff to Reconcile`).
+  The built-in default was previously just `GM Notes`, so a hand-configured
+  site with **no** exclude-sections list in either config file also stops
+  publishing `## DM Notes`, `## Player Notes` and `## Source References`
+  from this release — not only the two reconcile sections. Sites
+  scaffolded before this release already carry those four in
+  `vault.config.json`'s `excludeSections`, so the default never applied
+  to them and nothing changes for them until the reconcile pair is added
+  by hand; new scaffolds get all six.
+  **Existing sites with an explicit exclude-sections list do not pick
+  this up automatically** — add `Reconciliation Context` and `Handoff to
+  Reconcile` by hand, either to `excludeSections` in `vault.config.json`
+  or to `publish.exclude_sections` in the vault's `vault-config.md` (the
+  two union, so either works). Also corrected `configuration.md`'s
+  Precedence section, which described strict shadowing when list settings
+  actually union across both config sources (#144).
+- `publish-site`: `publish.overrides` advertised three keys but the build
+  only ever read `overrides.fields`; a top-level `overrides.exclude` or
+  `overrides.include` was a silent no-op. Dropped both from the defaults,
+  and a config that still carries one now warns instead of ignoring it.
+  `configuration.md` documents the real shape — per-file field
+  re-admission keyed by vault-relative path — with a copyable example,
+  and no longer implies whole-file include/exclude lives there (it lives
+  in the publish manifest). A malformed block (`overrides: fields`, or a
+  non-map `overrides.fields`) is now reported once with the expected
+  shape instead of being walked per character into invented keys.
+  `configuration.md` also drops its claim that a per-PC `crest`
+  frontmatter value overrides `publish.sheet_crest` — nothing reads
+  `frontmatter.crest`; the crest is campaign-wide.
+  A malformed *per-file* entry under `overrides.fields` is now caught the
+  same way: an `include` written as a bare string made `filterFields` do
+  substring matching (`include: sec` re-admitting `secrets`), and any
+  other truthy non-list threw mid-build. Each bad entry is named, warned
+  about once, and dropped, so the exclusions stay in force. An explicitly
+  falsy `fields:` value reaches that validator now too — `||` used to swap
+  `fields: false` for the default before anything could report it.
+- `publish-site`: a relationship whose `description:` is a YAML block
+  scalar (`description: |`) put its indented prose back into the
+  predicate scan, so a line of narration beginning `type:` was reported as
+  an off-vocabulary predicate and failed both `validate_schema.py` and
+  `vault_check.py` on a perfectly valid note. Block-scalar content is now
+  skipped by column across the whole frontmatter walk. `scalar_value`
+  separately accepted a quoted scalar with trailing junk (`type: "npc"
+  trailing` validated as an `npc`); the closing quote must now be the last
+  thing on the line apart from blanks or a comment, and it is found past
+  `\"`/`''` escapes so a value like `"5'4\" - 6'0\""` survives whole
+  instead of truncating at the first inner quote.
+- `publish-site`: the landing page picked its "Latest Session" recap with
+  a substring test, so `[[Session 10]]` answered a lookup for `Session 1`
+  and the wrong session's narrative recap went out. The wrap-up's
+  `session:` ref is now parsed as a wikilink and compared for exact
+  equality, and that lookup runs *before* the `session_number` fallback,
+  which chapters make ambiguous by restarting the count. The looser
+  "ref mentions the session inside longer prose" match is kept as a last
+  resort but can no longer run on into a longer number. NFC
+  canonicalization at the comparison boundary is unchanged (#139).
+- `publish-site`: `inbox pull` spawned `wrangler` with no timeout, so a
+  hung network turn froze the change-request watcher before it could tick
+  `.watcher-heartbeat` — a live-but-stalled loop looked exactly like a
+  dead one, which is the single thing the heartbeat exists to tell apart.
+  Every wrangler call the inbox CLI makes is now bounded at 60s via the
+  shared `runCommand`, so a hang surfaces as a failed poll and the loop's
+  existing failure streak reports it. The documented fallback loop also
+  clamps `WATCHER_SLEEP` once up front: `${WATCHER_SLEEP:-30}` covered
+  unset and empty but not `0` (a flat-out poll against Cloudflare KV) or a
+  non-numeric value (`sleep` fails, loop keeps polling).
+- `publish-site`: the e2e resource helper's cleanup called `wrangler kv
+  namespace delete` and `wrangler pages project delete` without their
+  non-interactive confirmation flags. Both prompt by default, and cleanup
+  runs unattended, so the prompt would hang or read EOF as "no" and leak
+  the resource it was meant to remove. Added `--skip-confirmation` and
+  `--yes` respectively (the two commands spell it differently).
+
+### Added
+
+- `campaign-qa`: relationship predicates are now validated against the
+  authoritative vocabulary in
+  `skills/shared/gm-apprentice-ontology.json`. `vault_check.py
+  relationships` (also folded into `vault_check.py all`) and a parallel
+  check in `scripts/validate_schema.py` flag off-vocabulary predicates
+  with nearest-match suggestions; campaign-qa's graph-health checks now
+  run the audit. `skills/shared/templates/plan.md`'s example relationship
+  swaps its blank `type: ""` for a real predicate (`located_at`), which
+  the new check would otherwise flag on day one. **Expect a burst of
+  errors on the first run after upgrading:** every plan note already
+  scaffolded from the old template carries that blank `type: ""` and
+  reports as a `blank relationship type` ERROR. That is the check working
+  — fill each one in with a sanctioned predicate from the ontology, or
+  drop the placeholder edge (#130).
+- `tools/publish/lib/e2e-resources.js`: a guarded lifecycle helper for
+  ephemeral test resources used by the Cloudflare setup flow's e2e tests.
+  Names are always `e2e-<runId>-<label>`; cleanup deletes only records the
+  factory itself minted (checked by object identity, not name-prefix
+  matching); there is no list-and-delete or delete-by-title API at all;
+  dry-run reports without calling `wrangler`. Motivated by an incident
+  where an ad-hoc cleanup sweep deleted a production KV namespace. Policy
+  documented in `cloudflare-pages.md` (#142).
+
+### Changed
+
+- `publish-site` skill docs: added watcher-resilience guidance for the
+  change-request loop (persistent monitor primitive preferred, a
+  documented shell-loop fallback, a heartbeat liveness artifact, failure
+  emission, request-id dedup, capped backoff) and pointers to the
+  manifest spec at the top of the relevant `SKILL.md` capability entries.
+  Also clarified the manifest's actual semantics in
+  `content-filtering.md`: it's an inclusion filter only on `mode: player`
+  sites — checking a box under `## Excluded` or `## Needs Decision` never
+  publishes a file — and `mode: full` ignores the manifest entirely
+  (#143, #136).
+
+---
+
+## [1.8.48] — 2026-07-26
+
+Publish tool 1.11.21. Keeper callouts no longer leak onto the published site.
+
+### Fixed
+
+- `publish-site`: Obsidian callouts (`> [!type] Title`) rendered in full onto
+  the player site — the tool had no callout stripping, so Keeper-facing callouts
+  (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon State) were
+  published verbatim (#137). Added a native `exclude_callouts` option
+  (`publish.exclude_callouts` / `excludeCallouts`): `true` strips every callout,
+  an array of types strips only those. Wired through `processContent`, the PC
+  accordion path (`extractSections`), and the `publishedMarkdown` precompute so
+  callout text also stays out of search, backlinks, and excerpts. Plain
+  blockquotes carry no `[!type]` marker and are preserved.
+
+### Changed
+
+- `publish-site`: scaffolded `vault.config.json` now defaults `excludeCallouts`
+  to `true`. Documented in `content-filtering.md` and `configuration.md`.
+
+---
+
 ## [1.8.47] — 2026-07-23
 
 Publish tool 1.11.20. Players' live HP/FP now sync from the site's KV store back

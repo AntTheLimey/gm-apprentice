@@ -2,12 +2,22 @@
 // GM). Reuses Part 1's inbox-core.mjs over a wrangler-backed KV adapter.
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { runCommand } = require('./run-command.js');
 const { readNamespaceId, makeAdapter } = require('./inbox-wrangler.js');
 
-function defaultRunWrangler(args) {
-  const res = spawnSync('npx', ['wrangler@4', ...args], { encoding: 'utf8' });
-  return { code: res.status == null ? 1 : res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+// The change-request watcher polls `inbox pull` in a loop and writes
+// `.watcher-heartbeat` only once the poll returns. An unbounded spawn on a
+// wrangler call that never comes back stalls the heartbeat with no exit and no
+// failure line, so the loop is indistinguishable from a dead one — the exact
+// case the heartbeat exists to rule out. Bound it: a hung call becomes a failed
+// poll, which the loop's failure streak already reports. 60s rather than
+// run-command's 30s default because a cold `npx wrangler@4` may have to fetch
+// the package before it does any work.
+const WRANGLER_TIMEOUT_MS = 60000;
+
+function defaultRunWrangler(args, run = runCommand) {
+  const res = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS });
+  return { code: res.code, stdout: res.stdout || '', stderr: res.stderr || '' };
 }
 
 function defaultAdapter(cwd) {
@@ -70,4 +80,4 @@ async function runInbox(argv, deps = {}) {
   }
 }
 
-module.exports = { runInbox };
+module.exports = { runInbox, defaultRunWrangler, WRANGLER_TIMEOUT_MS };

@@ -4,10 +4,11 @@ const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
-const { loadManifest } = require('./manifest');
+const { loadManifest, canonicalPath } = require('./manifest');
+const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -49,6 +50,7 @@ function build(options = {}) {
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
+  const excludeCallouts = publishConfig.exclude_callouts;
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
 
@@ -184,8 +186,13 @@ function build(options = {}) {
   // fields stripped from a *published* page.
   const corpus = pages.slice();
 
+  // NFC-normalized (#139): manifest.publishing/excluded entries are already canonicalized
+  // by manifest.js's stripInlineComment, so every Set.has()/lookup comparison against them
+  // below needs the scanned path in the same normal form — otherwise an NFD-typed filename
+  // (e.g. from an editor or OS that decomposes accents) silently fails to match its NFC
+  // manifest entry, or vice versa.
   function vaultRelPathOf(page) {
-    return path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/');
+    return canonicalPath(path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/'));
   }
 
   // A Publishing entry that matches no scanned file silently removes nothing and publishes
@@ -293,8 +300,10 @@ function build(options = {}) {
     const gmStripped = stripGmOnly(page.markdown || '');
     const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
     const spoilerStripped = stripSpoiler(afterGm);
-    const text = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
-    page.publishedMarkdown = filterSections(text, excludeSections);
+    const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
+    const commentStripped = stripHtmlComments(afterSpoiler);
+    const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
+    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections);
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -464,7 +473,11 @@ function build(options = {}) {
   // The CoC sheet masthead renders a campaign-level crest (publishConfig.sheet_crest);
   // register it so the image-manifest pruning below doesn't drop it from the output.
   if (publishConfig.sheet_crest) {
-    const crestBase = String(publishConfig.sheet_crest).split('/').pop();
+    // Canonical NFC (#139): usedImages is matched against imageMap's own (NFC) keys by the
+    // player-mode prune below, so a crest named in the other normal form must register the
+    // key the map actually holds — otherwise the crest resolves on the page and is then
+    // never copied.
+    const crestBase = canonicalNfc(String(publishConfig.sheet_crest).split('/').pop());
     if (crestBase && imageMap[crestBase]) usedImages.add(crestBase);
   }
   let errorCount = 0;
@@ -475,10 +488,10 @@ function build(options = {}) {
     try {
       if (page.frontmatter.type === 'world_flags') continue;
       if (page.frontmatter.portrait) {
-        const basename = String(page.frontmatter.portrait).split('/').pop();
+        const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
-      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages });
+      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
       logWarnings(page.outputPath, processed.warnings);
       let html;
 
@@ -495,6 +508,7 @@ function build(options = {}) {
           // markdown, and its warnings were already reported.
           const commentResult = stripHtmlComments(filtered);
           filtered = typeof commentResult === 'string' ? commentResult : commentResult.text;
+          filtered = stripCallouts(filtered, excludeCallouts);
           filtered = filterSections(filtered, excludeSections);
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
@@ -511,7 +525,7 @@ function build(options = {}) {
               frontmatter: {},
               outputPath: page.outputPath,
             };
-            const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages });
+            const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
             logWarnings(page.outputPath, storyProcessed.warnings);
             storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           }
@@ -603,15 +617,20 @@ function build(options = {}) {
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
           }
           if (page.frontmatter.type === 'chapter') {
-            const chapterTitle = String(page.frontmatter.title || page.displayTitle || '');
+            // All three comparisons below are author-typed `chapter:` ref vs filename-derived
+            // title, matched with `===`/`includes` rather than through a lookup table, so both
+            // sides are canonicalized to NFC here (#139) — otherwise an accented chapter shows
+            // an empty constituent-sessions sidebar.
+            const chapterTitle = canonicalNfc(String(page.frontmatter.title || page.displayTitle || ''));
             const chapterTitleNorm = chapterTitle.toLowerCase();
-            const chapterFilename = page.title.replace(/_/g, ' ');
+            const chapterFileTitle = canonicalNfc(page.title);
+            const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
             const chapterSessions = (pages || []).filter(p => {
               if (p.frontmatter.type !== 'session') return false;
-              const chapterRef = String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim();
+              const chapterRef = canonicalNfc(String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim());
               if (!chapterRef) return false;
               // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
-              if (chapterRef === page.title) return true;
+              if (chapterRef === chapterFileTitle) return true;
               // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
               if (chapterRef === chapterFilename) return true;
               // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
@@ -777,7 +796,7 @@ function build(options = {}) {
   for (const [dir, label] of Object.entries(DIR_LABELS)) {
     if (dir === 'characters/pcs' && pcRedirectTarget) {
       const depth = dir.split('/').length;
-      const rel = '../'.repeat(depth) + pcRedirectTarget;
+      const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
       const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
       const outPath = path.join(outputDir, dir, 'index.html');
       ensureDir(outPath);
@@ -788,7 +807,7 @@ function build(options = {}) {
     // Redirect events/ at the timeline only when one exists; with no timeline the redirect
     // would dangle, so fall through and give events its own index.
     if (dir === 'events' && timelineHref) {
-      const rel = relativePath(dir, timelineHref);
+      const rel = encodeHref(relativePath(dir, timelineHref));
       const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
       const outPath = path.join(outputDir, dir, 'index.html');
       ensureDir(outPath);
@@ -833,12 +852,12 @@ function build(options = {}) {
     const items = [];
     for (const p of refs.participants) {
       const out = linkMap[p.target];
-      items.push(out ? `<li><a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(p.label)}</a></li>`
+      items.push(out ? `<li><a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(p.label)}</a></li>`
                      : `<li>${escapeHtml(p.label)}</li>`);
     }
     if (refs.location) {
       const out = linkMap[refs.location.target];
-      items.push(out ? `<li>Location: <a href="${relativeHref(unit.outputPath, out)}">${escapeHtml(refs.location.label)}</a></li>`
+      items.push(out ? `<li>Location: <a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(refs.location.label)}</a></li>`
                      : `<li>Location: ${escapeHtml(refs.location.label)}</li>`);
     }
     return items.length ? `<ul>${items.join('')}</ul>` : '';
@@ -850,7 +869,7 @@ function build(options = {}) {
     for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
       const outputPath = `story/characters/${slugify(pc.title)}.html`;
       const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
-      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages });
+      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
       logWarnings(outputPath, processed.warnings);
       const story = {
         title: pc.displayTitle, outputPath, html: processed.html,

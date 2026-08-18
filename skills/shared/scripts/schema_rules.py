@@ -8,7 +8,11 @@ skills/shared/ so it ships with the plugin; the dev validator
 imports it from the repo. Stdlib only.
 """
 
+import json
 import re
+from difflib import get_close_matches
+from functools import lru_cache
+from pathlib import Path
 
 # Valid enum values
 CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
@@ -86,6 +90,35 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 }
 
 
+# A complete quoted scalar and nothing else after it but blanks or a comment.
+# The closing quote is the *unescaped* one (`\"` inside double quotes, `''`
+# inside single), so `"5'4\" - 6'0\""` is one value rather than a truncated
+# prefix. Content after the closing quote means the line is not a valid quoted
+# scalar at all — see scalar_value.
+QUOTED_SCALAR_RE = re.compile(
+    r"""^(?:"((?:\\.|[^"\\])*)"|'((?:''|[^'])*)')\s*(?:\#.*)?$"""
+)
+
+
+def scalar_value(value: str) -> str:
+    """Unwrap a YAML scalar: quoted content, or unquoted up to a comment.
+
+    A quoted scalar with trailing content (`type: "npc" trailing`) is not
+    valid YAML. Unwrapping it would hand a clean-looking `npc` to the type
+    and predicate checks and pass malformed frontmatter silently, so the raw
+    text is returned instead and the caller reports it.
+    """
+    text = value.strip()
+    m = QUOTED_SCALAR_RE.match(text)
+    if m:
+        # Escapes are left as authored — nothing downstream compares against
+        # an unescaped form, and decoding them here would be a second guess
+        # at YAML this parser is deliberately not implementing.
+        return m.group(1) if m.group(1) is not None else m.group(2)
+    # Unquoted: a ' #' starts a YAML comment.
+    return re.split(r"\s+#", text, maxsplit=1)[0].strip()
+
+
 def extract_frontmatter(content: str) -> dict | None:
     """Extract YAML frontmatter from markdown content."""
     # Handle both LF and CRLF line endings
@@ -116,16 +149,7 @@ def extract_frontmatter(content: str) -> dict | None:
         if ":" in line and not line.startswith(" ") and not line.startswith("\t"):
             key, _, value = line.partition(":")
             key = key.strip()
-            value = value.strip()
-
-            # Quoted value: take the quoted content, drop anything after
-            # (including trailing YAML comments).
-            m = re.match(r"""^(['"])(.*?)\1""", value)
-            if m:
-                value = m.group(2)
-            else:
-                # Unquoted: a ' #' starts a YAML comment.
-                value = re.split(r"\s+#", value, maxsplit=1)[0].strip()
+            value = scalar_value(value)
 
             # Handle empty value (might be start of array)
             if value == "" or value == "[]":
@@ -165,3 +189,119 @@ def parse_session_number(value) -> int | None:
         return None
     n = int(m.group(1))
     return n if n <= MAX_PLAUSIBLE_SESSION else None
+
+
+# Relationship predicate vocabulary
+#
+# The authoritative list is the predicate table in entity-schema.md; the
+# ontology export beside this package restates it machine-readably (and
+# scripts/validate_ontology.py fails CI when the two disagree), so the
+# export is what code reads. Resolved from this file's own location: the
+# vocabulary travels with the plugin, never with the vault under audit.
+
+ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology.json"
+
+# Predicate-bearing keys inside a `relationships:` block: `type` in
+# authored frontmatter, `predicate` in the machine-managed `mobrpg:` node.
+RELATIONSHIP_KEY_RE = re.compile(r"^(?:-\s+)?(type|predicate):\s*(.*)$")
+FRONTMATTER_KEY_RE = re.compile(r"^([\w-]+):\s*(.*)$")
+# A key whose value is a YAML block scalar header (`|`, `>`, with optional
+# indentation/chomping indicators and a trailing comment). Matched against the
+# *raw* line so group 1 gives the key's own column — content belonging to the
+# block is indented past it, and the next sibling key is not.
+BLOCK_SCALAR_OPEN_RE = re.compile(r"^(\s*(?:-\s+)?)[\w-]+:\s*[|>][0-9+-]*\s*(?:#.*)?$")
+
+
+def _ontology_predicates() -> list[dict]:
+    return json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))["predicates"]
+
+
+@lru_cache(maxsize=1)
+def predicate_vocabulary() -> frozenset[str]:
+    """The sanctioned relationship predicates. Raises if the export is unusable."""
+    return frozenset(p["type"] for p in _ontology_predicates())
+
+
+@lru_cache(maxsize=1)
+def inverse_predicates() -> dict[str, str]:
+    """Inverse name -> the sanctioned predicate it inverts.
+
+    Inverse names (`led_by`, `owned_by`, `imprisoned_by`) are implied, never
+    stored, so they are off-vocabulary — but they are the one class of bad
+    predicate whose fix is exact rather than a guess.
+    """
+    return {p["inverse"]: p["type"]
+            for p in _ontology_predicates() if p.get("inverse")}
+
+
+def suggest_predicates(predicate: str) -> list[str]:
+    """Up to three sanctioned predicates close to an off-vocabulary one."""
+    return get_close_matches(predicate, sorted(predicate_vocabulary()), n=3)
+
+
+def predicate_problem(key: str, predicate: str) -> str:
+    """Describe what is wrong with a predicate, and how to fix it.
+
+    Shared by both reporters so the vault-facing check and CI say the same
+    thing about the same edge; each wraps it in its own row format.
+    """
+    if not predicate:
+        return f"blank relationship {key} — every edge needs a sanctioned predicate"
+    problem = f"off-vocabulary relationship {key} '{predicate}'"
+    base = inverse_predicates().get(predicate)
+    if base:
+        return (f"{problem} — inverse of '{base}'; storage is single-direction, "
+                f"so record '{base}' on the other endpoint")
+    near = suggest_predicates(predicate)
+    if near:
+        return f"{problem} — did you mean {', '.join(near)}?"
+    return f"{problem} — no close match"
+
+
+def iter_relationship_predicates(content: str):
+    """Yield (lineno, key, predicate) for every edge in a `relationships:` block.
+
+    Covers both storage shapes: the authored top-level block (`type:`) and
+    the `mobrpg:` node's nested one (`predicate:`). Block style only — a
+    `relationships: []` or inline-flow value carries no edges to check.
+    Line numbers are 1-based within the file, so findings are navigable.
+    """
+    match = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", content, re.DOTALL)
+    if not match:
+        return
+    block_indent = None
+    scalar_indent = None
+    for offset, line in enumerate(match.group(1).split("\n")):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        indent = len(line) - len(line.lstrip())
+        # Inside a block scalar (`description: |`), every more-indented line is
+        # literal text, not YAML. A relationship description whose prose begins
+        # `type:` is not an edge, and a folded note that quotes a whole
+        # `relationships:` block does not open one.
+        if scalar_indent is not None:
+            if indent > scalar_indent:
+                continue
+            scalar_indent = None
+        # The block ends at the next key at or above its own indent.
+        if block_indent is not None and indent <= block_indent \
+                and not stripped.startswith("-"):
+            block_indent = None
+        key = FRONTMATTER_KEY_RE.match(stripped)
+        if key and key.group(1) == "relationships":
+            # A trailing comment is not a value: `relationships:  # later`
+            # still opens a block whose edges follow.
+            value = key.group(2).strip()
+            block_indent = indent if not value or value.startswith("#") else None
+            continue
+        opener = BLOCK_SCALAR_OPEN_RE.match(line)
+        if opener:
+            scalar_indent = len(opener.group(1))
+            continue
+        if block_indent is None:
+            continue
+        edge = RELATIONSHIP_KEY_RE.match(stripped)
+        if edge:
+            # +2: line 1 is the opening `---`, so frontmatter starts at 2.
+            yield offset + 2, edge.group(1), scalar_value(edge.group(2))

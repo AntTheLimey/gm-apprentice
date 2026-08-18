@@ -1,4 +1,4 @@
-const { escapeHtml, relativeHref } = require('../processor');
+const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -24,7 +24,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
 
   if (extraSidebar.mentionedNPCs && extraSidebar.mentionedNPCs.length > 0) {
     const npcItems = extraSidebar.mentionedNPCs.map(n => {
-      const href = relativeHref(page.outputPath, n.outputPath);
+      const href = encodeHref(relativeHref(page.outputPath, n.outputPath));
       return `<li><a href="${href}">${escapeHtml(n.displayTitle)}</a></li>`;
     });
     extraSections.push(`<h3>NPCs Appearing</h3>\n<ul>${npcItems.join('\n')}</ul>`);
@@ -32,7 +32,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
 
   if (extraSidebar.events && extraSidebar.events.length > 0) {
     const eventItems = extraSidebar.events.map(e => {
-      const href = relativeHref(page.outputPath, e.outputPath);
+      const href = encodeHref(relativeHref(page.outputPath, e.outputPath));
       return `<li><a href="${href}">${escapeHtml(e.displayTitle)}</a></li>`;
     });
     extraSections.push(`<h3>Events</h3>\n<ul>${eventItems.join('\n')}</ul>`);
@@ -40,7 +40,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
 
   if (extraSidebar.constituentSessions && extraSidebar.constituentSessions.length > 0) {
     const sessionItems = extraSidebar.constituentSessions.map(s => {
-      const href = relativeHref(page.outputPath, s.outputPath);
+      const href = encodeHref(relativeHref(page.outputPath, s.outputPath));
       return `<li><a href="${href}">${escapeHtml(s.displayTitle)}</a></li>`;
     });
     extraSections.push(`<h3>Sessions</h3>\n<ul>${sessionItems.join('\n')}</ul>`);
@@ -74,8 +74,8 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     const idx = sameType.findIndex(p => p.title === page.title);
     const prev = idx > 0 ? sameType[idx - 1] : null;
     const next = idx < sameType.length - 1 ? sameType[idx + 1] : null;
-    const prevLink = prev ? `<a href="${relativeHref(page.outputPath, prev.outputPath)}">&larr; ${escapeHtml(prev.displayTitle)}</a>` : '<span></span>';
-    const nextLink = next ? `<a href="${relativeHref(page.outputPath, next.outputPath)}">${escapeHtml(next.displayTitle)} &rarr;</a>` : '<span></span>';
+    const prevLink = prev ? `<a href="${encodeHref(relativeHref(page.outputPath, prev.outputPath))}">&larr; ${escapeHtml(prev.displayTitle)}</a>` : '<span></span>';
+    const nextLink = next ? `<a href="${encodeHref(relativeHref(page.outputPath, next.outputPath))}">${escapeHtml(next.displayTitle)} &rarr;</a>` : '<span></span>';
     storyNav = `<div class="story-nav">${prevLink}${nextLink}</div>`;
   }
 

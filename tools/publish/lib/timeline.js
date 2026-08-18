@@ -1,4 +1,4 @@
-const { escapeHtml } = require('./processor');
+const { escapeHtml, encodeHref } = require('./processor');
 
 const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
   july:6, august:7, september:8, october:9, november:10, december:11 };
@@ -116,7 +116,7 @@ function renderTimelineHTML(data) {
   </div>
   <div class="tl-detail-col">
     <span class="tl-type">${escapeHtml(badge)}</span>
-    <h3><a href="${escapeHtml(evt.outputPath)}">${escapeHtml(evt.title)}</a></h3>
+    <h3><a href="${escapeHtml(encodeHref(evt.outputPath))}">${escapeHtml(evt.title)}</a></h3>
     ${details.length ? `<p>${escapeHtml(details.join(' — '))}</p>` : ''}
   </div>
 </div>`;
@@ -143,7 +143,7 @@ function renderTimelineStrip(data, options) {
     <div class="tl-dot"></div>
   </div>
   <div class="tl-detail-col">
-    <h3><a href="${escapeHtml(evt.outputPath)}">${escapeHtml(evt.title)}</a></h3>
+    <h3><a href="${escapeHtml(encodeHref(evt.outputPath))}">${escapeHtml(evt.title)}</a></h3>
   </div>
 </div>`;
   }).join('\n');

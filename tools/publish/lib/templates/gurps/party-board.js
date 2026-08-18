@@ -1,7 +1,7 @@
 'use strict';
 const { deriveLive } = require('../../../js/gurps-live');
 const { rowCells } = require('../../../js/gurps-party');
-const { relativeHref, escapeHtml } = require('../../processor');
+const { relativeHref, escapeHtml, encodeHref } = require('../../processor');
 const { avatarHtml } = require('../party-avatar');
 
 function renderPartyBoard(manifest, rosterOutputPath, { live = true } = {}) {
@@ -11,7 +11,7 @@ function renderPartyBoard(manifest, rosterOutputPath, { live = true } = {}) {
   const rows = manifest.pcs.map((pc) => {
     const view = deriveLive(pc, null);           // authored-default initial render
     const c = rowCells(view);
-    const href = relativeHref(rosterOutputPath, pc.outputPath);
+    const href = encodeHref(relativeHref(rosterOutputPath, pc.outputPath));
     const speed = pc.basicSpeed != null ? Number(pc.basicSpeed).toFixed(2) : '—';
     return `<tr class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
   <td class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub" data-gl-party-field="enc">${c.enc}</span></span></a></td>

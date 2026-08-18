@@ -28,6 +28,11 @@ The blacksmith is also a fence for stolen goods.
 
 The apothecary sells herbs and tonics.
 
+> [!warning] Keeper Only
+> The apothecary answers to Nyarlathotep.
+
+> "Buy fresh apples here!" calls the fruit-seller.
+
 <!-- spoiler -->
 The market square is a fading dream of Carcosa, waiting to be
 revealed once the players find the Yellow Sign.

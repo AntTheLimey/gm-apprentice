@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -219,6 +219,51 @@ describe('stripSpoiler', () => {
     const md = '<!-- gm-only -->\nA\n<!-- /gm-only -->\n<!-- spoiler -->\nB\n<!-- /spoiler -->';
     assert.strictEqual(stripSpoiler(md), '<!-- gm-only -->\nA\n<!-- /gm-only -->\n');
     assert.strictEqual(stripGmOnly(md), '\n<!-- spoiler -->\nB\n<!-- /spoiler -->');
+  });
+});
+
+describe('stripCallouts (issue #137)', () => {
+  it('returns markdown unchanged when exclude is falsy', () => {
+    const md = '> [!info] Keeper Only\n> Secret note.\n\nBody.';
+    assert.strictEqual(stripCallouts(md, false), md);
+    assert.strictEqual(stripCallouts(md, undefined), md);
+  });
+
+  it('strips a whole callout blockquote when exclude is true', () => {
+    const md = 'Intro.\n\n> [!info] Keeper Only\n> The name is a cover.\n> More secret.\n\nOutro.';
+    assert.strictEqual(stripCallouts(md, true), 'Intro.\n\nOutro.');
+  });
+
+  it('leaves ordinary blockquotes untouched', () => {
+    const md = '> "An ordinary in-world quote."\n\nBody.';
+    assert.strictEqual(stripCallouts(md, true), md);
+  });
+
+  it('strips multiple callouts of different types', () => {
+    const md = '> [!warning] Campaign Design Decision\n> A.\n\nKeep.\n\n> [!danger] Alert Level\n> B.';
+    assert.strictEqual(stripCallouts(md, true), 'Keep.\n');
+  });
+
+  it('handles the fold marker and a title-less callout', () => {
+    const md = '> [!note]- Folded\n> hidden\n\n> [!tip]\n> also hidden\n\nEnd.';
+    assert.strictEqual(stripCallouts(md, true), 'End.');
+  });
+
+  it('strips only the listed types when given an array', () => {
+    const md = '> [!danger] Alert\n> secret\n\n> [!info] Read-Aloud\n> player text';
+    const result = stripCallouts(md, ['danger']);
+    assert.doesNotMatch(result, /Alert/);
+    assert.match(result, /Read-Aloud/);
+  });
+
+  it('is case-insensitive on type names in the array form', () => {
+    const md = '> [!WARNING] Design\n> secret\n\nKeep.';
+    assert.strictEqual(stripCallouts(md, ['warning']), 'Keep.');
+  });
+
+  it('preserves a callout example inside a fenced code block', () => {
+    const md = 'Docs:\n\n```\n> [!warning] Example\n> body\n```\n\nAfter.';
+    assert.strictEqual(stripCallouts(md, true), md);
   });
 });
 

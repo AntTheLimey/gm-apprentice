@@ -10,7 +10,7 @@ All campaign content falls into three categories:
 - All prep files: sessions/scenes with `status: planned | prepped`,
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
-- H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
+- H2 sections listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - **Every other `<!-- ... -->` comment.** Private authoring notes
   (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are
@@ -111,6 +111,31 @@ never made it into the wrap-up notes, or the entity wasn't obviously
 "touched"), campaign-qa also runs a full-vault open-spoilers audit on
 demand — see `campaign-qa/references/check-procedures.md`.
 
+## Excluding Callouts (opt-in)
+
+Obsidian callouts (`> [!type] Title` blocks) are **published by
+default** — `exclude_callouts` defaults to `false`, so an existing
+vault with no explicit setting still renders every callout to the
+site. Enable stripping with `publish.exclude_callouts` (or
+`excludeCallouts` in `vault.config.json`):
+
+- `true` — strip every callout
+- an array of types, e.g. `["warning", "danger", "info"]` — strip
+  only callouts of those types
+
+The gm-apprentice convention treats callouts as Keeper-facing
+(Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
+State), so **newly scaffolded** sites set `excludeCallouts: true` by
+default. Sites created before this option existed keep the default
+`false` until you set it explicitly — if you rely on callouts to hide
+Keeper content, turn it on, or move that content under a `## GM Notes`
+heading or `<!-- gm-only -->` markers, which are excluded regardless.
+
+Plain blockquotes (`> "an in-world quote"`) carry no `[!type]` marker
+and are never touched — keep read-aloud text as a plain blockquote,
+not a callout, if you want it published. Callout examples inside a
+fenced code block are preserved as documentation.
+
 ## Publish Manifest
 
 The manifest at `_meta/publish-manifest.md` is the work order
@@ -122,8 +147,17 @@ The build tool reads this file directly — no rescanning needed.
 ### Manifest Format
 
 The manifest is a markdown file with YAML frontmatter and three
-H2 sections. The build tool's parser (`lib/manifest.js`) reads
-the sections by heading prefix and checkbox state.
+H2 sections. The build tool's parser (`lib/manifest.js`) uses the
+heading to bucket each entry into Publishing/Excluded/Needs
+Decision. Only `mode: player` (see § Publish Modes) enforces the
+manifest as an inclusion filter — and even there, a file publishes
+if and only if it's a **checked** entry under `## Publishing`.
+Checking the box under `## Excluded` or `## Needs Decision` never
+publishes the file: those buckets are read (Excluded, to suppress a
+separate "missing from manifest" warning) but never for inclusion.
+In `mode: full` (the GM's own copy), the manifest isn't applied as
+a filter at all — every scanned page publishes regardless of what's
+checked.
 
 **Frontmatter** (metadata, not used by the build tool):
 

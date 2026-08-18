@@ -127,6 +127,12 @@ jobs:
       - name: gurps-check tests
         run: python tests/test_gurps_check.py
 
+      - name: Vault check assistance regression
+        run: python tests/test_vault_check.py
+
+      - name: Relationship predicate vocabulary regression
+        run: python tests/test_relationship_predicates.py
+
   pr-discipline:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

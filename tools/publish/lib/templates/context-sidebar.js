@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath } = require('../processor');
+const { escapeHtml, relativePath, encodeHref } = require('../processor');
 
 function normalizeRelationships(raw, linkMap) {
   if (!raw) return [];
@@ -29,7 +29,7 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
 
   if (parentEntity) {
-    const href = parentEntity.path ? relativePath(currentDir, parentEntity.path) : null;
+    const href = parentEntity.path ? encodeHref(relativePath(currentDir, parentEntity.path)) : null;
     const link = href
       ? `<a href="${href}">${escapeHtml(parentEntity.name)}</a>`
       : escapeHtml(parentEntity.name);
@@ -38,7 +38,7 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
 
   if (relationships && relationships.length > 0) {
     const items = relationships.map(r => {
-      const href = r.targetPath ? relativePath(currentDir, r.targetPath) : null;
+      const href = r.targetPath ? encodeHref(relativePath(currentDir, r.targetPath)) : null;
       const name = escapeHtml(r.target.replace(/_/g, ' '));
       const link = href ? `<a href="${href}">${name}</a>` : name;
       const type = escapeHtml(r.type.replace(/_/g, ' '));
@@ -49,7 +49,7 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
 
   if (backlinks && backlinks.length > 0) {
     const items = backlinks.map(b => {
-      const href = relativePath(currentDir, b.outputPath);
+      const href = encodeHref(relativePath(currentDir, b.outputPath));
       return `<li><a href="${href}">${escapeHtml(b.displayTitle)}</a> <span class="sidebar-badge">${escapeHtml(b.type)}</span></li>`;
     });
     sections.push(`<h3>Mentioned In</h3>\n<ul>${items.join('\n')}</ul>`);
@@ -57,7 +57,7 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
 
   if (events && events.length > 0) {
     const items = events.map(e => {
-      const href = relativePath(currentDir, e.outputPath);
+      const href = encodeHref(relativePath(currentDir, e.outputPath));
       return `<li><a href="${href}">${escapeHtml(e.displayTitle)}</a></li>`;
     });
     sections.push(`<h3>Events</h3>\n<ul>${items.join('\n')}</ul>`);

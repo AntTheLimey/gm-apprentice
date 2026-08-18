@@ -39,8 +39,12 @@ function summarize(changes) {
 // The only two live-state systems are GURPS and CoC. Anything not GURPS routes
 // to the CoC writeback — the historical default (legacy CoC sites carry no
 // system). A PC's own frontmatter.system wins; otherwise the campaign system
-// (resolved the same way build.js does — from _meta/vault-config.md via
-// loadPublishConfig, with a vault.config.json `system` fallback) decides.
+// decides. Note flush resolves that campaign system more permissively than
+// build.js does: build reads `publishConfig.system` alone (vault-config.md
+// only), while flush falls back to a top-level `system` in vault.config.json
+// when vault-config.md doesn't set one — see runFlush below. So a legacy site
+// carrying `system` only in the JSON gets the right writeback here even though
+// the build would treat it as unset.
 function resolveSystem(frontmatter, campaignSystem) {
   const s = String((frontmatter && frontmatter.system) || campaignSystem || '').toLowerCase();
   return s.indexOf('gurps') !== -1 ? 'gurps' : 'coc';

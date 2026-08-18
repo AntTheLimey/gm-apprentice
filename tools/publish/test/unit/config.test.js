@@ -24,10 +24,98 @@ describe('PUBLISH_DEFAULTS', () => {
   });
 });
 
+describe('exclude_sections default (issue #144)', () => {
+  // Reconcile / session-wrapup write '## Reconciliation Context' and
+  // '## Handoff to Reconcile' straight into vault files — GM plot state that
+  // must never reach a published player-mode site. The built-in default and
+  // the scaffold template (templates-scaffold/vault.config.json.tmpl) had
+  // drifted apart; this guards both independently, plus a sync check so they
+  // can't drift again.
+  const EXPECTED = [
+    'GM Notes',
+    'DM Notes',
+    'Player Notes',
+    'Source References',
+    'Reconciliation Context',
+    'Handoff to Reconcile',
+  ];
+
+  it('includes the six reconcile-bookkeeping sections by default', () => {
+    assert.deepStrictEqual(PUBLISH_DEFAULTS.exclude_sections, EXPECTED);
+  });
+
+  it('loadPublishConfig uses the six-item default when no vault config is present', () => {
+    const config = loadPublishConfig('/nonexistent/path');
+    assert.deepStrictEqual(config.exclude_sections, EXPECTED);
+  });
+
+  it('a vault-config.md exclude_sections list fully replaces the default (no default leakage)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_sections:\n    - "Custom Section"\n---\n',
+    );
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(result.exclude_sections, ['Custom Section']);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('unions vault-config.md with a stale vault.config.json excludeSections list, with no default injection', () => {
+    // Regression for the exact upgrade scenario #144 leaves unfixed: a site
+    // scaffolded before this change has a stale 4-item excludeSections in
+    // vault.config.json. Adding a vault-config.md list must union with that
+    // stale list (neither shadows the other, per the existing union
+    // semantics), and the six-item built-in default must not sneak in on
+    // top of either explicit source.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(
+      path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_sections:\n    - "Custom Section"\n---\n',
+    );
+    const staleFallback = {
+      excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
+    };
+    const result = loadPublishConfig(tmpDir, staleFallback);
+    assert.deepStrictEqual(result.exclude_sections, [
+      'Custom Section',
+      'GM Notes',
+      'DM Notes',
+      'Player Notes',
+      'Source References',
+    ]);
+    assert.ok(!result.exclude_sections.includes('Reconciliation Context'));
+    assert.ok(!result.exclude_sections.includes('Handoff to Reconcile'));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('scaffold template excludeSections stays in sync with PUBLISH_DEFAULTS.exclude_sections', () => {
+    const tmplPath = path.join(__dirname, '../../templates-scaffold/vault.config.json.tmpl');
+    const parsed = JSON.parse(fs.readFileSync(tmplPath, 'utf8'));
+    assert.deepStrictEqual(parsed.excludeSections, PUBLISH_DEFAULTS.exclude_sections);
+  });
+});
+
 describe('exclude_drafts', () => {
   it('defaults to false', () => {
     const config = loadPublishConfig('/nonexistent/path');
     assert.strictEqual(config.exclude_drafts, false);
+  });
+});
+
+describe('exclude_callouts (issue #137)', () => {
+  it('defaults to false', () => {
+    assert.strictEqual(PUBLISH_DEFAULTS.exclude_callouts, false);
+    const config = loadPublishConfig('/nonexistent/path');
+    assert.strictEqual(config.exclude_callouts, false);
+  });
+
+  it('reads excludeCallouts from vault.config.json fallback', () => {
+    const config = loadPublishConfig('/nonexistent/path', { excludeCallouts: true });
+    assert.strictEqual(config.exclude_callouts, true);
   });
 });
 
@@ -282,5 +370,202 @@ describe('sheet_crest', () => {
   it('defaults sheet_crest to null when unset', () => {
     const result = loadPublishConfig('/nonexistent/path');
     assert.strictEqual(result.sheet_crest, null);
+  });
+});
+
+describe('overrides.fields unicode normalization (#139)', () => {
+  const { canonicalPath } = require('../../lib/manifest');
+
+  // Built with explicit \u escapes (never a literal accented character) so the test
+  // file itself cannot be silently re-normalized by an editor or formatter. NFC types
+  // the accent as one precomposed codepoint; NFD types the same visible character as
+  // base letter + a separate combining acute accent codepoint. build.js looks up
+  // overrides via fieldOverrides[vaultRelPathOf(page)], and vaultRelPathOf() now
+  // canonicalizes the scanned page path to NFC (#139) — so an overrides.fields key
+  // must land in the same NFC form at config-load time, or it silently stops matching
+  // whenever the config author's normal form differs from the page's.
+  const NFC_PATH = 'Characters/PCs/Alena Gonz\u00e1lez.md';
+  const NFD_PATH = 'Characters/PCs/Alena Gonza\u0301lez.md';
+
+  function writeVaultConfig(tmpDir, fieldKey) {
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    const yaml = [
+      '---',
+      'publish:',
+      '  overrides:',
+      '    fields:',
+      `      "${fieldKey}":`,
+      '        some_field: "override value"',
+      '---',
+    ].join('\n');
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+  }
+
+  it('canonicalizes an NFD-keyed overrides.fields entry to NFC, matching an NFC page path', () => {
+    assert.notStrictEqual(NFC_PATH, NFD_PATH); // sanity: the two source strings really do differ byte-for-byte
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    writeVaultConfig(tmpDir, NFD_PATH);
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(Object.keys(result.overrides.fields), [NFC_PATH]);
+    assert.strictEqual(result.overrides.fields[canonicalPath(NFC_PATH)].some_field, 'override value');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('canonicalizes an NFC-keyed overrides.fields entry, matching an NFD page path (vice versa)', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    writeVaultConfig(tmpDir, NFC_PATH);
+    const result = loadPublishConfig(tmpDir);
+    assert.deepStrictEqual(Object.keys(result.overrides.fields), [NFC_PATH]);
+    assert.strictEqual(result.overrides.fields[canonicalPath(NFD_PATH)].some_field, 'override value');
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('overrides surface (dead top-level keys)', () => {
+  // `overrides.fields` is the only override the build reads: build.js takes
+  // `publishConfig.overrides.fields[vaultRelPath]` and hands that per-file object to
+  // filterFields, which reads `.include` off it. A top-level `overrides.exclude` or
+  // `overrides.include` was declared in the defaults but never read anywhere, so a GM who
+  // wrote one got a silent no-op.
+  function writeConfig(tmpDir, yamlBody) {
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), `---\n${yamlBody}---\n`);
+  }
+
+  function captureWarns(fn) {
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try { return { result: fn(), warns }; } finally { console.warn = orig; }
+  }
+
+  it('declares only the override the build actually reads', () => {
+    assert.deepStrictEqual(Object.keys(PUBLISH_DEFAULTS.overrides), ['fields']);
+  });
+
+  it('warns instead of silently ignoring an unread top-level override key', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    try {
+      writeConfig(tmpDir, 'publish:\n  overrides:\n    exclude:\n      - "Notes/Secret.md"\n');
+      const { warns } = captureWarns(() => loadPublishConfig(tmpDir));
+      const hits = warns.filter(w => w.includes('overrides.exclude'));
+      assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+      assert.match(hits[0], /overrides\.fields/);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('stays quiet for the supported overrides.fields block', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    try {
+      writeConfig(tmpDir, 'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include:\n          - secrets\n');
+      const { result, warns } = captureWarns(() => loadPublishConfig(tmpDir));
+      assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
+      assert.deepStrictEqual(result.overrides.fields['Characters/NPCs/Vex.md'].include, ['secrets']);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves overrides.fields as the only key when nothing is configured', () => {
+    assert.deepStrictEqual(loadPublishConfig('/nonexistent/path').overrides, { fields: {} });
+  });
+});
+
+describe('malformed publish.overrides blocks', () => {
+  function writeConfig(tmpDir, yamlBody) {
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir, { recursive: true });
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), `---\n${yamlBody}---\n`);
+  }
+
+  function loadWithWarns(yamlBody) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try {
+      writeConfig(tmpDir, yamlBody);
+      return { result: loadPublishConfig(tmpDir), warns };
+    } finally {
+      console.warn = orig;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  it('warns once, not per character index, when overrides is a bare string', () => {
+    // Object.keys('fields') is ['0'..'5'], which would invent six override keys.
+    const { result, warns } = loadWithWarns('publish:\n  overrides: fields\n');
+    const hits = warns.filter(w => w.includes('publish.overrides'));
+    assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+    assert.match(hits[0], /must be a map/);
+    assert.deepStrictEqual(result.overrides, { fields: {} });
+  });
+
+  it('warns once when overrides is a list', () => {
+    const { warns } = loadWithWarns('publish:\n  overrides:\n    - fields\n');
+    const hits = warns.filter(w => w.includes('publish.overrides'));
+    assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+    assert.match(hits[0], /a list/);
+  });
+
+  it('ignores a non-map overrides.fields instead of inventing per-character keys', () => {
+    const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: secrets\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('overrides.fields')), `no warning in: ${warns.join(' | ')}`);
+  });
+
+  it('reaches the validator for an explicitly falsy fields value', () => {
+    // `||` swapped `false` for the default before it could be reported, so a
+    // GM who wrote `fields: false` got silence and no overrides.
+    const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: false\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('overrides.fields') && w.includes('boolean')),
+      `no boolean warning in: ${warns.join(' | ')}`);
+  });
+
+  it('drops a per-file override whose include is a string, not a list', () => {
+    // filterFields does `overrides.include.includes(field)`; on a string that is
+    // substring matching, so `include: sec` would re-admit `secrets`.
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include: sec\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('Characters/NPCs/Vex.md') && w.includes('include')),
+      `no include warning in: ${warns.join(' | ')}`);
+  });
+
+  it('drops a per-file override that is not a map at all', () => {
+    // A truthy non-array `include` (or a scalar override) makes filterFields throw.
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md": secrets\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('Characters/NPCs/Vex.md')),
+      `no per-file warning in: ${warns.join(' | ')}`);
+  });
+
+  it('drops a per-file override whose include list holds a non-string', () => {
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include:\n          - 7\n');
+    assert.deepStrictEqual(result.overrides.fields, {});
+    assert.ok(warns.some(w => w.includes('Characters/NPCs/Vex.md')),
+      `no per-file warning in: ${warns.join(' | ')}`);
+  });
+
+  it('keeps a well-formed per-file override untouched', () => {
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md":\n        include:\n          - secrets\n');
+    assert.deepStrictEqual(result.overrides.fields['Characters/NPCs/Vex.md'], { include: ['secrets'] });
+    assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
+  });
+
+  it('keeps a per-file override with no include key', () => {
+    // `{}` is a legal entry — it just re-admits nothing. Warning here would be noise.
+    const { result, warns } = loadWithWarns(
+      'publish:\n  overrides:\n    fields:\n      "Characters/NPCs/Vex.md": {}\n');
+    assert.deepStrictEqual(result.overrides.fields['Characters/NPCs/Vex.md'], {});
+    assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
   });
 });
