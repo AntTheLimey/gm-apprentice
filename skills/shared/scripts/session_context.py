@@ -130,12 +130,32 @@ def main() -> int:
         # behaviour and right for a flat vault.
         return max(entries, key=lambda s: (bool(s["date"]), s["date"], s["n"]))
 
+    def resolve_ref(ref, pool):
+        """The session a wikilink names: (record, problem).
+
+        An exact relative path wins outright. A bare stem is accepted only
+        when it identifies one file — two chapters can hold identically named
+        sessions, and picking the first off the walk is the collision this
+        whole change exists to remove.
+        """
+        target = ref.casefold()
+        exact = [s for s in pool if s["rel"][:-3].casefold() == target]
+        if len(exact) == 1:
+            return exact[0], None
+        if len(exact) > 1:
+            return None, "ambiguous"
+        base = target.rsplit("/", 1)[-1]
+        hits = [s for s in pool if stem_of(s) == base]
+        if len(hits) == 1:
+            return hits[0], None
+        return None, ("ambiguous" if hits else "missing")
+
     chosen = None
     if args.session is not None:
         matches = [s for s in sessions if s["n"] == args.session]
         if matches:
-            named = next((s for s in matches if overview_last and stem_of(s)
-                          == overview_last.casefold()), None)
+            named = (resolve_ref(overview_last, matches)[0]
+                     if overview_last else None)
             chosen = named or by_recency(matches)
             if len(matches) > 1:
                 others = [s["chapter_label"] or s["rel"] for s in matches
@@ -146,9 +166,14 @@ def main() -> int:
                     f"{', '.join(sorted(str(o) for o in others))}) — resolved "
                     f"to {chosen['chapter_label'] or chosen['rel']}.")
     elif overview_last:
-        target = overview_last.casefold()
-        chosen = next((s for s in sessions if stem_of(s) == target), None)
-        if chosen is None:
+        chosen, problem = resolve_ref(overview_last, sessions)
+        if problem == "ambiguous":
+            warnings.append(
+                f"Note: campaign overview names last_session "
+                f"'{overview_last}', which matches more than one session "
+                f"file — falling back to the most recently played session. "
+                f"Qualify the link with its folder to disambiguate.")
+        elif problem == "missing":
             warnings.append(
                 f"Note: campaign overview names last_session "
                 f"'{overview_last}', which matches no session file — "
@@ -204,22 +229,31 @@ def main() -> int:
     # vault where numbering restarts they could pair the right number with the
     # wrong chapter's documents. An unknown chapter on either side matches, which
     # keeps flat vaults working exactly as before.
-    def in_chapter(rel, fm):
-        other = chapter_key(rel, fm)
-        return chapter is None or other is None or other == chapter
+    def prefer_chapter(candidates):
+        """The selected chapter's own document, else an unfiled one.
 
-    wrap = next(
-        ((rel, text) for rel, text, fm in files
+        Accepting any unresolvable chapter equally let a document that merely
+        sorted earlier — an archived copy at the vault root — outrank the
+        chapter's real one. Scoped first, unscoped only as a fallback.
+        """
+        if chapter is not None:
+            own = [c for c in candidates if chapter_key(c[0], c[2]) == chapter]
+            if own:
+                return (own[0][0], own[0][1])
+        loose = [c for c in candidates
+                 if chapter is None or chapter_key(c[0], c[2]) is None]
+        return (loose[0][0], loose[0][1]) if loose else None
+
+    wrap = prefer_chapter(
+        [(rel, text, fm) for rel, text, fm in files
          if fm.get("type") in ("session-wrap-up", "session_wrap")
-         and parse_session_number(fm.get("session")) == current
-         and in_chapter(rel, fm)),
-        None)
+         and parse_session_number(fm.get("session")) == current])
     if wrap is None:
         # Fallback: filename convention Chapter_CC_Session_NN_Wrap_Up.md
         pat = re.compile(rf"Session[ _-]0*{current}[ _-].*Wrap[ _-]?Up",
                          re.IGNORECASE)
-        wrap = next(((rel, text) for rel, text, fm in files
-                     if pat.search(rel) and in_chapter(rel, fm)), None)
+        wrap = prefer_chapter([(rel, text, fm) for rel, text, fm in files
+                               if pat.search(rel)])
     emit(f"Wrap-Up — Session {current}",
          wrap[0] if wrap else None,
          body_of(wrap[1]) if wrap else None)
@@ -243,12 +277,10 @@ def main() -> int:
         print("(no active PC entities found)")
 
     # --- existing plan for the upcoming session ---
-    plan = next(
-        ((rel, text) for rel, text, fm in files
+    plan = prefer_chapter(
+        [(rel, text, fm) for rel, text, fm in files
          if fm.get("type") == "session-plan"
-         and parse_session_number(fm.get("session")) == upcoming
-         and in_chapter(rel, fm)),
-        None)
+         and parse_session_number(fm.get("session")) == upcoming])
     emit(f"Existing Plan — Session {upcoming}",
          plan[0] if plan else None,
          body_of(plan[1]) if plan else None)

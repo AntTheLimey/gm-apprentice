@@ -175,12 +175,21 @@ scans seeds for relevant prior ideas.
 scratchpad should not be linted for schema compliance.
 
 **That is an auditing rule, not a general one.** `session-prep`
-and `session-play` must *read* `_midwife/{chapter-slug}/`: it is
-where a chapter's forward design actually lives once a midwife
-session has run, and it is often the only place it lives, with
+and `session-play` must *read* the workspace: it is where a
+chapter's forward design actually lives once a midwife session
+has run, and it is often the only place it lives, with
 `Chapters/{chapter}/Planning/` left empty. A prep pass that
 skips it will invent scene structure that contradicts a
 timeline already sitting in the vault.
+
+**Directories here are named per adventure, not per chapter**
+(`_midwife/{adventure-name}/`, as written above). An adventure
+may be one chapter, several, or carry a name resembling
+neither. Readers must therefore resolve the directory through
+`_midwife/index.md`, the master manifest, rather than deriving
+a slug from the chapter title — and where the manifest leaves
+the match ambiguous, ask rather than guess. `Ingested` status
+means the design was already promoted into `Planning/`.
 
 Discover these files **by path**. They are creative working
 documents and carry no frontmatter, so any scan keyed on

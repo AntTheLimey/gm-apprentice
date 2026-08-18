@@ -22,8 +22,12 @@ design never read at all.
   months-stale wrap-up, the wrong PC world-state, and a meaningless "no
   existing plan" — all of it reading as authoritative. Selection now
   follows the campaign overview's `last_session`, falling back to the most
-  recent `play_date`, and every downstream lookup is scoped to the selected
-  session's chapter. Sessions are keyed on `(chapter, number)` rather than
+  recent `play_date`, and the session-anchored lookups (wrap-up, upcoming
+  plan) are scoped to the selected session's chapter — the rest of the bundle
+  stays vault-wide, which is correct for PCs, flags, and the overview. A
+  document that names no chapter no longer outranks the chapter's own by
+  sorting earlier, and a chapter ref written as a path keys the same as one
+  written as a folder name. Sessions are keyed on `(chapter, number)` rather than
   the bare integer, which two chapters could silently collide on depending
   on directory walk order. Where the answer is ambiguous — a stale overview
   pointer, a number appearing in more than one chapter — the bundle now says

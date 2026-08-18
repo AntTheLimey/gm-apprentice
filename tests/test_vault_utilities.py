@@ -253,6 +253,49 @@ check("vault_check stale-drafts: the live chapter's draft is not stale",
        "WARNING\t_World/_flags.md\tDRAFT missing createdSession — "
        "cannot determine staleness; add it or promote"])
 
+# Review findings on #162. Three ways the chapter dimension could still be lost.
+
+# (a) A chapter ref written as a path must key the same as the folder fallback,
+# or one chapter becomes two identities and its own documents stop matching.
+sys.path.insert(0, str(SCRIPTS))
+from schema_rules import chapter_key  # noqa: E402
+
+check("chapter_key: path-form ref matches the folder fallback",
+      [chapter_key("Chapters/Chapter 4 - Calcutta/Sessions/S.md",
+                   {"chapter": ["[Chapters/Chapter 4 - Calcutta]"]})],
+      [chapter_key("Chapters/Chapter 4 - Calcutta/Sessions/S.md", {})])
+
+# (b) last_session is a path-form wikilink in the fixture; it must still resolve.
+# Assert the pointer RESOLVED, not merely that the answer came out right:
+# the recency fallback reaches the same session, so only the absence of the
+# "matches no session file" warning proves the overview path fired.
+_ctx_path = "\n".join(run("session_context.py", vault=PREP_CHAPTERS_VAULT))
+check("session_context: path-form last_session resolves",
+      ["Session 07 - The Sterile Bay" in _ctx_path,
+       "matches no session file" in _ctx_path],
+      [True, False])
+
+# A bare stem must keep working — that is what the reported vault held.
+_stem_vault = Path(tempfile.mkdtemp()) / "v"
+shutil.copytree(PREP_CHAPTERS_VAULT, _stem_vault)
+_ov = _stem_vault / "Overview.md"
+_ov.write_text(_ov.read_text(encoding="utf-8").replace(
+    "[[Chapters/Chapter 4 - Calcutta/Sessions/Session 07 - The Sterile Bay]]",
+    "[[Session 07 - The Sterile Bay]]"), encoding="utf-8")
+check("session_context: bare-stem last_session resolves",
+      ["Session 07 - The Sterile Bay" in "\n".join(
+          run("session_context.py", vault=_stem_vault))],
+      [True])
+shutil.rmtree(_stem_vault.parent, ignore_errors=True)
+
+# (c) A document carrying no chapter must not outrank the chapter's own just
+# because it sorts earlier. Archive_... deliberately sorts before Chapters/.
+_ctx_pref = "\n".join(run("session_context.py", vault=PREP_CHAPTERS_VAULT))
+check("session_context: the chapter's own wrap-up outranks an unfiled one",
+      ["sterile bay swallowed" in _ctx_pref,
+       "unfiled wrap-up carrying no chapter" in _ctx_pref],
+      [True, False])
+
 # --- vault_check.py changed ---
 
 check("changed --since lists session-touched entities",

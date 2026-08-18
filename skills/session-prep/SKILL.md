@@ -183,7 +183,7 @@ what's already established.
 
 Forward design for a chapter lives in **two** places and you
 must check both. `Chapters/{chapter}/Planning/` holds stamped
-plan entities. `_midwife/{chapter-slug}/` holds whatever a
+plan entities. The `_midwife/` workspace holds whatever a
 midwife session produced — often the richer of the two, and
 frequently the only one populated.
 
@@ -195,15 +195,36 @@ frequently the only one populated.
    overlap with the threads, NPCs, or locations already
    gathered in steps 8-10
 
-**B. `_midwife/{chapter-slug}/`**, if it exists. Match the
-slug loosely — a chapter titled "Chapter 4 - Calcutta" maps
-to `chapter-4-calcutta`; if no directory matches, list
-`_midwife/` and pick by name.
+**B. The midwife workspace**, if `_midwife/` exists.
 
-Discover these by **path, not frontmatter**. Midwife files are
-creative working documents and carry no `---` block at all, so
-a `plan_type` scan finds nothing however wide its root. Read
-each file's `#` H1 and `##` headings to summarise it.
+Directories under `_midwife/` are named per **adventure**, not
+per chapter. An adventure may be a chapter, span several, or
+be named nothing like one — so do not guess a slug. Use the
+manifest:
+
+1. Read `_midwife/index.md` — the master list of adventures
+   and their status (Active / Parked / Complete / Ingested).
+2. Identify the adventure covering the upcoming chapter.
+   **Exactly one, or none.** If two or more could plausibly
+   match, or the manifest is missing and several directories
+   exist, say so and ask the GM which — do not pick. Prepping
+   against another chapter's timeline is the failure this
+   step exists to prevent.
+3. Read that adventure's `_midwife/{adventure}/index.md`,
+   which carries a one-line summary per topic file. Use it to
+   choose what to open rather than reading the whole tree.
+
+`Ingested` in the manifest means the design was already
+promoted into `Planning/`; root A then covers it and this root
+is history. Anything not yet ingested is exactly the case
+where `Planning/` is empty and this step is the only way the
+design gets seen.
+
+Discover these files by **path, not frontmatter**. Midwife
+files are creative working documents and carry no `---` block
+at all, so a `plan_type` scan finds nothing however wide its
+root. Read each file's `#` H1 and `##` headings to summarise
+it.
 
 **Read `timeline.md` first if one exists.** A midwife
 day-by-day timeline is the highest-value prep artifact in the
@@ -220,7 +241,7 @@ the GM is the one who has to catch that.
 > - Scenes: Temple_Approach.md, Recognition_Scene.md,
 >   Escort_Betrayal.md — scene designs with decision trees
 > - Investigation: Investigation_Design.md — clue flow
-> - Midwife design (`_midwife/chapter-4-calcutta/`, 55 files):
+> - Midwife design (`_midwife/{adventure}/`, 55 files):
 >   timeline.md — day-by-day skeleton, all 18 days;
 >   chapter-shape.md, narrative-arc.md, social-events.md;
 >   npcs/ profiles; handouts/ prose

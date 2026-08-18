@@ -221,7 +221,11 @@ def chapter_of(rel: str, fm: dict) -> str | None:
     """
     ref = wikilink_target(fm.get("chapter"))
     if ref:
-        return ref
+        # A ref may be written as a path ("[[Chapters/Chapter 4 - Calcutta]]")
+        # while the folder fallback yields only the segment. Keep the last
+        # segment either way, or one chapter acquires two identities and stops
+        # matching its own wrap-ups and plans.
+        return ref.rsplit("/", 1)[-1]
     parts = rel.split("/")
     if len(parts) > 1 and parts[0].casefold() in {"chapters", "_chapters"}:
         return parts[1]
