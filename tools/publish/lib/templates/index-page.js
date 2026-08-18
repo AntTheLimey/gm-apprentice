@@ -380,29 +380,63 @@ function renderChapterList(pages, indexDir) {
   // built from every page under `chapters/`, subfolders included, so a session in one
   // chapter's folder whose `chapter:` ref names another reaches both tests. Deleting
   // them leaves the whole suite green, which is what made them look dead.
-  function refMatchesChapter(session, chapter) {
-    const ref = canonicalNfc(String(session.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '')).toLowerCase();
-    if (!ref) return false;
-    const chTitle = canonicalNfc(chapter.displayTitle).toLowerCase();
-    const chFrontTitle = chapter.frontmatter.title ? canonicalNfc(chapter.frontmatter.title).toLowerCase() : '___';
-    if (chTitle.includes(ref.replace(/^chapter \d+\s*[-–—]\s*/i, '').trim().toLowerCase())) return true;
-    if (ref.includes(chFrontTitle)) return true;
-    return false;
+  const CHAPTER_PREFIX = /^chapter\s+\d+\s*[-–—:]\s*/i;
+  const bare = (s) => s.replace(CHAPTER_PREFIX, '').trim();
+  const refOf = (session) => canonicalNfc(
+    String(session.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').split('|')[0].trim()
+  ).toLowerCase();
+
+  // How strongly a ref names this chapter. 2 = the two titles are the same once a
+  // "Chapter 3 — " prefix is discounted on either side. 1 = the chapter's own title
+  // appears inside a longer ref ("Chapter 1 — London: The Orphean Society" naming
+  // "London") — the direction both sibling matchers implement. 0 = no claim.
+  //
+  // The reverse of that substring test, ref-inside-title, is deliberately absent: it
+  // is what let `[[Vienna]]` claim both "Vienna" and "The Vienna Files", and it is
+  // also the one direction neither sibling uses.
+  function refScore(ref, chapter) {
+    if (!ref) return 0;
+    const titles = [chapter.displayTitle, chapter.frontmatter.title]
+      .filter(Boolean)
+      .map(t => canonicalNfc(String(t)).toLowerCase());
+    if (titles.some(t => bare(ref) === bare(t))) return 2;
+    if (titles.some(t => t && ref.includes(t))) return 1;
+    return 0;
+  }
+
+  // Resolve each session to at most ONE chapter up front. Scoring rather than
+  // first-match-wins so an exact title beats a loose containment, and the longest
+  // title breaks a tie as the most specific claim. Without this a ref that matched
+  // two chapters put the session under both.
+  const resolvedChapter = new Map();
+  for (const s of sessions) {
+    const ref = refOf(s);
+    if (!ref) continue;
+    let best = null;
+    let bestScore = 0;
+    let bestLen = -1;
+    for (const c of chapters) {
+      const score = refScore(ref, c);
+      if (!score) continue;
+      const len = canonicalNfc(String(c.displayTitle || '')).length;
+      if (score > bestScore || (score === bestScore && len > bestLen)) {
+        best = c;
+        bestScore = score;
+        bestLen = len;
+      }
+    }
+    if (best) resolvedChapter.set(s.outputPath, best);
   }
 
   // An explicit ref outranks the folder. Before this, a session filed under Calcutta
   // but tagged `chapter: [[Vienna]]` matched the ref test for Vienna *and* the folder
   // test for Calcutta, and was listed under both chapters. A ref that names no chapter
-  // on the page claims nothing, so those sessions still fall back to their folder.
-  const refClaimed = new Set(
-    sessions.filter(s => chapters.some(c => refMatchesChapter(s, c))).map(s => s.outputPath)
-  );
-
+  // on the page resolves to nothing, so those sessions still fall back to their folder.
   function sessionsForChapter(chapter) {
     const chFolder = chapter.outputPath.split('/').slice(0, -1).join('/');
     return sessions.filter(s => {
-      if (refMatchesChapter(s, chapter)) return true;
-      if (refClaimed.has(s.outputPath)) return false;
+      const resolved = resolvedChapter.get(s.outputPath);
+      if (resolved) return resolved === chapter;
       return s.outputPath.startsWith(chFolder + '/');
     });
   }

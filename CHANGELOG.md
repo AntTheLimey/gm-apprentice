@@ -25,18 +25,26 @@ review, closed as one pass.
   `runCommand` on the same 60s bound the inbox poll received in 1.8.49, and
   the constant moved to `run-command.js` instead of being copied a third
   time. `runCommand` gained a `cwd` passthrough, which is why backend setup
-  had its own raw spawn (#160).
+  had its own raw spawn (#160). The wrappers also dropped `runCommand`'s
+  `error`, and a timed-out spawn leaves stdout and stderr empty — so the new
+  bound turned a hang into a blank message indistinguishable from a silent
+  success. All three now carry it, and the KV adapter and setup diagnostics
+  fall back to it through a shared `failureDetail`.
 - `publish-site`: card initials and relationship-graph labels counted UTF-16
   code units, so a decomposed accent dropped off an initial ("Bestia Ñu"
   showed "BN") and cost a label one of its fifteen characters, truncating
   names that fit composed. Both now measure graphemes, which also keeps
   astral characters whole (#157).
 - `publish-site`: a session filed in one chapter's folder while its
-  `chapter:` ref named another was listed under **both** chapters. The
-  explicit ref now outranks the folder; a ref matching no chapter on the
-  page still falls back to folder grouping. Filed as unreachable dead code
-  (#156) — the clauses are reachable, and deleting them left the suite
-  green, so the gap was coverage.
+  `chapter:` ref named another was listed under **both** chapters. Each
+  session now resolves to exactly one chapter — an exact title beats a loose
+  containment, longest title breaks a tie — and that ref outranks the
+  folder, with folder grouping still the fallback when a ref names no
+  chapter on the page. The ref test that compared ref-inside-chapter-title
+  is gone: it ran opposite to both sibling copies of this matcher and let
+  `[[Vienna]]` claim "Vienna" and "The Vienna Files" at once. Filed as
+  unreachable dead code (#156) — the clauses are reachable, and deleting
+  them left the suite green, so the gap was coverage.
 
 ### Removed
 

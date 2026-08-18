@@ -40,3 +40,44 @@ describe('chapter/session grouping', () => {
     assert.strictEqual(countSession(html), 1, 'an unmatched ref falls back to the folder');
   });
 });
+
+// #161 review: the ref test compared `chapterTitle.includes(ref)` — the opposite
+// direction from both sibling copies of this matcher (story-spine.js, build.js),
+// which test whether the chapter's title appears in the ref. That backwards
+// direction is what lets one ref claim two chapters.
+describe('chapter reference matching is unambiguous', () => {
+  const twoChapters = (chapterRef) => [
+    { title: 'Vienna', displayTitle: 'Vienna', outputPath: 'chapters/vienna/vienna.html',
+      frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' },
+    { title: 'The Vienna Files', displayTitle: 'The Vienna Files', outputPath: 'chapters/files/files.html',
+      frontmatter: { type: 'chapter', sort_order: 2 }, markdown: '' },
+    { title: 'Session 04', displayTitle: 'Session 04', outputPath: 'chapters/vienna/session-04.html',
+      frontmatter: { type: 'session', session_number: 4, status: 'played', chapter: chapterRef }, markdown: '' },
+  ];
+
+  it('does not let one ref claim two chapters by substring', () => {
+    const html = indexTemplate('chapters', 'Chapters', twoChapters('[[Vienna]]'), navFor, cfg, {}, {});
+    assert.strictEqual((html.match(/Session 04/g) || []).length, 1, 'listed under exactly one chapter');
+  });
+
+  it('files it under the chapter the ref actually names', () => {
+    const html = indexTemplate('chapters', 'Chapters', twoChapters('[[The Vienna Files]]'), navFor, cfg, {}, {});
+    const idx = html.indexOf('Session 04');
+    assert.ok(idx > html.indexOf('The Vienna Files'), 'sits under The Vienna Files, not Vienna');
+    assert.strictEqual((html.match(/Session 04/g) || []).length, 1);
+  });
+
+  // Capability that must survive: a long descriptive ref naming a short chapter.
+  // This is the direction the two sibling matchers implement.
+  it('still matches a long ref that contains the chapter title', () => {
+    const pages = [
+      { title: 'London', displayTitle: 'London', outputPath: 'chapters/london/london.html',
+        frontmatter: { type: 'chapter', title: 'London', sort_order: 1 }, markdown: '' },
+      { title: 'Session 09', displayTitle: 'Session 09', outputPath: 'chapters/misfiled/session-09.html',
+        frontmatter: { type: 'session', session_number: 9, status: 'played',
+          chapter: '[[Chapter 1 — London: The Orphean Society]]' }, markdown: '' },
+    ];
+    const html = indexTemplate('chapters', 'Chapters', pages, navFor, cfg, {}, {});
+    assert.strictEqual((html.match(/Session 09/g) || []).length, 1, 'the long ref still finds London');
+  });
+});
