@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.51] — 2026-08-17
 
-Session-prep picked the wrong session in vaults whose numbering restarts
-each chapter.
+Two session-prep bugs found in one live prep pass: the wrong session picked
+in vaults whose numbering restarts each chapter, and a chapter's midwife
+design never read at all.
 
 ### Fixed
 
@@ -27,6 +28,19 @@ each chapter.
   on directory walk order. Where the answer is ambiguous — a stale overview
   pointer, a number appearing in more than one chapter — the bundle now says
   so instead of choosing quietly (#162).
+- `session-prep`/`session-play`: neither skill ever read `_midwife/`. Step
+  10c scanned only `Chapters/{chapter}/Planning/` and matched on `plan_type`
+  frontmatter, so a chapter whose forward design lived in `_midwife/` was
+  reported as having no plans and scene structure was generated from
+  scratch, contradicting a day-by-day timeline already sitting in the vault.
+  Both skills now read `_midwife/{chapter-slug}/` by path rather than
+  frontmatter — those files carry none by design — with `timeline.md`
+  surfaced before scene design begins. `vault-structure.md` now states both
+  halves of the posture: `campaign-qa` ignores `_midwife/` for auditing,
+  prep and play read it for design. An empty result is no longer written up
+  as a vault gap, which was a claim about the vault when the real cause was
+  a scan that never opened the directory (#163).
+
 - `session-prep`/`campaign-qa`: a quoted wikilink reaches the frontmatter
   reader as a one-item list (`"[[Note]]"` parses as a YAML flow sequence),
   so reading `last_session` as a string silently disabled the
