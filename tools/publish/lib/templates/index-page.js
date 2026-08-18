@@ -371,22 +371,39 @@ function renderChapterList(pages, indexDir) {
 
   if (chapters.length === 0 && sessions.length === 0) return '';
 
-  function sessionsForChapter(chapter) {
-    // The third copy of the chapter matcher (story-spine.js and build.js hold the others).
-    // Author-typed ref vs filename-derived title on both substring tests, so both sides are
-    // canonicalized to NFC (#139) — but the two ref clauses are UNREACHABLE TODAY: this
-    // function only ever sees the pages of a single output dir, so the folder-prefix clause
-    // below is true for every session it is given and always decides first. Kept in the same
-    // normal form as its two live siblings so the three cannot drift.
+  // The third copy of the chapter matcher (story-spine.js and build.js hold the
+  // others). Author-typed ref vs filename-derived title on both substring tests, so
+  // both sides are canonicalized to NFC (#139). Kept in the same normal form as its
+  // two live siblings so the three cannot drift.
+  //
+  // #156 filed these two ref tests as unreachable. They are not: the index page is
+  // built from every page under `chapters/`, subfolders included, so a session in one
+  // chapter's folder whose `chapter:` ref names another reaches both tests. Deleting
+  // them leaves the whole suite green, which is what made them look dead.
+  function refMatchesChapter(session, chapter) {
+    const ref = canonicalNfc(String(session.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '')).toLowerCase();
+    if (!ref) return false;
     const chTitle = canonicalNfc(chapter.displayTitle).toLowerCase();
     const chFrontTitle = chapter.frontmatter.title ? canonicalNfc(chapter.frontmatter.title).toLowerCase() : '___';
+    if (chTitle.includes(ref.replace(/^chapter \d+\s*[-–—]\s*/i, '').trim().toLowerCase())) return true;
+    if (ref.includes(chFrontTitle)) return true;
+    return false;
+  }
+
+  // An explicit ref outranks the folder. Before this, a session filed under Calcutta
+  // but tagged `chapter: [[Vienna]]` matched the ref test for Vienna *and* the folder
+  // test for Calcutta, and was listed under both chapters. A ref that names no chapter
+  // on the page claims nothing, so those sessions still fall back to their folder.
+  const refClaimed = new Set(
+    sessions.filter(s => chapters.some(c => refMatchesChapter(s, c))).map(s => s.outputPath)
+  );
+
+  function sessionsForChapter(chapter) {
     const chFolder = chapter.outputPath.split('/').slice(0, -1).join('/');
     return sessions.filter(s => {
-      const ref = canonicalNfc(String(s.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '')).toLowerCase();
-      if (ref && chTitle.includes(ref.replace(/^chapter \d+\s*[-–—]\s*/i, '').trim().toLowerCase())) return true;
-      if (ref && ref.includes(chFrontTitle)) return true;
-      if (s.outputPath.startsWith(chFolder + '/')) return true;
-      return false;
+      if (refMatchesChapter(s, chapter)) return true;
+      if (refClaimed.has(s.outputPath)) return false;
+      return s.outputPath.startsWith(chFolder + '/');
     });
   }
 
