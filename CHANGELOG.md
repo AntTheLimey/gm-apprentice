@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.51] — 2026-08-17
+
+Session-prep picked the wrong session in vaults whose numbering restarts
+each chapter.
+
+### Fixed
+
+- `session-prep`: `session_context.py` chose "just played" by taking a
+  vault-wide `max()` over `session_number`. Where numbering restarts per
+  chapter that is not a campaign-wide ordinal, so a finished chapter's
+  higher-numbered session won permanently and the bundle handed back a
+  months-stale wrap-up, the wrong PC world-state, and a meaningless "no
+  existing plan" — all of it reading as authoritative. Selection now
+  follows the campaign overview's `last_session`, falling back to the most
+  recent `play_date`, and every downstream lookup is scoped to the selected
+  session's chapter. Sessions are keyed on `(chapter, number)` rather than
+  the bare integer, which two chapters could silently collide on depending
+  on directory walk order. Where the answer is ambiguous — a stale overview
+  pointer, a number appearing in more than one chapter — the bundle now says
+  so instead of choosing quietly (#162).
+- `session-prep`/`campaign-qa`: a quoted wikilink reaches the frontmatter
+  reader as a one-item list (`"[[Note]]"` parses as a YAML flow sequence),
+  so reading `last_session` as a string silently disabled the
+  authoritative-metadata path entirely. `wikilink_target` now unwraps it.
+- `campaign-qa`: `vault_check.py stale-drafts` carried the same flat
+  assumption, measuring every draft against the vault-wide highest session
+  number. In a restarting vault that made the live chapter's newest content
+  read as many sessions old and told the GM to "promote to AUTHORITATIVE or
+  delete" it. Staleness is now measured within a chapter; a draft that names
+  no chapter in such a vault is reported as undatable rather than judged
+  against an unrelated chapter's count.
+
+---
+
 ## [1.8.50] — 2026-08-17
 
 Publish tool 1.11.23. The five follow-up bugs left open by the 1.8.49

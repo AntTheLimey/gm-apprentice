@@ -19,6 +19,9 @@ SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 VAULT = ROOT / "tests" / "fixtures" / "mini-vault"
 SCHEMA_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-schema"
 PREP_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-prep"
+PREP_CHAPTERS_VAULT = ROOT / "tests" / "fixtures" / "mini-vault-prep-chapters"
+PREP_NOLINK_VAULT = (ROOT / "tests" / "fixtures"
+                     / "mini-vault-prep-chapters-nolink")
 
 FAILURES = []
 
@@ -178,6 +181,77 @@ for expect, present, label in [
     ("Fogport, 1923", True, "includes campaign overview"),
 ]:
     check(f"session_context: {label}", [expect in ctx], [present])
+
+# --- session_context.py with per-chapter session numbering (#162) ---
+#
+# Chapter 3 ran to Session 14; Chapter 4 restarted and is at Session 07. A
+# vault-wide max() over session_number picks Vienna S14 and stays there until
+# Calcutta reaches 15, handing back a stale wrap-up as if it were current. Two
+# sessions also share number 7 across chapters, which silently collided on a
+# bare-integer key.
+
+ctx_ch = "\n".join(run("session_context.py", vault=PREP_CHAPTERS_VAULT))
+for expect, present, label in [
+    ("Session 07 - The Sterile Bay", True,
+     "picks the most recently played session, not the highest number"),
+    ("Preparing: session 8", True,
+     "next session is numbered within the current chapter"),
+    ("Chapter 3 - Vienna/Sessions/Session 14.md", False,
+     "the completed chapter's last session is not 'just played'"),
+    ("sterile bay swallowed", True, "pairs the current chapter's wrap-up"),
+    ("Vienna opera burned", False, "stale chapter wrap-up excluded"),
+    ("dredger's manifest inland", True, "finds the upcoming plan in-chapter"),
+]:
+    check(f"session_context chapters: {label}", [expect in ctx_ch], [present])
+
+# Two chapters both hold a Session 07. Picking one silently is the collision
+# itself, so an explicit --session 7 must say which chapter it resolved to.
+# (Asserting only "Calcutta won" would pass today by directory walk order.)
+ctx_s7 = "\n".join(run("session_context.py", "--session", "7",
+                       vault=PREP_CHAPTERS_VAULT))
+check("session_context chapters: --session names the chapter it resolved to",
+      ["resolved to Chapter 4 - Calcutta" in ctx_s7,
+       "also in Chapter 3 - Vienna" in ctx_s7],
+      [True, True])
+
+# A quoted wikilink arrives from the frontmatter reader as a ONE-ITEM LIST
+# (`"[[Note]]"` -> `['[Note]']`, outer brackets eaten as a YAML flow sequence),
+# so anything that reads a wikilink-valued field has to unwrap it. Getting this
+# wrong disables the lookup silently rather than erroring.
+sys.path.insert(0, str(SCRIPTS))
+from session_context import wikilink_target  # noqa: E402
+
+for value, expected, label in [
+    (["[Session 07 - The Sterile Bay]"], "Session 07 - The Sterile Bay",
+     "single-item list from a quoted wikilink"),
+    ("[[Session 07]]", "Session 07", "plain string wikilink"),
+    ("[[Session 07|the bay]]", "Session 07", "alias discarded"),
+    ("[[Session 07#Recap]]", "Session 07", "anchor discarded"),
+    ("Session 07", "Session 07", "bare text passes through"),
+    (None, "", "missing value"),
+    ([], "", "empty list"),
+]:
+    check(f"wikilink_target: {label}", [wikilink_target(value)], [expected])
+
+# When the overview's pointer is stale, saying so beats guessing quietly.
+ctx_nolink = "\n".join(run("session_context.py", vault=PREP_NOLINK_VAULT))
+for expect, present, label in [
+    ("matches no session file", True, "unresolvable last_session is reported"),
+    ("Session 07 - The Sterile Bay", True,
+     "falls back to the most recently played session"),
+]:
+    check(f"session_context stale pointer: {label}",
+          [expect in ctx_nolink], [present])
+
+# Staleness took a vault-wide max() over session_number too, so in a vault that
+# restarts numbering the just-played chapter's drafts read as many sessions old
+# and were told to "promote or delete" (#162). Deleting current content on a
+# miscount is the worst outcome in this file.
+check("vault_check stale-drafts: the live chapter's draft is not stale",
+      run("vault_check.py", "stale-drafts", vault=PREP_CHAPTERS_VAULT),
+      ["## stale-drafts", "# count: 1",
+       "WARNING\t_World/_flags.md\tDRAFT missing createdSession — "
+       "cannot determine staleness; add it or promote"])
 
 # --- vault_check.py changed ---
 
