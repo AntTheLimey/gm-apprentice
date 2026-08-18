@@ -79,10 +79,6 @@ const PATRON_TAGS = new Set(['employer', 'patron']);
 const ANTAGONIST_TAGS = new Set(['villain', 'antagonist']);
 const COMPANION_TAGS = new Set(['companion', 'ally']);
 const THREAT_TAGS = new Set(['super', 'fragment-empowered']);
-const IMPORTANCE_TAGS = new Set([
-  'employer', 'patron', 'villain', 'antagonist', 'rival',
-  'companion', 'ally', 'recurring', 'boss',
-]);
 
 function inferNPCRole(npc, sessionCount) {
   const tags = new Set(npc.frontmatter.tags || []);
@@ -95,49 +91,6 @@ function inferNPCRole(npc, sessionCount) {
   if (rels.some(r => r.type === 'leads' || r.type === 'commands')) return 'Leader';
   if (sessionCount >= 2) return 'Recurring';
   return 'NPC';
-}
-
-function scoreNPCs(allPages) {
-  const npcs = allPages.filter(p => p.frontmatter.type === 'npc');
-  const sessions = allPages.filter(
-    p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
-  );
-
-  const scored = npcs.map(npc => {
-    let score = 0;
-    let sessionCount = 0;
-    const names = [npc.title, ...(npc.frontmatter.aliases || [])];
-
-    for (const session of sessions) {
-      const md = session.markdown || '';
-      const mentioned = names.some(name => md.includes(`[[${name}]]`));
-      if (mentioned) {
-        score += 2;
-        sessionCount++;
-      }
-    }
-
-    const rels = npc.frontmatter.relationships || [];
-    score += rels.length;
-
-    const tags = npc.frontmatter.tags || [];
-    for (const tag of tags) {
-      if (IMPORTANCE_TAGS.has(tag)) score += 3;
-    }
-
-    if (rels.some(r => r.type === 'leads' || r.type === 'commands')) score += 2;
-
-    if (tags.some(t => THREAT_TAGS.has(t))) score += 2;
-
-    const role = inferNPCRole(npc, sessionCount);
-
-    return { page: npc, score, role };
-  });
-
-  return scored
-    .filter(s => s.score >= 3)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
 }
 
 const EXPLORE_DESCRIPTIONS = {
@@ -274,4 +227,4 @@ function getLatestWrapUp(pages, session) {
   return null;
 }
 
-module.exports = { getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs, scoreNPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
+module.exports = { getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
