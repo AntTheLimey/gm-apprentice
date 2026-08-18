@@ -6,13 +6,15 @@ which file owns which setting prevents confusion.
 ## `_meta/vault-config.md` (in the vault)
 
 YAML frontmatter under `publish:`. This is the authoritative
-source for content filtering and theming. Values here override
-any equivalent in `vault.config.json`.
+source for content filtering and theming. Values here take
+precedence over `vault.config.json` for scalar settings; the
+exclude **lists** union across both files rather than shadowing
+each other — see § Precedence.
 
 | Setting | Key path | Description |
 |---------|----------|-------------|
 | Publish mode | `publish.mode` | `player` or `full` |
-| Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes"]`) |
+| Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`) |
@@ -21,13 +23,13 @@ any equivalent in `vault.config.json`.
 | Theme fonts | `publish.theme.fonts` | Heading and body font families |
 | Theme genre | `publish.theme.genre` | Genre tag for theming hints |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
-| Overrides | `publish.overrides` | Per-file include/exclude/field overrides |
+| Per-file field overrides | `publish.overrides.fields` | Re-admit an excluded frontmatter field for one named file (see § Per-file field overrides) |
 | Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Image optimization | `publish.images` | Opt-in WebP re-encoding of copied images (default: off) |
 | Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
 | Locations grouping | `publish.locations` | Pivot the Locations index on a `location_type` (default: genre-derived) |
-| CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists; a per-PC `crest` frontmatter value overrides it |
+| CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists. Campaign-wide — there is no per-PC override |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
 > **Landing page state.** The landing hero (in-game date, session count) and the
@@ -145,6 +147,34 @@ small context caption rather than rendered as tree rows. Grouping is
 skipped — falling back to the flat view — when fewer than two locations
 match the pivot, since one section is not a grouping.
 
+### Per-file field overrides
+
+`exclude_fields` strips a frontmatter field from every page. When one
+page needs a stripped field back, name that page under
+`publish.overrides.fields` and list the fields to re-admit:
+
+```yaml
+publish:
+  exclude_fields: [secrets, gm_notes]
+  overrides:
+    fields:
+      "Characters/NPCs/Vex Ambrose.md":
+        include: [secrets]
+```
+
+The key is the **vault-relative path** of the note, extension included —
+not its title, and not a glob. `include` is an allowlist checked against
+`exclude_fields`: it re-admits a field that would otherwise be stripped,
+and naming a field that isn't excluded does nothing. There is no
+per-file `exclude`; to strip a field from one page only, remove it from
+that page's frontmatter.
+
+`fields` is the only key under `overrides` that the build reads. Whole
+files are included or excluded through the publish manifest
+(`_meta/publish-manifest.md`), not here — see
+`content-filtering.md`. A build warns on any other
+`publish.overrides.*` key rather than ignoring it silently.
+
 ## `vault.config.json` (in the site repo)
 
 JSON file in the site directory. Controls paths, URLs, and
@@ -161,17 +191,51 @@ display settings that are specific to the generated site.
 | Cloudflare project | `cloudflarePagesProject` | Optional. Cloudflare Pages project name for deploys. Defaults to the site directory's folder name. |
 | Attachments directory | `attachmentsDir` | Subfolder in vault holding images |
 | Folder map | `folderMap` | Maps vault folders to site output paths |
-| Exclude directories | `excludeDirs` | Fallback if `vault-config.md` doesn't set `publish.exclude_dirs` |
-| Exclude sections | `excludeSections` | Fallback if `vault-config.md` doesn't set `publish.exclude_sections` |
+| Exclude directories | `excludeDirs` | Unioned with `publish.exclude_dirs` in `vault-config.md` (see § Precedence) |
+| Exclude sections | `excludeSections` | Unioned with `publish.exclude_sections` in `vault-config.md` (see § Precedence) |
+| Exclude fields | `excludeFields` | Unioned with `publish.exclude_fields` in `vault-config.md` (see § Precedence) |
 | Exclude callouts | `excludeCallouts` | Fallback if `vault-config.md` doesn't set `publish.exclude_callouts`. `true` strips all callouts, or an array of types |
 | Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
 
 ## Precedence
 
-When both files define the same setting (e.g. `excludeSections`
-in `vault.config.json` and `publish.exclude_sections` in
-`vault-config.md`), the vault-config.md value wins. The JSON
-file values are used only as fallbacks.
+Three different rules apply, depending on the setting.
+
+**List settings** — `exclude_sections`, `exclude_fields`, `exclude_dirs`
+— are **unioned**, not overridden. If `publish.exclude_sections` (etc.)
+in `vault-config.md` and the matching `excludeSections`/`excludeFields`/
+`excludeDirs` in `vault.config.json` both supply a list, the two lists
+are merged (case-insensitively deduplicated, first-seen casing kept), so
+a section/field/directory named in only one file is still excluded —
+neither file shadows the other. The built-in default list is used only
+when **neither** file provides a list for that setting; as soon as
+either does, the default stops applying on its own (it is not unioned
+in alongside them).
+
+**`vault-config.md`-only settings** — `mode`, `exclude_drafts`,
+`theme`, `four_oh_four`, `overrides`, `section_titles`, and
+`setting_year` — are never read from `vault.config.json` at all: the
+`vault-config.md` value applies when set, otherwise the built-in
+default (`setting_year` has none — unset just means unset). Putting
+them in the JSON file does nothing.
+
+`publish.system` is *almost* one of them: the build reads it from
+`vault-config.md` only, but the `flush` command falls back to a
+top-level `system` in `vault.config.json` when `publish.system` is
+unset, to pick the GURPS vs CoC writeback. Set it in `vault-config.md`
+and both agree; if a legacy site has it only in the JSON, leave it
+there — deleting it would change what `flush` writes back.
+
+**Scalar and passthrough settings** — `sheet_crest`, `exclude_callouts`,
+`backend.statusBar`/`backend.inbox`, and the per-key settings inside
+`images`, `banners`, and `locations` — follow simple precedence: the
+`vault-config.md` `publish.*` value wins when set, `vault.config.json`
+is used only as a fallback when `vault-config.md` doesn't set it, and
+where the setting has a built-in default (`exclude_callouts` and the
+`images` keys) that default applies only when neither file sets it.
+`sheet_crest`, `banners`, `locations` and `backend.*` have no built-in
+default at all — unset stays unset, deliberately, so the build can tell
+"never configured" apart from "configured off".
 
 ---
 

@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath, parseWikiRef } = require('../processor');
+const { escapeHtml, relativePath, parseWikiRef, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -39,7 +39,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
     const holderPath = linkMap?.[holderName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     if (holderPath) {
-      const href = relativePath(currentDir, holderPath);
+      const href = encodeHref(relativePath(currentDir, holderPath));
       holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> <a href="${href}">${escapeHtml(holderLabel)}</a></p>`;
     } else {
       holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> ${escapeHtml(holderLabel)}</p>`;
@@ -53,7 +53,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
     const originPath = linkMap?.[originName];
     const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     if (originPath) {
-      const href = relativePath(currentDir, originPath);
+      const href = encodeHref(relativePath(currentDir, originPath));
       originHtml = `<p class="item-origin"><strong>Origin:</strong> <a href="${href}">${escapeHtml(originLabel)}</a></p>`;
     } else {
       originHtml = `<p class="item-origin"><strong>Origin:</strong> ${escapeHtml(originLabel)}</p>`;

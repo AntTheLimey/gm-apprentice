@@ -1,4 +1,5 @@
-const { escapeHtml } = require('./processor');
+const { escapeHtml, encodeHref } = require('./processor');
+const { canonicalNfc, nfcLookupTable } = require('./unicode');
 
 const SHAPE_MAP = {
   pc: 'circle',
@@ -17,15 +18,22 @@ function isIndexTitle(title) {
   return String(title).toLowerCase() === 'index';
 }
 
+// Node identity is the entity title, and titles reach this function from two places that
+// need not agree on Unicode normal form: the scanner (filenames) and wikilink text typed
+// inside notes. Everything entering the graph is canonicalized to NFC (#139) so one entity
+// is one node — otherwise an accented NPC is drawn twice, once resolved and once as a
+// dangling node that links nowhere.
 function buildRelationshipGraph(centerTitle, pages, backlinks) {
   if (isIndexTitle(centerTitle)) return { nodes: [], edges: [] };
-  const pageMap = {};
+  centerTitle = canonicalNfc(centerTitle);
+  const byTitle = {};
   for (const p of pages) {
-    pageMap[p.title] = p;
+    byTitle[canonicalNfc(p.title)] = p;
     if (p.frontmatter.aliases) {
-      for (const a of p.frontmatter.aliases) pageMap[a] = p;
+      for (const a of p.frontmatter.aliases) byTitle[canonicalNfc(a)] = p;
     }
   }
+  const pageMap = nfcLookupTable(byTitle);
 
   const nodes = new Map();
   const edges = [];
@@ -50,14 +58,14 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
     const raw = page.frontmatter.relationships;
     if (Array.isArray(raw)) {
       for (const r of raw) {
-        const target = String(r.target).replace(/\[\[|\]\]/g, '').trim();
+        const target = canonicalNfc(String(r.target).replace(/\[\[|\]\]/g, '').trim());
         rels.push({ target, type: r.type });
       }
     } else if (raw && typeof raw === 'object') {
       for (const [type, targets] of Object.entries(raw)) {
         const list = Array.isArray(targets) ? targets : [targets];
         for (const t of list) {
-          const target = String(t).replace(/\[\[|\]\]/g, '').trim();
+          const target = canonicalNfc(String(t).replace(/\[\[|\]\]/g, '').trim());
           rels.push({ target, type });
         }
       }
@@ -65,8 +73,9 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
     const bl = backlinks[title] || [];
     for (const b of bl) {
       if (isIndexTitle(b.title)) continue;
-      if (!rels.some(r => r.target === b.title)) {
-        rels.push({ target: b.title, type: 'mentioned_in' });
+      const backTitle = canonicalNfc(b.title);
+      if (!rels.some(r => r.target === backTitle)) {
+        rels.push({ target: backTitle, type: 'mentioned_in' });
       }
     }
     return rels.filter(r => !isIndexTitle(r.target));
@@ -153,7 +162,8 @@ function renderRelationshipSVG(graph, options = {}) {
     const fill = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--bg-card, #232830)';
     const stroke = node.hop === 0 ? 'var(--accent, #58a6ff)' : 'var(--border, #30363d)';
 
-    const href = (node.outputPath && options.currentOutputPath) ? relPath(options.currentOutputPath, node.outputPath) : node.outputPath;
+    const rawHref = (node.outputPath && options.currentOutputPath) ? relPath(options.currentOutputPath, node.outputPath) : node.outputPath;
+    const href = rawHref ? encodeHref(rawHref) : rawHref;
     const linkOpen = href ? `<a href="${escapeHtml(href)}">` : '';
     const linkClose = href ? '</a>' : '';
 

@@ -1,12 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
+const { canonicalPath } = require('./manifest');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
   exclude_drafts: false,
   exclude_callouts: false,
-  exclude_sections: ['GM Notes'],
+  // Keep in sync with templates-scaffold/vault.config.json.tmpl's
+  // "excludeSections" — the scaffold ships this same list as the JSON
+  // fallback for new sites. Reconciliation Context / Handoff to Reconcile
+  // are written automatically by reconcile and session-wrapup and carry GM
+  // plot state; they must never reach a published player-mode site (#144).
+  // test/unit/config.test.js has a sync check that fails if these drift apart.
+  exclude_sections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
   exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes'],
   exclude_dirs: ['_meta', '_Templates'],
   theme: {
@@ -34,9 +41,13 @@ const PUBLISH_DEFAULTS = {
     max_width: 1600,
     quality: 82,
   },
+  // Per-file frontmatter overrides, keyed by vault-relative path:
+  //   fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }
+  // `include` re-admits a field that exclude_fields strips, for that one file. `fields` is
+  // the only override the build reads — top-level `exclude`/`include` keys were declared
+  // here for years and read by nothing, so a GM who wrote one got a silent no-op. They are
+  // gone rather than implemented; loadPublishConfig warns if a config still carries one.
   overrides: {
-    exclude: [],
-    include: [],
     fields: {},
   },
   section_titles: {},
@@ -67,6 +78,84 @@ function unionExcludeList(primary, fallback, defaults) {
   return out;
 }
 
+// build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
+// and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
+// key typed by the config author in a different normal form (e.g. an NFD-decomposed
+// accented filename) would otherwise never match — canonicalize once here, at load, so
+// build.js's single query-side normalization is enough.
+function canonicalizeOverrideFieldKeys(fields) {
+  if (fields == null) return {};
+  // Same trap as the block above: Object.entries on a string yields per-character keys, which
+  // would become override entries no page path can ever match.
+  if (typeof fields !== 'object' || Array.isArray(fields)) {
+    console.warn(
+      `config: publish.overrides.fields must be a map keyed by vault-relative path, but is ` +
+      `${Array.isArray(fields) ? 'a list' : typeof fields}. No field overrides applied.`
+    );
+    return {};
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(fields)) {
+    const problem = overrideEntryProblem(value);
+    if (problem) {
+      // Dropping the entry leaves the exclusions in force, which is the safe
+      // direction: a malformed `include` must never re-admit a field by accident.
+      console.warn(
+        `config: publish.overrides.fields["${key}"] ${problem}. That override is ignored. ` +
+        'Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.'
+      );
+      continue;
+    }
+    out[canonicalPath(key)] = value;
+  }
+  return out;
+}
+
+// build.js hands each per-file entry straight to filterFields, which does
+// `overrides.include.includes(field)`. A string there is substring matching
+// (`include: sec` would re-admit `secrets`); any other truthy non-array throws.
+// Say which it is rather than letting the build guess or crash.
+function overrideEntryProblem(value) {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return `must be a map, but is ${Array.isArray(value) ? 'a list' : typeof value}`;
+  }
+  if (!('include' in value)) return null;
+  if (!Array.isArray(value.include)) {
+    return `has an "include" that must be a list of field names, but is ` +
+      `${typeof value.include}`;
+  }
+  if (!value.include.every((f) => typeof f === 'string')) {
+    return 'has an "include" list holding something that is not a field name';
+  }
+  return null;
+}
+
+// A key under `publish.overrides` that the build never reads changes nothing about the
+// published site, and the GM has no way to tell that from "the override didn't match".
+// Name it, and say where the real one lives.
+function warnUnreadOverrideKeys(overrides) {
+  if (overrides == null) return;
+  // A malformed block — `overrides: fields` (a bare string), or a list — must not be walked
+  // as a key/value map: Object.keys('fields') is ['0'..'5'], which would report six invented
+  // keys and bury the real problem.
+  if (typeof overrides !== 'object' || Array.isArray(overrides)) {
+    console.warn(
+      `config: publish.overrides must be a map, but is ${Array.isArray(overrides) ? 'a list' : typeof overrides}. ` +
+      'Nothing under it is being read. Expected shape: overrides: { fields: ' +
+      '{ "Characters/NPCs/Vex.md": { include: ["secrets"] } } }.'
+    );
+    return;
+  }
+  for (const key of Object.keys(overrides)) {
+    if (key === 'fields') continue;
+    console.warn(
+      `config: publish.overrides.${key} is not read by the build and has no effect. ` +
+      'The only supported override is publish.overrides.fields, keyed by vault-relative ' +
+      'path: fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }.'
+    );
+  }
+}
+
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
@@ -82,6 +171,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       settingYear = data.setting_year;
     }
   }
+
+  warnUnreadOverrideKeys(publish.overrides);
 
   const merged = {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
@@ -135,9 +226,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     // "group_by never mentioned" (fall back to the genre's pivot) apart from
     // "group_by explicitly falsy" (grouping off), and a default would erase that.
     locations: { ...jsonConfigFallback.locations, ...publish.locations },
+    // Only `fields` is carried through: nothing downstream reads any other override key, so
+    // passing one along would just relocate the silent no-op into publishConfig.
     overrides: {
-      ...PUBLISH_DEFAULTS.overrides,
-      ...publish.overrides,
+      fields: canonicalizeOverrideFieldKeys(
+        // `??`, not `||`: an explicitly falsy `fields: false` is malformed config the
+        // validator must see and report, not something to silently swap for the default.
+        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields
+      ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
     // Explicit flags win, publish block over json fallback; absent stays undefined.

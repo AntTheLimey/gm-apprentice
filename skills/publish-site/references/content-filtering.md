@@ -10,7 +10,7 @@ All campaign content falls into three categories:
 - All prep files: sessions/scenes with `status: planned | prepped`,
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
-- H2 sections listed in `exclude_sections` (default: `["GM Notes"]`)
+- H2 sections listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - **Every other `<!-- ... -->` comment.** Private authoring notes
   (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are
@@ -147,8 +147,17 @@ The build tool reads this file directly — no rescanning needed.
 ### Manifest Format
 
 The manifest is a markdown file with YAML frontmatter and three
-H2 sections. The build tool's parser (`lib/manifest.js`) reads
-the sections by heading prefix and checkbox state.
+H2 sections. The build tool's parser (`lib/manifest.js`) uses the
+heading to bucket each entry into Publishing/Excluded/Needs
+Decision. Only `mode: player` (see § Publish Modes) enforces the
+manifest as an inclusion filter — and even there, a file publishes
+if and only if it's a **checked** entry under `## Publishing`.
+Checking the box under `## Excluded` or `## Needs Decision` never
+publishes the file: those buckets are read (Excluded, to suppress a
+separate "missing from manifest" warning) but never for inclusion.
+In `mode: full` (the GM's own copy), the manifest isn't applied as
+a filter at all — every scanned page publishes regardless of what's
+checked.
 
 **Frontmatter** (metadata, not used by the build tool):
 

@@ -1,4 +1,4 @@
-const { escapeHtml, relativePath, humanizeName } = require('../processor');
+const { escapeHtml, relativePath, humanizeName, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -48,7 +48,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     const locDisplay = locMatch && locMatch[2] ? locMatch[2].trim() : humanizeName(locTarget);
     const locPath = linkMap?.[locTarget];
     if (locPath) {
-      const href = relativePath(currentDir, locPath);
+      const href = encodeHref(relativePath(currentDir, locPath));
       metaItems.push(`<span><span class="label">Location</span> <a href="${href}">${escapeHtml(locDisplay)}</a></span>`);
     } else {
       metaItems.push(`<span><span class="label">Location</span> ${escapeHtml(locDisplay)}</span>`);
@@ -79,7 +79,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
       if (p.isLink) {
         const resolved = linkMap?.[p.target];
         if (resolved) {
-          const href = relativePath(currentDir, resolved);
+          const href = encodeHref(relativePath(currentDir, resolved));
           nameHtml = `<a href="${href}">${escapeHtml(p.display)}</a>`;
         } else {
           nameHtml = escapeHtml(p.display);

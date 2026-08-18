@@ -225,3 +225,38 @@ describe('parseManifest does not truncate dashed filenames (review regression)',
     assert.strictEqual(stripInlineComment('NoExtension'), 'NoExtension');
   });
 });
+
+describe('unicode normalization (#139)', () => {
+  const { canonicalPath, stripInlineComment } = require('../../lib/manifest');
+
+  // Built with explicit \u escapes (never a literal accented character) so the test
+  // file itself cannot be silently re-normalized by an editor or formatter. NFC types
+  // the accent as one precomposed codepoint; NFD types the same visible character as
+  // base letter + a separate combining acute accent codepoint.
+  const NFC = 'Alena Gonz\u00e1lez.md';
+  const NFD = 'Alena Gonza\u0301lez.md';
+
+  it('canonicalPath maps both normal forms of the same name to the same string', () => {
+    assert.notStrictEqual(NFC, NFD); // sanity: the two source strings really do differ byte-for-byte
+    assert.strictEqual(canonicalPath(NFC), canonicalPath(NFD));
+  });
+
+  it('canonicalPath returns NFC', () => {
+    assert.strictEqual(canonicalPath(NFD), NFC);
+    assert.strictEqual(canonicalPath(NFD).normalize('NFC'), canonicalPath(NFD));
+  });
+
+  it('a manifest entry typed in NFD is parsed out already normalized to NFC', () => {
+    const md = [
+      '## Publishing (1 files)',
+      '',
+      `- [x] ${NFD}`,
+    ].join('\n');
+    const result = parseManifest(md);
+    assert.strictEqual(result.publishing[0], NFC);
+  });
+
+  it('stripInlineComment normalizes an NFD path with a trailing comment', () => {
+    assert.strictEqual(stripInlineComment(`${NFD} — some note`), NFC);
+  });
+});

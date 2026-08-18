@@ -1,6 +1,7 @@
 const path = require('path');
 const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
+const { canonicalNfc } = require('./unicode');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -23,9 +24,14 @@ function findRecap(page, resolve) {
 
 const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
 
+// Every `session:`/`chapter:` ref in this file is author-typed and is compared against a
+// filename-derived title through a Map key or `===`. Canonicalizing here (#139) covers the
+// write side of both indexes and the ref in chapterMatchesSession; the reads below
+// canonicalize the title they look up with. A Map is not a plain object, so nfcLookupTable
+// cannot carry this — it has to be done at the call sites.
 function refTarget(value) {
   if (!value) return '';
-  return String(value).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim();
+  return canonicalNfc(String(value).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
 }
 
 // Index wrap-up pages: bySession (keyed on the session ref target) and byChapter
@@ -62,9 +68,10 @@ function resolveUnitRecap(unitPage, wrapUpPage, resolve) {
 function chapterMatchesSession(chapterPage, sessionPage) {
   const ref = refTarget(sessionPage.frontmatter.chapter);
   if (!ref) return false;
-  if (ref === chapterPage.title) return true;
-  if (ref === chapterPage.title.replace(/_/g, ' ')) return true;
-  const norm = String(chapterPage.displayTitle || chapterPage.title).toLowerCase();
+  const title = canonicalNfc(chapterPage.title);
+  if (ref === title) return true;
+  if (ref === title.replace(/_/g, ' ')) return true;
+  const norm = canonicalNfc(chapterPage.displayTitle || chapterPage.title).toLowerCase();
   return norm.length > 0 && ref.toLowerCase().includes(norm);
 }
 
@@ -91,9 +98,10 @@ function chapterOwnsSession(chapter, session) {
 // exactly ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and
 // a first-match grab there would hand the same wrap-up to every session.
 function wrapUpForUnit(unitPage, wrapUps, idx) {
-  const byRef = idx.bySession.get(unitPage.title)
-    || idx.byChapter.get(unitPage.title)
-    || idx.byChapter.get(unitPage.title.replace(/_/g, ' '));
+  const title = canonicalNfc(unitPage.title);
+  const byRef = idx.bySession.get(title)
+    || idx.byChapter.get(title)
+    || idx.byChapter.get(title.replace(/_/g, ' '));
   if (byRef) return byRef;
   const dir = folderOf(unitPage);
   if (dir) {

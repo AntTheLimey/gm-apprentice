@@ -112,7 +112,29 @@ in the vault must be a predicate listed in
 `shared/entity-schema.md`'s vocabulary). This is separate from,
 and more fundamental than, the vagueness check below — an
 invented predicate is worse than a vague one because no query,
-inverse-inference, or publish step knows about it. Flag:
+inverse-inference, or publish step knows about it.
+
+**Preferred procedure:** run the bundled check rather than
+eyeballing frontmatter — it reads the sanctioned vocabulary from
+`shared/gm-apprentice-ontology.json` and reports every off-vocabulary
+predicate (top-level `type:` and `mobrpg:` node `predicate:` alike)
+with its note, line, and the nearest sanctioned predicates:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> relationships
+```
+
+Walk each ERROR row with the GM fix-or-dismiss: rename to the
+suggested predicate, re-store an inverse on the other endpoint, or
+drop the edge if it is not entity-to-entity.
+
+The check enforces the **full** vocabulary, not the campaign's
+genre-filtered subset — a predicate that is globally sanctioned but
+absent from this vault's `_meta/relationship-types.md` passes the
+tool and still breaks the rule above. Silence means "no invented
+predicates", not "genre-appropriate": scan the surviving types
+against `_meta/relationship-types.md` yourself. Flag:
 
 - **Off-vocabulary** — a `type:` not in the vocabulary at all
   (`hosts`, `contains`, `adjacent_to`, `carved_by`, `patrols`,

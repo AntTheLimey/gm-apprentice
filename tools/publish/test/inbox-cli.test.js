@@ -1,6 +1,6 @@
 const { test, before } = require('node:test');
 const assert = require('node:assert');
-const { runInbox } = require('../lib/inbox-cli.js');
+const { runInbox, defaultRunWrangler, WRANGLER_TIMEOUT_MS } = require('../lib/inbox-cli.js');
 
 let inbox;
 before(async () => { inbox = await import('../templates-scaffold/functions/api/inbox-core.mjs'); });
@@ -84,4 +84,28 @@ test('reply rejects an unknown kind', async () => {
   const rc = await runInbox(['reply', 'a', 'bogus', 'x'], { adapter: kv, out: c.out });
   assert.equal(rc, 1);
   assert.match(c.lines.join('\n'), /applied\|rejected\|advice/);
+});
+
+test('the wrangler call the watcher polls through is bounded by a timeout', () => {
+  // The watcher's poll loop writes .watcher-heartbeat only after `inbox pull`
+  // returns. An unbounded spawn on a hung wrangler stalls the heartbeat with no
+  // exit and no failure line, so the loop looks dead and the GM cannot tell.
+  const seen = [];
+  const res = defaultRunWrangler(['kv', 'key', 'list'], (cmd, args, opts) => {
+    seen.push({ cmd, args, opts });
+    return { code: 0, stdout: '[]', stderr: '' };
+  });
+  assert.equal(res.code, 0);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].cmd, 'npx');
+  assert.deepEqual(seen[0].args, ['wrangler@4', 'kv', 'key', 'list']);
+  assert.ok(Number.isFinite(seen[0].opts.timeoutMs) && seen[0].opts.timeoutMs > 0,
+    `expected a finite positive timeoutMs, got ${JSON.stringify(seen[0].opts)}`);
+  assert.equal(seen[0].opts.timeoutMs, WRANGLER_TIMEOUT_MS);
+});
+
+test('a timed-out wrangler call reports failure instead of hanging', () => {
+  const res = defaultRunWrangler(['kv', 'key', 'list'],
+    () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }));
+  assert.equal(res.code, 1);
 });

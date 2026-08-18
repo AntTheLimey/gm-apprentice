@@ -1,3 +1,6 @@
+const { canonicalNfc } = require('../unicode');
+const { parseWikiRef } = require('../processor');
+
 function getLatestSession(pages) {
   const played = pages.filter(
     p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
@@ -209,6 +212,16 @@ function getRecentEvents(pages, max) {
     .slice(0, max || 4);
 }
 
+// Does `ref` name `title` as a whole title, rather than as the prefix of a longer one?
+// "Session 1" is a substring of "Session 10", so a bare `includes` picks the wrong
+// wrap-up; require the character after the match not to continue the word.
+function refMentions(ref, title) {
+  const at = ref.indexOf(title);
+  if (at === -1) return false;
+  const after = ref.charAt(at + title.length);
+  return after === '' || !/[0-9A-Za-z]/.test(after);
+}
+
 function getLatestWrapUp(pages, session) {
   if (!session) return null;
   const wrapTypes = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
@@ -227,17 +240,33 @@ function getLatestWrapUp(pages, session) {
     }
   }
 
+  // NFC both sides (#139): the wrap-up's session ref is author-typed, the session title is a
+  // filename. A mismatch drops the landing page's narrative recap back to the session body.
+  const sessionTitle = canonicalNfc(session.title || '');
+  const refOf = (wu) =>
+    canonicalNfc(parseWikiRef(wu.frontmatter.session || wu.title || '').target);
+
+  // An explicit `session:` ref names one session, so it outranks session_number, which
+  // chapters make ambiguous by restarting the count.
+  if (sessionTitle) {
+    for (const wu of wrapUps) {
+      if (refOf(wu) === sessionTitle) return wu;
+    }
+  }
+
   const num = session.frontmatter.session_number;
   if (num != null) {
     for (const wu of wrapUps) {
       if (wu.frontmatter.session_number === num) return wu;
     }
   }
-  const sessionTitle = session.title || '';
+
+  // Last resort: a ref that mentions the session inside longer prose ("Recap for
+  // Session 05 extras"). Guarded against the digit run-on that made "Session 1" match
+  // "[[Session 10]]" and put the wrong recap on the landing page.
   if (sessionTitle) {
     for (const wu of wrapUps) {
-      const ref = String(wu.frontmatter.session || wu.title || '');
-      if (ref === sessionTitle || ref.includes(sessionTitle)) return wu;
+      if (refMentions(refOf(wu), sessionTitle)) return wu;
     }
   }
   return null;

@@ -1,4 +1,5 @@
-const { escapeHtml, relativePath, relativeHref, publishedSource } = require('../processor');
+const { escapeHtml, relativePath, relativeHref, publishedSource, encodeHref } = require('../processor');
+const { canonicalNfc } = require('../unicode');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -163,7 +164,9 @@ function buildRouteMap(page, pages) {
   for (const session of storyPages) {
     const loc = session.frontmatter.location;
     if (loc) {
-      const locTitle = String(loc).replace(/\[\[|\]\]/g, '').split('|')[0].trim();
+      // NFC (#139): a Set keyed on an author-typed ref, so two spellings of one location
+      // would list it twice in the route map instead of deduping.
+      const locTitle = canonicalNfc(String(loc).replace(/\[\[|\]\]/g, '').split('|')[0].trim());
       if (!seen.has(locTitle) || locations[locations.length - 1] !== locTitle) {
         locations.push(locTitle);
         seen.add(locTitle);
@@ -343,7 +346,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // --- Story Tab ---
   const opts = context || {};
   const storyContent = opts.storyHref
-    ? `<a class="story-read-link" href="${relativeHref(page.outputPath, opts.storyHref)}">Read ${escapeHtml(page.displayTitle)}'s story &rarr;</a>`
+    ? `<a class="story-read-link" href="${encodeHref(relativeHref(page.outputPath, opts.storyHref))}">Read ${escapeHtml(page.displayTitle)}'s story &rarr;</a>`
     : (storyHtml || '<p class="text-muted">No story content available.</p>');
 
   // --- Journey Tab ---
