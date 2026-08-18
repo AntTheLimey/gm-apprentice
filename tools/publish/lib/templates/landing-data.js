@@ -1,4 +1,4 @@
-const { canonicalNfc } = require('../unicode');
+const { canonicalNfc, graphemes } = require('../unicode');
 const { parseWikiRef } = require('../processor');
 
 function getLatestSession(pages) {
@@ -64,7 +64,9 @@ function extractRecap(page) {
 function getInitials(name) {
   if (!name) return '';
   const words = name.split(/\s+/).filter(Boolean);
-  return words.slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  // First *grapheme*, not first code unit: w[0] dropped a decomposed accent and
+  // would halve an astral character (#157).
+  return words.slice(0, 2).map(w => (graphemes(w)[0] || '').toUpperCase()).join('');
 }
 
 function getPCs(pages) {

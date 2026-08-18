@@ -279,6 +279,19 @@ describe('getInitials', () => {
   it('returns empty string for empty input', () => {
     assert.strictEqual(getInitials(''), '');
   });
+
+  // #157: w[0] takes one UTF-16 code unit, so a decomposed accent — the form
+  // macOS filenames arrive in — left its base letter behind and the mark on the
+  // floor. Card initials showed "BN" for a decomposed "Bestia Ñu".
+  it('keeps a decomposed accent on the initial', () => {
+    assert.strictEqual(getInitials('Bestia N\u0303u'), 'B\u00d1');
+  });
+
+  // Same code-unit assumption, one step further out: an astral character is a
+  // surrogate pair, so w[0] would emit half of it.
+  it('does not split an astral character in half', () => {
+    assert.strictEqual(getInitials('\u{1F409} Dragon'), '\u{1F409}D');
+  });
 });
 
 describe('getPCs', () => {

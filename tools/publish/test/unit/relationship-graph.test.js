@@ -86,3 +86,37 @@ describe('index-page exclusion', () => {
     assert.ok(graph.edges.some(e => e.from === 'Hero' && e.to === 'Villain'));
   });
 });
+
+describe('renderRelationshipSVG label truncation', () => {
+  const { renderRelationshipSVG } = require('../../lib/relationship-graph');
+
+  // #157: the cap counts UTF-16 code units, so a decomposed accent spent one of
+  // the 15 budgeted characters. "La Desaparición" fits composed and rendered as
+  // "La Desaparici…" decomposed — same visible name, two different labels.
+  it('does not truncate a decomposed name that fits when composed', () => {
+    const nfc = 'La Desaparición';
+    const nfd = nfc.normalize('NFD');
+    assert.notStrictEqual(nfd, nfc, 'fixture must actually differ by normal form');
+    const graph = {
+      nodes: [
+        { id: 'Hero', displayTitle: 'Hero', hop: 0, shape: 'circle' },
+        { id: 'X', displayTitle: nfd, hop: 1, shape: 'circle' },
+      ],
+      edges: [{ from: 'Hero', to: 'X', type: 'knows' }],
+    };
+    const svg = renderRelationshipSVG(graph, {});
+    assert.ok(svg.includes(nfc), 'renders the full composed name');
+    assert.ok(!svg.includes('…'), 'nothing was truncated');
+  });
+
+  it('still truncates a name that is genuinely too long', () => {
+    const graph = {
+      nodes: [
+        { id: 'Hero', displayTitle: 'Hero', hop: 0, shape: 'circle' },
+        { id: 'X', displayTitle: 'The Extremely Long Location Name', hop: 1, shape: 'circle' },
+      ],
+      edges: [{ from: 'Hero', to: 'X', type: 'knows' }],
+    };
+    assert.ok(renderRelationshipSVG(graph, {}).includes('…'), 'long label is capped');
+  });
+});
