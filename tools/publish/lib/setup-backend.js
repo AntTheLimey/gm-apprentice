@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
@@ -66,9 +66,12 @@ function patchWranglerToml(tomlText, { name, kvId }) {
   return out;
 }
 
-const defaultRunWrangler = (args, opts = {}) => {
-  const r = spawnSync('npx', ['wrangler@4', ...args], { encoding: 'utf8', cwd: opts.cwd });
-  return { code: r.status == null ? 1 : r.status, stdout: r.stdout || '', stderr: r.stderr || '' };
+// Bounded like the other two wrangler entry points (#160). These are quick
+// control-plane calls (kv namespace list/create), so a stall means a wedged
+// setup with nothing on screen to explain it.
+const defaultRunWrangler = (args, opts = {}, run = runCommand) => {
+  const r = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS, cwd: opts.cwd });
+  return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '' };
 };
 
 const FLAG_KEY = { 'status-bar': 'statusBar', inbox: 'inbox' };
@@ -132,4 +135,6 @@ module.exports = {
   KV_PERMISSION_FIX,
   runSetupBackend,
   parseCreatedId,
+  defaultRunWrangler,
+  WRANGLER_TIMEOUT_MS,
 };

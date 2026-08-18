@@ -14,11 +14,14 @@ const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
 const { loadPublishConfig } = require('./config');
 
-const { spawnSync } = require('child_process');
+const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
 
-function defaultRunWrangler(args) {
-  const res = spawnSync('npx', ['wrangler@4', ...args], { encoding: 'utf8' });
-  return { code: res.status == null ? 1 : res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+// Bounded like the watcher's poll (#154). The failure here is milder — the GM
+// watches a flush hang rather than a background watcher going silently dark —
+// but an unbounded spawn still blocks the flush with no exit and no signal.
+function defaultRunWrangler(args, run = runCommand) {
+  const res = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS });
+  return { code: res.code, stdout: res.stdout || '', stderr: res.stderr || '' };
 }
 
 function defaultAdapter(cwd) {
@@ -119,4 +122,4 @@ async function runFlush(deps) {
   return 0;
 }
 
-module.exports = { runFlush };
+module.exports = { runFlush, defaultRunWrangler, WRANGLER_TIMEOUT_MS };

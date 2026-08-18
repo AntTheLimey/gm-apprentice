@@ -174,3 +174,22 @@ test('flush skips a GURPS PC whose HP/FP are pinned in frontmatter (status objec
   assert.equal(writes['/vault/PCs/Karl.md'], undefined, 'sheet must not be written');
   assert.ok(lines.some((l) => /Karl Brenner/.test(l) && /frontmatter/.test(l)), 'warns about frontmatter-pinned vitals');
 });
+
+// #160: flush's wrangler spawn was unbounded. Milder than the watcher poll it
+// mirrors (#154) — a GM sees the flush hang rather than a background watcher
+// going quietly dark — but a hung wrangler still blocks the flush forever.
+test('the wrangler call flush runs through is bounded by a timeout', () => {
+  const { defaultRunWrangler, WRANGLER_TIMEOUT_MS } = require('../lib/flush-cli');
+  const seen = [];
+  const res = defaultRunWrangler(['kv', 'key', 'get', 'x'], (cmd, args, opts) => {
+    seen.push({ cmd, args, opts });
+    return { code: 0, stdout: '{}', stderr: '' };
+  });
+  assert.equal(res.code, 0);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].cmd, 'npx');
+  assert.deepEqual(seen[0].args, ['wrangler@4', 'kv', 'key', 'get', 'x']);
+  assert.ok(Number.isFinite(seen[0].opts.timeoutMs) && seen[0].opts.timeoutMs > 0,
+    `expected a finite positive timeoutMs, got ${JSON.stringify(seen[0].opts)}`);
+  assert.equal(seen[0].opts.timeoutMs, WRANGLER_TIMEOUT_MS);
+});
