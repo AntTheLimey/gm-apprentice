@@ -30,13 +30,31 @@ existing file.
 relationship predicate → the mobRPG type `suggest` will push it as. Two targets:
 a reified **Event** eventType (`member_of`→Membership, `leads`→Leadership,
 `owns`→Reign, …, default Generic) for social/narrative predicates, or a direct
-**WorldElementRelation** (`part_of`→Parent, `contains`/`hosts`→Child,
-`adjacent_to`→Link) for *structural/spatial* predicates. Structural edges are NOT
-flattened to Generic events — a planet `part_of` a system becomes a real Parent
-relation. If the campaign uses a structural predicate the defaults don't cover,
-add it to `relationshipTypes` in the map with the right value (Parent/Child/Link,
-or an eventType) before pushing, or it falls back to a Generic event. See the
-"Relationships: two mechanisms" section of `push.md`.
+**WorldElementRelation** for *structural/spatial* predicates.
+
+The structural defaults are:
+
+| predicate | relation | note |
+|---|---|---|
+| `part_of` | `Link` | authored subordinate-first, pushed **container-first** |
+| `located_at` | `Link` | same swap |
+| `headquartered_at` | `Link` | same swap |
+| `borders` | `Link` | symmetric — no swap |
+| `parent_of` | `Parent` | genealogy between people only |
+| `spouse_of` | `Spouse` | symmetric |
+
+`Parent`/`Child`/`Spouse` are **genealogy between people**; the backend
+auto-creates the reciprocal row. Place containment is a `Link` — one row, no
+reciprocal — so a planet `part_of` a system is a container-first `Link`, *not* a
+`Parent`. Do not add a `relationshipTypes` override mapping `part_of` to
+`Parent`: it changes the containment semantics and lands a genealogy edge
+between two places.
+
+Structural edges are NOT flattened to Generic events. If the campaign uses a
+structural predicate the defaults don't cover, add it to `relationshipTypes` in
+the map with the right value (Link/Parent/Child/Spouse, or an eventType) before
+pushing, or it falls back to a Generic event. See the "Relationships: two
+mechanisms" section of `push.md`.
 
 ## 2. Resolve `review` routes — one at a time
 

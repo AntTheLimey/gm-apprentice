@@ -115,6 +115,19 @@ itself). The **→ mobRPG** column is the suggested `eventType` when reifying th
 edge as a mobRPG join event; the specific predicate name is preserved on the
 event's `title`.
 
+> **The → mobRPG column is the predicate-only default, not the final answer.**
+> The four affiliation types — **Membership**, **Leadership**, **Reign**,
+> **Employ** — are the person/group join. mobRPG builds them from a person and a
+> Political/Organization and nothing else, so `suggest` picks them from *both*
+> endpoint kinds, not from the predicate. When both kinds are known and they are
+> not a person/group pair, the type degrades to **Generic** (the predicate then
+> rides on the event title). An Item→Organization `owns` edge is therefore
+> Generic, not the Reign this table shows; likewise a person→person `serves`.
+> Passing no kinds at all falls back to the flat mapping below, which is the
+> documented degraded behaviour. `map_cmd.resolve_event_type` is the single
+> entry point both push and `pull-canon --baseline` use — read it, not this
+> table, when the endpoints matter.
+
 ### Kinship — genre: universal
 
 | Predicate | Inverse | Sym | → mobRPG |

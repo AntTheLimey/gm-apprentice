@@ -246,10 +246,14 @@ def _canon_determined(world, token, kind_ep, eid):
     embed the full `source` object, which is what determined_from_element wants.
     Returns None if the relations could not be read at all, so the caller can
     distinguish "no classifiers" from "could not tell".
+
+    Only `ApiError` means "could not tell". `_get_relations` treats an empty
+    body as a genuine "this element has no relations" and returns [], which is
+    an answer, not a failure.
     """
     try:
         rows = rel_baseline._get_relations(world, kind_ep, eid, token)
-    except (client.ApiError, ValueError):
+    except client.ApiError:
         return None
     return determined_from_element({"relations": rows})
 

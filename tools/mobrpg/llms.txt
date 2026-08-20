@@ -30,13 +30,22 @@ Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured.
 
 ## Read-only vs mutating
 
-Read-only (safe anywhere): whoami, worlds, pull, whats-new, suggestions, catalog, map, images.
-Mutating (need write access; dry-run by default, add --execute to apply):
-suggest, submit-batch, update, review, sync (sync only submits a suggestion on
-a push/tie decision — a pull decision just overwrites the note locally).
-write/link-orphans/pull-canon/adopt/relink only touch local vault files, not
-the API (pull-canon and adopt read from mobRPG but only ever write locally;
-relink makes no API calls at all).
+Three tiers, not two. Read the middle one before calling anything "safe".
+
+Read-only — writes nothing at all: whoami, worlds, whats-new, map check.
+
+Writes locally, never to mobRPG: pull (writes --out), suggestions (with --out),
+map init and map sync (write _meta/mobrpg-map.json), images (--execute writes
+into _attachments/ and can set portrait:), write, link-orphans, pull-canon,
+adopt, relink. These read from mobRPG but only ever write to disk; relink makes
+no API calls at all. `map` and `images` as a whole are NOT read-only — only
+`map check` is.
+
+Writes to mobRPG (need write access; dry-run by default, add --execute):
+suggest, submit-batch, update, review, sync. sync only submits a suggestion on
+a push/tie decision — a pull decision just overwrites the note locally. Nothing
+here overwrites a live element directly; every upstream change goes through a
+suggestion the world owner accepts or dismisses.
 
 Entity/event IDs live in each note's `mobrpg:` frontmatter node — the single
 source of truth. There is NO sidecar crosswalk; never read or write one. A

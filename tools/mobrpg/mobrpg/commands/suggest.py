@@ -987,8 +987,9 @@ def run(argv: list[str]) -> int:
     rc = 0
     for idx, chunk in enumerate(chunks, 1):
         req = {"batchLabel": f"{label} [{idx}/{len(chunks)}]", "suggestions": chunk}
-        json.dump(req, open(os.path.join(args.out, f"suggest-batch-{idx}.json"), "w"),
-                  indent=2, ensure_ascii=False)
+        batch_path = os.path.join(args.out, f"suggest-batch-{idx}.json")
+        with open(batch_path, "w", encoding="utf-8") as fh:
+            json.dump(req, fh, indent=2, ensure_ascii=False)
         try:
             submit_batch.submit(args.world, req, execute=args.execute, index=idx)
         except client.ApiError as e:

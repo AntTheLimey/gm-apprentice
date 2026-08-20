@@ -272,10 +272,14 @@ locations, and NPC relationships.
   station and its venues, a cell between a faction and its members —
   creating it is only half the job. Re-point the children, or it lands
   as a childless leaf at the same level as the things it contains.
-  Present the candidates for a yes/no each, then update **both**
-  `parent_location` and the `part_of` edge on each confirmed child;
-  the scalar and the edge feed different consumers and neither implies
-  the other. Procedure: `shared/relationship-normalization.md`.
+  Present the candidates for a yes/no each, then update the fields
+  that match the containment's kind on each confirmed child: a place
+  inside a place gets **both** `parent_location` and the `part_of`
+  edge (scalar and edge feed different consumers; neither implies the
+  other), but a person moved into a cell gets the `member_of` edge
+  only — there is no membership scalar, and `parent_location` is a
+  Location field. Table and procedure:
+  `shared/relationship-normalization.md`.
 
 - **Timeline**: Linked events:
   `- **{in_game_date}** — [[Event_Name]] — {summary}`.

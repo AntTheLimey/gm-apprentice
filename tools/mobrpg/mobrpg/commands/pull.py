@@ -28,23 +28,52 @@ EVENTTYPE_TO_PREDICATE = {
 
 KINDS = ["person", "organization", "political", "landfeature", "item",
          "creature", "culture", "race", "event"]
-CLASSIFIER_KINDS = ["organization/type", "political/type"]
-
-# Classifier `/type` endpoints traversed for the extract's `types` section, so a
-# standalone/new type with no vault content (e.g. a new creature type) is still
-# visible to a "what's new" report. landfeature/item have NO `/type` endpoint —
-# their types live on the elements — so they are excluded here.
+# Classifier `/type` endpoints. Traversed for the extract's `types` section, so
+# a standalone/new type with no vault content (e.g. a new creature type) is
+# still visible to a "what's new" report — and indexed in step 1 so an
+# `Attribute` relation pointing at one resolves back to a name.
+#
+# The index set and the step-2 skip set must be the SAME list: a kind indexed
+# but not skipped gets emitted as if it were an entity, and a kind skipped but
+# not indexed drops the classifier with no warning. `creature/type` was in this
+# list but missing from the (now removed) narrower index set, so every creature
+# lost its type.
+#
+# landfeature/item have NO `/type` endpoint — their types live on the elements —
+# so they are excluded here.
 TYPE_KINDS = ["creature/type", "organization/type", "political/type"]
 
 
 def _list_all(world: str, kind: str, token: str) -> list:
-    try:
-        r = client._request("GET", f"/world/{world}/{kind}", token=token,
-                            query={"page": 0, "size": 500})
-        c = r.get("content", r) if isinstance(r, dict) else r
-        return c if isinstance(c, list) else []
-    except Exception:
-        return []
+    """Every row of one kind, following `totalPages`.
+
+    Tolerates only the documented empty-body case (surfaced as ValueError),
+    which is how this API reports a kind holding no elements. An `ApiError`
+    propagates: this list is what the extract is built from, so swallowing a
+    failure here writes a successful-looking extract with the kind's entities
+    missing — indistinguishable from canon genuinely not having any.
+
+    Paged for the same reason `map_cmd._fetch_all` is: a single `size=500` read
+    silently dropped everything past the first page.
+    """
+    out: list = []
+    page = 0
+    while True:
+        try:
+            r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                query={"page": page, "size": 200})
+        except ValueError:
+            break                                    # empty body == no rows of this kind
+        rows = r.get("content", []) if isinstance(r, dict) else (
+            r if isinstance(r, list) else [])
+        out.extend(x for x in rows if isinstance(x, dict))
+        if not isinstance(r, dict):
+            break                                    # a bare list is unpaged
+        total = (r.get("page") or {}).get("totalPages", 1)
+        if page >= total - 1:
+            break
+        page += 1
+    return out
 
 
 def live_element_ids(world: str, token: str) -> set:
@@ -82,9 +111,17 @@ def live_element_ids(world: str, token: str) -> set:
 
 
 def _get_one(world: str, kind: str, eid: str, token: str) -> dict:
+    """One element in full.
+
+    Same contract as `_list_all`: only the empty-body ValueError is tolerated.
+    A swallowed `ApiError` used to yield `{}`, and the caller then wrote an
+    entity with empty descriptions, notes, classifiers, and relationships —
+    a corrupted extract that reports success and, pulled into the vault, reads
+    as "canon says this entity is blank".
+    """
     try:
         return client._request("GET", f"/world/{world}/{kind}/{eid}", token=token) or {}
-    except Exception:
+    except ValueError:
         return {}
 
 
@@ -106,7 +143,7 @@ def role_from_event_name(name: str, subject: str) -> str | None:
 def extract(world: str, token: str) -> dict:
     # 1. index every entity (light list pass) — includes classifier types
     index: dict[str, dict] = {}
-    for kind in KINDS + CLASSIFIER_KINDS:
+    for kind in KINDS + TYPE_KINDS:
         for it in _list_all(world, kind, token):
             if it.get("id"):
                 index[it["id"]] = {"id": it["id"], "kind": kind,
@@ -115,7 +152,7 @@ def extract(world: str, token: str) -> dict:
     # 2. build entity records with full descriptions (skip events + classifiers)
     records: dict[str, dict] = {}
     for eid, meta in index.items():
-        if meta["kind"] in ("event", *CLASSIFIER_KINDS):
+        if meta["kind"] in ("event", *TYPE_KINDS):
             continue
         full = _get_one(world, meta["kind"], eid, token)
         records[eid] = {
@@ -195,7 +232,7 @@ def run(argv: list[str]) -> int:
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
-    with open(args.out, "w") as f:
+    with open(args.out, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
     n_types = sum(len(v) for v in result.get("types", {}).values())
     print(f"wrote {args.out}: {len(result['entities'])} entities, "

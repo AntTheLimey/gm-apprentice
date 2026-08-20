@@ -1,3 +1,7 @@
+import pytest
+
+from mobrpg import client
+from mobrpg.commands import rel_baseline
 from mobrpg.commands import rel_baseline as rb
 
 
@@ -136,3 +140,39 @@ def test_stamp_baseline_sets_event_id_and_leaves_rest_untouched():
 def test_stamp_baseline_noop_returns_input():
     node = {"element_id": "x", "relationships": []}
     assert rb.stamp_baseline(node, {}) is node
+
+
+def test_get_relations_propagates_api_error(monkeypatch):
+    # Swallowing this made pull_canon._canon_determined's None branch dead: a
+    # failed read came back as {} and every classifier was reported
+    # "local-only (canon silent)".
+    def boom(method, path, *, token=None, body=None, query=None):
+        raise client.ApiError(503, "down", path)
+
+    monkeypatch.setattr(client, "_request", boom)
+    with pytest.raises(client.ApiError):
+        rel_baseline._get_relations("w1", "person", "e1", "tok")
+
+
+def test_get_relations_treats_empty_body_as_no_relations(monkeypatch):
+    def empty(method, path, *, token=None, body=None, query=None):
+        raise ValueError("no json")
+
+    monkeypatch.setattr(client, "_request", empty)
+    assert rel_baseline._get_relations("w1", "person", "e1", "tok") == []
+
+
+def test_mid_pagination_failure_is_not_reported_as_a_short_list(monkeypatch):
+    # A partial index makes `suggest` re-propose edges mobRPG already holds.
+    calls = {"n": 0}
+
+    def fake(method, path, *, token=None, body=None, query=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"content": [{"id": f"r{i}", "sourceId": "e1", "targetId": "x",
+                                 "type": "Link"} for i in range(rel_baseline._PAGE)]}
+        raise client.ApiError(500, "boom", path)
+
+    monkeypatch.setattr(client, "_request", fake)
+    with pytest.raises(client.ApiError):
+        rel_baseline._get_relations("w1", "person", "e1", "tok")

@@ -133,7 +133,7 @@ def run(argv: list[str]) -> int:
     if args.out:
         os.makedirs(args.out, exist_ok=True)
         p = os.path.join(args.out, f"suggestions-{args.state.lower()}.json")
-        with open(p, "w") as fh:
+        with open(p, "w", encoding="utf-8") as fh:
             json.dump(report, fh, indent=2, ensure_ascii=False)
         print(f"-> {p}")
     return 0

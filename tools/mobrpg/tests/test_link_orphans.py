@@ -83,3 +83,56 @@ def test_systems_flag_defaults_empty_so_nothing_derives(tmp_path):
     data = json.loads((out / "orphan-linking.json").read_text(encoding="utf-8"))
     assert data["linked"] == []
     assert any(n == "Corwin I" for _k, n in data["still_orphan"])
+
+
+NOTE_NO_RELS = """---
+type: location
+name: {name}
+---
+# {name}
+"""
+
+
+def test_note_without_relationships_key_is_reported_not_claimed(tmp_path):
+    # re.sub returns the text unchanged when nothing matches. That used to be
+    # written back byte-identical while the report still claimed the link was
+    # created — the edge vanished and the report lied about it.
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(NOTE.format(name="Corwin System"), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(NOTE_NO_RELS.format(name="Corwin I"), encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+    before = (locs / "Corwin I.md").read_text(encoding="utf-8")
+
+    rc = link_orphans.run([str(extract), "--vault", str(vault),
+                           "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    assert rc == 0
+    assert (locs / "Corwin I.md").read_text(encoding="utf-8") == before  # untouched
+    data = json.loads((out / "orphan-linking.json").read_text(encoding="utf-8"))
+    assert data["linked"] == []                                          # not claimed
+    assert any(u["entity"] == "Corwin I" for u in data["unwritable"])
+    report = (out / "orphan-linking-report.md").read_text(encoding="utf-8")
+    assert "could not be written" in report
+
+
+def test_description_backslashes_survive_the_substitution():
+    # `block` is a literal, not a replacement template: a backslash in the
+    # JSON-encoded description must not be eaten as an escape (and `\u` would
+    # have raised "bad escape" outright).
+    text = "---\nname: X\nrelationships: []\n---\n"
+    out = link_orphans.add_relationship(text, "Target", "part_of", r'a \ b "q" A')
+    assert out is not None
+    assert r"\\" in out          # the backslash is still escaped in the YAML value
+    assert r"A" in out      # not consumed as a replacement-template escape
+
+
+def test_appends_under_an_existing_relationships_block():
+    text = ("---\nname: X\nrelationships:\n  - target: \"[[Other]]\"\n"
+            "    type: knows\n---\n")
+    out = link_orphans.add_relationship(text, "Target", "part_of", "why")
+    assert out is not None
+    assert '- target: "[[Other]]"' in out    # existing edge kept
+    assert '- target: "[[Target]]"' in out   # new edge added

@@ -244,7 +244,7 @@ def run(argv: list[str]) -> int:
                     help="filename/wiki-link naming convention (default: plain)")
     args = ap.parse_args(argv)
 
-    with open(args.extract) as f:
+    with open(args.extract, encoding="utf-8") as f:
         data = json.load(f)
 
     written: dict[str, int] = {}
@@ -255,7 +255,7 @@ def run(argv: list[str]) -> int:
         rel_path, md = r
         full = os.path.join(args.out, rel_path)
         os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "w") as f:
+        with open(full, "w", encoding="utf-8") as f:
             f.write(md)
         written.setdefault(rec["kind"], 0)
         written[rec["kind"]] += 1

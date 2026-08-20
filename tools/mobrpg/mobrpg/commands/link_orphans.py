@@ -27,6 +27,7 @@ import glob
 import json
 import os
 import re
+import sys
 
 from mobrpg.commands import map_cmd
 
@@ -101,7 +102,19 @@ def derive_maker(desc: str, exists: set) -> str | None:
     return None
 
 
-def add_relationship(text: str, target: str, rtype: str, desc: str) -> str:
+def add_relationship(text: str, target: str, rtype: str, desc: str) -> str | None:
+    """Insert one relationship entry, or return None if there was nowhere to put it.
+
+    None means the note's frontmatter carries neither `relationships: []` nor a
+    `relationships:` block. Previously this fell through to a no-op `re.sub`,
+    the note was rewritten byte-identical, and the caller still reported the
+    link as created — the edge was lost and the report was wrong.
+
+    The replacements are function-form on purpose: the entry is a *literal*, and
+    `desc` is JSON-encoded, so a backslash in it would otherwise be read as a
+    replacement-template escape (`\\\\` collapsing to `\\`, `\\u...` raising
+    "bad escape").
+    """
     block = (f"relationships:\n"
              f"  - target: \"[[{target}]]\"\n"
              f"    type: {rtype}\n"
@@ -110,10 +123,13 @@ def add_relationship(text: str, target: str, rtype: str, desc: str) -> str:
              f"    bidirectional: false\n"
              f"    description: {json.dumps(desc, ensure_ascii=False)}")
     if re.search(r"^relationships:\s*\[\]\s*$", text, flags=re.M):
-        return re.sub(r"^relationships:\s*\[\]\s*$", block, text, count=1, flags=re.M)
-    # append under existing relationships:
-    return re.sub(r"^(relationships:\s*\n)", r"\1" + block.split("\n", 1)[1] + "\n",
-                  text, count=1, flags=re.M)
+        return re.sub(r"^relationships:\s*\[\]\s*$", lambda _m: block,
+                      text, count=1, flags=re.M)
+    # append under an existing `relationships:` block
+    entry = block.split("\n", 1)[1] + "\n"
+    new_text, n = re.subn(r"^(relationships:\s*\n)", lambda m: m.group(1) + entry,
+                          text, count=1, flags=re.M)
+    return new_text if n else None
 
 
 def run(argv: list[str]) -> int:
@@ -140,7 +156,7 @@ def run(argv: list[str]) -> int:
     exists = vault_entity_names(vault)
     already_linked = vault_has_rels(vault)   # judge orphan status from the vault
 
-    linked, still = [], []
+    linked, still, unwritable = [], [], []
     for e in extract["entities"]:
         name, kind = e["name"], e["kind"]
         if e.get("relationships") or name in already_linked:
@@ -163,20 +179,37 @@ def run(argv: list[str]) -> int:
             still.append((kind, name))
             continue
         if args.execute:
-            txt = open(path, encoding="utf-8").read()
-            open(path, "w", encoding="utf-8").write(
-                add_relationship(txt, target, rtype, "auto-linked: " + why))
+            with open(path, encoding="utf-8") as fh:
+                txt = fh.read()
+            edited = add_relationship(txt, target, rtype, "auto-linked: " + why)
+            if edited is None:
+                # No relationships key to write into. Report it rather than
+                # rewriting the file unchanged and claiming the link was made.
+                unwritable.append((kind, name, target, rtype))
+                continue
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(edited)
         linked.append({"entity": name, "kind": kind, "type": rtype, "target": target,
                        "subj_id": id_of.get(name), "obj_id": id_of.get(target)})
 
     outdir = args.out
     os.makedirs(outdir, exist_ok=True)
 
-    rep = [f"# Orphan auto-linking report — {len(linked)} linked, {len(still)} still orphan\n"]
+    head = f"# Orphan auto-linking report — {len(linked)} linked, {len(still)} still orphan"
+    if unwritable:
+        head += f", {len(unwritable)} could not be written"
+    rep = [head + "\n"]
     rep.append("## Linked\n")
     rep.append("| entity | type | → target |\n|---|---|---|")
     for l in linked:
         rep.append(f"| {l['entity']} | {l['type']} | {l['target']} |")
+    if unwritable:
+        rep.append("\n## Not written — no `relationships:` key in the note\n")
+        rep.append("Add the key (or `relationships: []`) and re-run, "
+                   "or add these by hand.\n")
+        rep.append("| entity | type | → target |\n|---|---|---|")
+        for kind, name, target, rtype in sorted(unwritable):
+            rep.append(f"| {name} | {rtype} | {target} |")
     rep.append("\n## Still orphan (need manual judgement)\n")
     for k, n in sorted(still):
         rep.append(f"- [{k}] {n}")
@@ -184,9 +217,15 @@ def run(argv: list[str]) -> int:
         fh.write("\n".join(rep) + "\n")
 
     with open(os.path.join(outdir, "orphan-linking.json"), "w", encoding="utf-8") as fh:
-        json.dump({"linked": linked, "still_orphan": still}, fh, indent=2, ensure_ascii=False)
+        json.dump({"linked": linked, "still_orphan": still,
+                   "unwritable": [{"entity": n, "kind": k, "type": t, "target": tgt}
+                                  for k, n, tgt, t in unwritable]},
+                  fh, indent=2, ensure_ascii=False)
 
     if not args.execute and linked:
         print("dry-run — pass --execute to write the vault edits above")
     print(f"linked {len(linked)}, still orphan {len(still)}")
+    if unwritable:
+        print(f"WARNING: {len(unwritable)} note(s) have no `relationships:` key — "
+              f"nothing was written for them; see the report", file=sys.stderr)
     return 0

@@ -11,6 +11,9 @@ on:
       - 'tools/mobrpg/**'
       - '.github/workflows/mobrpg-cli-ci.yml'
 
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
@@ -21,6 +24,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Nothing here runs an authenticated git operation, so don't leave the
+          # job token in the checkout for the test steps to reach.
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:

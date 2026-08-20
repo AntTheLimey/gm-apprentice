@@ -368,29 +368,54 @@ def run(argv: list[str]) -> int:
         counts[a.decision] = counts.get(a.decision, 0) + 1
         print(f"  {a.decision:8} {a.ref}{a.delta}")
 
+    # Local-only writes first: pull / in-sync / baseline record what canon
+    # already says and depend on nothing upstream.
     if args.execute:
-        # pull, in-sync and baseline writes stamp `last_synced`; pin the file mtime
-        # to that stamp so decide sees `mtime == last_synced` (skip) on the next run
-        # rather than mtime > last_synced (a spurious vault-dirty push). now_iso
-        # truncates to whole seconds, so an un-pinned sub-second mtime reads newer.
-        # The push write only marks review_state pending (no stamp) and is held on
-        # later runs, so it needs no pin.
+        # These writes stamp `last_synced`; pin the file mtime to that stamp so
+        # decide sees `mtime == last_synced` (skip) on the next run rather than
+        # mtime > last_synced (a spurious vault-dirty push). now_iso truncates to
+        # whole seconds, so an un-pinned sub-second mtime reads newer.
         ls = lww.parse_ts(now)
         for a in actions:
-            if a.new_text is not None:
+            if a.new_text is not None and a.suggestion is None:
                 with open(a.path, "w", encoding="utf-8") as fh:
                     fh.write(a.new_text)
                 if a.decision in ("pull", "in-sync", "baseline") and ls is not None:
                     os.utime(a.path, (ls, ls))
 
-    batch = [a.suggestion for a in actions if a.suggestion is not None]
-    if batch:
-        request = {"batchLabel": args.batch_label, "suggestions": batch}
+    # Then submit, and only mark a note `pending` once its suggestion is really
+    # in the review queue. Writing `pending` + `pending_ref` first left a note
+    # claiming an `upd/` row that a failed submit — or an externalRef already
+    # claimed by a terminal suggestion — never created. Nothing can clear that:
+    # `plan` holds the note every run, and pull-canon only adjudicates a row
+    # whose ref matches `pending_ref`, so it stays stuck until edited by hand.
+    pushes = [a for a in actions if a.suggestion is not None]
+    if pushes:
+        request = {"batchLabel": args.batch_label,
+                   "suggestions": [a.suggestion for a in pushes]}
         try:
-            submit_batch.submit(args.world, request, execute=args.execute)
+            resp = submit_batch.submit(args.world, request, execute=args.execute)
         except client.ApiError as e:
             print(f"ERROR: {e}", file=sys.stderr)
+            print(f"  {len(pushes)} note(s) left unchanged — nothing was marked "
+                  f"pending, so a re-run will propose them again", file=sys.stderr)
             return 1
+        if args.execute:
+            refused = submit_batch.refused_refs(resp)
+            not_landed = []
+            for a in pushes:
+                ref = (a.suggestion or {}).get("externalRef")
+                if ref and ref in refused:
+                    not_landed.append(a)
+                    continue
+                if a.new_text is not None:
+                    with open(a.path, "w", encoding="utf-8") as fh:
+                        fh.write(a.new_text)
+            if not_landed:
+                print(f"\n  ⚠ {len(not_landed)} note(s) NOT marked pending — their "
+                      f"suggestion never reached the review queue:", file=sys.stderr)
+                for a in not_landed:
+                    print(f"      - {a.ref}", file=sys.stderr)
 
     summary = ", ".join(f"{v} {k}" for k, v in sorted(counts.items())) or "0 notes"
     tag = "" if args.execute else "  [dry-run — no files changed]"

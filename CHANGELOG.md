@@ -108,6 +108,74 @@ CLI never overwrites a live element directly.
 
 ### Fixed
 
+- **A note is only marked `pending` once its suggestion really lands.** `sync
+  --execute` wrote every push note with `review_state: pending` and a
+  `pending_ref` *before* submitting the batch. If the submit failed, or the
+  server bounced a row whose externalRef was already claimed by a terminal
+  suggestion, the note pointed at an `upd/` row that did not exist — and nothing
+  could clear it: `plan` held the note on every later run, and `pull-canon` only
+  adjudicates a row matching `pending_ref`. Local-only writes (pull / in-sync /
+  baseline) still go first; the pending mark now happens after the submit and
+  skips any ref the server refused, which is reported.
+- **`catalog` fetches every page.** It requested page zero only and printed a
+  "there may be more" hint on a full page. A truncated list is read as "that
+  type doesn't exist yet", which is exactly what leads to minting a duplicate,
+  so it now follows `page.totalPages` and reports a mid-pagination failure
+  instead of printing a partial catalog as if it were complete.
+- **`pull` no longer turns an API failure into missing canon.** `_list_all` and
+  `_get_one` caught bare `Exception` and returned `[]` / `{}`, so a failed read
+  produced a successful-looking extract with entities missing or blank. Only the
+  documented empty-body case (`ValueError`) is tolerated now; `ApiError`
+  propagates to the handler that already aborts without writing. `_list_all`
+  also follows `totalPages` rather than reading a single `size=500` page.
+- **Creature types survive the pull.** `creature/type` was traversed for the
+  extract's `types` section but never indexed, so a creature's `Attribute` edge
+  to its type could not be resolved and the classifier was dropped in silence.
+  The indexed set and the skip set are now the same list.
+- **A failed relation read is no longer reported as "no relations".**
+  `rel_baseline._get_relations` swallowed `ApiError`, which made
+  `pull_canon._canon_determined`'s "could not tell" branch unreachable — a
+  failed read came back as `{}` and `run_refresh` then reported every existing
+  classifier as "local-only (canon silent)", the exact misreport it exists to
+  prevent. It also left `fetch_upstream` building the baseline index from
+  partial results, so `suggest` re-proposed edges mobRPG already held.
+- **`link-orphans` reports an edge it could not write.** A note whose
+  frontmatter had neither `relationships: []` nor a `relationships:` block fell
+  through a no-op `re.sub`, was rewritten byte-identical, and was still counted
+  as linked — the relationship was lost and the report claimed otherwise. The
+  substitutions are also function-form now, so a backslash in the JSON-encoded
+  description is not eaten as a replacement-template escape.
+- **A tight markdown heading is no longer swallowed into a paragraph.**
+  `md_to_html` required a heading to be alone in its blank-line-delimited block,
+  but a heading ends at its newline — so `## Overview` followed directly by
+  prose emitted a literal `## Overview` inside `<p>`.
+  `normalize_html_for_compare` strips `<h1..h6>` but cannot strip that, so two
+  identical descriptions compared as different.
+- **`images` validates the URL and contains the write.** Image URLs come from
+  the world API and went unchecked into `urlopen`, which speaks `file:` — so
+  `images --execute` could be steered into reading local files. Only https (and
+  loopback http, for the dev preset) is fetched, and credentials in the URL are
+  refused. The API-supplied name and the extension carved off the URL are both
+  reduced to one safe filename component, and the destination is confirmed
+  inside `_attachments/` before anything is written.
+- **UTF-8 is pinned on every text file the CLI reads or writes.** Ten sites
+  opened text at the platform default encoding while writing non-ASCII content
+  (`ensure_ascii=False` dumps, mobRPG names, vault prose) — wrong decoding on a
+  non-UTF-8 locale, and disagreeing with `vault.py`/`suggest.py`, which already
+  read the map as UTF-8. Several also leaked the handle.
+- **The mobRPG CI job pins `wheel`.** `test_packaging` builds a real wheel with
+  `--no-isolation`, and setuptools only grew a native `bdist_wheel` in 70.1, so
+  the macOS 3.10 leg aborted with "Missing dependencies: wheel" while every
+  other leg happened to ship a newer setuptools. The workflow also drops the
+  persisted checkout credentials and declares `contents: read`.
+- **Docs corrected against the shipped contract.** `part_of` maps to a
+  container-first `Link`, not `Parent` (`Parent`/`Child`/`Spouse` are genealogy
+  between people); the ontology export now says the four affiliation event types
+  are chosen from both endpoint kinds and degrade to `Generic` otherwise;
+  `llms.txt` no longer calls `map` and `images` read-only when `map init`/`map
+  sync` and `images --execute` write locally; the migration note no longer reads
+  as though the current `sync` verb was removed; and the re-parenting procedure
+  no longer applies location fields to faction membership, which is edge-only.
 - **An element deleted upstream stays deleted.** `suggest` held a note whose node
   carried a `pending` or `dismissed` review_state, but not a `deleted` one — and
   `deleted` carries no `element_id`, so the note read as net-new and was re-filed

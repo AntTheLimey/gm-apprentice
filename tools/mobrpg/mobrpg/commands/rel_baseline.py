@@ -180,14 +180,29 @@ def stamp_baseline(node, event_ids, mp=None, kind_by_key=None,
 
 def _get_relations(world, kind, eid, token) -> list:
     """All WorldElementRelation edges touching one element (both directions, all
-    types), paged. Returns [{id, sourceId, targetId, type}, ...]."""
+    types), paged. Returns [{id, sourceId, targetId, type}, ...].
+
+    Raises `client.ApiError` rather than returning short. Both callers need to
+    tell "no relations" from "could not read":
+
+    - `pull_canon._canon_determined` returns None for "could not tell". While
+      this swallowed ApiError that branch was unreachable — a failed read came
+      back as `{}` and `run_refresh` then reported every existing classifier as
+      "local-only (canon silent)", the exact misreport its docstring promises
+      to prevent.
+    - `fetch_upstream` builds the structural baseline index from the result, so
+      a partial read makes `suggest` re-propose edges mobRPG already holds.
+
+    An empty/non-JSON body (ValueError) is still tolerated: that is how this API
+    reports an element with no relations, matching `pull.live_element_ids`.
+    """
     out, page = [], 0
     while page < _MAX_PAGES:          # safety cap: never loop forever on a broken pager
         try:
             r = client._request("GET", f"/world/{world}/{kind}/{eid}/relation",
                                  token=token, query={"page": page, "size": _PAGE})
-        except (client.ApiError, ValueError):
-            break
+        except ValueError:
+            break                     # empty body == this element has no relations
         content = r.get("content", r) if isinstance(r, dict) else r
         if not isinstance(content, list) or not content:
             break

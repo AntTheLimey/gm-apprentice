@@ -25,6 +25,7 @@ import argparse
 import os
 import re
 import sys
+import urllib.parse
 import urllib.request
 
 from mobrpg import client
@@ -35,11 +36,60 @@ FOLDER = {"person": "characters", "organization": "factions",
           "political": "locations", "landfeature": "locations", "item": "items"}
 
 
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def _check_url(url: str) -> str:
+    """Reject any image URL we are not willing to fetch.
+
+    The URL comes from the world API, so it is attacker-controllable by whoever
+    can edit the world. `urlopen` speaks `file:` (and `ftp:`) as happily as
+    `https:`, so an unchecked URL turns `images --execute` into a local-file
+    read or a probe of whatever the operator's machine can reach. Allow https
+    everywhere, and http only against a loopback host so the dev/local
+    environment preset still works. Credentials in the URL are always refused.
+    """
+    parts = urllib.parse.urlsplit(url)
+    scheme, host = parts.scheme.lower(), (parts.hostname or "").lower()
+    if parts.username or parts.password:
+        raise ValueError(f"refusing image URL with embedded credentials: {url!r}")
+    if scheme == "https" and host:
+        return url
+    if scheme == "http" and host in _LOCAL_HOSTS:
+        return url
+    raise ValueError(f"refusing non-https image URL: {url!r}")
+
+
 def _download(url: str) -> bytes:
     """Fetch raw bytes from a URL. Factored out so tests can stub the network
     without ever hitting a live server."""
-    with urllib.request.urlopen(url, timeout=30) as resp:
+    with urllib.request.urlopen(_check_url(url), timeout=30) as resp:  # noqa: S310 - scheme checked
         return resp.read()
+
+
+_UNSAFE_NAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+
+def _safe_component(name: str) -> str:
+    """Reduce an untrusted string to one filename component.
+
+    Separators, `..`, and characters that would break the quoted YAML the path
+    is later written into are all removed, so the result can neither climb out
+    of `_attachments/` nor terminate the `portrait: "..."` value early.
+    """
+    cleaned = _UNSAFE_NAME.sub("_", name).replace("..", "_").strip(" .")
+    return cleaned or "unnamed"
+
+
+def _safe_ext(ext: str) -> str:
+    """Keep only a plain `.abc` extension carved off an untrusted URL."""
+    return ext if re.fullmatch(r"\.[A-Za-z0-9]{1,8}", ext or "") else ".png"
+
+
+def _within(root: str, path: str) -> bool:
+    """True when `path` resolves inside `root`."""
+    target = os.path.realpath(path)
+    return target == root or target.startswith(root + os.sep)
 
 
 def _node_paths(vault_dir: str) -> dict:
@@ -99,15 +149,25 @@ def run(argv: list[str]) -> int:
     wired = occupied = saved = 0
     for ent in found:
         vp = id_to_path.get(ent["id"])
-        base = os.path.splitext(os.path.basename(vp))[0] if vp else ent["name"]
+        # For an unlinked entity the stem is the API-supplied name, and the
+        # extension is carved off the API-supplied URL — both untrusted. Reduce
+        # each to a single safe filename component before it reaches a path or
+        # a quoted YAML value.
+        base = _safe_component(
+            os.path.splitext(os.path.basename(vp))[0] if vp else ent["name"])
         folder = FOLDER[ent["kind"]]
+        attach_root = os.path.realpath(os.path.join(vault_dir, "_attachments"))
         for i, img in enumerate(ent["images"]):
-            ext = os.path.splitext(img["url"].split("?")[0])[1] or ".png"
+            ext = _safe_ext(os.path.splitext(img["url"].split("?")[0])[1])
             fname = f"{base}{'' if i == 0 else f' {i + 1}'}{ext}"
             dest = os.path.join(vault_dir, "_attachments", folder, fname)
             if os.path.exists(dest):
-                fname = fname.replace(ext, f" (mobRPG){ext}")
+                fname = f"{base}{'' if i == 0 else f' {i + 1}'} (mobRPG){ext}"
                 dest = os.path.join(vault_dir, "_attachments", folder, fname)
+            if not _within(attach_root, dest):
+                print(f"  SKIPPED (path escapes _attachments): {ent['name']}",
+                      file=sys.stderr)
+                continue
             rel = f"_attachments/{folder}/{fname}"
             fresh = not os.path.exists(dest)
             if args.execute and fresh:

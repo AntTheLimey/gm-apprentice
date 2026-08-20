@@ -1,4 +1,7 @@
 import json
+
+import pytest
+
 from mobrpg import client
 from mobrpg.commands import pull
 
@@ -218,3 +221,69 @@ def test_run_reports_api_error_and_writes_nothing(monkeypatch, tmp_path, capsys)
     captured = capsys.readouterr()
     assert "ERROR" in captured.err
     assert not out.exists()
+
+
+def test_api_error_aborts_instead_of_writing_a_blank_extract(monkeypatch, tmp_path):
+    # A swallowed ApiError used to yield {} and write an entity with empty
+    # description/notes/classifiers — a successful-looking, corrupted extract.
+    def fake(method, path, *, token=None, body=None, query=None):
+        if path.endswith("/person") or "/person?" in path:
+            return {"content": [{"id": "p1", "name": "Vela"}], "page": {"totalPages": 1}}
+        if "/person/p1" in path:
+            raise client.ApiError(500, "boom", path)
+        return {"content": [], "page": {"totalPages": 1}}
+
+    monkeypatch.setattr(client, "_request", fake)
+    with pytest.raises(client.ApiError):
+        pull.extract("w1", "tok")
+
+
+def test_list_all_follows_total_pages(monkeypatch):
+    pages = {0: {"content": [{"id": "a"}], "page": {"totalPages": 2}},
+             1: {"content": [{"id": "b"}], "page": {"totalPages": 2}}}
+
+    def fake(method, path, *, token=None, body=None, query=None):
+        return pages[query["page"]]
+
+    monkeypatch.setattr(client, "_request", fake)
+    assert [r["id"] for r in pull._list_all("w1", "person", "tok")] == ["a", "b"]
+
+
+def test_list_all_tolerates_empty_body_only(monkeypatch):
+    def empty(method, path, *, token=None, body=None, query=None):
+        raise ValueError("no json")
+
+    monkeypatch.setattr(client, "_request", empty)
+    assert pull._list_all("w1", "race", "tok") == []
+
+    def boom(method, path, *, token=None, body=None, query=None):
+        raise client.ApiError(503, "down", path)
+
+    monkeypatch.setattr(client, "_request", boom)
+    with pytest.raises(client.ApiError):
+        pull._list_all("w1", "person", "tok")
+
+
+def test_creature_type_classifier_is_resolved_not_dropped(monkeypatch):
+    # creature/type was traversed for the `types` section but never indexed, so
+    # a creature's Attribute relation to its type could not be resolved and the
+    # classifier vanished from the extract.
+    def fake(method, path, *, token=None, body=None, query=None):
+        if path.endswith("/creature/type"):
+            return {"content": [{"id": "ct1", "name": "Voidwhale"}],
+                    "page": {"totalPages": 1}}
+        if path.endswith("/creature"):
+            return {"content": [{"id": "c1", "name": "Old Grey"}],
+                    "page": {"totalPages": 1}}
+        if path.endswith("/creature/c1"):
+            return {"id": "c1", "name": "Old Grey", "description": "<p>big</p>",
+                    "relations": [{"type": "Attribute", "sourceId": "c1",
+                                   "targetId": "ct1"}]}
+        return {"content": [], "page": {"totalPages": 1}}
+
+    monkeypatch.setattr(client, "_request", fake)
+    out = pull.extract("w1", "tok")
+    creature = next(e for e in out["entities"] if e["id"] == "c1")
+    assert {"kind": "creature/type", "name": "Voidwhale"} in creature["classifiers"]
+    # and the type element itself is not emitted as an entity
+    assert all(e["id"] != "ct1" for e in out["entities"])

@@ -73,10 +73,24 @@ explicit step:
 2. **Present them to the GM for a yes/no each.** Never re-parent silently
    — "inside the district" is a canon claim, and some siblings genuinely
    stay siblings.
-3. **For each confirmed child, update both fields** — `parent_location`
-   *and* the `part_of` edge (see above) — on the **child's** file.
+3. **For each confirmed child, update the pair that matches the
+   containment's kind** — on the **child's** file, never the container's.
    Containment is stored child → parent, single-direction, so the
    container itself gains nothing but its own edge to *its* parent.
+
+   | What is being contained | Scalar field | Edge |
+   |---|---|---|
+   | A place inside a place (venue in a district, room in a wing) | `parent_location` | `part_of` |
+   | A faction inside a faction (a cell under its parent body) | *(none)* | `part_of` |
+   | A **person in a faction** (a member moved to a new cell) | *(none)* | `member_of` |
+   | A faction's seat of operations | `territory` | `headquartered_at` |
+
+   `parent_location` is a **Location** field and exists for location
+   containment only. There is no membership scalar — a person's place in
+   a faction lives entirely on the `member_of` edge, which mobRPG reifies
+   as a Membership event. Do not write `parent_location` onto a person
+   because their cell changed, and do not use `part_of` for membership:
+   it is off-vocabulary there and pushes as a junk Generic node.
 
 Do this at creation time. A container that has been childless for a few
 sessions reads as deliberate, and by then nobody remembers which venues

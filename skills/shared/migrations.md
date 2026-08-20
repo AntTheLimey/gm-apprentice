@@ -572,8 +572,10 @@ no sidecar crosswalk.
 
 - The `mobrpg` CLI (`tools/mobrpg/`) resolves every element/event id
   from the vault's own `mobrpg:` nodes — the sole source of truth. The legacy
-  sidecar crosswalk is retired: the `backfill` and `sync` verbs and all
-  `--crosswalk` inputs are removed, and `images` reads its id→file map from
-  nodes. A vault whose entities already exist upstream but lack nodes is
+  sidecar crosswalk is retired: the `backfill` verb, the old crosswalk-based
+  sync path, and all `--crosswalk` inputs are removed, and `images` reads its
+  id→file map from nodes. The current `sync` verb is the new timestamp
+  last-writer-wins description sync, not the retired crosswalk one.
+  A vault whose entities already exist upstream but lack nodes is
   linked by matching live mobRPG elements by name, never by reading a
   crosswalk.

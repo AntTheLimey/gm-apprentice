@@ -132,12 +132,23 @@ def md_to_html(md: str | None) -> str:
         blocks.append(cur)
 
     html_parts: list[str] = []
-    for block in blocks:
+    # Blocks split on blank lines, but a heading ends at its newline — so
+    # `## Overview` followed straight by prose arrives as ONE block. Emit the
+    # heading and push the remainder back on the queue rather than requiring
+    # len(block) == 1, which used to drop the whole thing into the paragraph
+    # branch and leave a literal "## Overview" inside <p>. That literal text
+    # survives normalize_html_for_compare (it only strips <h1..h6> blocks), so
+    # two otherwise identical descriptions compared as different.
+    queue = list(blocks)
+    while queue:
+        block = queue.pop(0)
         first = block[0].lstrip()
         h = re.match(r"^(#{1,6})\s+(.*)$", first)
-        if h and len(block) == 1:
+        if h:
             level = len(h.group(1))
             html_parts.append(f"<h{level}>{_inline(h.group(2))}</h{level}>")
+            if len(block) > 1:
+                queue.insert(0, block[1:])
         elif _is_table(block):
             html_parts.append(_table_html(block))
         elif re.match(r"^\s*[-*+]\s+", block[0]):

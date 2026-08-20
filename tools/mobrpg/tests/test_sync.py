@@ -587,3 +587,76 @@ def test_markdown_server_description_compares_in_html_space(tmp_path, monkeypatc
     _wire(monkeypatch, detail, submitted)
     sync_cmd.run(["w1", "--vault", str(v), "--execute"])
     assert not submitted                               # in-sync, nothing filed
+
+
+def test_failed_submit_leaves_the_note_unmarked(tmp_path, monkeypatch):
+    # The note used to be written `pending` with a `pending_ref` BEFORE the
+    # submit. If the submit then failed, no upd/ row existed upstream while the
+    # note claimed one — and nothing could clear it: plan holds it every run and
+    # pull-canon only adjudicates a row matching pending_ref.
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)
+    before = p.read_text(encoding="utf-8")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: {"description": "<p>Server prose.</p>",
+                                              "lastModified": "2026-07-01T00:00:00Z"}
+                        if m == "GET" else {})
+
+    def boom(world, req, execute, index=None):
+        raise client.ApiError(500, "boom", "/suggestion")
+
+    monkeypatch.setattr(submit_batch, "submit", boom)
+    rc = sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert rc == 1
+    assert p.read_text(encoding="utf-8") == before      # not marked pending
+
+
+def test_claimed_ref_does_not_mark_the_note_pending(tmp_path, monkeypatch):
+    # A row bounced as "already claimed (NOT submitted)" never reaches the review
+    # queue, so the note must not claim it either.
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)
+    before = p.read_text(encoding="utf-8")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: {"description": "<p>Server prose.</p>",
+                                              "lastModified": "2026-07-01T00:00:00Z"}
+                        if m == "GET" else {})
+
+    captured = {}
+
+    def fake_submit(world, req, execute, index=None):
+        ref = req["suggestions"][0]["externalRef"]
+        captured["ref"] = ref
+        return {"suggestions": [{"id": "s1", "externalRef": ref,
+                                 "reviewState": "Accepted"}]}
+
+    monkeypatch.setattr(submit_batch, "submit", fake_submit)
+    rc = sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    assert rc == 0
+    assert captured["ref"]
+    assert p.read_text(encoding="utf-8") == before      # not marked pending
+
+
+def test_stored_ref_still_marks_the_note_pending(tmp_path, monkeypatch):
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: {"description": "<p>Server prose.</p>",
+                                              "lastModified": "2026-07-01T00:00:00Z"}
+                        if m == "GET" else {})
+
+    def fake_submit(world, req, execute, index=None):
+        ref = req["suggestions"][0]["externalRef"]
+        return {"suggestions": [{"id": "s1", "externalRef": ref,
+                                 "reviewState": "Pending"}]}
+
+    monkeypatch.setattr(submit_batch, "submit", fake_submit)
+    assert sync_cmd.run(["w1", "--vault", str(v), "--execute"]) == 0
+    nd = _node.read_node(p.read_text(encoding="utf-8"))
+    assert nd["review_state"] == "pending"

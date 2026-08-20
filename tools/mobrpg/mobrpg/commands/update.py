@@ -41,7 +41,7 @@ def run(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     try:
-        with open(args.file) as fh:
+        with open(args.file, encoding="utf-8") as fh:
             body = json.load(fh)
     except (OSError, json.JSONDecodeError) as e:
         print(f"ERROR reading {args.file}: {e}", file=sys.stderr)

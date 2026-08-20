@@ -43,6 +43,40 @@ def _summarize(req: dict) -> None:
                   f"{pl.get('sourceRef')} -> {pl.get('targetRef')}  deps={it.get('dependsOn')}")
 
 
+def classify(resp: dict) -> tuple[list, list, list]:
+    """Split a submit response into (stored, corrected, claimed) rows.
+
+    `claimed` are rows the server refused to store because their externalRef is
+    already held by a terminal (Accepted/Dismissed) suggestion — the GM will
+    never see them. Callers that record local state about a submitted proposal
+    must consult this: a note marked `pending` against a claimed row points at a
+    suggestion that does not exist upstream and can never be adjudicated.
+    """
+    rows = resp.get("suggestions", []) if isinstance(resp, dict) else []
+    updated = set(resp.get("updatedIds") or []) if isinstance(resp, dict) else set()
+    stored, corrected, claimed = [], [], []
+    for s in rows:
+        if s.get("id") in updated:
+            corrected.append(s)
+        elif (s.get("reviewState") or "").lower() in ("accepted", "dismissed"):
+            claimed.append(s)
+        else:
+            stored.append(s)
+    return stored, corrected, claimed
+
+
+def refused_refs(resp: dict) -> set:
+    """The externalRefs the server positively refused to store.
+
+    Deliberately the refused set and not the landed set: a response that does
+    not enumerate rows at all still means the POST succeeded, and treating that
+    as "nothing landed" would stop every note being marked pending. Only a row
+    we can see was bounced is withheld.
+    """
+    _stored, _corrected, claimed = classify(resp)
+    return {s.get("externalRef") for s in claimed if s.get("externalRef")}
+
+
 def submit(world: str, request: dict, *, execute: bool, index: int | None = None) -> dict:
     """Dry-run summary (returns {}) or POST one SubmitSuggestionsRequest (returns the response).
     Shared by `submit-batch` (file in) and `suggest` (built in memory)."""
@@ -55,17 +89,8 @@ def submit(world: str, request: dict, *, execute: bool, index: int | None = None
     token = client.get_access_token()
     print(f"→ {tag}POST /world/{world}/suggestion  n={n} ...")
     resp = client._request("POST", f"/world/{world}/suggestion", token=token, body=request)
-    rows = resp.get("suggestions", []) if isinstance(resp, dict) else []
     resolved = resp.get("resolvedRefs", {}) if isinstance(resp, dict) else {}
-    updated = set(resp.get("updatedIds") or []) if isinstance(resp, dict) else set()
-    stored, corrected, claimed = [], [], []
-    for s in rows:
-        if s.get("id") in updated:
-            corrected.append(s)
-        elif (s.get("reviewState") or "").lower() in ("accepted", "dismissed"):
-            claimed.append(s)
-        else:
-            stored.append(s)
+    stored, corrected, claimed = classify(resp)
     parts = [f"{len(stored)} stored"]
     if corrected:
         parts.append(f"{len(corrected)} corrected in place")
@@ -100,7 +125,7 @@ def run(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     try:
-        with open(args.file) as fh:
+        with open(args.file, encoding="utf-8") as fh:
             req = json.load(fh)
     except (OSError, json.JSONDecodeError) as e:
         print(f"ERROR reading {args.file}: {e}", file=sys.stderr)

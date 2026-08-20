@@ -146,3 +146,26 @@ def test_normalize_html_for_compare_ignores_headings_tags_entities():
     b = "<p>Alpha &amp; beta</p>"
     assert md.normalize_html_for_compare(a) == md.normalize_html_for_compare(b)
     assert "alpha & beta" in md.normalize_html_for_compare(a).lower()
+
+
+def test_heading_without_blank_line_is_not_swallowed_into_paragraph():
+    # A heading ends at its newline, so `## Overview` followed straight by prose
+    # is one blank-line-delimited block. It must still emit an <h2>, not a <p>
+    # containing the literal "## Overview".
+    out = md.md_to_html("## Overview\nSome prose here.")
+    assert out == "<h2>Overview</h2><p>Some prose here.</p>"
+    assert "## Overview" not in out
+
+
+def test_consecutive_headings_without_blank_lines():
+    out = md.md_to_html("# A\n## B\ntext")
+    assert out == "<h1>A</h1><h2>B</h2><p>text</p>"
+
+
+def test_tight_heading_does_not_poison_the_compare_key():
+    # normalize_html_for_compare strips <h1..h6> blocks but cannot strip a
+    # literal "## Overview" trapped inside <p> — that was the real damage:
+    # two identical descriptions, one written tight, compared as different.
+    tight = md.md_to_html("## Overview\nSame body.")
+    loose = md.md_to_html("## Overview\n\nSame body.")
+    assert md.normalize_html_for_compare(tight) == md.normalize_html_for_compare(loose)

@@ -682,6 +682,25 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
     }
 
 
+def _read_map(path: str) -> dict:
+    """Read the vault map as UTF-8.
+
+    The map holds mobRPG element names and vault prose and is dumped with
+    `ensure_ascii=False`, so it is genuinely non-ASCII on disk. Reading it at
+    the platform default encoding decodes it wrongly on a non-UTF-8 locale —
+    and `mobrpg/vault.py` and `commands/suggest.py` already read it as UTF-8,
+    so producer and consumer must agree.
+    """
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _write_map(path: str, data: dict) -> None:
+    """Write the vault map as UTF-8, closing the handle deterministically."""
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+
+
 def _counts(m: dict) -> dict:
     def over(section):
         vals = list(section.values())
@@ -877,7 +896,7 @@ def run(argv: list[str]) -> int:
     fresh = build_map(args.world, world_meta, args.vault, disc, vocab, now)
 
     if args.action == "check":
-        old = json.load(open(map_path)) if os.path.exists(map_path) else fresh
+        old = _read_map(map_path) if os.path.exists(map_path) else fresh
         print(f"map coverage ({map_path if os.path.exists(map_path) else '(no map yet; showing fresh)'}):")
         for section, c in _counts(old).items():
             print(f"  {section:18} total={c['total']:3}  bound={c['bound']:3}  new={c['new']:3}  "
@@ -889,7 +908,7 @@ def run(argv: list[str]) -> int:
             print(f"map already exists at {map_path} — use `map sync` to update it.", file=sys.stderr)
             return 2
         os.makedirs(os.path.dirname(map_path), exist_ok=True)
-        json.dump(fresh, open(map_path, "w"), indent=2, ensure_ascii=False)
+        _write_map(map_path, fresh)
         c = _counts(fresh)
         print(f"wrote {map_path}")
         for section, cc in c.items():
@@ -900,10 +919,10 @@ def run(argv: list[str]) -> int:
     if not os.path.exists(map_path):
         print(f"no map at {map_path} — run `map init` first.", file=sys.stderr)
         return 2
-    old = json.load(open(map_path))
+    old = _read_map(map_path)
     merged, notes = _merge(old, fresh)
     merged["discoveredAt"] = now
-    json.dump(merged, open(map_path, "w"), indent=2, ensure_ascii=False)
+    _write_map(map_path, merged)
     print(f"synced {map_path}: {len(notes)} change(s)")
     for n in notes:
         print(f"  - {n}")

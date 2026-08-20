@@ -1,3 +1,5 @@
+import pytest
+
 from mobrpg import client
 from mobrpg.commands import images
 
@@ -83,3 +85,39 @@ def test_occupied_portrait_left_alone_and_reported(tmp_path, monkeypatch, capsys
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
     assert 'portrait: "already/set.png"' in note.read_text(encoding="utf-8")
     assert "portrait already set" in capsys.readouterr().out
+
+
+def test_download_refuses_non_https_schemes():
+    # The image URL comes from the world API. urlopen speaks file: too, so an
+    # unchecked URL turns `images --execute` into a local-file read.
+    for bad in ("file:///etc/passwd", "ftp://host/x.png", "http://example.com/x.png"):
+        with pytest.raises(ValueError):
+            images._check_url(bad)
+
+
+def test_download_refuses_embedded_credentials():
+    with pytest.raises(ValueError):
+        images._check_url("https://user:pw@cdn/x.png")
+
+
+def test_download_allows_https_and_loopback_http():
+    # loopback http is the dev/local environment preset, not a bypass
+    assert images._check_url("https://cdn/x.png")
+    assert images._check_url("http://localhost:8080/x.png")
+
+
+def test_safe_component_cannot_escape_or_break_yaml():
+    assert "/" not in images._safe_component("../../etc/passwd")
+    assert ".." not in images._safe_component("../../etc/passwd")
+    assert '"' not in images._safe_component('he said "hi"')
+    assert images._safe_component("") == "unnamed"
+    # a dots-only name must not survive as a relative path segment
+    assert images._safe_component("...") not in (".", "..", "...")
+    assert images._safe_component("..") not in (".", "..")
+
+
+def test_safe_ext_rejects_junk_carved_off_a_url():
+    assert images._safe_ext(".png") == ".png"
+    assert images._safe_ext('.pn"g') == ".png"   # would have broken portrait: "..."
+    assert images._safe_ext("") == ".png"
+    assert images._safe_ext("./../x") == ".png"
