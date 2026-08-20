@@ -75,6 +75,22 @@ campaign overview — each section tagged with its source path.
 Drill into individual files only where the digest shows the
 need.
 
+Which session counts as "just played" comes from the campaign
+overview's `last_session`, falling back to the most recent
+`play_date` — not the highest `session_number`, which is not a
+campaign-wide ordinal in a vault whose numbering restarts each
+chapter. The session-anchored lookups — the wrap-up and the
+upcoming plan — are then scoped to that session's chapter. The
+rest of the bundle stays vault-wide, as it should: active PCs,
+deferred flags, and the campaign overview are not per-chapter.
+
+**A `Note:` line in the header means read before trusting.** It
+appears when the choice was ambiguous (a `last_session` pointer
+that resolves to nothing or to several files, a session number
+present in more than one chapter) and when later session
+indexes were ignored as unplayed. Confirm it with the GM: a
+wrong bundle reads exactly as authoritative as a right one.
+
 `stamp_entities.py <vault> FILE... --session N --date
 YYYY-MM-DD [--retag OLD=NEW]` batch-stamps `asOfSession`,
 `lastUpdated`, and a chapter-tag swap across files. Dry-run

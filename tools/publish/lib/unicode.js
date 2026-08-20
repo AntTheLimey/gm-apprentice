@@ -60,4 +60,30 @@ function nfcLookupTable(map) {
   });
 }
 
-module.exports = { canonicalNfc, nfcLookupTable };
+// --- Display-side helpers (#157) ---
+//
+// Distinct in purpose from everything above: those exist so two strings *compare*
+// equal, these exist so one string *renders* and *measures* the way a reader sees
+// it. The failures they fix are cosmetic, not structural — an initial that loses
+// its accent, a label truncated a character early — but they share the same root
+// cause, which is that JS string indexing counts UTF-16 code units while a reader
+// counts what looks like one character.
+//
+// Composing first collapses the common case (base + combining mark becomes one
+// code point); segmenting handles the rest, including marks with no precomposed
+// form and astral characters, which are surrogate pairs.
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function graphemes(value) {
+  return Array.from(graphemeSegmenter.segment(canonicalNfc(value)), (g) => g.segment);
+}
+
+// Truncate by what the reader counts as a character, not by code unit. Returns the
+// composed string untouched when it fits.
+function truncateGraphemes(value, max, keep, ellipsis = '…') {
+  const composed = canonicalNfc(value);
+  const parts = graphemes(composed);
+  return parts.length > max ? parts.slice(0, keep).join('') + ellipsis : composed;
+}
+
+module.exports = { canonicalNfc, nfcLookupTable, graphemes, truncateGraphemes };

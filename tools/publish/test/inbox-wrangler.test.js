@@ -78,3 +78,13 @@ test('adapter.list parses wrangler JSON into {keys:[{name}]}', async () => {
   const out = await kv.list({ prefix: 'req:' });
   assert.deepEqual(out.keys.map(k => k.name), ['req:a', 'req:b']);
 });
+
+// #161 review: a timed-out wrangler leaves stdout/stderr empty, so the adapter's
+// throw degraded to a bare "exit 1" and the flush reported nothing a GM could act on.
+test('a KV read that times out reports the process error, not a bare exit code', async () => {
+  const adapter = makeAdapter({
+    runWrangler: () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }),
+    namespaceId: 'ns',
+  });
+  await assert.rejects(() => adapter.get('some-key'), /ETIMEDOUT/);
+});

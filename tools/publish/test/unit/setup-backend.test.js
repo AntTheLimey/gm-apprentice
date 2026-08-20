@@ -73,3 +73,39 @@ test('ensureKvNamespace creates when only the placeholder is present (never list
   assert.ok(!calls.some((a) => a.join(' ') === 'kv namespace list'));
   assert.deepStrictEqual(calls, [['kv', 'namespace', 'create', 'INBOX']]);
 });
+
+// #160 audit: setup-backend is the third wrangler entry point and was the other
+// unbounded spawn. Its calls are quick control-plane ones (kv namespace
+// list/create), so a stall means a wedged setup with no error.
+test('the wrangler call backend setup runs through is bounded by a timeout', () => {
+  const { defaultRunWrangler, WRANGLER_TIMEOUT_MS } = require('../../lib/setup-backend');
+  const seen = [];
+  const res = defaultRunWrangler(['kv', 'namespace', 'list'], { cwd: '/site' }, (cmd, args, opts) => {
+    seen.push({ cmd, args, opts });
+    return { code: 0, stdout: '[]', stderr: '' };
+  });
+  assert.equal(res.code, 0);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].cmd, 'npx');
+  assert.deepEqual(seen[0].args, ['wrangler@4', 'kv', 'namespace', 'list']);
+  assert.equal(seen[0].opts.cwd, '/site', 'cwd still reaches the child');
+  assert.ok(Number.isFinite(seen[0].opts.timeoutMs) && seen[0].opts.timeoutMs > 0,
+    `expected a finite positive timeoutMs, got ${JSON.stringify(seen[0].opts)}`);
+  assert.equal(seen[0].opts.timeoutMs, WRANGLER_TIMEOUT_MS);
+});
+
+// #161 review: the wrappers dropped run-command's `error`, so a timed-out or
+// un-spawnable wrangler produced "wrangler could not list KV namespaces: " with
+// nothing after the colon — indistinguishable from a silent success.
+test('a permission check on a timed-out wrangler names the failure', () => {
+  const res = checkKvPermission({ runWrangler: () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }) });
+  assert.equal(res.ok, false);
+  assert.match(res.fix, /ETIMEDOUT/);
+});
+
+test('the backend-setup wrapper passes the process error through', () => {
+  const { defaultRunWrangler } = require('../../lib/setup-backend');
+  const res = defaultRunWrangler(['kv', 'namespace', 'list'], {},
+    () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }));
+  assert.equal(res.error, 'ETIMEDOUT');
+});

@@ -322,6 +322,106 @@ Second fix round (a four-way adversarial review of the post-LWW-rework
 
 ---
 
+## [1.8.51] — 2026-08-17
+
+Two session-prep bugs found in one live prep pass: the wrong session picked
+in vaults whose numbering restarts each chapter, and a chapter's midwife
+design never read at all.
+
+### Fixed
+
+- `session-prep`: `session_context.py` chose "just played" by taking a
+  vault-wide `max()` over `session_number`. Where numbering restarts per
+  chapter that is not a campaign-wide ordinal, so a finished chapter's
+  higher-numbered session won permanently and the bundle handed back a
+  months-stale wrap-up, the wrong PC world-state, and a meaningless "no
+  existing plan" — all of it reading as authoritative. Selection now
+  follows the campaign overview's `last_session`, falling back to the most
+  recent `play_date`, and the session-anchored lookups (wrap-up, upcoming
+  plan) are scoped to the selected session's chapter — the rest of the bundle
+  stays vault-wide, which is correct for PCs, flags, and the overview. A
+  document that names no chapter no longer outranks the chapter's own by
+  sorting earlier, and a chapter ref written as a path keys the same as one
+  written as a folder name. Sessions are keyed on `(chapter, number)` rather than
+  the bare integer, which two chapters could silently collide on depending
+  on directory walk order. Where the answer is ambiguous — a stale overview
+  pointer, a number appearing in more than one chapter — the bundle now says
+  so instead of choosing quietly (#162).
+- `session-prep`/`session-play`: neither skill ever read `_midwife/`. Step
+  10c scanned only `Chapters/{chapter}/Planning/` and matched on `plan_type`
+  frontmatter, so a chapter whose forward design lived in `_midwife/` was
+  reported as having no plans and scene structure was generated from
+  scratch, contradicting a day-by-day timeline already sitting in the vault.
+  Both skills now read `_midwife/{chapter-slug}/` by path rather than
+  frontmatter — those files carry none by design — with `timeline.md`
+  surfaced before scene design begins. `vault-structure.md` now states both
+  halves of the posture: `campaign-qa` ignores `_midwife/` for auditing,
+  prep and play read it for design. An empty result is no longer written up
+  as a vault gap, which was a claim about the vault when the real cause was
+  a scan that never opened the directory (#163).
+
+- `session-prep`/`campaign-qa`: a quoted wikilink reaches the frontmatter
+  reader as a one-item list (`"[[Note]]"` parses as a YAML flow sequence),
+  so reading `last_session` as a string silently disabled the
+  authoritative-metadata path entirely. `wikilink_target` now unwraps it.
+- `campaign-qa`: `vault_check.py stale-drafts` carried the same flat
+  assumption, measuring every draft against the vault-wide highest session
+  number. In a restarting vault that made the live chapter's newest content
+  read as many sessions old and told the GM to "promote to AUTHORITATIVE or
+  delete" it. Staleness is now measured within a chapter; a draft that names
+  no chapter in such a vault is reported as undatable rather than judged
+  against an unrelated chapter's count.
+
+---
+
+## [1.8.50] — 2026-08-17
+
+Publish tool 1.11.23. The five follow-up bugs left open by the 1.8.49
+review, closed as one pass.
+
+### Fixed
+
+- `publish-site`: `data-character` was emitted without unicode
+  normalization, so an accented PC's change requests could fail to match
+  back to their vault note — the one place a normal-form mismatch survived
+  #139's sweep into a runtime comparison rather than a build-time one. The
+  flush side was suspected too and turns out to be safe already: it keys on
+  `slugify(title)`, which strips combining marks (#158).
+- `publish-site`: `flush` and backend setup still spawned wrangler with no
+  timeout, so a hung call blocked them indefinitely. Both now route through
+  `runCommand` on the same 60s bound the inbox poll received in 1.8.49, and
+  the constant moved to `run-command.js` instead of being copied a third
+  time. `runCommand` gained a `cwd` passthrough, which is why backend setup
+  had its own raw spawn (#160). The wrappers also dropped `runCommand`'s
+  `error`, and a timed-out spawn leaves stdout and stderr empty — so the new
+  bound turned a hang into a blank message indistinguishable from a silent
+  success. All three now carry it, and the KV adapter and setup diagnostics
+  fall back to it through a shared `failureDetail`.
+- `publish-site`: card initials and relationship-graph labels counted UTF-16
+  code units, so a decomposed accent dropped off an initial ("Bestia Ñu"
+  showed "BN") and cost a label one of its fifteen characters, truncating
+  names that fit composed. Both now measure graphemes, which also keeps
+  astral characters whole (#157).
+- `publish-site`: a session filed in one chapter's folder while its
+  `chapter:` ref named another was listed under **both** chapters. Each
+  session now resolves to exactly one chapter — an exact title beats a loose
+  containment, longest title breaks a tie — and that ref outranks the
+  folder, with folder grouping still the fallback when a ref names no
+  chapter on the page. The ref test that compared ref-inside-chapter-title
+  is gone: it ran opposite to both sibling copies of this matcher and let
+  `[[Vienna]]` claim "Vienna" and "The Vienna Files" at once. Filed as
+  unreachable dead code (#156) — the clauses are reachable, and deleting
+  them left the suite green, so the gap was coverage.
+
+### Removed
+
+- `publish-site`: `scoreNPCs` and its only reader `IMPORTANCE_TAGS`. Nothing
+  but its own test called it — `scoreByRecency` superseded it — and it
+  carried an unfixed copy of the #139 ref-matching bug, so reviving it would
+  have reintroduced a defect the rest of the tool no longer has (#155).
+
+---
+
 ## [1.8.49] — 2026-08-12
 
 Publish tool 1.11.22. Published-site content-leak and encoding bugs fixed,

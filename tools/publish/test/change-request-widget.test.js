@@ -24,6 +24,20 @@ test('widget falls back to displayTitle when frontmatter.name is absent', () => 
   assert.ok(html.includes('data-character="Hero"'));
 });
 
+// The attribute is the only author-typed string that leaves the build and comes
+// back at runtime: the browser posts it as the inbox entry's `character`, which
+// the GM side matches against vault note names. A decomposed name emitted as-is
+// never matches a composed note title, so normalize at this boundary like every
+// other comparison site does (#139).
+test('data-character is emitted NFC-normalized even when the name is decomposed', () => {
+  const nfd = 'Gonza\u0301lez'; // n, a, combining acute
+  const nfc = 'Gonz\u00e1lez';   // precomposed a-acute
+  const p = { frontmatter: { type: 'pc', name: nfd }, displayTitle: nfd, outputPath: 'pcs/gonzalez.html', title: nfd };
+  const html = pcTemplate(p, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, inboxOn);
+  assert.ok(html.includes(`data-character="${nfc}"`), 'attribute carries the composed form');
+  assert.ok(!html.includes(`data-character="${nfd}"`), 'attribute does not carry the decomposed form');
+});
+
 const fs = require('node:fs');
 test('widget script ships the chat-log and hint UI hooks', () => {
   const src = fs.readFileSync(require('path').join(__dirname, '../js/change-request.js'), 'utf8');

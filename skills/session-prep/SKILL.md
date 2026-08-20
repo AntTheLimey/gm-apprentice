@@ -181,30 +181,86 @@ what's already established.
 
 #### Step 10c: Narrative plans
 
-If `Chapters/{chapter}/Planning/` exists, scan it for plan
-entities relevant to the upcoming session:
+Forward design for a chapter lives in **two** places and you
+must check both. `Chapters/{chapter}/Planning/` holds stamped
+plan entities. The `_midwife/` workspace holds whatever a
+midwife session produced — often the richer of the two, and
+frequently the only one populated.
 
-1. Read all files in `Planning/` and categorize by
-   `plan_type` (arc, scene, investigation, timeline)
+**A. `Chapters/{chapter}/Planning/`**, if it exists:
+
+1. Read all files and categorize by `plan_type` (arc, scene,
+   investigation, timeline)
 2. Surface scene plans whose `participants` or `locations`
    overlap with the threads, NPCs, or locations already
    gathered in steps 8-10
-3. Present a brief summary:
+
+**B. The midwife workspace**, if `_midwife/` exists.
+
+Directories under `_midwife/` are named per **adventure**, not
+per chapter. An adventure may be a chapter, span several, or
+be named nothing like one — so do not guess a slug. Use the
+manifest:
+
+1. Read `_midwife/index.md` — the master list of adventures
+   and their status (Active / Parked / Complete / Ingested).
+2. Identify the adventure covering the upcoming chapter.
+   **Exactly one, or none.** If two or more could plausibly
+   match, or the manifest is missing and several directories
+   exist, say so and ask the GM which — do not pick. Prepping
+   against another chapter's timeline is the failure this
+   step exists to prevent.
+3. Read that adventure's `_midwife/{adventure}/index.md`,
+   which carries a one-line summary per topic file. Use it to
+   choose what to open rather than reading the whole tree.
+
+`Ingested` in the manifest means the design was already
+promoted into `Planning/`; root A then covers it and this root
+is history. Anything not yet ingested is exactly the case
+where `Planning/` is empty and this step is the only way the
+design gets seen.
+
+Discover these files by **path, not frontmatter**. Midwife
+files are creative working documents and carry no `---` block
+at all, so a `plan_type` scan finds nothing however wide its
+root. Read each file's `#` H1 and `##` headings to summarise
+it.
+
+**Read `timeline.md` first if one exists.** A midwife
+day-by-day timeline is the highest-value prep artifact in the
+tree: it says which beats belong to the upcoming days and,
+just as importantly, which must not be pulled forward. Surface
+it *before* any scene design in Phase 2, not after — scene
+work invented against an unread timeline contradicts it, and
+the GM is the one who has to catch that.
+
+3. Present a brief summary of both roots:
 
 > **Narrative plans available for this chapter:**
 > - Arc: Arc_Shape.md — four-phase dramatic structure
 > - Scenes: Temple_Approach.md, Recognition_Scene.md,
 >   Escort_Betrayal.md — scene designs with decision trees
 > - Investigation: Investigation_Design.md — clue flow
+> - Midwife design (`_midwife/{adventure}/`, 55 files):
+>   timeline.md — day-by-day skeleton, all 18 days;
+>   chapter-shape.md, narrative-arc.md, social-events.md;
+>   npcs/ profiles; handouts/ prose
 >
 > **Most relevant for next session:** [list based on thread
-> and NPC overlap]
+> and NPC overlap, and on which days the timeline assigns]
 
 Do not copy plan content into the session plan — link to
 it. Plans are reference documents the GM consults during
-play, not material to be duplicated.
+play, not material to be duplicated. This applies to
+`_midwife/` exactly as it does to `Planning/`.
 (rationale: `shared/content-fidelity.md`)
 → Write `## Available Plans` to Plan file.
+
+**If both roots are empty, say that plainly** — "no narrative
+plans found for this chapter" — and do not write it up as a
+vault gap. A Gap/Action asserting no plan entities exist is a
+claim about the vault, and it is false whenever the design is
+sitting in a directory this step failed to open.
 
 ## Phase 2: Prep Forward — Creative Planning (elicited)
 

@@ -364,8 +364,12 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
 
   // --- Assemble ---
+  // NFC at the boundary, not because this is a path (it isn't — see unicode.js on
+  // why emitted paths stay byte-exact) but because the browser posts this value
+  // back as the inbox entry's `character`, where it is matched against vault note
+  // names. A decomposed name would survive into that runtime comparison and miss.
   const crWidget = showInbox
-    ? `<div id="cr-root" data-character="${escapeHtml(page.frontmatter.name || page.displayTitle || page.title || '')}"></div>`
+    ? `<div id="cr-root" data-character="${escapeHtml(canonicalNfc(page.frontmatter.name || page.displayTitle || page.title || ''))}"></div>`
     : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
