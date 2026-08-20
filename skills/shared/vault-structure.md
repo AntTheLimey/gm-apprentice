@@ -169,7 +169,32 @@ idea is generated but not used, it goes to the appropriate
 seed category. When starting a new adventure, the midwife
 scans seeds for relevant prior ideas.
 
-`campaign-qa` ignores `_midwife/` during audits.
+### Who reads `_midwife/`
+
+`campaign-qa` ignores `_midwife/` during audits — a creative
+scratchpad should not be linted for schema compliance.
+
+**That is an auditing rule, not a general one.** `session-prep`
+and `session-play` must *read* the workspace: it is where a
+chapter's forward design actually lives once a midwife session
+has run, and it is often the only place it lives, with
+`Chapters/{chapter}/Planning/` left empty. A prep pass that
+skips it will invent scene structure that contradicts a
+timeline already sitting in the vault.
+
+**Directories here are named per adventure, not per chapter**
+(`_midwife/{adventure-name}/`, as written above). An adventure
+may be one chapter, several, or carry a name resembling
+neither. Readers must therefore resolve the directory through
+`_midwife/index.md`, the master manifest, rather than deriving
+a slug from the chapter title — and where the manifest leaves
+the match ambiguous, ask rather than guess. `Ingested` status
+means the design was already promoted into `Planning/`.
+
+Discover these files **by path**. They are creative working
+documents and carry no frontmatter, so any scan keyed on
+`type:` or `plan_type` finds nothing there regardless of its
+root. Read them, link to them, never copy them.
 
 ## World Layer
 

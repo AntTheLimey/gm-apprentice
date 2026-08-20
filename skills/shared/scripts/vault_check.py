@@ -43,6 +43,7 @@ from schema_rules import (
     extract_frontmatter,
     inverse_predicates,
     iter_relationship_predicates,
+    chapter_key,
     parse_session_number,
     predicate_problem,
     predicate_vocabulary,
@@ -283,13 +284,21 @@ def check_index(vault: Path) -> list[str]:
 
 def check_stale_drafts(vault: Path) -> list[str]:
     files = list(vault_files(vault))
-    current = 0
+    # Staleness is "how many sessions ago", which only means something inside a
+    # chapter: numbering restarts, so a vault-wide max() made every draft in the
+    # live chapter look many sessions old and told the GM to promote or delete
+    # content written last week (#162). Track the latest session per chapter and
+    # measure each draft against its own chapter's.
+    per_chapter: dict[str | None, int] = {}
     for rel, text in files:
         fm = extract_frontmatter(text) or {}
         if fm.get("type") == "session":
             n = parse_session_number(fm.get("session_number"))
             if n:
-                current = max(current, n)
+                key = chapter_key(rel, fm)
+                per_chapter[key] = max(per_chapter.get(key, 0), n)
+    current = max(per_chapter.values(), default=0)
+    chaptered = len([k for k in per_chapter if k is not None]) > 1
     rows = []
     if not current:
         return ["INFO\t(vault)\tno session entities with "
@@ -301,16 +310,27 @@ def check_stale_drafts(vault: Path) -> list[str]:
         if fm.get("type") == "session-plan":
             continue  # prep content is always DRAFT — exempt
         created = parse_session_number(fm.get("createdSession"))
+        own = chapter_key(rel, fm)
+        if chaptered and own is None and created is not None:
+            # Numbering restarts per chapter and this note names none, so its
+            # createdSession cannot be placed on any timeline. Saying so beats
+            # guessing against an unrelated chapter's count.
+            rows.append(f"INFO\t{rel}\tDRAFT createdSession ({created}) "
+                        f"cannot be dated — this vault numbers sessions per "
+                        f"chapter and the note names no chapter")
+            continue
+        # Its own chapter's latest where known, else the vault-wide latest.
+        now = per_chapter.get(own, current)
         if created is None:
             rows.append(f"WARNING\t{rel}\tDRAFT missing createdSession — "
                         f"cannot determine staleness; add it or promote")
-        elif created > current:
+        elif created > now:
             rows.append(f"WARNING\t{rel}\tcreatedSession ({created}) "
-                        f"exceeds current session ({current}) — check "
+                        f"exceeds current session ({now}) — check "
                         f"the value (dates don't belong in this field)")
-        elif current - created >= 3:
+        elif now - created >= 3:
             rows.append(f"WARNING\t{rel}\tstale DRAFT (created session "
-                        f"{created}, now session {current}) — promote "
+                        f"{created}, now session {now}) — promote "
                         f"to AUTHORITATIVE or delete")
     return rows
 

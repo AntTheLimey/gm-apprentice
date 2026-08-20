@@ -96,7 +96,7 @@ Route these requests directly — don't search, load the file.
 | Scene fell flat | `ttrpg-expert/active-play-management.md` §Mid-Session Adjustments |
 | Pacing / tension | `ttrpg-expert/active-play-management.md` §Pacing and Flow |
 | Improvisation help | `ttrpg-expert/active-play-management.md` §Improvisation |
-| Narrative plan | `Chapters/{chapter}/Planning/` — read the relevant plan entity (scene designs, arc structure, investigation flow, or timeline) |
+| Narrative plan | `Chapters/{chapter}/Planning/` — read the relevant plan entity (scene designs, arc structure, investigation flow, or timeline). Also check the midwife workspace, which is often the only place the design lives: resolve the adventure directory via `_midwife/index.md` (dirs are named per adventure, not per chapter) and read by path, not frontmatter — those files carry none. `timeline.md` and `npcs/` first; if the manifest leaves it ambiguous, ask rather than guess |
 
 Read `ttrpg-expert/active-play-management.md` when the GM needs
 GM-craft advice (spotlight, pacing, improv, difficulty tuning)

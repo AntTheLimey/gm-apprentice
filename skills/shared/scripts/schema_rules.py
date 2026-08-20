@@ -191,6 +191,53 @@ def parse_session_number(value) -> int | None:
     return n if n <= MAX_PLAUSIBLE_SESSION else None
 
 
+def wikilink_target(value) -> str:
+    """Bare target of a `[[Link|alias]]`, or the plain string.
+
+    A quoted wikilink reaches us as a one-item list, not a string: the
+    frontmatter reader treats the outer `[...]` of `"[[Note]]"` as a YAML
+    flow sequence and yields `['[Note]']`. Rejecting lists here silently
+    disabled every wikilink-valued lookup, so unwrap the single-item case
+    and strip whatever brackets survive.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        if len(value) != 1:
+            return ""
+        value = value[0]
+    return re.sub(r"[\[\]]", "", str(value)).split("|")[0].split("#")[0].strip()
+
+
+def chapter_of(rel: str, fm: dict) -> str | None:
+    """Which chapter a note belongs to, or None if it cannot be told.
+
+    Session numbering restarts per chapter in real vaults, so a bare
+    `session_number` is not a campaign-wide ordinal (#162). The
+    frontmatter ref is authoritative; the path is the fallback for
+    vaults that file by folder without tagging. Returns None for a
+    flat vault, where number alone is the only ordering available and
+    is correct.
+    """
+    ref = wikilink_target(fm.get("chapter"))
+    if ref:
+        # A ref may be written as a path ("[[Chapters/Chapter 4 - Calcutta]]")
+        # while the folder fallback yields only the segment. Keep the last
+        # segment either way, or one chapter acquires two identities and stops
+        # matching its own wrap-ups and plans.
+        return ref.rsplit("/", 1)[-1]
+    parts = rel.split("/")
+    if len(parts) > 1 and parts[0].casefold() in {"chapters", "_chapters"}:
+        return parts[1]
+    return None
+
+
+def chapter_key(rel: str, fm: dict) -> str | None:
+    """chapter_of, casefolded for comparison. None stays None."""
+    c = chapter_of(rel, fm)
+    return c.casefold() if c else None
+
+
 # Relationship predicate vocabulary
 #
 # The authoritative list is the predicate table in entity-schema.md; the
