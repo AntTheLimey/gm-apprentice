@@ -81,9 +81,15 @@ explicit step:
    | What is being contained | Scalar field | Edge |
    |---|---|---|
    | A place inside a place (venue in a district, room in a wing) | `parent_location` | `part_of` |
-   | A faction inside a faction (a cell under its parent body) | *(none)* | `part_of` |
+   | A faction inside a faction (a cell under its parent body) | `part_of` | `part_of` |
    | A **person in a faction** (a member moved to a new cell) | *(none)* | `member_of` |
    | A faction's seat of operations | `territory` | `headquartered_at` |
+
+   Faction and Organization carry a scalar `part_of` (wiki-link to the
+   parent body) as well as the edge — the same scalar/edge pairing
+   Location has, and the same obligation to update both. The **edge is
+   authoritative**: it is what pushes upstream and what the graph
+   queries, and a scalar left behind is the divergence to fix.
 
    `parent_location` is a **Location** field and exists for location
    containment only. There is no membership scalar — a person's place in

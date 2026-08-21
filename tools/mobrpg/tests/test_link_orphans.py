@@ -136,3 +136,36 @@ def test_appends_under_an_existing_relationships_block():
     assert out is not None
     assert '- target: "[[Other]]"' in out    # existing edge kept
     assert '- target: "[[Target]]"' in out   # new edge added
+
+
+def test_entity_name_cannot_escape_its_folder(tmp_path):
+    # `name` comes from the extract, which is built from the world API. A name
+    # containing ../ resolved to an existing file outside the kind's folder and
+    # that file was rewritten.
+    vault = tmp_path / "vault"
+    (vault / "Locations").mkdir(parents=True)
+    (vault / "Locations" / "Corwin System.md").write_text(
+        NOTE.format(name="Corwin System"), encoding="utf-8")
+    outside = vault / "Characters"
+    outside.mkdir()
+    victim = outside / "Corwin I.md"
+    victim.write_text(NOTE.format(name="Corwin I"), encoding="utf-8")
+    before = victim.read_text(encoding="utf-8")
+
+    # The "gate" rule matches on startswith + substring, not fullmatch, so a
+    # name can satisfy it AND carry traversal segments.
+    escaping = "Corwin Gate/../../Characters/Corwin I"
+    extract = {"entities": [
+        {"id": "id-sys", "name": "Corwin System", "kind": "political", "relationships": []},
+        {"id": "id-p", "name": escaping, "kind": "landfeature", "relationships": []},
+    ]}
+    p = tmp_path / "extract.json"
+    p.write_text(json.dumps(extract), encoding="utf-8")
+    out = tmp_path / "out"
+
+    rc = link_orphans.run([str(p), "--vault", str(vault), "--out", str(out),
+                           "--systems", "Corwin", "--execute"])
+    assert rc == 0
+    assert victim.read_text(encoding="utf-8") == before   # untouched
+    data = json.loads((out / "orphan-linking.json").read_text(encoding="utf-8"))
+    assert data["linked"] == []

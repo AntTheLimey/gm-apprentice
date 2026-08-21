@@ -174,7 +174,15 @@ def run(argv: list[str]) -> int:
             still.append((kind, name))
             continue
         folder = _WRITE_FOLDER[kind]
-        path = os.path.join(vault, folder, f"{name}.md")
+        # `name` comes from the extract, which is built from the world API, so
+        # it is untrusted. A name containing `../` would otherwise resolve to an
+        # existing file outside this kind's folder and be rewritten there.
+        folder_root = os.path.realpath(os.path.join(vault, folder))
+        path = os.path.realpath(os.path.join(folder_root, f"{name}.md"))
+        if path != folder_root and not path.startswith(folder_root + os.sep):
+            print(f"  SKIPPED (path escapes {folder}): {name}", file=sys.stderr)
+            still.append((kind, name))
+            continue
         if not os.path.exists(path):
             still.append((kind, name))
             continue

@@ -159,6 +159,11 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
 
     elif etype == "faction":
         ftype = classifier_of(rec, ("organization/type",))
+        # Faction/Organization carry a scalar `part_of` (wiki-link to the parent
+        # body) alongside the edge, exactly as location carries parent_location.
+        # It used to be emitted hardcoded-empty while the edge was preserved, so
+        # a faction with a real parent shipped with the two disagreeing.
+        parent = next((r["target"] for r in rels if r["predicate"] == "part_of"), "")
         fm = (
             f"---\n"
             f"type: faction\n{fm_common}"
@@ -173,7 +178,7 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
             f"alliances: []\n"
             f"recentActions: []\n"
             f"status: active\n"
-            f"part_of: \"\"\n"
+            f"part_of: \"{wl(parent, name_style) if parent else ''}\"\n"
             f"portrait: \"\"\n"
             f"relationships:{rel_block(rels, 'headquartered_at', None, name_style)}\n"
             f"---\n"

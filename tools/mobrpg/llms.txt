@@ -210,7 +210,14 @@ vault whose entities already exist upstream but carry no node is linked with
                                   Pull entity images into the vault (id->file map
                                   comes from the vault's own mobrpg: nodes).
 
-Mutating verbs are dry-run by default; add --execute to actually write. Run
+Dry-run-by-default applies to the verbs that carry an --execute flag — the
+mobRPG-mutating ones (suggest, submit-batch, update, review, sync) plus the
+gated local writers (images, link-orphans, pull-canon, adopt, relink). Add
+--execute to actually write.
+
+It does NOT apply to `pull` and `write`, which have no --execute flag and write
+their output as soon as they are run: `pull` creates the file named by --out,
+and `write` materializes vault notes. Neither is a preview. Run
 `mobrpg <command> --help` for a command's own options.
 
 ## Typical workflows

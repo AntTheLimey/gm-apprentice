@@ -108,6 +108,19 @@ CLI never overwrites a live element directly.
 
 ### Fixed
 
+- **A faction's `part_of` scalar is derived from its edge.** `write`
+  emitted `part_of: ""` hardcoded while preserving the `part_of` relationship,
+  so an imported faction with a real parent body shipped with the scalar and the
+  edge disagreeing. The location branch already derived `parent_location` from
+  the edge; the faction branch now does the same. The compact type-field summary
+  in `entity-schema.md` was also missing `part_of` for Faction/Organization,
+  which is what made it look like there was no scalar at all.
+- **`link-orphans` cannot be walked out of its folder.** The note path was built
+  from the extract-supplied entity name. The "gate" naming rule matches on
+  `startswith` plus a substring rather than a full match, so a name could
+  satisfy it *and* carry `../` segments — resolving onto an existing file
+  outside the kind's folder, which was then rewritten. The candidate is now
+  resolved against the folder root and skipped if it escapes.
 - **A note is only marked `pending` once its suggestion really lands.** `sync
   --execute` wrote every push note with `review_state: pending` and a
   `pending_ref` *before* submitting the batch. If the submit failed, or the
@@ -176,6 +189,8 @@ CLI never overwrites a live element directly.
   sync` and `images --execute` write locally; the migration note no longer reads
   as though the current `sync` verb was removed; and the re-parenting procedure
   no longer applies location fields to faction membership, which is edge-only.
+  `llms.txt` also no longer claims every mutating verb is dry-run by default —
+  `pull` and `write` have no `--execute` flag and write as soon as they run.
 - **An element deleted upstream stays deleted.** `suggest` held a note whose node
   carried a `pending` or `dismissed` review_state, but not a `deleted` one — and
   `deleted` carries no `element_id`, so the note read as net-new and was re-filed

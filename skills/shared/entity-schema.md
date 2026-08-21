@@ -445,8 +445,8 @@ published Locations listing (fallback: `location_type`).
 
 **Faction/Organization:** `faction_type` (cult, guild, military,
 etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
-`portrait` (optional). `faction_type` groups the published Factions
-listing.
+`part_of` (wiki-link to the parent body, optional), `portrait`
+(optional). `faction_type` groups the published Factions listing.
 
 **Item:** `item_type` (weapon, armor, relic, etc.),
 `current_holder` (wiki-link), `origin`, `portrait` (optional)
