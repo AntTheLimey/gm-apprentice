@@ -618,6 +618,9 @@ was introduced to end.
   nesting-aware. Previously the first closer ended the outer block, so
   wrapping a region that already contained inner fences published everything
   after that inner closer — with balanced-looking markers and no warning.
-  An inner block now closes only itself. A closer with nothing open no
-  longer silently does nothing: it is counted and reported, and the
-  unclosed-marker warning now says how many blocks were left open.
+  An inner block now closes only itself. Code-fence detection follows
+  CommonMark too, so a marker shown inside a `~~~` block, a longer fence, or
+  an indented fence is read as documentation rather than obeyed as a real
+  closer. A closer with nothing open no longer silently does nothing: it is
+  counted and reported, and the unclosed-marker warning now says how many
+  blocks were left open.

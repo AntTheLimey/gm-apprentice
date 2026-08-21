@@ -138,7 +138,7 @@ or proceed to session prep?"
 
 **When invoked from reconcile:** skip this prompt — results
 flow into reconcile step 7's `### Reconciliation Context`
-under `### World Evolution`. Set `world_evolved` on the
+under `#### World Evolution`. Set `world_evolved` on the
 session index to the current session reference.
 
 ## Universal Faction Turn

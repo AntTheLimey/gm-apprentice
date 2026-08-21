@@ -126,16 +126,43 @@ function stripMarkedBlocks(markdown, markerName) {
   const warnings = [];
   let depth = 0;
   let orphanClosers = 0;
-  let inCodeFence = false;
+  // The open fence's delimiter, or null outside a fence. Tracking the actual
+  // delimiter — not a boolean — is what makes ``` inside a ~~~ block (and vice
+  // versa) inert, per CommonMark: a fence closes only on the same character,
+  // at least as long as the opener, with nothing but whitespace after it.
+  //
+  // Only ^``` used to count as a fence, so a marker shown inside a ~~~ block,
+  // a ````-long fence, or an indented fence was obeyed as a real directive —
+  // ending the enclosing block early and publishing the rest. This repo's own
+  // docs demonstrate these markers inside fenced examples, so it is a shape
+  // that actually occurs. Getting this wrong leaks in BOTH directions: miss a
+  // fence and an example closer is obeyed; invent one and a real opener is
+  // ignored. Hence matching CommonMark rather than loosening the pattern.
+  let fenceDelim = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (/^```/.test(line)) {
-      inCodeFence = !inCodeFence;
+    // up to 3 leading spaces; 4+ would be an indented code block, not a fence
+    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    let isFenceLine = false;
+    if (fence) {
+      const [, delim, info] = fence;
+      if (fenceDelim === null) {
+        // A backtick fence's info string may not contain a backtick.
+        if (delim[0] !== '`' || !info.includes('`')) {
+          fenceDelim = delim;
+          isFenceLine = true;
+        }
+      } else if (delim[0] === fenceDelim[0]
+                 && delim.length >= fenceDelim.length
+                 && /^\s*$/.test(info)) {
+        fenceDelim = null;
+        isFenceLine = true;
+      }
     }
 
-    if (inCodeFence) {
+    if (fenceDelim !== null || isFenceLine) {
       if (depth === 0) result.push(line);
       continue;
     }

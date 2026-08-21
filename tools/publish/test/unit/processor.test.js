@@ -232,6 +232,72 @@ describe('stripGmOnly', () => {
     assert.ok(warnings[0].includes('without a matching'));
   });
 
+  // A marker inside a code example is documentation, not a directive. Only
+  // ``` was recognised, so a closer shown inside a ~~~ block, a longer fence,
+  // or an indented fence was obeyed — ending the real block early and
+  // publishing everything after it. This repo's own docs demonstrate the
+  // markers inside fenced examples, so it is a live shape.
+  it('ignores markers inside a ~~~ fence', () => {
+    const md = [
+      '<!-- gm-only -->',
+      'secret one',
+      '~~~markdown',
+      '<!-- /gm-only -->',
+      '~~~',
+      'secret two',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('ignores markers inside a fence longer than three backticks', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '````',
+      '```',
+      '<!-- /gm-only -->',
+      '```',
+      '````',
+      'secret tail',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('ignores markers inside a fence indented up to three spaces', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '   ```',
+      '<!-- /gm-only -->',
+      '   ```',
+      'secret tail',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('a ``` line does not close a ~~~ fence', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '~~~',
+      '```',
+      '<!-- /gm-only -->',
+      '~~~',
+      'secret tail',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('still publishes a fenced code example that sits outside any block', () => {
+    const md = 'Intro\n~~~markdown\n<!-- gm-only -->\nexample\n<!-- /gm-only -->\n~~~\nAfter';
+    assert.strictEqual(stripGmOnly(md), md);
+  });
+
   it('reports how many blocks were left open at EOF', () => {
     const md = '<!-- gm-only -->\na\n<!-- gm-only -->\nb';
     const { text, warnings } = stripGmOnly(md);

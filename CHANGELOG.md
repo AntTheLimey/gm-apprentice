@@ -22,6 +22,15 @@ live Call of Cthulhu campaign (#168). Publish tool 1.11.24.
   Silent under-protection is the worst failure mode for the one primitive whose
   whole job is hiding things. An inner block now closes only itself.
   `<!-- spoiler -->` gets the same fix, from the same shared implementation.
+- **A marker inside a code example is documentation, not a directive.** Only a
+  line starting with exactly three backticks counted as a code fence, so a
+  `<!-- /gm-only -->` shown inside a `~~~` block, a ` ```` `-length fence, or a
+  fence indented by up to three spaces was obeyed as a real closer — ending the
+  enclosing block early and publishing the rest. Fence tracking now follows
+  CommonMark: a fence closes only on the same character, at least as long as
+  the opener, with nothing but whitespace after it. This repo's own
+  documentation demonstrates these markers inside fenced examples, so it is a
+  shape that occurs in practice.
 - **A `<!-- /gm-only -->` with nothing open is reported.** It used to be a
   silent no-op. It is now counted and warned about at build time, and the
   unclosed-marker warning says how many blocks were left open — so an
