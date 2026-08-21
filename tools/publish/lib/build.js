@@ -4,7 +4,7 @@ const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
@@ -283,8 +283,49 @@ function build(options = {}) {
     console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);
   }
 
+  // `publish: false` — the GM said never publish this file. Honoured in EVERY
+  // mode, unlike the auto-exclusions above: those are heuristics about draft
+  // state, this is an explicit instruction, and a flag named "never publish"
+  // that publishes under some setting is worse than no flag at all.
+  //
+  // Dropped before the link map, so links to it resolve to nothing and render
+  // as plain text rather than as a broken href — the file still parses, it
+  // just never becomes a page.
+  const neverPublish = pages.filter(p => publishMode(p.frontmatter) === 'none');
+  if (neverPublish.length > 0) {
+    pages = pages.filter(p => publishMode(p.frontmatter) !== 'none');
+    console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
+  }
+
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
+
+  // Reduce every page's frontmatter to its PUBLISHED view before anything
+  // derived is built from it.
+  //
+  // This used to run ~80 lines further down, after backlinks, the search index
+  // and the relationship graphs had all already read the raw frontmatter — so
+  // excluding a field removed it from the page and left it in every derived
+  // view (#166). Excluding `relationships` still drew the graph, with the
+  // secret targets as node labels; excluding `occupation` still shipped it as
+  // the search-index subtitle. The link map is built above and is what redirect
+  // resolution actually consults, so `aliases`/`canon_status` are safe to strip
+  // from here on.
+  for (const page of pages) {
+    // `publish: stub` — emit the page shell so navigation and links still work,
+    // but keep only the sections the GM explicitly named. Applied to
+    // page.markdown itself, before the published view is computed, so every
+    // downstream reader sees the same reduced body.
+    if (publishMode(page.frontmatter) === 'stub') {
+      const include = Array.isArray(page.frontmatter.publish_include_sections)
+        ? page.frontmatter.publish_include_sections
+        : [];
+      page.markdown = keepOnlySections(page.markdown || '', include);
+    }
+    const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};
+    page.frontmatter = publishedFrontmatter(
+      page.frontmatter, excludeFields, overridesForFile);
+  }
 
   const { buildBacklinks } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
@@ -363,12 +404,6 @@ function build(options = {}) {
   }
   console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
   publishConfig._entityGraphs = entityGraphs;
-
-  // Apply field filtering after link map is built (aliases/canon_status needed for redirect resolution)
-  for (const page of pages) {
-    const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};
-    page.frontmatter = filterFields(page.frontmatter, excludeFields, overridesForFile);
-  }
 
   // Where the timeline actually lives. Decided after field filtering — so an excluded
   // `in_game_date` can't resurrect a timeline the GM meant to suppress — but before the nav

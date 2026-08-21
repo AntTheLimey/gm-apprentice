@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -585,5 +585,109 @@ describe('resolveWikiLinks on non-image transclusions (review regression)', () =
   it('still resolves an ordinary wikilink', () => {
     const out = resolveWikiLinks('[[Backstory]]', { Backstory: 'docs/backstory.html' }, 'x.html');
     assert.strictEqual(out, '[Backstory](docs/backstory.html)');
+  });
+});
+
+describe('publishMode (#167)', () => {
+  it('defaults to all when the key is absent', () => {
+    assert.strictEqual(publishMode({}), 'all');
+  });
+
+  it('reads false, "false" and "none" as none', () => {
+    assert.strictEqual(publishMode({ publish: false }), 'none');
+    assert.strictEqual(publishMode({ publish: 'false' }), 'none');
+    assert.strictEqual(publishMode({ publish: 'none' }), 'none');
+  });
+
+  it('reads stub', () => {
+    assert.strictEqual(publishMode({ publish: 'stub' }), 'stub');
+  });
+
+  // A typo must not silently unpublish a page — nor silently publish one that
+  // was meant to be hidden. Only the explicit opt-outs count.
+  it('treats anything unrecognized as all', () => {
+    assert.strictEqual(publishMode({ publish: 'no' }), 'all');
+    assert.strictEqual(publishMode({ publish: true }), 'all');
+    assert.strictEqual(publishMode({ publish: 'yes' }), 'all');
+  });
+});
+
+describe('keepOnlySections (#167)', () => {
+  const md = '# Title\n\npreamble\n\n## Overview\n\npublic\n\n## The Climax\n\nsecret\n';
+
+  it('keeps nothing by default', () => {
+    assert.strictEqual(keepOnlySections(md, []), '');
+  });
+
+  it('keeps only the named section, dropping preamble and everything else', () => {
+    const out = keepOnlySections(md, ['Overview']);
+    assert.ok(out.includes('## Overview'));
+    assert.ok(out.includes('public'));
+    assert.ok(!out.includes('preamble'));
+    assert.ok(!out.includes('The Climax'));
+    assert.ok(!out.includes('secret'));
+  });
+
+  it('matches heading titles case-insensitively', () => {
+    assert.ok(keepOnlySections(md, ['overview']).includes('public'));
+  });
+
+  it('ends a kept section at the next same-or-higher heading', () => {
+    const nested = '## Keep\n\na\n\n### Child\n\nb\n\n## Drop\n\nc\n';
+    const out = keepOnlySections(nested, ['Keep']);
+    assert.ok(out.includes('a') && out.includes('b'));   // child rides along
+    assert.ok(!out.includes('c'));
+  });
+});
+
+describe('publishedFrontmatter (#166)', () => {
+  it('drops relationship edges marked gm_only', () => {
+    const fm = { relationships: [
+      { target: '[[Innkeeper]]', type: 'knows' },
+      { target: '[[Cult_Leader]]', type: 'serves', gm_only: true },
+    ] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.strictEqual(out.relationships.length, 1);
+    assert.strictEqual(out.relationships[0].target, '[[Innkeeper]]');
+  });
+
+  it('removes the relationships key entirely when every edge is gm_only', () => {
+    const fm = { relationships: [{ target: '[[X]]', type: 'serves', gm_only: true }] };
+    assert.ok(!('relationships' in publishedFrontmatter(fm, [], {})));
+  });
+
+  it('applies the file own publish_exclude_fields on top of the global list', () => {
+    const fm = { occupation: 'Thuggee Operative', age: 40, publish_exclude_fields: ['occupation'] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.ok(!('occupation' in out));
+    assert.strictEqual(out.age, 40);          // untouched for every other NPC
+  });
+
+  // The config is a campaign-wide default; the frontmatter is the GM saying it
+  // about this specific secret. Where they disagree, hiding wins.
+  it('does not let a config include re-admit a per-file exclusion', () => {
+    const fm = { occupation: 'secret', publish_exclude_fields: ['occupation'] };
+    const out = publishedFrontmatter(fm, ['occupation'], { include: ['occupation'] });
+    assert.ok(!('occupation' in out));
+  });
+
+  it('still honours a config include against the global list alone', () => {
+    const fm = { occupation: 'Publican' };
+    const out = publishedFrontmatter(fm, ['occupation'], { include: ['occupation'] });
+    assert.strictEqual(out.occupation, 'Publican');
+  });
+
+  it('strips its own control fields', () => {
+    const fm = { publish: 'stub', publish_exclude_fields: ['x'], publish_include_sections: ['y'] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.ok(!('publish' in out));
+    assert.ok(!('publish_exclude_fields' in out));
+    assert.ok(!('publish_include_sections' in out));
+  });
+
+  it('leaves a vault with none of the new keys unchanged', () => {
+    const fm = { occupation: 'Publican', relationships: [{ target: '[[A]]', type: 'knows' }] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.deepStrictEqual(out, fm);
   });
 });

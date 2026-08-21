@@ -19,6 +19,27 @@ All campaign content falls into three categories:
   of file and prints a build warning.
 - Frontmatter fields in `exclude_fields` (default:
   `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`)
+- Files whose frontmatter says `publish: false` — in **every** mode,
+  including `full`. The file still parses, so links to it render as
+  plain text rather than as a broken link; no page is emitted.
+- Fields named in a file's own `publish_exclude_fields`, on that file
+  only, merged over the global `exclude_fields`.
+- Relationship edges marked `gm_only: true` — removed from the page,
+  its relationship graph, and the search index.
+- On a `publish: stub` file, everything except the sections named in
+  `publish_include_sections`.
+
+### Frontmatter is not covered by the fence
+
+`<!-- gm-only -->` is a **body** primitive. It has no meaning inside
+frontmatter, and it never has had — so a secret that lives in a field
+(`occupation`, `key_traits`) or in a relationship target is not
+protected by fencing the body, and neither are the views derived from
+those fields: the character sheet, the Connections graph, the search
+index. That is what `publish_exclude_fields` and edge-level `gm_only`
+are for. Reach for them whenever the *fact of the field* is the secret
+— a traitor whose `occupation` names their true allegiance, or an edge
+to the cult leader whose existence gives the game away.
 
 ### Always included
 

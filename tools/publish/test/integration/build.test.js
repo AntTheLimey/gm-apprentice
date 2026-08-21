@@ -1577,3 +1577,93 @@ describe('build integration', () => {
     });
   });
 });
+
+describe('publish controls (#166, #167)', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures');
+  let outputDir;
+  let configPath;
+
+  before(() => {
+    outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-pubctl-'));
+    configPath = path.join(outputDir, 'config.json');
+    const config = {
+      vaultPath: path.join(fixturesDir, 'with-publish-controls'),
+      outputDir: path.join(outputDir, 'docs'),
+      attachmentsDir: '_attachments',
+      siteTitle: 'Publish Controls Test',
+      siteUrl: 'https://example.github.io/test-pubctl',
+      excludeDirs: ['_meta'],
+      excludeSections: [],
+      folderMap: {
+        'Characters/NPCs': 'characters/npcs',
+        'Locations': 'locations',
+        'Chapters': 'chapters',
+      },
+    };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    build({ configPath });
+  });
+
+  after(() => {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  const read = (...p) => fs.readFileSync(path.join(outputDir, 'docs', ...p), 'utf-8');
+  const exists = (...p) => fs.existsSync(path.join(outputDir, 'docs', ...p));
+
+  it('publish: false emits no page at all', () => {
+    assert.ok(!exists('locations', 'fort-william.html'));
+  });
+
+  it('publish: false keeps its body out of the search index', () => {
+    const idx = read('search-index.json').toLowerCase();
+    assert.ok(!idx.includes('impostors'));
+    assert.ok(!idx.includes('fort william'));
+  });
+
+  it('a link to a publish: false page renders as plain text, not a broken href', () => {
+    const html = read('locations', 'grand-trunk-road.html');
+    assert.ok(html.includes('Fort William'));            // still readable prose
+    assert.ok(!html.includes('fort-william.html'));      // but not a link
+  });
+
+  it('publish: stub keeps the page for navigation', () => {
+    assert.ok(exists('chapters', 'chapter-4-overview.html'));
+  });
+
+  it('publish: stub emits only the named sections', () => {
+    const html = read('chapters', 'chapter-4-overview.html');
+    assert.ok(html.includes('hot season'));              // the included Synopsis
+    assert.ok(!html.includes('Prep preamble'));
+    assert.ok(!html.includes('Key NPCs'));
+    assert.ok(!html.includes('is the traitor'));
+    assert.ok(!html.includes('The Climax'));
+    assert.ok(!html.includes('beneath the ossuary'));
+  });
+
+  it('publish_exclude_fields hides the fields on that file only', () => {
+    const singh = read('characters', 'npcs', 'havildar-singh.html');
+    assert.ok(!singh.includes('Thuggee'));
+    assert.ok(!singh.includes('Devout servant'));
+    const innkeeper = read('characters', 'npcs', 'innkeeper.html');
+    assert.ok(innkeeper.includes('Publican'));           // every other NPC unaffected
+  });
+
+  it('a gm_only relationship edge does not reach the page or its graph', () => {
+    const singh = read('characters', 'npcs', 'havildar-singh.html');
+    assert.ok(!singh.includes('Acharya'));
+    assert.ok(!singh.includes('Devendra'));
+  });
+
+  // No reverse-direction assertion here on purpose. The target page carries no
+  // backlink or graph markup for an inbound frontmatter edge in this
+  // configuration, so `!cultist.includes('Havildar')` passes whether or not
+  // the filtering works — it reads as coverage while proving nothing. The
+  // forward surface above is the one that actually regressed.
+
+  it('excluded fields and gm_only targets stay out of the search index', () => {
+    const idx = read('search-index.json').toLowerCase();
+    assert.ok(!idx.includes('thuggee'));
+    assert.ok(!idx.includes('devout servant'));
+  });
+});

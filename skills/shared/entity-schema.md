@@ -128,6 +128,9 @@ relationships:
     strength: 7           # 1-10 (1-2 weak, 9-10 defining)
     bidirectional: false
     description: "Serves as lieutenant"
+    gm_only: false        # optional; true hides this edge from a published
+                          # site — the page, its relationship graph, and the
+                          # search index
 ```
 
 Extraction defaults:
@@ -135,6 +138,26 @@ Extraction defaults:
 - `tone: neutral` and `strength: 5` when source is ambiguous
 - `bidirectional: false` unless inherently symmetric
 - Include `description` traceable to source text
+- `gm_only` omitted (visible) unless the edge's *existence* is the secret
+
+### Publish control fields
+
+Optional, on any entity. Frontmatter carries no body prose, so
+`<!-- gm-only -->` has no meaning there — these are how a secret in
+frontmatter or a whole GM-facing file is kept off a player site.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `publish` | `false` \| `stub` | `false` — no page is emitted in any mode; the file still parses, so links to it render as plain text rather than as a broken link. `stub` — the page is emitted for navigation but only the sections named in `publish_include_sections` are kept. |
+| `publish_exclude_fields` | array | Field names hidden on **this file only**, merged over the vault's global `exclude_fields`. Use when excluding a field campaign-wide would strip it from every honest entity too. |
+| `publish_include_sections` | array | Only meaningful with `publish: stub`. Section headings to keep. Defaults to none — a stub opts content *in*. |
+
+Absent means "publish normally"; a vault that uses none of these is
+unaffected. An unrecognized `publish:` value is treated as normal
+publication — a typo must not silently unpublish a page, nor silently
+publish one. A `publish_exclude_fields` entry is **not** re-admitted by a
+config-level `overrides.fields.*.include`: the file's own instruction about
+its own secret outranks a campaign-wide default.
 
 ## Core Entity Types
 

@@ -9,10 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.52] — 2026-08-21
 
-Two GM-content leaks onto player-facing sites, both found while publishing a
-live Call of Cthulhu campaign (#168). Publish tool 1.11.24.
+GM content reaching player-facing sites, found while publishing a live Call of
+Cthulhu campaign with a traitor PC (#166, #167, #168). Publish tool 1.11.24.
+
+### Added
+
+- **`publish: false` and `publish: stub`** (#167). There was no file-level
+  exclusion at all — `exclude_dirs` works per directory, `exclude_sections` per
+  heading, `exclude_fields` per field, and nothing per file. A wholly
+  Keeper-facing page in an otherwise publishable folder had to be fenced
+  section by section and re-audited after every edit. `publish: false` emits no
+  page in any mode, while still parsing the file so links to it render as plain
+  text rather than breaking. `publish: stub` keeps the page for navigation —
+  the chapter-overview case, where the page is needed but its body is a GM
+  bible — and emits only the sections named in `publish_include_sections`,
+  which defaults to none so a stub opts content *in*.
+- **`publish_exclude_fields`** (#166). Hides named fields on one file, merged
+  over the vault's global `exclude_fields`. Excluding `occupation`
+  campaign-wide to hide one traitor's true allegiance would have stripped it
+  from every honest NPC. A per-file entry is deliberately *not* re-admitted by
+  a config-level `overrides.fields.*.include`: where the two disagree, hiding
+  wins.
+- **`gm_only: true` on a single relationship edge** (#166). Some edges are
+  themselves the secret — a loyal-seeming escort who `serves` the cult leader.
+  The edge is dropped from the page, the relationship graph and the search
+  index.
 
 ### Fixed
+
+- **Field exclusion now reaches the derived views** (#166). Frontmatter
+  filtering ran *after* backlinks, the search index and the relationship graphs
+  had already been built from the raw frontmatter — so excluding a field
+  removed it from the page and left it in every view derived from it.
+  Excluding `relationships` still drew the Connections graph with the secret
+  targets as node labels; excluding `occupation` still shipped it as the
+  search-index subtitle. The published view is now computed once, immediately
+  after the link map, and everything derived is built from that.
 
 - **`<!-- gm-only -->` fences nest.** The markers were tracked with a boolean,
   so the *first* closer ended the outer block and everything after it

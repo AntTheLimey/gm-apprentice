@@ -607,10 +607,27 @@ was introduced to end.
 
 ### Content
 
-- **None.** Vaults that added `"Reconciliation Context"` to their own
+- **None required.** Vaults that added `"Reconciliation Context"` to their own
   `exclude_sections` as a workaround may leave it there — it is harmless
   once the section is nested, and still protects any file the structural
   pass did not reach.
+- **New optional publish-control fields**, documented in
+  `entity-schema.md` and picked up by Schema Mirror Sync into each vault's
+  `_meta/entity-types.md`. All are absent by default and change nothing for a
+  vault that does not use them:
+  - `publish: false | stub` on any entity — `false` emits no page in any mode
+    (the file still parses, so links to it render as plain text); `stub` emits
+    the page for navigation with only the sections named in
+    `publish_include_sections`.
+  - `publish_exclude_fields` — field names hidden on that file alone, merged
+    over the vault's global `exclude_fields`.
+  - `gm_only: true` on a single `relationships[]` entry — hides that edge from
+    the page, the relationship graph, and the search index.
+
+  Not backfilled and no GM action required. These exist because
+  `<!-- gm-only -->` is a body primitive with no meaning in frontmatter: a
+  secret held in a field, or in the mere existence of an edge, was previously
+  unprotectable without stripping the field campaign-wide.
 
 ### Tooling
 

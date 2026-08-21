@@ -102,6 +102,38 @@ function filterSections(markdown, excludeSections = []) {
   return result.join('\n');
 }
 
+// The inverse of filterSections: keep ONLY the named headings and their
+// content, dropping everything else including any preamble before the first
+// heading. Backs `publish: stub`, where the page must exist for navigation but
+// its body is prep. Defaults to keeping nothing — a stub opts content IN, so a
+// section added later is suppressed until the GM names it, rather than
+// appearing the moment someone writes it.
+function keepOnlySections(markdown, includeSections = []) {
+  const wanted = includeSections
+    .filter(s => typeof s === 'string')
+    .map(s => s.toLowerCase());
+  if (wanted.length === 0) return '';
+  const lines = String(markdown).split('\n');
+  const result = [];
+  let keeping = false;
+  let keepLevel = 0;
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const title = headingMatch[2].trim().toLowerCase();
+      if (keeping && level <= keepLevel) keeping = false;
+      if (wanted.includes(title)) {
+        keeping = true;
+        keepLevel = level;
+      }
+    }
+    if (keeping) result.push(line);
+  }
+  return result.join('\n');
+}
+
 function stripDataview(markdown) {
   return markdown.replace(/```dataview[\s\S]*?```/g, '');
 }
@@ -540,4 +572,60 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields };
+// How much of a file to publish, from its own `publish:` frontmatter key.
+// 'all' (default), 'stub' (page shell, body suppressed), 'none' (no page).
+// Absent/true/anything unrecognized means 'all' — a typo must not silently
+// unpublish a page, and must not silently publish one either, so only the two
+// explicit opt-outs are honoured.
+function publishMode(frontmatter) {
+  const raw = frontmatter && frontmatter.publish;
+  if (raw === false || raw === 'false' || raw === 'none') return 'none';
+  if (raw === 'stub') return 'stub';
+  return 'all';
+}
+
+// The GM-only marker on a single relationship edge. Frontmatter carries no
+// body prose, so `<!-- gm-only -->` has no meaning here — an edge whose very
+// existence is the secret (a "loyal escort" who `serves` the cult leader)
+// needs its own flag.
+function isGmOnlyEdge(rel) {
+  return !!(rel && (rel.gm_only === true || rel.gm_only === 'true'));
+}
+
+// One page's frontmatter as a reader may see it. Everything derived from
+// frontmatter — the relationship graph, backlinks, the search index, sheet
+// meta rows — must be built from THIS, never from the raw frontmatter.
+//
+// Three layers, in order:
+//   1. edges marked `gm_only: true` are dropped
+//   2. the file's own `publish_exclude_fields` is merged over the global
+//      `exclude_fields` — per-file, because excluding `occupation` campaign-
+//      wide to hide one traitor strips it from every honest NPC too
+//   3. the existing per-file `include` override can re-admit a field
+function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
+  const fm = { ...frontmatter };
+
+  if (Array.isArray(fm.relationships)) {
+    const visible = fm.relationships.filter(r => !isGmOnlyEdge(r));
+    if (visible.length > 0) fm.relationships = visible;
+    else delete fm.relationships;
+  }
+
+  const filtered = filterFields(fm, excludeFields, overrides);
+
+  // Applied AFTER, and deliberately not subject to `overrides.include`: the
+  // file's own "hide this" outranks a config-level re-include. The config is a
+  // campaign-wide default; the frontmatter is the GM saying it about this
+  // specific secret. Where they disagree, hiding wins.
+  const perFile = Array.isArray(fm.publish_exclude_fields) ? fm.publish_exclude_fields : [];
+  for (const field of perFile) {
+    if (typeof field === 'string') delete filtered[field];
+  }
+  // The control fields are bookkeeping, never reader-facing.
+  delete filtered.publish;
+  delete filtered.publish_exclude_fields;
+  delete filtered.publish_include_sections;
+  return filtered;
+}
+
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, publishMode, isGmOnlyEdge, keepOnlySections };
