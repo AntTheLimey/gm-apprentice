@@ -1186,6 +1186,27 @@ describe('build integration', () => {
       assert.ok(!html.includes('Secret Chamber'));
       assert.ok(!html.includes('treasure'));
     });
+
+    // #168: an inner gm-only block used to close the OUTER one, so everything
+    // between the inner closer and the outer closer published. Balanced
+    // markers, no warning — the author had no way to see it had failed.
+    it('a nested gm-only block does not end the enclosing block', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'catacombs.html'), 'utf-8');
+      assert.ok(html.includes('Ossuary tunnels'));       // public lede survives
+      assert.ok(html.includes('Guided tours'));          // public tail survives
+      assert.ok(!html.includes('Malachar'));             // inner block
+      assert.ok(!html.includes('third alcove'));         // AFTER the inner closer
+      assert.ok(!html.includes('Vaskorrin'));           // after it too
+      assert.ok(!html.includes('Keeper Briefing'));
+      assert.ok(!html.includes('The Climax'));
+    });
+
+    it('keeps nested gm-only content out of search-index.json', () => {
+      const indexJson = fs.readFileSync(path.join(outputDir, 'docs', 'search-index.json'), 'utf-8').toLowerCase();
+      assert.ok(!indexJson.includes('malachar'));
+      assert.ok(!indexJson.includes('third alcove'));
+      assert.ok(!indexJson.includes('vaskorrin'));
+    });
   });
 
   describe('excludeCallouts (issue #137)', () => {

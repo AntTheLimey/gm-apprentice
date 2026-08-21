@@ -187,6 +187,59 @@ describe('stripGmOnly', () => {
     const result = stripGmOnly(md);
     assert.strictEqual(result, 'Public\n\nMore');
   });
+
+  // #168: fences were matched with a boolean, so the FIRST closer ended the
+  // outer block and everything after it published. A GM who wrapped a region
+  // that already contained inner fences saw balanced markers and reasonably
+  // assumed the whole region was covered. Silent under-protection is the worst
+  // failure mode for the one feature whose job is hiding things.
+  it('nests: an inner block does not end the outer block', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '## Premise',
+      '<!-- gm-only -->',
+      'secret A',
+      '<!-- /gm-only -->',
+      'still secret',
+      '<!-- /gm-only -->',
+      'public tail',
+    ].join('\n');
+    const result = stripGmOnly(md);
+    // one blank stands in for the whole outer block, inner markers add none
+    assert.strictEqual(result, '\npublic tail');
+    assert.ok(!String(result).includes('still secret'));
+    assert.ok(!String(result).includes('Premise'));
+  });
+
+  it('nests three deep', () => {
+    const md = [
+      '<!-- gm-only -->', 'a',
+      '<!-- gm-only -->', 'b',
+      '<!-- gm-only -->', 'c',
+      '<!-- /gm-only -->', 'd',
+      '<!-- /gm-only -->', 'e',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('warns on a closer that never opened, and keeps publishing after it', () => {
+    const md = 'A\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\nB\n<!-- /gm-only -->\nC';
+    const { text, warnings } = stripGmOnly(md);
+    assert.strictEqual(text, 'A\n\nB\nC');
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(warnings[0].includes('without a matching'));
+  });
+
+  it('reports how many blocks were left open at EOF', () => {
+    const md = '<!-- gm-only -->\na\n<!-- gm-only -->\nb';
+    const { text, warnings } = stripGmOnly(md);
+    assert.strictEqual(text, '');
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(warnings[0].includes('unclosed'));
+    assert.ok(warnings[0].includes('2'));
+  });
 });
 
 describe('stripSpoiler', () => {

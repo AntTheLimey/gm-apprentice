@@ -577,3 +577,47 @@ no sidecar crosswalk.
   nodes. A vault whose entities already exist upstream but lack nodes is
   linked by matching live mobRPG elements by name, never by reading a
   crosswalk.
+
+## Migration: 1.8.51 → 1.8.52
+
+Re-nests `## Reconciliation Context` under `## GM Notes`, and makes the
+`<!-- gm-only -->` fence nesting-aware.
+
+Reconciliation Context is entirely Keeper-facing — GM decisions and their
+rationale, unplayed-prep dispositions, and the World Evolution block
+describing what the factions did while the PCs weren't looking. As a
+top-level H2 it was a sibling of `## GM Notes` rather than a child, so it
+published to player-facing sites. A vault that sets its own
+`exclude_sections` keeps that list as written — a newly-added default never
+reaches it — which is exactly the failure the 1.8.3 two-primitive standard
+was introduced to end.
+
+### Structural
+
+- **`## Reconciliation Context` → `### Reconciliation Context` under
+  `## GM Notes`** in Wrap-Up and session-plan files, creating `## GM Notes`
+  where absent. Its own subsections demote one level with it
+  (`### Consequences` → `#### Consequences`, and likewise Salvageable Prep,
+  GM Decisions, and World Evolution). A pure structural move — nothing is
+  added, removed, or reworded, only relocated and demoted — so it applies
+  automatically after preview confirmation, like the 1.8.3 re-nesting.
+- Readers accept **both** forms. A vault that has not yet migrated keeps
+  working: session-prep looks for the nested heading first and falls back to
+  a top-level `## Reconciliation Context`.
+
+### Content
+
+- **None.** Vaults that added `"Reconciliation Context"` to their own
+  `exclude_sections` as a workaround may leave it there — it is harmless
+  once the section is nested, and still protects any file the structural
+  pass did not reach.
+
+### Tooling
+
+- **Publish tool:** `<!-- gm-only -->` and `<!-- spoiler -->` fences are now
+  nesting-aware. Previously the first closer ended the outer block, so
+  wrapping a region that already contained inner fences published everything
+  after that inner closer — with balanced-looking markers and no warning.
+  An inner block now closes only itself. A closer with nothing open no
+  longer silently does nothing: it is counted and reported, and the
+  unclosed-marker warning now says how many blocks were left open.

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.52] — 2026-08-21
+
+Two GM-content leaks onto player-facing sites, both found while publishing a
+live Call of Cthulhu campaign (#168). Publish tool 1.11.24.
+
+### Fixed
+
+- **`<!-- gm-only -->` fences nest.** The markers were tracked with a boolean,
+  so the *first* closer ended the outer block and everything after it
+  published. Wrapping a region that already contained inner fences therefore
+  protected only as far as the first inner `<!-- /gm-only -->` — with balanced
+  markers, no warning, and no way to tell from the source that it had failed.
+  Silent under-protection is the worst failure mode for the one primitive whose
+  whole job is hiding things. An inner block now closes only itself.
+  `<!-- spoiler -->` gets the same fix, from the same shared implementation.
+- **A `<!-- /gm-only -->` with nothing open is reported.** It used to be a
+  silent no-op. It is now counted and warned about at build time, and the
+  unclosed-marker warning says how many blocks were left open — so an
+  unbalanced file is visible instead of quietly publishing or quietly
+  truncating.
+- **`## Reconciliation Context` is written under `## GM Notes`.** Every item in
+  it is Keeper-facing — GM decisions and rationale, unplayed-prep dispositions,
+  and the World Evolution block describing what the factions did off-screen.
+  As a sibling H2 it published; in one vault it revealed an antagonist's
+  position the party had not discovered, across 9 wrap-up files. Adding it to
+  the default `exclude_sections` does not fix this, because a vault that sets
+  its own list keeps that list as written — which is precisely the failure the
+  1.8.3 two-primitive standard was introduced to end. `reconcile.md` now writes
+  it as a `###` under `## GM Notes` (with its subsections demoted to `####`),
+  and the session-plan template does the same. Readers accept both forms, so an
+  un-migrated vault keeps working.
+
+### Changed
+
+- **Migration 1.8.51 → 1.8.52** re-nests existing `## Reconciliation Context`
+  sections under `## GM Notes`, creating the container where absent. A pure
+  structural move, applied after preview confirmation like the 1.8.3
+  re-nesting.
+
+---
+
 ## [1.8.51] — 2026-08-17
 
 Two session-prep bugs found in one live prep pass: the wrong session picked

@@ -110,13 +110,22 @@ function stripDataview(markdown) {
 // <!-- gm-only -->...<!-- /gm-only -->). Shared implementation behind
 // stripGmOnly and stripSpoiler — same stripping behavior, different marker
 // name, so a marker of one name never strips a block of the other name.
+//
+// Nesting-aware by depth, NOT a boolean (#168). With a boolean, the first
+// closer ended the outer block, so wrapping a region that already contained
+// inner fences published everything after that inner closer. The markers looked
+// balanced, so the author had no reason to doubt the region was covered, and
+// nothing warned. Silent under-protection is the worst possible failure of the
+// one primitive whose entire job is hiding things — so an inner block now
+// closes only itself, and the outer block survives it.
 function stripMarkedBlocks(markdown, markerName) {
   const openRe = new RegExp(`^<!--\\s*${markerName}\\s*-->`);
   const closeRe = new RegExp(`^<!--\\s*/${markerName}\\s*-->`);
   const lines = markdown.split('\n');
   const result = [];
   const warnings = [];
-  let excluding = false;
+  let depth = 0;
+  let orphanClosers = 0;
   let inCodeFence = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -127,28 +136,41 @@ function stripMarkedBlocks(markdown, markerName) {
     }
 
     if (inCodeFence) {
-      if (!excluding) result.push(line);
+      if (depth === 0) result.push(line);
       continue;
     }
 
     if (openRe.test(line.trim())) {
-      excluding = true;
-      result.push('');
+      depth += 1;
+      if (depth === 1) result.push('');   // one blank stands in for the whole block
       continue;
     }
 
     if (closeRe.test(line.trim())) {
-      excluding = false;
+      if (depth === 0) {
+        // A closer with nothing open. Don't let it drive depth negative — that
+        // would make a LATER opener fail to strip. Count it and warn instead.
+        orphanClosers += 1;
+        continue;
+      }
+      depth -= 1;
       continue;
     }
 
-    if (!excluding) {
+    if (depth === 0) {
       result.push(line);
     }
   }
 
-  if (excluding) {
-    warnings.push(`unclosed <!-- ${markerName} --> marker — content stripped to end of file`);
+  if (depth > 0) {
+    warnings.push(
+      `unclosed <!-- ${markerName} --> marker (${depth} block${depth === 1 ? '' : 's'} still open) `
+      + '— content stripped to end of file');
+  }
+  if (orphanClosers > 0) {
+    warnings.push(
+      `${orphanClosers} <!-- /${markerName} --> marker${orphanClosers === 1 ? '' : 's'} `
+      + `without a matching <!-- ${markerName} --> — check the block boundaries`);
   }
 
   const text = result.join('\n');
