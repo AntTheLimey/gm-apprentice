@@ -1,0 +1,42 @@
+import json
+from mobrpg.commands import write_cmd
+
+
+def test_write_materializes_extract(tmp_path):
+    extract = {"entities": [{
+        "kind": "person", "name": "Vela Kesh", "body_md": "A smuggler.",
+        "relationships": [], "altNames": ["The Fox"],
+        "notes_public": [], "notes_gm": ["Owes Tim money."], "classifiers": [],
+    }]}
+    src = tmp_path / "extract.json"
+    src.write_text(json.dumps(extract), encoding="utf-8")
+    out = tmp_path / "vault"
+    rc = write_cmd.run([str(src), "--out", str(out), "--campaign", "Test Run"])
+    assert rc == 0
+    files = list(out.rglob("*.md"))
+    assert len(files) == 1
+    txt = files[0].read_text(encoding="utf-8")
+    assert "Vela Kesh" in txt and "A smuggler." in txt
+    assert "campaign: " in txt and "Test Run" in txt
+    assert "## GM Notes" in txt and "Owes Tim money." in txt
+
+
+def test_faction_part_of_scalar_is_derived_from_the_edge(tmp_path):
+    # Faction/Organization carry a scalar `part_of` as well as the edge. It was
+    # emitted hardcoded-empty while the edge was preserved, so a faction with a
+    # real parent shipped with the two disagreeing.
+    extract = {"entities": [{
+        "id": "f1", "name": "Ashen Cell", "kind": "organization",
+        "body_md": "A splinter group.", "notes_public": [], "notes_gm": [],
+        "classifiers": [],
+        "relationships": [{"target": "The Ashen Hand", "predicate": "part_of"}],
+    }]}
+    ep = tmp_path / "extract.json"
+    ep.write_text(json.dumps(extract), encoding="utf-8")
+    vault = tmp_path / "vault"
+    write_cmd.run([str(ep), "--out", str(vault)])
+    txt = next(vault.rglob("Ashen_Cell.md")).read_text(encoding="utf-8")
+    part_of = next(line for line in txt.splitlines() if line.startswith("part_of:"))
+    assert part_of == 'part_of: "[[The_Ashen_Hand]]"', part_of   # slug style, as parent_location
+    # and the edge is still present — scalar and edge agree, not one or the other
+    assert "type: part_of" in txt

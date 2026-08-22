@@ -1,180 +1,132 @@
 # Quickstart: Your First Campaign
 
-This guide walks you through setting up a new TTRPG campaign with gm-apprentice, from installation to prepping your first session. It assumes you know your way around a tabletop RPG but are new to using Claude as a GM tool.
+From a spark of an idea to your first session. This assumes you've
+[installed gm-apprentice](../README.md#installation) and know your way
+around a tabletop RPG, but are new to using Claude as a GM tool.
 
-## How Claude Skills Work
+You talk to Claude normally — "skills" activate automatically from what
+you ask. You never pick one by hand. When you say "help me start a new
+campaign," Claude reaches for **the-midwife**; "build me an NPC" reaches
+for **ttrpg-expert**. The skills handle the rest.
 
-Claude Code uses "skills" — specialized instructions that activate automatically based on what you ask Claude to do. You don't need to select a skill manually. When you say "build me an NPC," Claude recognizes this as a ttrpg-expert task and uses that skill's knowledge to respond.
+Tell Claude which system you're running when you start — it won't assume.
+gm-apprentice supports **Call of Cthulhu 7e** (with the Regency Cthulhu
+variant), **GURPS 4e**, **Forged in the Dark**, **D&D 5e (2024)**, and
+**Pathfinder 2e (Remaster)**.
 
-gm-apprentice installs nine skills:
+## 1. Conceive it — the-midwife
 
-| Skill | What it does |
-|-------|-------------|
-| **ttrpg-expert** | Rules, content generation, continuity |
-| **the-midwife** | Guided adventure creation through creative conversation |
-| **campaign-organizer** | Vault structure and knowledge graphs |
-| **campaign-qa** | Campaign quality auditing |
-| **session-prep** | Between-session preparation and reconciliation |
-| **session-play** | At-the-table lookups and note capture |
-| **session-wrapup** | Post-session recaps and entity creation |
-| **vault-ingest** | Ingest old campaign materials into a structured vault |
-| **publish-site** | Publish your campaign vault as a static website |
+Start with the idea, however rough — or with nothing at all:
 
-You talk to Claude normally. The skills handle the rest.
+> "I want to run a Call of Cthulhu game set in 1920s New York. Help me
+> figure out what it's about."
 
-## Step 1: Install gm-apprentice
+The midwife draws the concept out through conversation. It sparks,
+shapes, and refines — offering possibilities as seeds, never deciding for
+you — and builds worlds in motion: factions that act, clocks that tick,
+and a "what if the players do nothing?" answer for every problem. Three
+strong ideas beat six half-formed ones.
 
-Choose your platform:
+When you're happy with the shape of it, the midwife writes an **adventure
+brief** and **scaffolds your vault** — the folder structure, config, and
+the Session 0 entities — ready to play. Starting fresh, building on an
+existing campaign, or adding a new chapter all work; point it at an
+existing vault and it will build on your canon instead.
 
-**Claude Code (CLI):**
-```bash
-/plugin marketplace add AntTheLimey/gm-apprentice
-/plugin install gm-apprentice
-/reload-plugins
-```
+## 2. Build out the world — ttrpg-expert
 
-**Claude Desktop:** Switch to the **Cowork** tab > **Customize** >
-under **Personal plugins** click **+** > **Create plugin** >
-**Add marketplace** > enter
-`https://github.com/AntTheLimey/gm-apprentice` > Install.
+Now fill in the specifics, as you need them:
 
-**No plugin support?** Download individual skill zips from the
-[latest release](https://github.com/AntTheLimey/gm-apprentice/releases/latest),
-then go to **Chat > Skills**, click **+**, and upload each zip.
+> "Make the campaign's main antagonist — a wealthy industrialist who's
+> funding occult research. CoC 7e."
 
-**VS Code / Cursor:** Install the Claude Code extension, type
-`/plugins` in the prompt, add the `AntTheLimey/gm-apprentice`
-marketplace from the Discover tab, then click Install.
+> "Create three Manhattan locations the investigators might visit: a
+> speakeasy, a university library, and a waterfront warehouse."
 
-See the [README](../README.md#installation) for detailed
-per-platform instructions.
+> "I need a faction — a secret society operating out of a brownstone on
+> the Upper East Side."
 
-## Step 2: Pick Your Game System
+Each piece of generated content starts as DRAFT. Review it, and it
+becomes part of your canon. ttrpg-expert also handles rules lookups,
+stat blocks, encounter design, and continuity checks across all five
+systems.
 
-gm-apprentice supports four systems:
+## 3. Prep your first session — session-prep
 
-- **Call of Cthulhu 7th Edition** (CoC 7e) — percentile-based investigation and cosmic horror
-- **GURPS 4th Edition** — point-buy, any-genre, 3d6 roll-under. Includes curated Basic Set content with 24 topic-based reference files and 7 chargen kits (see below). Check `sources.md` for book coverage.
-- **Forged in the Dark** (Blades in the Dark) — d6 dice pool, position and effect
-- **D&D 5th Edition, 2024 Revision** — d20 core, classes and spell slots
+With the world taking shape, prep for play:
 
-Tell Claude which system you're using when you start. It won't assume.
+> "Help me prep session 1. The investigators are hired by a missing
+> professor's daughter to find her father — last seen at his office at
+> Columbia University."
 
-### GURPS Chargen Kits
+Session-prep reconciles where things stand, plans the session as scenes
+you choose from (offered as options, never decided for you), and flags
+the gaps — NPCs you still need, locations you haven't fleshed out, clues
+you should plant. Hand any gap back to ttrpg-expert:
 
-If you're running GURPS, character generation uses archetype
-kits — bundled reference files that give Claude everything it
-needs for a character type in a single read. Just ask for a
-character and Claude picks the right kit automatically:
+> "Create the professor's office as a location — include three clues the
+> investigators might find there."
 
-| Kit | Archetype |
-|-----|-----------|
-| Combat / Military | Soldier, operative, martial artist |
-| Magic User | Wizard, mage, hedge witch |
-| Powers / Psionic | Super, psion, powered hero |
-| Social / Political | Diplomat, con artist, noble, face |
-| Scholar / Medic | Doctor, scientist, professor, inventor |
-| Thief / Spy | Burglar, infiltrator, intelligence agent |
-| Outdoorsman / Scout | Explorer, ranger, survivalist, tracker |
+## 4. Run it — session-play
 
-For mixed concepts (e.g., a magic-using spy), Claude combines
-multiple kits. You don't need to specify which kit to use —
-just describe the character you want.
+At the table, keep it fast:
 
-## Step 3: Set Up Obsidian (Recommended)
+> "What's the roll to notice a hidden drawer in a desk? CoC 7e."
 
-Obsidian gives you the best experience — clickable wiki-links, graph visualization, semantic search — but it's not required. The campaign-organizer skill can work directly on a folder of markdown files, producing Obsidian-compatible content you can open in Obsidian later.
+> "Quick NPC: a nervous front-desk clerk who knows more than she says."
 
-**To set up Obsidian now:** Follow the [Obsidian Setup](../README.md#obsidian-setup) instructions in the README, then come back here.
+session-play is speed-optimised — short answers, no unsolicited analysis
+— and captures play notes as you go for the wrap-up.
 
-**To skip Obsidian for now:** Continue to Step 4. Claude will ask you for a folder path and work with the filesystem directly. You can switch to Obsidian anytime by opening that folder as a vault.
+## 5. Process it — session-wrapup
 
-**One-time check — Python 3:** the plugin bundles small vault utilities (search ranking, link-graph audits, schema validation) that need Python 3 on your PATH. macOS and most Linux systems already have it; verify with `python3 --version` (or `python --version` on Windows). If it's missing, install from [python.org](https://www.python.org/downloads/) or `winget install python` — no extra packages needed. Everything still works without it, just with slower plain-text search.
-
-## Step 4: Scaffold Your Campaign
-
-Ask Claude to create your campaign structure:
-
-> "Set up a new campaign for Call of Cthulhu. It's set in 1920s New York, called 'Shadows Over Manhattan'."
-
-If you have Obsidian set up, Claude uses it automatically. If not, it will ask where to create the campaign folder:
-
-> "Where should I work? Give me the path to your campaign folder, or tell me where to create a new one."
-
-Either way, Claude creates the folder structure, schema files, and templates. You'll see directories for Characters, Locations, Factions, Items, and a narrative hierarchy for Chapters, Sessions, and Scenes.
-
-If you have existing campaign notes (Google Docs, text files, PDFs), feed them in:
-
-> "Here are my campaign notes from the first three sessions — organize them into the vault."
-
-Claude will extract entities, classify them, create individual notes, and link them together.
-
-## Step 5: Build Your World
-
-Now use ttrpg-expert to generate content:
-
-> "Make me the campaign's main antagonist — a wealthy industrialist who's funding occult research. CoC 7e."
-
-> "Create three locations in Manhattan that the investigators might visit: a speakeasy, a university library, and a waterfront warehouse."
-
-> "I need a faction — a secret society operating out of a brownstone in the Upper East Side."
-
-Each piece of generated content starts as DRAFT. Review it, and it becomes part of your canon.
-
-After generating several entities, organize them:
-
-> "File these new entities into the vault and link them to existing notes."
-
-## Step 6: Prep Your First Session
-
-With your world taking shape, prep for play:
-
-> "Help me prep session 1. The investigators are hired by a missing professor's daughter to find her father. Last known location: his office at Columbia University."
-
-Claude will review your PC roster, identify the entities involved, suggest a session structure, and flag any gaps in your prep (NPCs you need, locations you haven't fleshed out, clues you should plant).
-
-If it identifies gaps, hand off to ttrpg-expert:
-
-> "Create the professor's office as a location — include three clues the investigators might find there."
-
-## Step 7: After Your First Session
-
-When the session ends, process what happened:
+When the session ends, hand over what happened:
 
 > "Session's over. Here are my notes:
-> - Players explored the office, found the diary and the strange symbol but missed the locked drawer
+> - Players explored the office, found the diary and a strange symbol but
+>   missed the locked drawer
 > - Met Mrs. Chen at the front desk, she was helpful
-> - Went to the speakeasy to meet the informant
-> - Combat with two thugs in the alley behind the bar
+> - Combat with two thugs in the alley behind the speakeasy
 > - Ended with the informant dead and a cryptic note"
 
-Claude will produce a narrative recap, create entity files for any new NPCs (Mrs. Chen, the informant, the thugs), update existing entities, and tell you what carries forward.
+Wrap-up writes a narrative recap, creates entity files for the new NPCs
+(Mrs. Chen, the informant, the thugs), updates existing entities, records
+the timeline, and tells you what carries forward. Next time you prep,
+session-prep reconciles anything that got skipped.
 
-Then run a quick health check:
+## Keep the vault healthy
 
-> "Run a QA check on Chapter 1"
+The midwife scaffolds your starting vault, so you don't need these on day
+one — reach for them as the campaign grows:
 
-Claude will look for contradictions, timeline issues, and missing connections introduced by the session.
+- **campaign-organizer** — once you've generated a lot of content (or want
+  to bring in notes from elsewhere), it files entities into the right
+  folders, cross-links them, and builds the knowledge graph.
+- **campaign-qa** — a periodic health check for contradictions, timeline
+  slips, confusable names, and clue coverage. Run it after a big session:
+  > "Run a QA check on Chapter 1."
+- **vault-ingest** — import old campaign material (notes, character
+  sheets, transcripts, spreadsheets) into the vault, interviewing you to
+  recover what actually happened.
+- **publish-site** — publish the vault as a static website to share with
+  your players.
 
-## What's Next
+## What's next
 
-You now have a working campaign vault with structured content, linked entities, and a session under your belt. From here:
+You now have a working campaign vault and a session under your belt. The
+rhythm from here: **prep → play → wrap-up** each session, with
+**campaign-qa** and **campaign-organizer** for upkeep and **ttrpg-expert**
+on call for rules, content, and continuity.
 
-- **Before each session:** Use session-prep to review threads and prepare.
-- **After each session:** Use session-wrapup to process notes. Next time you prep, session-prep will reconcile what was skipped.
-- **Periodically:** Run campaign-qa to keep your vault clean.
-- **Anytime:** Use ttrpg-expert to generate new content, look up rules, or check continuity.
-
-**Want deeper system coverage?** If you own rulebooks or
-supplements beyond what's in the free SRDs, you can add
-personal reference files so Claude can access your setting
-content, factions, NPCs, and generation tables. See
+**Want deeper system coverage?** If you own rulebooks beyond the free
+SRDs, add personal reference files so Claude can use your setting content,
+factions, and generation tables. See
 [Adding Your Own Reference Material](personal-reference-files.md).
 
-For detailed guidance on each skill, see the individual skill guides:
+For detailed guidance on each skill:
 
-- [ttrpg-expert](ttrpg-expert.md)
 - [the-midwife](the-midwife.md)
+- [ttrpg-expert](ttrpg-expert.md)
 - [campaign-organizer](campaign-organizer.md)
 - [campaign-qa](campaign-qa.md)
 - [session-prep](session-prep.md)
@@ -182,3 +134,4 @@ For detailed guidance on each skill, see the individual skill guides:
 - [session-wrapup](session-wrapup.md)
 - [vault-ingest](vault-ingest.md)
 - [publish-site](publish-tool.md)
+- [Campaign Lifecycle](campaign-lifecycle.md) — the whole arc, end to end

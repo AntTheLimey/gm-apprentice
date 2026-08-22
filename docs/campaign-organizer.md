@@ -18,11 +18,13 @@ Reach for campaign-organizer when you need to:
 - Set up graph visualization for your campaign
 - Clean up vault structure after a period of messy note-taking
 
+New campaigns usually start in **the-midwife**, which scaffolds the vault and hands off here for deeper organizing and importing.
+
 ## What You Need
 
 **Obsidian:** Recommended but not required. With Obsidian and its plugins, you get the full experience — clickable wiki-links, graph visualization, semantic search, and template auto-application. Without Obsidian, the skill works directly on the filesystem, producing Obsidian-compatible files you can open in Obsidian later.
 
-**For the full Obsidian experience:** Install Smart Connections and Templater. See the [README](../README.md) for setup instructions.
+**For the full Obsidian experience:** open the vault in Obsidian and, optionally, install the Smart Connections and Templater community plugins from Settings > Community Plugins.
 
 ## Example Prompts
 

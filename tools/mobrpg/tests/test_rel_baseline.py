@@ -1,0 +1,178 @@
+import pytest
+
+from mobrpg import client
+from mobrpg.commands import rel_baseline
+from mobrpg.commands import rel_baseline as rb
+
+
+def _map():
+    return {"relationshipTypes": {}}
+
+
+def test_build_structural_index_keeps_only_known_both_ends():
+    known = {"a", "b", "c"}
+    rels_by = {
+        "a": [{"id": "r1", "sourceId": "a", "targetId": "b", "type": "Parent"},
+              {"id": "rx", "sourceId": "a", "targetId": "evt", "type": "Link"}],  # Link to Event -> excluded
+        "b": [{"id": "r1", "sourceId": "a", "targetId": "b", "type": "Parent"},   # dup (seen from b) -> same id
+              {"id": "r2", "sourceId": "b", "targetId": "zzz", "type": "Spouse"}],  # target not known -> excluded
+    }
+    idx = rb.build_structural_index(rels_by, known)
+    # Parent/Child are inverses, so the row is reachable from either orientation:
+    # the vault may author `located_at` (Parent) where mobRPG stored the Child row.
+    assert idx == {("a", "Parent", "b"): "r1", ("b", "Child", "a"): "r1"}
+
+
+def test_structural_index_matches_a_parent_child_inverse():
+    """(A, Child, B) upstream is the same fact as vault edge (B, Parent, A). Not
+    matching it re-pushes an existing relationship as a duplicate — this dropped
+    space_game's baseline from 33 matches to 1 when the vocabulary cleanup moved
+    spatial edges off `hosts`/`contains` (Child) onto `located_at` (Parent)."""
+    idx = rb.build_structural_index(
+        {"a": [{"id": "r9", "sourceId": "a", "targetId": "b", "type": "Child"}]},
+        {"a", "b"})
+    assert idx[("a", "Child", "b")] == "r9"
+    assert idx[("b", "Parent", "a")] == "r9"
+
+
+def test_build_reified_index_groups_by_participants_and_type():
+    known = {"a", "b", "c"}
+    events = [
+        {"id": "e1", "eventType": "Membership", "participants": ["a", "b"]},
+        {"id": "e2", "eventType": "Membership", "participants": ["a", "b"]},  # ambiguous dup
+        {"id": "e3", "eventType": "War", "participants": ["a", "c"]},
+        {"id": "e4", "eventType": "Generic", "participants": ["a", "zzz"]},    # <2 known -> dropped
+    ]
+    idx = rb.build_reified_index(events, known)
+    assert idx[(frozenset({"a", "b"}), "Membership")] == ["e1", "e2"]
+    assert idx[(frozenset({"a", "c"}), "War")] == ["e3"]
+    assert (frozenset({"a"}), "Generic") not in idx
+
+
+def test_match_node_structural_and_reified_hits():
+    mp = _map()
+    id_by_key = {rb._key("Halcyon"): "h", rb._key("Thides System"): "t"}
+    node = {"element_id": "corwin",
+            "relationships": [
+                {"predicate": "part_of", "target": "[[Thides System]]"},    # -> Link (structural)
+                {"predicate": "member_of", "target": "[[Halcyon]]"},        # -> Membership (reified)
+                {"predicate": "member_of", "target": "[[Unknown Org]]"},    # target not upstream -> skip
+            ]}
+    structural = {("corwin", "Link", "t"): "rel-1"}
+    reified = {(frozenset({"corwin", "h"}), "Membership"): ["ev-9"]}
+    eids, reviews = rb.match_node(node, id_by_key, structural, reified, mp)
+    assert eids == {"part_of|[[Thides System]]": "rel-1",
+                    "member_of|[[Halcyon]]": "ev-9"}
+    assert reviews == []
+
+
+def test_match_node_flags_ambiguous_reified():
+    mp = _map()
+    id_by_key = {rb._key("Halcyon"): "h"}
+    node = {"element_id": "corwin",
+            "relationships": [{"predicate": "member_of", "target": "[[Halcyon]]"}]}
+    reified = {(frozenset({"corwin", "h"}), "Membership"): ["ev-1", "ev-2"]}
+    eids, reviews = rb.match_node(node, id_by_key, {}, reified, mp)
+    assert eids == {}                      # ambiguous -> not auto-stamped
+    assert len(reviews) == 1 and "review" in reviews[0].lower()
+
+
+def test_match_node_skips_already_baselined_relationship():
+    mp = _map()
+    id_by_key = {rb._key("Halcyon"): "h"}
+    node = {"element_id": "corwin",
+            "relationships": [{"predicate": "member_of", "target": "[[Halcyon]]",
+                               "event_id": "already"}]}
+    reified = {(frozenset({"corwin", "h"}), "Membership"): ["ev-1"]}
+    eids, reviews = rb.match_node(node, id_by_key, {}, reified, mp)
+    assert eids == {} and reviews == []
+
+
+def test_build_structural_index_symmetrizes_link_and_spouse_only():
+    known = {"a", "b"}
+    rels_by = {"a": [{"id": "L", "sourceId": "a", "targetId": "b", "type": "Link"},
+                     {"id": "P", "sourceId": "a", "targetId": "b", "type": "Parent"}]}
+    idx = rb.build_structural_index(rels_by, known)
+    assert idx[("a", "Link", "b")] == "L" and idx[("b", "Link", "a")] == "L"   # both dirs
+    assert idx[("a", "Parent", "b")] == "P" and ("b", "Parent", "a") not in idx  # directional
+
+
+def test_match_node_symmetric_match_from_opposite_end():
+    mp = {"relationshipTypes": {"allied_with": "Link"}}
+    id_by_key = {rb._key("Bravo"): "b"}
+    # vault authors alpha--allied_with-->bravo; mobRPG stored the Link as (b -> a)
+    node = {"element_id": "a",
+            "relationships": [{"predicate": "allied_with", "target": "[[Bravo]]"}]}
+    structural = rb.build_structural_index(
+        {"b": [{"id": "L", "sourceId": "b", "targetId": "a", "type": "Link"}]}, {"a", "b"})
+    eids, reviews = rb.match_node(node, id_by_key, structural, {}, mp)
+    assert eids == {"allied_with|[[Bravo]]": "L"} and reviews == []
+
+
+def test_match_node_does_not_reuse_one_upstream_event_for_two_edges():
+    # Two different vault predicates between the same pair both collapse to Generic
+    # and there is a single Generic upstream event — only the first may claim it.
+    mp = {}
+    id_by_key = {rb._key("Bravo"): "b"}
+    node = {"element_id": "a", "relationships": [
+        {"predicate": "knows", "target": "[[Bravo]]"},      # sanctioned -> Generic
+        {"predicate": "trusts", "target": "[[Bravo]]"}]}    # sanctioned -> Generic
+    reified = {(frozenset({"a", "b"}), "Generic"): ["ev-1"]}
+    eids, reviews = rb.match_node(node, id_by_key, {}, reified, mp)
+    assert list(eids.values()) == ["ev-1"] and len(eids) == 1   # only one stamped
+    assert len(reviews) == 1 and "already claimed" in reviews[0]
+
+
+def test_stamp_baseline_sets_event_id_and_leaves_rest_untouched():
+    node = {"element_id": "corwin", "review_state": "edited", "determined": {"x": 1},
+            "relationships": [
+                {"predicate": "part_of", "target": "[[Thides System]]"},
+                {"predicate": "member_of", "target": "[[Halcyon]]", "event_id": "keep"}]}
+    out = rb.stamp_baseline(node, {"part_of|[[Thides System]]": "rel-1"})
+    assert out["review_state"] == "edited" and out["determined"] == {"x": 1}   # node-level untouched
+    assert out["relationships"][0]["event_id"] == "rel-1"
+    assert out["relationships"][0]["review_state"] == "accepted"
+    assert out["relationships"][1]["event_id"] == "keep"                       # pre-existing preserved
+    # original not mutated
+    assert "event_id" not in node["relationships"][0]
+
+
+def test_stamp_baseline_noop_returns_input():
+    node = {"element_id": "x", "relationships": []}
+    assert rb.stamp_baseline(node, {}) is node
+
+
+def test_get_relations_propagates_api_error(monkeypatch):
+    # Swallowing this made pull_canon._canon_determined's None branch dead: a
+    # failed read came back as {} and every classifier was reported
+    # "local-only (canon silent)".
+    def boom(method, path, *, token=None, body=None, query=None):
+        raise client.ApiError(503, "down", path)
+
+    monkeypatch.setattr(client, "_request", boom)
+    with pytest.raises(client.ApiError):
+        rel_baseline._get_relations("w1", "person", "e1", "tok")
+
+
+def test_get_relations_treats_empty_body_as_no_relations(monkeypatch):
+    def empty(method, path, *, token=None, body=None, query=None):
+        raise ValueError("no json")
+
+    monkeypatch.setattr(client, "_request", empty)
+    assert rel_baseline._get_relations("w1", "person", "e1", "tok") == []
+
+
+def test_mid_pagination_failure_is_not_reported_as_a_short_list(monkeypatch):
+    # A partial index makes `suggest` re-propose edges mobRPG already holds.
+    calls = {"n": 0}
+
+    def fake(method, path, *, token=None, body=None, query=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"content": [{"id": f"r{i}", "sourceId": "e1", "targetId": "x",
+                                 "type": "Link"} for i in range(rel_baseline._PAGE)]}
+        raise client.ApiError(500, "boom", path)
+
+    monkeypatch.setattr(client, "_request", fake)
+    with pytest.raises(client.ApiError):
+        rel_baseline._get_relations("w1", "person", "e1", "tok")

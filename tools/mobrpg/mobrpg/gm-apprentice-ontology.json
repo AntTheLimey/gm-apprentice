@@ -1,0 +1,175 @@
+{
+  "$comment": "gm-apprentice knowledge-graph ontology export for the mobRPG team. Reconciled from skills/shared/entity-schema.md (authoritative) and skills/ttrpg-expert/relationship-patterns.md. mobRPG stores relationships two ways and this export describes both. mobrpg_relation_type maps a predicate onto WorldElementRelationType (Parent|Child|Link|Spouse) — a backend enum, stable across worlds. Parent/Child/Spouse are GENEALOGY between people (their only consumer is PersonService.getSiblings: find a person's parents, then their other children) and the backend auto-creates the reciprocal row for them; (S,Parent,T) reads 'S is the parent of T'. Place containment is NOT modelled with them — it is a Link, which is a single row with no reciprocal. mobrpg_event_type maps onto a reified event, whose eventTypes are per-world created classifiers. A predicate with a non-null mobrpg_relation_type is stored as a direct relation and its mobrpg_event_type does not apply; null means reify as an event. null/Generic predicates preserve their name on event.title.",
+  "version": "1.2",
+  "source_of_truth": "skills/shared/entity-schema.md",
+  "entity_types": {
+    "abstract": ["person", "character", "agent", "place", "artifact", "narrative", "world"],
+    "hierarchy": {
+      "person": ["player", "game_master", "character"],
+      "character": ["pc", "npc"],
+      "agent": ["character", "creature", "faction", "organization"],
+      "creature": ["beast", "undead", "construct", "spirit", "deity", "aberration"],
+      "organization": ["government", "corporation", "cult", "guild", "military", "criminal"],
+      "place": ["location"],
+      "artifact": ["item", "document"],
+      "item": ["weapon", "armor", "vehicle", "treasure", "relic", "tool", "consumable"],
+      "document": ["spell", "map", "letter", "prophecy", "contract", "journal"],
+      "narrative": ["event", "clue", "plan", "adventure-brief", "campaign_overview"],
+      "event": ["battle", "ritual", "disaster", "discovery", "betrayal_event", "celebration"],
+      "world": ["heritage", "world_domain", "world_flags"]
+    }
+  },
+  "edge_fields": {
+    "source": {"type": "entity_ref", "required": true},
+    "target": {"type": "entity_ref", "required": true},
+    "type": {"type": "predicate_enum", "required": true},
+    "tone": {"type": "tone_enum", "required": false},
+    "strength": {"type": "integer", "range": [1, 10], "required": false},
+    "bidirectional": {"type": "boolean", "required": false},
+    "description": {"type": "string", "required": false}
+  },
+  "tones": {
+    "positive": ["friendly", "romantic", "respectful", "professional"],
+    "negative": ["hostile", "fearful", "distrustful", "contemptuous"],
+    "neutral": ["neutral", "unknown", "complicated"]
+  },
+  "strength_scale": {"1-2": "weak", "3-4": "moderate", "5-6": "significant", "7-8": "strong", "9-10": "defining"},
+  "storage_rule": "Single-direction only; inverse is implied, not stored. Symmetric predicates stored once with bidirectional=true.",
+  "mobrpg_event_type_enum": ["Employ", "Membership", "Leadership", "Reign", "War", "Score", "Generic"],
+  "mobrpg_relation_type_enum": ["Parent", "Child", "Link", "Spouse"],
+  "required_relationships": {
+    "npc": "located_at",
+    "pc": "located_at",
+    "creature": "located_at",
+    "faction": "headquartered_at",
+    "organization": "headquartered_at"
+  },
+  "mobrpg_element_kind": {
+    "$comment": "gm-apprentice vault entity kind -> mobRPG element kind (endpoint family). `location` maps to political only as a DEFAULT: a location whose location_type is natural on the location_nature axis below routes to landfeature instead.",
+    "npc": "person",
+    "pc": "person",
+    "location": "political",
+    "faction": "organization",
+    "organization": "organization",
+    "item": "item",
+    "creature": "creature"
+  },
+  "location_nature": {
+    "$comment": "location_type is an OPEN vocabulary (free text authored per vault), so this cannot be exhaustive. It classifies the recurring, genre-general concepts onto the natural/built axis that decides mobRPG LandFeature vs Political -- the axis is ontology, the specific LandFeatureType/PoliticalType classifier is per-world and resolved in the map. Matching is exact on the normalised type, else on its head noun (last word), so 'icy planet' resolves via 'planet'. Values under natural are a suggested classifier name, not a closed enum: mobRPG's LandFeatureSubType enum is terrestrial and contains none of the celestial types, which exist as per-world classifiers. Unlisted types fall through to client heuristics and land in the map as review.",
+    "natural": {
+      "planet": "Planet",
+      "gas giant": "Planet",
+      "ice giant": "Planet",
+      "moon": "Moon",
+      "star": "Star",
+      "system": "System",
+      "star system": "System",
+      "asteroid": "Asteroid",
+      "asteroid belt": "Asteroid",
+      "anomaly": "Anomaly",
+      "nebula": "Nebula",
+      "comet": "Comet"
+    },
+    "built": [
+      "space station", "station", "spaceship", "ship", "city", "town", "village",
+      "settlement", "colony", "district", "sector", "outpost", "venue", "territory",
+      "polity", "dock", "port", "facility", "installation", "fortress", "base",
+      "gate", "starport", "trade route"
+    ]
+  },
+  "predicates": [
+    {"type": "parent_of", "inverse": "child_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Parent", "mobrpg_event_type": "Generic"},
+    {"type": "ancestor_of", "inverse": "descendant_of", "category": "kinship", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "sibling_of", "inverse": "sibling_of", "category": "kinship", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "spouse_of", "inverse": "spouse_of", "category": "kinship", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": "Spouse", "mobrpg_event_type": "Generic"},
+    {"type": "betrothed_to", "inverse": "betrothed_to", "category": "kinship", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "knows", "inverse": "knows", "category": "social", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "friend_of", "inverse": "friend_of", "category": "social", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "rival_of", "inverse": "rival_of", "category": "social", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "mentors", "inverse": "mentored_by", "category": "social", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "trusts", "inverse": "trusted_by", "category": "social", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "betrayed", "inverse": "betrayed_by", "category": "social", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "rules", "inverse": "ruled_by", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Reign"},
+    {"type": "employs", "inverse": "employed_by", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Employ"},
+    {"type": "commands", "inverse": "commanded_by", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Employ"},
+    {"type": "serves", "inverse": "served_by", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Employ"},
+    {"type": "vassal_of", "inverse": "liege_of", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Employ"},
+    {"type": "imprisons", "inverse": "imprisoned_by", "category": "power", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "located_at", "inverse": "location_of", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
+    {"type": "headquartered_at", "inverse": "headquarters_of", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
+    {"type": "part_of", "inverse": "has_part", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
+    {"type": "borders", "inverse": "borders", "category": "spatial", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
+    {"type": "haunts", "inverse": "haunted_by", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "owns", "inverse": "owned_by", "category": "possession", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Reign"},
+    {"type": "created", "inverse": "created_by", "category": "possession", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "wields", "inverse": "wielded_by", "category": "possession", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "seeks", "inverse": "sought_by", "category": "possession", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "discovered", "inverse": "discovered_by", "category": "knowledge", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "conceals", "inverse": "concealed_by", "category": "knowledge", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "recorded_in", "inverse": "records", "category": "knowledge", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "studies", "inverse": "studied_by", "category": "knowledge", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "enemy_of", "inverse": "enemy_of", "category": "conflict", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "War"},
+    {"type": "at_war_with", "inverse": "at_war_with", "category": "conflict", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "War"},
+    {"type": "conspires_against", "inverse": "conspired_against_by", "category": "conflict", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "War"},
+    {"type": "allied_with", "inverse": "allied_with", "category": "conflict", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "member_of", "inverse": "has_member", "category": "affiliation", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Membership"},
+    {"type": "founded", "inverse": "founded_by", "category": "affiliation", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Membership"},
+    {"type": "leads", "inverse": "led_by", "category": "affiliation", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Leadership"},
+    {"type": "defected_from", "inverse": "lost_member", "category": "affiliation", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Membership"},
+    {"type": "infiltrates", "inverse": "infiltrated_by", "category": "affiliation", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Membership"},
+
+    {"type": "bound_to", "inverse": "binds", "category": "supernatural", "symmetric": false, "genre": ["fantasy", "horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "cursed_by", "inverse": "cursed", "category": "supernatural", "symmetric": false, "genre": ["fantasy", "horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "summoned", "inverse": "summoned_by", "category": "supernatural", "symmetric": false, "genre": ["fantasy", "horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "worships", "inverse": "worshipped_by", "category": "supernatural", "symmetric": false, "genre": ["fantasy", "horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "corrupted_by", "inverse": "corrupted", "category": "supernatural", "symmetric": false, "genre": ["fantasy", "horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "caused", "inverse": "caused_by", "category": "temporal", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "triggered", "inverse": "triggered_by", "category": "temporal", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "participated_in", "inverse": "had_participant", "category": "temporal", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "witnessed", "inverse": "witnessed_by", "category": "temporal", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "trades_with", "inverse": "trades_with", "category": "economic", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "supplies", "inverse": "supplied_by", "category": "economic", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Employ"},
+    {"type": "finances", "inverse": "financed_by", "category": "economic", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "indebted_to", "inverse": "creditor_of", "category": "economic", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "murdered", "inverse": "murdered_by", "category": "event", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "poisoned", "inverse": "poisoned_by", "category": "event", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "wounded", "inverse": "wounded_by", "category": "event", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "rescued", "inverse": "rescued_by", "category": "event", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "captured", "inverse": "captured_by", "category": "event", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "deceived", "inverse": "deceived_by", "category": "event", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "possessed_by", "inverse": "possesses", "category": "horror", "symmetric": false, "genre": ["horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "infected_by", "inverse": "infected", "category": "horror", "symmetric": false, "genre": ["horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "fears", "inverse": "feared_by", "category": "horror", "symmetric": false, "genre": ["horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "feeds_on", "inverse": "fed_upon_by", "category": "horror", "symmetric": false, "genre": ["horror"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "courts", "inverse": "courted_by", "category": "romance", "symmetric": false, "genre": ["romance"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "rejected", "inverse": "rejected_by", "category": "romance", "symmetric": false, "genre": ["romance"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "disguised_as", "inverse": "disguise_of", "category": "romance", "symmetric": false, "genre": ["romance"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "blackmails", "inverse": "blackmailed_by", "category": "romance", "symmetric": false, "genre": ["romance"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "conquered", "inverse": "conquered_by", "category": "historical", "symmetric": false, "genre": ["historical"], "mobrpg_relation_type": null, "mobrpg_event_type": "War"},
+    {"type": "exiled_from", "inverse": "exiled", "category": "historical", "symmetric": false, "genre": ["historical"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "succeeded", "inverse": "preceded", "category": "historical", "symmetric": false, "genre": ["historical"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "negotiated_with", "inverse": "negotiated_with", "category": "historical", "symmetric": true, "genre": ["historical"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "uploaded_to", "inverse": "upload_source_of", "category": "scifi", "symmetric": false, "genre": ["scifi"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "augmented_by", "inverse": "augments", "category": "scifi", "symmetric": false, "genre": ["scifi"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "cloned_from", "inverse": "clone_source_of", "category": "scifi", "symmetric": false, "genre": ["scifi"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "hacked", "inverse": "hacked_by", "category": "scifi", "symmetric": false, "genre": ["scifi"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+
+    {"type": "alter_ego_of", "inverse": "alter_ego_of", "category": "superhero", "symmetric": true, "genre": ["superhero"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "empowered_by", "inverse": "empowers", "category": "superhero", "symmetric": false, "genre": ["superhero"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "nemesis_of", "inverse": "nemesis_of", "category": "superhero", "symmetric": true, "genre": ["superhero"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"}
+  ]
+}

@@ -1,0 +1,621 @@
+"""mobrpg pull-canon — pull ratified mobRPG canon down into vault nodes.
+
+mobRPG is canon; the vault is the working surface. This applies the authority
+rule per entity review_state: accepted (fill ids), accepted-after-edit / drift
+(canon overwrites `determined`), dismissed (record note, preserve vault),
+deleted (flag), pending (leave the vault alone). Reads the review queue via the
+same endpoint `suggestions` uses. NOT named `reconcile` — that names a different
+gm-apprentice concept (canon_status promotion).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+
+from mobrpg import client
+from mobrpg import lww
+from mobrpg import node
+from mobrpg.vault import iter_linked_notes
+from mobrpg.commands import pull
+from mobrpg.commands import rel_baseline
+from mobrpg.commands import suggest
+from mobrpg.commands import suggestions
+
+
+def apply_state(existing: dict, live: dict) -> dict:
+    state = live.get("state")
+    if state == "pending":
+        return existing
+    out = dict(existing)
+    if state == "deleted":
+        out["review_state"] = "deleted"
+        out["element_id"] = None
+        return out
+    if state == "dismissed":
+        out["review_state"] = "dismissed"
+        out["review_note"] = live.get("review_note") or ""
+        if existing.get("review_state") != "dismissed":
+            out["last_synced"] = lww.now_iso()
+        return out
+    if state == "accepted":
+        out["element_id"] = live.get("element_id") or existing.get("element_id")
+        live_det = live.get("determined") or {}
+        if live_det and live_det != existing.get("determined"):
+            out["review_state"] = "edited"
+            out["determined"] = dict(live_det)
+        else:
+            out["review_state"] = "accepted"
+            if existing.get("review_state") != "accepted":
+                out["last_synced"] = lww.now_iso()
+        eids = live.get("event_ids") or {}
+        rels = []
+        for r in existing.get("relationships", []):
+            r2 = dict(r)
+            key = f"{r.get('predicate')}|{r.get('target')}"
+            if key in eids:
+                r2["event_id"] = eids[key]
+                r2["review_state"] = "accepted"
+            rels.append(r2)
+        out["relationships"] = rels
+        return out
+    return existing
+
+
+_ELEMENTKIND_VAULTKIND = {"Person": "npc", "Political": "location", "LandFeature": "location",
+                          "Organization": "faction", "Creature": "creature", "Item": "item"}
+
+
+def scaffold_note(external_ref, live, namespace):
+    _, rel = external_ref.split(":", 1)
+    name = live.get("name") or rel.rsplit("/", 1)[-1].replace("_", " ")
+    vault_kind = live.get("kind") or _ELEMENTKIND_VAULTKIND.get(
+        live.get("element_kind"), "npc")
+    n = {
+        "world_id": "", "external_ref": external_ref,
+        "element_id": live.get("element_id"),
+        "element_kind": live.get("element_kind") or "Person",
+        "review_state": "accepted", "last_synced": "",
+        "review_note": "", "determined": dict(live.get("determined") or {}),
+        "relationships": [], "languages": [],
+    }
+    text = (f"---\ntype: {vault_kind}\n" + node.emit_node(n) + f"---\n# {name}\n")
+    return rel + ".md", text
+
+
+def _vault_file(external_ref, vault):
+    if not external_ref or ":" not in external_ref:
+        return None
+    _, rel = external_ref.split(":", 1)
+    p = os.path.join(os.path.expanduser(vault), rel + ".md")
+    return p if os.path.exists(p) else None
+
+
+# Ref namespaces that are handles, not note paths: `rel/` for reified
+# relationship Events, `desc/` for the description suggestions the retired
+# `suggest-desc` verb minted, `upd/` for `sync`'s content-hashed description
+# updates. Their accepted cards stay in the review queue forever, so pull-canon
+# keeps meeting them long after the verb is gone.
+_RESERVED_REF_ROOTS = ("rel/", "desc/", "upd/")
+
+# `<ns>:upd/<relpath>#<hash>` -> `<ns>:<relpath>`; anything else unchanged.
+# Defined in `node` so `suggestions` can share it — `pull_canon` imports
+# `suggestions`, so the dependency can't run the other way.
+_note_ref = node.note_ref
+
+
+def _scaffoldable(external_ref, vault):
+    """True only for refs that safely map to a new vault note.
+
+    Rejects colon-less refs (scaffold_note would ValueError), the reserved
+    non-note namespaces, any rel-path that would escape the vault via
+    `..`/absolute traversal, and — the fail-closed rule — any rel-path whose
+    first segment is not already a directory in the vault. A prefix blocklist
+    alone only rejects the shapes we know about today, so the next verb to mint
+    a new ref namespace would repeat #140; requiring a known note root means an
+    unrecognised namespace is reported rather than scaffolded.
+    """
+    if not external_ref or ":" not in external_ref:
+        return False
+    rel = external_ref.split(":", 1)[1]
+    if rel.startswith(_RESERVED_REF_ROOTS):
+        return False
+    norm = os.path.normpath(rel)
+    if os.path.isabs(norm) or norm == ".." or norm.startswith(".." + os.sep):
+        return False
+    if os.sep not in norm:
+        return True                            # a root-level note; the root is the vault
+    root = norm.split(os.sep, 1)[0]
+    return os.path.isdir(os.path.join(os.path.expanduser(vault), root))
+
+
+# Live-element classifier -> vault `determined` key. Attribute relations carry
+# the classifier as source.type (lowercased, no separators); item/landfeature
+# store their type in a top-level field instead. Confirmed against real payloads
+# (Regency Cthulhu, 2026-07-19).
+_ATTR_TYPE_DETKEY = {
+    "sex": "sex", "race": "race", "profession": "profession",
+    "politicaltype": "political_type", "organizationtype": "organization_type",
+    "creaturetype": "creature_type",
+}
+
+
+def determined_from_element(element: dict) -> dict:
+    """Rebuild the ratified `determined` dict from a live mobRPG element, in the
+    same scalar shape `suggest.determined_for` emits, so it can be compared for
+    drift. A type with multiple values (e.g. several professions) collapses to a
+    sorted comma-joined string — a single value stays scalar (no false drift)."""
+    names: dict = {}
+    for rel in element.get("relations") or []:
+        if not isinstance(rel, dict) or rel.get("type") != "Attribute":
+            continue
+        src = rel.get("source")
+        if not isinstance(src, dict):
+            continue
+        key = _ATTR_TYPE_DETKEY.get((src.get("type") or "").lower())
+        name = src.get("name")
+        if key and name:
+            names.setdefault(key, []).append(name)
+    out = {k: ", ".join(sorted(v)) for k, v in names.items()}
+    attrs = element.get("attributes")
+    if isinstance(attrs, dict) and attrs.get("itemType"):
+        out["item_type"] = attrs["itemType"]
+    lft = element.get("landFeatureTypes")
+    if isinstance(lft, list) and lft:
+        out["land_feature_type"] = ", ".join(sorted(lft))
+    return out
+
+
+def _verify_accepted(world, token, sug, summary):
+    """GET the ratified element for an Accepted suggestion so the edited/drift
+    and deleted outcomes become reachable. A 404 means canon deleted it; a live
+    element supplies `determined`. Other errors leave the row plain-accepted
+    (never mistake a transient failure for a deletion)."""
+    rid = sug.get("resultElementId")
+    pl = sug.get("payload") or {}
+    etype = (pl.get("data") or {}).get("type") or sug.get("typeName") or ""
+    ep = suggestions.TYPE_EP.get(etype)
+    if not rid or not ep:
+        return
+    try:
+        element = client._request("GET", f"/world/{world}/{ep}/{rid}", token=token)
+    except client.ApiError as e:
+        if e.status == 404:
+            summary["state"] = "deleted"
+        return
+    except ValueError:
+        return
+    if isinstance(element, dict):
+        summary["determined"] = determined_from_element(element)
+
+
+def _fetch_live(world, token, *, verify=True):
+    """Return {external_ref: live_summary} across the Accepted, Dismissed and
+    Pending queues (the review-state enum has no Deleted — deletion is detected
+    by verifying the accepted element). live_summary =
+    {state, element_id, determined, review_note, event_ids}. With verify, each
+    Accepted row's element is fetched to populate `determined` (drift) or flag it
+    `deleted`; verify=False skips that pass (accepted/dismissed only)."""
+    live = {}
+    # Precedence is iteration order + first-write-wins: a ref that already has an
+    # authoritative Accepted outcome is never shadowed by a later Dismissed or
+    # (re-submitted) Pending row for the same externalRef.
+    for state in ("Accepted", "Dismissed", "Pending"):
+        try:
+            data = client._request(
+                "GET", f"/world/{world}/suggestion?reviewState={state}", token=token)
+        except (client.ApiError, ValueError):
+            continue
+        rows = data if isinstance(data, list) else (
+            data.get("content", []) if isinstance(data, dict) else [])
+        for s in rows:
+            ext = s.get("externalRef")
+            if not ext or ext in live:
+                continue
+            pl = s.get("payload") or {}
+            summary = {
+                "state": state.lower(),
+                "element_id": s.get("resultElementId"),
+                "review_note": s.get("reviewNote") or "",
+                # The accepted card's own payload is the only place the element's
+                # kind and name are available here. Without them scaffold_note
+                # falls through to Person/npc and a name derived from the ref, so
+                # every scaffolded note was mis-kinded and underscore-mangled.
+                "element_kind": (pl.get("data") or {}).get("type") or s.get("typeName"),
+                "name": pl.get("name"),
+                "determined": {}, "event_ids": {}}
+            if state == "Accepted" and verify:
+                _verify_accepted(world, token, s, summary)
+            live[ext] = summary
+    return live
+
+
+# node element_kind -> API endpoint segment, for fetching a linked element direct.
+_KIND_EP = {"Person": "person", "Organization": "organization", "Political": "political",
+            "LandFeature": "landfeature", "Item": "item", "Creature": "creature"}
+
+
+def _canon_determined(world, token, kind_ep, eid):
+    """Rebuild `determined` for one linked element from its Attribute edges.
+
+    Reads the /relation endpoint rather than the element itself: GET
+    /world/{id}/{kind}/{eid} returns `relations: []` for these elements — an
+    empty stub, not an empty truth — so deriving from the element payload would
+    conclude that every classifier had been removed upstream. The /relation rows
+    embed the full `source` object, which is what determined_from_element wants.
+    Returns None if the relations could not be read at all, so the caller can
+    distinguish "no classifiers" from "could not tell".
+
+    Only `ApiError` means "could not tell". `_get_relations` treats an empty
+    body as a genuine "this element has no relations" and returns [], which is
+    an answer, not a failure.
+    """
+    try:
+        rows = rel_baseline._get_relations(world, kind_ep, eid, token)
+    except client.ApiError:
+        return None
+    return determined_from_element({"relations": rows})
+
+
+def run_refresh(world, vault, token, *, execute) -> int:
+    """Refresh every linked node's `determined` block from live mobRPG canon.
+
+    `determined` records what mobRPG says a linked element IS. It was only ever
+    populated from our own proposals (backfill/suggest) or via _verify_accepted,
+    which runs solely for elements that came through the suggestion review queue.
+    Notes imported by the old `write` path therefore keep whatever WE guessed,
+    and nothing corrects it: space_game's gates recorded political_type
+    "Hyperspace Gate" — invented locally to fill a blank the importer left —
+    where canon says "Gate". Routing reads these values, so a stale guess
+    proposes a duplicate classifier in someone else's world.
+
+    CONSERVATIVE: canon only ever overwrites a key it has an opinion on. A key
+    canon is silent about is left alone and reported, because silence is not
+    contradiction — many of these elements simply carry no classifier upstream,
+    and a local value may be a proposal not yet pushed. Clearing them wholesale
+    would delete real local state to satisfy a sync. Vault-write only (dry-run
+    default); never writes to mobRPG.
+    """
+    vault = os.path.expanduser(vault)
+    corrected = local_only = scanned = in_flight = 0
+    diffs: list[str] = []
+    notes: list[str] = []
+    skipped: list[str] = []
+    for path, txt, nd in iter_linked_notes(vault):
+        eid, kind = nd.get("element_id"), nd.get("element_kind")
+        ep = _KIND_EP.get(kind)
+        if not eid or not ep:
+            continue
+        # Only an ACCEPTED node's determined is canon's to own. In any other
+        # state the block holds what we PROPOSED and have not had ratified;
+        # overwriting it destroys the proposal and the drift comparison that
+        # depends on it. Canon cannot arbitrate a suggestion still in flight.
+        state = nd.get("review_state")
+        if state != "accepted":
+            in_flight += 1
+            skipped.append(f"  {os.path.relpath(path, vault)}: review_state={state!r}")
+            continue
+        scanned += 1
+        canon = _canon_determined(world, token, ep, eid)
+        if canon is None:
+            continue
+        old = dict(nd.get("determined") or {})
+        rel = os.path.relpath(path, vault)
+        merged = dict(old)
+        for k, v in canon.items():
+            if old.get(k) != v:
+                diffs.append(f"  {rel}: {k}: {old.get(k)!r} -> {v!r}")
+            merged[k] = v
+        silent = sorted(set(old) - set(canon))
+        if silent:
+            local_only += 1
+            notes.append(f"  {rel}: local-only (canon silent): {', '.join(silent)}")
+        if merged == old:
+            continue
+        corrected += 1
+        newn = dict(nd)
+        newn["determined"] = merged
+        out = node.write_node(txt, newn)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(out)
+    if diffs:
+        print("CORRECTED FROM CANON:")
+        print("\n".join(diffs[:30]))
+        if len(diffs) > 30:
+            print(f"  ... and {len(diffs) - 30} more")
+    if notes:
+        print(f"LOCAL-ONLY (left untouched): {local_only} node(s); e.g.")
+        print("\n".join(notes[:5]))
+    if skipped:
+        print(f"IN FLIGHT (not canon's to overwrite): {in_flight} node(s); e.g.")
+        print("\n".join(skipped[:5]))
+    print(f"pull-canon --refresh: {corrected} node(s) corrected from canon, "
+          f"{local_only} with local-only values left intact, "
+          f"{in_flight} skipped as in-flight, of {scanned} accepted"
+          + ("" if execute else "  [dry-run — no files changed]"))
+    return 0
+
+
+def run_reconcile_deletions(world, vault, token, *, execute) -> int:
+    """Flag linked nodes whose element no longer exists upstream.
+
+    The review-queue pass only ever learns about deletions of elements that came
+    through review (`_verify_accepted`'s 404). An element deleted directly in
+    mobRPG — "Six — Field Sundries & Reloads", 2026-07-26 — is reported by
+    `whats-new` and then never reconciled: its node keeps a dangling element_id
+    and reads as linked forever. This is that report's write side, using the same
+    id-set comparison so the two can't disagree.
+
+    Vault-write only (dry-run default); never writes to mobRPG.
+    """
+    vault = os.path.expanduser(vault)
+    try:
+        live_ids = pull.live_element_ids(world, token)
+    except (client.ApiError, ValueError) as e:
+        print(f"ERROR reading world elements: {e}", file=sys.stderr)
+        print("ABORTED — an unreadable world is indistinguishable from an empty one; "
+              "no node was flagged.", file=sys.stderr)
+        return 1
+    if not live_ids:
+        print("ERROR: the world reports zero elements — refusing to flag every linked "
+              "node deleted off that reading.", file=sys.stderr)
+        return 1
+    flagged = 0
+    scanned = 0
+    for path, txt, nd in iter_linked_notes(vault):
+        scanned += 1
+        if nd.get("element_id") in live_ids:
+            continue
+        newn = dict(nd)
+        newn["review_state"] = "deleted"
+        newn["element_id"] = None
+        out = node.write_node(txt, newn)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(out)
+        flagged += 1
+        print(f"  GONE {os.path.relpath(path, vault)}  (was {nd.get('element_id')})")
+    print(f"pull-canon --reconcile-deletions: {flagged} of {scanned} linked node(s) "
+          f"flagged deleted"
+          + ("" if execute else "  [dry-run — no files changed]"))
+    return 0
+
+
+def run_baseline(world, vault, token, *, execute) -> int:
+    """Relationship-baseline pass: read mobRPG's PRE-EXISTING edges among the
+    vault's linked elements and stamp `event_id` onto matching node relationships,
+    so a subsequent `suggest` skips edges that already exist upstream instead of
+    re-proposing them. Vault-write only (dry-run default). See rel_baseline."""
+    vault = os.path.expanduser(vault)
+    map_path = os.path.join(vault, "_meta", "mobrpg-map.json")
+    try:
+        mp = json.load(open(map_path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"ERROR reading map {map_path}: {e}", file=sys.stderr)
+        return 2
+    id_by_key, _, _ = suggest.node_index(vault)
+    # What each endpoint IS upstream, so an affiliation the person/group grid
+    # regrades is looked up under the type it was actually pushed as.
+    kind_by_key = suggest.node_kind_index(vault)
+    notes = list(iter_linked_notes(vault))          # (path, txt, node) for every linked note
+    try:
+        structural, reified, _known = rel_baseline.fetch_upstream(
+            world, token, [nd for _, _, nd in notes])
+    except client.ApiError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+    stamped_nodes = matched = 0
+    reviews: list[str] = []
+    for path, txt, nd in notes:
+        eids, revs = rel_baseline.match_node(
+            nd, id_by_key, structural, reified, mp,
+            subject_kind=nd.get("element_kind"), kind_by_key=kind_by_key)
+        reviews += [f"{os.path.relpath(path, vault)}: {r}" for r in revs]
+        if not eids:
+            continue
+        newn = rel_baseline.stamp_baseline(
+            nd, eids, mp=mp, kind_by_key=kind_by_key,
+            subject_kind=nd.get("element_kind"))
+        if newn == nd:
+            continue
+        merged = node.write_node(txt, newn)
+        if execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(merged)
+        stamped_nodes += 1
+        matched += len(eids)
+
+    reified_edges = sum(len(v) for v in reified.values())
+    print(f"pull-canon --baseline: matched {matched} pre-existing upstream "
+          f"relationship(s) across {stamped_nodes} node(s)"
+          + ("" if execute else "  [dry-run — no files changed]"))
+    print(f"  scanned {len(structural)} structural + {reified_edges} reified "
+          f"upstream edge(s)")
+    for r in reviews:
+        print(f"  [review] {r}")
+    return 0
+
+
+def run(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(
+        prog="mobrpg pull-canon",
+        description="Pull ratified mobRPG canon down into vault mobrpg: nodes.")
+    ap.add_argument("world")
+    ap.add_argument("--vault", required=True)
+    ap.add_argument("--execute", action="store_true")
+    ap.add_argument("--no-verify", action="store_true",
+                    help="skip the accepted-element verification pass (faster / "
+                         "offline; edited-drift and deleted outcomes won't be detected)")
+    ap.add_argument("--refresh", action="store_true",
+                    help="refresh every linked node's `determined` block from live "
+                         "mobRPG canon, correcting values that were written from our "
+                         "own proposals rather than pulled down. Vault-write only; "
+                         "dry-run unless --execute.")
+    ap.add_argument("--reconcile-deletions", action="store_true",
+                    help="flag linked nodes whose element no longer exists upstream "
+                         "(the write side of `whats-new`'s GONE list — the review "
+                         "queue only sees deletions of elements it reviewed). "
+                         "Vault-write only; dry-run unless --execute.")
+    ap.add_argument("--baseline", action="store_true",
+                    help="instead of the review-queue pass, reconcile PRE-EXISTING "
+                         "mobRPG relationships against the vault's authored edges and "
+                         "stamp their event_ids (so a later suggest skips them). "
+                         "Vault-write only; dry-run unless --execute.")
+    args = ap.parse_args(argv)
+    try:
+        token = client.get_access_token()
+    except client.ApiError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    if args.refresh:
+        return run_refresh(args.world, args.vault, token, execute=args.execute)
+    if args.reconcile_deletions:
+        return run_reconcile_deletions(args.world, args.vault, token,
+                                       execute=args.execute)
+    if args.baseline:
+        return run_baseline(args.world, args.vault, token, execute=args.execute)
+    live_by_ref = _fetch_live(args.world, token, verify=not args.no_verify)
+    if not args.no_verify:
+        try:
+            live_ids = pull.live_element_ids(args.world, token)
+        except (client.ApiError, ValueError) as e:
+            live_ids = None
+            print(f"WARNING: could not read live element ids ({e}); "
+                  f"deletion gating skipped this run", file=sys.stderr)
+        if live_ids:
+            # Element absence is authoritative over suggestion state: a
+            # still-Accepted create whose element left the world must flag the
+            # node deleted, not re-stamp a dead id (#153). An empty id set is
+            # refused, same as --reconcile-deletions.
+            for live in live_by_ref.values():
+                if (live.get("state") == "accepted" and live.get("element_id")
+                        and live["element_id"] not in live_ids):
+                    live["state"] = "deleted"
+    updated = 0
+    orphan_updates = 0
+    unscaffoldable: list[str] = []
+    # Notes an `upd/` row already answered for THIS run. The upd branch writes
+    # the file and releases `pending_ref`, so a create-ref row reached later in
+    # the same pass would re-read a note that no longer looks pending and flip
+    # the verdict it just applied.
+    adjudicated: set[str] = set()
+    for ext, live in live_by_ref.items():
+        if ext != _note_ref(ext):
+            # An update-suggestion ref (`<ns>:upd/<relpath>#<hash>`, #151). It
+            # names no element of its own — it adjudicates the note that `sync`
+            # left `review_state: pending` when it filed the update.
+            #
+            # A note accumulates one row per pushed revision, each with its own
+            # hash and so its own ref, and Accepted/Dismissed rows stay in the
+            # queue forever. Matching on the note path alone therefore lets an
+            # OLD terminal row adjudicate a NEWER pending push — stamping a
+            # verdict (and, when dismissed, a review note) the GM never gave to
+            # this content, while the row actually under review never lands. So
+            # the ONLY row that may adjudicate is the one whose full ref equals
+            # the `pending_ref` the note recorded when it filed the push; the
+            # claim is released on adjudication. A pending note with no
+            # `pending_ref` predates this scheme and is left to the create-ref
+            # path below rather than adjudicated from a guess.
+            path = _vault_file(_note_ref(ext), args.vault)
+            if not path:
+                orphan_updates += 1
+                continue
+            txt = open(path, encoding="utf-8").read()
+            existing = node.read_node(txt)
+            if not existing or existing.get("review_state") != "pending":
+                continue
+            if existing.get("pending_ref") != ext:
+                continue
+            adjudicated.add(path)
+            newn = dict(existing)
+            if live.get("state") == "accepted":
+                newn["review_state"] = "accepted"
+                newn["last_synced"] = lww.now_iso()
+            elif live.get("state") == "dismissed":
+                newn["review_state"] = "dismissed"
+                newn["review_note"] = live.get("review_note") or ""
+                newn["last_synced"] = lww.now_iso()
+            else:
+                continue                          # still pending — hold the note
+            newn["pending_ref"] = ""
+            merged = node.write_node(txt, newn)
+            if args.execute:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(merged)
+                # Pin mtime to the fresh stamp, same as the note-ref branch, so
+                # the note doesn't read vault-dirty and re-file on the next sync.
+                ls = lww.parse_ts(newn["last_synced"])
+                if ls is not None:
+                    os.utime(path, (ls, ls))
+            updated += 1
+            continue
+        path = _vault_file(ext, args.vault)
+        if not path:
+            if live.get("state") == "accepted" and _scaffoldable(ext, args.vault):
+                rel, text = scaffold_note(ext, live, os.path.basename(args.vault))
+                dest = os.path.join(os.path.expanduser(args.vault), rel)
+                if args.execute and not os.path.exists(dest):
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    with open(dest, "w", encoding="utf-8") as fh:
+                        fh.write(text)
+                updated += 1
+            elif live.get("state") == "accepted":
+                unscaffoldable.append(ext)
+            continue
+        txt = open(path, encoding="utf-8").read()
+        existing = node.read_node(txt)
+        if not existing:
+            continue
+        # This is the note's CREATE ref: it answers for the ELEMENT, not for the
+        # description update the note is waiting on. A note holding a
+        # `pending_ref` has one specific `upd/` row's verdict outstanding (#151),
+        # and terminal create rows live in the review queue forever — letting one
+        # adjudicate here stamped accepted/dismissed off the wrong row, buried
+        # the real verdict, and stranded the claim. So the create row stands down
+        # while a push is in flight (or was already answered this run). Deletion
+        # is the exception and stays authoritative: with the element gone, no
+        # pending update can ever land, so the node must still be flagged.
+        if live.get("state") != "deleted" and (
+                path in adjudicated or existing.get("pending_ref")):
+            continue
+        newn = apply_state(existing, live)
+        if newn == existing:
+            continue
+        merged = node.write_node(txt, newn)
+        if args.execute:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(merged)
+            # An accept/dismiss transition stamps a fresh `last_synced`; pin the
+            # file mtime to it so the note reads clean (mtime == last_synced) on
+            # the next sync instead of vault-dirty (a dismissed suggestion would
+            # otherwise be re-filed). Other transitions (deleted, edited) don't
+            # stamp, so `last_synced` is unchanged and no pin is applied.
+            if newn.get("last_synced") != existing.get("last_synced"):
+                ls = lww.parse_ts(newn.get("last_synced"))
+                if ls is not None:
+                    os.utime(path, (ls, ls))
+        updated += 1
+    if unscaffoldable:
+        # Accepted, no vault note, and not a scaffoldable note path: a reserved
+        # handle (rel/, desc/) or an unrecognised ref root. Report rather than
+        # mint a stub in the wrong place — silence is how #140 went unnoticed.
+        print(f"NOT SCAFFOLDED ({len(unscaffoldable)} accepted ref(s) that are not "
+              f"vault note paths):")
+        for ext in unscaffoldable[:20]:
+            print(f"  {ext}")
+        if len(unscaffoldable) > 20:
+            print(f"  ... and {len(unscaffoldable) - 20} more")
+    if orphan_updates:
+        # An update ref must never scaffold (it is not a note path), but it must
+        # not vanish either: its note has been moved, renamed or deleted since the
+        # push, so a verdict the GM gave has nowhere to land. Reported, not listed
+        # — these rows are terminal and would otherwise repeat every run.
+        print(f"{orphan_updates} update suggestion(s) skipped — no vault note for "
+              f"their ref (note moved, renamed or deleted since the push; "
+              f"`relink` re-points a moved note)")
+    print(f"pull-canon: {updated} node(s) updated"
+          + ("" if args.execute else "  [dry-run — no files changed]"))
+    return 0

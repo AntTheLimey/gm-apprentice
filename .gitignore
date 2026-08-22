@@ -52,9 +52,6 @@ docs/superpowers/
 docs/plans/
 .superpowers/
 
-# mobRPG integration prototype (private collaborator tooling, not for distribution)
-docs/prototypes/mobrpg/
-
 # Test results (run-specific artifacts)
 tests/compaction/
 tests/proof-runs/

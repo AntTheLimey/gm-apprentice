@@ -267,6 +267,20 @@ locations, and NPC relationships.
   `type:` — an off-vocabulary predicate is invisible to every
   query and pushes to mobRPG as a junk Generic node.
 
+- **New container entities**: when a new entity sits *between* an
+  existing parent and its existing children — a district between a
+  station and its venues, a cell between a faction and its members —
+  creating it is only half the job. Re-point the children, or it lands
+  as a childless leaf at the same level as the things it contains.
+  Present the candidates for a yes/no each, then update the fields
+  that match the containment's kind on each confirmed child: a place
+  inside a place gets **both** `parent_location` and the `part_of`
+  edge (scalar and edge feed different consumers; neither implies the
+  other), but a person moved into a cell gets the `member_of` edge
+  only — there is no membership scalar, and `parent_location` is a
+  Location field. Table and procedure:
+  `shared/relationship-normalization.md`.
+
 - **Timeline**: Linked events:
   `- **{in_game_date}** — [[Event_Name]] — {summary}`.
   Inline events: `- **{in_game_date}** — {description}`.

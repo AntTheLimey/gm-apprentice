@@ -1,0 +1,242 @@
+"""mobrpg pull — import a mobRPG world into a structured JSON extract.
+
+Ported from the prototype's etl_extract.py: pulls every entity + event, resolves
+relationships (which live in `event` join-entities), converts HTML descriptions
+to markdown, and emits one JSON record per entity — the input to `mobrpg write`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+
+from mobrpg import client
+from mobrpg import md as _md
+
+# mobRPG eventType (7-enum) → gm-apprentice relationship predicate.
+EVENTTYPE_TO_PREDICATE = {
+    "Membership": "member_of",
+    "Leadership": "leads",
+    "Employ": "employs",
+    "Reign": "owns",
+    "War": "enemy_of",
+    "Score": "participated_in",
+    "Generic": "associated_with",
+}
+
+KINDS = ["person", "organization", "political", "landfeature", "item",
+         "creature", "culture", "race", "event"]
+# Classifier `/type` endpoints. Traversed for the extract's `types` section, so
+# a standalone/new type with no vault content (e.g. a new creature type) is
+# still visible to a "what's new" report — and indexed in step 1 so an
+# `Attribute` relation pointing at one resolves back to a name.
+#
+# The index set and the step-2 skip set must be the SAME list: a kind indexed
+# but not skipped gets emitted as if it were an entity, and a kind skipped but
+# not indexed drops the classifier with no warning. `creature/type` was in this
+# list but missing from the (now removed) narrower index set, so every creature
+# lost its type.
+#
+# landfeature/item have NO `/type` endpoint — their types live on the elements —
+# so they are excluded here.
+TYPE_KINDS = ["creature/type", "organization/type", "political/type"]
+
+
+def _list_all(world: str, kind: str, token: str) -> list:
+    """Every row of one kind, following `totalPages`.
+
+    Tolerates only the documented empty-body case (surfaced as ValueError),
+    which is how this API reports a kind holding no elements. An `ApiError`
+    propagates: this list is what the extract is built from, so swallowing a
+    failure here writes a successful-looking extract with the kind's entities
+    missing — indistinguishable from canon genuinely not having any.
+
+    Paged for the same reason `map_cmd._fetch_all` is: a single `size=500` read
+    silently dropped everything past the first page.
+    """
+    out: list = []
+    page = 0
+    while True:
+        try:
+            r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                query={"page": page, "size": 200})
+        except ValueError:
+            break                                    # empty body == no rows of this kind
+        rows = r.get("content", []) if isinstance(r, dict) else (
+            r if isinstance(r, list) else [])
+        out.extend(x for x in rows if isinstance(x, dict))
+        if not isinstance(r, dict):
+            break                                    # a bare list is unpaged
+        total = (r.get("page") or {}).get("totalPages", 1)
+        if page >= total - 1:
+            break
+        page += 1
+    return out
+
+
+def live_element_ids(world: str, token: str) -> set:
+    """Every element id currently live in the world, across all entity kinds.
+
+    Deliberately STRICT where `_list_all` is fail-soft: it follows `totalPages`
+    and lets `ApiError` propagate. A caller deciding which vault notes to flag
+    `deleted` cannot tell a truncated or failed read apart from "canon deleted
+    everything", so a short answer must be an exception, not a smaller set.
+
+    The one tolerated case is a kind whose endpoint answers with an empty or
+    non-JSON body (surfaced as ValueError). That is how this API reports a kind
+    holding no elements — the Space world's `/race` does it — and treating it as
+    a failure would abort every run. It contributes no ids, which is the truth.
+    """
+    ids: set = set()
+    for kind in KINDS:
+        page = 0
+        while True:
+            try:
+                r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                    query={"page": page, "size": 200})
+            except ValueError:
+                break                                    # empty body == no rows of this kind
+            rows = r.get("content", []) if isinstance(r, dict) else (
+                r if isinstance(r, list) else [])
+            ids.update(it["id"] for it in rows if isinstance(it, dict) and it.get("id"))
+            if not isinstance(r, dict):
+                break                                    # a bare list is unpaged
+            total = (r.get("page") or {}).get("totalPages", 1)
+            if page >= total - 1:
+                break
+            page += 1
+    return ids
+
+
+def _get_one(world: str, kind: str, eid: str, token: str) -> dict:
+    """One element in full.
+
+    Same contract as `_list_all`: only the empty-body ValueError is tolerated.
+    A swallowed `ApiError` used to yield `{}`, and the caller then wrote an
+    entity with empty descriptions, notes, classifiers, and relationships —
+    a corrupted extract that reports success and, pulled into the vault, reads
+    as "canon says this entity is blank".
+    """
+    try:
+        return client._request("GET", f"/world/{world}/{kind}/{eid}", token=token) or {}
+    except ValueError:
+        return {}
+
+
+def html_to_md(html: str | None) -> str:
+    """HTML→markdown for mobRPG's WYSIWYG output. Delegates to the shared GFM
+    converter (tables/lists/links) so pull is the inverse of the push conversion."""
+    return _md.html_to_md(html)
+
+
+def role_from_event_name(name: str, subject: str) -> str | None:
+    if not name:
+        return None
+    if subject and name.startswith(subject):
+        rest = name[len(subject):].lstrip(" ,")
+        return rest or None
+    return name.split(",", 1)[1].strip() if "," in name else None
+
+
+def extract(world: str, token: str) -> dict:
+    # 1. index every entity (light list pass) — includes classifier types
+    index: dict[str, dict] = {}
+    for kind in KINDS + TYPE_KINDS:
+        for it in _list_all(world, kind, token):
+            if it.get("id"):
+                index[it["id"]] = {"id": it["id"], "kind": kind,
+                                   "name": it.get("name") or it.get("title") or "?"}
+
+    # 2. build entity records with full descriptions (skip events + classifiers)
+    records: dict[str, dict] = {}
+    for eid, meta in index.items():
+        if meta["kind"] in ("event", *TYPE_KINDS):
+            continue
+        full = _get_one(world, meta["kind"], eid, token)
+        records[eid] = {
+            "id": eid, "kind": meta["kind"], "name": meta["name"],
+            "altNames": full.get("altNames") or [],
+            "body_md": html_to_md(full.get("description")),
+            "notes_public": [], "notes_gm": [],
+            "classifiers": [], "relationships": [],
+        }
+        for note in (full.get("notes") or []):
+            md = html_to_md(note.get("note"))
+            if not md:
+                continue
+            bucket = "notes_gm" if note.get("hidden") else "notes_public"
+            records[eid][bucket].append(md)
+        for rel in (full.get("relations") or []):
+            if rel.get("type") == "Attribute":
+                other = rel["targetId"] if rel.get("sourceId") == eid else rel.get("sourceId")
+                t = index.get(other)
+                if t:
+                    records[eid]["classifiers"].append({"kind": t["kind"], "name": t["name"]})
+        for sub in (full.get("landFeatureTypes") or []):
+            records[eid]["classifiers"].append({"kind": "landfeature/subType", "name": sub})
+
+    # 3. resolve events → relationships on participants
+    events_out = []
+    for eid, meta in index.items():
+        if meta["kind"] != "event":
+            continue
+        ev = _get_one(world, "event", eid, token)
+        et = ev.get("eventType")
+        predicate = EVENTTYPE_TO_PREDICATE.get(et, "associated_with")
+        ends = [(r["targetId"] if r.get("sourceId") == eid else r.get("sourceId"))
+                for r in (ev.get("relations") or []) if r.get("type") == "Link"]
+        ends = [e for e in ends if e in records]
+        subj = next((e for e in ends if records[e]["kind"] == "person"), ends[0] if ends else None)
+        obj = next((e for e in ends if e != subj), None)
+        role = role_from_event_name(ev.get("name", ""), records[subj]["name"] if subj else "")
+        events_out.append({"id": eid, "name": ev.get("name"), "eventType": et,
+                           "title": ev.get("title"), "predicate": predicate,
+                           "subject": records[subj]["name"] if subj else None,
+                           "object": records[obj]["name"] if obj else None, "role": role})
+        if subj and obj:
+            pred = predicate
+            if et == "Employ" and records[obj]["kind"] in ("political", "landfeature"):
+                pred = "located_at"
+            records[subj]["relationships"].append(
+                {"target": records[obj]["name"], "predicate": pred,
+                 "eventType": et, "role": role})
+
+    # 4. classifier types (bound or not) from the /type endpoints — so a
+    # standalone/new type unreferenced by any entity is still surfaced.
+    types_out: dict[str, list] = {}
+    for kind in TYPE_KINDS:
+        types_out[kind] = [{"id": it["id"], "name": it.get("name") or it.get("title") or "?"}
+                           for it in _list_all(world, kind, token) if it.get("id")]
+
+    return {"worldId": world, "entities": list(records.values()), "events": events_out,
+            "types": types_out,
+            "counts": {k: sum(1 for r in records.values() if r["kind"] == k)
+                       for k in KINDS if k != "event"}}
+
+
+def run(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(
+        prog="mobrpg pull",
+        description="Import a mobRPG world into a structured JSON extract.")
+    ap.add_argument("world", help="mobRPG worldId")
+    ap.add_argument("--out", default="extract.json",
+                    help="output JSON path (default: extract.json)")
+    args = ap.parse_args(argv)
+
+    token = client.get_access_token()
+    try:
+        client.whoami(token)  # fail fast on bad auth / no connectivity
+        result = extract(args.world, token)
+    except client.ApiError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+    n_types = sum(len(v) for v in result.get("types", {}).values())
+    print(f"wrote {args.out}: {len(result['entities'])} entities, "
+          f"{len(result['events'])} events, {n_types} classifier types")
+    print("counts:", result["counts"])
+    print("types:", {k: len(v) for k, v in result.get("types", {}).items()})
+    return 0

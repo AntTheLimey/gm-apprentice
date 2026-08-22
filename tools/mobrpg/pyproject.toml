@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobrpg-cli"
+# This is the mobrpg-cli package's own version. It is INDEPENDENT of the
+# gm-apprentice marketplace plugin version (.claude-plugin/plugin.json); do not
+# sync the two. `mobrpg --version` reports this value.
+version = "0.1.0"
+description = "CLI over the mobRPG world-builder API for gm-apprentice vault sync"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# `build` is required by tests/test_packaging.py, which builds a real wheel
+# and inspects its file list rather than trusting importlib.resources alone.
+# That test invokes `build --no-isolation`, which reuses whatever is already
+# on sys.path instead of provisioning its own build env — so setuptools must
+# be pinned here explicitly. Python 3.12+ venvs no longer bundle it by
+# default, so a fresh `pip install -e ".[test]"` would otherwise leave the
+# wheel build backend unavailable. `wheel` is pinned for the same reason:
+# setuptools only grew a native `bdist_wheel` in 70.1, so on a runner whose
+# ambient setuptools predates that, the no-isolation build aborts with
+# "Missing dependencies: wheel" — which is what the macOS 3.10 leg hit while
+# every other leg happened to ship a newer setuptools.
+test = ["pytest>=7", "build>=1.0", "setuptools>=61", "wheel>=0.40"]
+
+[project.scripts]
+mobrpg = "mobrpg.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mobrpg*"]
+
+# Ship as package data so it is present in the wheel and resolvable at runtime.
+# The ontology JSON loads via importlib.resources (map_cmd, lazily).
+[tool.setuptools.package-data]
+mobrpg = ["gm-apprentice-ontology.json"]

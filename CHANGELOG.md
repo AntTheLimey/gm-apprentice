@@ -7,6 +7,413 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.0] — 2026-07-26
+
+Graduates the mobRPG integration CLI (`tools/mobrpg/`) into the repo as a
+**fully native** Python `mobrpg` command: every verb is a native subcommand
+sharing one stdlib-only client — there is no shell-out fallback layer and no
+prototype scripts left in the package. The centrepiece is a new
+last-writer-wins (LWW) sync model that reconciles a linked note's description
+prose with its mobRPG element from timestamps alone — no content hashes, no
+frozen baselines, no three-way merges. Suggestions are the only path that
+changes mobRPG canon: the world owner accepts or dismisses each one, so the
+CLI never overwrites a live element directly.
+
+### Added
+
+- **`mobrpg sync` verb — timestamp last-writer-wins description sync.** For each
+  linked note it compares the note file's mtime, the node's recorded
+  `last_synced`, and the server element's `lastModified`, then decides
+  skip / pull / push per note inside a ±skew window (default 120s). A **pull**
+  overwrites the note's canon prose wholesale with the converted server
+  description — preserving the `## GM Notes` tail verbatim — and stamps
+  `last_synced`. A **push** (or a both-dirty tie the GM must adjudicate) files
+  one reviewable `UpdateElement` suggestion and marks the node
+  `review_state: pending`; it never writes upstream directly. Dry-run by
+  default; `--execute` gates every file write and suggestion submit.
+- **Native `write`, `images`, and `link-orphans` verbs** — the extract→vault
+  materializer, the entity-image downloader, and the orphan auto-linker are now
+  first-class Python subcommands. `link-orphans` uses suggestions as its push
+  path and no longer emits a generated curl script.
+- **Link rewriting across the boundary.** On push, `[[wikilinks]]` to linked
+  targets become mobRPG `…/world/{world}/link/{eid}` URLs (bare text when the
+  target isn't linked); `.md` links are flattened. On pull, known element URLs
+  come back as `[[wikilinks]]`.
+- **`mobrpg auth` verb** — managed credential setup replacing the hand-managed
+  `credentials.csv` + `MOBRPG_TOKEN` dance. `import <credentials.csv>` verifies a
+  website-issued token via `whoami` and stores it in a user-level config
+  (`~/.config/mobrpg` on POSIX, `%APPDATA%\mobrpg` on Windows, `0600` on POSIX);
+  `status`, `refresh`, and `logout` manage it. Tokens are never printed. New
+  `mobrpg/config.py` store and a portable `skill/references/auth-setup.md`
+  (one-URL download preferred, manual CSV fallback).
+- **`mobrpg adopt` verb** — stamps `mobrpg:` nodes onto unlinked notes by matching
+  them to live mobRPG elements by normalized name (aliases included); one match is
+  accepted with the real `element_id`, ambiguous/unmatched are reported never
+  guessed. A dup-safe replacement for the retired crosswalk/backfill flow.
+- **`mobrpg --version` / `-V`** — reports the package version (`0.1.0`), which is
+  intentionally independent of the marketplace plugin version.
+- **Ontology shipped as package data** — `gm-apprentice-ontology.json` now lives
+  inside `mobrpg/` and loads via `importlib.resources`, lazily: a missing file
+  affects only the `map` verb, not the whole CLI. This makes a non-editable wheel
+  install work (previously every verb died with `FileNotFoundError`).
+- **Prod-write safety banner** retained on every run.
+
+### Changed
+
+- **Suggestions are the only path that changes mobRPG canon.** `suggest` builds
+  the full datatype graph per entity (element + classifier Types via Attribute
+  edges + reified relationship Events); `sync` files `UpdateElement` suggestions
+  for newer vault prose. In both cases the world owner accepts or dismisses the
+  suggestion in mobRPG — accept makes the vault the new canon, dismiss leaves
+  mobRPG as canon. The CLI never overwrites a live element directly.
+- **GM Notes stay local to the vault by design.** The `## GM Notes` tail of a
+  note is never pushed to mobRPG (verification found the server's
+  `NoteableService.getNote` has no hidden-note check, so a pushed hidden note
+  would be readable). GM Notes remain vault-local until mobRPG enforces
+  hidden-note access server-side.
+- **README + Quickstart overhaul.** README leads with Installation, the skill
+  list, and an inline Quickstart; the long Obsidian setup walkthrough is
+  condensed to a short Vaults note. The Quickstart is rewritten to start from
+  the-midwife (which scaffolds the vault) and flow through ttrpg-expert →
+  session-prep → session-play → session-wrapup, with campaign-organizer/qa
+  reframed as as-needed upkeep. Both now list all five systems (Pathfinder 2e
+  was missing) and drop the redundant install/pick-system/Obsidian steps.
+- **`client.get_access_token()` precedence** — `MOBRPG_TOKEN` env still wins, then
+  the managed config, then `MOBRPG_EMAIL`/`MOBRPG_PASSWORD`, else a helpful error.
+- **`sync`'s never-synced verdict is `baseline`, and vault-only sections are
+  configurable via `vaultOnlySections`.** A note whose `last_synced` is still
+  empty has no LWW baseline, so timestamps decide nothing — content decides
+  instead: matching prose just stamps in sync, an empty scaffold pulls the
+  server description, anything else keeps the authored body and only adopts
+  the stamp. This replaces a manufactured push on every newly-linked note. The
+  vault-only section list (`## GM Notes` plus session-bookkeeping headings)
+  keeps its default but a vault can replace it with a top-level
+  `"vaultOnlySections"` array in `_meta/mobrpg-map.json`.
+
+### Removed
+
+- **The hash/baseline canon-boundary machinery** — the `pull-desc` and
+  `suggest-desc` verbs, the three-way `merge3` merge, the `content_hash` scalar
+  and the four `canon_*` node scalars, and the canon fence. The `sync` verb
+  replaces all of it with timestamp LWW.
+- **The shell-out fallback layer** — the `FALLBACK` subprocess dispatch and every
+  legacy prototype script (`smoketest.py`, `etl_extract.py`,
+  `push_suggestions.py`, and the shelled-out `write` / `merge` / `link-orphans` /
+  `push` / `types` / `links` / `images` scripts). Every verb is native; `push`,
+  `types`, and `links` are absorbed into `suggest`'s full-graph build, and
+  `merge` is gone.
+- **Legacy crosswalk** — the `backfill`/`sync` (crosswalk-era) verbs, all
+  `--crosswalk` inputs, and the packaged `canticle-regency-crosswalk.json`. Ids
+  resolve only from `mobrpg:` nodes; `images` derives its id→file map from nodes.
+
+### Fixed
+
+- **A faction's `part_of` scalar is derived from its edge.** `write`
+  emitted `part_of: ""` hardcoded while preserving the `part_of` relationship,
+  so an imported faction with a real parent body shipped with the scalar and the
+  edge disagreeing. The location branch already derived `parent_location` from
+  the edge; the faction branch now does the same. The compact type-field summary
+  in `entity-schema.md` was also missing `part_of` for Faction/Organization,
+  which is what made it look like there was no scalar at all.
+- **`link-orphans` cannot be walked out of its folder.** The note path was built
+  from the extract-supplied entity name. The "gate" naming rule matches on
+  `startswith` plus a substring rather than a full match, so a name could
+  satisfy it *and* carry `../` segments — resolving onto an existing file
+  outside the kind's folder, which was then rewritten. The candidate is now
+  resolved against the folder root and skipped if it escapes.
+- **`link-orphans` dry-run predicts what `--execute` will do.** The
+  "is there anywhere to write this?" check ran only under `--execute`, so a
+  preview listed a note as linked that the real run would refuse and report as
+  unwritable. The note is read and validated in both modes now; only the write
+  itself is gated.
+- **`link-orphans` escapes `--systems` names before matching.** They are
+  interpolated straight into the moon/planet/body/belt patterns, so an operator
+  passing a name carrying a regex metacharacter ("St.John", "Alpha (Prime)")
+  matched the wrong things, or raised `re.error` outright.
+- **A note is only marked `pending` once its suggestion really lands.** `sync
+  --execute` wrote every push note with `review_state: pending` and a
+  `pending_ref` *before* submitting the batch. If the submit failed, or the
+  server bounced a row whose externalRef was already claimed by a terminal
+  suggestion, the note pointed at an `upd/` row that did not exist — and nothing
+  could clear it: `plan` held the note on every later run, and `pull-canon` only
+  adjudicates a row matching `pending_ref`. Local-only writes (pull / in-sync /
+  baseline) still go first; the pending mark now happens after the submit and
+  skips any ref the server refused, which is reported.
+- **`catalog` fetches every page.** It requested page zero only and printed a
+  "there may be more" hint on a full page. A truncated list is read as "that
+  type doesn't exist yet", which is exactly what leads to minting a duplicate,
+  so it now follows `page.totalPages` and reports a mid-pagination failure
+  instead of printing a partial catalog as if it were complete.
+- **`pull` no longer turns an API failure into missing canon.** `_list_all` and
+  `_get_one` caught bare `Exception` and returned `[]` / `{}`, so a failed read
+  produced a successful-looking extract with entities missing or blank. Only the
+  documented empty-body case (`ValueError`) is tolerated now; `ApiError`
+  propagates to the handler that already aborts without writing. `_list_all`
+  also follows `totalPages` rather than reading a single `size=500` page.
+- **Creature types survive the pull.** `creature/type` was traversed for the
+  extract's `types` section but never indexed, so a creature's `Attribute` edge
+  to its type could not be resolved and the classifier was dropped in silence.
+  The indexed set and the skip set are now the same list.
+- **A failed relation read is no longer reported as "no relations".**
+  `rel_baseline._get_relations` swallowed `ApiError`, which made
+  `pull_canon._canon_determined`'s "could not tell" branch unreachable — a
+  failed read came back as `{}` and `run_refresh` then reported every existing
+  classifier as "local-only (canon silent)", the exact misreport it exists to
+  prevent. It also left `fetch_upstream` building the baseline index from
+  partial results, so `suggest` re-proposed edges mobRPG already held.
+- **`link-orphans` reports an edge it could not write.** A note whose
+  frontmatter had neither `relationships: []` nor a `relationships:` block fell
+  through a no-op `re.sub`, was rewritten byte-identical, and was still counted
+  as linked — the relationship was lost and the report claimed otherwise. The
+  substitutions are also function-form now, so a backslash in the JSON-encoded
+  description is not eaten as a replacement-template escape.
+- **A tight markdown heading is no longer swallowed into a paragraph.**
+  `md_to_html` required a heading to be alone in its blank-line-delimited block,
+  but a heading ends at its newline — so `## Overview` followed directly by
+  prose emitted a literal `## Overview` inside `<p>`.
+  `normalize_html_for_compare` strips `<h1..h6>` but cannot strip that, so two
+  identical descriptions compared as different.
+- **`images` validates the URL and contains the write.** Image URLs come from
+  the world API and went unchecked into `urlopen`, which speaks `file:` — so
+  `images --execute` could be steered into reading local files. Only https (and
+  loopback http, for the dev preset) is fetched, and credentials in the URL are
+  refused. The API-supplied name and the extension carved off the URL are both
+  reduced to one safe filename component, and the destination is confirmed
+  inside `_attachments/` before anything is written.
+- **UTF-8 is pinned on every text file the CLI reads or writes.** Ten sites
+  opened text at the platform default encoding while writing non-ASCII content
+  (`ensure_ascii=False` dumps, mobRPG names, vault prose) — wrong decoding on a
+  non-UTF-8 locale, and disagreeing with `vault.py`/`suggest.py`, which already
+  read the map as UTF-8. Several also leaked the handle.
+- **The mobRPG CI job pins `wheel`.** `test_packaging` builds a real wheel with
+  `--no-isolation`, and setuptools only grew a native `bdist_wheel` in 70.1, so
+  the macOS 3.10 leg aborted with "Missing dependencies: wheel" while every
+  other leg happened to ship a newer setuptools. The workflow also drops the
+  persisted checkout credentials and declares `contents: read`.
+- **Docs corrected against the shipped contract.** `part_of` maps to a
+  container-first `Link`, not `Parent` (`Parent`/`Child`/`Spouse` are genealogy
+  between people); the ontology export now says the four affiliation event types
+  are chosen from both endpoint kinds and degrade to `Generic` otherwise;
+  `llms.txt` no longer calls `map` and `images` read-only when `map init`/`map
+  sync` and `images --execute` write locally; the migration note no longer reads
+  as though the current `sync` verb was removed; and the re-parenting procedure
+  no longer applies location fields to faction membership, which is edge-only.
+  `llms.txt` also no longer claims every mutating verb is dry-run by default —
+  `pull` and `write` have no `--execute` flag and write as soon as they run.
+- **An element deleted upstream stays deleted.** `suggest` held a note whose node
+  carried a `pending` or `dismissed` review_state, but not a `deleted` one — and
+  `deleted` carries no `element_id`, so the note read as net-new and was re-filed
+  on every run, silently reversing the GM's decision to remove the element. It is
+  the same class of durable "no" as a dismissal and is now held alongside them.
+  `write_back`'s guard had the same gap from the other side: with no `element_id`
+  the accepted branch never covered a `deleted` node, so a fresh `pending` node
+  would erase the deletion record and its `review_note`.
+- **An affiliation eventType off the person/group grid degrades to `Generic`.**
+  `Reign`/`Employ`/`Membership`/`Leadership` *are* mobRPG's person↔group join —
+  the GUI builds them from a Person plus a Political or Organization and offers
+  no other shape. When the grid declined an edge, `resolve_event_type` still fell
+  through to the flat predicate table, which maps `owns`/`serves` by predicate
+  alone and cannot see the endpoints; a `Person owns Item` edge was pushed as a
+  `Reign` event nothing in a world could have produced. Off-grid affiliation
+  types now resolve to `Generic`, which is how mobRPG already carries every
+  non-group edge, with the predicate on the event title. Both directions share
+  `resolve_event_type`, so `pull-canon --baseline` looks up the same answer and
+  the edges still reconcile. With no kinds to judge by, the flat mapping stands.
+- **Interposing a new container no longer leaves it childless.** Creating an
+  entity that sits *between* an existing parent and its existing children — a
+  district between a station and its venues, a cell between a faction and its
+  members — never prompted anyone to re-point the children, so the container
+  landed as a leaf at the same level as the things it contains. Nothing surfaced
+  it either: the children's own files were untouched and still said what they
+  said yesterday. `shared/relationship-normalization.md` gains the re-point
+  procedure (list candidates → GM confirms each → update the child), and
+  session-wrapup routes new container entities through it.
+- **Containment is two fields and they must agree.** `parent_location:` (the
+  frontmatter scalar the site groups by) and the `part_of` edge (the graph edge
+  every query, campaign-qa, and the mobRPG sync read) are independent; neither
+  implies the other. Writing only the scalar leaves a note correctly nested on
+  the published site while being an orphan in the graph — the state all three
+  Entertainment District venues were in. Documented in
+  `shared/relationship-normalization.md`, with a campaign-qa graph-health check
+  for each direction of the mismatch plus one for childless interposed
+  containers.
+- **campaign-qa now flags an affiliation authored from both sides** — `A serves
+  B` on A and `B employs A` on B are both in-vocabulary base predicates, so the
+  off-vocabulary and stored-inverse checks miss them, but it is one fact written
+  twice and it pushes as two events.
+- **Person↔group affiliation events now follow mobRPG's own construct.** mobRPG
+  derives an affiliation's event type from what the edge points AT — its GUI
+  offers Reign/Employ only on a Political element and Leadership/Membership only
+  on an Organization. `suggest` used a flat predicate→eventType table that knew
+  nothing about the endpoints, so `serves` fired `Employ` at Corvid Financial and
+  Kinetic Logistics, both Organizations: a pairing the GUI cannot produce. Events
+  are now resolved through that grid from the endpoints' real kinds (canon
+  `element_kind` for a linked note, the proposed kind for a net-new one) and named
+  the way mobRPG names them — person first, mobRPG's own title word and
+  preposition (`"Marek Solano, Member of Corvid Financial"`, not
+  `"Marek Solano, serves Corvid Financial"`), including for edges authored
+  group-first like `Corvid Financial employs Marek Solano`. A per-world
+  `relationshipTypes` entry overrides the grid only when it *differs* from the
+  ontology default, since `map init`/`map sync` write an entry for every predicate
+  they discover. The rel/ externalRef is unchanged, so nothing re-files as net-new.
+- **Edges to accented entities are no longer silently dropped.** `suggest._key`
+  stripped `[^a-z0-9]`, which treats the two unicode normal forms differently: a
+  combining accent is removed but its base letter survives (NFD `Róbert` →
+  `robert`), while a precomposed letter is removed whole (NFC `Róbert` →
+  `rbert`). macOS stores filenames NFD-decomposed and a `[[wikilink]]` typed into
+  a note is NFC, so every edge pointing at an accented entity failed to resolve
+  and was reported "target not a world element" — 5 of the Dead End vault's
+  entities, including Opeyemi Tichá, who is already linked upstream. Keys now
+  decompose and drop combining marks, so both forms fold to the same value. This
+  is the same root cause as the publish-side issue #139.
+- **Push and reconcile resolve an edge's type through one entry point.**
+  `suggest` emitted the grid's type while `pull-canon --baseline` still looked the
+  edge up under the flat predicate mapping, so any affiliation the grid regraded
+  could never reconcile: it stayed `event_id`-less and every later run re-proposed
+  an event mobRPG already held. Both now call `map_cmd.resolve_event_type`.
+  Stamping a baseline also refreshes the row's recorded `event_type`, since
+  leaving `event_type: Employ` beside the id of a Membership event writes a fact
+  the match just disproved.
+- **Duplicate affiliation halves collapse before submit** — an affiliation
+  authored on both endpoints (`Marek serves Corvid` on the person, `Corvid employs
+  Marek` on the organization) pushed as two separate Employ events. Storage is
+  single-direction by rule, so the second half is now dropped and reported.
+  Scoped to Reign/Employ/Membership/Leadership: two `Generic` events between the
+  same pair are two different facts and both survive.
+- **The push report says when the grid disagrees with the predicate map** —
+  regrades (`Membership -> Employ` because the target is a Political) and
+  endpoint pairs mobRPG could not build (`Item -> Organization` for an `owns`
+  edge stored inverse) are both surfaced instead of silently emitted.
+- **`pull-canon` no longer scaffolds junk vault notes** — `_scaffoldable`
+  rejected reified-relationship refs (`rel/`) but let description-suggestion refs
+  (`desc/`, minted by the retired `suggest-desc`) through, so an accepted
+  `space_game:desc/Items & Artifacts/Type II3-A` card scaffolded a stub at a
+  spurious top-level `desc/` folder for an element that was already linked. Both
+  reserved roots are now rejected, and scaffolding additionally requires the ref's
+  first path segment to be a directory the vault already has — so the next verb to
+  mint a new ref namespace can't repeat this. Refs that don't qualify are printed
+  under `NOT SCAFFOLDED`, never silently created (#140).
+- **`pull-canon` scaffolded every note as a Person** — `_fetch_live` never carried
+  the element kind or name into its live summaries, so `scaffold_note` fell through
+  to its `Person`/`npc` defaults and a name derived from the ref path for *every*
+  note it created. Both now come from the accepted card's own payload.
+- **Upstream deletions outside the review queue are reconcilable** — the
+  accepted-element verification only ever saw elements that came through review, so
+  an element deleted directly in mobRPG was reported by `whats-new` under GONE and
+  then never flagged on its node. New `pull-canon --reconcile-deletions` is that
+  report's write side. It reads live ids through a strict paginated fetcher that
+  raises rather than fail soft, and aborts on an unreadable or empty world instead
+  of flagging every linked node deleted off a failed read. A kind whose endpoint
+  answers with an empty body (how this API reports "no elements of this kind")
+  contributes no ids rather than aborting (#141).
+- **mobRPG duplicate re-push guard** — `suggest` no longer re-files entities that
+  already carry a `pending` or `dismissed` `mobrpg:` node review_state (a suggestion
+  is already in the reviewer's queue, or was rejected). `node_index` returns the
+  submitted set; `partition_entities` holds them out of net-new and reports `[held]`.
+- **mobRPG containment edge direction** — `suggest` now emits spatial containment
+  relations (`part_of`/`located_at`/`headquartered_at`) container-first to match
+  mobRPG's `Link` convention, instead of subordinate-first (which landed
+  `planet part_of system` as "planet is the system's parent"). The reversed-
+  predicate set is derived from the ontology (asymmetric `Link` predicates).
+- **Credential CSV gitignore gap** — `credentials*.csv` is now ignored in the
+  prototype so a stray token file can never be committed. Untracked stale run
+  artifacts (`*_out/`, `space_vault_preview/`, `space_extract.json`).
+
+Release-blocker pass (data-corruption and integrity fixes found in a four-way
+adversarial review of the branch, each fixed test-first):
+
+- **Intraword `_` no longer mangles descriptions** (`md.py`) — `snake_case`,
+  `file_name`, and URLs kept their underscores instead of sprouting `<em>` spans;
+  `_` emphasis now requires flanking whitespace/punctuation (CommonMark rule).
+  Previously this malformed HTML went straight into `_create(description=...)`.
+- **`suggest._read` frontmatter split** — replaced the banned
+  `str.split("---", 2)` with the shared `_split_frontmatter`; a note opening with
+  `---` and no closing fence no longer raises `ValueError` and aborts the whole
+  `suggest` run, and `--- inline ---` notes parse correctly.
+- **`sex` classifier sanitizer bypass** (`suggest.py`, `map_cmd.py`) — the gender
+  name now runs through `classifier_name()` like every other classifier, so markup
+  (`male [[note]]`) can no longer leak upstream into a pushed `CreateElement` name.
+- **`_split_frontmatter` thematic-break misclassification** (`node.py`) — a note
+  with no YAML frontmatter whose body opens with a `---` thematic break is no
+  longer treated as having frontmatter, so `write_node` stops splicing the
+  `mobrpg:` block into prose (reachable via `suggest --write-back` and `pull-canon`).
+- **Frontmatter fence newline** (`node.py`) — a rebuilt body that lost its leading
+  newline no longer glues onto the closing `---` fence (`---## Overview`); exactly
+  one separator is guaranteed.
+- **Link href double-escape** (`md.py`) — a link URL is no longer HTML-escaped a
+  second time, which had accreted an extra `amp;` on every round-trip.
+- **`md.py` table cells honor escaped `\|`** — cells split on unescaped pipes only,
+  so escaped pipes no longer cause a column-count mismatch in pushed tables.
+- **Full-page pagination warning** (`map_cmd.py`, `suggest.py`) — a world with more
+  than the `?size=500` page limit now warns rather than silently minting duplicates.
+- **Atomic, private credential write** (`config.py`) — credentials are written to a
+  `0600` temp file and renamed into place, closing the brief world-readable window
+  on a pre-existing loose-perm `credentials.json`; Windows write path now tested.
+- **`auth status` stale-token warning** — warns when a `MOBRPG_TOKEN` env var is set
+  and would override the imported identity that `status` displays.
+
+Second fix round (a four-way adversarial review of the post-LWW-rework
+`sync`/`suggest` path, 2026-08-11, each fixed test-first):
+
+- **Vault-only sections generalize past `## GM Notes`** — `## Notes`,
+  `## Appearances`, and `## Source References` are session bookkeeping, not
+  canon prose, and pushing them buried the world owner's review queue in
+  churn; they're now vault-only by default too, and every `pull` dry-run row
+  prints the canon line-count it's about to trade so a shrinking pull gets
+  read before it's confirmed (#146).
+- **A never-synced note no longer manufactures a push** — with no LWW
+  baseline to compare against, `sync` now decides from content instead of
+  timestamps (match → stamp in sync, empty scaffold → pull, else → stamp
+  only), and a heading left with no body (`## Properties` with nothing under
+  it) is dropped from the push candidate rather than sent as description
+  content (#147).
+- **`map sync` folds case/whitespace/unicode when matching vocab keys** — a
+  casing or whitespace-only difference (`Chitinoteuthis` vs
+  `chitinoteuthis `) previously split one vault term into a stale map entry
+  plus an unbound duplicate; `whats-new` also distinguishes vocab that's
+  recorded-but-unbound from genuinely new (#148).
+- **`sync`/`suggest` send raw Markdown, not lossy HTML** — omitting
+  `descriptionType` silently selected Html, forcing every pushed description
+  through the CLI's own `md_to_html`; both verbs now set
+  `descriptionType: "Markdown"` and send the cleaned markdown verbatim (the
+  drift compare still happens in HTML space to avoid false positives) (#150).
+- **Update suggestions get their own `upd/<relpath>#<hash>` externalRef** —
+  reusing the note's create-time ref meant only the first `UpdateElement` a
+  GM ever accepted actually reached them; a per-content-hash ref under its
+  own namespace lets identical re-pushed prose correct an open proposal in
+  place while edited prose mints a fresh one, and `pull-canon` now
+  adjudicates only the row matching the node's `pending_ref` (#151).
+- **`submit-batch` reports stored/corrected/already-claimed distinctly** —
+  a plain aggregate "N stored" count hid rows a terminal (Accepted/Dismissed)
+  suggestion had already swallowed; those are now named and flagged as
+  proposals the GM will never see (#152).
+- **`pull-canon` gates accepted element_ids on world liveness** — a
+  still-Accepted create could re-stamp a dead `element_id` onto a node
+  `--reconcile-deletions` had already flagged deleted; the main pass now
+  checks the same live element-id set and treats absence as authoritative
+  (#153).
+- **A note's create ref no longer hijacks the update it is waiting on** — a
+  terminal Accepted/Dismissed row at the note's plain create ref ran the
+  element-level adjudication over a node holding a `pending_ref`, stamping a
+  verdict the GM gave to different content and stranding the claim. While a
+  push is in flight the create row stands down; deletion stays authoritative.
+- **Section boundaries are fence-aware** — a ``` block under `## GM Notes`
+  whose first line began `## ` (a quoted stat block) ended the vault-only
+  section early and leaked every GM line below it into the push candidate. A
+  `##` line inside a fence is code, not a heading, in both the vault-only
+  split and the empty-heading strip.
+- **`map sync` preserves hand-authored top-level map keys** — the merge
+  rebuilt the map from the fresh discovery alone, silently deleting a vault's
+  `vaultOnlySections` list; the next `sync` then reverted to the default
+  sections with no warning.
+- **`suggest` strips the vault's configured sections from create
+  descriptions** — the create path hardcoded the four default headings, so a
+  custom vault-only section that `sync` kept local was published verbatim the
+  first time an entity was pushed. Both push paths now read the same
+  `vaultOnlySections` loader.
+
+---
+
 ## [1.8.53] — 2026-08-22
 
 Landing page selection: the config that controlled it did nothing, and the
@@ -607,7 +1014,7 @@ crosswalk is retired.
 
 ### Changed
 
-- **mobRPG CLI (`docs/prototypes/mobrpg/`) resolves all element/event ids from
+- **mobRPG CLI (`tools/mobrpg/`) resolves all element/event ids from
   the vault's own `mobrpg:` nodes** — the sole source of truth. `suggest` drops
   `--crosswalk` and the packaged default; `images` derives its id→file map from
   nodes.
