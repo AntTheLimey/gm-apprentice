@@ -36,7 +36,7 @@ def test_faction_part_of_scalar_is_derived_from_the_edge(tmp_path):
     vault = tmp_path / "vault"
     write_cmd.run([str(ep), "--out", str(vault)])
     txt = next(vault.rglob("Ashen_Cell.md")).read_text(encoding="utf-8")
-    part_of = next(l for l in txt.splitlines() if l.startswith("part_of:"))
+    part_of = next(line for line in txt.splitlines() if line.startswith("part_of:"))
     assert part_of == 'part_of: "[[The_Ashen_Hand]]"', part_of   # slug style, as parent_location
     # and the edge is still present — scalar and edge agree, not one or the other
     assert "type: part_of" in txt

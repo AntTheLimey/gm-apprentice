@@ -169,3 +169,36 @@ def test_entity_name_cannot_escape_its_folder(tmp_path):
     assert victim.read_text(encoding="utf-8") == before   # untouched
     data = json.loads((out / "orphan-linking.json").read_text(encoding="utf-8"))
     assert data["linked"] == []
+
+
+def test_dry_run_reports_unwritable_the_same_as_execute(tmp_path):
+    # A dry-run exists to predict the execute run. Validating only under
+    # --execute meant the preview listed a note as linked that the real run
+    # would refuse and report as unwritable.
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(NOTE.format(name="Corwin System"), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(NOTE_NO_RELS.format(name="Corwin I"), encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+    before = (locs / "Corwin I.md").read_text(encoding="utf-8")
+
+    rc = link_orphans.run([str(extract), "--vault", str(vault),
+                           "--out", str(out), "--systems", "Corwin"])   # no --execute
+
+    assert rc == 0
+    assert (locs / "Corwin I.md").read_text(encoding="utf-8") == before  # still untouched
+    data = json.loads((out / "orphan-linking.json").read_text(encoding="utf-8"))
+    assert data["linked"] == []                                          # not promised
+    assert any(u["entity"] == "Corwin I" for u in data["unwritable"])
+
+
+def test_system_name_with_regex_metacharacters(tmp_path):
+    # --systems is operator input interpolated into patterns. A dot or paren
+    # would otherwise match the wrong things, or raise re.error outright.
+    exists = {"Alpha (Prime) System", "Alpha (Prime) II"}
+    assert link_orphans.derive_parent(
+        "Alpha (Prime) II", exists, ["Alpha (Prime)"]) == "Alpha (Prime) System"
+    # the dot must be literal, not "any character"
+    assert link_orphans.derive_parent("StXJohn II", {"St.John System"}, ["St.John"]) is None

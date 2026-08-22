@@ -65,24 +65,28 @@ def vault_has_rels(vault: str) -> set:
 def derive_parent(name: str, exists: set, systems: list[str]) -> str | None:
     for sys_ in systems:
         sysname = f"{sys_} System"
+        # --systems is operator input interpolated into patterns below. A name
+        # carrying a regex metacharacter ("St. John", "Alpha (Prime)") would
+        # otherwise match the wrong things, or raise re.error outright.
+        esc = re.escape(sys_)
         if name == sysname or name == sys_:
             return None
         # moon: "<Sys> <ROMAN> <LETTER>"
-        m = re.fullmatch(rf"{sys_}\s+({ROMAN})\s+([A-Z])", name)
+        m = re.fullmatch(rf"{esc}\s+({ROMAN})\s+([A-Z])", name)
         if m:
             parent = f"{sys_} {m.group(1)}"
             return parent if parent in exists else (sysname if sysname in exists else None)
         # planet: "<Sys> <ROMAN>"
-        if re.fullmatch(rf"{sys_}\s+{ROMAN}", name):
+        if re.fullmatch(rf"{esc}\s+{ROMAN}", name):
             return sysname if sysname in exists else None
         # body: "<Sys> <LETTER>"
-        if re.fullmatch(rf"{sys_}\s+[A-Z]", name):
+        if re.fullmatch(rf"{esc}\s+[A-Z]", name):
             return sysname if sysname in exists else None
         # gate: contains "Gate" and the system token
         if "Gate" in name and name.startswith(sys_):
             return sysname if sysname in exists else None
         # belt: "<Sys>ian Belt" or "<Sys> Belt"
-        if re.search(rf"{sys_}(ian)?\s+Belt", name):
+        if re.search(rf"{esc}(ian)?\s+Belt", name):
             return sysname if sysname in exists else None
     return None
 
@@ -186,15 +190,19 @@ def run(argv: list[str]) -> int:
         if not os.path.exists(path):
             still.append((kind, name))
             continue
+        # Read and validate in BOTH modes. A dry-run exists to predict the
+        # execute run; doing this check only under --execute meant the preview
+        # listed a note as linked that the real run would refuse and report as
+        # unwritable. Only the write itself is gated.
+        with open(path, encoding="utf-8") as fh:
+            txt = fh.read()
+        edited = add_relationship(txt, target, rtype, "auto-linked: " + why)
+        if edited is None:
+            # No relationships key to write into. Report it rather than
+            # rewriting the file unchanged and claiming the link was made.
+            unwritable.append((kind, name, target, rtype))
+            continue
         if args.execute:
-            with open(path, encoding="utf-8") as fh:
-                txt = fh.read()
-            edited = add_relationship(txt, target, rtype, "auto-linked: " + why)
-            if edited is None:
-                # No relationships key to write into. Report it rather than
-                # rewriting the file unchanged and claiming the link was made.
-                unwritable.append((kind, name, target, rtype))
-                continue
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(edited)
         linked.append({"entity": name, "kind": kind, "type": rtype, "target": target,

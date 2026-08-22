@@ -121,6 +121,15 @@ CLI never overwrites a live element directly.
   satisfy it *and* carry `../` segments — resolving onto an existing file
   outside the kind's folder, which was then rewritten. The candidate is now
   resolved against the folder root and skipped if it escapes.
+- **`link-orphans` dry-run predicts what `--execute` will do.** The
+  "is there anywhere to write this?" check ran only under `--execute`, so a
+  preview listed a note as linked that the real run would refuse and report as
+  unwritable. The note is read and validated in both modes now; only the write
+  itself is gated.
+- **`link-orphans` escapes `--systems` names before matching.** They are
+  interpolated straight into the moon/planet/body/belt patterns, so an operator
+  passing a name carrying a regex metacharacter ("St.John", "Alpha (Prime)")
+  matched the wrong things, or raised `re.error` outright.
 - **A note is only marked `pending` once its suggestion really lands.** `sync
   --execute` wrote every push note with `review_state: pending` and a
   `pending_ref` *before* submitting the batch. If the submit failed, or the
