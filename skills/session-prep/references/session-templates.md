@@ -64,17 +64,23 @@ this session *about* dramatically? Not "the PCs go to the opera" but
 "the investigators make first contact with Viennese high society and get
 their first glimpse of the Brotherhood's influence."
 
-## Reconciliation Context
+## GM Notes
+
+<!-- Keeper-facing. Everything under this heading is hidden from a
+     published player site by the default exclude, so new GM content
+     belongs here rather than in a new top-level section. -->
+
+### Reconciliation Context
 
 [Written by Phase 1 Reconcile. Absent for first sessions.]
 
-### Consequences
+#### Consequences
 [Forward-looking summary of what follows from last session]
 
-### Salvageable Prep
+#### Salvageable Prep
 [Unplayed prep: dropped / recycled / must-happen]
 
-### GM Decisions
+#### GM Decisions
 [Resolved decisions with outcomes, appended one at a time]
 
 ## Prior Prep Review

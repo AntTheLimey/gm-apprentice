@@ -137,8 +137,8 @@ After filing: "Updates filed. Run campaign-qa to validate,
 or proceed to session prep?"
 
 **When invoked from reconcile:** skip this prompt — results
-flow into reconcile step 7's `## Reconciliation Context`
-under `### World Evolution`. Set `world_evolved` on the
+flow into reconcile step 7's `### Reconciliation Context`
+under `#### World Evolution`. Set `world_evolved` on the
 session index to the current session reference.
 
 ## Universal Faction Turn

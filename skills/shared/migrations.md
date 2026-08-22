@@ -579,3 +579,67 @@ no sidecar crosswalk.
   A vault whose entities already exist upstream but lack nodes is
   linked by matching live mobRPG elements by name, never by reading a
   crosswalk.
+
+## Migration: 1.8.51 → 1.8.52
+
+Re-nests `## Reconciliation Context` under `## GM Notes`, and makes the
+`<!-- gm-only -->` fence nesting-aware.
+
+Reconciliation Context is entirely Keeper-facing — GM decisions and their
+rationale, unplayed-prep dispositions, and the World Evolution block
+describing what the factions did while the PCs weren't looking. As a
+top-level H2 it was a sibling of `## GM Notes` rather than a child, so it
+published to player-facing sites. A vault that sets its own
+`exclude_sections` keeps that list as written — a newly-added default never
+reaches it — which is exactly the failure the 1.8.3 two-primitive standard
+was introduced to end.
+
+### Structural
+
+- **`## Reconciliation Context` → `### Reconciliation Context` under
+  `## GM Notes`** in Wrap-Up and session-plan files, creating `## GM Notes`
+  where absent. Its own subsections demote one level with it
+  (`### Consequences` → `#### Consequences`, and likewise Salvageable Prep,
+  GM Decisions, and World Evolution). A pure structural move — nothing is
+  added, removed, or reworded, only relocated and demoted — so it applies
+  automatically after preview confirmation, like the 1.8.3 re-nesting.
+- Readers accept **both** forms. A vault that has not yet migrated keeps
+  working: session-prep looks for the nested heading first and falls back to
+  a top-level `## Reconciliation Context`.
+
+### Content
+
+- **None required.** Vaults that added `"Reconciliation Context"` to their own
+  `exclude_sections` as a workaround may leave it there — it is harmless
+  once the section is nested, and still protects any file the structural
+  pass did not reach.
+- **New optional publish-control fields**, documented in
+  `entity-schema.md` and picked up by Schema Mirror Sync into each vault's
+  `_meta/entity-types.md`. All are absent by default and change nothing for a
+  vault that does not use them:
+  - `publish: false | stub` on any entity — `false` emits no page in any mode
+    (the file still parses, so links to it render as plain text); `stub` emits
+    the page for navigation with only the sections named in
+    `publish_include_sections`.
+  - `publish_exclude_fields` — field names hidden on that file alone, merged
+    over the vault's global `exclude_fields`.
+  - `gm_only: true` on a single `relationships[]` entry — hides that edge from
+    the page, the relationship graph, and the search index.
+
+  Not backfilled and no GM action required. These exist because
+  `<!-- gm-only -->` is a body primitive with no meaning in frontmatter: a
+  secret held in a field, or in the mere existence of an edge, was previously
+  unprotectable without stripping the field campaign-wide.
+
+### Tooling
+
+- **Publish tool:** `<!-- gm-only -->` and `<!-- spoiler -->` fences are now
+  nesting-aware. Previously the first closer ended the outer block, so
+  wrapping a region that already contained inner fences published everything
+  after that inner closer — with balanced-looking markers and no warning.
+  An inner block now closes only itself. Code-fence detection follows
+  CommonMark too, so a marker shown inside a `~~~` block, a longer fence, or
+  an indented fence is read as documentation rather than obeyed as a real
+  closer. A closer with nothing open no longer silently does nothing: it is
+  counted and reported, and the unclosed-marker warning now says how many
+  blocks were left open.

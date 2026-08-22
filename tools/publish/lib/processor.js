@@ -69,8 +69,13 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   });
 }
 
+// Line endings are normalized first: the heading pattern below ends in `$`,
+// and `.` does not match `\r`, so on a CRLF vault NO heading matched and
+// nothing was ever excluded. processContent strips \r before rendering, which
+// kept the page itself safe and hid the bug — but publishedMarkdown does not,
+// and that is what feeds the search index, backlinks and recency.
 function filterSections(markdown, excludeSections = []) {
-  const lines = markdown.split('\n');
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const result = [];
   let excluding = false;
   let excludeLevel = 0;
@@ -102,6 +107,38 @@ function filterSections(markdown, excludeSections = []) {
   return result.join('\n');
 }
 
+// The inverse of filterSections: keep ONLY the named headings and their
+// content, dropping everything else including any preamble before the first
+// heading. Backs `publish: stub`, where the page must exist for navigation but
+// its body is prep. Defaults to keeping nothing — a stub opts content IN, so a
+// section added later is suppressed until the GM names it, rather than
+// appearing the moment someone writes it.
+function keepOnlySections(markdown, includeSections = []) {
+  const wanted = includeSections
+    .filter(s => typeof s === 'string')
+    .map(s => s.toLowerCase());
+  if (wanted.length === 0) return '';
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  const result = [];
+  let keeping = false;
+  let keepLevel = 0;
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const title = headingMatch[2].trim().toLowerCase();
+      if (keeping && level <= keepLevel) keeping = false;
+      if (wanted.includes(title)) {
+        keeping = true;
+        keepLevel = level;
+      }
+    }
+    if (keeping) result.push(line);
+  }
+  return result.join('\n');
+}
+
 function stripDataview(markdown) {
   return markdown.replace(/```dataview[\s\S]*?```/g, '');
 }
@@ -110,45 +147,94 @@ function stripDataview(markdown) {
 // <!-- gm-only -->...<!-- /gm-only -->). Shared implementation behind
 // stripGmOnly and stripSpoiler — same stripping behavior, different marker
 // name, so a marker of one name never strips a block of the other name.
+//
+// Nesting-aware by depth, NOT a boolean (#168). With a boolean, the first
+// closer ended the outer block, so wrapping a region that already contained
+// inner fences published everything after that inner closer. The markers looked
+// balanced, so the author had no reason to doubt the region was covered, and
+// nothing warned. Silent under-protection is the worst possible failure of the
+// one primitive whose entire job is hiding things — so an inner block now
+// closes only itself, and the outer block survives it.
 function stripMarkedBlocks(markdown, markerName) {
   const openRe = new RegExp(`^<!--\\s*${markerName}\\s*-->`);
   const closeRe = new RegExp(`^<!--\\s*/${markerName}\\s*-->`);
   const lines = markdown.split('\n');
   const result = [];
   const warnings = [];
-  let excluding = false;
-  let inCodeFence = false;
+  let depth = 0;
+  let orphanClosers = 0;
+  // The open fence's delimiter, or null outside a fence. Tracking the actual
+  // delimiter — not a boolean — is what makes ``` inside a ~~~ block (and vice
+  // versa) inert, per CommonMark: a fence closes only on the same character,
+  // at least as long as the opener, with nothing but whitespace after it.
+  //
+  // Only ^``` used to count as a fence, so a marker shown inside a ~~~ block,
+  // a ````-long fence, or an indented fence was obeyed as a real directive —
+  // ending the enclosing block early and publishing the rest. This repo's own
+  // docs demonstrate these markers inside fenced examples, so it is a shape
+  // that actually occurs. Getting this wrong leaks in BOTH directions: miss a
+  // fence and an example closer is obeyed; invent one and a real opener is
+  // ignored. Hence matching CommonMark rather than loosening the pattern.
+  let fenceDelim = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    if (/^```/.test(line)) {
-      inCodeFence = !inCodeFence;
+    // up to 3 leading spaces; 4+ would be an indented code block, not a fence
+    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    let isFenceLine = false;
+    if (fence) {
+      const [, delim, info] = fence;
+      if (fenceDelim === null) {
+        // A backtick fence's info string may not contain a backtick.
+        if (delim[0] !== '`' || !info.includes('`')) {
+          fenceDelim = delim;
+          isFenceLine = true;
+        }
+      } else if (delim[0] === fenceDelim[0]
+                 && delim.length >= fenceDelim.length
+                 && /^\s*$/.test(info)) {
+        fenceDelim = null;
+        isFenceLine = true;
+      }
     }
 
-    if (inCodeFence) {
-      if (!excluding) result.push(line);
+    if (fenceDelim !== null || isFenceLine) {
+      if (depth === 0) result.push(line);
       continue;
     }
 
     if (openRe.test(line.trim())) {
-      excluding = true;
-      result.push('');
+      depth += 1;
+      if (depth === 1) result.push('');   // one blank stands in for the whole block
       continue;
     }
 
     if (closeRe.test(line.trim())) {
-      excluding = false;
+      if (depth === 0) {
+        // A closer with nothing open. Don't let it drive depth negative — that
+        // would make a LATER opener fail to strip. Count it and warn instead.
+        orphanClosers += 1;
+        continue;
+      }
+      depth -= 1;
       continue;
     }
 
-    if (!excluding) {
+    if (depth === 0) {
       result.push(line);
     }
   }
 
-  if (excluding) {
-    warnings.push(`unclosed <!-- ${markerName} --> marker — content stripped to end of file`);
+  if (depth > 0) {
+    warnings.push(
+      `unclosed <!-- ${markerName} --> marker (${depth} block${depth === 1 ? '' : 's'} still open) `
+      + '— content stripped to end of file');
+  }
+  if (orphanClosers > 0) {
+    warnings.push(
+      `${orphanClosers} <!-- /${markerName} --> marker${orphanClosers === 1 ? '' : 's'} `
+      + `without a matching <!-- ${markerName} --> — check the block boundaries`);
   }
 
   const text = result.join('\n');
@@ -491,4 +577,60 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields };
+// How much of a file to publish, from its own `publish:` frontmatter key.
+// 'all' (default), 'stub' (page shell, body suppressed), 'none' (no page).
+// Absent/true/anything unrecognized means 'all' — a typo must not silently
+// unpublish a page, and must not silently publish one either, so only the two
+// explicit opt-outs are honoured.
+function publishMode(frontmatter) {
+  const raw = frontmatter && frontmatter.publish;
+  if (raw === false || raw === 'false' || raw === 'none') return 'none';
+  if (raw === 'stub') return 'stub';
+  return 'all';
+}
+
+// The GM-only marker on a single relationship edge. Frontmatter carries no
+// body prose, so `<!-- gm-only -->` has no meaning here — an edge whose very
+// existence is the secret (a "loyal escort" who `serves` the cult leader)
+// needs its own flag.
+function isGmOnlyEdge(rel) {
+  return !!(rel && (rel.gm_only === true || rel.gm_only === 'true'));
+}
+
+// One page's frontmatter as a reader may see it. Everything derived from
+// frontmatter — the relationship graph, backlinks, the search index, sheet
+// meta rows — must be built from THIS, never from the raw frontmatter.
+//
+// Three layers, in order:
+//   1. edges marked `gm_only: true` are dropped
+//   2. the file's own `publish_exclude_fields` is merged over the global
+//      `exclude_fields` — per-file, because excluding `occupation` campaign-
+//      wide to hide one traitor strips it from every honest NPC too
+//   3. the existing per-file `include` override can re-admit a field
+function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
+  const fm = { ...frontmatter };
+
+  if (Array.isArray(fm.relationships)) {
+    const visible = fm.relationships.filter(r => !isGmOnlyEdge(r));
+    if (visible.length > 0) fm.relationships = visible;
+    else delete fm.relationships;
+  }
+
+  const filtered = filterFields(fm, excludeFields, overrides);
+
+  // Applied AFTER, and deliberately not subject to `overrides.include`: the
+  // file's own "hide this" outranks a config-level re-include. The config is a
+  // campaign-wide default; the frontmatter is the GM saying it about this
+  // specific secret. Where they disagree, hiding wins.
+  const perFile = Array.isArray(fm.publish_exclude_fields) ? fm.publish_exclude_fields : [];
+  for (const field of perFile) {
+    if (typeof field === 'string') delete filtered[field];
+  }
+  // The control fields are bookkeeping, never reader-facing.
+  delete filtered.publish;
+  delete filtered.publish_exclude_fields;
+  delete filtered.publish_include_sections;
+  return filtered;
+}
+
+module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, publishMode, isGmOnlyEdge, keepOnlySections };

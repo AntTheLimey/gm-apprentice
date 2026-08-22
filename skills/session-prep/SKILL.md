@@ -102,9 +102,9 @@ salvageable prep triage. See the shared procedure for the full
 workflow.
 
 **Reconcile-to-Prep handoff:** Reconcile writes
-`## Reconciliation Context` to the Wrap-Up file, capturing
-consequences, salvageable prep, and GM decisions. Steps 7-10
-read this and only gather what's new.
+`### Reconciliation Context` under the Wrap-Up file's
+`## GM Notes`, capturing consequences, salvageable prep, and
+GM decisions. Steps 7-10 read this and only gather what's new.
 
 ## Phase 2: Prep Forward — Context Gathering
 
@@ -176,8 +176,9 @@ Surface items gaining traction:
 whether to act. If they want to resolve, suggest a midwife
 worldbuilding conversation.
 
-If Reconcile ran, steps 7-10 read `## Reconciliation Context` and skip
-what's already established.
+If Reconcile ran, steps 7-10 read `### Reconciliation Context` (under
+`## GM Notes`; also accept a top-level `## Reconciliation Context` in a
+vault not yet migrated) and skip what's already established.
 
 #### Step 10c: Narrative plans
 

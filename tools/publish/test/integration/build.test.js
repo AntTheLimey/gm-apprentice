@@ -1186,6 +1186,27 @@ describe('build integration', () => {
       assert.ok(!html.includes('Secret Chamber'));
       assert.ok(!html.includes('treasure'));
     });
+
+    // #168: an inner gm-only block used to close the OUTER one, so everything
+    // between the inner closer and the outer closer published. Balanced
+    // markers, no warning — the author had no way to see it had failed.
+    it('a nested gm-only block does not end the enclosing block', () => {
+      const html = fs.readFileSync(path.join(outputDir, 'docs', 'locations', 'catacombs.html'), 'utf-8');
+      assert.ok(html.includes('Ossuary tunnels'));       // public lede survives
+      assert.ok(html.includes('Guided tours'));          // public tail survives
+      assert.ok(!html.includes('Malachar'));             // inner block
+      assert.ok(!html.includes('third alcove'));         // AFTER the inner closer
+      assert.ok(!html.includes('Vaskorrin'));           // after it too
+      assert.ok(!html.includes('Keeper Briefing'));
+      assert.ok(!html.includes('The Climax'));
+    });
+
+    it('keeps nested gm-only content out of search-index.json', () => {
+      const indexJson = fs.readFileSync(path.join(outputDir, 'docs', 'search-index.json'), 'utf-8').toLowerCase();
+      assert.ok(!indexJson.includes('malachar'));
+      assert.ok(!indexJson.includes('third alcove'));
+      assert.ok(!indexJson.includes('vaskorrin'));
+    });
   });
 
   describe('excludeCallouts (issue #137)', () => {
@@ -1554,5 +1575,190 @@ describe('build integration', () => {
         fs.rmSync(path.dirname(docs), { recursive: true, force: true });
       }
     });
+  });
+});
+
+describe('publish controls (#166, #167)', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures');
+  let outputDir;
+  let configPath;
+
+  before(() => {
+    outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-pubctl-'));
+    configPath = path.join(outputDir, 'config.json');
+    const config = {
+      vaultPath: path.join(fixturesDir, 'with-publish-controls'),
+      outputDir: path.join(outputDir, 'docs'),
+      attachmentsDir: '_attachments',
+      siteTitle: 'Publish Controls Test',
+      siteUrl: 'https://example.github.io/test-pubctl',
+      excludeDirs: ['_meta'],
+      excludeSections: [],
+      folderMap: {
+        'Characters/NPCs': 'characters/npcs',
+        'Characters/PCs': 'characters/pcs',
+        'Locations': 'locations',
+        'Chapters': 'chapters',
+      },
+    };
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    build({ configPath });
+  });
+
+  after(() => {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  const read = (...p) => fs.readFileSync(path.join(outputDir, 'docs', ...p), 'utf-8');
+  const exists = (...p) => fs.existsSync(path.join(outputDir, 'docs', ...p));
+
+  it('publish: false emits no page at all', () => {
+    assert.ok(!exists('locations', 'fort-william.html'));
+  });
+
+  it('publish: false keeps its body out of the search index', () => {
+    const idx = read('search-index.json').toLowerCase();
+    assert.ok(!idx.includes('impostors'));
+    assert.ok(!idx.includes('fort william'));
+  });
+
+  it('a link to a publish: false page renders as plain text, not a broken href', () => {
+    const html = read('locations', 'grand-trunk-road.html');
+    assert.ok(html.includes('Fort William'));            // still readable prose
+    assert.ok(!html.includes('fort-william.html'));      // but not a link
+  });
+
+  it('publish: stub keeps the page for navigation', () => {
+    assert.ok(exists('chapters', 'chapter-4-overview.html'));
+  });
+
+  it('publish: stub emits only the named sections', () => {
+    const html = read('chapters', 'chapter-4-overview.html');
+    assert.ok(html.includes('hot season'));              // the included Synopsis
+    assert.ok(!html.includes('Prep preamble'));
+    assert.ok(!html.includes('Key NPCs'));
+    assert.ok(!html.includes('is the traitor'));
+    assert.ok(!html.includes('The Climax'));
+    assert.ok(!html.includes('beneath the ossuary'));
+  });
+
+  it('publish_exclude_fields hides the fields on that file only', () => {
+    const singh = read('characters', 'npcs', 'havildar-singh.html');
+    assert.ok(!singh.includes('Thuggee'));
+    assert.ok(!singh.includes('Devout servant'));
+    const innkeeper = read('characters', 'npcs', 'innkeeper.html');
+    assert.ok(innkeeper.includes('Publican'));           // every other NPC unaffected
+  });
+
+  it('a gm_only relationship edge does not reach the page or its graph', () => {
+    const singh = read('characters', 'npcs', 'havildar-singh.html');
+    assert.ok(!singh.includes('Acharya'));
+    assert.ok(!singh.includes('Devendra'));
+  });
+
+  // No reverse-direction assertion here on purpose. The target page carries no
+  // backlink or graph markup for an inbound frontmatter edge in this
+  // configuration, so `!cultist.includes('Havildar')` passes whether or not
+  // the filtering works — it reads as coverage while proving nothing. The
+  // forward surface above is the one that actually regressed.
+
+  it('publish: stub reduces the PC story companion too', () => {
+    // The story is a SEPARATE file rendered on its own page. Reducing only the
+    // PC page left a stubbed PC publishing its complete story one URL over.
+    const story = read('story', 'characters', 'mira-chandra.html');
+    assert.ok(story.includes('public arc'));          // the included Overview
+    assert.ok(!story.includes('cult handler'));
+    assert.ok(!story.includes('Session 3'));
+  });
+
+  it('publish: stub reduces the PC page itself', () => {
+    const pc = read('characters', 'pcs', 'mira-chandra.html');
+    assert.ok(!pc.includes('Prep preamble'));
+    assert.ok(!pc.includes('Secret History'));
+    assert.ok(!pc.includes('feeding the cult'));
+  });
+
+  it('excluded fields and gm_only targets stay out of the search index', () => {
+    const idx = read('search-index.json').toLowerCase();
+    assert.ok(!idx.includes('thuggee'));
+    assert.ok(!idx.includes('devout servant'));
+  });
+});
+
+describe('landing config and pinning (#169)', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures');
+  let outputDir;
+  let configPath;
+  let warnings;
+
+  before(() => {
+    outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-landing-'));
+    configPath = path.join(outputDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: path.join(fixturesDir, 'with-landing-config'),
+      outputDir: path.join(outputDir, 'docs'),
+      attachmentsDir: '_attachments',
+      siteTitle: 'Landing Test',
+      siteUrl: 'https://example.github.io/landing',
+      excludeDirs: ['_meta'],
+      excludeSections: [],
+      folderMap: {
+        'Characters/NPCs': 'characters/npcs',
+        'Locations': 'locations',
+        'Sessions': 'sessions',
+      },
+    }, null, 2));
+
+    warnings = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      build({ configPath });
+    } finally {
+      console.warn = realWarn;
+    }
+  });
+
+  after(() => {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  const landing = () => fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+
+  it('honours max_npcs from the vault config', () => {
+    // The whole point of #169: this key was read by build.js but never
+    // populated by loadPublishConfig, so it did nothing at all.
+    // Four NPCs score and one more is pinned, so a working cap is the only
+    // thing that can produce three cards. With the config dead the default of
+    // six applies and all four scorers render.
+    const html = landing();
+    const cards = (html.match(/class="npc-card"/g) || []).length;
+    assert.strictEqual(cards, 3);
+  });
+
+  it('features a pinned NPC that no session mentions', () => {
+    // Zenobia scores zero — recency alone could never surface her.
+    assert.ok(landing().includes('Zenobia Marr'));
+  });
+
+  it('puts pinned entries before recency-scored ones, which then sort deterministically', () => {
+    // Scoped to the NPC zone: these names also appear in other zones earlier in
+    // the page, so a whole-document indexOf would compare the wrong occurrences.
+    const html = landing();
+    const zone = html.slice(html.indexOf('NPCs in Play'));
+    const order = [...zone.matchAll(/class="npc-card"[\s\S]*?<h4>([^<]+)<\/h4>/g)].map(m => m[1]);
+    assert.deepStrictEqual(order.slice(0, 3), ['Zenobia Marr', 'Adam Npc', 'Brody Npc']);
+  });
+
+  it('warns about a featured name that resolves to nothing', () => {
+    assert.ok(warnings.some(w => w.includes('featured_npcs') && w.includes('Ghost_Npc')));
+  });
+
+  it('renders quick links for resolvable names only, and warns about the rest', () => {
+    const html = landing();
+    assert.ok(html.includes('class="quick-link"'));
+    assert.ok(html.includes('Calcutta City Map'));
+    assert.ok(!html.includes('Nonexistent_Page'));
+    assert.ok(warnings.some(w => w.includes('quick_links') && w.includes('Nonexistent_Page')));
   });
 });

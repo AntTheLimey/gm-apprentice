@@ -142,3 +142,42 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
     assert.ok(!titles.includes('Wrong_NPC'), 'ignores the same-numbered wrap-up from another chapter');
   });
 });
+
+describe('scoreByRecency tie-break (#169)', () => {
+  // Equal scores used to fall back to vault scan order, because the sort had no
+  // secondary key and Array.prototype.sort is stable. Which entities survived
+  // `.slice(0, max)` was therefore decided by where the files sat on disk —
+  // invisible to the GM and unchangeable by anything they could author.
+  const mkSession = (md) => ({
+    title: 'Session_01', displayTitle: 'Session 01',
+    frontmatter: { type: 'session', status: 'played', play_date: '2026-08-01' },
+    markdown: md,
+  });
+  const mkNpc = (title) => ({
+    title, displayTitle: title, frontmatter: { type: 'npc', status: 'alive' }, markdown: '',
+  });
+
+  it('breaks ties by title so the selection is deterministic and explainable', () => {
+    const session = mkSession('Met [[Zed_Npc]], [[Adam_Npc]] and [[Mabel_Npc]].');
+    // deliberately reversed relative to the wanted output
+    const entities = [mkNpc('Zed_Npc'), mkNpc('Mabel_Npc'), mkNpc('Adam_Npc')];
+    const scored = scoreByRecency(entities, [session], [], { window: 3, max: 10, type: 'npc' });
+    assert.deepStrictEqual(scored.map(s => s.page.title), ['Adam_Npc', 'Mabel_Npc', 'Zed_Npc']);
+  });
+
+  it('keeps score as the primary key', () => {
+    const session = mkSession('Met [[Zed_Npc]] twice: [[Zed_Npc]]. Also [[Adam_Npc]].');
+    const chapter = { title: 'Ch', displayTitle: 'Ch', frontmatter: { type: 'chapter' },
+      markdown: 'Featuring [[Zed_Npc]].' };
+    const entities = [mkNpc('Adam_Npc'), mkNpc('Zed_Npc')];
+    const scored = scoreByRecency(entities, [session], [chapter], { window: 3, max: 10, type: 'npc' });
+    assert.strictEqual(scored[0].page.title, 'Zed_Npc');   // higher score wins over alphabetical
+  });
+
+  it('cuts at max by the same deterministic order', () => {
+    const session = mkSession('Met [[Zed_Npc]], [[Adam_Npc]] and [[Mabel_Npc]].');
+    const entities = [mkNpc('Zed_Npc'), mkNpc('Mabel_Npc'), mkNpc('Adam_Npc')];
+    const scored = scoreByRecency(entities, [session], [], { window: 3, max: 2, type: 'npc' });
+    assert.deepStrictEqual(scored.map(s => s.page.title), ['Adam_Npc', 'Mabel_Npc']);
+  });
+});
