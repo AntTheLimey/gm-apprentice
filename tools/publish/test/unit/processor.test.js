@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -186,6 +186,125 @@ describe('stripGmOnly', () => {
     const md = 'Public\n<!--  gm-only  -->\nSecret\n<!--  /gm-only  -->\nMore';
     const result = stripGmOnly(md);
     assert.strictEqual(result, 'Public\n\nMore');
+  });
+
+  // #168: fences were matched with a boolean, so the FIRST closer ended the
+  // outer block and everything after it published. A GM who wrapped a region
+  // that already contained inner fences saw balanced markers and reasonably
+  // assumed the whole region was covered. Silent under-protection is the worst
+  // failure mode for the one feature whose job is hiding things.
+  it('nests: an inner block does not end the outer block', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '## Premise',
+      '<!-- gm-only -->',
+      'secret A',
+      '<!-- /gm-only -->',
+      'still secret',
+      '<!-- /gm-only -->',
+      'public tail',
+    ].join('\n');
+    const result = stripGmOnly(md);
+    // one blank stands in for the whole outer block, inner markers add none
+    assert.strictEqual(result, '\npublic tail');
+    assert.ok(!String(result).includes('still secret'));
+    assert.ok(!String(result).includes('Premise'));
+  });
+
+  it('nests three deep', () => {
+    const md = [
+      '<!-- gm-only -->', 'a',
+      '<!-- gm-only -->', 'b',
+      '<!-- gm-only -->', 'c',
+      '<!-- /gm-only -->', 'd',
+      '<!-- /gm-only -->', 'e',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('warns on a closer that never opened, and keeps publishing after it', () => {
+    const md = 'A\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\nB\n<!-- /gm-only -->\nC';
+    const { text, warnings } = stripGmOnly(md);
+    assert.strictEqual(text, 'A\n\nB\nC');
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(warnings[0].includes('without a matching'));
+  });
+
+  // A marker inside a code example is documentation, not a directive. Only
+  // ``` was recognised, so a closer shown inside a ~~~ block, a longer fence,
+  // or an indented fence was obeyed — ending the real block early and
+  // publishing everything after it. This repo's own docs demonstrate the
+  // markers inside fenced examples, so it is a live shape.
+  it('ignores markers inside a ~~~ fence', () => {
+    const md = [
+      '<!-- gm-only -->',
+      'secret one',
+      '~~~markdown',
+      '<!-- /gm-only -->',
+      '~~~',
+      'secret two',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('ignores markers inside a fence longer than three backticks', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '````',
+      '```',
+      '<!-- /gm-only -->',
+      '```',
+      '````',
+      'secret tail',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('ignores markers inside a fence indented up to three spaces', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '   ```',
+      '<!-- /gm-only -->',
+      '   ```',
+      'secret tail',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('a ``` line does not close a ~~~ fence', () => {
+    const md = [
+      '<!-- gm-only -->',
+      '~~~',
+      '```',
+      '<!-- /gm-only -->',
+      '~~~',
+      'secret tail',
+      '<!-- /gm-only -->',
+      'public',
+    ].join('\n');
+    assert.strictEqual(stripGmOnly(md), '\npublic');
+  });
+
+  it('still publishes a fenced code example that sits outside any block', () => {
+    const md = 'Intro\n~~~markdown\n<!-- gm-only -->\nexample\n<!-- /gm-only -->\n~~~\nAfter';
+    assert.strictEqual(stripGmOnly(md), md);
+  });
+
+  it('reports how many blocks were left open at EOF', () => {
+    const md = '<!-- gm-only -->\na\n<!-- gm-only -->\nb';
+    const { text, warnings } = stripGmOnly(md);
+    assert.strictEqual(text, '');
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(warnings[0].includes('unclosed'));
+    assert.ok(warnings[0].includes('2'));
   });
 });
 
@@ -466,5 +585,136 @@ describe('resolveWikiLinks on non-image transclusions (review regression)', () =
   it('still resolves an ordinary wikilink', () => {
     const out = resolveWikiLinks('[[Backstory]]', { Backstory: 'docs/backstory.html' }, 'x.html');
     assert.strictEqual(out, '[Backstory](docs/backstory.html)');
+  });
+});
+
+describe('publishMode (#167)', () => {
+  it('defaults to all when the key is absent', () => {
+    assert.strictEqual(publishMode({}), 'all');
+  });
+
+  it('reads false, "false" and "none" as none', () => {
+    assert.strictEqual(publishMode({ publish: false }), 'none');
+    assert.strictEqual(publishMode({ publish: 'false' }), 'none');
+    assert.strictEqual(publishMode({ publish: 'none' }), 'none');
+  });
+
+  it('reads stub', () => {
+    assert.strictEqual(publishMode({ publish: 'stub' }), 'stub');
+  });
+
+  // A typo must not silently unpublish a page — nor silently publish one that
+  // was meant to be hidden. Only the explicit opt-outs count.
+  it('treats anything unrecognized as all', () => {
+    assert.strictEqual(publishMode({ publish: 'no' }), 'all');
+    assert.strictEqual(publishMode({ publish: true }), 'all');
+    assert.strictEqual(publishMode({ publish: 'yes' }), 'all');
+  });
+});
+
+describe('keepOnlySections (#167)', () => {
+  const md = '# Title\n\npreamble\n\n## Overview\n\npublic\n\n## The Climax\n\nsecret\n';
+
+  it('keeps nothing by default', () => {
+    assert.strictEqual(keepOnlySections(md, []), '');
+  });
+
+  it('keeps only the named section, dropping preamble and everything else', () => {
+    const out = keepOnlySections(md, ['Overview']);
+    assert.ok(out.includes('## Overview'));
+    assert.ok(out.includes('public'));
+    assert.ok(!out.includes('preamble'));
+    assert.ok(!out.includes('The Climax'));
+    assert.ok(!out.includes('secret'));
+  });
+
+  it('matches heading titles case-insensitively', () => {
+    assert.ok(keepOnlySections(md, ['overview']).includes('public'));
+  });
+
+  it('ends a kept section at the next same-or-higher heading', () => {
+    const nested = '## Keep\n\na\n\n### Child\n\nb\n\n## Drop\n\nc\n';
+    const out = keepOnlySections(nested, ['Keep']);
+    assert.ok(out.includes('a') && out.includes('b'));   // child rides along
+    assert.ok(!out.includes('c'));
+  });
+});
+
+describe('publishedFrontmatter (#166)', () => {
+  it('drops relationship edges marked gm_only', () => {
+    const fm = { relationships: [
+      { target: '[[Innkeeper]]', type: 'knows' },
+      { target: '[[Cult_Leader]]', type: 'serves', gm_only: true },
+    ] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.strictEqual(out.relationships.length, 1);
+    assert.strictEqual(out.relationships[0].target, '[[Innkeeper]]');
+  });
+
+  it('removes the relationships key entirely when every edge is gm_only', () => {
+    const fm = { relationships: [{ target: '[[X]]', type: 'serves', gm_only: true }] };
+    assert.ok(!('relationships' in publishedFrontmatter(fm, [], {})));
+  });
+
+  it('applies the file own publish_exclude_fields on top of the global list', () => {
+    const fm = { occupation: 'Thuggee Operative', age: 40, publish_exclude_fields: ['occupation'] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.ok(!('occupation' in out));
+    assert.strictEqual(out.age, 40);          // untouched for every other NPC
+  });
+
+  // The config is a campaign-wide default; the frontmatter is the GM saying it
+  // about this specific secret. Where they disagree, hiding wins.
+  it('does not let a config include re-admit a per-file exclusion', () => {
+    const fm = { occupation: 'secret', publish_exclude_fields: ['occupation'] };
+    const out = publishedFrontmatter(fm, ['occupation'], { include: ['occupation'] });
+    assert.ok(!('occupation' in out));
+  });
+
+  it('still honours a config include against the global list alone', () => {
+    const fm = { occupation: 'Publican' };
+    const out = publishedFrontmatter(fm, ['occupation'], { include: ['occupation'] });
+    assert.strictEqual(out.occupation, 'Publican');
+  });
+
+  it('strips its own control fields', () => {
+    const fm = { publish: 'stub', publish_exclude_fields: ['x'], publish_include_sections: ['y'] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.ok(!('publish' in out));
+    assert.ok(!('publish_exclude_fields' in out));
+    assert.ok(!('publish_include_sections' in out));
+  });
+
+  it('leaves a vault with none of the new keys unchanged', () => {
+    const fm = { occupation: 'Publican', relationships: [{ target: '[[A]]', type: 'knows' }] };
+    const out = publishedFrontmatter(fm, [], {});
+    assert.deepStrictEqual(out, fm);
+  });
+});
+
+describe('CRLF line endings', () => {
+  // A vault authored on Windows (or checked out with core.autocrlf) arrives
+  // with \r\n. The heading pattern ends in `$`, and `.` does not match `\r`,
+  // so NO heading matched and `## GM Notes` was never excluded. processContent
+  // strips \r before rendering, so the page itself was safe — but
+  // publishedMarkdown does not, and that is what feeds the search index,
+  // backlinks and recency. GM prose reached the search index verbatim.
+  const crlf = '## Public\r\npublic body\r\n\r\n## GM Notes\r\nSECRET PROSE\r\n';
+
+  it('filterSections still excludes a section on CRLF input', () => {
+    const out = filterSections(crlf, ['GM Notes']);
+    assert.ok(!out.includes('SECRET PROSE'));
+    assert.ok(out.includes('public body'));
+  });
+
+  it('keepOnlySections still finds its heading on CRLF input', () => {
+    const out = keepOnlySections(crlf, ['Public']);
+    assert.ok(out.includes('public body'));
+    assert.ok(!out.includes('SECRET PROSE'));
+  });
+
+  it('handles a lone CR as well', () => {
+    const cr = '## Public\rpublic body\r\r## GM Notes\rSECRET\r';
+    assert.ok(!filterSections(cr, ['GM Notes']).includes('SECRET'));
   });
 });

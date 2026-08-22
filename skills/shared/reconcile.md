@@ -90,8 +90,8 @@ For each finding, present the three-state prompt:
   flesh this out?"
 
 One finding at a time. Wait for GM decision before continuing.
-Record each resolution in the `## Reconciliation Context`
-section (step 7).
+Record each resolution in the `### Reconciliation Context`
+subsection under `## GM Notes` (step 7).
 
 ### 3. Walk through conflicts
 
@@ -189,8 +189,8 @@ conversational style as the rest of reconcile.
 - Entity files created or updated use
   `source: "world-evolution"`, with `lastUpdated` and
   `asOfSession` set to the current session
-- Results feed into step 7's `## Reconciliation Context`
-  under `### World Evolution`, containing:
+- Results feed into step 7's `### Reconciliation Context`
+  under `#### World Evolution`, containing:
   - Faction turn summaries (one line per faction: action,
     impact level, what's visible to PCs)
   - Surfaced consequences (trigger, manifestation)
@@ -200,25 +200,41 @@ conversational style as the rest of reconcile.
 
 ### 7. Record decisions
 
-Write a `## Reconciliation Context` section capturing:
+Write a `### Reconciliation Context` subsection capturing:
 - **Consequences** — forward-looking summary of what this
   session established (every claim traceable to vault or
   play notes, no invention)
 - **Salvageable prep** — disposition of each unplayed item
 - **GM decisions** — each conflict resolution with rationale
 - **World evolution** — if step 6.5 ran, include a
-  `### World Evolution` sub-section with faction turn
+  `#### World Evolution` sub-section with faction turn
   summaries, surfaced consequences, foreshadowing and
   discovery state changes, and world state updates
 
 This section provides cross-conversation continuity.
 Session-prep reads it to avoid re-gathering context.
 
-**Where to write it:** Always in the Wrap-Up file under
-`## Reconciliation Context` — session-prep reads this exact
-header. If a Plan file exists, you may append a short pointer
-(`See Wrap-Up for reconciliation context`) but the Wrap-Up
-file is the canonical location.
+**Where to write it:** Always in the Wrap-Up file, as a `###`
+subsection **under that file's `## GM Notes` heading** —
+create `## GM Notes` if the file has none. If a Plan file
+exists, you may append a short pointer (`See Wrap-Up for
+reconciliation context`) but the Wrap-Up file is the canonical
+location.
+
+**Why nested, not a top-level `## Reconciliation Context`:**
+every item in it is Keeper-facing — GM decisions and their
+rationale, unplayed prep, what the factions did while the PCs
+weren't looking. As a sibling H2 it published to player sites,
+because a GM's own `exclude_sections` list is respected as
+written and a newly-added default never reaches a vault that
+set its own. The 1.8.3 standard exists precisely so new GM
+content needs no new exclude entry: put it under `## GM Notes`
+and every config already hides it. Do not "fix" this by adding
+`Reconciliation Context` to an exclude list.
+
+**Reading it back:** accept either form — `###` under
+`## GM Notes` (current) or a top-level `## Reconciliation
+Context` (vaults not yet migrated).
 
 ## Rules
 

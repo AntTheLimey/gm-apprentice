@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.52] — 2026-08-21
+
+GM content reaching player-facing sites, found while publishing a live Call of
+Cthulhu campaign with a traitor PC (#166, #167, #168). Publish tool 1.11.24.
+
+### Added
+
+- **`publish: false` and `publish: stub`** (#167). There was no file-level
+  exclusion at all — `exclude_dirs` works per directory, `exclude_sections` per
+  heading, `exclude_fields` per field, and nothing per file. A wholly
+  Keeper-facing page in an otherwise publishable folder had to be fenced
+  section by section and re-audited after every edit. `publish: false` emits no
+  page in any mode, while still parsing the file so links to it render as plain
+  text rather than breaking. `publish: stub` keeps the page for navigation —
+  the chapter-overview case, where the page is needed but its body is a GM
+  bible — and emits only the sections named in `publish_include_sections`,
+  which defaults to none so a stub opts content *in*.
+- **`publish_exclude_fields`** (#166). Hides named fields on one file, merged
+  over the vault's global `exclude_fields`. Excluding `occupation`
+  campaign-wide to hide one traitor's true allegiance would have stripped it
+  from every honest NPC. A per-file entry is deliberately *not* re-admitted by
+  a config-level `overrides.fields.*.include`: where the two disagree, hiding
+  wins.
+- **`gm_only: true` on a single relationship edge** (#166). Some edges are
+  themselves the secret — a loyal-seeming escort who `serves` the cult leader.
+  The edge is dropped from the page, the relationship graph and the search
+  index.
+
+### Fixed
+
+- **Section filtering survives CRLF line endings.** The heading pattern ends in
+  `$` and `.` does not match `\r`, so on a vault authored on Windows (or checked
+  out with `core.autocrlf`) **no heading matched at all** and `exclude_sections`
+  excluded nothing. `processContent` strips `\r` before rendering, which kept
+  the page itself safe and hid the bug — but the published view used for the
+  search index, backlinks and recency does not, so `## GM Notes` prose reached
+  the search index verbatim. Both section filters normalize line endings first.
+- **`publish: stub` reduces a PC's story companion too.** The story is a
+  separate file paired in by the scanner and rendered on its own page, so
+  reducing only the entity page left a stubbed PC publishing its complete story
+  one URL over.
+- **Field exclusion now reaches the derived views** (#166). Frontmatter
+  filtering ran *after* backlinks, the search index and the relationship graphs
+  had already been built from the raw frontmatter — so excluding a field
+  removed it from the page and left it in every view derived from it.
+  Excluding `relationships` still drew the Connections graph with the secret
+  targets as node labels; excluding `occupation` still shipped it as the
+  search-index subtitle. The published view is now computed once, immediately
+  after the link map, and everything derived is built from that.
+
+- **`<!-- gm-only -->` fences nest.** The markers were tracked with a boolean,
+  so the *first* closer ended the outer block and everything after it
+  published. Wrapping a region that already contained inner fences therefore
+  protected only as far as the first inner `<!-- /gm-only -->` — with balanced
+  markers, no warning, and no way to tell from the source that it had failed.
+  Silent under-protection is the worst failure mode for the one primitive whose
+  whole job is hiding things. An inner block now closes only itself.
+  `<!-- spoiler -->` gets the same fix, from the same shared implementation.
+- **A marker inside a code example is documentation, not a directive.** Only a
+  line starting with exactly three backticks counted as a code fence, so a
+  `<!-- /gm-only -->` shown inside a `~~~` block, a ` ```` `-length fence, or a
+  fence indented by up to three spaces was obeyed as a real closer — ending the
+  enclosing block early and publishing the rest. Fence tracking now follows
+  CommonMark: a fence closes only on the same character, at least as long as
+  the opener, with nothing but whitespace after it. This repo's own
+  documentation demonstrates these markers inside fenced examples, so it is a
+  shape that occurs in practice.
+- **A `<!-- /gm-only -->` with nothing open is reported.** It used to be a
+  silent no-op. It is now counted and warned about at build time, and the
+  unclosed-marker warning says how many blocks were left open — so an
+  unbalanced file is visible instead of quietly publishing or quietly
+  truncating.
+- **`## Reconciliation Context` is written under `## GM Notes`.** Every item in
+  it is Keeper-facing — GM decisions and rationale, unplayed-prep dispositions,
+  and the World Evolution block describing what the factions did off-screen.
+  As a sibling H2 it published; in one vault it revealed an antagonist's
+  position the party had not discovered, across 9 wrap-up files. Adding it to
+  the default `exclude_sections` does not fix this, because a vault that sets
+  its own list keeps that list as written — which is precisely the failure the
+  1.8.3 two-primitive standard was introduced to end. `reconcile.md` now writes
+  it as a `###` under `## GM Notes` (with its subsections demoted to `####`),
+  and the session-plan template does the same. Readers accept both forms, so an
+  un-migrated vault keeps working.
+
+### Changed
+
+- **Migration 1.8.51 → 1.8.52** re-nests existing `## Reconciliation Context`
+  sections under `## GM Notes`, creating the container where absent. A pure
+  structural move, applied after preview confirmation like the 1.8.3
+  re-nesting.
+
+---
+
 ## [1.8.51] — 2026-08-17
 
 Two session-prep bugs found in one live prep pass: the wrong session picked
