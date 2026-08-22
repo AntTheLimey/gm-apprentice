@@ -1596,6 +1596,7 @@ describe('publish controls (#166, #167)', () => {
       excludeSections: [],
       folderMap: {
         'Characters/NPCs': 'characters/npcs',
+        'Characters/PCs': 'characters/pcs',
         'Locations': 'locations',
         'Chapters': 'chapters',
       },
@@ -1660,6 +1661,22 @@ describe('publish controls (#166, #167)', () => {
   // configuration, so `!cultist.includes('Havildar')` passes whether or not
   // the filtering works — it reads as coverage while proving nothing. The
   // forward surface above is the one that actually regressed.
+
+  it('publish: stub reduces the PC story companion too', () => {
+    // The story is a SEPARATE file rendered on its own page. Reducing only the
+    // PC page left a stubbed PC publishing its complete story one URL over.
+    const story = read('story', 'characters', 'mira-chandra.html');
+    assert.ok(story.includes('public arc'));          // the included Overview
+    assert.ok(!story.includes('cult handler'));
+    assert.ok(!story.includes('Session 3'));
+  });
+
+  it('publish: stub reduces the PC page itself', () => {
+    const pc = read('characters', 'pcs', 'mira-chandra.html');
+    assert.ok(!pc.includes('Prep preamble'));
+    assert.ok(!pc.includes('Secret History'));
+    assert.ok(!pc.includes('feeding the cult'));
+  });
 
   it('excluded fields and gm_only targets stay out of the search index', () => {
     const idx = read('search-index.json').toLowerCase();

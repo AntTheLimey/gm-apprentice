@@ -691,3 +691,30 @@ describe('publishedFrontmatter (#166)', () => {
     assert.deepStrictEqual(out, fm);
   });
 });
+
+describe('CRLF line endings', () => {
+  // A vault authored on Windows (or checked out with core.autocrlf) arrives
+  // with \r\n. The heading pattern ends in `$`, and `.` does not match `\r`,
+  // so NO heading matched and `## GM Notes` was never excluded. processContent
+  // strips \r before rendering, so the page itself was safe — but
+  // publishedMarkdown does not, and that is what feeds the search index,
+  // backlinks and recency. GM prose reached the search index verbatim.
+  const crlf = '## Public\r\npublic body\r\n\r\n## GM Notes\r\nSECRET PROSE\r\n';
+
+  it('filterSections still excludes a section on CRLF input', () => {
+    const out = filterSections(crlf, ['GM Notes']);
+    assert.ok(!out.includes('SECRET PROSE'));
+    assert.ok(out.includes('public body'));
+  });
+
+  it('keepOnlySections still finds its heading on CRLF input', () => {
+    const out = keepOnlySections(crlf, ['Public']);
+    assert.ok(out.includes('public body'));
+    assert.ok(!out.includes('SECRET PROSE'));
+  });
+
+  it('handles a lone CR as well', () => {
+    const cr = '## Public\rpublic body\r\r## GM Notes\rSECRET\r';
+    assert.ok(!filterSections(cr, ['GM Notes']).includes('SECRET'));
+  });
+});

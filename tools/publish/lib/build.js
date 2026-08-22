@@ -321,6 +321,13 @@ function build(options = {}) {
         ? page.frontmatter.publish_include_sections
         : [];
       page.markdown = keepOnlySections(page.markdown || '', include);
+      // A PC's story companion is a SEPARATE file paired in by the scanner and
+      // rendered on its own page. Reducing only page.markdown left a stubbed PC
+      // publishing its complete story — the same content the stub exists to
+      // withhold, one URL over.
+      if (page.storyMarkdown) {
+        page.storyMarkdown = keepOnlySections(page.storyMarkdown, include);
+      }
     }
     const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};
     page.frontmatter = publishedFrontmatter(

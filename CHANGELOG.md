@@ -37,6 +37,17 @@ Cthulhu campaign with a traitor PC (#166, #167, #168). Publish tool 1.11.24.
 
 ### Fixed
 
+- **Section filtering survives CRLF line endings.** The heading pattern ends in
+  `$` and `.` does not match `\r`, so on a vault authored on Windows (or checked
+  out with `core.autocrlf`) **no heading matched at all** and `exclude_sections`
+  excluded nothing. `processContent` strips `\r` before rendering, which kept
+  the page itself safe and hid the bug — but the published view used for the
+  search index, backlinks and recency does not, so `## GM Notes` prose reached
+  the search index verbatim. Both section filters normalize line endings first.
+- **`publish: stub` reduces a PC's story companion too.** The story is a
+  separate file paired in by the scanner and rendered on its own page, so
+  reducing only the entity page left a stubbed PC publishing its complete story
+  one URL over.
 - **Field exclusion now reaches the derived views** (#166). Frontmatter
   filtering ran *after* backlinks, the search index and the relationship graphs
   had already been built from the raw frontmatter — so excluding a field

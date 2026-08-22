@@ -69,8 +69,13 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   });
 }
 
+// Line endings are normalized first: the heading pattern below ends in `$`,
+// and `.` does not match `\r`, so on a CRLF vault NO heading matched and
+// nothing was ever excluded. processContent strips \r before rendering, which
+// kept the page itself safe and hid the bug — but publishedMarkdown does not,
+// and that is what feeds the search index, backlinks and recency.
 function filterSections(markdown, excludeSections = []) {
-  const lines = markdown.split('\n');
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const result = [];
   let excluding = false;
   let excludeLevel = 0;
@@ -113,7 +118,7 @@ function keepOnlySections(markdown, includeSections = []) {
     .filter(s => typeof s === 'string')
     .map(s => s.toLowerCase());
   if (wanted.length === 0) return '';
-  const lines = String(markdown).split('\n');
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const result = [];
   let keeping = false;
   let keepLevel = 0;
