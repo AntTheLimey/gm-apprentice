@@ -111,7 +111,14 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
 
   return scored
     .filter(s => s.score > 0)
-    .sort((a, b) => b.score - a.score)
+    // Title is a real secondary key, not decoration. Array.prototype.sort is
+    // stable, so with score alone a cluster of equally-scoring entities kept
+    // vault scan order — meaning `.slice(0, max)` below chose by where the
+    // files happened to sit on disk. Deterministic, but invisible to the GM and
+    // unchangeable by anything they could author (#169). Alphabetical is not
+    // more "relevant", but it is explainable, and `featured_*` is the supported
+    // way to override it.
+    .sort((a, b) => b.score - a.score || a.page.title.localeCompare(b.page.title))
     .slice(0, max);
 }
 

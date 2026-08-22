@@ -18,6 +18,12 @@ each other — see § Precedence.
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`) |
+| Landing NPC count | `publish.landing.max_npcs` | Cards in "NPCs in Play" (default: `6`) |
+| Landing location count | `publish.landing.max_locations` | Cards in "Latest Locations" (default: `4`) |
+| Landing recency window | `publish.landing.recency_window` | How many recent sessions feed the scoring (default: `3`) |
+| Featured NPCs | `publish.landing.featured_npcs` | Pin NPCs to the front of their section, in order (see § Pinning landing entries) |
+| Featured locations | `publish.landing.featured_locations` | Same, for locations |
+| Quick links | `publish.landing.quick_links` | A short row of pinned links near the top of the landing page |
 | Campaign image | `publish.theme.campaign_image` | Vault-relative path to hero image |
 | Theme palette | `publish.theme.palette` | Colour scheme (primary, accent, background, text) |
 | Theme fonts | `publish.theme.fonts` | Heading and body font families |
@@ -146,6 +152,36 @@ scaffolding above the pivot (the Republic, the Sector) is demoted to a
 small context caption rather than rendered as tree rows. Grouping is
 skipped — falling back to the flat view — when fewer than two locations
 match the pivot, since one section is not a grouping.
+
+### Pinning landing entries
+
+The landing page picks NPCs and locations by a recency score — how often
+an entity appears in the last few sessions. That is a reasonable default
+and a poor editor: a GM who knows which five NPCs matter this session
+cannot express it, and entities tied on score are separated by nothing
+more meaningful than where their files sit on disk.
+
+`featured_npcs` / `featured_locations` pin entries to the front of their
+section, in the order listed, with recency filling whatever slots remain
+up to `max_npcs` / `max_locations`. A pinned entity appears even if it
+scores nothing — an NPC no session has mentioned yet is still featurable.
+
+```yaml
+publish:
+  landing:
+    max_npcs: 6
+    featured_npcs: ["Hugh_Cavendish", "Margaret_Cavendish"]
+    featured_locations: ["Cavendish_Compound"]
+    quick_links: ["Calcutta_City_Map", "Calcutta_Season_Calendar"]
+```
+
+Name entities the same way a wiki-link does — the filename form, not the
+display title. A name that resolves to no published page prints a build
+warning rather than being dropped in silence; if it is spelled right, the
+page is probably excluded from the site.
+
+Entities left unpinned still sort by score, and ties now break by title,
+so the selection is at least reproducible and explainable.
 
 ### Per-file field overrides
 

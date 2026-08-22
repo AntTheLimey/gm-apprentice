@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.53] — 2026-08-22
+
+Landing page selection: the config that controlled it did nothing, and the
+scoring it fell back on could not be steered (#169). Publish tool 1.11.25.
+
+### Fixed
+
+- **`publish.landing.*` is read at last.** `build.js` has always consulted
+  `publishConfig.landing`, but `loadPublishConfig` built its result from a key
+  whitelist that `landing` was not on — so the key was permanently `undefined`
+  and every knob under it was silently ignored. The landing page was fixed at 6
+  NPCs / 4 locations / window 3 regardless of what the GM configured, in either
+  `_meta/vault-config.md` or `vault.config.json`. It now merges per key, publish
+  block first, so setting one value does not reset the others. This also
+  revives `max_events` and `explore_descriptions`, which the landing template
+  read from the same dead key.
+- **Landing ties break deterministically.** The sort had no secondary key, and
+  `Array.prototype.sort` is stable, so equally-scoring entities kept vault scan
+  order — meaning which ones survived the cut was decided by where their files
+  sat on disk. Invisible to the GM and unchangeable by anything they could
+  author. Ties now break by title: not more "relevant", but explainable, and
+  `featured_*` is the supported way to override it.
+
+### Added
+
+- **`featured_npcs`, `featured_locations`, `quick_links`.** Pinned entries lead
+  their section in the order given, with recency filling the remaining slots. A
+  pinned entity appears even if it scores nothing, so an NPC no session has
+  mentioned yet is still featurable. A name that resolves to no published page
+  prints a build warning rather than vanishing — silence there would repeat the
+  exact complaint this fixes. `quick_links` renders a short row of pinned
+  destinations near the top of the landing page.
+
+### Note
+
+The same issue reported that recency scoring compares an entity's **H1 title**
+against wiki-link targets, so entities whose display title differs from their
+filename can never be featured. That does not reproduce: `scanner.js` sets
+`page.title` to the **filename base** (the H1 goes to `displayTitle`, which
+recency never reads), and the mention pattern already stops its capture at the
+`|`. An NPC filed as `Margaret_Cavendish.md` with H1 `Margaret "Meg" Cavendish`,
+referenced only as `[[Margaret_Cavendish|Meg]]`, scores and is returned. The
+scoring path was left alone; the two fixes above are what actually produced the
+reported symptom.
+
+---
+
 ## [1.8.52] — 2026-08-21
 
 GM content reaching player-facing sites, found while publishing a live Call of

@@ -256,7 +256,18 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
 </div>`
     : '';
 
-  const content = [heroZone, recapZone, teamZone, memoriamZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
+  // --- Quick Links (GM-pinned; resolved in build.js so unknown names warn there) ---
+  const quickLinks = (publishConfig && publishConfig._quickLinks) || [];
+  const quickLinkZone = quickLinks.length > 0
+    ? `<div class="dashboard-section">
+  <h2>Quick Links</h2>
+  <div class="quick-links">${quickLinks.map(page =>
+    `<a class="quick-link" href="${escapeHtml(encodeHref(page.outputPath))}">${escapeHtml(page.displayTitle)}</a>`
+  ).join('\n')}</div>
+</div>`
+    : '';
+
+  const content = [heroZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
     .filter(Boolean)
     .join('\n');
 

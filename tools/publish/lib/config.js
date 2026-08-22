@@ -16,6 +16,24 @@ const PUBLISH_DEFAULTS = {
   exclude_sections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
   exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes'],
   exclude_dirs: ['_meta', '_Templates'],
+  // Landing page selection. build.js has always read publishConfig.landing.*,
+  // but `landing` was missing from the whitelist that builds `merged`, so the
+  // key was permanently undefined and every knob here was silently ignored —
+  // the page was fixed at 6 NPCs / 4 locations / window 3 no matter what the
+  // GM configured (#169).
+  //
+  // featured_* pin entities to the front of their section, in the order given,
+  // with recency filling whatever slots remain. They are the escape hatch from
+  // the scoring heuristic: a GM who knows which five NPCs matter this session
+  // should not have to reverse-engineer a score to feature them.
+  landing: {
+    recency_window: 3,
+    max_npcs: 6,
+    max_locations: 4,
+    featured_npcs: [],
+    featured_locations: [],
+    quick_links: [],
+  },
   theme: {
     genre: null,
     palette: {
@@ -199,6 +217,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       jsonConfigFallback.excludeDirs,
       PUBLISH_DEFAULTS.exclude_dirs,
     ),
+    // Per-key merge, not a whole-block replace: setting only max_npcs must not
+    // silently drop recency_window back to nothing. Publish block wins, then
+    // vault.config.json, then the defaults.
+    landing: {
+      ...PUBLISH_DEFAULTS.landing,
+      ...(jsonConfigFallback.landing || {}),
+      ...(publish.landing || {}),
+    },
     theme: {
       ...PUBLISH_DEFAULTS.theme,
       ...publish.theme,
