@@ -569,3 +569,68 @@ describe('malformed publish.overrides blocks', () => {
     assert.deepStrictEqual(warns.filter(w => w.includes('overrides')), []);
   });
 });
+
+describe('landing config (#169)', () => {
+  const withVaultConfig = (yaml) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-landing-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    return tmpDir;
+  };
+
+  it('ships defaults so the key is never undefined', () => {
+    // build.js reads publishConfig.landing.*; loadPublishConfig never set the
+    // key at all, so every knob was silently ignored and the landing page was
+    // permanently 6 NPCs / 4 locations / window 3.
+    const config = loadPublishConfig('/nonexistent/path');
+    assert.strictEqual(config.landing.recency_window, 3);
+    assert.strictEqual(config.landing.max_npcs, 6);
+    assert.strictEqual(config.landing.max_locations, 4);
+    assert.deepStrictEqual(config.landing.featured_npcs, []);
+    assert.deepStrictEqual(config.landing.featured_locations, []);
+    assert.deepStrictEqual(config.landing.quick_links, []);
+  });
+
+  it('reads landing from a vault-config.md publish block', () => {
+    const dir = withVaultConfig(
+      '---\npublish:\n  landing:\n    recency_window: 1\n    max_npcs: 8\n    max_locations: 6\n---\n');
+    const config = loadPublishConfig(dir);
+    assert.strictEqual(config.landing.recency_window, 1);
+    assert.strictEqual(config.landing.max_npcs, 8);
+    assert.strictEqual(config.landing.max_locations, 6);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('falls back to vault.config.json when the publish block has no landing', () => {
+    const config = loadPublishConfig('/nonexistent/path', { landing: { max_npcs: 9 } });
+    assert.strictEqual(config.landing.max_npcs, 9);
+    assert.strictEqual(config.landing.max_locations, 4);   // untouched keys keep defaults
+  });
+
+  it('lets the publish block win over vault.config.json', () => {
+    const dir = withVaultConfig('---\npublish:\n  landing:\n    max_npcs: 8\n---\n');
+    const config = loadPublishConfig(dir, { landing: { max_npcs: 2 } });
+    assert.strictEqual(config.landing.max_npcs, 8);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('merges per key rather than replacing the whole block', () => {
+    const dir = withVaultConfig('---\npublish:\n  landing:\n    max_npcs: 8\n---\n');
+    const config = loadPublishConfig(dir);
+    assert.strictEqual(config.landing.max_npcs, 8);
+    assert.strictEqual(config.landing.recency_window, 3);  // default survives
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('reads the pinning lists', () => {
+    const dir = withVaultConfig(
+      '---\npublish:\n  landing:\n    featured_npcs: ["Hugh_Cavendish", "Margaret_Cavendish"]\n'
+      + '    featured_locations: ["Cavendish_Compound"]\n    quick_links: ["Calcutta_City_Map"]\n---\n');
+    const config = loadPublishConfig(dir);
+    assert.deepStrictEqual(config.landing.featured_npcs, ['Hugh_Cavendish', 'Margaret_Cavendish']);
+    assert.deepStrictEqual(config.landing.featured_locations, ['Cavendish_Compound']);
+    assert.deepStrictEqual(config.landing.quick_links, ['Calcutta_City_Map']);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

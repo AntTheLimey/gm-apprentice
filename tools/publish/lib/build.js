@@ -373,21 +373,74 @@ function build(options = {}) {
   const landingConfig = (publishConfig.landing || {});
   const recencyWindow = landingConfig.recency_window || 3;
 
-  const recentNPCs = scoreByRecency(npcs, sessions, chapters, {
-    window: recencyWindow,
-    max: landingConfig.max_npcs || 6,
-    type: 'npc',
-    wrapUps,
-  });
+  // Pinned entries come first, in the order the GM listed them; recency fills
+  // whatever slots are left. This is the supported way to override the scoring
+  // heuristic — without it a GM who knows which entities matter this session
+  // has to reverse-engineer a score to feature them, and cannot break a tie at
+  // all. Named by the same form a wiki-link uses (the filename), so a name that
+  // can be linked can be pinned.
+  function withFeatured(scored, candidates, featured, max, label) {
+    const names = Array.isArray(featured) ? featured.filter(n => typeof n === 'string') : [];
+    if (names.length === 0) return scored.slice(0, max);
+    const byName = new Map(candidates.map(p => [canonicalNfc(p.title), p]));
+    const pinned = [];
+    const seen = new Set();
+    for (const name of names) {
+      const page = byName.get(canonicalNfc(name));
+      if (!page) {
+        // Silence here would repeat the very complaint this fixes: config that
+        // looks applied and does nothing.
+        console.warn(`  WARNING: landing.${label} names "${name}", which is not a published ${label.replace('featured_', '').replace(/s$/, '')} — check spelling, or it may be excluded from the site`);
+        continue;
+      }
+      if (seen.has(page.outputPath)) continue;
+      seen.add(page.outputPath);
+      pinned.push({ page, score: Infinity, pinned: true });
+    }
+    const rest = scored.filter(s => !seen.has(s.page.outputPath));
+    return [...pinned, ...rest].slice(0, max);
+  }
 
-  const recentLocations = scoreByRecency(locations, sessions, chapters, {
-    window: recencyWindow,
-    max: landingConfig.max_locations || 4,
-    type: 'location',
-    wrapUps,
-  });
+  const maxNPCs = landingConfig.max_npcs || 6;
+  const maxLocations = landingConfig.max_locations || 4;
 
-  console.log(`Recency: ${recentNPCs.length} NPCs, ${recentLocations.length} locations`);
+  const recentNPCs = withFeatured(
+    scoreByRecency(npcs, sessions, chapters, {
+      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUps,
+    }),
+    npcs, landingConfig.featured_npcs, maxNPCs, 'featured_npcs');
+
+  const recentLocations = withFeatured(
+    scoreByRecency(locations, sessions, chapters, {
+      window: recencyWindow, max: maxLocations, type: 'location', wrapUps,
+    }),
+    locations, landingConfig.featured_locations, maxLocations, 'featured_locations');
+
+  // Quick links: a short GM-curated row of "go here first" pages — a map, a
+  // calendar, a house-rules page. Resolved here rather than in the template so
+  // an unresolvable name warns once, in the same place as the featured_* names.
+  const quickLinks = [];
+  {
+    const names = Array.isArray(landingConfig.quick_links)
+      ? landingConfig.quick_links.filter(n => typeof n === 'string')
+      : [];
+    const byName = new Map(pages.map(p => [canonicalNfc(p.title), p]));
+    const seen = new Set();
+    for (const name of names) {
+      const page = byName.get(canonicalNfc(name));
+      if (!page) {
+        console.warn(`  WARNING: landing.quick_links names "${name}", which is not a published page — check spelling, or it may be excluded from the site`);
+        continue;
+      }
+      if (seen.has(page.outputPath)) continue;
+      seen.add(page.outputPath);
+      quickLinks.push(page);
+    }
+  }
+  publishConfig._quickLinks = quickLinks;
+
+  console.log(`Recency: ${recentNPCs.length} NPCs, ${recentLocations.length} locations`
+    + (quickLinks.length ? `, ${quickLinks.length} quick links` : ''));
 
   // Search index (skip if searchEnabled explicitly set to false in config)
   const searchEnabled = config.searchEnabled !== false;

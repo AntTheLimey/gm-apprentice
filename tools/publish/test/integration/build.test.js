@@ -1684,3 +1684,81 @@ describe('publish controls (#166, #167)', () => {
     assert.ok(!idx.includes('devout servant'));
   });
 });
+
+describe('landing config and pinning (#169)', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures');
+  let outputDir;
+  let configPath;
+  let warnings;
+
+  before(() => {
+    outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-landing-'));
+    configPath = path.join(outputDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: path.join(fixturesDir, 'with-landing-config'),
+      outputDir: path.join(outputDir, 'docs'),
+      attachmentsDir: '_attachments',
+      siteTitle: 'Landing Test',
+      siteUrl: 'https://example.github.io/landing',
+      excludeDirs: ['_meta'],
+      excludeSections: [],
+      folderMap: {
+        'Characters/NPCs': 'characters/npcs',
+        'Locations': 'locations',
+        'Sessions': 'sessions',
+      },
+    }, null, 2));
+
+    warnings = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      build({ configPath });
+    } finally {
+      console.warn = realWarn;
+    }
+  });
+
+  after(() => {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  });
+
+  const landing = () => fs.readFileSync(path.join(outputDir, 'docs', 'index.html'), 'utf-8');
+
+  it('honours max_npcs from the vault config', () => {
+    // The whole point of #169: this key was read by build.js but never
+    // populated by loadPublishConfig, so it did nothing at all.
+    // Four NPCs score and one more is pinned, so a working cap is the only
+    // thing that can produce three cards. With the config dead the default of
+    // six applies and all four scorers render.
+    const html = landing();
+    const cards = (html.match(/class="npc-card"/g) || []).length;
+    assert.strictEqual(cards, 3);
+  });
+
+  it('features a pinned NPC that no session mentions', () => {
+    // Zenobia scores zero — recency alone could never surface her.
+    assert.ok(landing().includes('Zenobia Marr'));
+  });
+
+  it('puts pinned entries before recency-scored ones, which then sort deterministically', () => {
+    // Scoped to the NPC zone: these names also appear in other zones earlier in
+    // the page, so a whole-document indexOf would compare the wrong occurrences.
+    const html = landing();
+    const zone = html.slice(html.indexOf('NPCs in Play'));
+    const order = [...zone.matchAll(/class="npc-card"[\s\S]*?<h4>([^<]+)<\/h4>/g)].map(m => m[1]);
+    assert.deepStrictEqual(order.slice(0, 3), ['Zenobia Marr', 'Adam Npc', 'Brody Npc']);
+  });
+
+  it('warns about a featured name that resolves to nothing', () => {
+    assert.ok(warnings.some(w => w.includes('featured_npcs') && w.includes('Ghost_Npc')));
+  });
+
+  it('renders quick links for resolvable names only, and warns about the rest', () => {
+    const html = landing();
+    assert.ok(html.includes('class="quick-link"'));
+    assert.ok(html.includes('Calcutta City Map'));
+    assert.ok(!html.includes('Nonexistent_Page'));
+    assert.ok(warnings.some(w => w.includes('quick_links') && w.includes('Nonexistent_Page')));
+  });
+});
