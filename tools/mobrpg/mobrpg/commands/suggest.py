@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import html as _html
 import json
 import os
 import re
@@ -510,7 +511,11 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
             items.append(rel_item)
             continue
         eref = f"{ref_seed}v{n}"; n += 1
-        desc = f"<p>{rel.get('desc') or pred}</p>"
+        # Escape before interpolating: this is one of the two descriptions the CLI
+        # hand-builds as HTML (see skill/references/push.md), and the text inside it
+        # is vault-authored. An unescaped `&` shipped as an undefined entity and an
+        # unescaped `<` was swallowed as a tag by the renderer.
+        desc = f"<p>{_html.escape(rel.get('desc') or pred)}</p>"
         # The rel/ ref is the edge's identity across re-pushes — keyed on the
         # authored predicate and target, never on the emitted name, so renaming
         # an event can't make it re-file as net-new.
