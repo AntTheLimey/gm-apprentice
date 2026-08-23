@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.2] — 2026-08-23
+
+### Fixed
+
+- **An `advice` or `rejected` change-request reply is no longer invisible to the
+  player (#174).** Only an `applied` reply reloaded the page, so a player whose
+  widget had collapsed never learned an answer had arrived — one re-submitted the
+  same question 90 seconds later, then found the reply only by refreshing and
+  opening the History modal by hand. A reply now surfaces three ways, any one of
+  which survives a player who submitted and looked away: an unread badge on the
+  💬 History button (with `aria-live` and an `aria-label` count), the widget
+  re-expanded with the reply inline (truncated past 240 characters, pointing at
+  History for the rest), and an unread marker in the document title. Opening the
+  log is what marks replies read; log entries written before this change carry no
+  `read` flag and deliberately count as unread.
+
+---
+
 ## [1.9.1] — 2026-08-23
 
 ### Fixed

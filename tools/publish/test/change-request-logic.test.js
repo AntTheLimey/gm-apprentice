@@ -47,6 +47,36 @@ test('setLogReply fills the matching entry', () => {
   assert.equal(out[0].reply, undefined); // others untouched
 });
 
+test('unreadCount counts replies the player has not opened the log on', () => {
+  const log = [
+    { id: 'a', ts: 1, message: 'q', reply: 'answered', kind: 'advice' },   // unread
+    { id: 'b', ts: 2, message: 'r', reply: 'seen', kind: 'advice', read: true },
+    { id: 'c', ts: 3, message: 's' },                                      // no reply yet
+  ];
+  assert.equal(cr.unreadCount(log), 1);
+  assert.equal(cr.unreadCount([]), 0);
+  assert.equal(cr.unreadCount(undefined), 0);
+});
+
+// Entries written before this feature carry no `read` flag. They must read as UNREAD:
+// the bug being fixed is a reply the player never saw, so defaulting them to read
+// would hide exactly the case the badge exists for.
+test('unreadCount treats a pre-feature reply with no read flag as unread', () => {
+  assert.equal(cr.unreadCount([{ id: 'a', ts: 1, message: 'q', reply: 'old answer' }]), 1);
+});
+
+test('markAllRead flags replies only, leaves unanswered entries alone', () => {
+  const log = [
+    { id: 'a', ts: 1, message: 'q', reply: 'answered' },
+    { id: 'b', ts: 2, message: 's' },
+  ];
+  const out = cr.markAllRead(log);
+  assert.equal(out[0].read, true);
+  assert.equal(out[1].read, undefined);   // nothing to have read
+  assert.equal(cr.unreadCount(out), 0);
+  assert.equal(log[0].read, undefined);   // input not mutated
+});
+
 test('classifySubmitError maps HTTP status', () => {
   assert.equal(cr.classifySubmitError(403), 'code');
   assert.equal(cr.classifySubmitError(429), 'rate');
