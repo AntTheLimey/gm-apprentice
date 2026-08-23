@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.1] — 2026-08-23
+
+### Fixed
+
+- **`mobrpg suggest` no longer ships unescaped vault text inside the reified-Event
+  blurb.** The one-line description on a reified relationship Event is one of the
+  two descriptions the CLI hand-builds as HTML (the other is the empty-description
+  stub); it interpolated a vault-authored `description:` straight into `<p>…</p>`
+  with no escaping. An edge described as `Ran the docks & bar` shipped an undefined
+  HTML entity, and anything angle-bracketed was swallowed as a tag by the renderer.
+  The text is now escaped before interpolation.
+
+---
+
 ## [1.9.0] — 2026-07-26
 
 Graduates the mobRPG integration CLI (`tools/mobrpg/`) into the repo as a

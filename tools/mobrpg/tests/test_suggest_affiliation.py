@@ -464,3 +464,34 @@ def test_node_kind_index_reads_canon_kinds_and_aliases(tmp_path):
     kinds = suggest.node_kind_index(str(tmp_path))
     assert kinds[suggest._key("Corvid Financial")] == "Organization"
     assert kinds[suggest._key("Corvid")] == "Organization"
+
+
+def test_event_blurb_escapes_vault_text_into_its_html_wrapper(tmp_path):
+    """The reified-Event blurb is one of the two descriptions the CLI hand-builds
+    as HTML (see skill/references/push.md). It interpolates a vault-authored
+    `description:` into `<p>...</p>`, so any `&`, `<` or `>` the GM wrote shipped
+    as markup: "Ran the docks & bar" became an undefined entity, and anything
+    angle-bracketed was swallowed as a tag by the renderer."""
+    ent = {"path": str(tmp_path / "Characters/NPCs/Rusa Vetch.md"),
+           "name": "Rusa Vetch", "kind": "npc",
+           "relationships": [{"target": "[[Dock 9]]", "predicate": "serves",
+                              "desc": "Ran the docks & bar <the good one>"}]}
+    idx = {suggest._key("Dock 9"): "dock9-id"}
+    kinds = {suggest._key("Rusa Vetch"): "Person",
+             suggest._key("Dock 9"): "Political"}
+    items, _ = _rel_items(tmp_path, ent, idx, kinds)
+    ev = [i for i in items if i["operation"] == "CreateElement"][0]
+    assert ev["payload"]["description"] == (
+        "<p>Ran the docks &amp; bar &lt;the good one&gt;</p>")
+
+
+def test_event_blurb_falls_back_to_the_predicate_and_still_escapes(tmp_path):
+    ent = {"path": str(tmp_path / "Characters/NPCs/Rusa Vetch.md"),
+           "name": "Rusa Vetch", "kind": "npc",
+           "relationships": [{"target": "[[Dock 9]]", "predicate": "serves", "desc": ""}]}
+    idx = {suggest._key("Dock 9"): "dock9-id"}
+    kinds = {suggest._key("Rusa Vetch"): "Person",
+             suggest._key("Dock 9"): "Political"}
+    items, _ = _rel_items(tmp_path, ent, idx, kinds)
+    ev = [i for i in items if i["operation"] == "CreateElement"][0]
+    assert ev["payload"]["description"] == "<p>serves</p>"
