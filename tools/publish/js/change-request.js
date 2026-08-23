@@ -47,6 +47,19 @@
     });
   }
 
+  // A reply the player has not yet opened the History modal on. Entries predating
+  // this feature have no `read` flag, so they read as unread — deliberately, since
+  // the bug this fixes is replies the player never saw.
+  function unreadCount(log) {
+    return (log || []).filter(function (e) { return e.reply != null && !e.read; }).length;
+  }
+
+  function markAllRead(log) {
+    return (log || []).map(function (e) {
+      return e.reply != null && !e.read ? Object.assign({}, e, { read: true }) : e;
+    });
+  }
+
   function classifySubmitError(httpStatus) {
     if (httpStatus === 403) return 'code';
     if (httpStatus === 429) return 'rate';
@@ -64,6 +77,8 @@
       needsReload: needsReload,
       appendLog: appendLog,
       setLogReply: setLogReply,
+      unreadCount: unreadCount,
+      markAllRead: markAllRead,
       classifySubmitError: classifySubmitError,
     };
   }
@@ -145,11 +160,35 @@
       });
     }
     renderLog();
+
+    // Unread badge on the History button. An `advice`/`rejected` reply does not
+    // reload the page the way `applied` does, so without a passive signal a player
+    // with a collapsed widget never learns an answer arrived.
+    var badge = document.createElement('span');
+    badge.className = 'cr-unread';
+    badge.setAttribute('aria-live', 'polite');
+    badge.style.cssText = 'display:none;margin-left:.4em;min-width:1.35em;padding:0 .35em;' +
+      'border-radius:1em;background:#c0392b;color:#fff;font-size:.8em;font-weight:700;' +
+      'line-height:1.35em;text-align:center;';
+    logBtn.appendChild(badge);
+
+    var baseTitle = document.title;
+    function renderBadge() {
+      var n = unreadCount(getLog());
+      badge.textContent = n ? String(n) : '';
+      badge.style.display = n ? 'inline-block' : 'none';
+      logBtn.setAttribute('aria-label', n ? 'Open chat history, ' + n + ' unread' : 'Open chat history');
+      document.title = n ? '(' + n + ') ' + baseTitle : baseTitle;
+    }
+    renderBadge();
+
     function openModal() {
       backdrop.hidden = false;
       document.body.style.overflow = 'hidden';
       logBtn.setAttribute('aria-expanded', 'true');
+      setLog(markAllRead(getLog()));  // opening the log is what marks replies seen
       renderLog();
+      renderBadge();
       closeBtn.focus();               // move focus into the dialog for keyboard/SR users
     }
     function closeModal() {
@@ -253,9 +292,17 @@
           u.searchParams.set('_cr', String(Date.now()));
           location.replace(u.href);
         } else {
-          // advice / rejected only — show the newest reply inline, keep the log open-able
-          // (stale-only ticks have no response to show; the log entry is left as-is)
-          if (done.length) msg.textContent = done[done.length - 1].response;
+          // advice / rejected only — no reload, so surface it three ways: badge on the
+          // History button, the widget expanded with the reply inline, and a title marker.
+          // Any one of them survives a player who submitted and looked away.
+          renderBadge();
+          if (done.length) {
+            var newest = done[done.length - 1].response || '';
+            msg.textContent = newest.length > 240 ? newest.slice(0, 237) + '… (full reply in 💬 History)' : newest;
+            panel.hidden = false;
+            toggle.setAttribute('aria-expanded', 'true');
+            codeInput.hidden = !shouldPromptForCode(readJSON(K_CODE), Date.now());
+          }
           if (!getPending().length) { clearInterval(timer); timer = null; }
         }
       }).catch(function () { /* transient; try again next tick */ });
