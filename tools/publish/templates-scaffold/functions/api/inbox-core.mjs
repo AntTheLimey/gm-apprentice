@@ -191,7 +191,11 @@ export async function getResults(kv, ids) {
     if (raw) {
       try {
         const e = JSON.parse(raw);
-        val = { status: e.status, response: e.response ?? null, kind: e.kind ?? null };
+        // Only a record-shaped entry counts; an array, scalar, or object with no
+        // string status is as unusable as unparseable JSON.
+        if (e && typeof e === 'object' && !Array.isArray(e) && typeof e.status === 'string') {
+          val = { status: e.status, response: e.response ?? null, kind: e.kind ?? null };
+        }
       } catch { /* corrupt → gone */ }
     }
     return [id, val];

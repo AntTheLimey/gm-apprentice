@@ -211,7 +211,7 @@ happened; if the request no longer exists (it expired, or the id is wrong)
 it prints `<id>: reply NOT stored …` and exits 1 — tell the player to send
 it again. KV is eventually consistent, so re-reading right after a write can
 show stale state; never "verify" by polling and re-sending, which delivers the
-same answer twice. Finalized entries linger for days (a reply for 7), so a
+same answer twice. Finalized entries linger for 7 days, so a
 player who put the phone down still gets the answer; a request the server has
 lost reports `status: gone` to the widget, which tells the player to resend.
 

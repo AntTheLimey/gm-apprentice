@@ -508,11 +508,26 @@ function splitMixedTable(rows) {
 // rows for either kind reads at the table as lost data. Called once both
 // parsers have run.
 function noteEmptyWeapons(model, sections) {
+  const shape = 'a weapon table needs a header row with a Weapon column (plus Parry/Reach for melee or Acc/Range/RoF/Shots for ranged)';
+  // Each recognised section is judged on its own: a good Ranged table must not
+  // hide an unreadable Melee one.
+  const own = [[findSectionByTitle(sections, ...MELEE_TITLES), 'melee'], [findSectionByTitle(sections, ...RANGED_TITLES), 'ranged']];
+  const recognised = new Set();
+  for (const [sec, kind] of own) {
+    if (!sec) continue;
+    recognised.add(sec);
+    if (!model[kind].length) model.warnings.push(`GURPS "## ${sec.title}" is present but no ${kind} rows were read — ${shape}.`);
+  }
+  const both = findSectionByTitle(sections, ...COMBINED_TITLES);
+  if (both) {
+    recognised.add(both);
+    if (!model.melee.length && !model.ranged.length) model.warnings.push(`GURPS combat tab is empty: "## ${both.title}" is present but no melee or ranged rows were read — ${shape}.`);
+  }
   if (model.melee.length || model.ranged.length) return;
-  const named = sections.filter(s => /weapon|melee|ranged|attack/i.test(String(s.title || '')));
+  const named = sections.filter(s => !recognised.has(s) && /weapon|melee|ranged|attack/i.test(String(s.title || '')));
   if (!named.length) return;
   model.warnings.push(
-    `GURPS combat tab is empty: section(s) ${named.map(s => `"## ${s.title}"`).join(', ')} exist but no melee or ranged rows were read. Headings recognised: ${[...MELEE_TITLES, ...RANGED_TITLES, ...COMBINED_TITLES].map(t => `"${t}"`).join(', ')}; a weapon table needs a header row with a Weapon column (plus Parry/Reach for melee or Acc/Range/RoF/Shots for ranged).`);
+    `GURPS combat tab is empty: section(s) ${named.map(s => `"## ${s.title}"`).join(', ')} exist but were not recognised as weapon sections. Headings recognised: ${[...MELEE_TITLES, ...RANGED_TITLES, ...COMBINED_TITLES].map(t => `"${t}"`).join(', ')}; ${shape}.`);
 }
 
 function parseMelee(model, sections, fm) {

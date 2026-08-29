@@ -42,6 +42,12 @@ describe('CLI: gm-publish flush argument handling (issue #178)', () => {
     }
   });
 
+  it('--config refuses an option token as its value', async () => {
+    const r = await runIn(['flush', '--config', '--dry-run']);
+    assert.strictEqual(r.code, 1);
+    assert.match(r.stderr, /--config needs a path/);
+  });
+
   it('an unknown flag on setup-inbox is rejected too', async () => {
     const r = await runIn(['setup-inbox', '--dry-run']);
     assert.strictEqual(r.code, 1);

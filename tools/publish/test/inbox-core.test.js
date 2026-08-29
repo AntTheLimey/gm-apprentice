@@ -291,11 +291,17 @@ test('getResults returns {status,response,kind}; missing → gone, never handled
   assert.deepEqual(r.gone, { status: 'gone', response: null, kind: null });
 });
 
-test('getResults reports a corrupt entry as gone (#176)', async () => {
+test('getResults reports a corrupt or mis-shaped entry as gone (#176)', async () => {
   const kv = fakeKV();
   await kv.put('req:bad', '{not json');
-  const r = await inbox.getResults(kv, ['bad']);
-  assert.deepEqual(r.bad, { status: 'gone', response: null, kind: null });
+  await kv.put('req:arr', '[]');
+  await kv.put('req:str', '"text"');
+  await kv.put('req:obj', '{}');
+  await kv.put('req:nul', 'null');
+  const r = await inbox.getResults(kv, ['bad', 'arr', 'str', 'obj', 'nul']);
+  for (const id of ['bad', 'arr', 'str', 'obj', 'nul']) {
+    assert.deepEqual(r[id], { status: 'gone', response: null, kind: null }, id);
+  }
 });
 
 test('finalized entries carry session-safe TTLs — days, not minutes (#176)', async () => {

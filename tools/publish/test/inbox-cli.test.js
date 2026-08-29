@@ -141,3 +141,9 @@ test('inbox commands fail clearly outside a site directory (no wrangler.toml) (#
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-inbox-nosite-'));
   await assert.rejects(runInbox(['pull'], { cwd: dir }), /No wrangler\.toml in .*site directory/);
 });
+
+test('handled/flag with no ids print usage and exit 1', async () => {
+  const kv = fakeKV(); const c = capture();
+  assert.equal(await runInbox(['handled'], { adapter: kv, out: c.out }), 1);
+  assert.match(c.lines.join('\n'), /Usage: inbox handled <id>/);
+});

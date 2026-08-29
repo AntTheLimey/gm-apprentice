@@ -581,6 +581,16 @@ describe('parseGurps — silent section drops (issue #177)', () => {
     assert.match(c.warnings[0], /"## Weapons"/);
   });
 
+  it('warns per section: an empty Melee Weapons is reported even when Ranged Weapons parsed', () => {
+    const c = parseGurps({}, [
+      { title: 'Melee Weapons', id: 'm', html: '<p>none carried</p>' },
+      { title: 'Ranged Weapons', id: 'r', html: '<table><tr><th>Weapon</th><th>Skill</th><th>Acc</th></tr><tr><td>Bow</td><td>13</td><td>2</td></tr></table>' },
+    ]);
+    assert.deepStrictEqual(c.ranged.map(w => w.weapon), ['Bow']);
+    assert.strictEqual(c.warnings.length, 1);
+    assert.match(c.warnings[0], /"## Melee Weapons" is present but no melee rows/);
+  });
+
   it('stays silent for a sheet with no weapon sections (a weaponless PC is not a defect)', () => {
     const c = parseGurps({}, [statSheet]);
     assert.deepStrictEqual(c.warnings, []);

@@ -56,7 +56,7 @@ function parseSubcommandArgs(rest, allowedFlags) {
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === '--config') {
-      if (!rest[i + 1]) return { error: '--config needs a path' };
+      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
       configPath = rest[i + 1]; i++;
     } else if (Object.prototype.hasOwnProperty.call(allowedFlags, a)) {
       flags[allowedFlags[a]] = true;

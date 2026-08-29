@@ -65,6 +65,7 @@ async function runInbox(argv, deps = {}) {
       // Report the outcome of our OWN write. KV is eventually consistent, so a
       // follow-up read is not a trustworthy check (#176); the return value is.
       const mark = sub === 'handled' ? inbox.markHandled : inbox.markFlagged;
+      if (!rest.length) { out(`Usage: inbox ${sub} <id> [<id>...]`); return 1; }
       let rc = 0;
       for (const id of rest) {
         if (await mark(kv, id)) out(`${id}: marked ${sub === 'handled' ? 'handled' : 'flagged'}`);
