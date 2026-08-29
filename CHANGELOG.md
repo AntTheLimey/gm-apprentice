@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.3] — 2026-08-28
+
+### Fixed
+
+- **A change-request reply no longer self-destructs after ten minutes (#176).**
+  Finalized inbox entries were stored with a 300s/600s KV TTL, so an answer
+  written while the player had put the phone down was deleted before it was
+  read — and a missing key was reported as `handled`, indistinguishable from an
+  answered one, so the widget dropped the request in silence. Handled entries now
+  linger 24h and replies 7 days; a missing or unreadable entry reports
+  `status: gone`, which the widget surfaces to the player as "expired — please
+  send it again" instead of nothing. `inbox reply` (and `handled`/`flag`) now
+  report the outcome of their own write and exit 1 when nothing was written,
+  and inbox commands run outside the site directory fail naming the missing
+  `wrangler.toml` rather than tracing.
+- **GURPS sheet sections are no longer dropped silently (#177).** Section
+  headings match loosely (case, punctuation, `&`/`and`), and a combined
+  `## Melee & Ranged` (or `## Weapons`) section feeds both the melee and ranged
+  tables, each routed by its own header row — previously it matched nothing and
+  the combat tab rendered empty. The build now warns per page when a
+  weapons-titled section yields no rows, when a Skills/Techniques/Spells section
+  is present but empty, and when tables under a `###` subheading were excluded
+  from those sections (naming the subheading), so an unrendered table is a
+  five-second heading fix instead of a mid-combat mystery.
+- **`gm-publish flush --help` prints help instead of flushing (#178).** Every
+  subcommand now honours `--help`/`-h` with no side effects, `flush` and the
+  `setup-*` commands reject unknown arguments with usage and exit 1 rather than
+  falling through to execution, and `flush --dry-run` (`-n`) prints the same
+  per-PC `✓ Name — HP 10→13` lines without writing.
+- **`mobrpg suggest` no longer 400s a whole batch on an already-claimed create,
+  and `--write-back` stamps only what the server accepted (#179).** Before
+  building batches it checks the live world for net-new entities that already
+  exist upstream without a `mobrpg:` node, holds them, and points at
+  `mobrpg adopt`; a bare HTTP 400 now carries the same hint. With `--execute
+  --write-back`, pending nodes are written per batch after the POST succeeds and
+  never for externalRefs the server refused, so a failed batch no longer leaves
+  its entities marked `pending` and unsubmittable.
+- **`stamp_entities.py` preserves the vault's `asOfSession` shape (#180).**
+  `--session` is a free string written verbatim — a bare number stays bare, a
+  label such as `"Chapter 4, Session 9"` is quoted — and a file whose existing
+  value has the other shape is refused (with an `ERROR` line) unless
+  `--force-shape`, so a wrap-up stamp can no longer flatten a label vault to
+  bare integers and drop the chapter. session-wrapup Step 3c and
+  `vault-access.md` now say so.
+
+---
+
 ## [1.9.2] — 2026-08-23
 
 ### Fixed

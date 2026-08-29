@@ -32,6 +32,19 @@
     return out;
   }
 
+  // The server no longer has this request at all — it expired (or was never
+  // stored). Distinct from "handled": the player must be TOLD, not silently
+  // dropped, because any reply the GM wrote is lost with it (#176).
+  var GONE_TEXT = 'This request expired before a reply reached you — please send it again.';
+  function goneIds(results, pendingIds) {
+    var out = [];
+    (pendingIds || []).forEach(function (id) {
+      var r = (results || {})[id];
+      if (r && r.status === 'gone') out.push(id);
+    });
+    return out;
+  }
+
   function needsReload(resolvedList) {
     return (resolvedList || []).some(function (x) { return x.kind === 'applied'; });
   }
@@ -74,6 +87,8 @@
       shouldPromptForCode: shouldPromptForCode,
       resolvedResults: resolvedResults,
       staleIds: staleIds,
+      goneIds: goneIds,
+      GONE_TEXT: GONE_TEXT,
       needsReload: needsReload,
       appendLog: appendLog,
       setLogReply: setLogReply,
@@ -274,12 +289,19 @@
       }).then(function (results) {
         var done = resolvedResults(results, ids);
         var stale = staleIds(results, ids);
-        if (!done.length && !stale.length) return; // still waiting
-        // record replies into the log and drop resolved + gone/expired ids from pending
+        var gone = goneIds(results, ids);
+        if (!done.length && !stale.length && !gone.length) return; // still waiting
+        // record replies into the log and drop resolved + handled + gone ids from pending.
+        // A gone id gets an 'expired' reply so it surfaces exactly like an answer would.
         var log = getLog();
         var removeIds = {};
         done.forEach(function (d) { removeIds[d.id] = true; log = setLogReply(log, d.id, d.response, d.kind); });
         stale.forEach(function (id) { removeIds[id] = true; });
+        gone.forEach(function (id) {
+          removeIds[id] = true;
+          log = setLogReply(log, id, GONE_TEXT, 'expired');
+          done.push({ id: id, response: GONE_TEXT, kind: 'expired' });
+        });
         setLog(log);
         setPending(ids.filter(function (id) { return !removeIds[id]; }));
         renderLog();

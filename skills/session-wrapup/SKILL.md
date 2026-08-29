@@ -162,8 +162,14 @@ and any who were off-screen this session):
    ```bash
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
      <vault> Characters/PCs/A.md Characters/PCs/B.md \
-     --session N --date YYYY-MM-DD --retag old-tag=new-tag
+     --session "<asOfSession value>" --date YYYY-MM-DD --retag old-tag=new-tag
    ```
+
+   `--session` is written verbatim, so match the vault's existing
+   `asOfSession` shape — `"Chapter 4, Session 9"` where the vault
+   uses labels, `9` where it uses bare numbers. The stamper refuses
+   a file whose shape would change (it prints an `ERROR` line);
+   re-run with the matching form rather than `--force-shape`.
 
    It touches only those frontmatter lines; body content and
    line endings are preserved. Steps 3–4 remain manual editing

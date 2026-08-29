@@ -83,3 +83,16 @@ test('classifySubmitError maps HTTP status', () => {
   assert.equal(cr.classifySubmitError(400), 'bad');
   assert.equal(cr.classifySubmitError(500), 'bad');
 });
+
+test('goneIds returns ids the server no longer holds, and nothing else (#176)', () => {
+  const results = {
+    a: { status: 'gone', response: null, kind: null },
+    b: { status: 'pending', response: null, kind: null },
+    c: { status: 'handled', response: null, kind: null },
+    d: { status: 'handled', response: '✓', kind: 'applied' },
+  };
+  assert.deepEqual(cr.goneIds(results, ['a', 'b', 'c', 'd']), ['a']);
+  // gone is NOT stale: stale drops silently, gone must be surfaced to the player
+  assert.deepEqual(cr.staleIds(results, ['a', 'b', 'c', 'd']), ['c']);
+  assert.match(cr.GONE_TEXT, /expired/);
+});

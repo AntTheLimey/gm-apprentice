@@ -12,10 +12,18 @@ Dry-run by default — prints planned changes and exits. Pass --write
 to apply. Stdlib only.
 
 Usage:
-  stamp_entities.py VAULT --session N --date YYYY-MM-DD \
-      [--retag OLD=NEW] [--write] FILE [FILE...]
+  stamp_entities.py VAULT --session SESSION --date YYYY-MM-DD \
+      [--retag OLD=NEW] [--force-shape] [--write] FILE [FILE...]
 
 FILE paths are vault-relative.
+
+SESSION is written verbatim as `asOfSession`: a bare integer (`9`) stays a
+bare integer, anything else (`"Chapter 4, Session 9"`) is written as a
+quoted string. A vault that already uses one shape keeps it: a file whose
+existing `asOfSession` is a label is refused a bare number (and vice
+versa) unless --force-shape is given, because silently flattening
+"Chapter 4, Session 8" to `9` drops the chapter and diverges from what
+every other writer in the toolchain produces.
 """
 
 import argparse
@@ -47,6 +55,44 @@ def frontmatter_span(lines: list[str]) -> tuple[int, str | None]:
                                 f"YAML ({body_line.rstrip()!r}) — refusing")
             return i, None
     return -1, "unterminated frontmatter"
+
+
+def get_key(fm: list[str], key: str) -> str | None:
+    """Raw value text after `key:` (whitespace-stripped), or None."""
+    pattern = re.compile(rf"^{re.escape(key)}:([^\r\n]*)")
+    for line in fm:
+        m = pattern.match(line)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+def unquote(text: str) -> str:
+    """Strip one layer of matching surrounding quotes, if present."""
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        return text[1:-1]
+    return text
+
+
+def yaml_scalar(value: str, *, quoted_int: bool = False) -> str:
+    """An integer stays bare unless the file already quotes its integer
+    (`asOfSession: "9"` stays `"10"`); anything else is double-quoted."""
+    if re.fullmatch(r"\d+", value) and not quoted_int:
+        return value
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def session_shape(raw: str | None) -> str | None:
+    """'int' for an integer (bare or quoted), 'label' for any other
+    non-empty value, None for absent or empty (a fresh template's
+    `asOfSession: ""`)."""
+    if raw is None:
+        return None
+    text = unquote(raw)
+    if text == "":
+        return None
+    return "int" if re.fullmatch(r"\d+", text) else "label"
 
 
 def set_key(fm: list[str], key: str, value: str, eol: str) -> str:
@@ -93,13 +139,25 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("files", nargs="+", help="vault-relative paths")
-    ap.add_argument("--session", type=int, required=True)
+    ap.add_argument("--session", required=True,
+                    help="asOfSession value, written verbatim: a bare "
+                         "number (9) or a label (\"Chapter 4, Session 9\")")
     ap.add_argument("--date", required=True,
                     help="lastUpdated value, YYYY-MM-DD")
     ap.add_argument("--retag", help="OLD=NEW chapter tag swap")
+    ap.add_argument("--force-shape", action="store_true",
+                    help="allow asOfSession to change shape (label <-> "
+                         "bare number) in files that already use one")
     ap.add_argument("--write", action="store_true",
                     help="apply changes (default: dry run)")
     args = ap.parse_args()
+
+    # A shell-quoted '"10"' means the integer 10, not a label containing quotes.
+    session = unquote(args.session)
+    if not session:
+        print("error: --session must not be empty", file=sys.stderr)
+        return 2
+    new_shape = session_shape(session)
 
     if not re.match(r"^\d{4}-\d{2}-\d{2}$", args.date):
         print(f"error: --date must be YYYY-MM-DD, got {args.date}",
@@ -144,7 +202,21 @@ def main() -> int:
             continue
         eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
         fm = lines[1:close]
-        actions = [set_key(fm, "asOfSession", str(args.session), eol),
+        old_raw = get_key(fm, "asOfSession")
+        old_shape = session_shape(old_raw)
+        if (old_shape and old_shape != new_shape
+                and not args.force_shape):
+            want = ("a label like the existing value" if old_shape == "label"
+                    else "a plain session number")
+            print(f"ERROR\t{rel}\tasOfSession is currently "
+                  f"{old_raw} ({old_shape}); --session "
+                  f"{session!r} would change its shape. Pass {want}, or "
+                  f"--force-shape to override — not stamped")
+            errors += 1
+            continue
+        quoted_int = (old_shape == "int" and old_raw.strip()[:1] in "\"'")
+        actions = [set_key(fm, "asOfSession",
+                           yaml_scalar(session, quoted_int=quoted_int), eol),
                    set_key(fm, "lastUpdated", f'"{args.date}"', eol)]
         if tag_old:
             act = retag(fm, tag_old, tag_new)

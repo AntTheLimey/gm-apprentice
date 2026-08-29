@@ -31,9 +31,41 @@ function topLevelHtml(sectionHtml) {
   return /<table[ >]/i.test(top) ? top : sectionHtml;
 }
 
+// Each table in a fragment as its own row list, in document order. parseTableRows
+// flattens every table into one list, which is right for a single-schema section
+// and wrong for a combined one (`## Melee & Ranged` holds two tables with two
+// header rows, #177).
+function parseTables(html) {
+  const out = [];
+  const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+  let m;
+  while ((m = tableRegex.exec(String(html || ''))) !== null) {
+    const rows = parseTableRows(m[1]);
+    if (rows.length) out.push(rows);
+  }
+  return out;
+}
+
+function countTables(html) {
+  return (String(html || '').match(/<table[ >]/gi) || []).length;
+}
+
+// Loose heading key: case-folded, `&`/`&amp;`/`+` read as "and", punctuation
+// and runs of whitespace collapsed to one space. A sheet author writes
+// `## Melee & Ranged` or `## Advantages/Perks` and expects it to match; exact
+// string equality silently dropped whole sections (#177).
+function normalizeTitle(title) {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/[&+]/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function findSectionByTitle(sections, ...titles) {
-  const lower = titles.map(t => t.toLowerCase());
-  return sections.find(s => lower.includes(s.title.toLowerCase()));
+  const keys = titles.map(normalizeTitle);
+  return sections.find(s => keys.includes(normalizeTitle(s.title)));
 }
 
 function escapeRegex(s) {
@@ -50,4 +82,4 @@ function extractSubsectionHtml(sectionHtml, subsectionTitle) {
   return match ? match[1] : '';
 }
 
-module.exports = { parseTableRows, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };
+module.exports = { parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };

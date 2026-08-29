@@ -26,10 +26,14 @@ Loadout (carried items) and hero points are not synced.
 From the **site directory** (the one holding `vault.config.json` and
 `wrangler.toml`):
 
-    npx gm-apprentice-publish flush
+    npx gm-apprentice-publish flush --dry-run   # preview: same lines, writes nothing
+    npx gm-apprentice-publish flush             # write the sheets
 
 (or `node <tool>/bin/gm-publish.js flush`). It prints a per-PC summary
 (`✓ Karl Brenner — HP 12→7, FP 11→9`). Report that summary to the GM.
+`flush` is the one command that edits the vault, so preview first when the
+GM is unsure; `--help` prints usage, and an unknown flag is rejected rather
+than run.
 
 ## When it does nothing
 

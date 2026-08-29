@@ -85,6 +85,11 @@ def _map():
     }
 
 
+def _empty_live():
+    """A live-world page with nothing on it (for the #179 preflight GETs)."""
+    return {"content": [], "page": {"totalPages": 1}}
+
+
 def test_element_spec_routing():
     mp = _map()
     person = {"kind": "npc", "location_type": None}
@@ -512,8 +517,10 @@ def test_run_dry_run_end_to_end(tmp_path, monkeypatch, capsys):
     (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
     monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
-    def boom(*a, **k):
-        raise AssertionError("no write in dry-run")
+    def boom(method, *a, **k):
+        if method != "GET":
+            raise AssertionError("no write in dry-run")
+        return _empty_live()   # the #179 preflight reads the live world
     monkeypatch.setattr(client, "_request", boom)
 
     rc = suggest.run(["w1", "--vault", str(d),
@@ -537,6 +544,7 @@ def test_run_namespace_and_label_not_hardcoded_canticle(tmp_path, monkeypatch, c
     (d / "_meta/mobrpg-map.json").write_text(json.dumps(mp), encoding="utf-8")
     monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda *a, **k: _empty_live())
     rc = suggest.run(["w1", "--vault", str(d),
                       "--out", str(tmp_path / "out")])
     assert rc == 0
@@ -635,6 +643,7 @@ def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):
     (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
     monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda *a, **k: _empty_live())
 
     rc = suggest.run(["w1", "--vault", str(d),
                       "--out", str(tmp_path / "out")])
@@ -911,3 +920,144 @@ def test_create_description_config_replaces_the_default_list(tmp_path, capsys):
     assert "She is the traitor." in im["description"]
     err = capsys.readouterr().err
     assert "vaultOnlySections" in err and "GM Notes" in err and "PUSHED" in err
+
+
+# --- issue #179: pre-existing upstream elements and per-batch write-back ---
+
+def _two_npc_vault(tmp_path):
+    d = tmp_path / "space_game"
+    (d / "Characters/NPCs").mkdir(parents=True)
+    (d / "_meta").mkdir(parents=True)
+    for name in ("Kate_Broadbeck", "Gary_Johnson"):
+        (d / f"Characters/NPCs/{name}.md").write_text(
+            '---\ntype: npc\noccupation: "Escort"\ngender: Female\n---\nBody.\n', encoding="utf-8")
+    (d / "_meta/mobrpg-map.json").write_text(json.dumps(_map()), encoding="utf-8")
+    return d
+
+
+def test_edge_to_a_held_preexisting_entity_resolves_to_its_live_id(tmp_path, monkeypatch, capsys):
+    d = _two_npc_vault(tmp_path)
+    (d / "Characters/NPCs/Gary_Johnson.md").write_text(
+        '---\ntype: npc\noccupation: "Escort"\ngender: Female\nrelationships:\n'
+        '  - target: "[[Kate_Broadbeck]]"\n    type: knows\n---\nBody.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "kate-id", "name": "Kate Broadbeck"}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out")]) == 0
+    out = capsys.readouterr().out
+    assert "not a world element" not in out
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    assert any("kate-id" in json.dumps(it) for it in batch["suggestions"])
+
+
+def test_run_holds_entities_that_already_exist_live_and_points_at_adopt(tmp_path, monkeypatch, capsys):
+    """Kate exists upstream (accepted from an earlier push) but her note has no
+    node. Re-filing her create is skipped server-side and every edge on it 400s
+    the batch. The preflight must hold her, name her, and suggest `adopt`."""
+    d = _two_npc_vault(tmp_path)
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def live(method, path, **k):
+        assert method == "GET"
+        if path.endswith("/person"):
+            return {"content": [{"id": "kate-id", "name": "Kate Broadbeck"}],
+                    "page": {"totalPages": 1}}
+        return _empty_live()
+    monkeypatch.setattr(client, "_request", live)
+
+    rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "[held] 1 entit(y/ies) already exist upstream" in out
+    assert "Kate Broadbeck" in out.split("[held]")[1].split("\n")[0]
+    assert "mobrpg adopt w1" in out
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    created = [it["payload"]["name"] for it in batch["suggestions"]
+               if it.get("operation") == "CreateElement" and it.get("externalRef")]
+    assert created == ["Gary Johnson"]
+
+
+def test_run_ambiguous_live_match_is_held_not_guessed(tmp_path, monkeypatch, capsys):
+    d = _two_npc_vault(tmp_path)
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "k1", "name": "Kate Broadbeck"}, {"id": "k2", "name": "Kate Broadbeck"}],
+         "page": {"totalPages": 1}} if p.endswith("/person") else _empty_live()))
+    rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "ambiguous live name match: Kate Broadbeck (2 matches)" in out
+
+
+def _execute_with(monkeypatch, post):
+    """Route GETs to an empty live world and POSTs to `post(body)`."""
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def fake(method, path, *, token=None, query=None, body=None):
+        if method == "GET":
+            return _empty_live()
+        return post(body)
+    monkeypatch.setattr(client, "_request", fake)
+
+
+def test_write_back_stamps_only_after_the_post_succeeds(tmp_path, monkeypatch, capsys):
+    from mobrpg import node
+    d = _two_npc_vault(tmp_path)
+
+    def post(body):
+        raise client.ApiError(400, '{"status":400,"error":"Bad Request"}', "/world/w1/suggestion")
+    _execute_with(monkeypatch, post)
+
+    rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out"),
+                      "--execute", "--write-back"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "ERROR on batch 1" in err
+    assert "mobrpg adopt w1" in err                     # the 400 hint
+    assert "batch 1 not stamped" in err
+    for name in ("Kate_Broadbeck", "Gary_Johnson"):
+        txt = (d / f"Characters/NPCs/{name}.md").read_text()
+        assert node.read_node(txt) is None, f"{name} must not carry a pending node"
+
+
+def test_write_back_stamps_accepted_batch_but_not_refused_refs(tmp_path, monkeypatch, capsys):
+    from mobrpg import node
+    d = _two_npc_vault(tmp_path)
+
+    def post(body):
+        rows = []
+        for it in body["suggestions"]:
+            if it.get("operation") != "CreateElement" or not it.get("externalRef"):
+                continue
+            ref = it["externalRef"]
+            rows.append({"id": ref, "externalRef": ref, "operation": "CreateElement",
+                         "payload": it["payload"],
+                         "reviewState": "Accepted" if ref.endswith("Kate_Broadbeck") else "Pending"})
+        return {"suggestions": rows, "updatedIds": []}
+    _execute_with(monkeypatch, post)
+
+    rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out"),
+                      "--execute", "--write-back"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "write-back: batch 1 — 1 node(s) written" in out
+    assert "1 refused by the server (not stamped)" in out
+    gary = node.read_node((d / "Characters/NPCs/Gary_Johnson.md").read_text())
+    assert gary and gary["review_state"] == "pending"
+    kate = node.read_node((d / "Characters/NPCs/Kate_Broadbeck.md").read_text())
+    assert kate is None
+
+
+def test_dry_run_write_back_changes_no_files(tmp_path, monkeypatch, capsys):
+    from mobrpg import node
+    d = _two_npc_vault(tmp_path)
+    _execute_with(monkeypatch, lambda body: (_ for _ in ()).throw(AssertionError("no POST in dry-run")))
+    rc = suggest.run(["w1", "--vault", str(d), "--out", str(tmp_path / "out"), "--write-back"])
+    assert rc == 0
+    assert "would be written" in capsys.readouterr().out
+    assert node.read_node((d / "Characters/NPCs/Gary_Johnson.md").read_text()) is None

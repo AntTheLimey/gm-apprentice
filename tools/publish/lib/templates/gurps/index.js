@@ -10,6 +10,9 @@ function renderGURPSSheet(frontmatter, sections, meta) {
     sheetHtml: buildSheet(model),
     combatHtml: buildCombat(model, sections || []),
     equipmentHtml: buildEquipment(model),
+    // Structural warnings (sections found but unread, hidden sub-tables, an
+    // empty combat tab) — build.js prints them per page (#177).
+    warnings: model.warnings,
     liveData,
     // Panel rides the live-data island: only mount when the island exists AND
     // vitals resolved. Otherwise there is no gurps-live.js to drive it.

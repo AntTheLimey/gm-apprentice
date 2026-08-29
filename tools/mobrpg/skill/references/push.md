@@ -21,9 +21,17 @@ So in practice:
 
 | Flags | What happens |
 |---|---|
-| `suggest --write-back --out <dir>` | Full dry-run. Writes `suggest-batch-N.json` into `<dir>`, computes the write-back and prints `write-back: N node(s) written, M unchanged (skipped)  [dry-run — no files changed]` — but touches nothing. |
-| `suggest --write-back --out <dir> --execute` | Submits the batches to the API **and** writes pending `mobrpg:` nodes into the vault (preserving any already-ratified `element_id` — see below). |
+| `suggest --write-back --out <dir>` | Full dry-run. Writes `suggest-batch-N.json` into `<dir>`, computes the write-back and prints `write-back: N node(s) would be written, M unchanged (skipped)  [dry-run — no files changed]` — but touches nothing. |
+| `suggest --write-back --out <dir> --execute` | Submits the batches to the API **and**, per batch, once the POST has succeeded, writes pending `mobrpg:` nodes for the creates the server stored (preserving any already-ratified `element_id` — see below). A batch that fails stamps nothing; an externalRef the server refused as already claimed is not stamped either. |
 | `suggest --out <dir> --execute` (no `--write-back`) | Submits the batches. No vault file is touched. |
+
+Before building batches, `suggest` checks the live world for net-new entities
+that already exist upstream without a `mobrpg:` node (matched by name within
+their element kind, as `adopt` does). Those are **held**, listed under
+`[held] … already exist upstream`, and not filed: the server would skip the
+create as already claimed and every edge referencing it would fail the whole
+batch with a bare HTTP 400. Run `mobrpg adopt <world> --vault <path> --execute`
+to link them, then re-run `suggest`.
 
 `--out` defaults to `./push_out` if omitted. `suggest-batch-N.json` files are
 written unconditionally on every run, dry-run or not — they're the batch
