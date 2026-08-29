@@ -58,6 +58,9 @@ async function runFlush(deps) {
   const out = deps.out || console.log;
   const readFile = deps.readFile || function (p) { return fs.readFileSync(p, 'utf8'); };
   const writeFile = deps.writeFile || function (p, s) { fs.writeFileSync(p, s); };
+  // --dry-run: identical reconciliation and report, no write (#178). The GM
+  // reads the same "✓ Name — HP 10→13" lines they would get for real.
+  const dryRun = !!deps.dryRun;
 
   // Resolve config exactly as build.js does (so campaignId/pcSlug match).
   const configPath = path.resolve(deps.configPath || './vault.config.json');
@@ -80,6 +83,7 @@ async function runFlush(deps) {
   }
   const latest = latestStateByPcSlug(states);
 
+  if (dryRun) out('DRY RUN — nothing will be written.');
   if (!Object.keys(latest).length) {
     out('No live state to flush for campaign ' + campaignId + ' — no players have saved sheet state yet.');
     return 0;
@@ -113,8 +117,12 @@ async function runFlush(deps) {
       res = applyCoCFlush(raw, latest[slug]);
     }
     if (res.changes.length) {
-      writeFile(page.sourcePath, res.markdown);
-      out('✓ ' + name + ' — ' + summarize(res.changes));
+      if (dryRun) {
+        out('✓ ' + name + ' — ' + summarize(res.changes) + '  (would write)');
+      } else {
+        writeFile(page.sourcePath, res.markdown);
+        out('✓ ' + name + ' — ' + summarize(res.changes));
+      }
     } else {
       out('· ' + name + ' — no change');
     }

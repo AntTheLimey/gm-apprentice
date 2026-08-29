@@ -23,7 +23,48 @@ Usage:
 
 Build options:
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
+
+Flush options:
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --dry-run, -n      Report what would change in each sheet without writing
+
+Every subcommand accepts --help / -h.
 `);
+}
+
+function printFlushHelp() {
+  console.log(`
+gm-apprentice-publish flush [--config <path>] [--dry-run]
+
+Writes each player's current KV live-state (HP, FP, conditions…) back into the
+matching vault character sheet so the build-time seed stays fresh. Edits vault
+source only — no rebuild, no deploy.
+
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --dry-run, -n      Print the same per-PC "✓ Name — HP 10→13" lines, write nothing
+  --help, -h         Show this help
+`);
+}
+
+// Parse `--config <path>` plus an allowlist of flags, rejecting anything else.
+// A mutating command must never let an unrecognised argument fall through to
+// execution: `flush --help` used to perform the flush (#178). Returns
+// { configPath, flags } or { error }.
+function parseSubcommandArgs(rest, allowedFlags) {
+  let configPath = './vault.config.json';
+  const flags = {};
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '--config') {
+      if (!rest[i + 1]) return { error: '--config needs a path' };
+      configPath = rest[i + 1]; i++;
+    } else if (Object.prototype.hasOwnProperty.call(allowedFlags, a)) {
+      flags[allowedFlags[a]] = true;
+    } else {
+      return { error: `Unknown argument: ${a}` };
+    }
+  }
+  return { configPath, flags };
 }
 
 function printVersion() {
@@ -106,6 +147,14 @@ if (command === '--version' || command === '-v') {
   process.exit(0);
 }
 
+// `--help` on any subcommand prints usage and exits 0 with no side effects (#178).
+const wantsHelp = args.slice(1).some((a) => a === '--help' || a === '-h');
+if (wantsHelp) {
+  if (command === 'flush') printFlushHelp(); else printHelp();
+  process.exit(0);
+}
+
+
 if (command === 'init') {
   const targetDir = args[1] || '.';
   const { init } = require('../lib/init');
@@ -176,12 +225,14 @@ if (command === 'inbox') {
 }
 
 if (command === 'flush') {
-  let configPath = './vault.config.json';
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--config' && args[i + 1]) { configPath = args[i + 1]; i++; }
+  const parsed = parseSubcommandArgs(args.slice(1), { '--dry-run': 'dryRun', '-n': 'dryRun' });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printFlushHelp();
+    process.exit(1);
   }
   const { runFlush } = require('../lib/flush-cli.js');
-  runFlush({ configPath })
+  runFlush({ configPath: parsed.configPath, dryRun: !!parsed.flags.dryRun })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
@@ -196,10 +247,14 @@ if (command === 'doctor') {
 }
 
 if (command === 'setup-status-bar' || command === 'setup-inbox') {
-  let configPath = './vault.config.json';
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--config' && args[i + 1]) { configPath = args[i + 1]; i++; }
+  // Also mutating (KV namespace + deploy): reject unknown arguments (#178).
+  const parsed = parseSubcommandArgs(args.slice(1), {});
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printHelp();
+    process.exit(1);
   }
+  const configPath = parsed.configPath;
   const feature = command === 'setup-status-bar' ? 'status-bar' : 'inbox';
   const { runSetupBackend } = require('../lib/setup-backend.js');
   runSetupBackend(feature, { configPath })

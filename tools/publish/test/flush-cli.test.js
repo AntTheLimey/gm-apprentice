@@ -200,3 +200,12 @@ test('the flush wrapper passes the process error through', () => {
     () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }));
   assert.equal(res.error, 'ETIMEDOUT');
 });
+
+test('flush --dry-run reports the same changes and writes nothing (#178)', async () => {
+  const r = run({ dryRun: true });
+  const code = await r.promise;
+  assert.equal(code, 0);
+  assert.deepEqual(Object.keys(r.writes), [], 'no file written');
+  assert.ok(r.lines.some((l) => /DRY RUN/.test(l)));
+  assert.ok(r.lines.some((l) => /Jane Ashford/.test(l) && /HP 11→7/.test(l) && /would write/.test(l)));
+});
