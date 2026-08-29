@@ -518,3 +518,95 @@ describe('parseGurps — helper tables under a ### subheading (issue #82)', () =
     assert.deepStrictEqual(c.spells.map(s => s.name), ['Lend Energy']);
   });
 });
+
+describe('parseGurps — silent section drops (issue #177)', () => {
+  const combined = {
+    title: 'Melee & Ranged', id: 'melee-ranged',
+    html: '<table><tr><th>Weapon</th><th>Skill</th><th>Parry</th><th>Damage</th><th>Reach</th></tr>' +
+          '<tr><td>Knife</td><td>12</td><td>9</td><td>1d-2 cut</td><td>C,1</td></tr></table>' +
+          '<h3>Ranged</h3>' +
+          '<table><tr><th>Weapon</th><th>Skill</th><th>Damage</th><th>Acc</th><th>Range</th><th>RoF</th><th>Shots</th></tr>' +
+          '<tr><td>Pistol</td><td>14</td><td>2d pi</td><td>2</td><td>150/1850</td><td>3</td><td>15+1</td></tr></table>',
+  };
+
+  it('reads both tables from a combined "Melee & Ranged" section', () => {
+    const c = parseGurps({}, [combined]);
+    assert.deepStrictEqual(c.melee.map(w => w.weapon), ['Knife']);
+    assert.deepStrictEqual(c.ranged.map(w => w.weapon), ['Pistol']);
+    assert.strictEqual(c.ranged[0].range, '150/1850');
+    assert.deepStrictEqual(c.warnings, []);
+  });
+
+  it('matches headings loosely: "and", "&amp;", punctuation, case', () => {
+    for (const title of ['Melee and Ranged', 'Melee &amp; Ranged', 'MELEE & RANGED WEAPONS', 'Weapons']) {
+      const c = parseGurps({}, [{ ...combined, title }]);
+      assert.strictEqual(c.melee.length + c.ranged.length, 2, `title "${title}" should parse both tables`);
+    }
+  });
+
+  it('keeps dedicated Melee Weapons / Ranged Weapons sections working', () => {
+    const c = parseGurps({}, [
+      { title: 'Melee Weapons', id: 'm', html: '<table><tr><th>Weapon</th><th>Skill</th><th>Parry</th></tr><tr><td>Club</td><td>11</td><td>8</td></tr></table>' },
+      { title: 'Ranged Weapons', id: 'r', html: '<table><tr><th>Weapon</th><th>Skill</th><th>Acc</th></tr><tr><td>Bow</td><td>13</td><td>2</td></tr></table>' },
+    ]);
+    assert.deepStrictEqual(c.melee.map(w => w.weapon), ['Club']);
+    assert.deepStrictEqual(c.ranged.map(w => w.weapon), ['Bow']);
+  });
+
+  it('a dedicated section with a bare Weapon/Skill/Damage table still takes the section kind', () => {
+    const c = parseGurps({}, [
+      { title: 'Ranged Weapons', id: 'r', html: '<table><tr><th>Weapon</th><th>Skill</th><th>Damage</th></tr><tr><td>Sling</td><td>10</td><td>1d</td></tr></table>' },
+    ]);
+    assert.deepStrictEqual(c.ranged.map(w => w.weapon), ['Sling']);
+    assert.deepStrictEqual(c.melee, []);
+  });
+
+  it('routes a single mixed table row by row (melee rows have no ranged cells)', () => {
+    const c = parseGurps({}, [{
+      title: 'Melee & Ranged', id: 'mr',
+      html: '<table><tr><th>Weapon</th><th>Skill</th><th>Parry</th><th>Damage</th><th>Reach</th><th>Acc</th><th>Range</th><th>RoF</th><th>Shots</th></tr>' +
+            '<tr><td>Knife</td><td>12</td><td>9</td><td>1d-2 cut</td><td>C,1</td><td>—</td><td></td><td></td><td></td></tr>' +
+            '<tr><td>Pistol</td><td>14</td><td>—</td><td>2d pi</td><td></td><td>2</td><td>150/1850</td><td>3</td><td>15+1</td></tr></table>',
+    }]);
+    assert.deepStrictEqual(c.melee.map(w => w.weapon), ['Knife']);
+    assert.deepStrictEqual(c.ranged.map(w => w.weapon), ['Pistol']);
+    assert.strictEqual(c.ranged[0].acc, '2');
+    assert.strictEqual(c.melee[0].reach, 'C,1');
+  });
+
+  it('warns when a weapons-titled section yields no rows at all', () => {
+    const c = parseGurps({}, [{ title: 'Weapons', id: 'w', html: '<p>Carries nothing but a grudge.</p>' }]);
+    assert.strictEqual(c.warnings.length, 1);
+    assert.match(c.warnings[0], /combat tab is empty/);
+    assert.match(c.warnings[0], /"## Weapons"/);
+  });
+
+  it('stays silent for a sheet with no weapon sections (a weaponless PC is not a defect)', () => {
+    const c = parseGurps({}, [statSheet]);
+    assert.deepStrictEqual(c.warnings, []);
+  });
+
+  it('warns when ### sub-tables under Techniques are excluded, naming the subheading', () => {
+    const c = parseGurps({}, [{
+      title: 'Techniques', id: 't',
+      html: '<table><tr><th>Name</th><th>Default</th><th>Points</th><th>Level</th></tr>' +
+            '<tr><td>Choke Hold</td><td>Judo-2</td><td>[3]</td><td>14</td></tr></table>' +
+            '<h3>Freefighting — techniques at a glance</h3>' +
+            '<table><tr><th>Technique</th><th>Use</th></tr><tr><td>Arm Lock</td><td>lock</td></tr></table>',
+    }]);
+    assert.deepStrictEqual(c.techniques.map(t => t.name), ['Choke Hold']);
+    assert.strictEqual(c.warnings.length, 1);
+    assert.match(c.warnings[0], /"## Techniques": 1 table\(s\) under ### subheading/);
+    assert.match(c.warnings[0], /Freefighting — techniques at a glance/);
+  });
+
+  it('warns when a Skills section is present but its table produced no rows', () => {
+    const c = parseGurps({}, [{ title: 'Skills', id: 's', html: '<table><tr><th>Name</th><th>Level</th></tr></table>' }]);
+    assert.ok(c.warnings.some(w => /"## Skills" is present but yielded no rows/.test(w)));
+  });
+
+  it('renderGURPSSheet surfaces the warnings for build.js', () => {
+    const out = renderGURPSSheet({}, [{ title: 'Weapons', id: 'w', html: '<p>none</p>' }]);
+    assert.ok(Array.isArray(out.warnings) && out.warnings.length === 1);
+  });
+});

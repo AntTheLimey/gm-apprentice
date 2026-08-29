@@ -1,4 +1,4 @@
-const { parseTableRows, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings } = require('./tables');
+const { parseTableRows, parseTables, countTables, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings } = require('./tables');
 const { splitMarkers, stripCost } = require('./render');
 
 const PRIMARY = ['ST', 'DX', 'IQ', 'HT'];
@@ -22,6 +22,7 @@ function emptyModel() {
     equipment: { items: [], loadouts: [] },
     chains: { melee: [], ranged: [] },
     points: [],
+    warnings: [],
   };
 }
 
@@ -159,6 +160,7 @@ function parseSkills(model, sections, fm) {
   const sec = findSectionByTitle(sections, 'skills');
   if (!sec) return;
   const rows = parseTableRows(topLevelHtml(sec.html));
+  noteHiddenSubtables(model, sec, rows);
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = header.findIndex(h => h.includes('name')) >= 0
     ? header.findIndex(h => h.includes('name')) : 0;
@@ -388,6 +390,7 @@ function parseSpells(model, sections, fm) {
   const sec = findSectionByTitle(sections, 'spells');
   if (!sec) return;
   const rows = parseTableRows(topLevelHtml(sec.html));
+  noteHiddenSubtables(model, sec, rows);
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = Math.max(0, header.findIndex(h => h.includes('name')));
   const { iLevel } = resolveLevelColumns(header);
@@ -418,6 +421,100 @@ function parsePoints(model, sections, fm) {
   }
 }
 
+// Skills/Techniques/Spells read only the table(s) above the first `###` (#82:
+// helper tables under a subheading carry a foreign schema). That exclusion is
+// deliberate, but it must not be silent — a sheet that keeps six usable
+// techniques in a `### … at a glance` sub-table shipped none of them for five
+// sessions with no hint in the build output (#177). Say what was skipped.
+function noteHiddenSubtables(model, sec, rowsRead) {
+  const total = countTables(sec.html);
+  const read = countTables(topLevelHtml(sec.html));
+  if (total > read) {
+    const subs = [...String(sec.html).matchAll(/<h3[^>]*>([\s\S]*?)<\/h3>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim()).filter(Boolean);
+    model.warnings.push(
+      `GURPS "## ${sec.title}": ${total - read} table(s) under ### subheading(s) (${subs.join(', ') || 'untitled'}) are not published — only the top-level table is read. Move rows that belong on the sheet into the main table.`);
+  }
+  if (rowsRead.length <= 1) {
+    model.warnings.push(total === 0
+      ? `GURPS "## ${sec.title}" is present but contains no table — its content will not publish. GURPS sheets keep these rows in a table with a Name column.`
+      : `GURPS "## ${sec.title}" is present but yielded no rows — check the table's header row (expected a Name column).`);
+  }
+}
+
+// Section titles that may hold weapon tables. A combined `## Melee & Ranged`
+// (or plain `## Weapons`) is a natural heading; each table inside is routed to
+// melee or ranged by its own header, so one section can feed both (#177).
+const MELEE_TITLES = ['melee weapons', 'melee', 'melee attacks'];
+const RANGED_TITLES = ['ranged weapons', 'ranged', 'ranged attacks'];
+const COMBINED_TITLES = ['melee and ranged', 'melee and ranged weapons', 'ranged and melee', 'ranged and melee weapons', 'weapons', 'attacks', 'combat weapons'];
+
+// What a weapon table is, from its header alone: ranged-only columns win, then
+// melee-only ones; a bare Weapon/Skill/Damage/Notes table is `null` and takes
+// its kind from the section it sits in.
+function weaponTableKind(header) {
+  const h = header.map(x => x.toLowerCase());
+  const has = (...names) => h.some(c => names.some(n => c === n || c.startsWith(n + ' ') || c.startsWith(n + '/')));
+  if (has('acc', 'range', 'rof', 'shots', 'rcl', 'bulk')) return 'ranged';
+  if (has('parry', 'reach')) return 'melee';
+  return null;
+}
+
+// Every weapon table in scope for `kind`, from a dedicated section (all of its
+// tables not positively of the other kind) and from a combined section (only
+// tables whose header says `kind`; an unclassifiable table in a combined
+// section counts as melee, the commoner case). Returns { tables, sections }.
+function weaponTables(sections, kind) {
+  const own = kind === 'melee' ? MELEE_TITLES : RANGED_TITLES;
+  const other = kind === 'melee' ? 'ranged' : 'melee';
+  const found = [];
+  const tables = [];
+  const ownSec = findSectionByTitle(sections, ...own);
+  if (ownSec) {
+    found.push(ownSec);
+    for (const t of parseTables(ownSec.html)) if (weaponTableKind(t[0]) !== other) tables.push(t);
+  }
+  const both = findSectionByTitle(sections, ...COMBINED_TITLES);
+  if (both) {
+    found.push(both);
+    for (const t of parseTables(both.html)) {
+      const split = splitMixedTable(t);
+      if (split) { if (split[kind].length > 1) tables.push(split[kind]); continue; }
+      if ((weaponTableKind(t[0]) || 'melee') === kind) tables.push(t);
+    }
+  }
+  return { tables, sections: found };
+}
+
+// A combined section written as ONE table carries both Parry/Reach and
+// Acc/Range columns; classifying it whole would file every knife under Ranged
+// with blank Acc/Range and no warning. Route row by row instead: a row with any
+// ranged-only cell filled is ranged, the rest are melee. Returns null when the
+// table is not mixed.
+const RANGED_ONLY = ['acc', 'range', 'rof', 'shots', 'rcl', 'bulk'];
+const MELEE_ONLY = ['parry', 'reach'];
+function splitMixedTable(rows) {
+  const header = (rows[0] || []).map(h => h.toLowerCase());
+  const cols = names => header.map((c, i) => names.some(n => c === n || c.startsWith(n + ' ') || c.startsWith(n + '/')) ? i : -1).filter(i => i >= 0);
+  const rCols = cols(RANGED_ONLY); const mCols = cols(MELEE_ONLY);
+  if (!rCols.length || !mCols.length) return null;
+  const filled = (row, i) => { const v = (row[i] || '').trim(); return v && v !== '—' && v !== '-' && v !== '–'; };
+  const out = { melee: [rows[0]], ranged: [rows[0]] };
+  for (const row of rows.slice(1)) out[rCols.some(i => filled(row, i)) ? 'ranged' : 'melee'].push(row);
+  return out;
+}
+
+// Silence is the defect (#177): a section that names weapons but produced no
+// rows for either kind reads at the table as lost data. Called once both
+// parsers have run.
+function noteEmptyWeapons(model, sections) {
+  if (model.melee.length || model.ranged.length) return;
+  const named = sections.filter(s => /weapon|melee|ranged|attack/i.test(String(s.title || '')));
+  if (!named.length) return;
+  model.warnings.push(
+    `GURPS combat tab is empty: section(s) ${named.map(s => `"## ${s.title}"`).join(', ')} exist but no melee or ranged rows were read. Headings recognised: ${[...MELEE_TITLES, ...RANGED_TITLES, ...COMBINED_TITLES].map(t => `"${t}"`).join(', ')}; a weapon table needs a header row with a Weapon column (plus Parry/Reach for melee or Acc/Range/RoF/Shots for ranged).`);
+}
+
 function parseMelee(model, sections, fm) {
   if (Array.isArray(fm.melee)) {
     model.melee = fm.melee.map(a => ({
@@ -426,22 +523,21 @@ function parseMelee(model, sections, fm) {
     }));
     return;
   }
-  const sec = findSectionByTitle(sections, 'melee weapons', 'melee');
-  if (!sec) return;
-  const rows = parseTableRows(sec.html);
-  const header = (rows[0] || []).map(h => h.toLowerCase());
-  const idx = n => header.findIndex(h => h.includes(n));
-  const iWep = Math.max(0, idx('weapon') >= 0 ? idx('weapon') : idx('mode') >= 0 ? idx('mode') : 0);
-  const iSkill = idx('skill'); const iParry = idx('parry'); const iDmg = idx('damage') >= 0 ? idx('damage') : idx('dmg');
-  const iReach = idx('reach'); const iSt = idx('st'); const iNotes = idx('notes');
-  for (const row of rows.slice(1)) {
-    if (!row[iWep]) continue;
-    model.melee.push({
-      weapon: row[iWep], skill: iSkill >= 0 ? row[iSkill] : '',
-      parry: iParry >= 0 ? row[iParry] : '', damage: iDmg >= 0 ? row[iDmg] : '',
-      reach: iReach >= 0 ? row[iReach] : '', st: iSt >= 0 ? row[iSt] : '',
-      notes: iNotes >= 0 ? row[iNotes] : '',
-    });
+  for (const rows of weaponTables(sections, 'melee').tables) {
+    const header = (rows[0] || []).map(h => h.toLowerCase());
+    const idx = n => header.findIndex(h => h.includes(n));
+    const iWep = Math.max(0, idx('weapon') >= 0 ? idx('weapon') : idx('mode') >= 0 ? idx('mode') : 0);
+    const iSkill = idx('skill'); const iParry = idx('parry'); const iDmg = idx('damage') >= 0 ? idx('damage') : idx('dmg');
+    const iReach = idx('reach'); const iSt = idx('st'); const iNotes = idx('notes');
+    for (const row of rows.slice(1)) {
+      if (!row[iWep]) continue;
+      model.melee.push({
+        weapon: row[iWep], skill: iSkill >= 0 ? row[iSkill] : '',
+        parry: iParry >= 0 ? row[iParry] : '', damage: iDmg >= 0 ? row[iDmg] : '',
+        reach: iReach >= 0 ? row[iReach] : '', st: iSt >= 0 ? row[iSt] : '',
+        notes: iNotes >= 0 ? row[iNotes] : '',
+      });
+    }
   }
 }
 
@@ -455,26 +551,25 @@ function parseRanged(model, sections, fm) {
     }));
     return;
   }
-  const sec = findSectionByTitle(sections, 'ranged weapons', 'ranged');
-  if (!sec) return;
-  const rows = parseTableRows(sec.html);
-  const header = (rows[0] || []).map(h => h.toLowerCase());
-  const idx = n => header.findIndex(h => h.includes(n));
-  const iWep = Math.max(0, idx('weapon'));
-  const iSkill = idx('skill'); const iDmg = idx('damage') >= 0 ? idx('damage') : idx('dmg');
-  const iAcc = idx('acc'); const iRange = idx('range'); const iRof = idx('rof');
-  const iShots = idx('shots'); const iSt = idx('st'); const iBulk = idx('bulk');
-  const iRcl = idx('rcl'); const iNotes = idx('notes');
-  for (const row of rows.slice(1)) {
-    if (!row[iWep]) continue;
-    model.ranged.push({
-      weapon: row[iWep], skill: iSkill >= 0 ? row[iSkill] : '',
-      damage: iDmg >= 0 ? row[iDmg] : '', acc: iAcc >= 0 ? row[iAcc] : '',
-      range: iRange >= 0 ? row[iRange] : '', rof: iRof >= 0 ? row[iRof] : '',
-      shots: iShots >= 0 ? row[iShots] : '', st: iSt >= 0 ? row[iSt] : '',
-      bulk: iBulk >= 0 ? row[iBulk] : '', rcl: iRcl >= 0 ? row[iRcl] : '',
-      notes: iNotes >= 0 ? row[iNotes] : '',
-    });
+  for (const rows of weaponTables(sections, 'ranged').tables) {
+    const header = (rows[0] || []).map(h => h.toLowerCase());
+    const idx = n => header.findIndex(h => h.includes(n));
+    const iWep = Math.max(0, idx('weapon'));
+    const iSkill = idx('skill'); const iDmg = idx('damage') >= 0 ? idx('damage') : idx('dmg');
+    const iAcc = idx('acc'); const iRange = idx('range'); const iRof = idx('rof');
+    const iShots = idx('shots'); const iSt = idx('st'); const iBulk = idx('bulk');
+    const iRcl = idx('rcl'); const iNotes = idx('notes');
+    for (const row of rows.slice(1)) {
+      if (!row[iWep]) continue;
+      model.ranged.push({
+        weapon: row[iWep], skill: iSkill >= 0 ? row[iSkill] : '',
+        damage: iDmg >= 0 ? row[iDmg] : '', acc: iAcc >= 0 ? row[iAcc] : '',
+        range: iRange >= 0 ? row[iRange] : '', rof: iRof >= 0 ? row[iRof] : '',
+        shots: iShots >= 0 ? row[iShots] : '', st: iSt >= 0 ? row[iSt] : '',
+        bulk: iBulk >= 0 ? row[iBulk] : '', rcl: iRcl >= 0 ? row[iRcl] : '',
+        notes: iNotes >= 0 ? row[iNotes] : '',
+      });
+    }
   }
 }
 
@@ -568,6 +663,7 @@ function parseTechniques(model, sections, fm) {
   const sec = findSectionByTitle(sections, 'techniques');
   if (!sec) return;
   const rows = parseTableRows(topLevelHtml(sec.html));
+  noteHiddenSubtables(model, sec, rows);
   const header = (rows[0] || []).map(h => h.toLowerCase());
   const iName = header.findIndex(h => h.includes('name')) >= 0
     ? header.findIndex(h => h.includes('name')) : 0;
@@ -817,6 +913,7 @@ function parseGurps(frontmatter, sections) {
   parsePoints(model, secs, fm);
   parseMelee(model, secs, fm);
   parseRanged(model, secs, fm);
+  noteEmptyWeapons(model, secs);
   parseGrimoire(model, secs, fm);
   parseStatus(model, secs, fm);
   resolveCurrentEncumbrance(model);
@@ -826,4 +923,4 @@ function parseGurps(frontmatter, sections) {
   return model;
 }
 
-module.exports = { parseGurps, emptyModel, cell };
+module.exports = { parseGurps, emptyModel, cell, weaponTableKind };
