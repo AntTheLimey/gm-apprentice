@@ -69,7 +69,7 @@ test('GET returns per-id {status,response,kind}', async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), {
     k: { status: 'handled', response: '• hi', kind: 'advice' },
-    gone: { status: 'handled', response: null, kind: null },
+    gone: { status: 'gone', response: null, kind: null },
   });
 });
 

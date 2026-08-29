@@ -205,6 +205,16 @@ reason), or `advice`. A deploy failure leaves the applied items `pending` to
 retry next tick, unreplied for now. `reply` is the single finalizer for every
 item — it supersedes the old `handled`/`flag` commands.
 
+**Trust `reply`'s exit code, not a follow-up read.** It prints
+`<id>: reply stored (<kind>) → status …` and exits 0 only when the write
+happened; if the request no longer exists (it expired, or the id is wrong)
+it prints `<id>: reply NOT stored …` and exits 1 — tell the player to send
+it again. KV is eventually consistent, so re-reading right after a write can
+show stale state; never "verify" by polling and re-sending, which delivers the
+same answer twice. Finalized entries linger for days (a reply for 7), so a
+player who put the phone down still gets the answer; a request the server has
+lost reports `status: gone` to the widget, which tells the player to resend.
+
 ## When the watcher reports failure
 
 Either mode can wake you with a failure signal instead of a batch — the

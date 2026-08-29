@@ -109,3 +109,35 @@ test('a timed-out wrangler call reports failure instead of hanging', () => {
     () => ({ code: 1, stdout: '', stderr: '', error: 'ETIMEDOUT' }));
   assert.equal(res.code, 1);
 });
+
+test('reply exits non-zero and says so when the request no longer exists (#176)', async () => {
+  const kv = fakeKV(); const c = capture();
+  const rc = await runInbox(['reply', 'nope', 'advice', 'hello'], { adapter: kv, out: c.out });
+  assert.equal(rc, 1);
+  assert.match(c.lines.join('\n'), /NOT stored/);
+  assert.equal(await kv.get('req:nope'), null, 'nothing was written');
+});
+
+test('reply reports its own write outcome on success (#176)', async () => {
+  const kv = fakeKV(); const c = capture();
+  await inbox.enqueue(kv, { id: 'a', character: 'ana', text: 'x', timestamp: '2026-07-11T14:01:00.000Z' });
+  const rc = await runInbox(['reply', 'a', 'advice', 'try', 'this'], { adapter: kv, out: c.out });
+  assert.equal(rc, 0);
+  assert.match(c.lines.join('\n'), /a: reply stored \(advice\) → status handled/);
+  assert.equal(JSON.parse(await kv.get('req:a')).response, 'try this');
+});
+
+test('handled/flag exit non-zero for an id that does not exist (#176)', async () => {
+  const kv = fakeKV(); const c = capture();
+  await inbox.enqueue(kv, { id: 'a', character: 'ana', text: 'x', timestamp: '2026-07-11T14:01:00.000Z' });
+  assert.equal(await runInbox(['handled', 'a', 'ghost'], { adapter: kv, out: c.out }), 1);
+  assert.match(c.lines.join('\n'), /a: marked handled/);
+  assert.match(c.lines.join('\n'), /ghost: NOT marked handled/);
+  assert.equal(await runInbox(['flag', 'ghost'], { adapter: kv, out: c.out }), 1);
+});
+
+test('inbox commands fail clearly outside a site directory (no wrangler.toml) (#176)', async () => {
+  const os = require('os'); const fs = require('fs'); const path = require('path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-inbox-nosite-'));
+  await assert.rejects(runInbox(['pull'], { cwd: dir }), /No wrangler\.toml in .*site directory/);
+});

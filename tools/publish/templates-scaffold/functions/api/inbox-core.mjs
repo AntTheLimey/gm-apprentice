@@ -8,8 +8,14 @@ export const PREFIX = 'req:';
 export const CODE_KEY = 'config:code';
 export const INDEX_KEY = 'config:req-index'; // JSON array of request ids; lets readPending skip kv.list()
 export const RL_PREFIX = 'rl:';
-export const HANDLED_TTL = 300; // seconds a handled entry lingers for the widget
-export const RESPONSE_TTL = 600; // seconds a responded (handled) entry lingers for the widget
+// How long a finalized entry lingers so the widget can collect it. These must
+// outlive the session they were written in (#176): at the old 300s/600s an answer
+// expired before a player who had put the phone down could read it, and a missing
+// key read back as "handled", so the reply was destroyed and every observer was
+// told the request had been dealt with. KV storage for a few text entries is
+// free and the index prune already keeps readPending cheap, so days, not minutes.
+export const HANDLED_TTL = 86400;   // 24h — handled with no reply text
+export const RESPONSE_TTL = 604800; // 7d  — handled with a reply the player must still see
 
 // The request index removes kv.list() from the change-request loop's hot path.
 // The GM's inbox loop polls readPending repeatedly during a session; on the free
@@ -172,15 +178,21 @@ export async function setResponse(kv, id, kind, text) {
   return entry;
 }
 
+// A missing (expired or never-written) entry reports `gone`, never `handled`:
+// the two must stay distinguishable so the widget can tell the player a reply
+// was lost rather than silently dropping the request as dealt with (#176). An
+// unparseable entry is reported the same way — its contents are unrecoverable.
+export const GONE = Object.freeze({ status: 'gone', response: null, kind: null });
+
 export async function getResults(kv, ids) {
   const pairs = await Promise.all(ids.map(async (id) => {
     const raw = await kv.get(PREFIX + id);
-    let val = { status: 'handled', response: null, kind: null };
+    let val = GONE;
     if (raw) {
       try {
         const e = JSON.parse(raw);
         val = { status: e.status, response: e.response ?? null, kind: e.kind ?? null };
-      } catch { /* corrupt → treat as handled/no-response */ }
+      } catch { /* corrupt → gone */ }
     }
     return [id, val];
   }));

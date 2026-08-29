@@ -281,13 +281,33 @@ test('setResponse: missing id returns null', async () => {
   assert.equal(await inbox.setResponse(kv, 'nope', 'advice', 'x'), null);
 });
 
-test('getResults returns {status,response,kind}; missing → nulls', async () => {
+test('getResults returns {status,response,kind}; missing → gone, never handled (#176)', async () => {
   const kv = fakeKV();
   await inbox.enqueue(kv, { id: 'c', character: 'a', text: 't', timestamp: '2026-07-12T00:00:02Z' });
   await inbox.setResponse(kv, 'c', 'advice', '• do this');
   const r = await inbox.getResults(kv, ['c', 'gone']);
   assert.deepEqual(r.c, { status: 'handled', response: '• do this', kind: 'advice' });
-  assert.deepEqual(r.gone, { status: 'handled', response: null, kind: null });
+  // An expired/never-written key must be distinguishable from an answered one.
+  assert.deepEqual(r.gone, { status: 'gone', response: null, kind: null });
+});
+
+test('getResults reports a corrupt entry as gone (#176)', async () => {
+  const kv = fakeKV();
+  await kv.put('req:bad', '{not json');
+  const r = await inbox.getResults(kv, ['bad']);
+  assert.deepEqual(r.bad, { status: 'gone', response: null, kind: null });
+});
+
+test('finalized entries carry session-safe TTLs — days, not minutes (#176)', async () => {
+  assert.ok(inbox.HANDLED_TTL >= 24 * 3600, 'handled lingers at least a day');
+  assert.ok(inbox.RESPONSE_TTL >= 7 * 24 * 3600, 'a reply lingers at least a week');
+  const kv = fakeKV();
+  const puts = [];
+  const spy = { ...kv, async put(k, v, opts) { puts.push([k, opts]); return kv.put(k, v, opts); } };
+  await inbox.enqueue(spy, { id: 'r', character: 'a', text: 't', timestamp: '2026-07-12T00:00:02Z' });
+  await inbox.setResponse(spy, 'r', 'advice', 'hi');
+  const [, opts] = puts.find(([k, o]) => k === 'req:r' && o);
+  assert.equal(opts.expirationTtl, inbox.RESPONSE_TTL);
 });
 
 test('rateLimited allows up to limit then blocks', async () => {

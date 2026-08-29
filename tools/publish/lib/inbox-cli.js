@@ -19,7 +19,13 @@ function defaultRunWrangler(args, run = runCommand) {
 }
 
 function defaultAdapter(cwd) {
-  const tomlPath = path.join(cwd || process.cwd(), 'wrangler.toml');
+  const dir = cwd || process.cwd();
+  const tomlPath = path.join(dir, 'wrangler.toml');
+  // A write that cannot happen must not look like one that did (#176): name the
+  // directory so "run it from the site folder" is the obvious next step.
+  if (!fs.existsSync(tomlPath)) {
+    throw new Error(`No wrangler.toml in ${dir} — inbox commands must run from the site directory.`);
+  }
   const namespaceId = readNamespaceId(fs.readFileSync(tomlPath, 'utf8'));
   if (!namespaceId) throw new Error('No INBOX namespace id in wrangler.toml — run the inbox setup first.');
   return makeAdapter({ runWrangler: defaultRunWrangler, namespaceId });
@@ -54,13 +60,17 @@ async function runInbox(argv, deps = {}) {
       out(JSON.stringify(await inbox.readPending(kv)));
       return 0;
     }
-    case 'handled': {
-      for (const id of rest) await inbox.markHandled(kv, id);
-      return 0;
-    }
+    case 'handled':
     case 'flag': {
-      for (const id of rest) await inbox.markFlagged(kv, id);
-      return 0;
+      // Report the outcome of our OWN write. KV is eventually consistent, so a
+      // follow-up read is not a trustworthy check (#176); the return value is.
+      const mark = sub === 'handled' ? inbox.markHandled : inbox.markFlagged;
+      let rc = 0;
+      for (const id of rest) {
+        if (await mark(kv, id)) out(`${id}: marked ${sub === 'handled' ? 'handled' : 'flagged'}`);
+        else { out(`${id}: NOT ${sub === 'handled' ? 'marked handled' : 'flagged'} — no such request (expired, or never enqueued)`); rc = 1; }
+      }
+      return rc;
     }
     case 'reply': {
       const [id, kind, ...textParts] = rest;
@@ -69,7 +79,14 @@ async function runInbox(argv, deps = {}) {
         out('Usage: inbox reply <id> <applied|rejected|advice> "<text>"');
         return 1;
       }
-      await inbox.setResponse(kv, id, kind, text);
+      const entry = await inbox.setResponse(kv, id, kind, text);
+      if (!entry) {
+        // Nothing was written. Exit non-zero so the loop never reports a reply
+        // the player can never receive (#176).
+        out(`${id}: reply NOT stored — no such request (it may have expired, or the id is wrong). Nothing was written.`);
+        return 1;
+      }
+      out(`${id}: reply stored (${kind}) → status ${entry.status}`);
       return 0;
     }
     default:
