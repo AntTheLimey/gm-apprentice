@@ -837,6 +837,47 @@ def _default_map_path(vault):
     return os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json")
 
 
+def upstream_unlinked(world, token, entities, mp) -> tuple[list[tuple[dict, dict]], list[tuple[dict, list]]]:
+    """Net-new candidates that already exist live upstream (matched by
+    normalized name/alias within their element kind, exactly as `adopt` does).
+
+    A vault can lose track of an element it pushed earlier — accepted upstream,
+    never pulled, no `element_id` on the note — and re-filing it looks harmless
+    (the server skips the CreateElement as already claimed). It is not: every
+    AddRelation in the batch whose ref is `suggestion:<that ref>` is then
+    unresolvable and the WHOLE batch 400s with no hint which item is at fault
+    (#179). Checking first costs one paginated GET per element kind present.
+    Returns `(matched, ambiguous)`: `matched` pairs an entity with its single
+    live element; `ambiguous` pairs it with the several that share its name."""
+    from mobrpg.commands import adopt   # local: adopt imports this module
+    by_kind: dict[str, list] = {}
+    for ent in entities:
+        try:
+            by_kind.setdefault(element_spec(ent, mp)[0], []).append(ent)
+        except (KeyError, TypeError):
+            continue
+    matched, ambiguous = [], []
+    for ek, ents in sorted(by_kind.items()):
+        idx = adopt.index_live(adopt.live_by_kind(world, token, ek))
+        for ent in ents:
+            hits = adopt._match(ent, idx)
+            if len(hits) == 1:
+                matched.append((ent, hits[0]))
+            elif hits:
+                ambiguous.append((ent, hits))
+    return matched, ambiguous
+
+
+def entities_in_chunk(chunk, ents_by_ref) -> list[dict]:
+    """The net-new entities whose CreateElement rides in `chunk`, keyed by the
+    externalRef the create carries (the same ref the server echoes back)."""
+    out = []
+    for it in chunk:
+        if it.get("operation") == "CreateElement" and it.get("externalRef") in ents_by_ref:
+            out.append(ents_by_ref[it["externalRef"]])
+    return out
+
+
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg suggest",
@@ -908,6 +949,26 @@ def run(argv: list[str]) -> int:
     net_new, linked_ents, submitted_ents = partition_entities(
         entities, ent_id_by_key, submitted_keys)
 
+    # Anything that already exists live but has no node must not be re-filed:
+    # its create is skipped as already claimed and the edges that hang off it
+    # fail the whole batch (#179). Hold it and point at `adopt`, which links it.
+    preexisting, ambiguous_live = [], []
+    if net_new:
+        try:
+            preexisting, ambiguous_live = upstream_unlinked(args.world, token, net_new, mp)
+        except client.ApiError as e:
+            print(f"ERROR checking live world for pre-existing elements: {e}", file=sys.stderr)
+            return 1
+        held_paths = {e["path"] for e, _ in preexisting} | {e["path"] for e, _ in ambiguous_live}
+        net_new = [e for e in net_new if e["path"] not in held_paths]
+        # The live id is known now — let edges from this run's creates resolve
+        # to it (the issue's preferred outcome) instead of being dropped as
+        # "not a world element".
+        for ent, live in preexisting:
+            ent_id_by_key.setdefault(_key(ent["name"]), live["id"])
+            for al in ent.get("aliases", []):
+                ent_id_by_key.setdefault(_key(al), live["id"])
+
     # Every NET-NEW entity's in-batch group ref, so a relationship whose target is
     # itself net-new in this push resolves to that target's `suggestion:<ref>`
     # instead of being skipped for want of an upstream id. (Linked targets resolve
@@ -973,6 +1034,20 @@ def run(argv: list[str]) -> int:
         print(f"  [held] {len(submitted_ents)} entit(y/ies) already ruled on upstream "
               f"(pending/dismissed suggestion, or deleted element) — not re-filed: "
               + ", ".join(sorted(e["name"] for e in submitted_ents)))
+    if preexisting or ambiguous_live:
+        parts = []
+        if preexisting:
+            parts.append(", ".join(sorted(e["name"] for e, _ in preexisting))
+                         + " (edges to them resolve to the live id)")
+        if ambiguous_live:
+            parts.append("ambiguous live name match: "
+                         + ", ".join(f"{e['name']} ({len(h)} matches)" for e, h in ambiguous_live))
+        print(f"  [held] {len(preexisting) + len(ambiguous_live)} entit(y/ies) already exist "
+              f"upstream but carry no mobrpg: node — not re-filed (the server would skip the "
+              f"create as already claimed and every edge referencing it would fail the whole "
+              f"batch with a bare HTTP 400): " + "; ".join(parts)
+              + f"\n         → run `mobrpg adopt {args.world} --vault {args.vault} --execute` "
+                f"to link them, then re-run suggest.")
     for r in all_reports:
         print(f"  [note] {r}")
     if deferred:
@@ -982,13 +1057,19 @@ def run(argv: list[str]) -> int:
         for src, tgt in deferred:
             print(f"    · {src} → {tgt}", file=sys.stderr)
 
-    if args.write_back:
-        # Only net-new entities get a fresh pending node here; already-linked
-        # entities keep their existing (accepted) nodes untouched.
-        w, s = write_back(net_new, mp, args.vault, namespace, execute=args.execute)
-        print(f"write-back: {w} node(s) written, {s} unchanged (skipped)"
-              + ("" if args.execute else "  [dry-run — no files changed]"))
+    if args.write_back and not args.execute:
+        # Dry-run: show the plan. Only net-new entities get a fresh pending node;
+        # already-linked entities keep their existing (accepted) nodes untouched.
+        w, s = write_back(net_new, mp, args.vault, namespace, execute=False)
+        print(f"write-back: {w} node(s) would be written, {s} unchanged (skipped)"
+              "  [dry-run — no files changed]")
 
+    # Executing: a node is stamped `pending` only for a create the server
+    # actually stored, per batch, after the POST result is known. Stamping up
+    # front left a failed batch's entities marked pending — which held-back
+    # detection then read as "already ruled on", so the failure made itself
+    # permanent until the frontmatter was hand-repaired (#179).
+    ents_by_ref = {external_ref(e["path"], args.vault, namespace): e for e in net_new}
     rc = 0
     for idx, chunk in enumerate(chunks, 1):
         req = {"batchLabel": f"{label} [{idx}/{len(chunks)}]", "suggestions": chunk}
@@ -996,11 +1077,26 @@ def run(argv: list[str]) -> int:
         with open(batch_path, "w", encoding="utf-8") as fh:
             json.dump(req, fh, indent=2, ensure_ascii=False)
         try:
-            submit_batch.submit(args.world, req, execute=args.execute, index=idx)
+            resp = submit_batch.submit(args.world, req, execute=args.execute, index=idx)
         except client.ApiError as e:
             print(f"ERROR on batch {idx}: {e}", file=sys.stderr)
+            if e.status == 400:
+                print(f"  hint: a bare 400 on a compound batch usually means an AddRelation "
+                      f"references `suggestion:<ref>` for a create the server skipped as "
+                      f"already claimed. Run `mobrpg adopt {args.world} --vault {args.vault}` "
+                      f"to link pre-existing elements, then re-run.", file=sys.stderr)
+            if args.write_back and args.execute:
+                print(f"  write-back: batch {idx} not stamped (nothing was accepted)",
+                      file=sys.stderr)
             rc = 1
             break
+        if args.write_back and args.execute:
+            refused = submit_batch.refused_refs(resp)
+            ents = [e for e in entities_in_chunk(chunk, ents_by_ref)
+                    if external_ref(e["path"], args.vault, namespace) not in refused]
+            w, s = write_back(ents, mp, args.vault, namespace, execute=True)
+            print(f"  write-back: batch {idx} — {w} node(s) written, {s} unchanged (skipped)"
+                  + (f", {len(refused)} refused by the server (not stamped)" if refused else ""))
     return rc
 
 
