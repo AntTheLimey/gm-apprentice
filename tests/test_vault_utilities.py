@@ -418,6 +418,52 @@ try:
     check("stamp: empty retag NEW side rejected",
           ["chapter-2" in (work / "Characters/PCs/Hero.md").read_text()],
           [True])
+
+    # --- asOfSession shape (#180): a label vault must not be flattened ---
+    hero = work / "Characters/PCs/Hero.md"
+    hero.write_text(hero.read_text().replace(
+        "asOfSession: 3", 'asOfSession: "Chapter 4, Session 8"'))
+    refused = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                            "--session", "9", "--date", "2026-08-27",
+                            "--write", vault=work, expect_rc=1))
+    check("stamp: bare number refused on a label-shaped vault",
+          ["would change its shape" in refused
+           and 'asOfSession: "Chapter 4, Session 8"' in hero.read_text()],
+          [True])
+    labelled = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                             "--session", "Chapter 4, Session 9",
+                             "--date", "2026-08-27", "--write", vault=work))
+    check("stamp: label written verbatim, quoted",
+          ['asOfSession: "Chapter 4, Session 9"' in hero.read_text()
+           and "STAMPED" in labelled], [True])
+    forced = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                           "--session", "10", "--date", "2026-08-28",
+                           "--force-shape", "--write", vault=work))
+    check("stamp: --force-shape allows the shape change",
+          ["asOfSession: 10" in hero.read_text() and "STAMPED" in forced],
+          [True])
+    hero.write_text(hero.read_text().replace(
+        "asOfSession: 10", 'asOfSession: ""'))
+    fresh = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                          "--session", "Chapter 5, Session 1",
+                          "--date", "2026-08-29", "--write", vault=work))
+    check("stamp: an empty template value takes either shape",
+          ['asOfSession: "Chapter 5, Session 1"' in hero.read_text()
+           and "STAMPED" in fresh], [True])
+    hero.write_text(hero.read_text().replace(
+        'asOfSession: "Chapter 5, Session 1"', 'asOfSession: "9"'))
+    qint = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                         "--session", "10", "--date", "2026-08-30",
+                         "--write", vault=work))
+    check("stamp: a quoted integer is an int and keeps its quotes",
+          ['asOfSession: "10"' in hero.read_text() and "STAMPED" in qint],
+          [True])
+    qq = "\n".join(run("stamp_entities.py", "Characters/PCs/Hero.md",
+                       "--session", '"11"', "--date", "2026-08-31",
+                       "--write", vault=work))
+    check("stamp: shell-quoted number never double-quotes",
+          ['asOfSession: "11"' in hero.read_text()
+           and '\\"' not in hero.read_text() and "STAMPED" in qq], [True])
 finally:
     shutil.rmtree(tmp)
 

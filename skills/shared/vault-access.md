@@ -91,12 +91,14 @@ present in more than one chapter) and when later session
 indexes were ignored as unplayed. Confirm it with the GM: a
 wrong bundle reads exactly as authoritative as a right one.
 
-`stamp_entities.py <vault> FILE... --session N --date
+`stamp_entities.py <vault> FILE... --session SESSION --date
 YYYY-MM-DD [--retag OLD=NEW]` batch-stamps `asOfSession`,
-`lastUpdated`, and a chapter-tag swap across files. Dry-run
-by default — review the plan, then re-run with `--write`. It
-touches only those frontmatter lines; everything else is
-preserved byte-for-byte.
+`lastUpdated`, and a chapter-tag swap across files. SESSION is
+written verbatim — a label (`"Chapter 4, Session 9"`) or a bare
+number — and a file already using the other shape is refused
+unless `--force-shape`. Dry-run by default — review the plan,
+then re-run with `--write`. It touches only those frontmatter
+lines; everything else is preserved byte-for-byte.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
