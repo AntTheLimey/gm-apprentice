@@ -136,7 +136,7 @@ def run(argv: list[str]) -> int:
             print(f"ERROR listing live {ek}: {e}", file=sys.stderr)
             return 1
 
-    stamped, ambiguous, unmatched = [], [], []
+    stamped, ambiguous, unmatched, kind_mismatch = [], [], [], []
     for ent in candidates:
         matches = _match(ent, live_idx.get(ent["_ek"], {}))
         if len(matches) == 1:
@@ -150,17 +150,46 @@ def run(argv: list[str]) -> int:
         elif len(matches) > 1:
             ambiguous.append((ent["name"], [m["name"] for m in matches]))
         else:
-            unmatched.append(ent["name"])
+            # (#182) a location the map routes to one kind can exist upstream
+            # under the SIBLING location kind when locationRouting guessed
+            # wrong. An exact-named element there is a map bug to surface as
+            # its own outcome — not a vault-only note to bury in "no live
+            # match". Reported, never stamped: names can legitimately collide
+            # across kinds, and the durable fix is correcting the route.
+            sib = {"political": "landfeature",
+                   "landfeature": "political"}.get(ent["_ek"])
+            sib_matches = []
+            if sib:
+                if sib not in live_idx:
+                    try:
+                        live_idx[sib] = index_live(
+                            live_by_kind(args.world, token, sib))
+                    except client.ApiError as e:
+                        print(f"WARNING: could not list live {sib} for the "
+                              f"kind-mismatch check: {e}", file=sys.stderr)
+                        live_idx[sib] = {}
+                sib_matches = _match(ent, live_idx.get(sib, {}))
+            if sib_matches:
+                kind_mismatch.append((ent, sib, sib_matches))
+            else:
+                unmatched.append(ent["name"])
 
     verb = "stamped" if args.execute else "would stamp"
+    mism = f"{len(kind_mismatch)} kind mismatch, " if kind_mismatch else ""
     print(f"{verb} {len(stamped)} node(s); {len(ambiguous)} ambiguous, "
-          f"{len(unmatched)} unmatched, {linked} already linked"
+          f"{mism}{len(unmatched)} unmatched, {linked} already linked"
           + ("" if args.execute else "  [dry-run — no files changed]"))
     for name, live_name, eid in stamped:
         note = "" if suggest._key(name) == suggest._key(live_name) else f" (live: {live_name!r})"
         print(f"  ✓ {name} → {eid}{note}")
     for name, names in ambiguous:
         print(f"  ⚠ ambiguous, skipped: {name} — {len(names)} live matches: {', '.join(names)}")
+    for ent, sib, ms in kind_mismatch:
+        ids = ", ".join(m["id"] for m in ms)
+        print(f"  ⚠ kind mismatch, skipped: {ent['name']} — exists upstream as "
+              f"{sib} ({ids}), but locationRouting sends location_type "
+              f"{(ent.get('location_type') or '')!r} to {ent['_ek']}. Fix the "
+              f"route in _meta/mobrpg-map.json and re-run adopt.")
     for name in unmatched:
         print(f"  · no live match: {name}")
     return 0

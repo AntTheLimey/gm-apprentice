@@ -550,9 +550,9 @@ def _ontology_built(value: str) -> bool:
     return any(k in built for k in _axis_keys(value))
 
 
-def canon_location_bindings(vault: str) -> dict:
-    """{normalized location_type: (target, classifier_name, element_kind)} learned
-    from linked notes' ratified `determined` blocks.
+def canon_location_bindings(vault: str, live_kind_by_id: dict | None = None) -> dict:
+    """{normalized location_type: (target, classifier_name)} learned from linked
+    notes' ratified `determined` blocks.
 
     The vault's `location_type` is the GM's own free-text vocabulary and is not
     required to match mobRPG's; a vault says "hyperspace gate" where the world
@@ -565,6 +565,14 @@ def canon_location_bindings(vault: str) -> dict:
 
     A term whose linked notes disagree is left out, so the ordinary heuristics
     (and the near-duplicate review) decide rather than an arbitrary winner.
+
+    A `determined` block can also hold the tool's OWN routing guess (written by
+    suggest/adopt and never ratified), and learning that back would make a wrong
+    routing self-confirming (#182). Two gates break the loop: the block's key
+    must agree with the node's `element_kind`, and — when the caller supplies
+    `live_kind_by_id` ({element_id: "political"|"landfeature"}, from live
+    listings) — with what the linked element actually IS upstream. A note
+    failing either gate simply casts no vote.
     """
     seen: dict = {}
     for path in glob.glob(os.path.join(os.path.expanduser(vault), "**", "*.md"),
@@ -583,11 +591,19 @@ def canon_location_bindings(vault: str) -> dict:
             continue
         det = nd.get("determined") or {}
         pol, land = det.get("political_type"), det.get("land_feature_type")
-        if pol:
+        kind = nd.get("element_kind")
+        if pol and kind == "Political":
             hit = ("political", pol)
-        elif land:
+        elif land and kind == "LandFeature":
             hit = ("landfeature", land)
         else:
+            # determined disagrees with (or lacks) the node's own element kind —
+            # a self-contradictory block written from a routing guess (#182)
+            continue
+        if live_kind_by_id is not None and \
+                live_kind_by_id.get(nd.get("element_id")) != hit[0]:
+            # the live element is another kind (or gone): the block holds our
+            # own proposal, not canon — never learn it back (#182)
             continue
         seen.setdefault(_norm(lt), set()).add(hit)
     return {k: next(iter(v)) for k, v in seen.items() if len(v) == 1}
@@ -642,7 +658,8 @@ def _route_location(value: str, disc: dict, canon: dict | None = None) -> dict:
     return {"target": "political", "politicalType": tok.title(), "mobrpgId": None, "status": "new"}
 
 
-def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict, now: str) -> dict:
+def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
+              now: str, live_loc_kinds: dict | None = None) -> dict:
     classifiers = {
         "profession": {v: _bind(v, disc["person/profession"], "person/profession")
                        for v in vocab["occupation"]},
@@ -654,7 +671,7 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
                     "status": "new"}
                 for v in vocab["gender"]},
     }
-    canon_loc = canon_location_bindings(vault)
+    canon_loc = canon_location_bindings(vault, live_kind_by_id=live_loc_kinds)
     location_routing = {v: _route_location(v, disc, canon_loc)
                         for v in vocab["location_type"]}
     # Report every off-vocabulary predicate at once rather than dying on the
@@ -892,8 +909,22 @@ def run(argv: list[str]) -> int:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
 
+    # Live location-element kinds let the canon-learning pass consult what a
+    # linked element actually IS upstream instead of trusting a `determined`
+    # block that may hold our own routing guess (#182). Unavailable -> None,
+    # and learning falls back to the element_kind-agreement gate alone.
+    live_loc: dict | None = {}
+    for ek in ("political", "landfeature"):
+        try:
+            for e in _fetch_all(f"/world/{args.world}/{ek}", token):
+                live_loc[e["id"]] = ek
+        except client.ApiError:
+            live_loc = None
+            break
+
     vocab = scan_vault(args.vault)
-    fresh = build_map(args.world, world_meta, args.vault, disc, vocab, now)
+    fresh = build_map(args.world, world_meta, args.vault, disc, vocab, now,
+                      live_loc_kinds=live_loc)
 
     if args.action == "check":
         old = _read_map(map_path) if os.path.exists(map_path) else fresh
