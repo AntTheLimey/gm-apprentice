@@ -3066,6 +3066,39 @@ tr:nth-child(even) {
 .flow { column-count: 2; column-gap: 16px; }
 @media (max-width: 760px) { .flow { column-count: 1; } }
 
+/* === Identity band ===
+   Physical description (height/weight/hair/eyes/...). Spans the full sheet width
+   above the two-column flow, so it stays wide and thin instead of becoming a tall
+   tile inside one column. */
+.identity-band { margin: 0 0 16px; }
+.identity-band .id-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+.identity-band .id-cell {
+  background: var(--bg-card);
+  padding: 6px 11px 7px;
+  min-width: 0;
+}
+.identity-band .id-l {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.identity-band .id-v {
+  font-size: 13px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 480px) {
+  .identity-band .id-grid { grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr)); }
+}
+
 /* === Block tiles === */
 .blk {
   break-inside: avoid;

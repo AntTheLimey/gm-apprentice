@@ -223,6 +223,34 @@ function parseTraits(model, sections, fm) {
   }
 }
 
+// Height/weight/eyes/hair and the rest of the physical description. Sheets carry
+// it as a `### Appearance & Social` sub-table under `## Stat Sheet`; these aliases
+// cover the other names sheets use for the same table.
+const IDENTITY_SUBSECTIONS = [
+  'Appearance & Social', 'Appearance and Social', 'Appearance',
+  'Physical Description', 'Description', 'Identity',
+];
+
+function parseIdentity(model, sections, fm) {
+  const fmSource = fm.appearance || fm.identity;
+  if (fmSource && typeof fmSource === 'object' && !Array.isArray(fmSource)) {
+    for (const [k, v] of Object.entries(fmSource)) model.identity[k] = String(v);
+    return;
+  }
+  const sec = findSectionByTitle(sections, 'stat sheet');
+  if (!sec) return;
+  let subHtml = '';
+  for (const title of IDENTITY_SUBSECTIONS) {
+    subHtml = extractSubsectionHtml(sec.html, title);
+    if (subHtml) break;
+  }
+  if (!subHtml) return;
+  for (const row of parseTableRows(subHtml)) {
+    if (isHeaderRow(row)) continue;
+    if (row.length >= 2 && row[0] && row[1]) model.identity[row[0]] = row[1];
+  }
+}
+
 function parseSenses(model, sections, fm) {
   if (fm.senses && typeof fm.senses === 'object') {
     for (const [k, v] of Object.entries(fm.senses)) model.senses[k] = String(v);
@@ -230,8 +258,10 @@ function parseSenses(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'stat sheet');
   if (!sec) return;
-  const subHtml = extractSubsectionHtml(sec.html, 'Appearance & Social') ||
-    extractSubsectionHtml(sec.html, 'Senses') || '';
+  // `Appearance & Social` belongs to parseIdentity — reading it here labelled every
+  // sheet's physical description "Senses & Checks".
+  const subHtml = extractSubsectionHtml(sec.html, 'Senses') ||
+    extractSubsectionHtml(sec.html, 'Senses & Checks') || '';
   for (const row of parseTableRows(subHtml).slice(1)) {
     if (row.length >= 2 && row[0]) model.senses[row[0]] = row[1];
   }
@@ -919,6 +949,7 @@ function parseGurps(frontmatter, sections) {
   parseSkills(model, secs, fm);
   parseTechniques(model, secs, fm);
   parseTraits(model, secs, fm);
+  parseIdentity(model, secs, fm);
   parseSenses(model, secs, fm);
   parseDefenses(model, secs, fm);
   parseEncumbrance(model, secs, fm);
