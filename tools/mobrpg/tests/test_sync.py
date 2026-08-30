@@ -660,3 +660,31 @@ def test_stored_ref_still_marks_the_note_pending(tmp_path, monkeypatch):
     assert sync_cmd.run(["w1", "--vault", str(v), "--execute"]) == 0
     nd = _node.read_node(p.read_text(encoding="utf-8"))
     assert nd["review_state"] == "pending"
+
+
+def test_show_body_prints_the_push_payload(tmp_path, monkeypatch, capsys):
+    # (#184) nothing in the dry-run showed the description body being pushed
+    # into someone else's review queue; --show-body prints exactly what would
+    # be sent, vault-only tail already stripped.
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)  # vault freshly edited -> push decision
+    detail = {"description": "<p>Stale server text.</p>",
+              "lastModified": "2026-07-21T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    rc = sync_cmd.run(["w1", "--vault", str(v), "--show-body"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Old vault prose." in out
+    assert "Secret plans." not in out       # GM Notes never shown as push body
+
+
+def test_without_show_body_the_payload_stays_out_of_the_table(tmp_path, monkeypatch, capsys):
+    v = _vault(tmp_path)
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)
+    detail = {"description": "<p>Stale server text.</p>",
+              "lastModified": "2026-07-21T00:00:00Z"}
+    _wire(monkeypatch, detail, [])
+    sync_cmd.run(["w1", "--vault", str(v)])
+    assert "Old vault prose." not in capsys.readouterr().out

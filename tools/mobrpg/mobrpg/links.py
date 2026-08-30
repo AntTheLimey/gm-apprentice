@@ -5,7 +5,9 @@ The vault authors cross-references as Obsidian wikilinks (`[[Name]]` /
 id-only redirect route. This module bridges the two, always operating on the
 `main` (canon-prose) slice — never the GM Notes tail:
 
-  push  — `[[Name]]` / `[[Name|Alias]]` -> `[display](element-url)` when the name
+  push  — `![[embeds]]` are dropped first (an image embed references a vault
+          attachment with no upstream counterpart); then `[[Name]]` /
+          `[[Name|Alias]]` -> `[display](element-url)` when the name
           resolves in the node index; unresolvable wikilinks and `.md` relative
           links collapse to bare display text; `http(s)` links are left alone.
           Runs BEFORE `md.md_to_html`.
@@ -32,6 +34,12 @@ from mobrpg.commands import suggest
 # would need a type the node need not know).
 URL_FMT = "https://www.mobrpg.com/world/{world}/link/{eid}"
 
+# `![[...]]` is an image EMBED, not a link: it points at a vault attachment
+# that has no upstream counterpart (there is no attachment-push path), so a
+# push drops it entirely. Left to the wikilink pass, the `!` was stranded while
+# the target collapsed — `![[map.png]]` -> `!map.png`, and `![[map.svg|697]]`
+# -> `!697` (an embed's pipe is a display width, not an alias). See #184.
+_EMBED = re.compile(r"!\[\[[^\]]+\]\]\s*\n?")
 # `[[Name]]` or `[[Name|Alias]]` — group 1 is the resolution Name, group 2 the
 # optional display Alias.
 _WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
@@ -67,7 +75,7 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
         return display
 
-    text = _WIKILINK.sub(_wl, md_text or "")
+    text = _WIKILINK.sub(_wl, _EMBED.sub("", md_text or ""))
 
     def _ml(m: re.Match) -> str:
         label, href = m.group(1), m.group(2)

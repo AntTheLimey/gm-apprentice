@@ -324,6 +324,10 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--execute", action="store_true",
                     help="write vault changes and submit suggestions (default: dry-run)")
     ap.add_argument("--batch-label", default="sync", help="suggestion batch label")
+    ap.add_argument("--show-body", action="store_true",
+                    help="print each push decision's outgoing description "
+                         "markdown — the exact payload its suggestion will "
+                         "carry into the world owner's review queue")
     args = ap.parse_args(argv)
 
     try:
@@ -367,6 +371,16 @@ def run(argv: list[str]) -> int:
     for a in actions:
         counts[a.decision] = counts.get(a.decision, 0) + 1
         print(f"  {a.decision:8} {a.ref}{a.delta}")
+
+    # A push lands prose in someone ELSE's review queue, under this user's
+    # name; --show-body prints exactly what will be sent, so the dry run can
+    # be inspected without reconstructing the payload by hand (#184).
+    if args.show_body:
+        for a in actions:
+            if a.suggestion is not None:
+                print(f"  --- push body: {a.ref} ---")
+                print((a.suggestion.get("payload") or {}).get("description", ""))
+                print("  --- end push body ---")
 
     # Local-only writes first: pull / in-sync / baseline record what canon
     # already says and depend on nothing upstream.

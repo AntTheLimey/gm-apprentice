@@ -32,3 +32,30 @@ def test_pull_leaves_unknown_element_urls_untouched():
     md_in = f"See [Ghost]({url})."
     out = links.rewrite_md_for_pull(md_in, {"e-77": "Marsh Hag"})
     assert url in out and "[[" not in out
+
+
+# ---- image embeds (#184) — an embed points at a vault attachment with no
+# upstream counterpart, so a push must drop it, not flatten it to junk text ----
+
+def test_push_drops_image_embed_line():
+    md_in = "Intro.\n\n![[Eris System.jpg]]\n\nSee [[Marsh Hag]].\n"
+    out = links.rewrite_md_for_push(md_in, IDX, "w1", FMT)
+    assert "Eris System.jpg" not in out
+    assert "!" not in out
+    assert FMT.format(world="w1", eid="e-77") in out
+
+
+def test_push_drops_sized_embed_width_is_not_an_alias():
+    # In an Obsidian embed the pipe is a display width, not an alias:
+    # ![[map.svg|697]] must vanish, never become the literal "!697".
+    out = links.rewrite_md_for_push("![[Meridian-system-map.svg|697]]\nProse.",
+                                    IDX, "w1", FMT)
+    assert "697" not in out
+    assert "!" not in out
+    assert "Prose." in out
+
+
+def test_push_inline_embed_leaves_surrounding_text():
+    out = links.rewrite_md_for_push("before ![[m.png]] after", IDX, "w1", FMT)
+    assert "m.png" not in out
+    assert "before" in out and "after" in out
