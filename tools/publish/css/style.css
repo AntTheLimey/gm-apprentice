@@ -380,6 +380,16 @@ h3 {
   padding: 3rem 1.5rem 1.5rem;
   background: linear-gradient(transparent 0%, rgba(0,0,0,0.7) 50%, rgba(0,0,0,0.85) 100%);
   color: #fff;
+  /* The overlay stacks above .hero-banner-img and would otherwise swallow
+     every click over the lower banner, so the lightbox never opened where a
+     reader actually clicks (#183). Interactive children get hit-testing back. */
+  pointer-events: none;
+}
+.hero-banner-overlay a,
+.hero-banner-overlay button,
+.hero-banner-overlay input,
+.hero-banner-overlay select {
+  pointer-events: auto;
 }
 .hero-banner h1 {
   font-size: 1.75rem;
