@@ -34,12 +34,17 @@ from mobrpg.commands import suggest
 # would need a type the node need not know).
 URL_FMT = "https://www.mobrpg.com/world/{world}/link/{eid}"
 
-# `![[...]]` is an image EMBED, not a link: it points at a vault attachment
-# that has no upstream counterpart (there is no attachment-push path), so a
-# push drops it entirely. Left to the wikilink pass, the `!` was stranded while
-# the target collapsed — `![[map.png]]` -> `!map.png`, and `![[map.svg|697]]`
-# -> `!697` (an embed's pipe is a display width, not an alias). See #184.
-_EMBED = re.compile(r"!\[\[[^\]]+\]\]\s*\n?")
+# `![[...]]` is an EMBED (image attachment or note transclusion), not a link:
+# it has no upstream counterpart (there is no attachment-push path), so a push
+# drops it entirely. Left to the wikilink pass, the `!` was stranded while the
+# target collapsed — `![[map.png]]` -> `!map.png`, and `![[map.svg|697]]` ->
+# `!697` (an embed's pipe is a display width, not an alias). See #184.
+# An embed alone on its line vanishes with the line; an inline embed vanishes
+# with the spaces immediately before it, so surrounding words never weld
+# together. (Like the wikilink pass this is a regex, not a parser: an embed
+# inside a code span is dropped too — the same documented trade-off.)
+_EMBED_LINE = re.compile(r"^[ \t]*!\[\[[^\]]+\]\][ \t]*\n?", re.M)
+_EMBED_INLINE = re.compile(r"[ \t]*!\[\[[^\]]+\]\]")
 # `[[Name]]` or `[[Name|Alias]]` — group 1 is the resolution Name, group 2 the
 # optional display Alias.
 _WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
@@ -75,7 +80,8 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
         return display
 
-    text = _WIKILINK.sub(_wl, _EMBED.sub("", md_text or ""))
+    text = _EMBED_LINE.sub("", md_text or "")
+    text = _WIKILINK.sub(_wl, _EMBED_INLINE.sub("", text))
 
     def _ml(m: re.Match) -> str:
         label, href = m.group(1), m.group(2)

@@ -569,3 +569,59 @@ def test_canon_bindings_live_kind_confirms_real_canon(tmp_path):
     live = {"id-Betelgeuse": "landfeature"}
     got = m.canon_location_bindings(str(tmp_path), live_kind_by_id=live)
     assert got == {"sun": ("landfeature", "Star")}
+
+
+def test_run_learning_survives_listing_failure(tmp_path, monkeypatch, capsys):
+    # A 502 on the live location listings must degrade the canon-learning gate
+    # (element_kind agreement only) with a warning — NOT silently discard every
+    # ratified binding by treating {} as "verified: nothing exists".
+    _canon_note(tmp_path, "Betelgeuse", "sun", "LandFeature",
+                {"land_feature_type": "Star"})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def stub(method, path, **k):
+        raise client.ApiError(502, "boom", "u")
+    monkeypatch.setattr(client, "_request", stub)
+
+    mp = str(tmp_path / "map.json")
+    assert m.run(["init", "w1", "--vault", str(tmp_path), "--map", mp,
+                  "--now", "T0"]) == 0
+    data = json.load(open(mp, encoding="utf-8"))
+    assert data["locationRouting"]["sun"]["status"] == "canon"
+    assert "WARNING" in capsys.readouterr().err
+
+
+def test_run_learning_consults_live_kinds(tmp_path, monkeypatch):
+    # Internally consistent but wrong: the block carries the tool's own guess
+    # (Political) while the live element is a landfeature. run() must build the
+    # live id->kind map and refuse to learn the guess back as canon.
+    _canon_note(tmp_path, "Corwin-Thides Route", "trade route", "Political",
+                {"political_type": "Trade Route"})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if path == "/world":
+            return []
+        if path.endswith("/landfeature"):
+            return {"content": [{"id": "id-Corwin-Thides Route",
+                                 "name": "Corwin-Thides Route"}],
+                    "page": {"totalPages": 1}}
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+
+    mp = str(tmp_path / "map.json")
+    assert m.run(["init", "w1", "--vault", str(tmp_path), "--map", mp,
+                  "--now", "T0"]) == 0
+    data = json.load(open(mp, encoding="utf-8"))
+    assert data["locationRouting"]["trade route"]["status"] != "canon"
+
+
+def test_entry_notes_a_canon_downgrade():
+    notes = []
+    old = {"target": "landfeature", "landFeatureType": "Gate",
+           "mobrpgId": None, "status": "canon"}
+    fresh = {"target": "political", "politicalType": "Hyperspace",
+             "mobrpgId": None, "status": "new"}
+    out = m._entry(old, fresh, "locationRouting[hyperspace gate]", notes)
+    assert out == fresh
+    assert any("canon" in n for n in notes)

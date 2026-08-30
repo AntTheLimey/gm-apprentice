@@ -766,6 +766,9 @@ def _entry(old_entry: dict | None, fresh: dict, label: str, notes: list[str]) ->
         notes.append(f"{label}: canon now resolves to a different type "
                      f"({old_id} -> {new_id})")
         return fresh
+    if old_entry.get("status") == "canon" and fresh.get("status") != "canon":
+        notes.append(f"{label}: canon-learned binding no longer verified — "
+                     f"replaced by '{fresh.get('status')}' proposal")
     if old_entry.get("status") in ("new", "review") and fresh.get("status") == "bound":
         notes.append(f"{label}: now bound to existing type")
     return fresh
@@ -911,16 +914,33 @@ def run(argv: list[str]) -> int:
 
     # Live location-element kinds let the canon-learning pass consult what a
     # linked element actually IS upstream instead of trusting a `determined`
-    # block that may hold our own routing guess (#182). Unavailable -> None,
-    # and learning falls back to the element_kind-agreement gate alone.
+    # block that may hold our own routing guess (#182). The listing must be
+    # COMPLETE to be authoritative — a partial or empty-on-error map would
+    # silently discard every ratified binding — so the pagination runs strict
+    # here (_fetch_all degrades to a partial list on error, which is exactly
+    # wrong for this use). Any failure downgrades learning to the
+    # element_kind-agreement gate alone, and says so.
     live_loc: dict | None = {}
-    for ek in ("political", "landfeature"):
-        try:
-            for e in _fetch_all(f"/world/{args.world}/{ek}", token):
-                live_loc[e["id"]] = ek
-        except client.ApiError:
-            live_loc = None
-            break
+    try:
+        for ek in ("political", "landfeature"):
+            page = 0
+            while True:
+                r = client._request("GET", f"/world/{args.world}/{ek}",
+                                    token=token, query={"page": page, "size": 200})
+                if not isinstance(r, dict):
+                    break
+                for e in r.get("content", []):
+                    if isinstance(e, dict) and e.get("id"):
+                        live_loc[e["id"]] = ek
+                total = (r.get("page") or {}).get("totalPages", 1)
+                if page >= total - 1:
+                    break
+                page += 1
+    except (client.ApiError, ValueError) as e:
+        print(f"WARNING: could not list live location elements ({e}); "
+              f"canon-learning falls back to the element_kind gate alone",
+              file=sys.stderr)
+        live_loc = None
 
     vocab = scan_vault(args.vault)
     fresh = build_map(args.world, world_meta, args.vault, disc, vocab, now,

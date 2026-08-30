@@ -83,3 +83,22 @@ def test_write_overwrite_flag_replaces_existing_note(tmp_path):
 
     assert rc == 0
     assert "A smuggler." in existing.read_text(encoding="utf-8")
+
+
+def test_write_reports_unsupported_kinds(tmp_path, capsys):
+    # An extract entity of a kind write can't map was dropped without a trace,
+    # making the written+skipped summary look like a complete accounting.
+    extract = {"entities": [
+        {"kind": "person", "name": "Vela Kesh", "body_md": "", "relationships": [],
+         "altNames": [], "notes_public": [], "notes_gm": [], "classifiers": []},
+        {"kind": "creature", "name": "Void Maw", "body_md": "", "relationships": [],
+         "altNames": [], "notes_public": [], "notes_gm": [], "classifiers": []},
+    ]}
+    src = tmp_path / "extract.json"
+    src.write_text(json.dumps(extract), encoding="utf-8")
+
+    rc = write_cmd.run([str(src), "--out", str(tmp_path / "vault")])
+
+    assert rc == 0
+    printed = capsys.readouterr().out
+    assert "unsupported kind" in printed

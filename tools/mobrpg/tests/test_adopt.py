@@ -181,3 +181,24 @@ def test_true_no_live_match_still_reported_for_locations(tmp_path, monkeypatch, 
     out = capsys.readouterr().out
     assert "no live match: Vault Only Place" in out
     assert "kind mismatch" not in out
+
+
+def test_sibling_listing_failure_is_fatal_not_a_false_no_match(tmp_path, monkeypatch, capsys):
+    # The primary listing treats an ApiError as fatal; the sibling check must
+    # too — degrading it silently would let the run claim "no live match" for
+    # an element the tool never actually looked for.
+    v = _loc_vault(tmp_path)
+    _note(v, "Locations/Eris-Peric Route.md",
+          fm="type: location\nlocation_type: trade route")
+    _auth(monkeypatch)
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if path.rsplit("/", 1)[-1] == "landfeature":
+            raise client.ApiError(502, "boom", "u")
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+
+    assert adopt.run(["w1", "--vault", str(v)]) == 1
+    captured = capsys.readouterr()
+    assert "no live match: Eris-Peric Route" not in captured.out
+    assert "ERROR" in captured.err

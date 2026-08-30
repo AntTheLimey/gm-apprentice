@@ -59,3 +59,18 @@ def test_push_inline_embed_leaves_surrounding_text():
     out = links.rewrite_md_for_push("before ![[m.png]] after", IDX, "w1", FMT)
     assert "m.png" not in out
     assert "before" in out and "after" in out
+
+
+def test_push_embed_between_words_preserves_spacing():
+    # `\s*` greediness must not weld the surrounding words together.
+    out = links.rewrite_md_for_push("The gate opened![[Corwin]] stood there.",
+                                    IDX, "w1", FMT)
+    assert "openedstood" not in out
+    assert "opened" in out and "stood there." in out
+
+
+def test_push_embed_lines_do_not_merge_paragraphs():
+    import re as _re
+    out = links.rewrite_md_for_push("Para one.\n\n![[map.png]]\n\nPara two.",
+                                    IDX, "w1", FMT)
+    assert _re.search(r"Para one\.\n\n+Para two\.", out)

@@ -126,7 +126,11 @@ vault whose entities already exist upstream but carry no node is linked with
                                   same kind by normalized name (aliases too) and
                                   write an `accepted` node with the real
                                   element_id. Ambiguous (several live matches) or
-                                  unmatched notes are reported, never guessed.
+                                  unmatched notes are reported, never guessed. A
+                                  location whose exact name exists upstream under
+                                  the SIBLING location kind reports as its own
+                                  "kind mismatch" outcome (fix locationRouting in
+                                  _meta/mobrpg-map.json, then re-run).
                                   The node-establishment path for imported / pushed
                                   vaults and the dup-safe alternative to any
                                   crosswalk. GET-only against mobRPG; dry-run

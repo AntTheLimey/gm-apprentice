@@ -136,15 +136,33 @@ def add_relationship(text: str, target: str, rtype: str, desc: str) -> str | Non
     return new_text if n else None
 
 
-def fill_parent_location(text: str, target: str) -> str:
-    """Fill an EMPTY `parent_location:` scalar to agree with a freshly written
-    `part_of` edge. Both are documented vault conventions and the publish
-    renderer groups its location index on the scalar, so writing only the edge
-    left an import looking right in the graph and wrong on the site (#186). An
-    authored (non-empty) value is never touched."""
-    return re.sub(r'^parent_location:\s*""\s*$',
-                  lambda _m: f'parent_location: "[[{target}]]"',
-                  text, count=1, flags=re.M)
+def fill_parent_location(text: str, target: str) -> tuple[str, str]:
+    """Make the `parent_location:` scalar agree with a freshly written `part_of`
+    edge. Both are documented vault conventions and the publish renderer groups
+    its location index on the scalar, so writing only the edge left an import
+    looking right in the graph and wrong on the site (#186).
+
+    Returns (new_text, status): 'filled' (empty scalar set — any empty YAML
+    spelling: "", '\'\'', bare, null, ~), 'inserted' (the Optional key was
+    absent and has been added after location_type:/type:), 'agrees' (already
+    the target), or 'disagrees' (an authored value names something else — left
+    untouched, but surfaced in the report rather than silently shipped)."""
+    link = f'parent_location: "[[{target}]]"'
+    m = re.search(r"^parent_location:(.*)$", text, flags=re.M)
+    if m is None:
+        for key in ("location_type", "type"):
+            new_text, n = re.subn(rf"^({key}:[^\n]*\n)",
+                                  lambda mm: mm.group(1) + link + "\n",
+                                  text, count=1, flags=re.M)
+            if n:
+                return new_text, "inserted"
+        return text, "disagrees"          # no slot to write — surface it
+    val = m.group(1).strip()
+    if val in ("", '""', "''", "null", "~"):
+        return text.replace(m.group(0), link, 1), "filled"
+    if val.strip('"\'') == f"[[{target}]]":
+        return text, "agrees"
+    return text, "disagrees"
 
 
 def run(argv: list[str]) -> int:
@@ -208,8 +226,9 @@ def run(argv: list[str]) -> int:
         with open(path, encoding="utf-8") as fh:
             txt = fh.read()
         edited = add_relationship(txt, target, rtype, "auto-linked: " + why)
+        scalar_status = None
         if edited is not None and rtype == "part_of":
-            edited = fill_parent_location(edited, target)
+            edited, scalar_status = fill_parent_location(edited, target)
         if edited is None:
             # No relationships key to write into. Report it rather than
             # rewriting the file unchanged and claiming the link was made.
@@ -218,8 +237,11 @@ def run(argv: list[str]) -> int:
         if args.execute:
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(edited)
-        linked.append({"entity": name, "kind": kind, "type": rtype, "target": target,
-                       "subj_id": id_of.get(name), "obj_id": id_of.get(target)})
+        entry = {"entity": name, "kind": kind, "type": rtype, "target": target,
+                 "subj_id": id_of.get(name), "obj_id": id_of.get(target)}
+        if scalar_status is not None:
+            entry["parent_scalar"] = scalar_status
+        linked.append(entry)
 
     outdir = args.out
     os.makedirs(outdir, exist_ok=True)
@@ -239,6 +261,16 @@ def run(argv: list[str]) -> int:
         rep.append("| entity | type | → target |\n|---|---|---|")
         for kind, name, target, rtype in sorted(unwritable):
             rep.append(f"| {name} | {rtype} | {target} |")
+    misaligned = [l for l in linked if l.get("parent_scalar") == "disagrees"]
+    if misaligned:
+        rep.append("\n## parent_location scalar not aligned\n")
+        rep.append("The part_of edge was written, but the note's "
+                   "parent_location: scalar names something else (or offered "
+                   "no slot) and was left untouched. The published site groups "
+                   "locations on the scalar, so these need a manual look.\n")
+        rep.append("| entity | edge target |\n|---|---|")
+        for l in misaligned:
+            rep.append(f"| {l['entity']} | {l['target']} |")
     rep.append("\n## Still orphan (need manual judgement)\n")
     for k, n in sorted(still):
         rep.append(f"- [{k}] {n}")
@@ -254,6 +286,10 @@ def run(argv: list[str]) -> int:
     if not args.execute and linked:
         print("dry-run — pass --execute to write the vault edits above")
     print(f"linked {len(linked)}, still orphan {len(still)}")
+    if misaligned:
+        print(f"WARNING: {len(misaligned)} note(s) keep a parent_location: that "
+              f"does not match the new part_of edge — see the report",
+              file=sys.stderr)
     if unwritable:
         print(f"WARNING: {len(unwritable)} note(s) have no `relationships:` key — "
               f"nothing was written for them; see the report", file=sys.stderr)

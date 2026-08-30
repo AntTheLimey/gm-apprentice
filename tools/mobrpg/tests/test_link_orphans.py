@@ -253,3 +253,62 @@ def test_authored_parent_location_is_never_clobbered(tmp_path):
 
     txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
     assert 'parent_location: "[[Somewhere Else]]"' in txt
+
+
+def test_fills_bare_and_single_quoted_parent_location(tmp_path):
+    # Hand-authored notes write the empty scalar every way YAML allows; the
+    # double-quoted form is only what `mobrpg write` emits.
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(
+        LOC_NOTE.format(name="Corwin System", parent=""), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(
+        "---\ntype: location\nname: Corwin I\nparent_location:\n"
+        "relationships: []\n---\n# Corwin I\n", encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+
+    rc = link_orphans.run([str(extract), "--vault", str(vault),
+                           "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    assert rc == 0
+    txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'parent_location: "[[Corwin System]]"' in txt
+
+
+def test_inserts_parent_location_when_key_is_missing(tmp_path):
+    # parent_location is Optional in the schema, so a hand-authored note may
+    # omit it entirely; writing only the edge would leave the exact
+    # graph-vs-site split #186 reported.
+    vault = _vault(tmp_path)          # NOTE template has no parent_location key
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+
+    rc = link_orphans.run([str(extract), "--vault", str(vault),
+                           "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    assert rc == 0
+    txt = (vault / "Locations" / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'parent_location: "[[Corwin System]]"' in txt
+
+
+def test_disagreeing_parent_location_is_surfaced_in_report(tmp_path):
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(
+        LOC_NOTE.format(name="Corwin System", parent=""), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(
+        LOC_NOTE.format(name="Corwin I", parent="[[Somewhere Else]]"),
+        encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+
+    link_orphans.run([str(extract), "--vault", str(vault),
+                      "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'parent_location: "[[Somewhere Else]]"' in txt   # never clobbered
+    report = (out / "orphan-linking-report.md").read_text(encoding="utf-8")
+    assert "parent_location" in report                      # ...but surfaced

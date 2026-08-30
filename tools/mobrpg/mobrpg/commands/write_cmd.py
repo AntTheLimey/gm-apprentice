@@ -256,10 +256,11 @@ def run(argv: list[str]) -> int:
         data = json.load(f)
 
     written: dict[str, int] = {}
-    skipped = 0
+    skipped = unsupported = 0
     for rec in data["entities"]:
         r = build(rec, args.campaign, args.source_doc, args.name_style)
         if not r:
+            unsupported += 1
             continue
         rel_path, md = r
         full = os.path.join(args.out, rel_path)
@@ -277,4 +278,7 @@ def run(argv: list[str]) -> int:
     print(f"wrote to {args.out}/:", written, "| total", sum(written.values()))
     if skipped:
         print(f"skipped {skipped} existing note(s) — pass --overwrite to replace them")
+    if unsupported:
+        print(f"ignored {unsupported} entit(y/ies) of unsupported kind(s) — "
+              f"no vault template maps them")
     return 0

@@ -104,7 +104,7 @@ def run(argv: list[str]) -> int:
 
     # Only entities that DON'T already carry a node with a real element_id are
     # candidates; a linked note is left exactly as-is.
-    candidates, linked = [], 0
+    candidates, linked, unroutable = [], 0, 0
     for ent in entities:
         nd = _existing_node(ent["path"])
         if nd and nd.get("element_id"):
@@ -113,7 +113,8 @@ def run(argv: list[str]) -> int:
         try:
             ent["_ek"] = suggest.element_spec(ent, mp)[0]
         except (KeyError, TypeError):
-            continue          # kind the map can't route to an element kind (e.g. an unmapped PC)
+            unroutable += 1   # kind the map can't route to an element kind (e.g. an unmapped PC)
+            continue
         candidates.append(ent)
 
     if not candidates:
@@ -132,7 +133,7 @@ def run(argv: list[str]) -> int:
     for ek in needed_kinds:
         try:
             live_idx[ek] = index_live(live_by_kind(args.world, token, ek))
-        except client.ApiError as e:
+        except (client.ApiError, ValueError) as e:
             print(f"ERROR listing live {ek}: {e}", file=sys.stderr)
             return 1
 
@@ -164,10 +165,13 @@ def run(argv: list[str]) -> int:
                     try:
                         live_idx[sib] = index_live(
                             live_by_kind(args.world, token, sib))
-                    except client.ApiError as e:
-                        print(f"WARNING: could not list live {sib} for the "
-                              f"kind-mismatch check: {e}", file=sys.stderr)
-                        live_idx[sib] = {}
+                    except (client.ApiError, ValueError) as e:
+                        # Same call, same contract as the primary listings
+                        # (fatal at run start): degrading here would let the
+                        # summary claim "no live match" for an element the
+                        # tool never actually looked for.
+                        print(f"ERROR listing live {sib}: {e}", file=sys.stderr)
+                        return 1
                 sib_matches = _match(ent, live_idx.get(sib, {}))
             if sib_matches:
                 kind_mismatch.append((ent, sib, sib_matches))
@@ -179,6 +183,9 @@ def run(argv: list[str]) -> int:
     print(f"{verb} {len(stamped)} node(s); {len(ambiguous)} ambiguous, "
           f"{mism}{len(unmatched)} unmatched, {linked} already linked"
           + ("" if args.execute else "  [dry-run — no files changed]"))
+    if unroutable:
+        print(f"  ({unroutable} entit(y/ies) had no element-kind mapping and "
+              f"were not considered)")
     for name, live_name, eid in stamped:
         note = "" if suggest._key(name) == suggest._key(live_name) else f" (live: {live_name!r})"
         print(f"  ✓ {name} → {eid}{note}")
