@@ -31,7 +31,7 @@ function loadoutTable(loadout) {
     ? `<tr class="totals-row"><td class="eq-toggle-cell"></td><td></td><td><strong>Totals</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalCost ?? ''))}</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalWeight ?? ''))}</strong></td></tr>`
     : '';
   const inner = `<table class="equip-table loadout-table"><thead><tr><th class="eq-toggle-cell"></th><th class="num">Qty</th><th>Item</th><th class="num">Cost</th><th class="num">Weight</th></tr></thead><tbody>${rows}${totals}</tbody></table>`;
-  return wide('table', `Load-Out: ${loadout.name}`, inner);
+  return wide('table', `Load-Out: ${escapeHtml(String(loadout.name || ''))}`, inner);
 }
 
 function renderEquipment(model) {

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { parseTableRows, findSectionByTitle, extractSubsectionHtml } = require('../../../lib/templates/gurps/tables');
+const { parseTableRows, findSectionByTitle, extractSubsectionHtml, decodeEntities } = require('../../../lib/templates/gurps/tables');
 
 describe('gurps/tables', () => {
   it('parses rendered table rows into cell-text arrays', () => {
@@ -51,5 +51,16 @@ describe('topLevelHtml (issue #82)', () => {
 
   it('is inert on a section with no table at all', () => {
     assert.strictEqual(topLevelHtml('<p>prose</p>'), '<p>prose</p>');
+  });
+});
+
+describe('decodeEntities', () => {
+  it('decodes named, decimal, and hex entities', () => {
+    assert.strictEqual(decodeEntities('6&#39;2&quot;'), '6\'2"');
+    assert.strictEqual(decodeEntities('Smith &amp; Wesson'), 'Smith & Wesson');
+    assert.strictEqual(decodeEntities('&#x41;&#66;'), 'AB');
+  });
+  it('leaves unknown entities untouched', () => {
+    assert.strictEqual(decodeEntities('&bogus; &notanentity'), '&bogus; &notanentity');
   });
 });
