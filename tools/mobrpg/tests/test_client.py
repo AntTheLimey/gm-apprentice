@@ -99,6 +99,10 @@ def test_resolve_environment_field_override(monkeypatch):
 def test_get_access_token_requires_auth(monkeypatch, unblock_client_network):
     for k in ("MOBRPG_TOKEN", "MOBRPG_EMAIL", "MOBRPG_PASSWORD"):
         monkeypatch.delenv(k, raising=False)
+    # Isolate from the developer's real managed credentials: on a machine with
+    # ~/.config/mobrpg/credentials.json this test would otherwise find them and
+    # never exit.
+    monkeypatch.setattr("mobrpg.config.read", lambda: {})
     with pytest.raises(SystemExit) as exc:
         client.get_access_token()
     assert exc.value.code == 2
