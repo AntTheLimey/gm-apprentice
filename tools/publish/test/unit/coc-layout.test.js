@@ -36,3 +36,13 @@ describe('buildSheet', () => {
     assert.ok(html.includes('coc-charsheet'));
   });
 });
+
+describe('pad2', () => {
+  const { pad2 } = require('../../lib/templates/coc/layout');
+  it('escapes non-numeric values (decodeEntities can hand it real markup)', () => {
+    assert.strictEqual(pad2('<img src=x>'), '&lt;img src=x&gt;');
+  });
+  it('still zero-pads small numbers', () => {
+    assert.strictEqual(pad2(7), '07');
+  });
+});

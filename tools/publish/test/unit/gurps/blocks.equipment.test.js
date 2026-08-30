@@ -109,3 +109,21 @@ describe('renderEquipment', () => {
     assert.ok(html.includes('<td>Iron</td>'), 'notes cell for Rations');
   });
 });
+
+describe('renderEquipment escaping', () => {
+  it('escapes the load-out name exactly once', () => {
+    const html = renderEquipment({
+      equipment: {
+        items: [],
+        loadouts: [{
+          name: 'Fitz & Co "Heavy"',
+          items: [{ qty: '1', name: 'Rope', cost: '$5', weight: '1 lb', location: null, notes: null }],
+          totalCost: '$5', totalWeight: '1 lb',
+        }],
+      },
+    });
+    assert.ok(html.includes('Load-Out: Fitz &amp; Co &quot;Heavy&quot;'),
+      'name should be escaped once');
+    assert.ok(!html.includes('&amp;amp;'), 'name must not be double-escaped');
+  });
+});

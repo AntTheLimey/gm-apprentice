@@ -91,3 +91,57 @@ describe('identity band placement', () => {
     assert.ok(band < flow, 'band precedes the flow');
   });
 });
+
+describe('parseIdentity completeness', () => {
+  it('merges every recognised identity sub-table, not just the first', () => {
+    const sheet = {
+      title: 'Stat Sheet', id: 'stat-sheet',
+      html: '<h3>Appearance &amp; Social</h3><table><tr><th>Trait</th><th>Value</th></tr>' +
+            '<tr><td>Height</td><td>6ft</td></tr></table>' +
+            '<h3>Physical Description</h3><table><tr><th>Trait</th><th>Value</th></tr>' +
+            '<tr><td>Hair</td><td>Black</td></tr></table>',
+    };
+    const model = parseGurps({}, [sheet]);
+    assert.strictEqual(model.identity.Height, '6ft');
+    assert.strictEqual(model.identity.Hair, 'Black');
+  });
+
+  it('a string appearance: does not shadow an identity: object', () => {
+    const model = parseGurps(
+      { appearance: 'Tall and weathered', identity: { Height: '6ft' } }, []);
+    assert.strictEqual(model.identity.Height, '6ft');
+    assert.strictEqual(model.identity.Appearance, 'Tall and weathered');
+  });
+
+  it('keeps columns beyond the second', () => {
+    const sheet = {
+      title: 'Stat Sheet', id: 'stat-sheet',
+      html: '<h3>Appearance &amp; Social</h3><table><tr><th>Trait</th><th>Value</th><th>Notes</th></tr>' +
+            '<tr><td>Hair</td><td>Black</td><td>greying</td></tr></table>',
+    };
+    const model = parseGurps({}, [sheet]);
+    assert.ok(model.identity.Hair.includes('Black'));
+    assert.ok(model.identity.Hair.includes('greying'));
+  });
+});
+
+describe('parseSenses aliases', () => {
+  it('reads a "Senses and Checks" heading', () => {
+    const sheet = {
+      title: 'Stat Sheet', id: 'stat-sheet',
+      html: '<h3>Senses and Checks</h3><table><tr><th>Sense</th><th>Value</th></tr>' +
+            '<tr><td>Vision</td><td>13</td></tr></table>',
+    };
+    const model = parseGurps({}, [sheet]);
+    assert.strictEqual(model.senses.Vision, '13');
+  });
+
+  it('does not drop the first senses row when there is no header row', () => {
+    const sheet = {
+      title: 'Stat Sheet', id: 'stat-sheet',
+      html: '<h3>Senses</h3><table><tr><td>Vision</td><td>13</td></tr></table>',
+    };
+    const model = parseGurps({}, [sheet]);
+    assert.strictEqual(model.senses.Vision, '13');
+  });
+});

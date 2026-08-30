@@ -1,7 +1,9 @@
 // Table cells arrive as rendered HTML, so their text still carries entities
 // (`&quot;`, `&amp;`, `&#39;`). Blocks escape again on the way out, so a height of
 // `6'2"` reached the page as the literal `6&quot;`. Decode at the parse boundary:
-// everything downstream treats a cell as plain text.
+// everything downstream treats a cell as plain text. (The named table covers
+// what the markdown renderer actually emits — its own escape set — plus
+// numeric/hex forms; other named entities pass through as literal text.)
 const NAMED_ENTITIES = {
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0',
 };

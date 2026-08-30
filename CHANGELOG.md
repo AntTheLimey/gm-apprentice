@@ -19,14 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now parses into its own identity model and renders as a full-width band above
   the two-column flow, recognised keys first, sheet-specific extras (Race,
   Nationality, …) following in source order; `parseSenses` is narrowed to
-  `Senses` / `Senses & Checks`. Applies to every GURPS sheet, PCs and NPCs.
+  `Senses` / `Senses & Checks` / `Senses and Checks`. Applies to every GURPS
+  sheet, PCs and NPCs. Every recognised identity sub-table merges into the band
+  (not just the first found), a plain `appearance:` string joins it instead of
+  silently shadowing an `identity:` map, table columns beyond the second are
+  kept, and a header-less senses table no longer loses its first row.
 - **GURPS table cells are no longer double-escaped (#188).** Cell text was
   pulled out of already-rendered HTML with its entities intact, then correctly
   escaped again at render — so a height of `6'2"` shipped as `6’2&quot;`, and
   any cell with `" & ' < >` (weapon notes, equipment names, skill specialties)
   showed literal entity text. Entities are decoded at the parse boundary so
-  escaping happens once, at render; the same audit found and escaped the one
-  raw interpolation (the equipment load-out heading).
+  escaping happens once, at render; every interpolation in the GURPS blocks was
+  audited to confirm that single-escape invariant (the local review round also
+  caught — and reverted — a double-escape the audit itself had introduced on
+  the load-out heading).
 - **Banner clicks reach the banner image (#183).** `.hero-banner-overlay`
   stacked above `.hero-banner-img` with no `pointer-events` rule, swallowing
   every click over the title area — the lightbox never opened exactly where a
@@ -50,11 +56,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   location kind before reporting "no live match": an exact-named element of the
   other kind is reported as its own `kind mismatch` outcome naming the
   `locationRouting` entry to fix, instead of being buried among vault-only
-  notes.
+  notes. A failed live listing degrades learning to the agreement gate with a
+  warning instead of silently discarding every ratified binding, `map sync`
+  notes any canon binding it replaces, and `adopt` treats a failed sibling
+  listing as the error it is rather than reporting a false "no live match".
 - **`link-orphans` fills the empty `parent_location:` scalar when it writes a
   `part_of` edge (#186)**, so an import groups correctly on the published
-  site's location index instead of only in the graph. An authored value is
-  never touched.
+  site's location index instead of only in the graph. Every empty YAML spelling
+  is filled, the Optional key is inserted when absent, an authored value is
+  never touched — and an authored value that disagrees with the new edge is
+  surfaced in the report instead of silently shipping split.
 
 ### Changed
 
@@ -63,9 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matched an entity in the extract was replaced wholesale, hand-authored prose
   and `## GM Notes` included, while the docs grouped it with the reassuring
   "only ever write local vault files" set. Existing notes are now skipped and
-  counted, `--overwrite` restores the old behaviour explicitly, and the README
-  and `llms.txt` spell out the danger, note that `images` is pull-only (#185),
-  and document exactly which fields `link-orphans` populates.
+  counted, `--overwrite` restores the old behaviour explicitly, entities of
+  kinds `write` cannot map are counted instead of dropped without a trace, and
+  the README and `llms.txt` spell out the danger, note that `images` is
+  pull-only (#185), and document exactly which fields `link-orphans` populates.
 
 ---
 
