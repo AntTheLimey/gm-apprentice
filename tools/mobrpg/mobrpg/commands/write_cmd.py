@@ -247,22 +247,34 @@ def run(argv: list[str]) -> int:
                     help="source reference string for '## Source References'")
     ap.add_argument("--name-style", choices=["plain", "space"], default="plain",
                     help="filename/wiki-link naming convention (default: plain)")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace notes that already exist under --out "
+                         "(default: skip them, keeping hand-authored content)")
     args = ap.parse_args(argv)
 
     with open(args.extract, encoding="utf-8") as f:
         data = json.load(f)
 
     written: dict[str, int] = {}
+    skipped = 0
     for rec in data["entities"]:
         r = build(rec, args.campaign, args.source_doc, args.name_style)
         if not r:
             continue
         rel_path, md = r
         full = os.path.join(args.out, rel_path)
+        # An existing note is someone's work — hand-authored prose, GM Notes,
+        # play bookkeeping. Replacing it wholesale is the most destructive thing
+        # this tool can do, so it only happens on an explicit --overwrite (#186).
+        if os.path.exists(full) and not args.overwrite:
+            skipped += 1
+            continue
         os.makedirs(os.path.dirname(full), exist_ok=True)
         with open(full, "w", encoding="utf-8") as f:
             f.write(md)
         written.setdefault(rec["kind"], 0)
         written[rec["kind"]] += 1
     print(f"wrote to {args.out}/:", written, "| total", sum(written.values()))
+    if skipped:
+        print(f"skipped {skipped} existing note(s) — pass --overwrite to replace them")
     return 0

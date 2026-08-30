@@ -202,3 +202,54 @@ def test_system_name_with_regex_metacharacters(tmp_path):
         "Alpha (Prime) II", exists, ["Alpha (Prime)"]) == "Alpha (Prime) System"
     # the dot must be literal, not "any character"
     assert link_orphans.derive_parent("StXJohn II", {"St.John System"}, ["St.John"]) is None
+
+
+LOC_NOTE = """---
+type: location
+name: {name}
+parent_location: "{parent}"
+relationships: []
+---
+# {name}
+"""
+
+
+def test_execute_fills_empty_parent_location_scalar(tmp_path):
+    # (#186) the publish renderer groups its location index on parent_location,
+    # so writing only the part_of edge left imports right in the graph and
+    # wrong on the site — the scalar and the edge must agree.
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(
+        LOC_NOTE.format(name="Corwin System", parent=""), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(
+        LOC_NOTE.format(name="Corwin I", parent=""), encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+
+    rc = link_orphans.run([str(extract), "--vault", str(vault),
+                           "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    assert rc == 0
+    txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'parent_location: "[[Corwin System]]"' in txt
+    assert '- target: "[[Corwin System]]"' in txt
+
+
+def test_authored_parent_location_is_never_clobbered(tmp_path):
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(
+        LOC_NOTE.format(name="Corwin System", parent=""), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(
+        LOC_NOTE.format(name="Corwin I", parent="[[Somewhere Else]]"), encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+
+    link_orphans.run([str(extract), "--vault", str(vault),
+                      "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'parent_location: "[[Somewhere Else]]"' in txt

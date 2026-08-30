@@ -40,3 +40,46 @@ def test_faction_part_of_scalar_is_derived_from_the_edge(tmp_path):
     assert part_of == 'part_of: "[[The_Ashen_Hand]]"', part_of   # slug style, as parent_location
     # and the edge is still present — scalar and edge agree, not one or the other
     assert "type: part_of" in txt
+
+
+def test_write_skips_existing_note_without_overwrite(tmp_path, capsys):
+    # (#186) `write` had no existence check: any note whose path matched an
+    # entity in the extract was replaced wholesale, hand-authored prose and all.
+    extract = {"entities": [{
+        "kind": "person", "name": "Vela Kesh", "body_md": "A smuggler.",
+        "relationships": [], "altNames": [],
+        "notes_public": [], "notes_gm": [], "classifiers": [],
+    }]}
+    src = tmp_path / "extract.json"
+    src.write_text(json.dumps(extract), encoding="utf-8")
+    out = tmp_path / "vault"
+    existing = out / "Characters/NPCs/Vela_Kesh.md"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("HAND-AUTHORED — do not clobber\n", encoding="utf-8")
+
+    rc = write_cmd.run([str(src), "--out", str(out)])
+
+    assert rc == 0
+    assert existing.read_text(encoding="utf-8") == "HAND-AUTHORED — do not clobber\n"
+    printed = capsys.readouterr().out
+    assert "--overwrite" in printed          # tells the user how to replace
+    assert "skipped" in printed
+
+
+def test_write_overwrite_flag_replaces_existing_note(tmp_path):
+    extract = {"entities": [{
+        "kind": "person", "name": "Vela Kesh", "body_md": "A smuggler.",
+        "relationships": [], "altNames": [],
+        "notes_public": [], "notes_gm": [], "classifiers": [],
+    }]}
+    src = tmp_path / "extract.json"
+    src.write_text(json.dumps(extract), encoding="utf-8")
+    out = tmp_path / "vault"
+    existing = out / "Characters/NPCs/Vela_Kesh.md"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("old\n", encoding="utf-8")
+
+    rc = write_cmd.run([str(src), "--out", str(out), "--overwrite"])
+
+    assert rc == 0
+    assert "A smuggler." in existing.read_text(encoding="utf-8")

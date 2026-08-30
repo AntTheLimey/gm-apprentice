@@ -136,6 +136,17 @@ def add_relationship(text: str, target: str, rtype: str, desc: str) -> str | Non
     return new_text if n else None
 
 
+def fill_parent_location(text: str, target: str) -> str:
+    """Fill an EMPTY `parent_location:` scalar to agree with a freshly written
+    `part_of` edge. Both are documented vault conventions and the publish
+    renderer groups its location index on the scalar, so writing only the edge
+    left an import looking right in the graph and wrong on the site (#186). An
+    authored (non-empty) value is never touched."""
+    return re.sub(r'^parent_location:\s*""\s*$',
+                  lambda _m: f'parent_location: "[[{target}]]"',
+                  text, count=1, flags=re.M)
+
+
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg link-orphans",
@@ -197,6 +208,8 @@ def run(argv: list[str]) -> int:
         with open(path, encoding="utf-8") as fh:
             txt = fh.read()
         edited = add_relationship(txt, target, rtype, "auto-linked: " + why)
+        if edited is not None and rtype == "part_of":
+            edited = fill_parent_location(edited, target)
         if edited is None:
             # No relationships key to write into. Report it rather than
             # rewriting the file unchanged and claiming the link was made.
