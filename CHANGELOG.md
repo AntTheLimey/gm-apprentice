@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sheet, PCs and NPCs. Every recognised identity sub-table merges into the band
   (not just the first found), a plain `appearance:` string joins it instead of
   silently shadowing an `identity:` map, table columns beyond the second are
-  kept, and a header-less senses table no longer loses its first row.
+  kept, a header-less senses table no longer loses its first row, a
+  `Sense | Check` header is not stored as a sense, and numeric `0` /
+  `false` identity values render instead of being dropped as blank.
 - **GURPS table cells are no longer double-escaped (#188).** Cell text was
   pulled out of already-rendered HTML with its entities intact, then correctly
   escaped again at render — so a height of `6'2"` shipped as `6’2&quot;`, and
@@ -32,7 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   escaping happens once, at render; every interpolation in the GURPS blocks was
   audited to confirm that single-escape invariant (the local review round also
   caught — and reverted — a double-escape the audit itself had introduced on
-  the load-out heading).
+  the load-out heading). The decoder rejects lone-surrogate code points and
+  resolves only its own named entities, so `&constructor;` and friends stay
+  literal.
 - **Banner clicks reach the banner image (#183).** `.hero-banner-overlay`
   stacked above `.hero-banner-img` with no `pointer-events` rule, swallowing
   every click over the title area — the lightbox never opened exactly where a
@@ -65,7 +69,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   site's location index instead of only in the graph. Every empty YAML spelling
   is filled, the Optional key is inserted when absent, an authored value is
   never touched — and an authored value that disagrees with the new edge is
-  surfaced in the report instead of silently shipping split.
+  surfaced in the report instead of silently shipping split. Only the opening
+  frontmatter block is read or written, so a body line starting with
+  `parent_location:` is never mistaken for the scalar.
 
 ### Changed
 
@@ -75,7 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `## GM Notes` included, while the docs grouped it with the reassuring
   "only ever write local vault files" set. Existing notes are now skipped and
   counted, `--overwrite` restores the old behaviour explicitly, entities of
-  kinds `write` cannot map are counted instead of dropped without a trace, and
+  kinds `write` cannot map are counted instead of dropped without a trace,
+  filename collisions (distinct names slugging to one file) are reported
+  instead of silently losing a record, and
   the README and `llms.txt` spell out the danger, note that `images` is
   pull-only (#185), and document exactly which fields `link-orphans` populates.
 

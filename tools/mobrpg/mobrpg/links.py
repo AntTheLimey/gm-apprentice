@@ -43,8 +43,14 @@ URL_FMT = "https://www.mobrpg.com/world/{world}/link/{eid}"
 # with the spaces immediately before it, so surrounding words never weld
 # together. (Like the wikilink pass this is a regex, not a parser: an embed
 # inside a code span is dropped too — the same documented trade-off.)
-_EMBED_LINE = re.compile(r"^[ \t]*!\[\[[^\]]+\]\][ \t]*\n?", re.M)
-_EMBED_INLINE = re.compile(r"[ \t]*!\[\[[^\]]+\]\]")
+_EMBED_LINE = re.compile(r"^[ \t]*!\[\[[^\]\r\n]+\]\][ \t]*\r?\n?", re.M)
+_EMBED_INLINE = re.compile(r"(?P<lead>[ \t]*)!\[\[[^\]\r\n]+\]\](?P<trail>[ \t]*)")
+
+
+def _drop_inline_embed(m: re.Match) -> str:
+    """Leave at most one separating space where whitespace flanked the embed,
+    so `before ![[m.png]]after` reads `before after`, never `beforeafter`."""
+    return " " if (m.group("lead") or m.group("trail")) else ""
 # `[[Name]]` or `[[Name|Alias]]` — group 1 is the resolution Name, group 2 the
 # optional display Alias.
 _WIKILINK = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
@@ -81,7 +87,7 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
         return display
 
     text = _EMBED_LINE.sub("", md_text or "")
-    text = _WIKILINK.sub(_wl, _EMBED_INLINE.sub("", text))
+    text = _WIKILINK.sub(_wl, _EMBED_INLINE.sub(_drop_inline_embed, text))
 
     def _ml(m: re.Match) -> str:
         label, href = m.group(1), m.group(2)

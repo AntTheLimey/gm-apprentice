@@ -82,7 +82,9 @@ def test_write_overwrite_flag_replaces_existing_note(tmp_path):
     rc = write_cmd.run([str(src), "--out", str(out), "--overwrite"])
 
     assert rc == 0
-    assert "A smuggler." in existing.read_text(encoding="utf-8")
+    txt = existing.read_text(encoding="utf-8")
+    assert "A smuggler." in txt
+    assert "old" not in txt          # wholesale replacement, not an append
 
 
 def test_write_reports_unsupported_kinds(tmp_path, capsys):
@@ -102,3 +104,23 @@ def test_write_reports_unsupported_kinds(tmp_path, capsys):
     assert rc == 0
     printed = capsys.readouterr().out
     assert "unsupported kind" in printed
+
+
+def test_write_reports_slug_collisions(tmp_path, capsys):
+    # slug() maps "A/B" and "AB" to the same file; the second must not silently
+    # vanish (default) or silently replace the first (--overwrite).
+    extract = {"entities": [
+        {"kind": "person", "name": "A/B", "body_md": "first", "relationships": [],
+         "altNames": [], "notes_public": [], "notes_gm": [], "classifiers": []},
+        {"kind": "person", "name": "AB", "body_md": "second", "relationships": [],
+         "altNames": [], "notes_public": [], "notes_gm": [], "classifiers": []},
+    ]}
+    src = tmp_path / "extract.json"
+    src.write_text(json.dumps(extract), encoding="utf-8")
+
+    rc = write_cmd.run([str(src), "--out", str(tmp_path / "vault")])
+
+    assert rc == 0
+    printed = capsys.readouterr().out
+    assert "collision" in printed
+    assert "A/B" in printed and "AB" in printed

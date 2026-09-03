@@ -625,3 +625,26 @@ def test_entry_notes_a_canon_downgrade():
     out = m._entry(old, fresh, "locationRouting[hyperspace gate]", notes)
     assert out == fresh
     assert any("canon" in n for n in notes)
+
+
+def test_run_learning_treats_non_dict_listing_as_failure(tmp_path, monkeypatch, capsys):
+    # A bare-list (or None) response is not a verified listing; leaving live_loc
+    # authoritative would silently discard every ratified binding.
+    _canon_note(tmp_path, "Betelgeuse", "sun", "LandFeature",
+                {"land_feature_type": "Star"})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if path == "/world":
+            return []
+        if path.endswith("/political") or path.endswith("/landfeature"):
+            return []                       # bare list — not the paged dict shape
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+
+    mp = str(tmp_path / "map.json")
+    assert m.run(["init", "w1", "--vault", str(tmp_path), "--map", mp,
+                  "--now", "T0"]) == 0
+    data = json.load(open(mp, encoding="utf-8"))
+    assert data["locationRouting"]["sun"]["status"] == "canon"
+    assert "WARNING" in capsys.readouterr().err

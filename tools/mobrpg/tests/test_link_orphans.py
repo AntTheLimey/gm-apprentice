@@ -312,3 +312,26 @@ def test_disagreeing_parent_location_is_surfaced_in_report(tmp_path):
     assert 'parent_location: "[[Somewhere Else]]"' in txt   # never clobbered
     report = (out / "orphan-linking-report.md").read_text(encoding="utf-8")
     assert "parent_location" in report                      # ...but surfaced
+
+
+def test_body_text_is_never_touched_by_parent_location_fill(tmp_path):
+    # The scalar lives in frontmatter; a body line that happens to start with
+    # `parent_location:` (docs, examples) must not be rewritten in its place.
+    vault = tmp_path / "vault"
+    locs = vault / "Locations"
+    locs.mkdir(parents=True)
+    (locs / "Corwin System.md").write_text(
+        LOC_NOTE.format(name="Corwin System", parent=""), encoding="utf-8")
+    (locs / "Corwin I.md").write_text(
+        "---\ntype: location\nname: Corwin I\n"
+        "relationships: []\n---\n# Corwin I\n\n"
+        "parent_location:\n", encoding="utf-8")
+    extract = _extract(tmp_path)
+    out = tmp_path / "out"
+
+    link_orphans.run([str(extract), "--vault", str(vault),
+                      "--out", str(out), "--systems", "Corwin", "--execute"])
+
+    txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'parent_location: "[[Corwin System]]"' in txt.split("---")[1]  # fm inserted
+    assert txt.rstrip().endswith("parent_location:")                      # body decoy intact

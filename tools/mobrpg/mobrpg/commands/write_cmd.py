@@ -257,12 +257,24 @@ def run(argv: list[str]) -> int:
 
     written: dict[str, int] = {}
     skipped = unsupported = 0
+    # Preflight: slug() can map distinct names ("A/B", "AB") onto one file, and
+    # case-insensitive filesystems collapse case variants too. Without this the
+    # later record silently vanished (or replaced the earlier under
+    # --overwrite). First name claims the path; the rest are reported.
+    claimed: dict[str, str] = {}
+    collisions: list[tuple[str, str, str]] = []
     for rec in data["entities"]:
         r = build(rec, args.campaign, args.source_doc, args.name_style)
         if not r:
             unsupported += 1
             continue
         rel_path, md = r
+        key = rel_path.lower()
+        holder = claimed.get(key)
+        if holder is not None and holder != rec["name"]:
+            collisions.append((rec["name"], holder, rel_path))
+            continue
+        claimed[key] = rec["name"]
         full = os.path.join(args.out, rel_path)
         # An existing note is someone's work — hand-authored prose, GM Notes,
         # play bookkeeping. Replacing it wholesale is the most destructive thing
@@ -281,4 +293,9 @@ def run(argv: list[str]) -> int:
     if unsupported:
         print(f"ignored {unsupported} entit(y/ies) of unsupported kind(s) — "
               f"no vault template maps them")
+    for name, holder, rel_path in collisions:
+        print(f"WARNING: filename collision — {name!r} maps to {rel_path}, "
+              f"already claimed by {holder!r}; not written")
+    if collisions:
+        print(f"{len(collisions)} filename collision(s) — rename to disambiguate")
     return 0

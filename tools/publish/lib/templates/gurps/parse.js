@@ -278,6 +278,8 @@ function parseSenses(model, sections, fm) {
     extractSubsectionHtml(sec.html, 'Senses and Checks') || '';
   for (const row of parseTableRows(subHtml)) {
     if (isHeaderRow(row)) continue;   // not slice(1): a header-less table keeps its first row
+    // Senses tables also use headers isHeaderRow doesn't know (`Sense | Check`).
+    if (/^senses?$/i.test(row[0] || '') && /^(check|value|score|roll)s?$/i.test(row[1] || '')) continue;
     if (row.length >= 2 && row[0]) model.senses[row[0]] = row[1];
   }
 }

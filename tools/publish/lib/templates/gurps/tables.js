@@ -16,9 +16,14 @@ function decodeEntities(text) {
         const cp = body[1] === 'x' || body[1] === 'X'
           ? parseInt(body.slice(2), 16)
           : parseInt(body.slice(1), 10);
-        return Number.isInteger(cp) && cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : whole;
+        const valid = Number.isInteger(cp) && cp > 0 && cp <= 0x10ffff
+          && !(cp >= 0xd800 && cp <= 0xdfff);   // lone surrogates are not scalar values
+        return valid ? String.fromCodePoint(cp) : whole;
       }
-      const named = NAMED_ENTITIES[body.toLowerCase()];
+      const key = body.toLowerCase();
+      // own-property only: '&constructor;' must not stringify Object.prototype members
+      const named = Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, key)
+        ? NAMED_ENTITIES[key] : undefined;
       return named === undefined ? whole : named;
     },
   );

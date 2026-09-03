@@ -146,20 +146,28 @@ def fill_parent_location(text: str, target: str) -> tuple[str, str]:
     spelling: "", '\'\'', bare, null, ~), 'inserted' (the Optional key was
     absent and has been added after location_type:/type:), 'agrees' (already
     the target), or 'disagrees' (an authored value names something else — left
-    untouched, but surfaced in the report rather than silently shipped)."""
+    untouched, but surfaced in the report rather than silently shipped).
+
+    Only the opening YAML frontmatter block is read or written: a body line
+    that happens to start with `parent_location:` (docs, examples) is data,
+    not the scalar."""
+    fm_m = re.match(r"^---\r?\n.*?\r?\n---(?:\r?\n|$)", text, flags=re.S)
+    if fm_m is None:
+        return text, "disagrees"          # no frontmatter — nowhere safe to write
+    fm, body = text[:fm_m.end()], text[fm_m.end():]
     link = f'parent_location: "[[{target}]]"'
-    m = re.search(r"^parent_location:(.*)$", text, flags=re.M)
+    m = re.search(r"^parent_location:(.*)$", fm, flags=re.M)
     if m is None:
         for key in ("location_type", "type"):
-            new_text, n = re.subn(rf"^({key}:[^\n]*\n)",
-                                  lambda mm: mm.group(1) + link + "\n",
-                                  text, count=1, flags=re.M)
+            new_fm, n = re.subn(rf"^({key}:[^\n]*\n)",
+                                lambda mm: mm.group(1) + link + "\n",
+                                fm, count=1, flags=re.M)
             if n:
-                return new_text, "inserted"
+                return new_fm + body, "inserted"
         return text, "disagrees"          # no slot to write — surface it
     val = m.group(1).strip()
     if val in ("", '""', "''", "null", "~"):
-        return text.replace(m.group(0), link, 1), "filled"
+        return fm.replace(m.group(0), link, 1) + body, "filled"
     if val.strip('"\'') == f"[[{target}]]":
         return text, "agrees"
     return text, "disagrees"

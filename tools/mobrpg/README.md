@@ -82,8 +82,13 @@ Exit codes: `0` ok, `1` API error, `2` bad args / no auth configured.
 
 ## Read-only vs mutating
 
-Read-only verbs are safe to run anywhere: `whoami`, `worlds`, `pull`,
-`whats-new`, `suggestions`, `catalog`, `map`.
+Truly read-only verbs — they write nothing at all: `whoami`, `worlds`,
+`whats-new`, `catalog`, `suggestions` (without `--out`), and `map check`.
+
+`pull` (writes the extract named by `--out`), `suggestions --out` (writes a
+report), and `map init` / `map sync` (write `_meta/mobrpg-map.json`) read from
+mobRPG but create or update local files as soon as they run, with no
+`--execute` gate.
 
 Mutating verbs are **dry-run by default** — add `--execute` to actually write.
 `suggest`, `sync`, and `submit-batch` only ever file *suggestions* — a

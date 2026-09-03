@@ -145,3 +145,25 @@ describe('parseSenses aliases', () => {
     assert.strictEqual(model.senses.Vision, '13');
   });
 });
+
+describe('renderIdentity falsey values', () => {
+  it('keeps numeric 0 and boolean false', () => {
+    const html = renderIdentity({ identity: { Dependents: 0, Literate: false } });
+    assert.ok(html.includes('Dependents'));
+    assert.ok(html.includes('>0<'));
+    assert.ok(html.includes('Literate'));
+  });
+});
+
+describe('parseSenses header detection', () => {
+  it('does not store a "Sense | Check" header as a sense', () => {
+    const sheet = {
+      title: 'Stat Sheet', id: 'stat-sheet',
+      html: '<h3>Senses</h3><table><tr><td>Sense</td><td>Check</td></tr>' +
+            '<tr><td>Vision</td><td>13</td></tr></table>',
+    };
+    const model = parseGurps({}, [sheet]);
+    assert.strictEqual(model.senses.Vision, '13');
+    assert.ok(!('Sense' in model.senses));
+  });
+});

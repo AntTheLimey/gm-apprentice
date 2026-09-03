@@ -18,7 +18,7 @@ function orderedEntries(identity) {
 // who the character physically is before any of the numbers.
 function renderIdentity(model) {
   const identity = model.identity || {};
-  const entries = orderedEntries(identity).filter(([, v]) => String(v || '').trim());
+  const entries = orderedEntries(identity).filter(([, v]) => v != null && String(v).trim());
   if (entries.length === 0) return null;
   const cells = entries.map(([k, v]) =>
     `<div class="id-cell"><div class="id-l">${escapeHtml(k)}</div><div class="id-v">${escapeHtml(String(v))}</div></div>`

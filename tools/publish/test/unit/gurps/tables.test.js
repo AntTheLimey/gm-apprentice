@@ -64,3 +64,13 @@ describe('decodeEntities', () => {
     assert.strictEqual(decodeEntities('&bogus; &notanentity'), '&bogus; &notanentity');
   });
 });
+
+describe('decodeEntities hardening', () => {
+  const { decodeEntities } = require('../../../lib/templates/gurps/tables');
+  it('leaves surrogate code points literal', () => {
+    assert.strictEqual(decodeEntities('&#55296;'), '&#55296;');
+  });
+  it('does not stringify inherited object members as entities', () => {
+    assert.strictEqual(decodeEntities('&constructor;'), '&constructor;');
+  });
+});

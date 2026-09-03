@@ -74,3 +74,15 @@ def test_push_embed_lines_do_not_merge_paragraphs():
     out = links.rewrite_md_for_push("Para one.\n\n![[map.png]]\n\nPara two.",
                                     IDX, "w1", FMT)
     assert _re.search(r"Para one\.\n\n+Para two\.", out)
+
+
+def test_push_embed_with_no_trailing_space_keeps_a_separator():
+    out = links.rewrite_md_for_push("before ![[m.png]]after", IDX, "w1", FMT)
+    assert "beforeafter" not in out
+    assert "before after" in out
+
+
+def test_push_malformed_multiline_embed_does_not_eat_prose():
+    # `[^\]]+` spanning newlines could delete unrelated prose up to the next ]]
+    out = links.rewrite_md_for_push("keep ![[foo\nbar]] this line too", IDX, "w1", FMT)
+    assert "keep" in out and "this line too" in out

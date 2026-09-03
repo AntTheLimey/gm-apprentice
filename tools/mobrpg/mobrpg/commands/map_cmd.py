@@ -928,7 +928,9 @@ def run(argv: list[str]) -> int:
                 r = client._request("GET", f"/world/{args.world}/{ek}",
                                     token=token, query={"page": page, "size": 200})
                 if not isinstance(r, dict):
-                    break
+                    # a bare list / None is not the paged shape — treat it as a
+                    # failed listing, never as an authoritative empty one
+                    raise ValueError(f"unexpected {ek} listing shape: {type(r).__name__}")
                 for e in r.get("content", []):
                     if isinstance(e, dict) and e.get("id"):
                         live_loc[e["id"]] = ek
