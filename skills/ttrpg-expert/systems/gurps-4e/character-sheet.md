@@ -1,8 +1,13 @@
 # GURPS 4e Character Sheet
 
-> Based on the freely available GURPS Character Sheet layout
-> by Steve Jackson Games. GURPS is a registered trademark of
-> Steve Jackson Games Incorporated.
+> GURPS is a trademark of Steve Jackson Games, and its rules
+> and art are copyrighted by Steve Jackson Games. All rights
+> are reserved by Steve Jackson Games. This game aid is the
+> original creation of AntTheLimey and is released for free
+> distribution, and not for resale, under the permissions
+> granted in the
+> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
+> Layout follows the freely available GURPS Character Sheet.
 
 ## Identity
 

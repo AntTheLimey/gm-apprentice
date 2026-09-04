@@ -42,8 +42,11 @@ systematic tracking is cheaper than repair through retcon.
 
 **Relationship Consistency:**
 1. List each NPC's stated relationships
-2. Cross-ref for mutual consistency (A enemy of B → B acknowledges?)
-3. Flag one-way relationships that should be bidirectional
+2. Flag the same fact stored on both endpoints (`enemy_of` is
+   symmetric and stored once; B "acknowledging" it is a duplicate
+   edge, not consistency — see `relationship-patterns.md`)
+3. Flag an edge whose stored direction contradicts the prose
+   (the file says A employs B; the edge says the reverse)
 4. Flag relationships contradicting faction allegiance
 
 **Clue Path Verification:**
@@ -89,6 +92,15 @@ Constraints" in `scenario-writing.md`.)
 4. Flag read-aloud with 2nd-person emotion/perception verbs
    ("You feel uneasy" = violation; describe objective sensory info only)
 5. Verify every confrontation has ≥2 contingencies (cooperative + hostile)
+
+**What is mechanized:** only item 4. `vault_check.py read-aloud`
+scans `> ` blockquote lines in plan and scene files for a named
+PC, a 2nd-person feeling verb, or a 3rd-person pronoun, and emits
+an INFO cue to raise with the GM. Items 1-3 and 5 are read, not
+grepped — a plan-wide "PC name as subject of an action verb" scan
+was built and deliberately dropped because it scolded the GM's
+own notes as often as it caught a real violation. Do not report
+its absence as a gap.
 
 ## Thread Management
 

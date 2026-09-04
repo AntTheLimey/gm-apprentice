@@ -70,7 +70,7 @@ Read only the file(s) relevant to the current request.
 | Active play / mid-session | `active-play-management.md` | `{system}/rules-reference.md` |
 | Terminology | `rpg-terminology.md` | — |
 | Relationships | `relationship-patterns.md` | — |
-| Campaign structure | `campaign-structure.md` | — |
+| Campaign structure / session lifecycle | campaign-organizer skill (chapter → session → scene hierarchy) | `shared/session-document-chain.md` (session statuses, document chain); `gm-session-patterns.md` (discovery state) |
 | Cross-system tone | `systems/shared-patterns.md` | — |
 
 ## File Reference
@@ -92,9 +92,8 @@ Read only the file(s) relevant to the current request.
 - `random-generation.md` — Oracles, random tables, procedural generation
 - `gm-session-patterns.md` — Lazy DM, Three Clue Rule, Five Room Dungeon
 - `shared/entity-schema.md` — Entity schemas, universal temporal fields
-- `canon-management.md` — DRAFT → AUTHORITATIVE → SUPERSEDED
-- `relationship-patterns.md` — Relationship types, strength, modeling
-- `campaign-structure.md` — Session management, timelines, discovery
+- `canon-management.md` — DRAFT → AUTHORITATIVE → SUPERSEDED (+ STUB); where conflicts land and how they resolve
+- `relationship-patterns.md` — Predicate table with inverses, storage direction, modeling patterns
 - `rpg-terminology.md` — Cross-system terminology
 - `campaign-timeline.md` — Append-only session record (vault root or campaign/)
 - `systems/shared-patterns.md` — Cross-system tone guidance
