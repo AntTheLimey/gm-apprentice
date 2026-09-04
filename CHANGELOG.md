@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.4] — 2026-08-30
+
+### Fixed
+
+- **GURPS physical description leads the sheet instead of hiding mid-column
+  (#187).** `parseSenses` read the `### Appearance & Social` sub-table in
+  preference to `### Senses`, so height, weight, build, hair, eyes, skin and
+  handedness shipped under the heading "Senses & Checks", buried in one of the
+  two masonry columns — and any real Senses table was shadowed. The sub-table
+  now parses into its own identity model and renders as a full-width band above
+  the two-column flow, recognised keys first, sheet-specific extras (Race,
+  Nationality, …) following in source order; `parseSenses` is narrowed to
+  `Senses` / `Senses & Checks` / `Senses and Checks`. Applies to every GURPS
+  sheet, PCs and NPCs. Every recognised identity sub-table merges into the band
+  (not just the first found), a plain `appearance:` string joins it instead of
+  silently shadowing an `identity:` map, table columns beyond the second are
+  kept, a header-less senses table no longer loses its first row, a
+  `Sense | Check` header is not stored as a sense, and numeric `0` /
+  `false` identity values render instead of being dropped as blank.
+- **GURPS table cells are no longer double-escaped (#188).** Cell text was
+  pulled out of already-rendered HTML with its entities intact, then correctly
+  escaped again at render — so a height of `6'2"` shipped as `6’2&quot;`, and
+  any cell with `" & ' < >` (weapon notes, equipment names, skill specialties)
+  showed literal entity text. Entities are decoded at the parse boundary so
+  escaping happens once, at render; every interpolation in the GURPS blocks was
+  audited to confirm that single-escape invariant (the local review round also
+  caught — and reverted — a double-escape the audit itself had introduced on
+  the load-out heading). The decoder rejects lone-surrogate code points and
+  resolves only its own named entities, so `&constructor;` and friends stay
+  literal.
+- **Banner clicks reach the banner image (#183).** `.hero-banner-overlay`
+  stacked above `.hero-banner-img` with no `pointer-events` rule, swallowing
+  every click over the title area — the lightbox never opened exactly where a
+  reader clicks, and on a short `cover`-cropped banner the lightbox is the only
+  way to see a wide map at all. The overlay is now out of hit-testing, with
+  interactive children (links, buttons, inputs) restored.
+- **`mobrpg sync` no longer pushes mangled image embeds (#184).** The push
+  rewrite had no notion of the `!` embed prefix, so `![[map.png]]` became the
+  literal `!map.png` and `![[map.svg|697]]` became `!697` (an embed's pipe is a
+  display width, not an alias) — junk text filed into the world owner's review
+  queue under the collaborator's name. Embeds are dropped at the push boundary
+  (they reference vault attachments with no upstream counterpart), and a new
+  `sync --show-body` flag prints each push's exact outgoing markdown so the dry
+  run can be inspected without reconstructing the payload by hand.
+- **A guessed location routing is no longer learned back as canon (#182).**
+  `map init`/`map sync` learned location bindings from `determined` blocks that
+  the tool itself had written from its own routing guess, making a wrong route
+  self-confirming forever. Learning now requires the block to agree with the
+  node's `element_kind`, and — when live listings are available — with the
+  linked element's actual upstream kind. `adopt` also checks the sibling
+  location kind before reporting "no live match": an exact-named element of the
+  other kind is reported as its own `kind mismatch` outcome naming the
+  `locationRouting` entry to fix, instead of being buried among vault-only
+  notes. A failed live listing degrades learning to the agreement gate with a
+  warning instead of silently discarding every ratified binding, `map sync`
+  notes any canon binding it replaces, and `adopt` treats a failed sibling
+  listing as the error it is rather than reporting a false "no live match".
+- **`link-orphans` fills the empty `parent_location:` scalar when it writes a
+  `part_of` edge (#186)**, so an import groups correctly on the published
+  site's location index instead of only in the graph. Every empty YAML spelling
+  is filled, the Optional key is inserted when absent, an authored value is
+  never touched — and an authored value that disagrees with the new edge is
+  surfaced in the report instead of silently shipping split. Only the opening
+  frontmatter block is read or written, so a body line starting with
+  `parent_location:` is never mistaken for the scalar.
+
+### Changed
+
+- **`mobrpg write` refuses to overwrite existing vault notes (#186).** It had
+  no existence check, no `--execute` gate, and no dry-run — any note whose path
+  matched an entity in the extract was replaced wholesale, hand-authored prose
+  and `## GM Notes` included, while the docs grouped it with the reassuring
+  "only ever write local vault files" set. Existing notes are now skipped and
+  counted, `--overwrite` restores the old behaviour explicitly, entities of
+  kinds `write` cannot map are counted instead of dropped without a trace,
+  filename collisions (distinct names slugging to one file) are reported
+  instead of silently losing a record, and
+  the README and `llms.txt` spell out the danger, note that `images` is
+  pull-only (#185), and document exactly which fields `link-orphans` populates.
+
+---
+
 ## [1.9.3] — 2026-08-28
 
 ### Fixed

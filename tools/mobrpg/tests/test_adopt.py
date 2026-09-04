@@ -130,3 +130,75 @@ def test_kind_filter_scopes_the_pull(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(client, "_request", stub)
     assert adopt.run(["w1", "--vault", str(v), "--kind", "npc", "--execute"]) == 0
     assert seen_kinds == ["person"]                     # only the npc→person endpoint pulled
+
+
+# ---- #182: an exact-named element of the sibling location kind is a routing
+# bug to surface, not a "no live match" to bury ----
+
+def _loc_map():
+    mp = _map()
+    mp["kinds"]["location"] = "political"
+    mp["locationRouting"] = {"trade route": {"target": "political",
+                                             "politicalType": "Trade Route",
+                                             "status": "new"}}
+    return mp
+
+
+def _loc_vault(tmp_path):
+    (tmp_path / "_meta").mkdir(parents=True)
+    (tmp_path / "_meta/mobrpg-map.json").write_text(json.dumps(_loc_map()),
+                                                    encoding="utf-8")
+    return tmp_path
+
+
+def test_kind_mismatch_is_its_own_outcome_not_unmatched(tmp_path, monkeypatch, capsys):
+    v = _loc_vault(tmp_path)
+    _note(v, "Locations/Eris-Peric Route.md",
+          fm="type: location\nlocation_type: trade route")
+    _auth(monkeypatch)
+    monkeypatch.setattr(client, "_request", _fake_live({
+        "political": [],
+        "landfeature": [{"id": "lf-1", "name": "Eris-Peric Route"}],
+    }))
+    assert adopt.run(["w1", "--vault", str(v), "--execute"]) == 0
+    out = capsys.readouterr().out
+    assert "kind mismatch" in out
+    assert "landfeature" in out
+    assert "no live match: Eris-Peric Route" not in out
+    # reported, never stamped — the fix is the map's locationRouting
+    nd = node.read_node((v / "Locations/Eris-Peric Route.md").read_text())
+    assert nd is None or not nd.get("element_id")
+
+
+def test_true_no_live_match_still_reported_for_locations(tmp_path, monkeypatch, capsys):
+    v = _loc_vault(tmp_path)
+    _note(v, "Locations/Vault Only Place.md",
+          fm="type: location\nlocation_type: trade route")
+    _auth(monkeypatch)
+    monkeypatch.setattr(client, "_request",
+                        _fake_live({"political": [], "landfeature": []}))
+    assert adopt.run(["w1", "--vault", str(v)]) == 0
+    out = capsys.readouterr().out
+    assert "no live match: Vault Only Place" in out
+    assert "kind mismatch" not in out
+
+
+def test_sibling_listing_failure_is_fatal_not_a_false_no_match(tmp_path, monkeypatch, capsys):
+    # The primary listing treats an ApiError as fatal; the sibling check must
+    # too — degrading it silently would let the run claim "no live match" for
+    # an element the tool never actually looked for.
+    v = _loc_vault(tmp_path)
+    _note(v, "Locations/Eris-Peric Route.md",
+          fm="type: location\nlocation_type: trade route")
+    _auth(monkeypatch)
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if path.rsplit("/", 1)[-1] == "landfeature":
+            raise client.ApiError(502, "boom", "u")
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+
+    assert adopt.run(["w1", "--vault", str(v)]) == 1
+    captured = capsys.readouterr()
+    assert "no live match: Eris-Peric Route" not in captured.out
+    assert "ERROR" in captured.err

@@ -1,5 +1,6 @@
 const { escapeHtml } = require('../../processor');
 const { renderAttributes } = require('./blocks/attributes');
+const { renderIdentity } = require('./blocks/identity');
 const { renderLiftingFeats, renderSlamTable } = require('./blocks/lifting');
 const { renderSenses } = require('./blocks/senses');
 const { renderDefenses } = require('./blocks/defenses');
@@ -34,8 +35,11 @@ function buildSheet(model) {
     renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
   ].filter(Boolean);
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
-  if (flow.length === 0 && wideBlocks.length === 0) return null;
-  return `<div class="gurps-sheet"><div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
+  // Full-width and above the flow: the physical description leads the sheet rather
+  // than getting buried mid-column.
+  const identity = renderIdentity(model) || '';
+  if (flow.length === 0 && wideBlocks.length === 0 && !identity) return null;
+  return `<div class="gurps-sheet">${identity}<div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
 }
 
 function buildCombat(model, sections) {

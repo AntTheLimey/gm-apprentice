@@ -73,5 +73,7 @@ tests/benchmark-results/
 # ...but never the npm-generated cruft: .bin holds machine-local (absolute-target)
 # symlinks that would ship as dangling links, and .package-lock.json is regenerable.
 tools/publish/node_modules/.bin/
+tools/publish/node_modules/.cache/
+tools/publish/node_modules/.vite/
 tools/publish/node_modules/.package-lock.json
 tools/publish/node_modules/**/.package-lock.json

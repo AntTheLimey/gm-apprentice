@@ -1,3 +1,34 @@
+// Table cells arrive as rendered HTML, so their text still carries entities
+// (`&quot;`, `&amp;`, `&#39;`). Blocks escape again on the way out, so a height of
+// `6'2"` reached the page as the literal `6&quot;`. Decode at the parse boundary:
+// everything downstream treats a cell as plain text. (The named table covers
+// what the markdown renderer actually emits — its own escape set — plus
+// numeric/hex forms; other named entities pass through as literal text.)
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0',
+};
+
+function decodeEntities(text) {
+  return String(text == null ? '' : text).replace(
+    /&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/gi,
+    (whole, body) => {
+      if (body[0] === '#') {
+        const cp = body[1] === 'x' || body[1] === 'X'
+          ? parseInt(body.slice(2), 16)
+          : parseInt(body.slice(1), 10);
+        const valid = Number.isInteger(cp) && cp > 0 && cp <= 0x10ffff
+          && !(cp >= 0xd800 && cp <= 0xdfff);   // lone surrogates are not scalar values
+        return valid ? String.fromCodePoint(cp) : whole;
+      }
+      const key = body.toLowerCase();
+      // own-property only: '&constructor;' must not stringify Object.prototype members
+      const named = Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, key)
+        ? NAMED_ENTITIES[key] : undefined;
+      return named === undefined ? whole : named;
+    },
+  );
+}
+
 function parseTableRows(html) {
   const rows = [];
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -7,7 +38,7 @@ function parseTableRows(html) {
     const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
     let cellMatch;
     while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
-      cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
+      cells.push(decodeEntities(cellMatch[1].replace(/<[^>]+>/g, '')).trim());
     }
     if (cells.length > 0) rows.push(cells);
   }
@@ -82,4 +113,4 @@ function extractSubsectionHtml(sectionHtml, subsectionTitle) {
   return match ? match[1] : '';
 }
 
-module.exports = { parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };
+module.exports = { decodeEntities, parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };

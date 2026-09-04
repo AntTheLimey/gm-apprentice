@@ -39,7 +39,10 @@ map init and map sync (write _meta/mobrpg-map.json), images (--execute writes
 into _attachments/ and can set portrait:), write, link-orphans, pull-canon,
 adopt, relink. These read from mobRPG but only ever write to disk; relink makes
 no API calls at all. `map` and `images` as a whole are NOT read-only — only
-`map check` is.
+`map check` is. `images` is PULL-ONLY: nothing uploads a vault image to
+mobRPG; attachments go up through the web UI or not at all. `write` skips
+notes that already exist unless given --overwrite, which replaces them
+wholesale — hand-authored prose and GM Notes included.
 
 Writes to mobRPG (need write access; dry-run by default, add --execute):
 suggest, submit-batch, update, review, sync. sync only submits a suggestion on
@@ -123,7 +126,11 @@ vault whose entities already exist upstream but carry no node is linked with
                                   same kind by normalized name (aliases too) and
                                   write an `accepted` node with the real
                                   element_id. Ambiguous (several live matches) or
-                                  unmatched notes are reported, never guessed.
+                                  unmatched notes are reported, never guessed. A
+                                  location whose exact name exists upstream under
+                                  the SIBLING location kind reports as its own
+                                  "kind mismatch" outcome (fix locationRouting in
+                                  _meta/mobrpg-map.json, then re-run).
                                   The node-establishment path for imported / pushed
                                   vaults and the dup-safe alternative to any
                                   crosswalk. GET-only against mobRPG; dry-run
@@ -150,10 +157,13 @@ vault whose entities already exist upstream but carry no node is linked with
                                   accept is irreversible; dismiss keeps the
                                   externalRef claimed (see resubmit note below).
     mobrpg write <extract.json> --out <vault-dir> [--campaign NAME]
-                 [--source-doc TEXT] [--name-style plain|space]
+                 [--source-doc TEXT] [--name-style plain|space] [--overwrite]
                                   Materialize a mobRPG extract (from `pull`)
                                   into vault markdown — one file per entity,
                                   mapped to the correct folder/template/type.
+                                  Existing notes are SKIPPED unless --overwrite
+                                  is given; with it they are replaced wholesale,
+                                  hand-authored prose and GM Notes included.
     mobrpg link-orphans <extract.json> --vault <path> --out <dir>
                         [--systems NAMES] [--execute]
                                   Auto-link obvious orphan entities after an
@@ -164,9 +174,12 @@ vault whose entities already exist upstream but carry no node is linked with
                                   Only links to targets that already exist in
                                   the vault. Writes a report; vault edits
                                   (relationships: frontmatter) gated by
-                                  --execute (dry-run default).
+                                  --execute (dry-run default). Writes the edge
+                                  and fills an empty parent_location: scalar to
+                                  match; no other frontmatter fields are
+                                  populated.
     mobrpg sync <world> --vault <path> [--only S] [--skew SECONDS]
-                [--batch-label L] [--execute]
+                [--batch-label L] [--show-body] [--execute]
                                   Timestamp last-writer-wins sync of every
                                   linked note's description prose against
                                   mtime / node last_synced / server
@@ -187,7 +200,9 @@ vault whose entities already exist upstream but carry no node is linked with
                                   externalRef) and marks the node
                                   review_state: pending until `review`
                                   adjudicates it. Notes already pending are
-                                  skipped. Dry-run by default.
+                                  skipped. Dry-run by default; --show-body
+                                  prints each push's exact outgoing description
+                                  markdown (what the suggestion will carry).
     mobrpg suggest <world> --vault <path> [--chapter CH] [--kind K] [--only S]
                   [--limit N] [--out DIR] [--write-back] [--include-pcs]
                   [--execute]
@@ -209,6 +224,8 @@ vault whose entities already exist upstream but carry no node is linked with
     mobrpg images <world> --vault <path> [--execute]
                                   Pull entity images into the vault (id->file map
                                   comes from the vault's own mobrpg: nodes).
+                                  PULL-ONLY: there is no image upload path;
+                                  push images via the mobRPG web UI.
 
 Dry-run-by-default applies to the verbs that carry an --execute flag — the
 mobRPG-mutating ones (suggest, submit-batch, update, review, sync) plus the
@@ -217,7 +234,9 @@ gated local writers (images, link-orphans, pull-canon, adopt, relink). Add
 
 It does NOT apply to `pull` and `write`, which have no --execute flag and write
 their output as soon as they are run: `pull` creates the file named by --out,
-and `write` materializes vault notes. Neither is a preview. Run
+and `write` materializes vault notes. Neither is a preview. `write` will not
+replace a note that already exists unless given --overwrite; with it, the
+replacement is wholesale (hand-authored prose and GM Notes included). Run
 `mobrpg <command> --help` for a command's own options.
 
 ## Typical workflows

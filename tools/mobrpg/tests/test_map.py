@@ -519,3 +519,132 @@ def test_merge_lets_a_rediscovered_value_win_over_the_old_one():
     old = {"world": "Old Name", "classifiers": {}, "locationRouting": {}}
     new = {"world": "New Name", "classifiers": {}, "locationRouting": {}}
     assert m._merge(old, new)[0]["world"] == "New Name"
+
+
+# ---- #182: a guessed routing must not be learned back as canon ----
+
+def _canon_note(tmp_path, name, location_type, element_kind, det):
+    from mobrpg import node as _node
+    nd = {"world_id": "w1", "external_ref": f"ns:Locations/{name}",
+          "element_id": f"id-{name}", "element_kind": element_kind,
+          "review_state": "accepted", "determined": det,
+          "relationships": [], "languages": []}
+    p = tmp_path / "Locations" / f"{name}.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"---\ntype: location\nlocation_type: {location_type}\n"
+                 + _node.emit_node(nd) + "---\nBody.\n", encoding="utf-8")
+    return p
+
+
+def test_canon_bindings_skip_kind_disagreeing_determined(tmp_path):
+    # determined says Political while the node's own element_kind says
+    # LandFeature — a self-contradictory block written from the tool's guess.
+    _canon_note(tmp_path, "Trade Route A", "trade route", "LandFeature",
+                {"political_type": "Trade Route"})
+    assert m.canon_location_bindings(str(tmp_path)) == {}
+
+
+def test_canon_bindings_learn_agreeing_node(tmp_path):
+    _canon_note(tmp_path, "Betelgeuse", "sun", "LandFeature",
+                {"land_feature_type": "Star"})
+    got = m.canon_location_bindings(str(tmp_path))
+    assert got == {"sun": ("landfeature", "Star")}
+
+
+def test_canon_bindings_live_kind_overrules_self_written_block(tmp_path):
+    # Internally consistent but wrong: element_kind AND determined both carry
+    # the tool's own proposal, while the live element is another kind. With a
+    # live id->kind map the learning path must consult the element, not the
+    # block the routing guess wrote.
+    _canon_note(tmp_path, "Corwin-Thides Route", "trade route", "Political",
+                {"political_type": "Trade Route"})
+    live = {"id-Corwin-Thides Route": "landfeature"}
+    assert m.canon_location_bindings(str(tmp_path),
+                                           live_kind_by_id=live) == {}
+
+
+def test_canon_bindings_live_kind_confirms_real_canon(tmp_path):
+    _canon_note(tmp_path, "Betelgeuse", "sun", "LandFeature",
+                {"land_feature_type": "Star"})
+    live = {"id-Betelgeuse": "landfeature"}
+    got = m.canon_location_bindings(str(tmp_path), live_kind_by_id=live)
+    assert got == {"sun": ("landfeature", "Star")}
+
+
+def test_run_learning_survives_listing_failure(tmp_path, monkeypatch, capsys):
+    # A 502 on the live location listings must degrade the canon-learning gate
+    # (element_kind agreement only) with a warning — NOT silently discard every
+    # ratified binding by treating {} as "verified: nothing exists".
+    _canon_note(tmp_path, "Betelgeuse", "sun", "LandFeature",
+                {"land_feature_type": "Star"})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def stub(method, path, **k):
+        raise client.ApiError(502, "boom", "u")
+    monkeypatch.setattr(client, "_request", stub)
+
+    mp = str(tmp_path / "map.json")
+    assert m.run(["init", "w1", "--vault", str(tmp_path), "--map", mp,
+                  "--now", "T0"]) == 0
+    data = json.load(open(mp, encoding="utf-8"))
+    assert data["locationRouting"]["sun"]["status"] == "canon"
+    assert "WARNING" in capsys.readouterr().err
+
+
+def test_run_learning_consults_live_kinds(tmp_path, monkeypatch):
+    # Internally consistent but wrong: the block carries the tool's own guess
+    # (Political) while the live element is a landfeature. run() must build the
+    # live id->kind map and refuse to learn the guess back as canon.
+    _canon_note(tmp_path, "Corwin-Thides Route", "trade route", "Political",
+                {"political_type": "Trade Route"})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if path == "/world":
+            return []
+        if path.endswith("/landfeature"):
+            return {"content": [{"id": "id-Corwin-Thides Route",
+                                 "name": "Corwin-Thides Route"}],
+                    "page": {"totalPages": 1}}
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+
+    mp = str(tmp_path / "map.json")
+    assert m.run(["init", "w1", "--vault", str(tmp_path), "--map", mp,
+                  "--now", "T0"]) == 0
+    data = json.load(open(mp, encoding="utf-8"))
+    assert data["locationRouting"]["trade route"]["status"] != "canon"
+
+
+def test_entry_notes_a_canon_downgrade():
+    notes = []
+    old = {"target": "landfeature", "landFeatureType": "Gate",
+           "mobrpgId": None, "status": "canon"}
+    fresh = {"target": "political", "politicalType": "Hyperspace",
+             "mobrpgId": None, "status": "new"}
+    out = m._entry(old, fresh, "locationRouting[hyperspace gate]", notes)
+    assert out == fresh
+    assert any("canon" in n for n in notes)
+
+
+def test_run_learning_treats_non_dict_listing_as_failure(tmp_path, monkeypatch, capsys):
+    # A bare-list (or None) response is not a verified listing; leaving live_loc
+    # authoritative would silently discard every ratified binding.
+    _canon_note(tmp_path, "Betelgeuse", "sun", "LandFeature",
+                {"land_feature_type": "Star"})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def stub(method, path, *, token=None, query=None, body=None):
+        if path == "/world":
+            return []
+        if path.endswith("/political") or path.endswith("/landfeature"):
+            return []                       # bare list — not the paged dict shape
+        return {"content": [], "page": {"totalPages": 1}}
+    monkeypatch.setattr(client, "_request", stub)
+
+    mp = str(tmp_path / "map.json")
+    assert m.run(["init", "w1", "--vault", str(tmp_path), "--map", mp,
+                  "--now", "T0"]) == 0
+    data = json.load(open(mp, encoding="utf-8"))
+    assert data["locationRouting"]["sun"]["status"] == "canon"
+    assert "WARNING" in capsys.readouterr().err

@@ -82,18 +82,31 @@ Exit codes: `0` ok, `1` API error, `2` bad args / no auth configured.
 
 ## Read-only vs mutating
 
-Read-only verbs are safe to run anywhere: `whoami`, `worlds`, `pull`,
-`whats-new`, `suggestions`, `catalog`, `map`.
+Truly read-only verbs — they write nothing at all: `whoami`, `worlds`,
+`whats-new`, `catalog`, `suggestions` (without `--out`), and `map check`.
+
+`pull` (writes the extract named by `--out`), `suggestions --out` (writes a
+report), and `map init` / `map sync` (write `_meta/mobrpg-map.json`) read from
+mobRPG but create or update local files as soon as they run, with no
+`--execute` gate.
 
 Mutating verbs are **dry-run by default** — add `--execute` to actually write.
 `suggest`, `sync`, and `submit-batch` only ever file *suggestions* — a
 collaborator can run them with just Read access, and the world owner accepts or
 dismisses each one, so none of them overwrites a live element directly. The
 owner-side verbs `update` and `review` (and listing others' suggestions) need
-write access on the world. The rest (`write`, `images`, `link-orphans`,
-`pull-canon`, `adopt`, `relink`) only ever write local vault files;
-`pull-canon`, `adopt`, and `images` read from mobRPG but write locally, and
-`relink` makes no API calls at all.
+write access on the world. The rest (`images`, `link-orphans`, `pull-canon`,
+`adopt`, `relink`) only ever write local vault files; `pull-canon`, `adopt`,
+and `images` read from mobRPG but write locally, and `relink` makes no API
+calls at all.
+
+`write` is the exception, twice over: it runs as soon as it is invoked (no
+`--execute`, no dry-run), and with `--overwrite` it replaces existing notes
+**wholesale** — hand-authored prose, `## GM Notes`, play bookkeeping, all of
+it. Without `--overwrite` it skips notes that already exist and reports the
+count, so the default is safe against a populated vault; to bring new entities
+into one, filter the extract to just the new ids, or `write` into a scratch
+directory and diff before copying in.
 
 Entity and event IDs live in each note's `mobrpg:` frontmatter node — the single
 source of truth. There is no sidecar crosswalk. A vault whose entities already
@@ -115,10 +128,16 @@ Run `mobrpg <command> --help` for a command's own options.
 - `pull <world>` — import a world into a structured JSON extract
   (default `extract.json`); the entry point of the import pipeline.
 - `write <extract.json> --out <out_dir>` — materialize an extract into vault
-  markdown, one file per entity.
+  markdown, one file per entity. **Skips notes that already exist** (and says
+  so); `--overwrite` replaces them wholesale, hand-authored prose and
+  `## GM Notes` included — intended for a fresh or scratch directory.
 - `link-orphans <extract.json> --vault <path> --out <outdir>` — auto-link obvious
-  orphan relationships after an import.
+  orphan relationships after an import. Writes the derived `part_of`/`created`
+  edge into `relationships:` and fills an empty `parent_location:` scalar to
+  match; no other frontmatter fields are populated.
 - `images <world> --vault <path>` — pull entity images into the vault.
+  **Pull-only**: there is no upload path, so a vault-side image reaches mobRPG
+  only through the web UI.
 
 ### Reconcile (keep a vault current)
 

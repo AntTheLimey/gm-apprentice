@@ -33,7 +33,7 @@ function isHeaderRow(row) {
   if (row.length < 2) return false;
   const c0 = row[0].toLowerCase();
   const c1 = row[1].toLowerCase();
-  return /^(characteristic|attribute|trait|name)$/.test(c0) || /^(value|score)$/.test(c1);
+  return /^(characteristic|attribute|trait|name|field)$/.test(c0) || /^(value|score|detail)$/.test(c1);
 }
 
 function parseAttributes(model, sections, fm) {
@@ -223,6 +223,47 @@ function parseTraits(model, sections, fm) {
   }
 }
 
+// Height/weight/eyes/hair and the rest of the physical description. Sheets carry
+// it as a `### Appearance & Social` sub-table under `## Stat Sheet`; these aliases
+// cover the other names sheets use for the same table.
+const IDENTITY_SUBSECTIONS = [
+  'Appearance & Social', 'Appearance and Social', 'Appearance',
+  'Physical Description', 'Description', 'Identity',
+];
+
+function parseIdentity(model, sections, fm) {
+  // Frontmatter: objects merge in (appearance, then identity); a plain string
+  // becomes the band's Appearance/Identity entry instead of shadowing the
+  // other key (`||` used to consume the slot and drop the object silently).
+  let fromFmObject = false;
+  for (const [key, label] of [['appearance', 'Appearance'], ['identity', 'Identity']]) {
+    const src = fm[key];
+    if (src && typeof src === 'object' && !Array.isArray(src)) {
+      for (const [k, v] of Object.entries(src)) model.identity[k] = String(v);
+      fromFmObject = true;
+    } else if (typeof src === 'string' && src.trim()) {
+      model.identity[label] = src.trim();
+    }
+  }
+  if (fromFmObject) return;
+  const sec = findSectionByTitle(sections, 'stat sheet');
+  if (!sec) return;
+  // Merge EVERY recognised sub-table: the aliases are alternative names sheets
+  // use, not a priority list — a sheet carrying both `Appearance & Social` and
+  // `Physical Description` renders all of it. Columns beyond the second are
+  // kept, joined onto the value.
+  for (const title of IDENTITY_SUBSECTIONS) {
+    const subHtml = extractSubsectionHtml(sec.html, title);
+    if (!subHtml) continue;
+    for (const row of parseTableRows(subHtml)) {
+      if (isHeaderRow(row)) continue;
+      if (row.length >= 2 && row[0] && row[1]) {
+        model.identity[row[0]] = row.slice(1).filter(c => c && c.trim()).join(' — ');
+      }
+    }
+  }
+}
+
 function parseSenses(model, sections, fm) {
   if (fm.senses && typeof fm.senses === 'object') {
     for (const [k, v] of Object.entries(fm.senses)) model.senses[k] = String(v);
@@ -230,9 +271,15 @@ function parseSenses(model, sections, fm) {
   }
   const sec = findSectionByTitle(sections, 'stat sheet');
   if (!sec) return;
-  const subHtml = extractSubsectionHtml(sec.html, 'Appearance & Social') ||
-    extractSubsectionHtml(sec.html, 'Senses') || '';
-  for (const row of parseTableRows(subHtml).slice(1)) {
+  // `Appearance & Social` belongs to parseIdentity — reading it here labelled every
+  // sheet's physical description "Senses & Checks".
+  const subHtml = extractSubsectionHtml(sec.html, 'Senses') ||
+    extractSubsectionHtml(sec.html, 'Senses & Checks') ||
+    extractSubsectionHtml(sec.html, 'Senses and Checks') || '';
+  for (const row of parseTableRows(subHtml)) {
+    if (isHeaderRow(row)) continue;   // not slice(1): a header-less table keeps its first row
+    // Senses tables also use headers isHeaderRow doesn't know (`Sense | Check`).
+    if (/^senses?$/i.test(row[0] || '') && /^(check|value|score|roll)s?$/i.test(row[1] || '')) continue;
     if (row.length >= 2 && row[0]) model.senses[row[0]] = row[1];
   }
 }
@@ -919,6 +966,7 @@ function parseGurps(frontmatter, sections) {
   parseSkills(model, secs, fm);
   parseTechniques(model, secs, fm);
   parseTraits(model, secs, fm);
+  parseIdentity(model, secs, fm);
   parseSenses(model, secs, fm);
   parseDefenses(model, secs, fm);
   parseEncumbrance(model, secs, fm);

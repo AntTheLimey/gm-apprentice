@@ -26,7 +26,9 @@ function nameHtml(name) {
 function pad2(v) {
   if (v == null) return '';
   const n = Number(v);
-  return Number.isFinite(n) && n >= 0 && n < 10 ? `0${n}` : String(v);
+  // Non-numeric values are interpolated into skill rows; decodeEntities at the
+  // parse boundary means they can now hold real markup characters — escape them.
+  return Number.isFinite(n) && n >= 0 && n < 10 ? `0${n}` : escapeHtml(String(v));
 }
 
 function pct(part, whole) {
@@ -302,4 +304,4 @@ function buildEquipment(model, sections) {
     `<h2 class="section">Wealth <span class="rule"></span></h2>${wealth}`;
 }
 
-module.exports = { buildStatusBar, buildSheet, buildRecord, buildEquipment };
+module.exports = { buildStatusBar, buildSheet, buildRecord, buildEquipment, pad2 };
