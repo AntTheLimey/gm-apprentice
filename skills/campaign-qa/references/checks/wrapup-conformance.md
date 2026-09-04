@@ -28,7 +28,11 @@ Per file, against the spec's frontmatter block:
 - **`session:` is a quoted wiki-link** to the session index
   (`"[[Session NN - Title]]"`). Integer or plain-string values
   are drift — Warning; fix derives the link from the session
-  index in the same directory.
+  index the file belongs to, matched by session number/filename
+  (flat `Sessions/` directories hold many indexes — "same
+  directory" alone is not a selector). Chapter-level wrap-ups
+  with no per-session index keep their existing value — never
+  fabricate a link.
 - **`session_number:` scalar present.** Absent — Info; backfill
   from the session index or the filename.
 - **`play_date:`** present, `"YYYY-MM-DD"`. Non-ISO forms
@@ -39,9 +43,13 @@ Per file, against the spec's frontmatter block:
   the range in body prose if not already there.
 - **`source_document:`** wiki-link to the Play Notes file where
   one exists — Info; backfill.
-- **`reconciled:`** present. If absent — Info; backfill from a
-  `**Reconciled:** YYYY-MM-DD` line inside
-  `### Reconciliation Context`, else `null`.
+- **`reconciled:`** present. If absent — Info; backfill from
+  date evidence inside `### Reconciliation Context`: a
+  `**Reconciled:**` line, a dated reconcile callout
+  (`> [!success] Reconciled …`), or a dated decisions heading.
+  A Reconciliation Context with no derivable date → ask the GM
+  once for the date (or confirm `null`), rather than leaving
+  the file flagged forever.
 - **Unreconciled promotion:** `canon_status: AUTHORITATIVE` with
   `reconciled: null` and no Reconciliation Context section —
   Warning; ask whether the review actually happened (stamp the
@@ -52,20 +60,47 @@ Per file, against the spec's frontmatter block:
 
 ### Step 3: Structure Conformance (publish safety)
 
-- **Keeper-facing sibling H2s** — any of PC Carry-Forward, What
-  Carries Forward, World State, Keeper Checklist, Quality Notes,
-  Quick Bullets, World Fact Findings, Reconciliation Context (or
-  their variants) sitting at `##` instead of `###` under
-  `## GM Notes` — **Critical**: `exclude_sections` configs strip
-  only `GM Notes` by name, so these publish to player sites
-  today. Fix: create `## GM Notes` if absent, relocate each
-  section under it, demote it and its children one level.
-  (Same repair the 1.8.52 migration performs for Reconciliation
-  Context; this check extends it to every Keeper-facing section.)
-- **Missing `<!-- gm-only -->` fence** around the `## GM Notes`
-  block — Warning (Critical if the vault has a published site);
-  fix wraps the block in one pair. Fences are nesting-aware
-  (1.8.52+), so inner fences inside the block are safe.
+Classify every H2 first. **Player-facing H2s are exactly**
+`## Narrative Recap` (and its recap variants) and
+`## Memorable Moments`. **Every other H2 is Keeper-facing by
+default** — including names no list anticipates
+(`## Open Questions for Reconcile`, `## Handoff to Reconcile`,
+`## Combat Snapshot`). Real vaults invent Keeper-facing headings
+faster than any enumeration tracks, and a novel heading is in
+nobody's `exclude_sections` list. If a flagged heading is
+genuinely player-facing, the GM dismisses the finding — that is
+what the fix-or-dismiss walkthrough is for.
+
+- **Keeper-facing sibling H2s** — any Keeper-facing section at
+  `##` instead of `###` under `## GM Notes`. Severity per
+  heading: read the vault's **effective** exclude list (the
+  publish defaults, or the union of vault/site config lists
+  where set) — **Critical** when the heading is not covered by
+  it (it publishes today), Warning when it is (structure drift,
+  no live leak). Fix: hoist the player-facing sections
+  **first** — `## Narrative Recap` then `## Memorable Moments`
+  to the top, in that order; real files interleave them between
+  Keeper H2s, and a player-facing section must never end up
+  inside the GM block. Then create `## GM Notes` if absent and
+  relocate every Keeper-facing section under it, demoting each
+  with its children one level. (The 1.8.52 Reconciliation
+  Context repair, generalized.)
+- **Missing `<!-- gm-only -->` fence** — Warning (Critical if
+  the vault has a published site). Fix: one pair, opening on
+  the line before `## GM Notes` (heading inside — outside the
+  fence it publishes as an orphan heading on any vault whose
+  exclude list lacks the name) and closing after the last
+  Keeper-facing section, which is end-of-file once player-facing
+  sections are hoisted. Fences are nesting-aware (1.8.52+), so
+  inner fences inside the block are safe.
+- **Decorated headings** — a template section under a decorated
+  name (`### Cross-Entity Claims — Held for Confirmation`,
+  `## What Happened — Narrative Recap`) — Info; normalize to
+  the template name, moving the qualifier into the first body
+  line when it carries meaning.
+- **Section order drift** inside `## GM Notes` vs. the template
+  — Info, opt-in; reorder whole sections only, never their
+  contents.
 - **Recap heading variants** (`## What Happened — Narrative
   Recap`) — Info; the publish tool's contains-match already
   finds these, but normalize to `## Narrative Recap`.
@@ -81,10 +116,15 @@ Per file, against the spec's frontmatter block:
 ### Step 4: Filename Conformance
 
 Filename should be `Chapter_CC_Session_NN_Wrap_Up.md`
-(zero-padded, no title). Drifted names — Warning; a rename must
-update the session index `documents.wrap_up` link and every
-inbound wiki-link in the same fix (basenames resolve vault-wide
-in Obsidian, so a half-done rename breaks links silently).
+(zero-padded, no title). Drifted names — Warning, **opt-in on a
+published vault**: the filename derives the page's site URL, so
+a rename 404s links players have already shared — say so when
+presenting the finding. A confirmed rename must update the
+session index `documents.wrap_up` link and every inbound
+reference in the same fix — plain wiki-links, aliased links
+(`[[X|Alias]]`), embeds (`![[X]]`), and frontmatter link fields
+(basenames resolve vault-wide in Obsidian, so a half-done
+rename breaks links silently).
 Chapter-level wrap-ups from ingested back-history
 (`Chapter_N_Wrap_Up.md`, no per-session files) are conformant
 as-is — note them, don't rename.

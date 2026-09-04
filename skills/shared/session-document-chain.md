@@ -100,8 +100,9 @@ tags: []
 
 ### 4. Session Wrap-Up (`Chapter_CC_Session_NN_Wrap_Up.md`)
 
-Canonical record: narrative recap, quick bullets, PC
-carry-forward, world state changes, keeper checklist.
+Canonical record: narrative recap, PC carry-forward, what
+carries forward, world state, keeper checklist, quality notes,
+and the handoff to session-prep.
 Starts DRAFT, promoted to AUTHORITATIVE via reconcile.
 
 Filename uses zero-padded chapter and session numbers with
@@ -136,9 +137,12 @@ tags: []
 Both `session:` (wiki-link) and `session_number:` (scalar) are
 present because consumers key on different forms: the publish
 tool's recap lookup prefers the link and falls back to the
-scalar. `reconciled` is the machine-readable reconcile date —
-`canon_status: AUTHORITATIVE` with `reconciled: null` means the
-promotion never went through reconcile.
+scalar. `reconciled` is the machine-readable reconcile date. On files
+written since 1.9.5, `canon_status: AUTHORITATIVE` with
+`reconciled: null` means the promotion bypassed reconcile; on
+older files the date may simply predate the field — campaign-qa's
+Wrap-Up Conformance check backfills it where the body records a
+date, and asks once where it doesn't.
 
 **Body skeleton:** canonical in `shared/templates/session-wrap.md`
 (provisioned into vaults as `_Templates/_Template_Session_WrapUp.md`).
@@ -147,9 +151,11 @@ publish tool as the session's site recap) and the optional
 `## Memorable Moments` — then a single `## GM Notes` H2 wrapped in
 one `<!-- gm-only -->`/`<!-- /gm-only -->` pair holding every
 Keeper-facing subsection at `###`. GM-side content never gets its
-own top-level H2: `exclude_sections` configs only strip `GM Notes`
-by name, so a sibling H2 publishes to player sites (the same
-failure the 1.8.52 Reconciliation Context re-nesting fixed).
+own top-level H2: `exclude_sections` lists strip known names (the
+default covers six), but a Keeper-facing H2 with a novel name is
+on nobody's list and publishes to player sites — the failure the
+1.8.52 Reconciliation Context re-nesting fixed for one heading,
+the single fenced `## GM Notes` block ends for all of them.
 
 For reconstructed content (from vault-ingest), include a
 Reconstruction Note callout at the top of the document:

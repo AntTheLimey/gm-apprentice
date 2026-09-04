@@ -1,9 +1,9 @@
 ---
 type: session_wrap
 session: "[[Session NN - Title]]"
-session_number: 0
+session_number: null           # the session number, as an integer
 chapter: "[[Chapter C - Title]]"
-campaign: "[[Campaign Overview]]"
+campaign: "[[Campaign Overview]]"  # or the campaign's plain name — match the vault
 play_date: null                # real-world date played, "YYYY-MM-DD"
 in_game_date: null             # fictional date at session end; timeline
                                # format (4-digit year, no time-of-day)
@@ -13,6 +13,12 @@ created_by: session-wrapup
 reconciled: null               # stamped "YYYY-MM-DD" by reconcile
 tags: []
 ---
+
+<!-- Placeholders: NN = zero-padded session number, CC = zero-padded
+chapter number, C = the chapter's real (unpadded) number as used in
+folder names; {braces} = replace with content. Sections marked
+optional/conditional are omitted entirely when empty — never leave
+an empty heading. -->
 
 # Chapter CC · Session NN — {Title} — Wrap-Up
 
@@ -32,9 +38,9 @@ player-facing recap — write it for players.}
 line per moment; block-quote memorable table dialogue with
 `— [[Speaker]]` attribution. Omit the section if not wanted.}
 
-## GM Notes
-
 <!-- gm-only -->
+
+## GM Notes
 
 ### Quick Bullets
 
@@ -57,6 +63,8 @@ section when the Play Notes already carry a scene list.}
 #### Unresolved Threads
 
 #### Player-Stated Intentions
+
+#### Pending Consequences
 
 #### NPCs Needing Follow-Up
 

@@ -35,6 +35,12 @@ file. It also creates/updates entity files and timeline entries.
   `## GM Notes` — everything Keeper-facing lives under that single
   H2 at `###`, never as a sibling H2 (a sibling H2 publishes to
   player sites).
+- Sections land in their **template positions** — the workflow
+  visits them out of order (World Fact Findings at step 4c,
+  carry-forward earlier), but the file's section order follows
+  the template. The H1 and the `> [!info] Source` provenance
+  callout (source file/export plus any structural caveat, e.g.
+  "session ended mid-scene") come from the template too.
 - Filename: `Chapter_CC_Session_NN_Wrap_Up.md` (zero-padded
   chapter and session numbers, underscores, no session title).
   Example: `Chapter_03_Session_07_Wrap_Up.md`. The chapter number
@@ -239,7 +245,11 @@ markers (`NEW-NPC:`, `UPDATE:`, etc.) won't be present;
 instead, compare each listed NPC/Location/Item against the
 existing vault to determine new vs. update. If the
 gmassistant description conflicts with existing vault
-content, flag the entity as CONFLICT for GM review. Use the
+content, flag the entity as CONFLICT for GM review. Record every
+export-vs-vault name correction applied anywhere in this
+wrap-up in the Wrap-Up file's `### Name Conflicts (export vs.
+vault canon)` table — Export said | Vault canon | Applied.
+(Standard path: omit the section.) Use the
 `## Scenes` section as the primary source for identifying
 events that meet the decomposition threshold. All standard
 rules below still apply: read templates before creating,
@@ -275,7 +285,8 @@ locations, and NPC relationships.
   for the entity it is *about*; a claim about a *different* entity has had no
   such check, and this is the only checkpoint it gets. Surface each cross-entity
   claim to the GM for a one-time confirm. If confirmed, write it into the other
-  entity's file; if unconfirmed or deferred, record it **in the Wrap-Up file**
+  entity's file and log the resolution in the Wrap-Up's
+  `### Cross-Entity Claims` section; if unconfirmed or deferred, record it in the Wrap-Up file's `### Cross-Entity Claims` section
   with an `<!-- UNVERIFIED: {claim} -->` marker — `reconcile` scans the Wrap-Up
   file (not entity files) for these and blocks promotion until a human clears
   it, so the marker only does its job there. Table shorthand is a hallucination
@@ -406,12 +417,14 @@ this step entirely — no empty section.
 ### 5. What Carries Forward
 
 Write under the Wrap-Up file's `## GM Notes` section, as
-`### What Carries Forward`:
-- Unresolved cliffhangers
-- Player-stated intentions
-- Unrealised consequences
-- NPCs needing follow-up
-- Skipped prep with critical clues players still need
+`### What Carries Forward`, using the template's subsections:
+- `#### Unresolved Threads` — cliffhangers and live threads
+- `#### Player-Stated Intentions`
+- `#### Pending Consequences` — decisions made whose effects
+  haven't landed yet
+- `#### NPCs Needing Follow-Up`
+- `#### Skipped Prep` — unplayed prep with critical clues
+  players still need
 
 ### 6. World State
 

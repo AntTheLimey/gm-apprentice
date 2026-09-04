@@ -82,6 +82,15 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("source_confidence", "canon_status", "1.8.0"),
         ("confidence", "canon_status", "1.8.0"),
     ],
+    "session_wrap": [
+        ("in_game_dates", "in_game_date", "1.9.5"),
+    ],
+    "session-wrap-up": [
+        ("in_game_dates", "in_game_date", "1.9.5"),
+    ],
+    "session-wrapup": [
+        ("in_game_dates", "in_game_date", "1.9.5"),
+    ],
     "event": [("date", "in_game_date", "1.4.22")],
     "session": [
         ("planned_date", "play_date", "1.4.22"),

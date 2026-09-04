@@ -249,11 +249,12 @@ for the full procedure.
   at `wrap-up` status for multiple prep cycles (review was
   deferred too long), session index `documents:` links pointing
   to files that don't exist
-- Wrap-Up conformance: Wrap-Up files that drift from the
-  canonical `shared/templates/session-wrap.md` structure —
-  above all Keeper-facing sections sitting at `##` outside
-  `## GM Notes`, which publish to player sites (always repaired
-  via `references/checks/wrapup-conformance.md`)
+- Wrap-Up conformance runs as its **own pass**
+  (`references/checks/wrapup-conformance.md`) — Full Audit
+  schedules it after Stale DRAFT Detection, and it can be
+  invoked directly for a single-mode wrap-up audit. Graph
+  Health itself does not duplicate its checks; this bullet is
+  a pointer
 - Character story file validation: active PCs missing a
   companion `{Name}_Story.md` file, story files where
   `asOfSession` is more than 1 session behind the latest

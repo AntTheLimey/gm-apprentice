@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **campaign-qa Wrap-Up Conformance check**
   (`references/checks/wrapup-conformance.md`, run from Graph Health and
   Full Audit): finds frontmatter drift, Keeper-facing sections sitting at
-  `##` outside `## GM Notes` (which publish to player sites), missing
+  `##` outside `## GM Notes` (which can publish to player sites), missing
   gm-only fences, and filename drift — all repairs content-preserving and
   routed through the fix-or-dismiss workflow.
 - **Migration 1.9.4 → 1.9.5**: normalizes existing wrap-up frontmatter,
@@ -46,7 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the single wrap-up spec (the two previously documented divergent
   structures); session-wrapup's Handoff Contract adds Memorable Moments,
   Name Conflicts, Cross-Entity Claims, and Handoff to session-prep rows,
-  and Quick Bullets becomes optional.
+  and Quick Bullets becomes optional. session-prep reads the new
+  `### Handoff to session-prep` first when gathering last-session context,
+  and `in_game_dates` on wrap-ups is registered as a deprecated rename.
 
 ---
 

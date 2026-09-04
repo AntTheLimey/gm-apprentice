@@ -658,7 +658,10 @@ normalized to it.
   normalize to `session_wrap`):
   - `session:` becomes a quoted wiki-link to the session index
     (integer and plain-string forms are converted; the link is
-    derived from the session index in the same directory)
+    derived from the session index the file belongs to, matched
+    by session number/filename). Chapter-level wrap-ups with no
+    per-session index keep their existing value — no link is
+    fabricated
   - `session_number:` scalar added (from the session index or
     filename)
   - `play_date:` normalized to `"YYYY-MM-DD"`; legacy date
@@ -667,22 +670,26 @@ normalized to it.
     ranges are preserved in body prose, never deleted
   - `source_document:` backfilled as a wiki-link to the Play
     Notes file where one exists
-  - `reconciled:` added — backfilled from a
-    `**Reconciled:** YYYY-MM-DD` line inside
-    `### Reconciliation Context` if present, else `null`.
+  - `reconciled:` added — backfilled from date evidence inside
+    `### Reconciliation Context` (a `**Reconciled:**` line, a
+    dated reconcile callout, or a dated decisions heading), else
+    `null`; the QA conformance check asks once about a dateless
+    Reconciliation Context.
     `canon_status` itself is never changed by migration.
 - **Keeper-facing sections re-nested under `## GM Notes`** —
   extends the 1.8.52 Reconciliation Context re-nesting to every
-  Keeper-facing section (PC Carry-Forward, What Carries Forward,
-  World State, Keeper Checklist, Quality Notes, Quick Bullets,
-  World Fact Findings) found as a sibling `##`: relocate under
-  `## GM Notes` (creating it where absent) and demote one level
-  with children. Pure structural move — nothing reworded. Then
-  wrap the `## GM Notes` block in one
-  `<!-- gm-only -->`/`<!-- /gm-only -->` pair where absent
-  (fences are nesting-aware since 1.8.52, so inner fences are
-  safe). `## Narrative Recap` and `## Memorable Moments` are
-  player-facing and stay top-level.
+  Keeper-facing sibling `##`. Player-facing H2s are exactly
+  `## Narrative Recap` and `## Memorable Moments`; every other
+  H2 is Keeper-facing by default (real vaults invent headings —
+  `## Open Questions for Reconcile` — that no enumeration
+  anticipates). Hoist the player-facing sections above the
+  block first (real files interleave them between Keeper H2s),
+  then relocate the rest under `## GM Notes` (creating it where
+  absent), demoting each with its children one level. Pure
+  structural move — nothing reworded. Then wrap the block,
+  heading included, in one `<!-- gm-only -->`/`<!-- /gm-only -->`
+  pair where absent, closing at end of file (fences are
+  nesting-aware since 1.8.52, so inner fences are safe).
 
 ### Content
 
@@ -699,6 +706,9 @@ normalized to it.
 
 ### Tooling
 
-- None. The publish tool already reads both `session:` (link)
+- `in_game_dates` → `in_game_date` on wrap-up types is registered
+  in `shared/scripts/schema_rules.py` `DEPRECATED_FIELDS`, so
+  `validate_schema.py` and `vault_check.py` flag unmigrated files.
+- Otherwise none. The publish tool already reads both `session:` (link)
   and `session_number:` (scalar) forms and keeps its type-synonym
   compatibility set — unmigrated vaults keep working.
