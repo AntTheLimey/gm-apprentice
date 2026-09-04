@@ -39,7 +39,8 @@ If all three pass, offer the fast path:
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
 On GM confirmation:
-- Set Wrap-Up `canon_status` to `AUTHORITATIVE`
+- Set Wrap-Up `canon_status` to `AUTHORITATIVE` and stamp
+  `reconciled:` with today's date (`"YYYY-MM-DD"`)
 - Promote all DRAFT entities from this session to AUTHORITATIVE
 - Update session index `status` to `reviewed`
 - Skip to step 6.5 (world evolution offer)
@@ -143,7 +144,8 @@ forward into the next session's prep.
 ### 6. Promote canon status
 
 On GM approval:
-1. Set Wrap-Up `canon_status` to `AUTHORITATIVE`
+1. Set Wrap-Up `canon_status` to `AUTHORITATIVE` and stamp
+   `reconciled:` with today's date (`"YYYY-MM-DD"`)
 2. Update session index `status` to `reviewed`
 3. Promote related entity `canon_status` from DRAFT
    to AUTHORITATIVE where GM confirmed content
@@ -200,10 +202,14 @@ conversational style as the rest of reconcile.
 
 ### 7. Record decisions
 
-Write a `### Reconciliation Context` subsection capturing:
+Write a `### Reconciliation Context` subsection, opening
+with a `**Reconciled:** YYYY-MM-DD` line (the same date
+stamped into the frontmatter `reconciled:` field), capturing:
 - **Consequences** — forward-looking summary of what this
   session established (every claim traceable to vault or
   play notes, no invention)
+- **Promotion** — every entity moved DRAFT → AUTHORITATIVE,
+  by name
 - **Salvageable prep** — disposition of each unplayed item
 - **GM decisions** — each conflict resolution with rationale
 - **World evolution** — if step 6.5 ran, include a
@@ -216,7 +222,14 @@ Session-prep reads it to avoid re-gathering context.
 
 **Where to write it:** Always in the Wrap-Up file, as a `###`
 subsection **under that file's `## GM Notes` heading** —
-create `## GM Notes` if the file has none. If a Plan file
+if the file has none, create `## GM Notes` wrapped in its own
+`<!-- gm-only -->`/`<!-- /gm-only -->` fence (reconcile has no
+migration prerequisite, and an unfenced section on a legacy
+file can reach a published player site). If the GM Notes
+block is wrapped in a `<!-- gm-only -->` fence (standard since
+1.9.5), insert the subsection **before** the `<!-- /gm-only -->`
+closer — appending after it leaves the section outside the
+fence, breaking the one-fence invariant. If a Plan file
 exists, you may append a short pointer (`See Wrap-Up for
 reconciliation context`) but the Wrap-Up file is the canonical
 location.

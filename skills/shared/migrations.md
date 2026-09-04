@@ -643,3 +643,72 @@ was introduced to end.
   closer. A closer with nothing open no longer silently does nothing: it is
   counted and reported, and the unclosed-marker warning now says how many
   blocks were left open.
+
+## Migration: 1.9.4 → 1.9.5
+
+Standard Session Wrap-Up template. Wrap-ups gain a canonical
+structure (`shared/templates/session-wrap.md`) synthesized from
+three long-running campaign vaults; existing wrap-ups are
+normalized to it.
+
+### Structural
+
+- **Wrap-Up frontmatter normalization** on every `session_wrap`
+  file (synonym types `session-wrap-up`/`session-wrapup`
+  normalize to `session_wrap`):
+  - `session:` becomes a quoted wiki-link to the session index
+    (integer and plain-string forms are converted; the link is
+    derived from the session index the file belongs to, matched
+    by session number/filename). Chapter-level wrap-ups with no
+    per-session index keep their existing value — no link is
+    fabricated
+  - `session_number:` scalar added (from the session index or
+    filename)
+  - `play_date:` normalized to `"YYYY-MM-DD"`; legacy date
+    fields (`in_game_dates:`, `in_game_date_start`/`_end`) map
+    to a single `in_game_date:` holding the session-end date —
+    ranges are preserved in body prose, never deleted
+  - `source_document:` backfilled as a wiki-link to the Play
+    Notes file where one exists
+  - `reconciled:` added — backfilled from date evidence inside
+    `### Reconciliation Context` (a `**Reconciled:**` line, a
+    dated reconcile callout, or a dated decisions heading), else
+    `null`; the QA conformance check asks once about a dateless
+    Reconciliation Context.
+    `canon_status` itself is never changed by migration.
+- **Keeper-facing sections re-nested under `## GM Notes`** —
+  extends the 1.8.52 Reconciliation Context re-nesting to every
+  Keeper-facing sibling `##`. Player-facing H2s are exactly
+  `## Narrative Recap` and `## Memorable Moments`; every other
+  H2 is Keeper-facing by default (real vaults invent headings —
+  `## Open Questions for Reconcile` — that no enumeration
+  anticipates). Hoist the player-facing sections above the
+  block first (real files interleave them between Keeper H2s),
+  then relocate the rest under `## GM Notes` (creating it where
+  absent), demoting each with its children one level. Pure
+  structural move — nothing reworded. Then wrap the block,
+  heading included, in one `<!-- gm-only -->`/`<!-- /gm-only -->`
+  pair where absent, closing at end of file (fences are
+  nesting-aware since 1.8.52, so inner fences are safe).
+
+### Content
+
+- Copy `_Templates/_Template_Session_WrapUp.md` from
+  `shared/templates/session-wrap.md`.
+- **Body-format harmonization is opt-in via campaign-qa's
+  Wrap-Up Conformance check**
+  (`campaign-qa/references/checks/wrapup-conformance.md`):
+  filename renames to `Chapter_CC_Session_NN_Wrap_Up.md` (with
+  link updates), per-PC `#### [[Name]] (Player)` carry-forward
+  blocks, recap-heading normalization, Keeper Checklist
+  semantics. These touch content layout file-by-file, so they
+  run through QA's fix-or-dismiss workflow, not migration.
+
+### Tooling
+
+- `in_game_dates` → `in_game_date` on wrap-up types is registered
+  in `shared/scripts/schema_rules.py` `DEPRECATED_FIELDS`, so
+  `validate_schema.py` and `vault_check.py` flag unmigrated files.
+- Otherwise none. The publish tool already reads both `session:` (link)
+  and `session_number:` (scalar) forms and keeps its type-synonym
+  compatibility set — unmigrated vaults keep working.

@@ -25,6 +25,22 @@ Session-wrapup reads the Play Notes file and writes the Wrap-Up
 file. It also creates/updates entity files and timeline entries.
 
 **Wrap-Up file conventions:**
+- Create the file from `shared/templates/session-wrap.md` — read
+  it first; it is the canonical structure (vault copy:
+  `_Templates/_Template_Session_WrapUp.md`, if present). Fill the
+  full frontmatter: `session` (wiki-link) **and** `session_number`
+  (scalar), `play_date`, `in_game_date` (session-end date, timeline
+  format), `source_document` (Play Notes wiki-link), `reconciled:
+  null`. Preserve the template's `<!-- gm-only -->` fence around
+  `## GM Notes` — everything Keeper-facing lives under that single
+  H2 at `###`, never as a sibling H2 (a sibling H2 publishes to
+  player sites).
+- Sections land in their **template positions** — the workflow
+  visits them out of order (World Fact Findings at step 4c,
+  carry-forward earlier), but the file's section order follows
+  the template. The H1 and the `> [!info] Source` provenance
+  callout (source file/export plus any structural caveat, e.g.
+  "session ended mid-scene") come from the template too.
 - Filename: `Chapter_CC_Session_NN_Wrap_Up.md` (zero-padded
   chapter and session numbers, underscores, no session title).
   Example: `Chapter_03_Session_07_Wrap_Up.md`. The chapter number
@@ -78,9 +94,17 @@ play notes, not finished prose, so generating the recap is the
 job here.* Write 3-5 paragraphs of campaign prose. Dramatic,
 character names, `[[wiki-links]]` for every entity. Tone-calibrate
 per `references/recap-formats.md`. Stay faithful to the notes — no
-embellishment, never invent beyond what they record. Also generate
-**Quick Bullets** (5-8 points). Write both formats into the Wrap-Up
-file. (authoring exception to `shared/content-fidelity.md`)
+embellishment, never invent beyond what they record. Optionally
+also generate **Quick Bullets** (5-8 points, under `## GM Notes`)
+when the GM wants a fast refresher — skip when the Play Notes
+already carry a scene list. Write into the Wrap-Up file.
+(authoring exception to `shared/content-fidelity.md`)
+
+**Memorable Moments (both paths, optional):** a player-facing
+`## Memorable Moments` section after the recap — one bold beat
+line plus one italic context line per moment, block-quoted table
+dialogue with `— [[Speaker]]` attribution. Include when the
+session produced quotable beats; omit the heading otherwise.
 
 **gmassistant.app path:** Adopt the content of the Play Notes'
 `## Summary` section into the Wrap-Up file under the
@@ -100,8 +124,11 @@ path. Session-prep reads it later — never regenerates.
 Per active PC, note what carries forward. Focus on **player
 intent** — stated plans, unfinished actions, shifted NPC
 relationships, exclusive information. Ground in observable
-behaviour, not generated emotional analysis. Write into
-Wrap-Up file.
+behaviour, not generated emotional analysis. Write into the
+Wrap-Up file as one `#### [[PC Name]] (Player)` block per PC
+with the template's labelled bullets (**MAJOR —** for arc-level
+beats, Intent, Knows, Relationships, Advancement, Resources) —
+omit labels with nothing to say.
 
 ### 3b. Character Story Entries
 
@@ -218,7 +245,11 @@ markers (`NEW-NPC:`, `UPDATE:`, etc.) won't be present;
 instead, compare each listed NPC/Location/Item against the
 existing vault to determine new vs. update. If the
 gmassistant description conflicts with existing vault
-content, flag the entity as CONFLICT for GM review. Use the
+content, flag the entity as CONFLICT for GM review. Record every
+export-vs-vault name correction applied anywhere in this
+wrap-up in the Wrap-Up file's `### Name Conflicts (export vs.
+vault canon)` table — Export said | Vault canon | Applied.
+(Standard path: omit the section.) Use the
 `## Scenes` section as the primary source for identifying
 events that meet the decomposition threshold. All standard
 rules below still apply: read templates before creating,
@@ -254,7 +285,8 @@ locations, and NPC relationships.
   for the entity it is *about*; a claim about a *different* entity has had no
   such check, and this is the only checkpoint it gets. Surface each cross-entity
   claim to the GM for a one-time confirm. If confirmed, write it into the other
-  entity's file; if unconfirmed or deferred, record it **in the Wrap-Up file**
+  entity's file and log the resolution in the Wrap-Up's
+  `### Cross-Entity Claims` section; if unconfirmed or deferred, record it in the Wrap-Up file's `### Cross-Entity Claims` section
   with an `<!-- UNVERIFIED: {claim} -->` marker — `reconcile` scans the Wrap-Up
   file (not entity files) for these and blocks promotion until a human clears
   it, so the marker only does its job there. Table shorthand is a hallucination
@@ -385,12 +417,14 @@ this step entirely — no empty section.
 ### 5. What Carries Forward
 
 Write under the Wrap-Up file's `## GM Notes` section, as
-`### What Carries Forward`:
-- Unresolved cliffhangers
-- Player-stated intentions
-- Unrealised consequences
-- NPCs needing follow-up
-- Skipped prep with critical clues players still need
+`### What Carries Forward`, using the template's subsections:
+- `#### Unresolved Threads` — cliffhangers and live threads
+- `#### Player-Stated Intentions`
+- `#### Pending Consequences` — decisions made whose effects
+  haven't landed yet
+- `#### NPCs Needing Follow-Up`
+- `#### Skipped Prep` — unplayed prep with critical clues
+  players still need
 
 ### 6. World State
 
@@ -408,6 +442,13 @@ rules to review, handouts to prepare.
 
 Brief, honest: what worked in prep, what was missing,
 what to adjust. Write under `## GM Notes` as `### Quality Notes`.
+
+### 8b. Handoff to session-prep
+
+Write under `## GM Notes` as `### Handoff to session-prep`:
+2–4 sentences stating exactly where, when, and in what state
+the next session opens. This is the one section written *for*
+the next skill in the chain — session-prep reads it first.
 
 ### 9. Review (Reconcile)
 
@@ -427,13 +468,21 @@ Wrap-up **must** produce all sections so prep reads one file:
 | Section | Required | Written to |
 |---------|----------|------------|
 | Narrative Recap | Yes | Wrap-Up file |
-| GM Notes → Quick Bullets | Standard path only | Wrap-Up file |
+| Memorable Moments | Optional (player-facing) | Wrap-Up file |
+| GM Notes → Quick Bullets | Optional, standard path only | Wrap-Up file |
 | GM Notes → PC Carry-Forward | Yes | Wrap-Up file |
 | GM Notes → What Carries Forward | Yes | Wrap-Up file |
 | GM Notes → World State | Yes | Wrap-Up file |
 | GM Notes → Keeper Checklist | Yes | Wrap-Up file |
-| GM Notes → Quality Notes | Yes | Wrap-Up file |
+| GM Notes → Name Conflicts | Table-assistant exports only | Wrap-Up file |
+| GM Notes → Cross-Entity Claims | If any surfaced | Wrap-Up file |
 | GM Notes → World Fact Findings | If findings exist | Wrap-Up file |
+| GM Notes → Quality Notes | Yes | Wrap-Up file |
+| GM Notes → Handoff to session-prep | Yes | Wrap-Up file |
+
+Sections marked optional/conditional are **omitted entirely**
+when empty — no empty headings. `### Reconciliation Context` is
+appended later by reconcile, never written by wrap-up.
 
 Entity files and timeline are updated separately (Step 4).
 Character story files are updated separately (Step 3b).

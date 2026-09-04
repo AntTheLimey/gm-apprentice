@@ -249,6 +249,12 @@ for the full procedure.
   at `wrap-up` status for multiple prep cycles (review was
   deferred too long), session index `documents:` links pointing
   to files that don't exist
+- Wrap-Up conformance runs as its **own pass**
+  (`references/checks/wrapup-conformance.md`) — Full Audit
+  schedules it after Stale DRAFT Detection, and it can be
+  invoked directly for a single-mode wrap-up audit. Graph
+  Health itself does not duplicate its checks; this bullet is
+  a pointer
 - Character story file validation: active PCs missing a
   companion `{Name}_Story.md` file, story files where
   `asOfSession` is more than 1 session behind the latest
@@ -294,8 +300,9 @@ Runs all modes in order, reading each check file from
 `references/checks/` as it goes: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
 Health → Legacy Canon Field Repair → Stale DRAFT Detection →
-World Consistency (`references/world-audit-criteria.md`, if
-`_World/` exists) → Open Spoilers.
+Wrap-Up Conformance → World Consistency
+(`references/world-audit-criteria.md`, if `_World/` exists) →
+Open Spoilers.
 Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 

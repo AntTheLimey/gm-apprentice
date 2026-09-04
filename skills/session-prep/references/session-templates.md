@@ -248,69 +248,57 @@ Canonical record of what happened and what carries forward.
 Written by session-wrapup from Play Notes. Starts DRAFT,
 promoted to AUTHORITATIVE via reconcile.
 
+The canonical structure lives in
+`shared/templates/session-wrap.md` — read that file, not this
+summary, before writing a Wrap-Up. Skeleton:
+
 ```markdown
 ---
 type: session_wrap
 session: "[[Session NN - Title]]"
+session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
+play_date: null
+in_game_date: null
+source_document: "[[Session NN - Title - Play Notes]]"
 canon_status: DRAFT
 created_by: session-wrapup
+reconciled: null
 tags: []
 ---
 
+# Chapter CC · Session NN — {Title} — Wrap-Up
+
+> [!info] Source
+
 ## Narrative Recap
-
-[3-5 paragraphs of dramatic prose capturing the session's events.
-Written for players to read or for campaign journaling.]
-
+## Memorable Moments          <!-- optional, player-facing -->
 ## GM Notes
-
-### Quick Bullets
-
-- [One-line summary of each major event]
-- [Key decisions made]
-- [Important discoveries]
-- [Significant mechanical outcomes]
-
+### Quick Bullets             <!-- optional -->
 ### PC Carry-Forward
-
-| PC | Arc Update | Open Threads | Next Beat |
-|----|-----------|--------------|-----------|
-| [[Name]] | What changed for this PC | Unresolved threads | What comes next |
-
+#### [[PC Name]] (Player)
 ### What Carries Forward
-
-#### Active Threads
-[Threads still in play, updated with this session's events]
-
-#### New Clues & Hooks
-[Information or hooks introduced this session]
-
+#### Unresolved Threads
+#### Player-Stated Intentions
 #### Pending Consequences
-[Decisions made this session that will have future effects]
-
-#### Next Session Seeds
-[Concrete starting points for the next session's prep]
-
+#### NPCs Needing Follow-Up
+#### Skipped Prep
 ### World State
-
-[Updated in-game date, location, active threats, faction
-postures, ticking clocks. Reflects post-session reality.]
-
 ### Keeper Checklist
-
-- [ ] Entity files created/updated for all new and changed entities
-- [ ] Scene notes updated with played/skipped status
-- [ ] Session index status updated to wrap-up
-- [ ] Carry-forward threads verified against play notes
-- [ ] Canon status set correctly on all new files
-
+### Name Conflicts (export vs. vault canon)   <!-- conditional -->
+### Cross-Entity Claims       <!-- conditional -->
+### World Fact Findings       <!-- conditional -->
 ### Quality Notes
-
-[Self-assessment of the session: pacing, spotlight balance,
-player engagement, what worked, what to improve.]
+### Handoff to session-prep
+### Reconciliation Context    <!-- appended by reconcile -->
 ```
+
+Everything under `## GM Notes` sits inside one
+`<!-- gm-only -->` fence pair. Prep reads `### Handoff to
+session-prep` first, then `### What Carries Forward` and
+`### World State`; the recap is the player-facing record and
+is never regenerated.
 
 ## Scene Note Template
 

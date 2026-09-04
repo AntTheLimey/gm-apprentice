@@ -230,6 +230,8 @@ tools used to read, write, and search differ.
      `shared/templates/faction.md` if not already present.
    - Add `_Templates/_Template_Plan.md` from
      `shared/templates/plan.md` if not already present.
+   - Add `_Templates/_Template_Session_WrapUp.md` from
+     `shared/templates/session-wrap.md` if not already present.
    - For each chapter directory, create `Planning/` subfolder
      if it doesn't already exist. This is where narrative
      planning entities (scene designs, arc structures,

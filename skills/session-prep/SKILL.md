@@ -72,7 +72,10 @@ separate reads (see `shared/vault-access.md`). If Python is
 unavailable, fall back to the manual read pattern — it must
 cover the same set:
 
-1. Last session's Wrap-Up file — primary context
+1. Last session's Wrap-Up file — primary context. Read its
+   `### Handoff to session-prep` (under `## GM Notes`) first —
+   it states where, when, and in what state the next session
+   opens — then What Carries Forward and World State
 2. PC roster — always, including each active PC's `## Current Status`
    block (Location, Condition, Carrying, Open threads, Knows (exclusive))
 3. The upcoming session's Plan file, if one exists
