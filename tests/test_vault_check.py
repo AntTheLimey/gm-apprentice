@@ -9,7 +9,9 @@ the dropped plan-wide agency scan).
 Run: python tests/test_vault_check.py
 """
 
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -83,19 +85,32 @@ class CheckNamesPhoneticTests(unittest.TestCase):
     """name-similarity.md Step 4 (sound-alike names) used to exist only as a
     manual fallback the preferred script path silently skipped."""
 
-    def _vault(self, names, etype="npc"):
-        import tempfile
+    def _vault(self, files, etype="npc"):
+        """files: name -> aliases list (or a plain list of names)."""
         d = Path(tempfile.mkdtemp(prefix="vc-phonetic-"))
-        for n in names:
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        items = files.items() if isinstance(files, dict) else ((n, []) for n in files)
+        for n, aliases in items:
             t = etype if isinstance(etype, str) else etype[n]
-            (d / f"{n}.md").write_text(f"---\ntype: {t}\nname: {n}\n---\n")
+            alias_yaml = "".join(f"  - {a}\n" for a in aliases)
+            (d / f"{n}.md").write_text(
+                f"---\ntype: {t}\nname: {n}\naliases:\n{alias_yaml}---\n")
         return d
+
+    @staticmethod
+    def _alike(a, b):
+        return vc.sounds_alike(vc.phonetic_words(a), vc.phonetic_words(b))
 
     def test_collapses_confusable_consonants(self):
         same = [("Adler", "Adlar"), ("Herzfeld", "Herzveld"),
-                ("Simon", "Zimon"), ("Marina", "Miriam")]
+                ("Simon", "Zimon"), ("Marina", "Miriam"),
+                ("Barton", "Parton"), ("Martin", "Marden"), ("Gale", "Kale")]
         for a, b in same:
-            self.assertTrue(vc.sounds_alike(a, b), (a, b))
+            self.assertTrue(self._alike(a, b), (a, b))
+
+    def test_folds_diacritics_instead_of_dropping_the_letter(self):
+        self.assertTrue(self._alike("Émile", "Emile"))
+        self.assertEqual(vc.phonetic_words("Émile"), vc.phonetic_words("Emile"))
 
     def test_keeps_opening_sound_length_word_count_and_final_consonants(self):
         different = [("Adler", "Adley"), ("Emile", "Nell"),
@@ -103,22 +118,31 @@ class CheckNamesPhoneticTests(unittest.TestCase):
                      ("The Acharya", "The Watcher"), ("Vienna", "Vienna 1814"),
                      ("Jon", "Jumman")]
         for a, b in different:
-            self.assertFalse(vc.sounds_alike(a, b), (a, b))
+            self.assertFalse(self._alike(a, b), (a, b))
 
     def test_flags_sound_alike_pair_the_fuzzy_check_misses(self):
         rows = vc.check_names(self._vault(["Herzfeld", "Herzveld"]), 0.95)
         self.assertEqual(len(rows_for(rows, "PHONETIC")), 1)
         self.assertTrue(rows[0].startswith("INFO\t"))
 
+    def test_fuzzy_match_is_not_double_reported_as_phonetic(self):
+        rows = vc.check_names(self._vault(["Herzfeld", "Herzveld"]), 0.85)
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(rows_for(rows, "PHONETIC"))
+
+    def test_document_pair_already_fuzzy_under_another_alias_gets_no_phonetic_row(self):
+        # The phonetic alias pair sorts before the fuzzy name pair and after
+        # it, respectively — the suppression must not depend on loop order.
+        for files in ({"Katherine": ["Marina"], "Katherina": ["Miriam"]},
+                      {"Katherine": ["Zeta"], "Katherina": ["Seta"]}):
+            rows = vc.check_names(self._vault(files), 0.85)
+            self.assertEqual(len(rows_for(rows, "'Katherina' ~ 'Katherine'")), 1)
+            self.assertFalse(rows_for(rows, "PHONETIC"), rows)
+
     def test_only_entities_of_the_same_type_are_compared(self):
         rows = vc.check_names(
             self._vault(["Herzfeld", "Herzveld"],
                         {"Herzfeld": "npc", "Herzveld": "location"}), 0.95)
-        self.assertFalse(rows_for(rows, "PHONETIC"))
-
-    def test_fuzzy_match_is_not_double_reported_as_phonetic(self):
-        rows = vc.check_names(self._vault(["Herzfeld", "Herzveld"]), 0.85)
-        self.assertEqual(len(rows), 1)
         self.assertFalse(rows_for(rows, "PHONETIC"))
 
     def test_different_sounding_names_pass(self):

@@ -48,9 +48,9 @@ Storing them on both endpoints is a duplicate edge, not
 "consistency".
 
 **Asymmetric predicates** are stored on the endpoint that is the
-*subject* of the verb: the employer `employs`, the child is
-`part_of` the parent, the member is `member_of` the faction, the
-liege has a `vassal_of` recorded on the vassal's file.
+*subject* of the verb: the employer `employs`, the contained place
+is `part_of` its container, the member is `member_of` the faction,
+the liege has a `vassal_of` recorded on the vassal's file.
 
 ## Predicate Table
 
@@ -337,14 +337,14 @@ Character B ─ Character C
 ### Haunting and Possession
 
 - Ghost → Place: `haunts`
-- Entity → Victim: stored on the victim as `possessed_by`
-- Cult → Deity: `worships`; Deity → Cultist: `corrupted_by` on
-  the cultist's file
+- Victim → Entity: `possessed_by` (stored on the victim's file)
+- Cult → Deity: `worships`; Cultist → Deity: `corrupted_by` (on
+  the cultist's file)
 
 ## Best Practices
 
-1. **Most specific predicate that fits.** `associated_with` and
-   `related_to` are not in the vocabulary for a reason.
+1. **Most specific predicate that fits.** Vague types like
+   `associated_with` / `related_to` are not in the vocabulary, on purpose.
 2. **One edge per fact.** If two entities share a fact, it lives
    on one file. Do not mirror it "for completeness".
 3. **Description carries the nuance.** Predicate + tone +
@@ -356,6 +356,10 @@ Character B ─ Character C
 5. **Graph edges are entity-to-entity.** "Appears in Session 3"
    is a log reference, not a relationship — leave it out of
    `relationships:`.
+6. **Sequencing is not a relationship.** "This clue leads to that
+   scene" goes in the `leads_to` frontmatter field on Clue and
+   Plan entities, never as an edge. There is no `precedes` or `alternative_to` predicate
+   (see `shared/entity-schema.md`).
 
 ### Visualization Hints
 

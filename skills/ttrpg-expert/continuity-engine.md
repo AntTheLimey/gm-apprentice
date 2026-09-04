@@ -42,8 +42,11 @@ systematic tracking is cheaper than repair through retcon.
 
 **Relationship Consistency:**
 1. List each NPC's stated relationships
-2. Cross-ref for mutual consistency (A enemy of B → B acknowledges?)
-3. Flag one-way relationships that should be bidirectional
+2. Flag the same fact stored on both endpoints (`enemy_of` is
+   symmetric and stored once; B "acknowledging" it is a duplicate
+   edge, not consistency — see `relationship-patterns.md`)
+3. Flag an edge whose stored direction contradicts the prose
+   (the file says A employs B; the edge says the reverse)
 4. Flag relationships contradicting faction allegiance
 
 **Clue Path Verification:**

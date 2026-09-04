@@ -15,18 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`init`, `build`, `inbox`, `flush`, `doctor`, `setup-status-bar`,
   `setup-inbox`) now prints its own usage — arguments, flags, what it
   writes — instead of the top-level banner, and an unknown argument on
-  a mutating command prints that command's usage. The CLI, not the
-  skill prose, is now the reference for what each command accepts.
-  Smoke test in `tools/publish/test/cli/help-cli-smoke.test.js`.
+  a mutating command prints that command's usage, so the CLI now
+  documents what each command accepts.
+  Smoke test in `tools/publish/test/cli/help-cli-smoke.test.js`
+  (publish tool 1.11.28).
 - **Sound-alike names in `vault_check.py names`.** The
   name-similarity check's Step 4 (phonetic collisions) existed only as
   a manual fallback the preferred script path silently skipped. The
   script now emits INFO `PHONETIC` cues for same-type entities whose
   names share a consonant skeleton, opening sound, and similar length
-  once vowels are dropped and the commonly misheard pairs (b/d, m/n,
-  s/z, f/v, c/k) are collapsed — `Herzfeld`/`Herzveld`,
-  `Marina`/`Miriam` — without double-reporting pairs the fuzzy match
-  already caught. Tuned against a 300-entity live vault: two cues.
+  once diacritics are folded, vowels dropped, and the commonly misheard
+  consonant pairs (p/b, t/d, c/g/k, m/n, s/z, f/v) collapsed —
+  `Herzfeld`/`Herzveld`, `Marina`/`Miriam`, `Barton`/`Parton` — and a
+  document pair the exact or fuzzy check already reported gets no
+  second row. Tuned against a 300-entity live vault.
 
 ### Changed
 
@@ -65,7 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Attribution on four `systems/` files.** The three FitD files
   carrying a one-line credit now carry the full CC-BY 3.0 attribution
-  the other eleven use; `gurps-4e/session-procedures.md` had no SJG
+  the other eleven use, and all fourteen now carry the work and
+  license URIs CC-BY 3.0 asks for (the zips ship them without
+  `ATTRIBUTION.md`); `gurps-4e/session-procedures.md` had no SJG
   Online Policy notice at all and `gurps-4e/character-sheet.md`
   carried a non-standard one — both now open with the standard
   blockquote. `ATTRIBUTION.md` records the per-file requirement.
@@ -79,6 +83,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `shared/session-document-chain.md`, and the discovery-state section
   of `gm-session-patterns.md`, which already covered the parts worth
   keeping.
+
+---
 
 ## [1.9.5] — 2026-09-03
 

@@ -15,8 +15,9 @@ It covers exact duplicates, alias collisions, fuzzy spelling
 matches, and sound-alike pairs (INFO rows tagged `PHONETIC`:
 two entities of the same type whose names share a consonant
 skeleton, opening sound, and similar length once vowels are
-dropped and the commonly misheard pairs b/d, m/n, s/z, f/v, c/k
-are collapsed). Structural documents and document-chain
+dropped and the commonly misheard pairs p/b, t/d, c/g/k, m/n,
+s/z, f/v are collapsed; files with no `type:` are skipped).
+Structural documents and document-chain
 families are already filtered out. Your judgment still decides
 which pairs are intentional (married couples, senior/junior)
 versus confusing, and which sound-alikes matter — the script
@@ -58,8 +59,9 @@ a duplicate).
 
 At the table, players hear names spoken aloud. The script's
 `PHONETIC` rows cover the consonant-skeleton and misheard-
-consonant cases within an entity type; when working manually,
-also flag:
+consonant cases within an entity type. When working manually —
+or for the cross-type and untyped pairs the script skips —
+flag:
 - Same consonant skeleton (remove vowels and compare)
 - Rhyming names
 - Names sharing first syllable and similar length

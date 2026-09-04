@@ -29,6 +29,7 @@ import argparse
 import re
 import sys
 from difflib import SequenceMatcher
+import unicodedata
 from pathlib import Path
 
 from graph_check import link_target
@@ -177,19 +178,21 @@ def base_name(name: str) -> str:
 
 # Sound-alike detection for names players will *hear*. Two names collide
 # phonetically when they have the same number of words and each word
-# pair, after folding digraphs (th/ch/sh/ph/gh/wh/ck/qu), dropping vowels,
-# and collapsing the consonant pairs a listener most often confuses
-# (b/d, m/n, s/z, f/v, c/k), leaves the same consonant skeleton, opens
-# with the same sound, and is of similar length. "Adler"/"Adlar",
-# "Herzfeld"/"Herzveld", "Marina"/"Miriam" collide; "Adler"/"Adley"
-# (r ≠ l), "Emile"/"Nell" (opening sound) and "Henri"/"Honoria" (length)
-# do not. Only entities of the same type are compared — the prose
-# check's own advice, and what stops "The Mole" (NPC) ~ "The Nile"
-# (location) — and the result is an INFO cue for the GM, not a finding.
+# pair, after folding diacritics and digraphs (th/ch/sh/ph/gh/wh/ck/qu),
+# dropping vowels, and collapsing the consonant pairs a listener most
+# often confuses — the voiced/voiceless stops p/b, t/d, c/g/k plus m/n,
+# s/z, f/v — leaves the same consonant skeleton, opens with the same
+# sound, and is of similar length. "Adler"/"Adlar", "Herzfeld"/
+# "Herzveld", "Marina"/"Miriam", "Barton"/"Parton" collide; "Adler"/
+# "Adley" (r ≠ l), "Emile"/"Nell" (opening sound) and "Henri"/"Honoria"
+# (length) do not. Only entities of the same type are compared (files
+# with no `type:` are skipped) — the prose check's own advice, and what
+# stops "The Mole" (NPC) ~ "The Nile" (location) — and the result is an
+# INFO cue for the GM, not a finding.
 DIGRAPHS = (("th", "t"), ("ch", "c"), ("sh", "s"), ("ph", "f"),
             ("gh", "g"), ("wh", "w"), ("ck", "c"), ("qu", "c"))
 CONFUSABLE = str.maketrans({
-    "d": "b", "n": "m", "z": "s", "v": "f", "k": "c",
+    "p": "b", "t": "d", "g": "c", "k": "c", "n": "m", "z": "s", "v": "f",
 })
 MIN_SKELETON = 2  # total consonants across all words
 MAX_LENGTH_DIFF = 1  # per word, in letters
@@ -201,7 +204,9 @@ def phonetic_words(name: str) -> list[tuple[str, int]]:
     is too short to compare meaningfully."""
     words = []
     consonants = 0
-    for word in normalize(name).split():
+    folded = "".join(c for c in unicodedata.normalize("NFKD", normalize(name))
+                     if not unicodedata.combining(c))
+    for word in folded.split():
         word = re.sub(r"[^a-z0-9]", "", word)
         if not word:
             continue
@@ -221,16 +226,13 @@ def phonetic_words(name: str) -> list[tuple[str, int]]:
     return words if consonants >= MIN_SKELETON else []
 
 
-def phonetic_skeleton(name: str) -> str:
-    return " ".join(w for w, _ in phonetic_words(name))
-
-
-def sounds_alike(name_a: str, name_b: str) -> bool:
-    wa, wb = phonetic_words(name_a), phonetic_words(name_b)
-    if not wa or len(wa) != len(wb):
+def sounds_alike(words_a: list[tuple[str, int]],
+                 words_b: list[tuple[str, int]]) -> bool:
+    """Compare two `phonetic_words` results."""
+    if not words_a or len(words_a) != len(words_b):
         return False
     return all(sa == sb and abs(la - lb) <= MAX_LENGTH_DIFF
-               for (sa, la), (sb, lb) in zip(wa, wb))
+               for (sa, la), (sb, lb) in zip(words_a, words_b))
 
 
 def check_names(vault: Path, threshold: float) -> list[str]:
@@ -244,15 +246,16 @@ def check_names(vault: Path, threshold: float) -> list[str]:
         if STRUCTURAL_NAME_RE.search(stem) and STRUCTURAL_DOC_RE.search(stem):
             continue
         etype = fm.get("type")
-        entries.append((stem, rel, "name", etype))
+        entries.append((stem, rel, "name", etype, phonetic_words(stem)))
         aliases = fm.get("aliases")
         if isinstance(aliases, list):
             for a in aliases:
-                entries.append((a, rel, "alias", etype))
+                entries.append((a, rel, "alias", etype, phonetic_words(a)))
     rows = []
     seen_pairs = set()
-    for i, (name_a, rel_a, kind_a, type_a) in enumerate(entries):
-        for name_b, rel_b, kind_b, type_b in entries[i + 1:]:
+    phonetic = {}  # pair -> row; emitted only if no exact/fuzzy row exists
+    for i, (name_a, rel_a, kind_a, type_a, pw_a) in enumerate(entries):
+        for name_b, rel_b, kind_b, type_b, pw_b in entries[i + 1:]:
             if rel_a == rel_b:
                 continue
             pair = tuple(sorted((rel_a, rel_b)))
@@ -294,15 +297,16 @@ def check_names(vault: Path, threshold: float) -> list[str]:
             # Not close in spelling — but do they *sound* the same?
             if numbered_family or type_a is None or type_a != type_b:
                 continue
-            if sounds_alike(name_a, name_b):
-                key = (pair, "phonetic")
-                if key in seen_pairs:
-                    continue
-                seen_pairs.add(key)
-                rows.append(f"INFO\t{rel_a} <> {rel_b}\t"
-                            f"PHONETIC '{name_a}' ~ '{name_b}' "
-                            f"— sound-alike {type_a}s when read aloud; "
-                            f"verify they never share a scene")
+            if pair not in phonetic and sounds_alike(pw_a, pw_b):
+                phonetic[pair] = (f"INFO\t{rel_a} <> {rel_b}\t"
+                                  f"PHONETIC '{name_a}' ~ '{name_b}' "
+                                  f"— sound-alike {type_a}s when read "
+                                  f"aloud; verify they never share a scene")
+    # A document pair the exact or fuzzy check already reported (under any
+    # name/alias combination) gets no second, weaker row.
+    for pair, row in phonetic.items():
+        if (pair, "exact") not in seen_pairs and (pair, "fuzzy") not in seen_pairs:
+            rows.append(row)
     return sorted(rows)
 
 

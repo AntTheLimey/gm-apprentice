@@ -59,7 +59,8 @@ Replaced by newer information.
 the loser of a conflict resolution.
 
 **Behavior:** kept, not deleted; carries `superseded_by` pointing
-at the replacement; excluded from current views and the site.
+at the replacement. The site still renders it, with a Superseded
+badge, and redirects wiki-links to the replacement.
 
 ### STUB
 
@@ -111,11 +112,14 @@ the places a GM already reads:
 
 | Detector | Where the finding lands |
 |----------|-------------------------|
-| session-wrapup, while processing play notes | The wrap-up's `### Name Conflicts` and `### Cross-Entity Claims` sections; a claim about another entity gets an `<!-- UNVERIFIED -->` marker on the file it was written to |
+| session-wrapup, while processing play notes | The wrap-up's `### Cross-Entity Claims` section (and `### Name Conflicts`, for table-assistant exports only); a claim about another entity that is HELD rather than applied gets an `<!-- UNVERIFIED -->` marker on the file it would have changed |
 | `vault_check.py names` | Duplicate / near-duplicate / sound-alike name pairs |
 | campaign-qa canon audit (`checks/canon-audit.md`) | Contradictions between files, incrementally since the last audited session |
 | campaign-qa timeline validation | Dated events that cannot both be true |
-| any skill editing an AUTHORITATIVE file | Stops and asks before changing the fact |
+
+Nothing mechanical guards an AUTHORITATIVE file against a silent
+edit — the rule above is a rule for the skill doing the editing,
+and the GM is the backstop.
 
 ## Conflict Resolution Workflow
 

@@ -86,7 +86,7 @@ Reach for ttrpg-expert when you need to:
 | Active play techniques | `active-play-management.md` | Fail forward patterns, improvisation guidance |
 | Scene patterns | `scene-encounter-patterns.md` | Open interaction windows, encounter design frameworks |
 | World evolution | `world-evolution.md` | Post-session world update checklist |
-| Canon management | `canon-management.md` | DRAFT to AUTHORITATIVE to SUPERSEDED lifecycle |
+| Canon management | `canon-management.md` | DRAFT, AUTHORITATIVE, SUPERSEDED, and STUB states; where conflicts surface and how the GM resolves them |
 | Relationship patterns | `relationship-patterns.md` | The sanctioned predicate table with inverses, storage direction, and modeling patterns |
 | Random generation | `random-generation.md` | Inspiration tables, random content |
 | GM session patterns | `gm-session-patterns.md` | Session pacing, table management techniques |

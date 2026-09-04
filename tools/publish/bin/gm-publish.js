@@ -41,18 +41,18 @@ gm-apprentice-publish init [target-dir]
 
 Scaffolds a new site in target-dir (default: the current directory):
 package.json pinned to this tool, vault.config.json, README.md,
-css/overrides.css, .gitignore, and wrangler.toml. Refuses to overwrite —
-if any of those files already exists, nothing is written. Follow with
-"build" to generate the site.
+css/overrides.css, .gitignore, wrangler.toml, and .nojekyll.
+Refuses to overwrite — if any of those files already exists, nothing is
+written. Follow with "build" to generate the site.
 
   --help, -h         Show this help
 `,
   build: `
 gm-apprentice-publish build [--config <path>]
 
-Generates the static site from the vault named in vault.config.json. Re-syncs
-the plugin-owned Cloudflare Functions first so a site scaffolded by an older
-plugin picks up new API routes.
+Generates the static site from the vault named in vault.config.json. On a
+site with a backend enabled, re-syncs the plugin-owned Cloudflare Functions
+first so a site scaffolded by an older plugin picks up new API routes.
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
@@ -99,9 +99,9 @@ fix for each failing row.
   'setup-status-bar': `
 gm-apprentice-publish setup-status-bar [--config <path>]
 
-Enables the live status bar: creates the KV namespace, records it in
-vault.config.json, and rebuilds and deploys the site. Requires wrangler auth
-("doctor" checks it).
+Enables the live status bar: creates the KV namespace, records its id in
+wrangler.toml, flips the backend flag in vault.config.json, then rebuilds
+and deploys the site. Requires wrangler auth ("doctor" checks it).
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
@@ -109,9 +109,9 @@ vault.config.json, and rebuilds and deploys the site. Requires wrangler auth
   'setup-inbox': `
 gm-apprentice-publish setup-inbox [--config <path>]
 
-Enables the change-request inbox: creates the KV namespace, records it in
-vault.config.json, and rebuilds and deploys the site. Requires wrangler auth
-("doctor" checks it).
+Enables the change-request inbox: creates the KV namespace, records its id
+in wrangler.toml, flips the backend flag in vault.config.json, then rebuilds
+and deploys the site. Requires wrangler auth ("doctor" checks it).
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
