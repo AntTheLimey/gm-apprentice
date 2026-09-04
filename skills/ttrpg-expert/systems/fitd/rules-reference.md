@@ -178,4 +178,4 @@ These mechanics are covered in detail elsewhere:
 - **GM techniques** (consequences, bargains, position/effect practice): `systems/fitd/gm-techniques.md`
 
 ---
-*Based on Blades in the Dark by John Harper, CC BY 3.0.*
+*This work is based on Blades in the Dark, product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license.*

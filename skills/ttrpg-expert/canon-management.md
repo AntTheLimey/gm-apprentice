@@ -1,76 +1,70 @@
 # Canon Management
 
-Guidelines for maintaining narrative consistency.
+Guidelines for maintaining narrative consistency across a vault.
+The states themselves are defined in `shared/canon-status.md`;
+this file is the *why* and the conflict workflow.
 
 ## Core Principles
 
 ### 1. Canon Integrity is Primary
 
-The most important goal is maintaining consistent, trustworthy campaign data.
-Conflicting information must be detected and surfaced, never silently resolved.
+The most important goal is consistent, trustworthy campaign data.
+Conflicting information must be detected and surfaced, never
+silently resolved.
 
 ### 2. Human Resolution Required
 
-Only the Game Master can decide which version of events is canon.
-AI and automated systems detect conflicts; humans resolve them.
+Only the Game Master decides which version of events is canon.
+Skills and scripts detect conflicts; the GM resolves them, one at
+a time, in conversation (`shared/reconcile.md`).
 
 ### 3. Source Tracking
 
-Every piece of information should track where it came from.
-This enables conflict detection and audit trails.
+Every fact should be traceable to where it came from — a session
+wrap-up, a handout, a prep document, a GM ruling. `source_document`
+in frontmatter and a source note in an edge's `description` are
+what make a conflict *decidable* later.
 
 ## Canon Status Levels
+
+`canon_status` is a frontmatter field on every entity. Four values:
 
 ### DRAFT
 
 Initial entry, not yet confirmed as canon.
 
-**When to use:**
+**When to use:** first import of content; anything a skill
+generated; unverified information from play notes; work in
+progress.
 
-- First import of content
-- Player speculation
-- Unverified information
-- Work in progress
-
-**Behavior:**
-
-- Can be freely edited
-- May be superseded without conflict
-- Displayed with "unconfirmed" indicator
+**Behavior:** freely editable; may be superseded without a
+conflict; the published site treats it as unconfirmed.
 
 ### AUTHORITATIVE
 
 Confirmed as official canon.
 
-**When to use:**
+**When to use:** GM-verified information; published source
+material the GM has adopted; established in play and reconciled;
+the winner of a conflict resolution.
 
-- GM-verified information
-- Published source material
-- Established in play
-- Conflict resolution winner
-
-**Behavior:**
-
-- Editing creates version history
-- Cannot be silently overwritten
-- Conflicts require resolution
+**Behavior:** a change to an AUTHORITATIVE fact is a conflict
+until the GM confirms it — never overwrite one silently.
 
 ### SUPERSEDED
 
 Replaced by newer information.
 
-**When to use:**
+**When to use:** a retcon; an outdated version after a correction;
+the loser of a conflict resolution.
 
-- Retconned information
-- Outdated version after update
-- Conflict resolution loser
-- Corrected errors
+**Behavior:** kept, not deleted; carries `superseded_by` pointing
+at the replacement; excluded from current views and the site.
 
-**Behavior:**
+### STUB
 
-- Preserved in history
-- Not shown in current views
-- Available for reference
+Mentioned but not yet described — a placeholder file so links
+resolve. Promote it by writing it, then treating it as DRAFT.
 
 ## Conflict Detection
 
@@ -82,16 +76,16 @@ Replaced by newer information.
    Entity "Dr. Smith"
    Source A: "Age: 45"
    Source B: "Age: 52"
-   → Conflict detected
+   → Conflict
    ```
 
 2. **Contradicting relationships**
 
    ```text
    Entity "John"
-   Source A: "Married to Mary"
+   Source A: spouse_of "[[Mary]]"
    Source B: "Single"
-   → Conflict detected
+   → Conflict
    ```
 
 3. **Timeline inconsistencies**
@@ -99,7 +93,7 @@ Replaced by newer information.
    ```text
    Event A: "Smith died in 1925"
    Event B: "Smith attended meeting in 1926"
-   → Conflict detected
+   → Conflict
    ```
 
 4. **Entity duplication**
@@ -107,153 +101,74 @@ Replaced by newer information.
    ```text
    Entity "Dr. John Smith"
    Entity "John Smith, M.D."
-   → Potential duplicate detected
+   → Potential duplicate
    ```
 
-### Conflict Record Structure
+### Where Conflicts Are Surfaced
 
-```json
-{
-    "id": "conflict-uuid",
-    "campaignId": "campaign-uuid",
-    "entityId": "entity-uuid",
-    "fieldName": "age",
-    "conflictingValues": [
-        {"value": "45", "source": "Import from Evernote", "date": "2025-01-15"},
-        {"value": "52", "source": "Session 5 notes", "date": "2025-01-20"}
-    ],
-    "status": "DETECTED",
-    "resolution": null,
-    "resolvedAt": null
-}
-```
+There is no conflict database. Conflicts live in the vault, in
+the places a GM already reads:
+
+| Detector | Where the finding lands |
+|----------|-------------------------|
+| session-wrapup, while processing play notes | The wrap-up's `### Name Conflicts` and `### Cross-Entity Claims` sections; a claim about another entity gets an `<!-- UNVERIFIED -->` marker on the file it was written to |
+| `vault_check.py names` | Duplicate / near-duplicate / sound-alike name pairs |
+| campaign-qa canon audit (`checks/canon-audit.md`) | Contradictions between files, incrementally since the last audited session |
+| campaign-qa timeline validation | Dated events that cannot both be true |
+| any skill editing an AUTHORITATIVE file | Stops and asks before changing the fact |
 
 ## Conflict Resolution Workflow
 
 ### 1. Detection
 
-System identifies conflicting information and creates conflict record.
+A skill or script finds two incompatible claims and records both,
+with their sources, in one of the places above. It does **not**
+pick a winner.
 
 ### 2. Review
 
-GM reviews conflict in UI:
-
-- See both versions
-- View sources
-- Consider context
+The GM sees both versions, their sources, and the context — one
+conflict at a time, as a conversation, never a dump
+(`shared/reconcile.md`).
 
 ### 3. Decision
 
-GM chooses authoritative version:
-
-- Select winning value
-- Add resolution notes
-- Confirm decision
+The GM chooses the authoritative version and says why. "Both are
+true, here's how" is a valid answer and usually produces a new
+fact.
 
 ### 4. Update
 
-System applies resolution:
-
-- Winner marked AUTHORITATIVE
-- Loser marked SUPERSEDED
-- Conflict marked RESOLVED
-- History preserved
-
-## Implementation Guidelines
-
-### When Creating Entities
-
-```go
-// Always check for similar names
-existing, _ := FindSimilarEntities(campaignID, name)
-if len(existing) > 0 {
-    return PotentialDuplicate(existing)
-}
-
-// Set initial canon status
-entity.CanonStatus = "DRAFT"
-entity.SourceDocument = importSource
-```
-
-### When Updating Entities
-
-```go
-// Check if changing AUTHORITATIVE data
-if entity.CanonStatus == "AUTHORITATIVE" {
-    // Create conflict for review
-    if valueChanged(existing, updated) {
-        CreateConflict(entity, existing, updated)
-        return PendingConflict
-    }
-}
-```
-
-### When Importing
-
-```go
-// Always track source
-entity.SourceDocument = importFile
-
-// Default to DRAFT
-entity.CanonStatus = "DRAFT"
-
-// Check for existing
-existing := FindByName(entity.Name)
-if existing != nil {
-    // Don't auto-resolve - create conflict
-    return CreateConflict(existing, entity)
-}
-```
+- The winning file (or field) is marked `AUTHORITATIVE`.
+- The losing one is marked `SUPERSEDED` with `superseded_by`
+  pointing at the winner — never deleted.
+- The `<!-- UNVERIFIED -->` marker, if any, is removed.
+- The decision and its rationale go in the wrap-up's
+  Reconciliation Context so the next session-prep does not
+  re-open it.
 
 ## Best Practices
 
 ### For Game Masters
 
-1. **Review conflicts promptly**
-   Don't let conflicts accumulate
+1. **Review conflicts promptly.** They compound: a plan written
+   against an unresolved conflict mints a third version.
+2. **Document resolutions.** One line of rationale beside the
+   decision saves re-litigating it three sessions later.
+3. **Promote deliberately.** DRAFT → AUTHORITATIVE is a review,
+   not a timeout.
+4. **Use GM Notes.** Reasoning for a ruling belongs under
+   `## GM Notes`, fenced, where players will not see it.
 
-2. **Document resolutions**
-   Explain why one version is canon
+### When Writing Into the Vault
 
-3. **Promote to AUTHORITATIVE**
-   Confirm important information
-
-4. **Use GM notes**
-   Track reasoning for decisions
-
-### For Development
-
-1. **Never auto-resolve**
-   Surface conflicts, don't hide them
-
-2. **Check before insert**
-   Always look for duplicates
-
-3. **Preserve history**
-   Use SUPERSEDED, don't delete
-
-4. **Track sources**
-   Every update has a source
-
-## Conflict Prevention
-
-### Import Best Practices
-
-- Use consistent naming
-- Provide source documentation
-- Review before finalizing
-- Start as DRAFT
-
-### Session Note Best Practices
-
-- Reference existing entities
-- Update, don't duplicate
-- Note source session
-- Flag uncertainties
-
-### Entity Creation Best Practices
-
-- Search before creating
-- Use canonical names
-- Include distinguishing details
-- Link to sources
+- **Search before creating.** Run `vault_search.py` (or
+  `vault_check.py names`) for the name and its aliases; a near
+  miss is a duplicate until the GM says otherwise.
+- **Start as DRAFT.** Every new file and every skill-generated
+  fact.
+- **Reference, don't copy.** Point at the entity's live file
+  rather than transcribing a snapshot that will rot.
+- **Note the source session** on any fact taken from play.
+- **Flag uncertainties** with `<!-- UNVERIFIED -->` rather than
+  choosing quietly.

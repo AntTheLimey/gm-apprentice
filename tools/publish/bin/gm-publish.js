@@ -32,8 +32,47 @@ Every subcommand accepts --help / -h.
 `);
 }
 
-function printFlushHelp() {
-  console.log(`
+// Per-subcommand usage. `gm-apprentice-publish <cmd> --help` prints the entry for
+// <cmd> — never the top-level banner — so the CLI, not the skill prose, is the
+// reference for what each command accepts.
+const SUBCOMMAND_HELP = {
+  init: `
+gm-apprentice-publish init [target-dir]
+
+Scaffolds a new site in target-dir (default: the current directory):
+package.json pinned to this tool, vault.config.json, README.md,
+css/overrides.css, .gitignore, and wrangler.toml. Refuses to overwrite —
+if any of those files already exists, nothing is written. Follow with
+"build" to generate the site.
+
+  --help, -h         Show this help
+`,
+  build: `
+gm-apprentice-publish build [--config <path>]
+
+Generates the static site from the vault named in vault.config.json. Re-syncs
+the plugin-owned Cloudflare Functions first so a site scaffolded by an older
+plugin picks up new API routes.
+
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
+`,
+  inbox: `
+gm-apprentice-publish inbox <open|code|pull|handled|flag|reply> [args]
+
+Drives the at-table change-request queue (Cloudflare KV, via wrangler). Used
+by the publish-site skill's checking loop; run it by hand to inspect the queue.
+
+  inbox open <CODE>                          Publish CODE as the session code players enter
+  inbox code                                 Print the current session code
+  inbox pull                                 Print pending requests as JSON
+  inbox handled <id> [<id>...]               Mark requests handled
+  inbox flag <id> [<id>...]                  Mark requests flagged for the GM
+  inbox reply <id> <applied|rejected|advice> "<text>"
+                                             Store the reply the player sees
+  --help, -h                                 Show this help
+`,
+  flush: `
 gm-apprentice-publish flush [--config <path>] [--dry-run]
 
 Writes each player's current KV live-state (HP, FP, conditions…) back into the
@@ -43,7 +82,44 @@ source only — no rebuild, no deploy.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --dry-run, -n      Print the same per-PC "✓ Name — HP 10→13" lines, write nothing
   --help, -h         Show this help
-`);
+`,
+  doctor: `
+gm-apprentice-publish doctor [--host <host>] [--json] [--set-cloudflare-creds]
+
+Preflight for publishing: checks Node, git, and the host CLI (wrangler for
+Cloudflare Pages, gh for GitHub Pages) with its authentication, and prints a
+fix for each failing row.
+
+  --host <host>              cloudflare-pages (default) or github-pages
+  --json                     Machine-readable report instead of the checklist
+  --set-cloudflare-creds     Read a Cloudflare API token from stdin, verify it,
+                             and save it (plus the account id) to your shell env
+  --help, -h                 Show this help
+`,
+  'setup-status-bar': `
+gm-apprentice-publish setup-status-bar [--config <path>]
+
+Enables the live status bar: creates the KV namespace, records it in
+vault.config.json, and rebuilds and deploys the site. Requires wrangler auth
+("doctor" checks it).
+
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
+`,
+  'setup-inbox': `
+gm-apprentice-publish setup-inbox [--config <path>]
+
+Enables the change-request inbox: creates the KV namespace, records it in
+vault.config.json, and rebuilds and deploys the site. Requires wrangler auth
+("doctor" checks it).
+
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
+`,
+};
+
+function printSubcommandHelp(cmd) {
+  console.log(SUBCOMMAND_HELP[cmd]);
 }
 
 // Parse `--config <path>` plus an allowlist of flags, rejecting anything else.
@@ -150,7 +226,7 @@ if (command === '--version' || command === '-v') {
 // `--help` on any subcommand prints usage and exits 0 with no side effects (#178).
 const wantsHelp = args.slice(1).some((a) => a === '--help' || a === '-h');
 if (wantsHelp) {
-  if (command === 'flush') printFlushHelp(); else printHelp();
+  if (SUBCOMMAND_HELP[command]) printSubcommandHelp(command); else printHelp();
   process.exit(0);
 }
 
@@ -228,7 +304,7 @@ if (command === 'flush') {
   const parsed = parseSubcommandArgs(args.slice(1), { '--dry-run': 'dryRun', '-n': 'dryRun' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
-    printFlushHelp();
+    printSubcommandHelp('flush');
     process.exit(1);
   }
   const { runFlush } = require('../lib/flush-cli.js');
@@ -251,7 +327,7 @@ if (command === 'setup-status-bar' || command === 'setup-inbox') {
   const parsed = parseSubcommandArgs(args.slice(1), {});
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
-    printHelp();
+    printSubcommandHelp(command);
     process.exit(1);
   }
   const configPath = parsed.configPath;

@@ -79,6 +79,57 @@ class CheckTimelineTests(unittest.TestCase):
         self.assertFalse(vc._is_multi_day(None))
 
 
+class CheckNamesPhoneticTests(unittest.TestCase):
+    """name-similarity.md Step 4 (sound-alike names) used to exist only as a
+    manual fallback the preferred script path silently skipped."""
+
+    def _vault(self, names, etype="npc"):
+        import tempfile
+        d = Path(tempfile.mkdtemp(prefix="vc-phonetic-"))
+        for n in names:
+            t = etype if isinstance(etype, str) else etype[n]
+            (d / f"{n}.md").write_text(f"---\ntype: {t}\nname: {n}\n---\n")
+        return d
+
+    def test_collapses_confusable_consonants(self):
+        same = [("Adler", "Adlar"), ("Herzfeld", "Herzveld"),
+                ("Simon", "Zimon"), ("Marina", "Miriam")]
+        for a, b in same:
+            self.assertTrue(vc.sounds_alike(a, b), (a, b))
+
+    def test_keeps_opening_sound_length_word_count_and_final_consonants(self):
+        different = [("Adler", "Adley"), ("Emile", "Nell"),
+                     ("Henri", "Honoria"), ("The Cook", "The Quay"),
+                     ("The Acharya", "The Watcher"), ("Vienna", "Vienna 1814"),
+                     ("Jon", "Jumman")]
+        for a, b in different:
+            self.assertFalse(vc.sounds_alike(a, b), (a, b))
+
+    def test_flags_sound_alike_pair_the_fuzzy_check_misses(self):
+        rows = vc.check_names(self._vault(["Herzfeld", "Herzveld"]), 0.95)
+        self.assertEqual(len(rows_for(rows, "PHONETIC")), 1)
+        self.assertTrue(rows[0].startswith("INFO\t"))
+
+    def test_only_entities_of_the_same_type_are_compared(self):
+        rows = vc.check_names(
+            self._vault(["Herzfeld", "Herzveld"],
+                        {"Herzfeld": "npc", "Herzveld": "location"}), 0.95)
+        self.assertFalse(rows_for(rows, "PHONETIC"))
+
+    def test_fuzzy_match_is_not_double_reported_as_phonetic(self):
+        rows = vc.check_names(self._vault(["Herzfeld", "Herzveld"]), 0.85)
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(rows_for(rows, "PHONETIC"))
+
+    def test_different_sounding_names_pass(self):
+        rows = vc.check_names(self._vault(["Adler", "Adley", "Vienna"]), 0.95)
+        self.assertFalse(rows_for(rows, "PHONETIC"))
+
+    def test_short_skeletons_are_ignored(self):
+        rows = vc.check_names(self._vault(["Bo", "Do"]), 0.95)
+        self.assertFalse(rows_for(rows, "PHONETIC"))
+
+
 class CheckReadAloudTests(unittest.TestCase):
     def setUp(self):
         self.rows = vc.check_read_aloud(FIXTURE)

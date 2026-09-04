@@ -308,8 +308,10 @@ Follow `references/world-validation.md`.
 1. **Structural checks:** run the bundled utilities first —
    `graph_check.py all` and `vault_check.py all` (see
    `shared/vault-access.md`) — then interpret: type pair
-   violations, missing required relationships, bidirectional
-   consistency on top of their orphan/ambiguity/schema output.
+   violations, missing required relationships, mirrored edges
+   (the same fact stored on both endpoints — storage is
+   single-direction) on top of their orphan/ambiguity/schema
+   output.
 2. **Semantic checks:** redundant edges, implied traversal edges,
    hub overload, generic type usage (`associated_with` etc.).
    Read `references/graph-hygiene.md` for anti-patterns.

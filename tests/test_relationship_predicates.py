@@ -173,6 +173,52 @@ class IterRelationshipPredicatesTests(unittest.TestCase):
         self.assertEqual(list(sr.iter_relationship_predicates("# Just a body\n")), [])
 
 
+class RelationshipPatternsDocTests(unittest.TestCase):
+    """`ttrpg-expert/relationship-patterns.md` is what two skills route to
+    for relationship modelling. Its first version taught a vocabulary that
+    did not exist (`friend`, `married`, `reports_to`, …) and everything
+    authored from it failed `vault_check.py relationships`. Pin its
+    predicate table to the ontology export so it cannot drift again."""
+
+    DOC = REPO / "skills" / "ttrpg-expert" / "relationship-patterns.md"
+
+    @classmethod
+    def setUpClass(cls):
+        import re
+        cls.ontology = json.loads(
+            (REPO / "skills" / "shared" / "gm-apprentice-ontology.json")
+            .read_text(encoding="utf-8"))
+        text = cls.DOC.read_text(encoding="utf-8")
+        table = text[text.index("## Predicate Table"):text.index("## Tones")]
+        row_re = re.compile(r"^\| `([a-z_]+)` \| (.+?) \| (.+?) \|$", re.M)
+        cls.rows = {m.group(1): (m.group(2), m.group(3))
+                    for m in row_re.finditer(table)}
+        cls.body_predicates = set(re.findall(r"`([a-z]+(?:_[a-z]+)+)`", text))
+
+    def test_table_lists_exactly_the_ontology_predicates(self):
+        self.assertEqual(set(self.rows),
+                         {p["type"] for p in self.ontology["predicates"]})
+
+    def test_table_inverses_and_symmetry_match_the_ontology(self):
+        for p in self.ontology["predicates"]:
+            inverse_cell, _genre = self.rows[p["type"]]
+            if p["symmetric"]:
+                self.assertIn("symmetric", inverse_cell, p["type"])
+            else:
+                self.assertEqual(inverse_cell, f"`{p['inverse']}`", p["type"])
+
+    def test_no_off_vocabulary_predicate_is_taught(self):
+        # Every snake_case code span outside the table is either a sanctioned
+        # predicate, a documented inverse name, or a frontmatter key. Anything
+        # else is the file inventing vocabulary again.
+        allowed = (sr.predicate_vocabulary()
+                   | set(sr.inverse_predicates())
+                   | {"parent_location", "points_of_interest",
+                      "current_holder", "relationship_types", "related_to",
+                      "associated_with", "reports_to", "employed_by"})
+        self.assertLessEqual(self.body_predicates - allowed, set())
+
+
 class CheckRelationshipsTests(unittest.TestCase):
     def setUp(self):
         self.rows = vc.check_relationships(FIXTURE)

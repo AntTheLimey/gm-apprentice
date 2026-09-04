@@ -46,9 +46,17 @@ cause: Session Wrap-Up files still on the pre-migration
 `Session_NN_Wrap_Up.md` pattern (no chapter number) after a
 second chapter reused a session number.
 
-**Bidirectional consistency:** If entity A's frontmatter says
-`ally_of: "[[B]]"`, does entity B's frontmatter acknowledge
-entity A? Flag one-way relationships that should be mutual.
+**Mirrored edges (duplicates, not gaps):** Storage is
+single-direction (`shared/entity-schema.md`, "Relationship
+Types"): an asymmetric edge lives on one endpoint and its
+inverse is implied; a symmetric predicate (`allied_with`,
+`knows`, `sibling_of`…) is stored **once** with
+`bidirectional: true`. So a one-way edge is *correct*, and the
+thing to flag is the opposite — the same fact stored on both
+endpoints: `A allied_with B` on A *and* `B allied_with A` on B,
+or `A employs B` beside `B employed_by A`. Report the pair;
+the fix is to delete one side (the inverse-named one first),
+never to add the missing mirror.
 
 **Hub overload:** Entities with an unusually high number of
 relationships (more than 2 standard deviations above the mean

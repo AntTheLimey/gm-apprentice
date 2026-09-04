@@ -175,6 +175,64 @@ def base_name(name: str) -> str:
     return CHAIN_SUFFIX_RE.sub("", name.replace("_", " ").strip())
 
 
+# Sound-alike detection for names players will *hear*. Two names collide
+# phonetically when they have the same number of words and each word
+# pair, after folding digraphs (th/ch/sh/ph/gh/wh/ck/qu), dropping vowels,
+# and collapsing the consonant pairs a listener most often confuses
+# (b/d, m/n, s/z, f/v, c/k), leaves the same consonant skeleton, opens
+# with the same sound, and is of similar length. "Adler"/"Adlar",
+# "Herzfeld"/"Herzveld", "Marina"/"Miriam" collide; "Adler"/"Adley"
+# (r ≠ l), "Emile"/"Nell" (opening sound) and "Henri"/"Honoria" (length)
+# do not. Only entities of the same type are compared — the prose
+# check's own advice, and what stops "The Mole" (NPC) ~ "The Nile"
+# (location) — and the result is an INFO cue for the GM, not a finding.
+DIGRAPHS = (("th", "t"), ("ch", "c"), ("sh", "s"), ("ph", "f"),
+            ("gh", "g"), ("wh", "w"), ("ck", "c"), ("qu", "c"))
+CONFUSABLE = str.maketrans({
+    "d": "b", "n": "m", "z": "s", "v": "f", "k": "c",
+})
+MIN_SKELETON = 2  # total consonants across all words
+MAX_LENGTH_DIFF = 1  # per word, in letters
+
+
+def phonetic_words(name: str) -> list[tuple[str, int]]:
+    """Per-word ("opening|consonants", letter count). Digits are kept as
+    their own word so "Vienna 1814" is not "Vienna". Empty when the name
+    is too short to compare meaningfully."""
+    words = []
+    consonants = 0
+    for word in normalize(name).split():
+        word = re.sub(r"[^a-z0-9]", "", word)
+        if not word:
+            continue
+        if word.isdigit():
+            words.append((f"#{word}", len(word)))
+            continue
+        word = re.sub(r"[^a-z]", "", word)
+        word = re.sub(r"(.)\1+", r"\1", word)  # "tt" → "t", "oo" → "o"
+        for pair in DIGRAPHS:
+            word = word.replace(*pair)
+        if not word:
+            continue
+        opening = word[0].translate(CONFUSABLE)
+        body = re.sub(r"[aeiouyh]", "", word).translate(CONFUSABLE)
+        consonants += len(body)
+        words.append((f"{opening}|{body}", len(word)))
+    return words if consonants >= MIN_SKELETON else []
+
+
+def phonetic_skeleton(name: str) -> str:
+    return " ".join(w for w, _ in phonetic_words(name))
+
+
+def sounds_alike(name_a: str, name_b: str) -> bool:
+    wa, wb = phonetic_words(name_a), phonetic_words(name_b)
+    if not wa or len(wa) != len(wb):
+        return False
+    return all(sa == sb and abs(la - lb) <= MAX_LENGTH_DIFF
+               for (sa, la), (sb, lb) in zip(wa, wb))
+
+
 def check_names(vault: Path, threshold: float) -> list[str]:
     # name -> list of (rel, kind) where kind is 'name' or 'alias'
     entries = []
@@ -185,15 +243,16 @@ def check_names(vault: Path, threshold: float) -> list[str]:
             continue
         if STRUCTURAL_NAME_RE.search(stem) and STRUCTURAL_DOC_RE.search(stem):
             continue
-        entries.append((stem, rel, "name"))
+        etype = fm.get("type")
+        entries.append((stem, rel, "name", etype))
         aliases = fm.get("aliases")
         if isinstance(aliases, list):
             for a in aliases:
-                entries.append((a, rel, "alias"))
+                entries.append((a, rel, "alias", etype))
     rows = []
     seen_pairs = set()
-    for i, (name_a, rel_a, kind_a) in enumerate(entries):
-        for name_b, rel_b, kind_b in entries[i + 1:]:
+    for i, (name_a, rel_a, kind_a, type_a) in enumerate(entries):
+        for name_b, rel_b, kind_b, type_b in entries[i + 1:]:
             if rel_a == rel_b:
                 continue
             pair = tuple(sorted((rel_a, rel_b)))
@@ -212,11 +271,10 @@ def check_names(vault: Path, threshold: float) -> list[str]:
                                 f"{kind_b} '{name_b}'")
                 continue
             matcher = SequenceMatcher(None, na, nb)
-            if matcher.real_quick_ratio() < threshold \
-                    or matcher.quick_ratio() < threshold:
-                continue
-            ratio = matcher.ratio()
-            if ratio >= threshold:
+            fuzzy = (matcher.real_quick_ratio() >= threshold
+                     and matcher.quick_ratio() >= threshold
+                     and matcher.ratio() >= threshold)
+            if fuzzy:
                 key = (pair, "fuzzy")
                 if key in seen_pairs:
                     continue
@@ -231,7 +289,20 @@ def check_names(vault: Path, threshold: float) -> list[str]:
                 else:
                     rows.append(f"WARNING\t{rel_a} <> {rel_b}\t"
                                 f"'{name_a}' ~ '{name_b}' "
-                                f"(similarity {ratio:.2f})")
+                                f"(similarity {matcher.ratio():.2f})")
+                continue
+            # Not close in spelling — but do they *sound* the same?
+            if numbered_family or type_a is None or type_a != type_b:
+                continue
+            if sounds_alike(name_a, name_b):
+                key = (pair, "phonetic")
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+                rows.append(f"INFO\t{rel_a} <> {rel_b}\t"
+                            f"PHONETIC '{name_a}' ~ '{name_b}' "
+                            f"— sound-alike {type_a}s when read aloud; "
+                            f"verify they never share a scene")
     return sorted(rows)
 
 

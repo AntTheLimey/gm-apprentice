@@ -90,6 +90,15 @@ Constraints" in `scenario-writing.md`.)
    ("You feel uneasy" = violation; describe objective sensory info only)
 5. Verify every confrontation has ≥2 contingencies (cooperative + hostile)
 
+**What is mechanized:** only item 4. `vault_check.py read-aloud`
+scans `> ` blockquote lines in plan and scene files for a named
+PC, a 2nd-person feeling verb, or a 3rd-person pronoun, and emits
+an INFO cue to raise with the GM. Items 1-3 and 5 are read, not
+grepped — a plan-wide "PC name as subject of an action verb" scan
+was built and deliberately dropped because it scolded the GM's
+own notes as often as it caught a real violation. Do not report
+its absence as a gap.
+
 ## Thread Management
 
 ### Thread Types

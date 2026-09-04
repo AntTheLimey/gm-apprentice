@@ -86,9 +86,8 @@ Reach for ttrpg-expert when you need to:
 | Active play techniques | `active-play-management.md` | Fail forward patterns, improvisation guidance |
 | Scene patterns | `scene-encounter-patterns.md` | Open interaction windows, encounter design frameworks |
 | World evolution | `world-evolution.md` | Post-session world update checklist |
-| Campaign structure | `campaign-structure.md` | Campaign/chapter/session hierarchy guidance |
 | Canon management | `canon-management.md` | DRAFT to AUTHORITATIVE to SUPERSEDED lifecycle |
-| Relationship patterns | `relationship-patterns.md` | Entity relationship types and graph patterns |
+| Relationship patterns | `relationship-patterns.md` | The sanctioned predicate table with inverses, storage direction, and modeling patterns |
 | Random generation | `random-generation.md` | Inspiration tables, random content |
 | GM session patterns | `gm-session-patterns.md` | Session pacing, table management techniques |
 | RPG terminology | `rpg-terminology.md` | Shared vocabulary definitions |
