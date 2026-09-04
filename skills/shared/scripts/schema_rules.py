@@ -55,6 +55,7 @@ REQUIRED_FIELDS = {
     "session-plan": ["type", "canon_status", "session"],
     "session-play-notes": ["type", "canon_status", "session"],
     "session-wrap-up": ["type", "canon_status", "session"],
+    "session-wrapup": ["type", "canon_status", "session"],
     "session_wrap": ["type", "canon_status", "session"],
     "scene": ["type", "canon_status", "scene_type", "status"],
     "chapter": ["type"],
@@ -84,12 +85,18 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
     ],
     "session_wrap": [
         ("in_game_dates", "in_game_date", "1.9.5"),
+        ("in_game_date_start", "in_game_date", "1.9.5"),
+        ("in_game_date_end", "in_game_date", "1.9.5"),
     ],
     "session-wrap-up": [
         ("in_game_dates", "in_game_date", "1.9.5"),
+        ("in_game_date_start", "in_game_date", "1.9.5"),
+        ("in_game_date_end", "in_game_date", "1.9.5"),
     ],
     "session-wrapup": [
         ("in_game_dates", "in_game_date", "1.9.5"),
+        ("in_game_date_start", "in_game_date", "1.9.5"),
+        ("in_game_date_end", "in_game_date", "1.9.5"),
     ],
     "event": [("date", "in_game_date", "1.4.22")],
     "session": [

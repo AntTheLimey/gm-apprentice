@@ -6,7 +6,8 @@ chapter: "[[Chapter C - Title]]"
 campaign: "[[Campaign Overview]]"  # or the campaign's plain name — match the vault
 play_date: null                # real-world date played, "YYYY-MM-DD"
 in_game_date: null             # fictional date at session end; timeline
-                               # format (4-digit year, no time-of-day)
+                               # format — a non-Earth calendar keeps the
+                               # world's own format
 source_document: "[[]]"        # wiki-link to the Play Notes file
 canon_status: DRAFT            # reconcile promotes to AUTHORITATIVE
 created_by: session-wrapup

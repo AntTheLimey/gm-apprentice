@@ -35,9 +35,12 @@ Per file, against the spec's frontmatter block:
   fabricate a link.
 - **`session_number:` scalar present.** Absent — Info; backfill
   from the session index or the filename.
-- **`play_date:`** present, `"YYYY-MM-DD"`. Non-ISO forms
-  (`"May 21, 2026"`) — Info; normalize.
-- **`in_game_date:`** present in timeline format. Legacy forms
+- **`play_date:`** present (`null` is a valid unknown). When
+  non-null, `"YYYY-MM-DD"` — non-ISO forms (`"May 21, 2026"`)
+  are Info; normalize.
+- **`in_game_date:`** present (`null` is a valid unknown). When
+  non-null, timeline format — or the world's own format for a
+  non-Earth calendar, which is conformant as-is. Legacy forms
   (`in_game_dates:`, `in_game_date_start`/`_end` pairs) — Info;
   map to a single `in_game_date` (session-end date), preserving
   the range in body prose if not already there.
@@ -49,7 +52,9 @@ Per file, against the spec's frontmatter block:
   (`> [!success] Reconciled …`), or a dated decisions heading.
   A Reconciliation Context with no derivable date → ask the GM
   once for the date (or confirm `null`), rather than leaving
-  the file flagged forever.
+  the file flagged forever. No Reconciliation Context at all →
+  write `reconciled: null` explicitly, so the field exists and
+  the unreconciled-promotion check below can fire.
 - **Unreconciled promotion:** `canon_status: AUTHORITATIVE` with
   `reconciled: null` and no Reconciliation Context section —
   Warning; ask whether the review actually happened (stamp the
@@ -57,6 +62,11 @@ Per file, against the spec's frontmatter block:
   and queue for reconcile).
 - **`type:` synonym drift** (`session-wrap-up`, `session-wrapup`)
   — Info; normalize to `session_wrap`.
+- **Remaining canonical fields** — `chapter` (wiki-link),
+  `campaign`, `created_by`, `tags` present — Info; backfill
+  `chapter`/`campaign` from the session index or sibling
+  wrap-ups, `created_by` per provenance (`session-wrapup`, or
+  `vault-ingest` for reconstructed files).
 
 ### Step 3: Structure Conformance (publish safety)
 
@@ -73,11 +83,12 @@ what the fix-or-dismiss walkthrough is for.
 
 - **Keeper-facing sibling H2s** — any Keeper-facing section at
   `##` instead of `###` under `## GM Notes`. Severity per
-  heading: read the vault's **effective** exclude list (the
-  publish defaults, or the union of vault/site config lists
-  where set) — **Critical** when the heading is not covered by
-  it (it publishes today), Warning when it is (structure drift,
-  no live leak). Fix: hoist the player-facing sections
+  heading: a Keeper-facing H2 already inside a valid
+  `<!-- gm-only -->` fence never publishes — Warning (structure
+  drift only). Otherwise read the vault's **effective** exclude
+  list (the publish defaults, or the union of vault/site config
+  lists where set) — **Critical** when the heading is not
+  covered by it (it publishes today), Warning when it is. Fix: hoist the player-facing sections
   **first** — `## Narrative Recap` then `## Memorable Moments`
   to the top, in that order; real files interleave them between
   Keeper H2s, and a player-facing section must never end up

@@ -281,6 +281,7 @@ tags: []
 ### What Carries Forward
 #### Unresolved Threads
 #### Player-Stated Intentions
+#### Pending Consequences
 #### NPCs Needing Follow-Up
 #### Skipped Prep
 ### World State

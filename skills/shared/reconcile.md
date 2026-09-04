@@ -222,7 +222,10 @@ Session-prep reads it to avoid re-gathering context.
 
 **Where to write it:** Always in the Wrap-Up file, as a `###`
 subsection **under that file's `## GM Notes` heading** —
-create `## GM Notes` if the file has none. If the GM Notes
+if the file has none, create `## GM Notes` wrapped in its own
+`<!-- gm-only -->`/`<!-- /gm-only -->` fence (reconcile has no
+migration prerequisite, and an unfenced section on a legacy
+file can reach a published player site). If the GM Notes
 block is wrapped in a `<!-- gm-only -->` fence (standard since
 1.9.5), insert the subsection **before** the `<!-- /gm-only -->`
 closer — appending after it leaves the section outside the
