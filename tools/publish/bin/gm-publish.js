@@ -226,7 +226,7 @@ if (command === '--version' || command === '-v') {
 // `--help` on any subcommand prints usage and exits 0 with no side effects (#178).
 const wantsHelp = args.slice(1).some((a) => a === '--help' || a === '-h');
 if (wantsHelp) {
-  if (SUBCOMMAND_HELP[command]) printSubcommandHelp(command); else printHelp();
+  if (Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, command)) printSubcommandHelp(command); else printHelp();
   process.exit(0);
 }
 

@@ -246,7 +246,9 @@ Optional 1-10 intensity, defaulting to 5 when unknown:
 
 ## Required Relationships
 
-Every audit flags these when missing:
+campaign-qa's graph-health check and campaign-organizer's Validate
+step flag these when missing (a read-the-frontmatter check today —
+`vault_check.py relationships` validates vocabulary only):
 
 | Entity type | Must have |
 |-------------|-----------|

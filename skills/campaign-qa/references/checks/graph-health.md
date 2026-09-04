@@ -54,11 +54,13 @@ inverse is implied; a symmetric predicate (`allied_with`,
 `bidirectional: true`. So a one-way edge is *correct*, and the
 thing to flag is the opposite — the same fact stored on both
 endpoints: `A allied_with B` on A's file *and* `B allied_with A`
-on B's, or `A employs B` copied verbatim onto B's file. (An
-inverse-named edge such as `employed_by` is a different defect —
-"Wrong-direction / inverse stored" under Relationship Quality.)
-Report the pair; the fix is to delete one side, never to add the
-missing mirror.
+on B's. This is a symmetric-predicate defect; an asymmetric edge
+has no legal mirror — its inverse name (`employed_by`) is
+off-vocabulary and is caught as "Wrong-direction / inverse
+stored" under Relationship Quality, and `employs` written on
+*both* files is two contradictory facts, not a duplicate. Report
+the pair; the fix is to delete one side, never to add the missing
+mirror.
 
 **Hub overload:** Entities with an unusually high number of
 relationships (more than 2 standard deviations above the mean

@@ -6,7 +6,7 @@ Scope read in full: `skills/campaign-organizer/SKILL.md` + all 5 references;
 Baseline established by running `--help` on all 8 scripts in
 `skills/shared/scripts/` and reading `vault_check.py`'s check functions.
 
-All paths below are repo-relative to `/Users/antonypegg/PROJECTS/gm-apprentice/`.
+All paths below are repo-relative.
 
 ---
 
@@ -610,7 +610,7 @@ table; **D** for the closing conversation.
 
 ### Proposed contract
 
-```
+```text
 migrate.py VAULT plan   [--json]            → per-step {id, category, status:
                                               satisfied|pending, evidence, counts}
 migrate.py VAULT apply  --steps s1,s2,...   → applies confirmed steps, prints a

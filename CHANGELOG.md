@@ -65,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Attribution on four `systems/` files.** The three FitD files
+- **Attribution on five `systems/` files.** The three FitD files
   carrying a one-line credit now carry the full CC-BY 3.0 attribution
   the other eleven use, and all fourteen now carry the work and
   license URIs CC-BY 3.0 asks for (the zips ship them without

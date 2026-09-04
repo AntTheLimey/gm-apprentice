@@ -214,11 +214,11 @@ skill. 23 numbered steps.
 | 21a CF deploy | 599-633 | project-create idempotency, `wrangler.toml` name alignment, bare-vs-explicit deploy form | **B** (M) — `setup-backend.js:94-126` already does it |
 | 21b GH deploy | 635-695 | `git init`/commit/`gh repo create`/`gh api …/pages` | **B** for the scripted path, **D** for the browser fallback |
 | 22 Verify live | 699-733 | `curl -sSL --connect-timeout 5 --max-time 15 -w '%{http_code}'`, 2xx, ≤3 retries ~20s apart | **B** (S) |
-| 23 Tiered close | 737-809 | offer (D), run `setup-*` (A), maintain `deferred` (B) |
+| 23 Tiered close | 737-809 | offer (D), run `setup-*` (A), maintain `deferred` (B) | — |
 
 ### Proposed contract
 
-```
+```text
 gm-publish init <dir> --vault <path> --title <s> --tagline <s>
                 --host cloudflare-pages|github-pages
                 --project <name> [--github-user <u>] [--json]
@@ -228,13 +228,13 @@ composition included) instead of the model transcribing two JSON templates.
 Collapses Steps 8, 14, 15 and half of 21a. **Size S** (extension of `init`,
 `lib/init.js` is 124 lines).
 
-```
+```text
 gm-publish setup progress [--vault <path>] [--set key=value] [--json]
 ```
 owns the `publish.setup_progress` block — read, merge-write, never clobber
 siblings. Collapses Step 2 + the 41-line "Resume state" spec. **Size S.**
 
-```
+```text
 gm-publish deploy [--config <path>] [--verify] [--json]
 ```
 branches on `host`, derives the project name, checks auth, aligns
@@ -366,8 +366,9 @@ SKILL.md:107-113) at ~90 tokens fixed overhead each, and
 `references/troubleshooting.md` (+3,300 tokens) the moment the build prints
 anything unexpected.
 
-**What is actually needed to route a rebuild:** "run `gm-publish update
---deploy` from the site dir; report the summary" — under 1 KB.
+**What is actually needed to route a rebuild:** "run `gm-publish update-pin`
+then `gm-publish deploy --verify` from the site dir; report the summary" —
+under 1 KB.
 
 If `update-pin`, `manifest diff`, and `deploy --verify` exist, SKILL.md
 capability 2 (lines 90-196, 5,988 B) collapses to ~600 B, and
