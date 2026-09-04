@@ -249,6 +249,11 @@ for the full procedure.
   at `wrap-up` status for multiple prep cycles (review was
   deferred too long), session index `documents:` links pointing
   to files that don't exist
+- Wrap-Up conformance: Wrap-Up files that drift from the
+  canonical `shared/templates/session-wrap.md` structure —
+  above all Keeper-facing sections sitting at `##` outside
+  `## GM Notes`, which publish to player sites (always repaired
+  via `references/checks/wrapup-conformance.md`)
 - Character story file validation: active PCs missing a
   companion `{Name}_Story.md` file, story files where
   `asOfSession` is more than 1 session behind the latest
@@ -294,8 +299,9 @@ Runs all modes in order, reading each check file from
 `references/checks/` as it goes: Canon Audit → Timeline
 Validation → Name Similarity → Clue Redundancy → Graph
 Health → Legacy Canon Field Repair → Stale DRAFT Detection →
-World Consistency (`references/world-audit-criteria.md`, if
-`_World/` exists) → Open Spoilers.
+Wrap-Up Conformance → World Consistency
+(`references/world-audit-criteria.md`, if `_World/` exists) →
+Open Spoilers.
 Deduplicates findings that appear in multiple checks.
 Produces a unified report.
 

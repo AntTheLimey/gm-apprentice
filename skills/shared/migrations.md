@@ -643,3 +643,62 @@ was introduced to end.
   closer. A closer with nothing open no longer silently does nothing: it is
   counted and reported, and the unclosed-marker warning now says how many
   blocks were left open.
+
+## Migration: 1.9.4 → 1.9.5
+
+Standard Session Wrap-Up template. Wrap-ups gain a canonical
+structure (`shared/templates/session-wrap.md`) synthesized from
+three long-running campaign vaults; existing wrap-ups are
+normalized to it.
+
+### Structural
+
+- **Wrap-Up frontmatter normalization** on every `session_wrap`
+  file (synonym types `session-wrap-up`/`session-wrapup`
+  normalize to `session_wrap`):
+  - `session:` becomes a quoted wiki-link to the session index
+    (integer and plain-string forms are converted; the link is
+    derived from the session index in the same directory)
+  - `session_number:` scalar added (from the session index or
+    filename)
+  - `play_date:` normalized to `"YYYY-MM-DD"`; legacy date
+    fields (`in_game_dates:`, `in_game_date_start`/`_end`) map
+    to a single `in_game_date:` holding the session-end date —
+    ranges are preserved in body prose, never deleted
+  - `source_document:` backfilled as a wiki-link to the Play
+    Notes file where one exists
+  - `reconciled:` added — backfilled from a
+    `**Reconciled:** YYYY-MM-DD` line inside
+    `### Reconciliation Context` if present, else `null`.
+    `canon_status` itself is never changed by migration.
+- **Keeper-facing sections re-nested under `## GM Notes`** —
+  extends the 1.8.52 Reconciliation Context re-nesting to every
+  Keeper-facing section (PC Carry-Forward, What Carries Forward,
+  World State, Keeper Checklist, Quality Notes, Quick Bullets,
+  World Fact Findings) found as a sibling `##`: relocate under
+  `## GM Notes` (creating it where absent) and demote one level
+  with children. Pure structural move — nothing reworded. Then
+  wrap the `## GM Notes` block in one
+  `<!-- gm-only -->`/`<!-- /gm-only -->` pair where absent
+  (fences are nesting-aware since 1.8.52, so inner fences are
+  safe). `## Narrative Recap` and `## Memorable Moments` are
+  player-facing and stay top-level.
+
+### Content
+
+- Copy `_Templates/_Template_Session_WrapUp.md` from
+  `shared/templates/session-wrap.md`.
+- **Body-format harmonization is opt-in via campaign-qa's
+  Wrap-Up Conformance check**
+  (`campaign-qa/references/checks/wrapup-conformance.md`):
+  filename renames to `Chapter_CC_Session_NN_Wrap_Up.md` (with
+  link updates), per-PC `#### [[Name]] (Player)` carry-forward
+  blocks, recap-heading normalization, Keeper Checklist
+  semantics. These touch content layout file-by-file, so they
+  run through QA's fix-or-dismiss workflow, not migration.
+
+### Tooling
+
+- None. The publish tool already reads both `session:` (link)
+  and `session_number:` (scalar) forms and keeps its type-synonym
+  compatibility set — unmigrated vaults keep working.

@@ -39,7 +39,8 @@ If all three pass, offer the fast path:
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
 On GM confirmation:
-- Set Wrap-Up `canon_status` to `AUTHORITATIVE`
+- Set Wrap-Up `canon_status` to `AUTHORITATIVE` and stamp
+  `reconciled:` with today's date (`"YYYY-MM-DD"`)
 - Promote all DRAFT entities from this session to AUTHORITATIVE
 - Update session index `status` to `reviewed`
 - Skip to step 6.5 (world evolution offer)
@@ -143,7 +144,8 @@ forward into the next session's prep.
 ### 6. Promote canon status
 
 On GM approval:
-1. Set Wrap-Up `canon_status` to `AUTHORITATIVE`
+1. Set Wrap-Up `canon_status` to `AUTHORITATIVE` and stamp
+   `reconciled:` with today's date (`"YYYY-MM-DD"`)
 2. Update session index `status` to `reviewed`
 3. Promote related entity `canon_status` from DRAFT
    to AUTHORITATIVE where GM confirmed content
@@ -204,6 +206,8 @@ Write a `### Reconciliation Context` subsection capturing:
 - **Consequences** — forward-looking summary of what this
   session established (every claim traceable to vault or
   play notes, no invention)
+- **Promotion** — every entity moved DRAFT → AUTHORITATIVE,
+  by name
 - **Salvageable prep** — disposition of each unplayed item
 - **GM decisions** — each conflict resolution with rationale
 - **World evolution** — if step 6.5 ran, include a

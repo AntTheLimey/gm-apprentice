@@ -120,13 +120,36 @@ session's own directory (e.g.,
 ---
 type: session_wrap
 session: "[[Session NN - Title]]"
+session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
+play_date: null                # "YYYY-MM-DD"
+in_game_date: null             # timeline format (see Session Index)
+source_document: "[[Session NN - Title - Play Notes]]"
 canon_status: DRAFT
 created_by: session-wrapup
+reconciled: null               # stamped "YYYY-MM-DD" by reconcile
 tags: []
 ---
 ```
+
+Both `session:` (wiki-link) and `session_number:` (scalar) are
+present because consumers key on different forms: the publish
+tool's recap lookup prefers the link and falls back to the
+scalar. `reconciled` is the machine-readable reconcile date —
+`canon_status: AUTHORITATIVE` with `reconciled: null` means the
+promotion never went through reconcile.
+
+**Body skeleton:** canonical in `shared/templates/session-wrap.md`
+(provisioned into vaults as `_Templates/_Template_Session_WrapUp.md`).
+Two player-facing sections — `## Narrative Recap` (lifted by the
+publish tool as the session's site recap) and the optional
+`## Memorable Moments` — then a single `## GM Notes` H2 wrapped in
+one `<!-- gm-only -->`/`<!-- /gm-only -->` pair holding every
+Keeper-facing subsection at `###`. GM-side content never gets its
+own top-level H2: `exclude_sections` configs only strip `GM Notes`
+by name, so a sibling H2 publishes to player sites (the same
+failure the 1.8.52 Reconciliation Context re-nesting fixed).
 
 For reconstructed content (from vault-ingest), include a
 Reconstruction Note callout at the top of the document:

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.5] — 2026-09-03
+
+### Added
+
+- **Standard Session Wrap-Up template.** Wrap-ups now have a canonical
+  structure — `skills/shared/templates/session-wrap.md`, provisioned into
+  vaults as `_Templates/_Template_Session_WrapUp.md` — synthesized from 42
+  wrap-ups across three long-running campaign vaults. Two player-facing
+  sections (`## Narrative Recap`, lifted by the publish tool as the
+  session's site recap, and the optional `## Memorable Moments`), then one
+  `## GM Notes` H2 wrapped in a single `<!-- gm-only -->` fence holding
+  every Keeper-facing subsection: PC Carry-Forward (per-PC
+  `#### [[Name]] (Player)` blocks with labelled bullets), What Carries
+  Forward, World State (fixed save-state labels), Keeper Checklist,
+  conditional Name Conflicts / Cross-Entity Claims / World Fact Findings,
+  Quality Notes, and a new Handoff to session-prep. Frontmatter gains
+  `session_number`, `play_date`, `in_game_date`, `source_document`, and
+  `reconciled` (stamped by reconcile at promotion, so an AUTHORITATIVE
+  wrap-up that never went through review is detectable). Reconcile now
+  also records a Promotion list (every entity moved DRAFT→AUTHORITATIVE)
+  in Reconciliation Context.
+- **campaign-qa Wrap-Up Conformance check**
+  (`references/checks/wrapup-conformance.md`, run from Graph Health and
+  Full Audit): finds frontmatter drift, Keeper-facing sections sitting at
+  `##` outside `## GM Notes` (which publish to player sites), missing
+  gm-only fences, and filename drift — all repairs content-preserving and
+  routed through the fix-or-dismiss workflow.
+- **Migration 1.9.4 → 1.9.5**: normalizes existing wrap-up frontmatter,
+  re-nests Keeper-facing sibling H2s under `## GM Notes` (extending the
+  1.8.52 Reconciliation Context repair), and fences the block; body-format
+  harmonization stays opt-in via the new QA check.
+
+### Changed
+
+- `session-prep/references/session-templates.md` and
+  `shared/session-document-chain.md` now defer to the shared template as
+  the single wrap-up spec (the two previously documented divergent
+  structures); session-wrapup's Handoff Contract adds Memorable Moments,
+  Name Conflicts, Cross-Entity Claims, and Handoff to session-prep rows,
+  and Quick Bullets becomes optional.
+
+---
+
 ## [1.9.4] — 2026-08-30
 
 ### Fixed
