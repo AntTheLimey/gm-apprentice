@@ -4,10 +4,10 @@ const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, extractSections, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
-const { loadPublishConfig } = require('./config');
-const { loadManifest, canonicalPath } = require('./manifest');
+const { loadPublishConfig, vaultRelPath } = require('./config');
+const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, resolveGenrePreset } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
@@ -192,7 +192,7 @@ function build(options = {}) {
   // (e.g. from an editor or OS that decomposes accents) silently fails to match its NFC
   // manifest entry, or vice versa.
   function vaultRelPathOf(page) {
-    return canonicalPath(path.relative(config.vaultPath, page.sourcePath).split(path.sep).join('/'));
+    return vaultRelPath(config.vaultPath, page.sourcePath);
   }
 
   // A Publishing entry that matches no scanned file silently removes nothing and publishes
@@ -594,17 +594,9 @@ function build(options = {}) {
 
       switch (page.frontmatter.type) {
         case 'pc': {
-          let filtered = stripDataview(page.markdown.replace(/\r/g, ''));
-          const gmResult = stripGmOnly(filtered);
-          filtered = typeof gmResult === 'string' ? gmResult : gmResult.text;
-          const spoilerResult = stripSpoiler(filtered);
-          filtered = typeof spoilerResult === 'string' ? spoilerResult : spoilerResult.text;
-          // Not logged here: processContent above ran this same strip chain over the same
-          // markdown, and its warnings were already reported.
-          const commentResult = stripHtmlComments(filtered);
-          filtered = typeof commentResult === 'string' ? commentResult : commentResult.text;
-          filtered = stripCallouts(filtered, excludeCallouts);
-          filtered = filterSections(filtered, excludeSections);
+          // Warnings are dropped here, not ignored: processContent above ran this same
+          // strip chain over the same markdown and already reported them.
+          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections }).text;
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {

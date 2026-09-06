@@ -275,4 +275,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   return merged;
 }
 
-module.exports = { loadPublishConfig, PUBLISH_DEFAULTS };
+// A page's key into `publish.overrides.fields`: its vault-relative path, posix
+// separators, NFC-normalized (#139). The manifest and the overrides map are both
+// authored by hand and canonicalized on load, so a scanned path has to arrive in
+// the same normal form or an NFD-typed filename silently matches nothing.
+// Shared by build.js and sheet-cli.js so the CLI's player-safe view resolves a
+// per-file override to the same entry the site does.
+function vaultRelPath(vaultPath, sourcePath) {
+  return canonicalPath(path.relative(vaultPath, sourcePath).split(path.sep).join('/'));
+}
+
+module.exports = { loadPublishConfig, vaultRelPath, PUBLISH_DEFAULTS };

@@ -16,28 +16,13 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { scanVault, slugify } = require('./scanner');
-const { loadPublishConfig } = require('./config');
+const { loadPublishConfig, vaultRelPath } = require('./config');
 const {
-  stripDataview,
-  stripGmOnly,
-  stripSpoiler,
-  stripHtmlComments,
-  stripCallouts,
-  filterSections,
+  playerSafeMarkdown,
   keepOnlySections,
   publishedFrontmatter,
   publishMode,
 } = require('./processor');
-
-// The strip functions return either a string or { text, warnings }. Warnings
-// (an unclosed <!-- gm-only -->, say) must reach stderr and never the sheet:
-// the output is meant to be pasted or piped as markdown.
-function applyStrip(fn, markdown, warnings) {
-  const result = fn(markdown);
-  if (typeof result === 'string') return result;
-  if (Array.isArray(result.warnings)) warnings.push(...result.warnings);
-  return result.text;
-}
 
 function casefold(value) {
   return String(value == null ? '' : value).trim().toLowerCase();
@@ -61,25 +46,27 @@ function findPc(pcs, wanted) {
   }) || null;
 }
 
-// The published body: build.js's pipeline for a PC page, stopped at markdown.
-// stripLeadingH1 is deliberately NOT applied — the site drops the H1 because
-// the page template prints the name in a header, but this is a text view with
-// no template around it, so the name has to stay in the document.
-function playerSafeMarkdown(page, publishConfig, warnings) {
-  let md = String(page.markdown || '').replace(/\r/g, '');
-  md = stripDataview(md);
-  md = applyStrip(stripGmOnly, md, warnings);
-  md = applyStrip(stripSpoiler, md, warnings);
-  md = applyStrip(stripHtmlComments, md, warnings);
-  md = stripCallouts(md, publishConfig.exclude_callouts);
-  md = filterSections(md, publishConfig.exclude_sections);
+// The published body. The strip chain itself lives in processor.playerSafeMarkdown
+// and is shared with build.js's PC path, so a strip step added to the build cannot
+// miss this view. Only the `publish: stub` reduction is applied here on top —
+// build.js does it earlier, over page.markdown, before its own chain runs.
+//
+// stripLeadingH1 is deliberately NOT applied: the site drops the H1 because the
+// page template prints the name in a header, but this is a text view with no
+// template around it, so the name has to stay in the document.
+function playerSafeBody(page, publishConfig, warnings) {
+  const result = playerSafeMarkdown(page.markdown, {
+    excludeCallouts: publishConfig.exclude_callouts,
+    excludeSections: publishConfig.exclude_sections,
+  });
+  warnings.push(...result.warnings);
   if (publishMode(page.frontmatter) === 'stub') {
     const include = Array.isArray(page.frontmatter.publish_include_sections)
       ? page.frontmatter.publish_include_sections
       : [];
-    md = keepOnlySections(md, include);
+    return keepOnlySections(result.text, include);
   }
-  return md;
+  return result.text;
 }
 
 // gray-matter emits a trailing blank line for an empty body; trim it so the
@@ -96,6 +83,14 @@ async function runSheetShow(deps) {
   const playerSafe = !!deps.playerSafe;
   const asJson = !!deps.json;
 
+  // Checked before the config is touched: a missing --pc is a usage error, and
+  // reporting it as "config not found" would send the caller after the wrong bug.
+  const wanted = String(deps.pc == null ? '' : deps.pc).trim();
+  if (!wanted) {
+    err('sheet show needs --pc <name>.');
+    return 1;
+  }
+
   // Resolve config exactly as flush-cli/build.js do, so the same vault and the
   // same exclude lists back this view as back the site.
   const configPath = path.resolve(deps.configPath || './vault.config.json');
@@ -103,12 +98,6 @@ async function runSheetShow(deps) {
   const config = deps.config || require(configPath);
   const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
   const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
-
-  const wanted = String(deps.pc == null ? '' : deps.pc).trim();
-  if (!wanted) {
-    err('sheet show needs --pc <name>.');
-    return 1;
-  }
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
   const pcs = scan().filter((p) => p.frontmatter && p.frontmatter.type === 'pc');
@@ -137,10 +126,16 @@ async function runSheetShow(deps) {
   }
 
   const warnings = [];
+  // Per-file field overrides come from `publish.overrides.fields` in
+  // vault-config.md, keyed by vault-relative path — the same map build.js reads
+  // (there is no per-file override key in a page's own frontmatter). Resolving
+  // it from anywhere else would make a field the site publishes look GM-only
+  // here, or the reverse.
+  const fieldOverrides = (publishConfig.overrides && publishConfig.overrides.fields) || {};
   const fm = publishedFrontmatter(
     page.frontmatter,
     publishConfig.exclude_fields,
-    (page.frontmatter && page.frontmatter.publish_overrides) || {},
+    fieldOverrides[vaultRelPath(vaultPath, page.sourcePath)] || {},
   );
 
   // `publish: none` means the site has no page for this PC at all. Printing a
@@ -162,7 +157,7 @@ async function runSheetShow(deps) {
     return 0;
   }
 
-  const markdown = playerSafeMarkdown(page, publishConfig, warnings);
+  const markdown = playerSafeBody(page, publishConfig, warnings);
   for (const w of warnings) err(`sheet: ${name} — ${w}`);
 
   if (asJson) {
