@@ -23,3 +23,7 @@ He owes the harbourmaster a favour.
 <!-- /gm-only -->
 
 Nothing above this line was ever fenced.
+
+### *GM Notes*
+
+Single-asterisk emphasis defeats filterSections identically.

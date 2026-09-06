@@ -65,6 +65,7 @@ from schema_rules import (
 # LINK_RE, SKIP_DIRS and PC_INACTIVE_STATUS are re-exported: they were part
 # of this module's surface before vaultlib existed.
 from vaultlib import (  # noqa: F401
+    HEADING_RE,
     LINK_RE,
     PC_INACTIVE_STATUS,
     SKIP_DIRS,
@@ -78,6 +79,7 @@ from vaultlib import (  # noqa: F401
     normalize,
     parse_version,
     plugin_version,
+    publish_mode,
     raw_frontmatter,
     scan_body,
     vault_files,
@@ -828,26 +830,38 @@ CALLOUT_RE = re.compile(r"^>\s*\[!(\w[\w-]*)\]\s*(.*)")
 GM_WORD_RE = re.compile(r"\bgm\b")
 # Emphasis wrapping a whole heading title. `### **GM Notes**` is the case
 # that matters: processor.js `filterSections` compares the raw title, so
-# the asterisks turn an excluded section into a published one.
-EMPHASIS_RE = re.compile(r"^(\*\*|__|_)(.+?)\1$")
+# the asterisks turn an excluded section into a published one. Single
+# markers are in the alternation too — `### *GM Notes*` defeats the
+# exclude list in exactly the same way, and landing it at WARNING would
+# under-state a section that publishes in full.
+EMPHASIS_RE = re.compile(r"^(\*\*|\*|__|_)(.+?)\1$")
 
 FENCE_PROBLEM_RE = re.compile(r"^line (\d+): (.*)$")
 
 
-def _fence_rows(rel: str, problems: list[str]) -> list[str]:
+def _fence_rows(rel: str, problems: list[str],
+                kept: set[int] | None = None) -> list[str]:
     """`scan_body`'s authoring problems as rows, with the consequence named.
 
     An orphan closer is the worse of the two and is the ERROR: depth never
     went above zero, so nothing above it was ever hidden and the GM has no
     way to tell by looking. A block left open at EOF at least fails safe —
     the publish tool strips everything from the opener down.
+
+    `kept` is the stub-page line filter (None = the whole file publishes).
     """
     rows: list[str] = []
     for problem in problems:
         m = FENCE_PROBLEM_RE.match(problem)
         if not m:
+            # A problem shape this function does not know. Passing it
+            # through verbatim is noisy exactly once; dropping it would
+            # lose a new class of leak silently, forever.
+            rows.append(f"WARNING\t{rel}\t{problem}")
             continue
         lineno, detail = m.group(1), m.group(2)
+        if kept is not None and int(lineno) not in kept:
+            continue
         if "with no opener" in detail:
             rows.append(f"ERROR\t{rel}:{lineno}\t{detail} — "
                         f"everything above it publishes")
@@ -874,14 +888,55 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
     if title.casefold() in {s.casefold() for s in excludes}:
         # An unwrapped exact match never reaches here: `scan_body` has
         # already marked that line excluded, exactly as the site would.
-        # Only the emphasis-wrapped spelling survives to publish.
+        # Only the emphasis-wrapped spelling survives to publish. The
+        # remedy names the marker actually used, so the `*`/`_` spellings
+        # do not send the GM hunting for asterisks that are not there.
+        marker = m.group(1) if m else "**"
         return [f"ERROR\t{rel}:{state.lineno}\tbold-wrapped heading "
                 f"'{title}' defeats the exclude list and publishes — "
-                f"remove the ** or move it under ## GM Notes"]
+                f"remove the {marker} or move it under ## GM Notes"]
     if _keeper_text(title, excludes):
         return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
                 f"'{title}' publishes — nest it under ## GM Notes or fence it"]
     return []
+
+
+def _published_linenos(states: list[LineState],
+                       fm: dict) -> set[int] | None:
+    """Which body lines a `publish: stub` page actually ships, or None.
+
+    None means every line — the page is not a stub. Mirrors
+    processor.js `keepOnlySections`, which build.js applies to a stub
+    page's body before anything downstream reads it: content runs from an
+    included heading down to the next heading at its level or shallower,
+    and an absent or empty `publish_include_sections` ships nothing at
+    all. Headings are matched on the raw line rather than through
+    `LineState.heading`, because `keepOnlySections` — like
+    `filterSections` — does no code-fence tracking, and the whole point
+    of this helper is to agree with the tool.
+    """
+    if publish_mode(fm) != "stub":
+        return None
+    raw = fm.get("publish_include_sections")
+    include = raw if isinstance(raw, list) else []
+    wanted = {str(s).strip().casefold() for s in include if isinstance(s, str)}
+    kept: set[int] = set()
+    if not wanted:
+        return kept
+    keeping = False
+    keep_level = 0
+    for state in states:
+        m = HEADING_RE.match(state.line)
+        if m:
+            level = len(m.group(1))
+            if keeping and level <= keep_level:
+                keeping = False
+            if m.group(2).strip().casefold() in wanted:
+                keeping = True
+                keep_level = level
+        if keeping:
+            kept.add(state.lineno)
+    return kept
 
 
 def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
@@ -895,7 +950,11 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
 
     Every line is filtered through `scan_body`, so nothing inside a
     `<!-- gm-only -->`/`<!-- spoiler -->` fence, under an excluded
-    heading, or inside a code fence is ever reported.
+    heading, or inside a code fence is ever reported — and the file's own
+    `publish:` gate is honoured first: a `publish: false` page is dropped
+    before the site's link map exists, and a `publish: stub` page is
+    reduced to `publish_include_sections`, so neither can leak whatever
+    its headings say.
 
     A file's fence problems lead its rows rather than falling into line
     order: an orphan closer changes what every line above it means, so
@@ -907,9 +966,16 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
         fm = extract_frontmatter(text) or {}
         if fm.get("type") in GM_LEAK_SKIP_TYPES:
             continue
+        if publish_mode(fm) == "none":
+            continue
         states, problems = scan_body(text, excludes)
-        rows.extend(_fence_rows(rel, problems))
+        kept = _published_linenos(states, fm)
+        if kept is not None and not kept:
+            continue
+        rows.extend(_fence_rows(rel, problems, kept))
         for state in states:
+            if kept is not None and state.lineno not in kept:
+                continue
             # `published` deliberately says nothing about code fences —
             # vaultlib's divergence note — so exclude them here, or this
             # repo's own documented examples become findings.
@@ -943,14 +1009,18 @@ CANONICAL_FIRST_H2 = "Stat Sheet"
 
 
 def _has_labelled_field(states: list[LineState], start: LineState,
-                        level: int) -> bool:
+                        level: int, kept: set[int] | None = None) -> bool:
     """Does the block `start` opens carry any `**Label:**` field?
 
     The block runs to the next heading of the same level or shallower —
-    the same span the publish tool and session-wrapup read.
+    the same span the publish tool and session-wrapup read. `kept` is the
+    stub-page line filter: a field the site never ships cannot be the one
+    a machine consumer reads.
     """
     for state in states:
         if state.lineno <= start.lineno:
+            continue
+        if kept is not None and state.lineno not in kept:
             continue
         if state.heading is not None and state.heading[0] <= level:
             break
@@ -973,7 +1043,9 @@ def check_pc_body(vault: Path) -> list[str]:
 
     Every `type: pc` file is checked, whatever its status: a retired PC's
     page still publishes. `*_Story.md` companions are narrative history,
-    not sheets, and are skipped.
+    not sheets, and are skipped, as is any sheet the `publish:` gate
+    keeps off the site — a `publish: false` PC's Current Status cannot
+    leak from inside a fence, because the page does not exist.
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
@@ -981,11 +1053,18 @@ def check_pc_body(vault: Path) -> list[str]:
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
+        if publish_mode(fm) == "none":
+            continue
         states, problems = scan_body(text, excludes)
-        rows.extend(_fence_rows(rel, problems))
+        kept = _published_linenos(states, fm)
+        if kept is not None and not kept:
+            continue
+        rows.extend(_fence_rows(rel, problems, kept))
 
         headings: list[tuple[LineState, int, str]] = []
         for state in states:
+            if kept is not None and state.lineno not in kept:
+                continue
             if state.heading is not None:
                 headings.append((state, state.heading[0], state.heading[1]))
         h2s = [(s, title) for s, level, title in headings if level == 2]
@@ -996,8 +1075,12 @@ def check_pc_body(vault: Path) -> list[str]:
             current = named[0]
 
         if current is None:
-            rows.append(f"INFO\t{rel}\tno ## Current Status block — "
-                        f"session-wrapup Step 3c creates it")
+            # On a stub only a named fragment of the sheet publishes, so
+            # "this sheet has no Current Status" is a claim the published
+            # page cannot support — the block may well exist, unshipped.
+            if kept is None:
+                rows.append(f"INFO\t{rel}\tno ## Current Status block — "
+                            f"session-wrapup Step 3c creates it")
         else:
             state, level, _title = current
             n = state.lineno
@@ -1017,7 +1100,7 @@ def check_pc_body(vault: Path) -> list[str]:
                     rows.append(f"WARNING\t{rel}:{n}\t## Current Status "
                                 f"comes after ## {first_title} — it must "
                                 f"precede the protected sections")
-            if not _has_labelled_field(states, state, level):
+            if not _has_labelled_field(states, state, level, kept):
                 rows.append(f"INFO\t{rel}:{n}\t## Current Status has no "
                             f"labelled fields (**Location:** …) — machine "
                             f"consumers read the labels")
@@ -1030,7 +1113,8 @@ def check_pc_body(vault: Path) -> list[str]:
                             f"duplicate H2 '{title}'")
             seen.add(key)
 
-        if h2s and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():
+        if kept is None and h2s \
+                and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():
             rows.append(f"INFO\t{rel}\tfirst body H2 is '## {h2s[0][1]}' — "
                         f"the canonical skeleton opens with "
                         f"## {CANONICAL_FIRST_H2}")

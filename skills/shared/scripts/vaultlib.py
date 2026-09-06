@@ -29,7 +29,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, Iterator, Literal
 
 # --------------------------------------------------------------------------
 # Vault walking
@@ -724,6 +724,42 @@ def effective_exclude_sections(vault: Path) -> list[str]:
             seen.add(value.casefold())
             result.append(value)
     return result
+
+
+# --------------------------------------------------------------------------
+# Publish gating
+# --------------------------------------------------------------------------
+
+# The two explicit opt-outs processor.js honours, and nothing else.
+PUBLISH_NONE_VALUES = ("false", "none")
+
+
+def publish_mode(fm: dict[str, Any] | None) -> Literal["all", "stub", "none"]:
+    """Whether one file publishes whole, as a stub, or not at all.
+
+    Mirrors tools/publish/lib/processor.js `publishMode`, which build.js
+    consults twice: a `none` page is dropped before the link map is even
+    built, and a `stub` page's body is reduced to the sections named by
+    `publish_include_sections` (via `keepOnlySections`) before anything
+    downstream reads it. A leak check that ignores this reports content
+    that never reaches a reader.
+
+    Absent, `true`, or anything unrecognised means "all", exactly as
+    there: a typo must not silently unpublish a page, and must not
+    silently convince a check that a page is safe.
+
+    The comparison is literal, as it is there. `publish: False` reaches
+    the publish tool through a real YAML parser as boolean false and IS
+    dropped, while this module's frontmatter reader hands back the string
+    "False" and calls it "all" — an over-report, which is the direction a
+    leak check is allowed to be wrong in.
+    """
+    raw = (fm or {}).get("publish")
+    if raw is False or (isinstance(raw, str) and raw in PUBLISH_NONE_VALUES):
+        return "none"
+    if raw == "stub":
+        return "stub"
+    return "all"
 
 
 # --------------------------------------------------------------------------

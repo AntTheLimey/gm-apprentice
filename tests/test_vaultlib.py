@@ -482,5 +482,40 @@ class TextHelperTests(unittest.TestCase):
                          "ch 4")
 
 
+class PublishModeTests(unittest.TestCase):
+    """`publish_mode` mirrors processor.js `publishMode` — the gate the
+    publish-safety checks consult before calling anything published."""
+
+    def test_absent_publishes_everything(self):
+        self.assertEqual(vl.publish_mode({}), "all")
+        self.assertEqual(vl.publish_mode(None), "all")
+
+    def test_the_explicit_opt_outs(self):
+        for raw in (False, "false", "none"):
+            with self.subTest(raw=raw):
+                self.assertEqual(vl.publish_mode({"publish": raw}), "none")
+
+    def test_stub(self):
+        self.assertEqual(vl.publish_mode({"publish": "stub"}), "stub")
+
+    def test_anything_unrecognised_still_publishes(self):
+        # A typo must not silently unpublish a page, and must not silently
+        # convince a leak check that a page is safe.
+        for raw in ("true", True, "yes", "publish", "", [], "NONE", "False"):
+            with self.subTest(raw=raw):
+                self.assertEqual(vl.publish_mode({"publish": raw}), "all")
+
+    def test_it_reads_what_the_frontmatter_parser_actually_yields(self):
+        # `publish: false` reaches us as the string "false", not a bool.
+        fm = vl.extract_frontmatter(
+            "---\ntype: npc\npublish: false\n---\n\nbody\n")
+        self.assertEqual(vl.publish_mode(fm), "none")
+        fm = vl.extract_frontmatter(
+            "---\ntype: npc\npublish: stub\n"
+            'publish_include_sections: ["Background"]\n---\n\nbody\n')
+        self.assertEqual(vl.publish_mode(fm), "stub")
+        self.assertEqual(fm["publish_include_sections"], ["Background"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

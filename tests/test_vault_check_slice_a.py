@@ -380,6 +380,9 @@ FENCED = "Characters/PCs/Fenced.md"
 LATE = "Characters/PCs/Late.md"
 BARE = "Characters/PCs/Bare.md"
 STORY = "Characters/PCs/Fine_Story.md"
+UNPUBLISHED = "Characters/NPCs/Unpublished.md"
+STUB = "Characters/NPCs/Stub.md"
+HIDDEN = "Characters/PCs/Hidden.md"
 
 
 class GmLeakCommandTests(unittest.TestCase):
@@ -416,6 +419,41 @@ class GmLeakCommandTests(unittest.TestCase):
             f"INFO\t{LEAKY}:20\tcallout [!warning] Keeper eyes only reads "
             f"Keeper-facing — confirm it should publish",
             self.rows)
+
+    def test_single_asterisk_emphasis_is_the_same_error(self):
+        # `### *GM Notes*` defeats filterSections exactly as `**` does;
+        # the remedy names the marker that is actually there.
+        self.assertIn(
+            f"ERROR\t{LEAKY}:27\tbold-wrapped heading 'GM Notes' defeats "
+            f"the exclude list and publishes — remove the * or move it "
+            f"under ## GM Notes",
+            self.rows)
+
+    def test_publish_false_files_are_skipped(self):
+        # build.js drops these before the link map exists, so nothing in
+        # them can publish however it is written.
+        self.assertFalse(rows_for(self.rows, UNPUBLISHED), self.rows)
+
+    def test_a_stub_reports_only_its_included_sections(self):
+        self.assertIn(
+            f"WARNING\t{STUB}:12\tKeeper-facing heading 'Keeper Tactics' "
+            f"publishes — nest it under ## GM Notes or fence it",
+            self.rows)
+        # `### Keeper Hooks` sits under `## Plot`, which keepOnlySections
+        # drops wholesale.
+        self.assertFalse(rows_for(self.rows, f"{STUB}:18"), self.rows)
+
+    def test_a_stub_with_no_include_list_publishes_nothing(self):
+        vault = make_vault(self)
+        (vault / "Empty.md").write_text(
+            "---\ntype: npc\npublish: stub\n---\n\n"
+            "## Keeper Checklist\n\nNothing ships.\n", encoding="utf-8")
+        self.assertEqual(vc.check_gm_leak(vault, None), [])
+
+    def test_an_unrecognised_fence_problem_is_never_dropped(self):
+        self.assertEqual(
+            vc._fence_rows("X.md", ["something new from scan_body"]),
+            ["WARNING\tX.md\tsomething new from scan_body"])
 
     def test_orphan_closer_is_an_error(self):
         self.assertIn(
@@ -459,7 +497,7 @@ class GmLeakCommandTests(unittest.TestCase):
                 self.assertFalse(rows_for(self.rows, rel), self.rows)
 
     def test_that_is_every_row(self):
-        self.assertEqual(len(self.rows), 6, self.rows)
+        self.assertEqual(len(self.rows), 8, self.rows)
 
     def test_folder_restricts_the_walk(self):
         rows = vc.check_gm_leak(LEAK, "Characters/NPCs")
@@ -513,6 +551,35 @@ class PcBodyCommandTests(unittest.TestCase):
     def test_the_canonical_sheet_is_silent(self):
         self.assertFalse(rows_for(self.rows, FINE + "\t"), self.rows)
         self.assertFalse(rows_for(self.rows, FINE + ":"), self.rows)
+
+    def test_publish_false_pcs_are_skipped(self):
+        # Hidden.md's Current Status sits inside a gm-only fence — an
+        # ERROR on any sheet that actually reaches the site, and a false
+        # alarm on one build.js never builds a page for.
+        self.assertFalse(rows_for(self.rows, HIDDEN), self.rows)
+
+    def test_a_stub_pc_that_omits_current_status_is_silent(self):
+        vault = make_vault(self)
+        (vault / "Stubbed.md").write_text(
+            "---\ntype: pc\npublish: stub\n"
+            'publish_include_sections: ["Background"]\n---\n\n'
+            "## Background\n\nRaised by smugglers.\n\n"
+            "## Current Status\n\nProse only, and never shipped.\n",
+            encoding="utf-8")
+        self.assertEqual(vc.check_pc_body(vault), [])
+
+    def test_a_stub_pc_that_ships_current_status_is_still_checked(self):
+        vault = make_vault(self)
+        (vault / "Shown.md").write_text(
+            "---\ntype: pc\npublish: stub\n"
+            'publish_include_sections: ["Current Status"]\n---\n\n'
+            "## Background\n\nRaised by smugglers.\n\n"
+            "## Current Status\n\nProse only, and it ships.\n",
+            encoding="utf-8")
+        self.assertEqual(
+            vc.check_pc_body(vault),
+            ["INFO\tShown.md:11\t## Current Status has no labelled fields "
+             "(**Location:** …) — machine consumers read the labels"])
 
     def test_the_story_companion_is_ignored(self):
         self.assertFalse(rows_for(self.rows, STORY), self.rows)
