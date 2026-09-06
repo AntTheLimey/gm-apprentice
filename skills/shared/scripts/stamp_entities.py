@@ -113,6 +113,7 @@ from vaultlib import (  # noqa: E402,F401 — YAML_LINE_RE re-exported
     delete_key,
     frontmatter_span,
     get_key,
+    opens_a_block,
     raw_frontmatter,
     scalar_value,
     set_key,
@@ -238,8 +239,18 @@ def repair_canon(fm: list[str]) -> tuple[list[str], str | None]:
 
 
 def _plan_repair(fm: list[str]) -> tuple[list[str], str | None, bool]:
-    """repair_canon plus the post-condition every caller has to enforce:
-    exactly one `canon_status:` line survives, or nothing is written."""
+    """repair_canon plus the post-conditions every caller has to enforce:
+    a legacy key has to hold a scalar, and exactly one `canon_status:`
+    line survives, or nothing is written."""
+    # A legacy key whose value is an indented block is not a status at
+    # all. Renaming it yields `canon_status:` followed by list items —
+    # a shape no consumer accepts and no reader flags, reported as
+    # REPAIRED; deleting it orphans the same items. Both are wrong.
+    blocked = [key for key in LEGACY_KEYS
+               if get_key(fm, key) is not None and opens_a_block(fm, key)]
+    if blocked:
+        return ([f"{', '.join(blocked)} carries an indented block, not a "
+                 f"status value — repair this file by hand"], None, True)
     actions, conflict = repair_canon(fm)
     if not actions:
         return [], None, False
@@ -262,8 +273,15 @@ def _plan_set(fm: list[str], key: str, value: str,
         if hint:
             return f"refusing --set {key} — {hint}", True
         return set_key(fm, key, yaml_value_for_cli(value), eol), False
-    return set_nested_key(fm, parent, child, yaml_value_for_cli(value),
-                          eol), False
+    try:
+        return set_nested_key(fm, parent, child, yaml_value_for_cli(value),
+                              eol), False
+    except ValueError as e:
+        # An inline parent map (`documents: {plan: …}`) cannot take an
+        # appended block without leaving a duplicate top-level key, which
+        # a YAML reader resolves last-wins — the inline entries would
+        # vanish from the whole toolchain while this reported STAMPED.
+        return str(e), True
 
 
 def _plan_increment(fm: list[str], key: str,

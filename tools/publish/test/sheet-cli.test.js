@@ -196,6 +196,50 @@ test('--player-safe honours publish: stub by keeping only the named sections', a
   assert.ok(!text.includes('## Equipment'), text);
 });
 
+test('--player-safe reduces a stub before stripping, exactly as build.js does', async () => {
+  // build.js:319 runs keepOnlySections over page.markdown BEFORE its own strip
+  // chain. Running it after instead let an unclosed `<!-- gm-only -->` opener
+  // in one included section cascade through a later included section that the
+  // build had already isolated — printing content the site does not ship.
+  const stubbed = () => {
+    const p = pages();
+    p[0].frontmatter.publish = 'stub';
+    p[0].frontmatter.publish_include_sections = ['Current Status', 'Equipment'];
+    p[0].markdown = [
+      '# Jane Ashford',
+      '',
+      '## Current Status',
+      '',
+      '<!-- gm-only -->',
+      'GMSECRET unclosed opener.',
+      '',
+      '## Background',
+      '',
+      'BACKGROUNDTEXT never included.',
+      '',
+      '<!-- /gm-only -->',
+      '',
+      '## Equipment',
+      '',
+      '- Webley revolver',
+      '',
+    ].join('\n');
+    return p;
+  };
+  const r = run({ pc: 'Jane Ashford', playerSafe: true, scan: stubbed });
+  assert.equal(await r.promise, 0);
+  const text = r.out.join('\n');
+  assert.ok(!text.includes('GMSECRET'), text);
+  assert.ok(!text.includes('BACKGROUNDTEXT'), text);
+  // The reduction drops the closer with the Background section, so the opener
+  // is unclosed by the time stripGmOnly runs and cascades to the end — taking
+  // Equipment with it. That is what the site ships, so it is what this prints.
+  // Stripping first would have found a balanced pair and printed Equipment.
+  assert.ok(!text.includes('## Equipment'), text);
+  assert.ok(!text.includes('Webley revolver'), text);
+  assert.ok(text.includes('## Current Status'), text);
+});
+
 test('an unknown PC exits 1 and lists the PCs that exist', async () => {
   const r = run({ pc: 'Nobody' });
   const code = await r.promise;

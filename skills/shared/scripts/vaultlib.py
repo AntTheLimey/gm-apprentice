@@ -314,11 +314,25 @@ def set_nested_key(fm: list[str], parent: str, child: str, value: str,
     the block is empty or has to be created). Only the parent's own level
     is considered a child, so `documents.plan` never collides with a
     top-level `plan:`.
+
+    Raises `ValueError` when `parent:` already carries an inline value
+    (`documents: {plan: "[[P]]"}`, `documents: []`, `documents: {}`).
+    Appending a second `parent:` block there would leave the file with a
+    duplicate top-level key, which every YAML reader resolves last-wins —
+    the inline map's contents would vanish from the whole toolchain while
+    the writer reported a successful stamp. Refusing is the contract this
+    module already keeps everywhere else: malformed frontmatter is
+    refused, never guessed at.
     """
     parent_re = re.compile(rf"^{re.escape(parent)}:\s*(?:#.*)?$")
+    inline_re = re.compile(rf"^{re.escape(parent)}:[ \t]+(?!#)\S")
     start = next((i for i, line in enumerate(fm)
                   if parent_re.match(line.rstrip("\r\n"))), None)
     if start is None:
+        if any(inline_re.match(line.rstrip("\r\n")) for line in fm):
+            raise ValueError(
+                f"{parent}: has an inline value — convert it to a block "
+                f"mapping by hand")
         fm.append(f"{parent}:{eol}")
         fm.append(f"  {child}: {value}{eol}")
         return f"added {parent}: with {child}: {value}"
@@ -369,6 +383,27 @@ def delete_key(fm: list[str], key: str) -> str | None:
         if pattern.match(line):
             return fm.pop(i).rstrip("\r\n")
     return None
+
+
+def opens_a_block(fm: list[str], key: str) -> bool:
+    """Does `key:` carry an indented block rather than a scalar?
+
+    `delete_key` and `set_key` both edit exactly one line. On a key whose
+    value is a block list or a nested mapping that leaves the indented
+    items behind — a deletion orphans them, a rename re-parents them onto
+    the new key. Every writer that touches a key it did not itself write
+    has to be able to tell the two shapes apart first.
+    """
+    pattern = re.compile(rf"^{re.escape(key)}:")
+    for i, line in enumerate(fm):
+        if not pattern.match(line):
+            continue
+        for nxt in fm[i + 1:]:
+            if not nxt.strip():
+                continue
+            return nxt[:1].isspace()
+        return False
+    return False
 
 
 def unquote(text: str) -> str:
@@ -515,6 +550,14 @@ def chapter_key(rel: str, fm: dict[str, Any]) -> str | None:
     return c.casefold() if c else None
 
 
+# Every `type:` spelling a Session Wrap-Up is written with in the wild.
+# One definition, because a script that knows only two of the three finds
+# a vault's wrap-ups and another one silently does not: `vault_check
+# sessions` reported a wrap-up that `session_context.py` never loaded.
+WRAP_UP_TYPES: frozenset[str] = frozenset(
+    {"session_wrap", "session-wrap-up", "session-wrapup"})
+
+
 # --------------------------------------------------------------------------
 # Body scanning
 # --------------------------------------------------------------------------
@@ -587,6 +630,18 @@ def scan_body(text: str,
       after it, silently, which is the worst possible failure of the one
       primitive whose whole job is hiding things (#168).
 
+    Section exclusion follows the pipeline's *order*, not just its rule.
+    `processContent` / `playerSafeMarkdown` run `stripGmOnly` and
+    `stripSpoiler` BEFORE `filterSections`, so a `## GM Notes` written
+    inside a `<!-- gm-only -->` block is already gone when the section
+    filter runs: it never starts an exclusion, and it never ends one
+    either. Headings are therefore only allowed to drive `excluded_by`
+    at marker depth zero. They are still reported in `LineState.heading`
+    wherever they appear. This matters because `<!-- gm-only -->`
+    wrapping `## GM Notes` is exactly the shape `wrapup --fix` writes:
+    letting that heading exclude the rest of the file would blind every
+    leak check to everything a GM appends below the fence.
+
     Two deliberate divergences from `filterSections`, both erring toward
     calling a line published — the safe direction for a leak check, since
     over-reporting costs a false positive while under-reporting hides a
@@ -601,6 +656,11 @@ def scan_body(text: str,
       JavaScript `toLowerCase()`. The two differ on a handful of
       non-ASCII titles (German `ß`, Turkish dotted/dotless `I`), so a
       heading using them can match here and not there, or vice versa.
+    * Only the two marker blocks suppress exclusion, not multi-line HTML
+      comments, which `stripHtmlComments` also removes before
+      `filterSections`. A `## GM Notes` commented out that way still
+      starts an exclusion here and does not on the site — the same safe
+      direction, and rare enough not to be worth a third depth counter.
 
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.
@@ -671,11 +731,15 @@ def scan_body(text: str,
                     level = len(hm.group(1))
                     title = hm.group(2).strip()
                     heading = (level, title)
-                    if excluded_by is not None and level <= exclude_level:
-                        excluded_by = None
-                    if title.casefold() in excludes:
-                        excluded_by = title
-                        exclude_level = level
+                    # A heading inside a marker block neither starts nor
+                    # ends an exclusion: the publish pipeline strips the
+                    # block before `filterSections` ever sees the line.
+                    if depths["gm"] == 0 and depths["spoiler"] == 0:
+                        if excluded_by is not None and level <= exclude_level:
+                            excluded_by = None
+                        if title.casefold() in excludes:
+                            excluded_by = title
+                            exclude_level = level
 
         states.append(LineState(
             lineno=lineno,
@@ -716,7 +780,15 @@ def effective_exclude_sections(vault: Path) -> list[str]:
     config = vault / "_meta" / "vault-config.md"
     try:
         text = config.read_text(encoding="utf-8", errors="replace")
-    except OSError:
+    except FileNotFoundError:
+        # No vault config at all is the ordinary case, not a failure.
+        return result
+    except OSError as e:
+        # An unreadable config silently reverting to the defaults is how
+        # a check quietly stops honouring the vault's own exclude list.
+        # The direction is safe (over-reporting), but say so.
+        print(f"warning: unreadable _meta/vault-config.md: {e} — "
+              f"using the default exclude_sections", file=sys.stderr)
         return result
     block = _nested_block(raw_frontmatter(text), "publish")
     for value in _list_value(block, "exclude_sections"):
@@ -834,6 +906,13 @@ def plugin_version() -> tuple[str, str] | None:
     `.claude-plugin/plugin.json` is authoritative. `migrations.md` is the
     fallback because the build stamps it from plugin.json, so a skill zip
     that ships without the plugin manifest still knows its own version.
+
+    A *missing* manifest is the ordinary skill-zip case and falls through
+    quietly. A manifest that exists but cannot be parsed warns on stderr
+    first: in a repo checkout `migrations.md` carries the last stamped
+    version rather than the working one, so falling through silently
+    would report `AHEAD` on a current vault and send the GM off to update
+    a plugin that is already up to date.
     """
     here = Path(__file__).resolve()
     manifest = here.parents[3] / ".claude-plugin" / "plugin.json"
@@ -841,13 +920,20 @@ def plugin_version() -> tuple[str, str] | None:
         version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
         if version:
             return str(version), ".claude-plugin/plugin.json"
-    except (OSError, ValueError, KeyError, TypeError):
+        print(f"warning: {manifest} has an empty version — falling back to "
+              f"shared/migrations.md", file=sys.stderr)
+    except FileNotFoundError:
         pass
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        print(f"warning: unusable {manifest} ({e.__class__.__name__}: {e}) "
+              f"— falling back to shared/migrations.md", file=sys.stderr)
     migrations = here.parents[1] / "migrations.md"
     try:
         fm = extract_frontmatter(
             migrations.read_text(encoding="utf-8")) or {}
-    except OSError:
+    except OSError as e:
+        print(f"warning: unreadable {migrations}: {e} — the plugin version "
+              f"is unknown", file=sys.stderr)
         return None
     current = fm.get("current_version")
     if isinstance(current, str) and current:

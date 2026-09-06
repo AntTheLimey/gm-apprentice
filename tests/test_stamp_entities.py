@@ -135,6 +135,32 @@ class SetTests(ScriptCase):
             '  plan: "[[Chapter_01_Session_02_Plan]]"\n'
             '  wrap_up: "[[Chapter_01_Session_02_Wrap_Up]]"\n'), after)
 
+    def test_an_inline_parent_map_is_refused_not_duplicated(self):
+        # Appending a second `documents:` block leaves a duplicate
+        # top-level key that every YAML reader resolves last-wins: the
+        # inline plan and play_notes would be gone from the whole
+        # toolchain, and the command used to exit 0 reporting STAMPED.
+        inline = fm(
+            "---",
+            "type: session",
+            'documents: {plan: "[[P]]", play_notes: "[[N]]"}',
+            "---",
+            "",
+            "# Session 02",
+        )
+        for value in ('{plan: "[[P]]", play_notes: "[[N]]"}', "{}", "[]"):
+            with self.subTest(value=value):
+                source = inline.replace(
+                    '{plan: "[[P]]", play_notes: "[[N]]"}', value)
+                path = self.note("Sessions/S02.md", source)
+                out = self.run_script(
+                    "Sessions/S02.md", "--set", "documents.wrap_up=[[W]]",
+                    "--write", rc=1)
+                self.assertIn("documents: has an inline value — convert it "
+                              "to a block mapping by hand", out)
+                self.assertTrue(out.startswith("ERROR\t"), out)
+                self.assertEqual(path.read_text(encoding="utf-8"), source)
+
     def test_three_actions_in_one_row(self):
         path = self.note("Campaign_Overview.md", OVERVIEW)
         out = self.run_script(
@@ -564,6 +590,18 @@ class RepairCanonUnitTests(unittest.TestCase):
         self.assertTrue(actions)
         self.assertIsNone(conflict)
         self.assertEqual(block, ["type: npc\n", "canon_status: DRAFT\n"])
+
+    def test_a_block_valued_legacy_key_is_refused(self):
+        # Renaming this yields `canon_status:` followed by list items —
+        # a shape no consumer accepts and no reader flags, reported as
+        # REPAIRED. Deleting it orphans the same items. Refuse both.
+        block = ["type: npc\n", "confidence:\n", "  - one\n", "  - two\n"]
+        before = list(block)
+        actions, mode, error = se._plan_repair(block)
+        self.assertTrue(error)
+        self.assertIsNone(mode)
+        self.assertIn("carries an indented block", actions[0])
+        self.assertEqual(block, before)
 
     def test_nested_legacy_key_is_left_alone(self):
         block = ["type: npc\n", "meta:\n", "  confidence: DRAFT\n"]

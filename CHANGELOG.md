@@ -36,9 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     published headings carrying an exclude-list entry or Keeper
     keyword are WARNING; Keeper-looking bold labels and callouts are
     INFO. Honours `publish: none` / `publish: stub` so it never
-    reports a line the site strips.
-  - `vault_check.py pc-body` — the `## Current Status` placement rule
-    (`shared/pc-body-structure.md`) that nothing checked: ERROR when
+    reports a line the site strips. A heading inside a
+    `<!-- gm-only -->` block starts no section exclusion, matching the
+    publish pipeline's own order (markers are stripped before
+    `filterSections`) — otherwise the fenced `## GM Notes` that
+    `wrapup --fix` writes hid every later leak from this check.
+  - `vault_check.py pc-body [--folder SUB]` — the `## Current Status`
+    placement rule (`shared/pc-body-structure.md`) that nothing
+    checked: ERROR when
     the block sits inside a gm-only or spoiler fence, WARNING when it
     follows `## Notes` / `## GM Notes`, is not an H2, or an H2 is
     duplicated; INFO for a missing block, no labelled fields, or a
@@ -55,14 +60,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     set including the re-nest the 1.9.5 migration specified in prose
     (hoist the player-facing sections, demote Keeper H2s under
     `## GM Notes`, one fence) — content-preserving, dry-run rows
-    first. Filename renames stay manual.
+    first, and every fix row is read back off the bytes the repair
+    produced rather than predicted from the findings. A file whose
+    gm-only fence is unbalanced or crosses a player-facing section
+    boundary gets its frontmatter backfilled and its body left
+    untouched: which marker is missing changes what publishes, so it
+    is the GM's call. Filename renames stay manual.
   - `vault_check.py active-pcs` — exposes the roster helper the
     wrap-up prose re-derived three times.
   - `stamp_entities.py --set KEY=VALUE` / `--increment KEY` /
     `--promote` / `--reconciled D` / `--supersede-by "[[X]]"` —
     generic frontmatter writes (one-level dotted keys such as
     `documents.wrap_up`; `--set` refuses the keys that have their own
-    flag) that retire the hand-bookkeeping in wrap-up 4b (campaign
+    flag, and refuses a dotted write whose parent carries an inline
+    value rather than appending a duplicate top-level key) that retire
+    the hand-bookkeeping in wrap-up 4b (campaign
     overview), the session-index transitions, reconcile's promotion
     step and world-evolution's stamps. `--session` and `--date` are
     now independent.
@@ -71,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     only a legacy key exists, collapse when both agree, keep
     `canon_status` and raise a `CONFLICT` row when they disagree;
     exactly one `canon_status:` line afterwards or the file is
-    refused. With no FILE it sweeps the whole vault, `_Templates/`
+    refused, as is a legacy key whose value is an indented block. With no FILE it sweeps the whole vault, `_Templates/`
     and `_meta/` included.
   - `gm-publish sheet show --pc <name> [--player-safe] [--json]` —
     prints a PC sheet as the site would show it (the same strip chain
@@ -98,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Every prose site that restated a check now invokes the script**
-  (22 skill files): the eight version-check paragraphs, campaign-qa's
+  (23 skill files): the eight version-check paragraphs, campaign-qa's
   graph-health / legacy-canon / wrap-up-conformance procedures,
   campaign-organizer's migration Step 3, session-wrapup's campaign
   overview and session-index bookkeeping, reconcile's fast path and

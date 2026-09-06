@@ -48,24 +48,32 @@ function findPc(pcs, wanted) {
 
 // The published body. The strip chain itself lives in processor.playerSafeMarkdown
 // and is shared with build.js's PC path, so a strip step added to the build cannot
-// miss this view. Only the `publish: stub` reduction is applied here on top —
-// build.js does it earlier, over page.markdown, before its own chain runs.
+// miss this view.
+//
+// The `publish: stub` reduction runs FIRST, over page.markdown, in the same order
+// build.js:319 applies it — before its own chain. Order is not cosmetic here: an
+// unclosed `<!-- gm-only -->` opener inside an included section makes stripGmOnly
+// cascade to the end of whatever it is given, so reducing first strips to the end
+// of the stub and reducing last strips through sections the build had already
+// dropped. Running them in the other order printed a section the site does not
+// ship, which is the one thing this view exists not to do.
 //
 // stripLeadingH1 is deliberately NOT applied: the site drops the H1 because the
 // page template prints the name in a header, but this is a text view with no
 // template around it, so the name has to stay in the document.
 function playerSafeBody(page, publishConfig, warnings) {
-  const result = playerSafeMarkdown(page.markdown, {
-    excludeCallouts: publishConfig.exclude_callouts,
-    excludeSections: publishConfig.exclude_sections,
-  });
-  warnings.push(...result.warnings);
+  let markdown = page.markdown;
   if (publishMode(page.frontmatter) === 'stub') {
     const include = Array.isArray(page.frontmatter.publish_include_sections)
       ? page.frontmatter.publish_include_sections
       : [];
-    return keepOnlySections(result.text, include);
+    markdown = keepOnlySections(markdown || '', include);
   }
+  const result = playerSafeMarkdown(markdown, {
+    excludeCallouts: publishConfig.exclude_callouts,
+    excludeSections: publishConfig.exclude_sections,
+  });
+  warnings.push(...result.warnings);
   return result.text;
 }
 

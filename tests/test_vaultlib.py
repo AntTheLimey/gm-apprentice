@@ -192,6 +192,38 @@ class FrontmatterEditorTests(unittest.TestCase):
         vl.set_nested_key(fm, "documents", "notes", '"[[N]]"', "\n")
         self.assertIn('    notes: "[[N]]"\n', "".join(fm))
 
+    def test_set_nested_key_refuses_an_inline_parent_map(self):
+        # Appending a second `documents:` block here would leave a
+        # duplicate top-level key: every YAML reader resolves it
+        # last-wins, so the inline plan and play_notes would vanish from
+        # the whole toolchain while the writer reported success.
+        inline = 'documents: {plan: "[[P]]", play_notes: "[[N]]"}\n'
+        fm = self.fm(f"---\n{inline}---\n")
+        with self.assertRaises(ValueError) as caught:
+            vl.set_nested_key(fm, "documents", "wrap_up", '"[[W]]"', "\n")
+        self.assertIn("inline value", str(caught.exception))
+        self.assertEqual("".join(fm), inline)
+
+    def test_set_nested_key_refuses_an_inline_empty_parent(self):
+        for value in ("{}", "[]"):
+            with self.subTest(value=value):
+                fm = self.fm(f"---\ndocuments: {value}\n---\n")
+                with self.assertRaises(ValueError):
+                    vl.set_nested_key(fm, "documents", "plan", '"[[P]]"',
+                                      "\n")
+                self.assertEqual("".join(fm), f"documents: {value}\n")
+
+    def test_set_nested_key_ignores_a_trailing_comment_on_the_parent(self):
+        fm = self.fm("---\ndocuments:  # the chain\n  plan: \"[[P]]\"\n---\n")
+        vl.set_nested_key(fm, "documents", "notes", '"[[N]]"', "\n")
+        self.assertIn('  notes: "[[N]]"\n', "".join(fm))
+
+    def test_opens_a_block(self):
+        fm = self.fm("---\nconfidence:\n  - one\n  - two\nstatus: DRAFT\n---\n")
+        self.assertTrue(vl.opens_a_block(fm, "confidence"))
+        self.assertFalse(vl.opens_a_block(fm, "status"))
+        self.assertFalse(vl.opens_a_block(fm, "absent"))
+
     def test_delete_key_first_top_level_only(self):
         fm = self.fm("---\ntype: npc\ndocuments:\n  type: nested\n"
                      "type: duplicate\n---\n")
@@ -318,6 +350,34 @@ class ScanBodyTests(unittest.TestCase):
         self.assertEqual(
             self.published_lines(),
             {4, 5, 6, 7, 8, 16, 18, 23, 24, 25, 26, 27, 28})
+
+    def test_a_heading_inside_a_gm_block_starts_no_exclusion(self):
+        # The publish pipeline runs stripGmOnly BEFORE filterSections, so
+        # this `## GM Notes` is already gone when the section filter runs:
+        # it never starts an exclusion, and the bold label below the
+        # closer publishes. `<!-- gm-only -->` around `## GM Notes` is
+        # exactly the shape `wrapup --fix` writes, so treating it as an
+        # exclusion blinded gm-leak to everything appended after it.
+        text = ("# Bob\n\n<!-- gm-only -->\n## GM Notes\nhidden\n"
+                "<!-- /gm-only -->\n\n**Secret:** he runs the cult.\n")
+        states, problems = vl.scan_body(text, exclude_sections=["GM Notes"])
+        by_line = {s.lineno: s for s in states}
+        self.assertEqual(problems, [])
+        self.assertEqual(by_line[4].heading, (2, "GM Notes"))
+        self.assertIsNone(by_line[4].excluded_by)
+        self.assertFalse(by_line[4].published)   # hidden by the fence
+        self.assertIsNone(by_line[8].excluded_by)
+        self.assertTrue(by_line[8].published)
+
+    def test_a_heading_inside_a_gm_block_ends_no_exclusion(self):
+        # The mirror case: an exclusion opened outside the block is not
+        # closed by a shallower heading the publish tool has stripped.
+        text = ("## GM Notes\nhidden\n<!-- gm-only -->\n# Top\n"
+                "<!-- /gm-only -->\nstill under GM Notes\n")
+        states, _ = vl.scan_body(text, exclude_sections=["GM Notes"])
+        by_line = {s.lineno: s for s in states}
+        self.assertEqual(by_line[6].excluded_by, "GM Notes")
+        self.assertFalse(by_line[6].published)
 
     def test_spoiler_markers_tracked_separately(self):
         states, problems = vl.scan_body(

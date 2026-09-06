@@ -471,6 +471,22 @@ class GmLeakCommandTests(unittest.TestCase):
             "publish strips to end of file",
             vc.check_gm_leak(vault, None))
 
+    def test_a_fenced_gm_notes_heading_hides_nothing_below_the_closer(self):
+        # `<!-- gm-only -->` wrapping `## GM Notes` is the shape
+        # `wrapup --fix` writes. The publish pipeline strips the block
+        # before filterSections runs, so that heading excludes nothing —
+        # and letting it start an exclusion made this check blind to
+        # everything a GM appended after the closer.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n<!-- gm-only -->\n"
+            "## GM Notes\nhidden\n<!-- /gm-only -->\n\n"
+            "**Secret:** he runs the cult.\n\n"
+            "> [!note] GM only: he lies.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "bold label 'Secret'"), rows)
+        self.assertTrue(rows_for(rows, "callout [!note] GM only"), rows)
+
     def test_a_config_exclude_entry_silences_its_own_section(self):
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:6"), self.rows)
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:10"), self.rows)
@@ -637,6 +653,19 @@ class PcBodyCommandTests(unittest.TestCase):
 
     def test_a_vault_with_no_pcs_is_empty(self):
         self.assertEqual(vc.check_pc_body(make_vault(self)), [])
+
+    def test_folder_restricts_the_walk(self):
+        # `--folder` used to be accepted and ignored here, which reads as
+        # a clean bill of health for a folder that was never scanned.
+        rows = vc.check_pc_body(LEAK, "Characters/PCs")
+        self.assertTrue(all("Characters/PCs/" in r for r in rows), rows)
+        self.assertTrue(rows_for(rows, FENCED), rows)
+        self.assertEqual(vc.check_pc_body(LEAK, "Characters/NPCs"), [])
+
+    def test_folder_restricts_the_walk_through_the_cli(self):
+        proc = run_cli(LEAK, "pc-body", "--folder", "Characters/NPCs")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("# count: 0", proc.stdout)
 
     def test_cli_emits_the_section_and_all_includes_it(self):
         proc = run_cli(LEAK, "pc-body")
@@ -858,6 +887,24 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn(
             f'INFO\t{LEGACY}\tcampaign: absent — backfill '
             f'"[[Vienna Campaign]]" from the session index', self.rows)
+
+    def test_a_yaml_example_in_the_index_body_is_not_backfilled(self):
+        # `get_key` matches `^key:` at column 0, so a fenced YAML example
+        # in the index's own body used to be read as its frontmatter and
+        # written into a wrap-up under `--fix`.
+        vault = make_vault(self)
+        (vault / "Session 01 - X.md").write_text(
+            "---\ntype: session\nsession_number: 1\n---\n\n"
+            "The frontmatter looks like this:\n\n```yaml\n"
+            'chapter: "[[Not A Real Chapter]]"\n'
+            'campaign: "[[Not A Real Campaign]]"\n```\n', encoding="utf-8")
+        (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+            "---\ntype: session_wrap\nsession_number: 1\n---\n\n"
+            "## Narrative Recap\n\nIt happened.\n", encoding="utf-8")
+        rows = vc.check_wrapup(vault, None, True)
+        self.assertFalse(rows_for(rows, "Not A Real"), rows)
+        self.assertNotIn("Not A Real",
+                         read(vault, "Chapter_01_Session_01_Wrap_Up.md"))
 
     def test_created_by_and_tags_are_backfilled(self):
         self.assertIn(
@@ -1215,6 +1262,93 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn("type: session_wrap", text)
         self.assertIn("\n## Keeper Checklist\n", text)
         self.assertFalse(rows_for(rows, "re-nested"), rows)
+
+    # ---- an unbalanced fence stops the body repair -------------------
+
+    def test_an_unclosed_opener_over_player_blocks_leaves_the_body_alone(self):
+        # The whole tail is player-facing, so the re-nest found no GM
+        # region, built no fence, and dropped the opener — republishing
+        # everything the site strips to EOF, under a fix row claiming a
+        # fence it never wrote.
+        vault, rel = self.wrap_file(
+            "\nIntro line.\n\n<!-- gm-only -->\n\n## Narrative Recap\n\n"
+            "The whole recap was Keeper-only.\n\n## Memorable Moments\n\n"
+            "- A great line.\n")
+        before = read(vault, rel)
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertEqual(read(vault, rel), before)
+        self.assertFalse(rows_for(rows, "re-nested"), rows)
+        self.assertTrue(rows_for(
+            rows, "<!-- gm-only --> never closed — publish strips to end "
+                  "of file"), rows)
+        self.assertTrue(rows_for(
+            rows, "gm-only fence is unbalanced — close it by hand before "
+                  "--fix re-nests"), rows)
+
+    def test_an_unclosed_opener_before_a_keeper_h2_leaves_the_body_alone(self):
+        vault, rel = self.wrap_file(
+            "\nIntro line.\n\n<!-- gm-only -->\n\n## Narrative Recap\n\n"
+            "It happened.\n\n## Keeper Checklist\n\n- [ ] a task\n")
+        before = read(vault, rel)
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertEqual(read(vault, rel), before)
+        self.assertFalse(rows_for(rows, "re-nested"), rows)
+        self.assertTrue(rows_for(
+            rows, "gm-only fence is unbalanced"), rows)
+
+    def test_an_orphan_closer_leaves_the_body_alone(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n<!-- /gm-only -->\n\n"
+            "## Keeper Checklist\n\n- [ ] a task\n")
+        before = read(vault, rel)
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertEqual(read(vault, rel), before)
+        self.assertFalse(rows_for(rows, "re-nested"), rows)
+        self.assertTrue(rows_for(
+            rows, "gm-only fence is unbalanced"), rows)
+
+    def test_an_unbalanced_fence_still_lets_frontmatter_fixes_through(self):
+        vault, rel = self.wrap_file(
+            "\nIntro line.\n\n<!-- gm-only -->\n\n## Narrative Recap\n\n"
+            "It happened.\n", fm="---\ntype: session-wrap-up\n---\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        text = read(vault, rel)
+        self.assertIn("type: session_wrap", text)
+        self.assertIn("<!-- gm-only -->\n\n## Narrative Recap", text)
+        self.assertFalse(rows_for(rows, "re-nested"), rows)
+
+    def test_an_unbalanced_spoiler_fence_names_itself(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n<!-- spoiler -->\n\n"
+            "## Keeper Checklist\n\n- [ ] a task\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(rows, "spoiler fence is unbalanced"), rows)
+
+    # ---- fix rows describe the bytes, not the findings ---------------
+
+    def test_the_renest_row_counts_what_actually_moved(self):
+        vault, rel = self.wrap_file(
+            "\n## Session Recap\n\nIt happened.\n\n## Keeper Checklist\n\n"
+            "- [ ] a task\n\n## World State\n\nVienna.\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(
+            rows, "re-nested 2 Keeper-facing H2 sections under ## GM Notes "
+                  "in one <!-- gm-only --> pair"), rows)
+        self.assertTrue(rows_for(
+            rows, "renamed heading 'Session Recap' to 'Narrative Recap'"),
+            rows)
+        text = read(vault, rel)
+        self.assertIn("### Keeper Checklist", text)
+        self.assertIn("### World State", text)
+
+    def test_one_moved_section_is_reported_in_the_singular(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n## World State\n\n"
+            "Vienna.\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(
+            rows, "re-nested 1 Keeper-facing H2 section under ## GM Notes"),
+            rows)
 
     def test_a_second_recap_variant_is_left_titled_as_it_was(self):
         vault, rel = self.wrap_file(

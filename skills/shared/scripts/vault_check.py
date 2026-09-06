@@ -17,7 +17,7 @@ Usage:
   vault_check.py VAULT relationships
   vault_check.py VAULT sessions
   vault_check.py VAULT gm-leak [--folder SUB]
-  vault_check.py VAULT pc-body
+  vault_check.py VAULT pc-body [--folder SUB]
   vault_check.py VAULT wrapup [--file REL] [--fix]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
@@ -77,6 +77,7 @@ from vaultlib import (  # noqa: F401
     LINK_RE,
     PC_INACTIVE_STATUS,
     SKIP_DIRS,
+    WRAP_UP_TYPES,
     LineState,
     active_pc_names,
     active_pcs,
@@ -88,6 +89,7 @@ from vaultlib import (  # noqa: F401
     link_target,
     nested_mapping,
     normalize,
+    opens_a_block,
     parse_version,
     plugin_version,
     publish_mode,
@@ -677,8 +679,7 @@ YAML_NULLS = {"", "null", "~"}
 SESSION_DOC_TYPES: dict[str, tuple[str, set[str]]] = {
     "plan": ("plan", {"session-plan"}),
     "play_notes": ("play notes", {"session-play-notes"}),
-    "wrap_up": ("wrap-up", {"session_wrap", "session-wrap-up",
-                            "session-wrapup"}),
+    "wrap_up": ("wrap-up", set(WRAP_UP_TYPES)),
 }
 
 
@@ -1043,7 +1044,7 @@ def _has_labelled_field(states: list[LineState], start: LineState,
     return False
 
 
-def check_pc_body(vault: Path) -> list[str]:
+def check_pc_body(vault: Path, folder: str | None = None) -> list[str]:
     """PC sheet skeleton and `## Current Status` placement.
 
     `shared/pc-body-structure.md` makes three promises about the block
@@ -1063,7 +1064,7 @@ def check_pc_body(vault: Path) -> list[str]:
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
-    for rel, text in vault_files(vault):
+    for rel, text in vault_files(vault, folder):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
@@ -1295,6 +1296,11 @@ def _wrap_eol(text: str) -> str:
     by a re-nest. That is a deliberate simplification — mixed endings
     are already ambiguous to every tool that reads the vault — and it
     keeps a uniform file, which is every real one, byte-identical.
+
+    The same applies to the exotic separators `str.splitlines()` also
+    breaks on (`\\x0b`, `\\x0c`, U+2028, U+2029): a re-nest rejoins with
+    this EOL, so they become ordinary line breaks. No content is lost,
+    and no vault has ever carried one.
     """
     return "\r\n" if "\r\n" in text else "\n"
 
@@ -1353,10 +1359,20 @@ def _wrap_context(rel: str, fm: dict,
 
 
 def _index_value(ctx: WrapContext, key: str) -> str | None:
-    """A raw frontmatter value from the resolved session index."""
+    """A raw frontmatter value from the resolved session index.
+
+    The frontmatter span, not the whole file: `get_key` matches `^key:`
+    at column 0, and a session index whose body quotes a YAML example
+    would otherwise have that example's `chapter:` backfilled into a
+    wrap-up's real frontmatter by `--fix`.
+    """
     if ctx.index_rel is None:
         return None
-    value = get_key(ctx.index_text.splitlines(keepends=True), key)
+    lines = ctx.index_text.splitlines(keepends=True)
+    close, err = frontmatter_span(lines)
+    if err:
+        return None
+    value = get_key(lines[1:close], key)
     return value or None
 
 
@@ -1381,23 +1397,12 @@ def _wrap_section(states: list[LineState], title: str) -> list[LineState]:
     return out
 
 
-def _opens_a_block(fm_lines: list[str], key: str) -> bool:
-    """Does `key:` carry an indented block rather than a scalar?
-
-    `delete_key` removes one line. On a key whose value is a block list
-    that would leave the `- "…"` items behind as orphan YAML, so the
-    fix layer has to be able to tell the two shapes apart.
-    """
-    pattern = re.compile(rf"^{re.escape(key)}:")
-    for i, line in enumerate(fm_lines):
-        if not pattern.match(line):
-            continue
-        for nxt in fm_lines[i + 1:]:
-            if not nxt.strip():
-                continue
-            return nxt[:1].isspace()
-        return False
-    return False
+# `delete_key` removes one line; on a key whose value is a block list
+# that would leave the `- "…"` items behind as orphan YAML, so the fix
+# layer has to be able to tell the two shapes apart. Shared with
+# `stamp_entities.py --repair-canon`, which refuses a block-valued legacy
+# key for the same reason.
+_opens_a_block = opens_a_block
 
 
 def _legacy_dates(fm_lines: list[str]) -> tuple[list[str], str, str, str]:
@@ -1654,9 +1659,11 @@ def wrapup_structure_findings(rel: str, text: str,
     structure drift only. A heading quoted inside a code fence is
     documentation — reported, never moved.
 
-    A gm-only pair with one end inside a player-facing section and the
-    other outside it stops the re-nest for the whole file: either
-    placement changes what publishes, so the choice is the GM's.
+    Two fence shapes stop the re-nest for the whole file, because both
+    make "what is the GM region?" a question only the GM can answer: a
+    pair with one end inside a player-facing section and the other
+    outside it (either placement changes what publishes), and a pair
+    that never closes or closes without an opener.
     """
     states, problems = scan_body(text, exclude)
     preserved, crossing = _gm_pair_plan(states)
@@ -1667,12 +1674,29 @@ def wrapup_structure_findings(rel: str, text: str,
             "ERROR", f"{rel}:{lineno}",
             "gm-only fence crosses a player-facing section boundary — "
             "re-nest by hand", "fence-crosses"))
-    for row in _fence_rows(rel, problems):
+    fence_rows = _fence_rows(rel, problems)
+    for row in fence_rows:
         # `_fence_rows` already words these — an orphan closer publishes
-        # everything above it, an unclosed one strips to EOF — and the
-        # re-nest is the repair for both.
+        # everything above it, an unclosed one strips to EOF.
         fence_level, fence_where, fence_message = row.split("\t", 2)
-        out.append(Finding(fence_level, fence_where, fence_message, "renest"))
+        out.append(Finding(fence_level, fence_where, fence_message,
+                           "fence-unbalanced"))
+    if fence_rows:
+        # An unbalanced pair stops every body repair, exactly as a
+        # crossing pair does. The re-nest strips the markers of the GM
+        # region and rebuilds one pair around whatever it decided the GM
+        # region was; with one end of a pair missing there is no such
+        # decision to make. An unclosed opener followed only by
+        # player-facing blocks used to come out with no marker at all,
+        # publishing everything the site strips to EOF today — silently,
+        # and under a fix row claiming a fence had been written. Which
+        # marker is missing, and where it belonged, is the GM's call.
+        _level, where, message = fence_rows[0].split("\t", 2)
+        word = "spoiler" if "spoiler" in message else "gm-only"
+        out.append(Finding(
+            "ERROR", where,
+            f"{word} fence is unbalanced — close it by hand before --fix "
+            f"re-nests", "fence-unbalanced"))
 
     # A pair the re-nest preserves is the author's own aside, not a
     # second copy of the canonical fence — counting it would report
@@ -2143,17 +2167,19 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
     lines[1:close] = fm_lines
     new_text = "".join(lines)
 
-    # A fence that crosses a section boundary stops every body repair —
-    # the frontmatter backfills are independent of it and still apply.
-    if not any(f.kind == "fence-crosses" for f in structure):
+    # A fence that crosses a section boundary, or one that is unbalanced,
+    # stops every body repair — the frontmatter backfills are independent
+    # of it and still apply.
+    if not any(f.kind in ("fence-crosses", "fence-unbalanced")
+               for f in structure):
         if any(f.kind in ("keeper-h2", "recap", "renest") for f in structure):
             renested = renest_wrapup(new_text)
             # Structure-only defects — an unfenced `## GM Notes`, a
-            # second opener, an orphan marker — carry no per-finding
-            # action, so what the re-nest did is read back off the text
-            # rather than predicted from the findings that triggered it.
+            # second opener — carry no per-finding action, so what the
+            # re-nest did is read back off the two texts rather than
+            # predicted from the findings that triggered it.
             if renested != new_text:
-                actions.extend(_renest_actions(structure))
+                actions.extend(_renest_actions(new_text, renested))
                 new_text = renested
         if any(f.kind == "decorated" for f in structure):
             new_text, renamed = rename_decorated_headings(new_text)
@@ -2171,16 +2197,46 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
     return rows
 
 
-def _renest_actions(structure: list[Finding]) -> list[str]:
-    """What the re-nest did, as fix rows."""
-    keeper = [f for f in structure if f.kind == "keeper-h2"]
-    if keeper:
-        out = [f"re-nested {len(keeper)} Keeper-facing H2 sections under "
-               f"## GM Notes in one {GM_ONLY_OPEN} pair"]
-    else:
+def _renest_actions(before: str, after: str) -> list[str]:
+    """What the re-nest did, as fix rows — read off the two texts.
+
+    Derived, never predicted. The rows worded from the *findings* claimed
+    a fence and a `## GM Notes` for a file that came out with neither,
+    and in a dry run that row is the only thing the GM sees before
+    approving the write. A fix row must describe the bytes the repair
+    produced, or it is worse than no row at all.
+    """
+    before_blocks = _wrap_blocks(scan_body(before, ())[0])
+    after_states, _ = scan_body(after, ())
+    after_h2 = [s.heading[1] for s in after_states
+                if s.heading is not None and s.heading[0] == 2]
+
+    remaining = list(after_h2)
+    moved = 0
+    for kind, title, _group in before_blocks:
+        if kind != "keeper":
+            continue
+        if title in remaining:
+            remaining.remove(title)
+        else:
+            moved += 1
+
+    fenced_gm = any(s.heading is not None and s.gm_depth > 0
+                    and s.heading[1].casefold() == GM_NOTES
+                    for s in after_states)
+    if moved:
+        out = [f"re-nested {moved} Keeper-facing H2 section"
+               f"{'' if moved == 1 else 's'} under ## GM Notes in one "
+               f"{GM_ONLY_OPEN} pair"]
+    elif fenced_gm:
         out = [f"re-nested: single {GM_ONLY_OPEN} fence around ## GM Notes"]
-    out.extend(f"renamed heading '{f.data[0]}' to '{NARRATIVE_RECAP}'"
-               for f in structure if f.kind == "recap" and f.data)
+    else:
+        out = ["re-nested: player-facing sections hoisted; no GM region "
+               "left to fence"]
+    out.extend(f"renamed heading '{title}' to '{NARRATIVE_RECAP}'"
+               for kind, title, _group in before_blocks
+               if kind == "recap" and title != NARRATIVE_RECAP
+               and NARRATIVE_RECAP in after_h2 and title not in after_h2)
     return out
 
 
@@ -2201,7 +2257,7 @@ def main() -> int:
                                         "gm-leak", "pc-body", "wrapup",
                                         "version", "active-pcs", "all"])
     ap.add_argument("--folder",
-                    help="restrict the frontmatter and gm-leak "
+                    help="restrict the frontmatter, gm-leak and pc-body "
                          "checks to a subfolder")
     ap.add_argument("--file",
                     help="restrict the wrapup check to one vault-relative "
@@ -2259,7 +2315,7 @@ def main() -> int:
     if args.command in ("gm-leak", "all"):
         emit("gm-leak", check_gm_leak(args.vault, args.folder))
     if args.command in ("pc-body", "all"):
-        emit("pc-body", check_pc_body(args.vault))
+        emit("pc-body", check_pc_body(args.vault, args.folder))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects
