@@ -698,6 +698,25 @@ Canon merged from the play notes.
 """
 
 
+# Every canonical field present, so a test can isolate a body defect
+# without the frontmatter backfills firing alongside it.
+FULL_FM = """---
+type: session_wrap
+session: "[[Session 01 - Lone]]"
+session_number: 1
+chapter: "[[Chapter 1 - A]]"
+campaign: "[[Campaign Overview]]"
+play_date: null
+in_game_date: null
+source_document: "[[Session 01 - Lone - Play Notes]]"
+canon_status: DRAFT
+created_by: session-wrapup
+reconciled: null
+tags: []
+---
+"""
+
+
 def copy_fixture(case, name):
     """A writable copy of a read-only fixture vault — `--fix` writes."""
     d = Path(tempfile.mkdtemp(prefix="vc-wrapup-"))
@@ -812,14 +831,15 @@ class WrapupCommandTests(unittest.TestCase):
             "---\ntype: session_wrap\nin_game_dates:\n"
             '  - "5 March 1814"\n  - "6 March 1814"\n---\n\n'
             "## Narrative Recap\n\nIt happened.\n", encoding="utf-8")
-        before = read(vault, rel)
         rows = vc.check_wrapup(vault, rel, True)
         self.assertTrue(rows_for(rows, "is a block list — map it to "
                                        "in_game_date and remove the block "
                                        "by hand"), rows)
         self.assertFalse(rows_for(rows, "removed in_game_dates"), rows)
-        self.assertIn("in_game_dates:\n", read(vault, rel))
-        self.assertIn('  - "5 March 1814"\n', before)
+        after = read(vault, rel)
+        self.assertIn("in_game_dates:\n", after)
+        self.assertIn('  - "5 March 1814"\n', after)
+        self.assertIn('  - "6 March 1814"\n', after)
 
     def test_source_document_backfills_from_the_unique_play_notes(self):
         self.assertIn(
@@ -1134,6 +1154,161 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn("## Narrative Recap", text)
         self.assertNotIn("gm-only", text)
         self.assertNotIn("## GM Notes", text)
+
+    # ---- player-side fences survive the re-nest ----------------------
+
+    def wrap_file(self, body, fm=FULL_FM,
+                  rel="Chapter_01_Session_01_Wrap_Up.md"):
+        """A wrap-up in a throwaway vault; returns (vault, rel)."""
+        vault = make_vault(self)
+        (vault / rel).write_text(fm + body, encoding="utf-8")
+        return vault, rel
+
+    def test_a_fenced_aside_inside_the_recap_survives_the_rename(self):
+        # The re-nest used to strip every gm-only marker before
+        # rebuilding one pair, which republished the aside — a leak
+        # caused by the repair.
+        vault, rel = self.wrap_file(
+            "\n## Session Recap\n\nIt happened.\n\n<!-- gm-only -->\n\n"
+            "The dagger was a fake.\n\n<!-- /gm-only -->\n\n"
+            "More recap prose.\n")
+        vc.check_wrapup(vault, rel, True)
+        # Byte-for-byte: the heading is renamed and nothing else moves.
+        self.assertEqual(
+            read(vault, rel),
+            FULL_FM + "## Narrative Recap\n\nIt happened.\n\n"
+            "<!-- gm-only -->\n\nThe dagger was a fake.\n\n"
+            "<!-- /gm-only -->\n\nMore recap prose.\n")
+
+    def test_a_fenced_aside_in_the_preamble_survives(self):
+        vault, rel = self.wrap_file(
+            "\n<!-- gm-only -->\n\nKeeper preamble note.\n\n"
+            "<!-- /gm-only -->\n\n# Title\n\n## Session Recap\n\n"
+            "It happened.\n")
+        vc.check_wrapup(vault, rel, True)
+        self.assertEqual(
+            read(vault, rel),
+            FULL_FM + "\n<!-- gm-only -->\n\nKeeper preamble note.\n\n"
+            "<!-- /gm-only -->\n\n# Title\n\n## Narrative Recap\n\n"
+            "It happened.\n")
+
+    def test_a_fence_crossing_a_section_boundary_stops_the_renest(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n<!-- gm-only -->\n\n"
+            "Keeper aside inside the recap.\n\n## Keeper Checklist\n\n"
+            "- [ ] a task\n\n<!-- /gm-only -->\n")
+        before = read(vault, rel)
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(
+            rows, "gm-only fence crosses a player-facing section boundary — "
+                  "re-nest by hand"), rows)
+        self.assertTrue([r for r in rows if r.startswith("ERROR\t")], rows)
+        self.assertEqual(read(vault, rel), before)
+
+    def test_the_crossing_error_still_lets_frontmatter_fixes_through(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n<!-- gm-only -->\n\n"
+            "Aside.\n\n## Keeper Checklist\n\n- [ ] a task\n\n"
+            "<!-- /gm-only -->\n", fm="---\ntype: session-wrap-up\n---\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        text = read(vault, rel)
+        self.assertIn("type: session_wrap", text)
+        self.assertIn("\n## Keeper Checklist\n", text)
+        self.assertFalse(rows_for(rows, "re-nested"), rows)
+
+    def test_a_second_recap_variant_is_left_titled_as_it_was(self):
+        vault, rel = self.wrap_file(
+            "\n## Session Recap\n\nFirst.\n\n## What Happened\n\nSecond.\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(
+            rows, "'## What Happened' is a second recap-variant heading "
+                  "left as-is — merge by hand"), rows)
+        text = read(vault, rel)
+        self.assertEqual(text.count("## Narrative Recap"), 1)
+        self.assertIn("\n## What Happened\n", text)
+
+    # ---- structure-only repairs are reported and applied -------------
+
+    def test_a_structure_only_defect_is_repaired_not_reported_unchanged(self):
+        # Complete frontmatter, one unfenced ## GM Notes: the file used
+        # to report UNCHANGED and return before the write.
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n## GM Notes\n\n"
+            "### World State\n\nVienna.\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertFalse(rows_for(rows, "UNCHANGED"), rows)
+        self.assertTrue(rows_for(
+            rows, "re-nested: single <!-- gm-only --> fence around "
+                  "## GM Notes"), rows)
+        text = read(vault, rel)
+        self.assertIn("<!-- gm-only -->\n\n## GM Notes", text)
+        self.assertIn("<!-- /gm-only -->", text)
+
+    def test_a_structure_only_repair_is_reported_beside_frontmatter_ones(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n## GM Notes\n\n"
+            "### World State\n\nVienna.\n",
+            fm="---\ntype: session_wrap\n---\n")
+        rows = vc.check_wrapup(vault, rel, False)
+        self.assertTrue(rows_for(rows, "WOULD-FIX"), rows)
+        self.assertTrue(rows_for(rows, "re-nested: single"), rows)
+
+    def test_unchanged_means_byte_identical(self):
+        # The filename WARNING is a judgment call with no repair, so a
+        # file carrying only that one is still byte-identical.
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n",
+            rel="Session 01 - Lone - Wrap-Up.md")
+        before = read(vault, rel)
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(rows, "Chapter_CC_Session_NN_Wrap_Up.md"),
+                        rows)
+        self.assertTrue(rows_for(rows, "UNCHANGED"), rows)
+        self.assertEqual(read(vault, rel), before)
+
+    # ---- more frontmatter edges --------------------------------------
+
+    def test_reconciled_backfills_from_a_dated_callout(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n<!-- gm-only -->\n\n"
+            "## GM Notes\n\n### Reconciliation Context\n\n"
+            "> [!success] Reconciled against the play notes on 2026-05-02\n\n"
+            "<!-- /gm-only -->\n",
+            fm="---\ntype: session_wrap\ncanon_status: AUTHORITATIVE\n---\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(
+            rows, 'reconciled: absent — backfill "2026-05-02" from the '
+                  "Reconciliation Context"), rows)
+        self.assertIn('reconciled: "2026-05-02"', read(vault, rel))
+
+    def test_an_empty_legacy_value_is_reported_not_guessed(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n",
+            fm="---\ntype: session_wrap\nin_game_dates:\n"
+               "canon_status: DRAFT\n---\n")
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(
+            rows, "legacy in_game_dates has an empty value — set "
+                  "in_game_date by hand"), rows)
+        self.assertIn("in_game_dates:\n", read(vault, rel))
+
+    def test_a_heading_inside_a_non_markdown_fence_is_not_reported(self):
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n```python\n"
+            "## Keeper Checklist\nprint(1)\n```\n")
+        self.assertFalse(rows_for(vc.check_wrapup(vault, rel, False),
+                                  "is inside a code fence"))
+
+    def test_a_second_fence_does_not_inherit_the_first_ones_language(self):
+        # `scan_body` marks a closing delimiter as fenced too, so two
+        # fences written back to back look like one run of code lines.
+        vault, rel = self.wrap_file(
+            "\n## Narrative Recap\n\nIt happened.\n\n```python\n"
+            "print(1)\n```\n```markdown\n## Keeper Checklist\n```\n")
+        self.assertTrue(rows_for(
+            vc.check_wrapup(vault, rel, False),
+            "Keeper-facing H2 '## Keeper Checklist' is inside a code fence "
+            "— quoted, not re-nested"))
 
     # ---- CLI ---------------------------------------------------------
 

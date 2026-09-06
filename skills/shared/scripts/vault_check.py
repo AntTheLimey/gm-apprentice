@@ -72,6 +72,7 @@ from schema_rules import (
 # LINK_RE, SKIP_DIRS and PC_INACTIVE_STATUS are re-exported: they were part
 # of this module's surface before vaultlib existed.
 from vaultlib import (  # noqa: F401
+    FENCE_RE,
     HEADING_RE,
     LINK_RE,
     PC_INACTIVE_STATUS,
@@ -1214,9 +1215,12 @@ RECONSTRUCTION_NOTE_RE = re.compile(
     r"^>\s*\[!\w[\w-]*\]\s*Reconstruction Note", re.IGNORECASE)
 RECONCILED_LINE_RE = re.compile(
     r"\*\*Reconciled:?\*\*[^\n]*?(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
+# MULTILINE, because the section text this is searched against starts
+# with its own heading — anchored at the string start it could never
+# match the callout on line two, which is where reconcile writes it.
 RECONCILED_CALLOUT_RE = re.compile(
     r"^>\s*(?:\[!\w[\w-]*\]\s*)?[^\n]*reconcil[^\n]*?(\d{4}-\d{2}-\d{2})",
-    re.IGNORECASE)
+    re.IGNORECASE | re.MULTILINE)
 # The legacy date keys, newest spelling last so `_end` wins the mapping.
 LEGACY_DATE_KEYS = ("in_game_dates", "in_game_date_start", "in_game_date_end")
 # The qualifier separators a decorated heading actually uses.
@@ -1285,8 +1289,13 @@ def decorated_heading(title: str) -> tuple[str, str] | None:
 
 
 def _wrap_eol(text: str) -> str:
-    """The file's line ending. Mixed endings normalise to the first one
-    seen — a wrap-up with both is already corrupt for every other tool."""
+    """The file's line ending: CRLF if the file uses it anywhere, else LF.
+
+    A file with genuinely mixed endings is therefore normalised to CRLF
+    by a re-nest. That is a deliberate simplification — mixed endings
+    are already ambiguous to every tool that reads the vault — and it
+    keeps a uniform file, which is every real one, byte-identical.
+    """
     return "\r\n" if "\r\n" in text else "\n"
 
 
@@ -1372,41 +1381,64 @@ def _wrap_section(states: list[LineState], title: str) -> list[LineState]:
     return out
 
 
-def _legacy_dates(fm_lines: list[str]) -> tuple[list[str], str, str, bool]:
-    """(legacy keys present, range start, range end, block form).
+def _opens_a_block(fm_lines: list[str], key: str) -> bool:
+    """Does `key:` carry an indented block rather than a scalar?
+
+    `delete_key` removes one line. On a key whose value is a block list
+    that would leave the `- "…"` items behind as orphan YAML, so the
+    fix layer has to be able to tell the two shapes apart.
+    """
+    pattern = re.compile(rf"^{re.escape(key)}:")
+    for i, line in enumerate(fm_lines):
+        if not pattern.match(line):
+            continue
+        for nxt in fm_lines[i + 1:]:
+            if not nxt.strip():
+                continue
+            return nxt[:1].isspace()
+        return False
+    return False
+
+
+def _legacy_dates(fm_lines: list[str]) -> tuple[list[str], str, str, str]:
+    """(legacy keys present, range start, range end, value form).
 
     `in_game_date_start`/`_end` win over `in_game_dates` when both are
     written. A string `in_game_dates` that reads as a range is split on
     its own range marker, so `"5–6 March 1814"` is recognised as the
     two-day span it is rather than a single opaque value.
 
-    "Block form" is the shape no fix may touch: a key whose value is an
-    indented list rather than a scalar. `delete_key` removes one line,
-    which would leave the `- "…"` items behind as orphan YAML — a
-    corrupt file is worse than an unmigrated one.
+    The form is `scalar`, `block`, or `empty`. Neither of the last two
+    may be fixed: `delete_key` removes one line, which on a block list
+    would leave the `- "…"` items behind as orphan YAML, and an empty
+    value carries no date to carry across. A corrupt or invented value
+    is worse than an unmigrated one.
     """
     present = [k for k in LEGACY_DATE_KEYS if get_key(fm_lines, k) is not None]
     if not present:
-        return [], "", "", False
-    if any(not (get_key(fm_lines, k) or "").strip() for k in present):
-        return present, "", "", True
+        return [], "", "", "scalar"
+    blank = [k for k in present if not (get_key(fm_lines, k) or "").strip()]
+    if blank:
+        form = "block" if any(_opens_a_block(fm_lines, k) for k in blank) \
+            else "empty"
+        return present, "", "", form
     start = scalar_value(get_key(fm_lines, "in_game_date_start") or "")
     end = scalar_value(get_key(fm_lines, "in_game_date_end") or "")
     if start or end:
-        return present, start or end, end or start, False
+        return present, start or end, end or start, "scalar"
     raw = get_key(fm_lines, "in_game_dates") or ""
     if raw.startswith("[") and raw.endswith("]"):
         items = [v.strip().strip("\"'") for v in raw[1:-1].split(",")
                  if v.strip()]
         if items:
-            return present, items[0], items[-1], False
-        return present, "", "", False
+            return present, items[0], items[-1], "scalar"
+        return present, "", "", "empty"
     value = scalar_value(raw)
     m = DATE_RANGE_RE.search(value)
     if m:
         return (present, value[:m.start()].strip(),
-                value[m.end():].strip() or value, False)
-    return present, value, value, False
+                value[m.end():].strip() or value, "scalar")
+    return present, value, value, "scalar"
 
 
 def wrapup_frontmatter_findings(rel: str, text: str,
@@ -1471,13 +1503,18 @@ def wrapup_frontmatter_findings(rel: str, text: str,
                 "INFO", rel,
                 f"play_date: '{value}' is not YYYY-MM-DD — fix it by hand"))
 
-    legacy, start, end, block_form = _legacy_dates(fm_lines)
+    legacy, start, end, form = _legacy_dates(fm_lines)
     has_date = get_key(fm_lines, "in_game_date") is not None
-    if legacy and block_form:
+    if legacy and form == "block":
         out.append(Finding(
             "WARNING", rel,
             f"legacy {', '.join(legacy)} is a block list — map it to "
             f"in_game_date and remove the block by hand"))
+    elif legacy and form == "empty":
+        out.append(Finding(
+            "WARNING", rel,
+            f"legacy {', '.join(legacy)} has an empty value — set "
+            f"in_game_date by hand"))
     elif legacy and not has_date:
         names = ", ".join(legacy)
         if start != end:
@@ -1520,7 +1557,7 @@ def wrapup_frontmatter_findings(rel: str, text: str,
                 f"source_document: absent — {reason} play notes resolve to "
                 f"this session; add it by hand"))
 
-    out.extend(_reconciled_findings(rel, text, fm_lines, body))
+    out.extend(_reconciled_findings(rel, text, fm_lines))
 
     for key, label in (("chapter", "chapter"), ("campaign", "campaign")):
         if get_key(fm_lines, key) is not None:
@@ -1551,8 +1588,8 @@ def wrapup_frontmatter_findings(rel: str, text: str,
     return out
 
 
-def _reconciled_findings(rel: str, text: str, fm_lines: list[str],
-                         body: str) -> list[Finding]:
+def _reconciled_findings(rel: str, text: str,
+                         fm_lines: list[str]) -> list[Finding]:
     """`reconciled:` backfill, and the promotion it can't explain.
 
     The date is never invented: it is read back out of the
@@ -1616,9 +1653,20 @@ def wrapup_structure_findings(rel: str, text: str,
     hidden by a fence or by the vault's effective exclude list and is
     structure drift only. A heading quoted inside a code fence is
     documentation — reported, never moved.
+
+    A gm-only pair with one end inside a player-facing section and the
+    other outside it stops the re-nest for the whole file: either
+    placement changes what publishes, so the choice is the GM's.
     """
     states, problems = scan_body(text, exclude)
+    preserved, crossing = _gm_pair_plan(states)
+    infos = _fence_infos(states)
     out: list[Finding] = []
+    for lineno in crossing:
+        out.append(Finding(
+            "ERROR", f"{rel}:{lineno}",
+            "gm-only fence crosses a player-facing section boundary — "
+            "re-nest by hand", "fence-crosses"))
     for row in _fence_rows(rel, problems):
         # `_fence_rows` already words these — an orphan closer publishes
         # everything above it, an unclosed one strips to EOF — and the
@@ -1626,7 +1674,11 @@ def wrapup_structure_findings(rel: str, text: str,
         fence_level, fence_where, fence_message = row.split("\t", 2)
         out.append(Finding(fence_level, fence_where, fence_message, "renest"))
 
-    openers = [s for s in states if s.marker == "open-gm"]
+    # A pair the re-nest preserves is the author's own aside, not a
+    # second copy of the canonical fence — counting it would report
+    # drift the fix has already decided to leave alone.
+    openers = [s for s in states
+               if s.marker == "open-gm" and s.lineno not in preserved]
     if len(openers) > 1:
         out.append(Finding(
             "WARNING", f"{rel}:{openers[1].lineno}",
@@ -1637,11 +1689,18 @@ def wrapup_structure_findings(rel: str, text: str,
     for state in states:
         if state.heading is None:
             if state.in_code:
-                out.extend(_fenced_heading_finding(rel, state))
+                out.extend(_fenced_heading_finding(
+                    rel, state, infos.get(state.lineno, "")))
             continue
         level, title = state.heading
         where = f"{rel}:{state.lineno}"
         if level == 2:
+            if is_recap_title(title) and has_recap:
+                out.append(Finding(
+                    "WARNING", where,
+                    f"'## {title}' is a second recap-variant heading left "
+                    f"as-is — merge by hand"))
+                continue
             has_recap = has_recap or is_recap_title(title)
             out.extend(_wrap_h2_finding(rel, state, where, title))
         found = decorated_heading(title)
@@ -1667,13 +1726,21 @@ def wrapup_structure_findings(rel: str, text: str,
     return out
 
 
-def _fenced_heading_finding(rel: str, state: LineState) -> list[Finding]:
+def _fenced_heading_finding(rel: str, state: LineState,
+                            info: str) -> list[Finding]:
     """A Keeper-facing H2 quoted inside a code fence — never re-nested.
 
     `scan_body` leaves `heading` unset inside a fence precisely so that
     this repo's own documented examples are inert. Saying so out loud
     beats a silent omission the GM reads as a clean bill of health.
+
+    Only fences that plausibly hold markdown are read this way: a `##`
+    line inside a ```python or ```yaml block is a comment or a string,
+    and reporting it as a quoted heading is noise.
     """
+    tag = info.split()[0].casefold() if info.split() else ""
+    if tag not in ("", "markdown", "md"):
+        return []
     m = HEADING_RE.match(state.line)
     if not m or len(m.group(1)) != 2:
         return []
@@ -1731,6 +1798,141 @@ def wrapup_filename_findings(rel: str) -> list[Finding]:
                     f"needs every inbound link updated")]
 
 
+def _wrap_blocks(states: list[LineState]) -> list[tuple[str, str,
+                                                        list[LineState]]]:
+    """(kind, title, lines) for the preamble and every H2 block.
+
+    Kinds are the four the template knows — `preamble`, `recap`,
+    `moments`, `gm` — plus `second-recap` and `keeper` for everything
+    else, `keeper` being the default because real vaults invent
+    Keeper-facing headings faster than any enumeration tracks. A heading
+    inside a code fence never starts a block: `scan_body` leaves
+    `heading` unset there.
+
+    Only the FIRST recap-titled H2 is `recap`. A later one is
+    `second-recap`: still player-facing, so it is not swept into the GM
+    block, but left titled as the author wrote it — merging two recaps
+    is a content decision, and renaming both would put two
+    `## Narrative Recap` headings in one file.
+    """
+    blocks: list[tuple[str, str, list[LineState]]] = [("preamble", "", [])]
+    seen_recap = False
+    for state in states:
+        if state.heading is not None and state.heading[0] == 2:
+            title = state.heading[1]
+            low = title.casefold()
+            if is_recap_title(title) and not seen_recap:
+                seen_recap = True
+                kind = "recap"
+            elif is_recap_title(title):
+                kind = "second-recap"
+            elif low == MEMORABLE_MOMENTS:
+                kind = "moments"
+            elif low == GM_NOTES:
+                kind = "gm"
+            else:
+                kind = "keeper"
+            blocks.append((kind, title, [state]))
+        else:
+            blocks[-1][2].append(state)
+    return blocks
+
+
+# The block kinds whose own `<!-- gm-only -->` pairs are the author's
+# and are kept exactly where they are. Everything else — a Keeper block,
+# the existing `## GM Notes` block, and the top-level gap between blocks,
+# where the canonical pair's own markers live — is rebuilt.
+PLAYER_BLOCK_KINDS = ("preamble", "recap", "second-recap", "moments")
+
+
+def _gm_pair_plan(states: list[LineState]) -> tuple[set[int], list[int]]:
+    """(marker lines to keep verbatim, marker lines that cross a boundary).
+
+    The re-nest rebuilds one `<!-- gm-only -->` pair around the GM
+    region, and stripping *every* marker first would republish a fenced
+    aside the GM wrote inside `## Narrative Recap` — a leak caused by
+    the repair, which is the worst kind. So a pair whose opener and
+    closer both belong to the same player-facing block (or both to the
+    preamble) is preserved untouched, and only the markers of the GM
+    region are dropped.
+
+    A block's own markers are those up to its last real content line;
+    the trailing zone after it is where the canonical pair's opener
+    sits, which is why the conformant template shape rebuilds cleanly.
+    A closer in that trailing zone still belongs to the block when its
+    opener does — an aside that ends a section is still that section's.
+
+    A pair with one end inside a player block and the other outside it
+    cannot be resolved mechanically: moving it would change what
+    publishes either way, so the file is reported and left alone.
+    """
+    region: dict[int, tuple[int, bool]] = {}
+    for index, (kind, _title, group) in enumerate(_wrap_blocks(states)):
+        core = -1
+        for j, state in enumerate(group):
+            if state.line.strip() and state.marker not in GM_MARKERS:
+                core = j
+        player = kind in PLAYER_BLOCK_KINDS
+        for j, state in enumerate(group):
+            region[state.lineno] = (index, player and j <= core)
+
+    keep: set[int] = set()
+    crossing: list[int] = []
+    stack: list[LineState] = []
+    for state in states:
+        if state.marker == "open-gm":
+            stack.append(state)
+        elif state.marker == "close-gm":
+            if not stack:
+                if region[state.lineno][1]:
+                    crossing.append(state.lineno)
+                continue
+            opener = stack.pop()
+            open_block, open_own = region[opener.lineno]
+            close_block, close_own = region[state.lineno]
+            if open_own and open_block == close_block:
+                keep.add(opener.lineno)
+                keep.add(state.lineno)
+            elif open_own or close_own:
+                crossing.append(opener.lineno)
+    crossing.extend(s.lineno for s in stack if region[s.lineno][1])
+    return keep, sorted(crossing)
+
+
+def _fence_infos(states: list[LineState]) -> dict[int, str]:
+    """Line number -> the info string of the code fence it sits in.
+
+    `scan_body` reports *that* a line is fenced, not what the fence
+    claimed to hold. The difference matters for one check: a `## Keeper
+    Checklist` inside a ```python block is a string literal, not a
+    quoted template.
+
+    The closing delimiter is tracked rather than inferred from the first
+    unfenced line, because `scan_body` marks a closer as `in_code` too:
+    two fences written back to back would otherwise look like one, and
+    the second would inherit the first one's language.
+    """
+    infos: dict[int, str] = {}
+    current = ""
+    delim = ""
+    for state in states:
+        if not state.in_code:
+            current, delim = "", ""
+            continue
+        m = FENCE_RE.match(state.line)
+        if not delim:
+            current = m.group(2).strip() if m else ""
+            delim = m.group(1) if m else "`"
+        elif (m and m.group(1)[0] == delim[0]
+                and len(m.group(1)) >= len(delim)
+                and not m.group(2).strip()):
+            infos[state.lineno] = current
+            current, delim = "", ""
+            continue
+        infos[state.lineno] = current
+    return infos
+
+
 def _demoted(state: LineState) -> str:
     """One line of a relocated block, its heading pushed a level deeper.
 
@@ -1758,48 +1960,52 @@ def renest_wrapup(text: str) -> str:
 
     Player-facing sections are hoisted above the GM block first — real
     files interleave them between Keeper-facing H2s, and a recap that
-    ended up inside `<!-- gm-only -->` would vanish from the site. Every
-    gm-only marker outside code is then removed and a single pair
-    rebuilt around one `## GM Notes`, existing GM content first and the
+    ended up inside `<!-- gm-only -->` would vanish from the site. The
+    GM region's own markers are then removed and a single pair rebuilt
+    around one `## GM Notes`, existing GM content first and the
     relocated Keeper blocks after it, each demoted a level with its
-    children. Content is never reordered inside a block and never
-    reworded; a conformant file comes back byte-identical.
+    children. A gm-only pair the GM wrote *inside* a player-facing
+    section is left exactly where it is — republishing it would be a
+    leak caused by the repair. Content is never reordered inside a
+    block and never reworded; a conformant file comes back
+    byte-identical, and a file whose fences cross a section boundary
+    comes back untouched.
     """
     states, _problems = scan_body(text, ())
     if not states:
+        return text
+    preserved, crossing = _gm_pair_plan(states)
+    if crossing:
         return text
     raw = text.splitlines(keepends=True)
     head = "".join(raw[:states[0].lineno - 1])
     eol = _wrap_eol(text)
 
-    kept = [s for s in states if s.marker not in GM_MARKERS]
-    preamble: list[str] = []
-    blocks: list[tuple[str, list[LineState]]] = []
-    for state in kept:
-        if state.heading is not None and state.heading[0] == 2:
-            blocks.append((state.heading[1], [state]))
-        elif blocks:
-            blocks[-1][1].append(state)
-        else:
-            preamble.append(state.line)
-
-    player: list[list[str]] = []
+    recap: list[list[str]] = []
+    extra_recaps: list[list[str]] = []
     moments: list[list[str]] = []
+    preamble: list[str] = []
     gm_content: list[str] = []
     keeper: list[list[str]] = []
-    for title, group in blocks:
-        low = title.casefold()
-        if is_recap_title(title):
-            player.append([f"## {NARRATIVE_RECAP}"]
-                          + [s.line for s in group[1:]])
-        elif low == MEMORABLE_MOMENTS:
+    for kind, _title, block_states in _wrap_blocks(states):
+        group = [s for s in block_states
+                 if s.marker not in GM_MARKERS or s.lineno in preserved]
+        if kind == "preamble":
+            preamble = [s.line for s in group]
+        elif kind == "recap":
+            recap.append([f"## {NARRATIVE_RECAP}"]
+                         + [s.line for s in group[1:]])
+        elif kind == "second-recap":
+            extra_recaps.append([s.line for s in group])
+        elif kind == "moments":
             moments.append([s.line for s in group])
-        elif low == GM_NOTES:
+        elif kind == "gm":
             gm_content.extend(_trim([s.line for s in group[1:]]))
         else:
             keeper.append([_demoted(s) for s in group])
 
-    parts = [t for t in (_trim(p) for p in (preamble, *player, *moments)) if t]
+    ordered = (preamble, *recap, *extra_recaps, *moments)
+    parts = [t for t in (_trim(p) for p in ordered) if t]
     if gm_content or keeper:
         block = [GM_ONLY_OPEN, "", "## GM Notes"] + _trim(gm_content)
         for section_lines in keeper:
@@ -1869,9 +2075,11 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
 
     Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
     row per repair it would apply. With `--fix` the same repairs are
-    written and the rows read `FIXED`; a file with nothing to repair
-    reports `UNCHANGED`. Findings always print first, so the GM sees
-    what was wrong and not merely what changed.
+    written and the rows read `FIXED`. `UNCHANGED` means exactly one
+    thing — the repaired text is byte-identical to what is on disk —
+    so a file whose only findings are judgment calls reports it too.
+    Findings always print first, so the GM sees what was wrong and not
+    merely what changed.
 
     A file the publish gate drops (`publish:` false/none) still gets its
     frontmatter findings — the schema matters whether or not a page is
@@ -1935,30 +2143,45 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
     lines[1:close] = fm_lines
     new_text = "".join(lines)
 
-    keeper = [f for f in structure if f.kind == "keeper-h2"]
-    recaps = [f for f in structure if f.kind == "recap"]
-    if keeper or recaps or any(f.kind == "renest" for f in structure):
-        new_text = renest_wrapup(new_text)
-        if keeper:
-            actions.append(f"re-nested {len(keeper)} Keeper-facing H2 "
-                           f"sections under ## GM Notes in one "
-                           f"{GM_ONLY_OPEN} pair")
-        for finding in recaps:
-            actions.append(f"renamed heading '{finding.data[0]}' to "
-                           f"'{NARRATIVE_RECAP}'")
-    if any(f.kind == "decorated" for f in structure):
-        new_text, renamed = rename_decorated_headings(new_text)
-        actions.extend(renamed)
+    # A fence that crosses a section boundary stops every body repair —
+    # the frontmatter backfills are independent of it and still apply.
+    if not any(f.kind == "fence-crosses" for f in structure):
+        if any(f.kind in ("keeper-h2", "recap", "renest") for f in structure):
+            renested = renest_wrapup(new_text)
+            # Structure-only defects — an unfenced `## GM Notes`, a
+            # second opener, an orphan marker — carry no per-finding
+            # action, so what the re-nest did is read back off the text
+            # rather than predicted from the findings that triggered it.
+            if renested != new_text:
+                actions.extend(_renest_actions(structure))
+                new_text = renested
+        if any(f.kind == "decorated" for f in structure):
+            new_text, renamed = rename_decorated_headings(new_text)
+            actions.extend(renamed)
 
-    if not actions:
+    if new_text == text:
+        # Byte-identical: whatever the plan said, nothing moved.
         rows.append(f"UNCHANGED\t{rel}\tnothing to fix")
         return rows
-    if fix and new_text != text:
+    if fix:
         with path.open("w", encoding="utf-8", newline="") as f:
             f.write(new_text)
     mode = "FIXED" if fix else "WOULD-FIX"
     rows.extend(f"{mode}\t{rel}\t{action}" for action in actions)
     return rows
+
+
+def _renest_actions(structure: list[Finding]) -> list[str]:
+    """What the re-nest did, as fix rows."""
+    keeper = [f for f in structure if f.kind == "keeper-h2"]
+    if keeper:
+        out = [f"re-nested {len(keeper)} Keeper-facing H2 sections under "
+               f"## GM Notes in one {GM_ONLY_OPEN} pair"]
+    else:
+        out = [f"re-nested: single {GM_ONLY_OPEN} fence around ## GM Notes"]
+    out.extend(f"renamed heading '{f.data[0]}' to '{NARRATIVE_RECAP}'"
+               for f in structure if f.kind == "recap" and f.data)
+    return out
 
 
 def _line_of(where: str) -> int:
