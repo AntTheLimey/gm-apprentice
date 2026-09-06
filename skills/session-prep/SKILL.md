@@ -22,12 +22,15 @@ first invocation.
 
 **Version check:** On first invocation run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
-the row and hand off to campaign-organizer's migration workflow
+version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
+row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding with prep; resume after it completes. Fallback without
-python: read `gm_apprentice_version` from `_meta/vault-config.md`
-and `current_version` from `shared/migrations.md` (frontmatter only)
+proceeding with prep; resume after it completes. `AHEAD` →
+announce the row and tell the GM to update the plugin; do not
+proceed. `ERROR` → report the row; the plugin install is broken —
+do not proceed. Fallback without python: read
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md` (frontmatter only)
 and compare component-by-component as numbers — `1.8.9` is older
 than `1.8.15`.
 
@@ -409,7 +412,9 @@ to build artifacts, and raise only *genuine* craft issues conversationally.
 **16. Gap Check** — Surface, as questions or a short actionable list:
 - NPCs referenced but lacking vault files; locations not
   described; missing entity stubs needed for planned scenes —
-  run `graph_check.py unresolved` on the plan
+  run `graph_check.py unresolved` (vault-wide, no per-file
+  scoping) and filter its `target <- source` rows to the plan
+  file
 - Stale entity files: flag for update vs retire —
   `vault_check.py stale-drafts`
 - **Unresolved calls** — anything the GM deferred, or you could not ground in

@@ -13,16 +13,20 @@ re-voices prose. If a fix would require changing what a section
 *says*, that is not conformance drift; dismiss it or route it to
 Canon Audit.
 
-**Preferred procedure:** run `vault_check.py <vault> wrapup` and
-present its findings per file. For the mechanical set — the
+**Preferred procedure:** run `vault_check.py <vault> wrapup`
+(see `shared/vault-access.md`) and present its findings per file. For the mechanical set — the
 frontmatter backfills, the Keeper-facing sibling H2 re-nest, the
 `<!-- gm-only -->` fence, and the recap/template heading
 variants — the dry-run rows print `WOULD-FIX`; on GM
 confirmation, re-run with `wrapup --fix` (`FIXED` rows apply
-them). The steps below cover what the script leaves as judgment
-calls: dateless Reconciliation Context, unreconciled promotion,
-Keeper Checklist semantics, PC Carry-Forward format, and filename
-rename with relinks (filename renames are never automatic).
+them). Fallback without python: apply the Structural steps in
+`shared/migrations.md`'s 1.9.5 entry by hand — it's the same
+frontmatter-backfill and re-nest procedure this check mechanizes.
+The steps below cover what the script leaves as judgment calls:
+dateless Reconciliation Context, unreconciled promotion, Section
+order drift, Keeper Checklist semantics, PC Carry-Forward format,
+and filename rename with relinks (filename renames are never
+automatic).
 
 ### Step 1: Enumerate Wrap-Ups
 
@@ -35,13 +39,16 @@ chapter-level variants that a filename glob misses.
 ### Step 2: Frontmatter Conformance
 
 `vault_check.py wrapup` backfills the mechanical fields against
-the spec's frontmatter block — `session:` link derivation,
+the spec's frontmatter block — `session:` link derivation
+(chapter-level wrap-ups with no per-session index keep their
+existing value; the script never fabricates a link),
 `session_number:`, `play_date:`/`in_game_date:` normalization
-(including legacy `in_game_dates:`/`_start`/`_end` forms),
-`source_document:`, `type:` synonym normalization, and the
-remaining canonical fields (`chapter`, `campaign`, `created_by`,
-`tags`). Two items stay judgment calls the script surfaces but
-doesn't resolve:
+(including legacy `in_game_dates:`/`_start`/`_end` forms — a
+non-Earth-calendar `in_game_date` is conformant as-is and is not
+normalized), `source_document:`, `type:` synonym normalization,
+and the remaining canonical fields (`chapter`, `campaign`,
+`created_by`, `tags`). Two items stay judgment calls the script
+surfaces but doesn't resolve:
 
 - **Dateless `reconciled:`.** The script backfills `reconciled:`
   from date evidence inside `### Reconciliation Context` (a
@@ -71,15 +78,28 @@ genuinely player-facing, the GM dismisses the finding — that is
 what the fix-or-dismiss walkthrough is for.
 
 `vault_check.py wrapup` finds and (with `--fix`) re-nests
-Keeper-facing sibling H2s under `## GM Notes`, applies the single
-`<!-- gm-only -->` fence, and normalizes decorated and recap
-heading variants to the template name. Severity for the sibling-H2
-and missing-fence cases: Critical when the vault's **effective**
-exclude list (the publish defaults, or the union of vault/site
-config lists where set) does not already cover the heading — it
-publishes today — Warning when it does or the vault has no
-published site. Three drift shapes the script doesn't resolve
-stay judgment calls:
+Keeper-facing sibling H2s under `## GM Notes` — hoisting the
+player-facing sections (`## Narrative Recap` then
+`## Memorable Moments`, in that order) to the top **first**,
+since real files interleave them between Keeper H2s and a
+player-facing section must never end up inside the GM block —
+applies the single `<!-- gm-only -->` fence, and normalizes
+decorated and recap heading variants to the template name.
+Severity mirrors what the script emits (ERROR when the heading
+line actually publishes, WARNING when it's already fenced or
+excluded):
+
+- **Keeper-facing sibling H2** already inside a valid
+  `<!-- gm-only -->` fence never publishes — Warning (structure
+  drift only). Otherwise read the vault's **effective** exclude
+  list (the publish defaults, or the union of vault/site config
+  lists where set) — Critical when the heading is not covered by
+  it (it publishes today), Warning when it is.
+- **Missing `<!-- gm-only -->` fence** — Warning, Critical if the
+  vault has a published site.
+
+Three drift shapes the script doesn't resolve stay judgment
+calls:
 
 - **Section order drift** inside `## GM Notes` vs. the template
   — Info, opt-in; reorder whole sections only, never their

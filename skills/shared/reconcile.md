@@ -39,10 +39,11 @@ If all three pass, offer the fast path:
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
 On GM confirmation, using the bundled stamper (dry-run first,
-`--write` on confirmation):
-- `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled
-  YYYY-MM-DD` — promotes the Wrap-Up's `canon_status` and stamps
-  `reconciled:` in one call
+`--write` on confirmation; see `shared/vault-access.md`):
+- `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py"
+  <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD` —
+  promotes the Wrap-Up's `canon_status` and stamps `reconciled:`
+  in one call
 - `stamp_entities.py <vault> <entity files> --promote` — all
   DRAFT entities from this session to AUTHORITATIVE
 - `stamp_entities.py <vault> "<index>" --set status=reviewed`

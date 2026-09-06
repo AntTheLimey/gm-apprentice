@@ -57,7 +57,8 @@ appears on its own entity page.
 | reviewed | GM has reviewed and confirmed the Wrap-Up |
 
 Derive/verify with `vault_check.py sessions`; fix with
-`stamp_entities.py … --set status=…`.
+`stamp_entities.py … --set status=…` (see
+`shared/vault-access.md`).
 
 **`world_evolved`:** Set by reconcile step 6.5 after the
 world-evolution procedure completes. Value is the session

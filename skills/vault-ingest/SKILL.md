@@ -58,14 +58,17 @@ paths and missing metadata.
 **Version check:** On first invocation, after confirming the vault
 exists, run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
-the row and hand off to campaign-organizer's migration workflow
+version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
+row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding with ingestion; resume after it completes. Fallback
-without python: read `gm_apprentice_version` from
-`_meta/vault-config.md` and `current_version` from
-`shared/migrations.md` (frontmatter only) and compare
-component-by-component as numbers — `1.8.9` is older than `1.8.15`.
+proceeding with ingestion; resume after it completes. `AHEAD` →
+announce the row and tell the GM to update the plugin; do not
+proceed. `ERROR` → report the row; the plugin install is broken —
+do not proceed. Fallback without python: read
+`gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md` (frontmatter only)
+and compare component-by-component as numbers — `1.8.9` is older
+than `1.8.15`.
 
 ## Gotchas
 
@@ -199,10 +202,13 @@ Read `references/synthesis-templates.md` for the output format.
 1. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
 2. Verify: `play_date` is `YYYY-MM-DD`; `in_game_date` uses a real-date form (ISO, month-name, or seasonal with a 4-digit year) or the campaign's own non-Earth calendar — never a fabricated Gregorian date, and no narrative time-of-day in the field (see `shared/session-document-chain.md`)
 
+Fix any issues before proceeding to the next entity.
+
 Run `vault_check.py frontmatter --folder <dir>` per bucket, not
-per file — it covers frontmatter-field comparison against the
-template, `type`/`canon_status`/required-field presence. Fix
-every ERROR before moving on to the next bucket.
+per file — it validates against the schema (required fields,
+enums, legacy keys, unquoted links), not against
+`_Templates/_Template_{Type}.md`. Fix every ERROR before moving
+on to the next bucket.
 
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.
@@ -227,8 +233,12 @@ After all buckets are processed:
 
 **Cross-reference pass:**
 - Deduplicate entities across buckets — `vault_check.py names`
-- Identify relationship chains spanning buckets — `graph_check.py all`
-- Check timeline consistency — `vault_check.py timeline`
+- Identify relationship chains spanning buckets — `graph_check.py
+  all` (link structure) and `vault_check.py relationships`
+  (predicate vocabulary)
+- Check timeline consistency — a judgment call across buckets, by
+  eye; `vault_check.py timeline` only flags a multi-day session
+  plan missing a `## Timeline` section, not cross-bucket ordering
 - Validate entity status progression — `vault_check.py stale-drafts`
 - Run `vault_check.py wrapup` over the generated wrap-ups
 - Inconsistencies → back through reconcile

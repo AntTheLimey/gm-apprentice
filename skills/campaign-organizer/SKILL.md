@@ -94,14 +94,17 @@ On first contact with a vault:
 After initialization confirms `_meta/` exists, on first
 invocation run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
-the row and hand off to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`) before
-proceeding with any user request; resume after it completes.
-Fallback without python: read `gm_apprentice_version` from
-`_meta/vault-config.md` and `current_version` from
+version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
+row and hand off to this skill's migration workflow
+(`references/migration-procedure.md`) before proceeding with any
+user request; resume after it completes. `AHEAD` → announce the
+row and tell the GM to update the plugin; do not proceed.
+`ERROR` → report the row; the plugin install is broken — do not
+proceed. Fallback without python: read `gm_apprentice_version`
+from `_meta/vault-config.md` and `current_version` from
 `shared/migrations.md` (frontmatter only) and compare
-component-by-component as numbers — `1.8.9` is older than `1.8.15`.
+component-by-component as numbers — `1.8.9` is older than
+`1.8.15`.
 
 This check runs once per session on first vault contact. It
 does not apply during first-time vault setup (when `_meta/` is

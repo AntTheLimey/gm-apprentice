@@ -7,7 +7,7 @@ is `canon_status` (since plugin 1.8.0). Run this check on every
 full QA pass — it keeps vaults converged after the 1.8.0
 migration.
 
-**Procedure:**
+**Procedure:** (commands below: see `shared/vault-access.md`)
 
 1. Detect with `vault_check.py frontmatter` (rows report
    `legacy field …`) or a `stamp_entities.py <vault>

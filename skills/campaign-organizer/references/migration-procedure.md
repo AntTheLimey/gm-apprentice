@@ -77,7 +77,8 @@ already satisfied:
 - **GM-only heading vocabulary matches the canonical single
   heading**, **bold-wrapped or bold-paragraph GM-only content**,
   and **callout-only-marked content** — run
-  `vault_check.py gm-leak` and read every row against the vault's
+  `vault_check.py gm-leak` (see `shared/vault-access.md`) and
+  read every row against the vault's
   `_meta/vault-config.md` `exclude_sections` list. ERROR and
   WARNING rows (an orphan `<!-- /gm-only -->` closer, a
   bold-wrapped excluded heading, an unclosed opener, or a

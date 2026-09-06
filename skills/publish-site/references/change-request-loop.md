@@ -165,11 +165,17 @@ submission order (`timestamp` ascending), tracking **running unspent points**
      An override bypasses affordability, never an unknown target.
 3. **Question → answer.** Run `npx gm-apprentice-publish sheet show --pc
    "<name>" --player-safe` and answer from that output only — never open the
-   vault sheet for a player question. The command is the data boundary; the
-   list of excluded sections is enforced by it, not remembered by you: it
-   already strips `GM Notes`, `DM Notes`, `Player Notes`,
-   `Source References`, `Reconciliation Context`, `Handoff to Reconcile`,
-   `<!-- gm-only -->` regions, other PCs' private data, and hidden plot/secret.
+   vault sheet for a player question. The command is the primary data
+   boundary: it already strips the target PC's own `GM Notes`, `DM Notes`,
+   `Player Notes`, `Source References`, `Reconciliation Context`,
+   `Handoff to Reconcile`, and `<!-- gm-only -->`/`<!-- spoiler -->` regions —
+   that part is enforced by it, not remembered by you. What it *cannot* know:
+   it only reads the one PC's own file, so it never sees other PCs' private
+   data (there's nothing to strip because it's never loaded); and it only
+   strips *fenced* or excluded sections, so hidden plot or a secret the GM
+   wrote inline in an otherwise-public section survives the strip. Both stay
+   your judgment call — never surface another PC's file, and if something in
+   the player-safe output still reads as a spoiler, withhold it anyway.
    If a good answer would need GM-only info, reply that it's beyond what you
    can see — never the hidden info itself. Answer as a brief bullet list, then
    finalize:

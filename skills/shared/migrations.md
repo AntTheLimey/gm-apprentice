@@ -710,13 +710,10 @@ normalized to it.
   in `shared/scripts/schema_rules.py` `DEPRECATED_FIELDS`, so
   `validate_schema.py` and `vault_check.py` flag unmigrated files.
 - `vault_check.py wrapup --fix` applies the Structural steps
-  above (frontmatter normalization, the sibling-H2 re-nest, the
-  `<!-- gm-only -->` fence), and `vault_check.py gm-leak` finds
-  the heading-vocabulary drift the re-nest step corrects —
-  **both landed in plugin 1.9.7**, two minor versions after this
-  migration, so say so when a vault still on 1.9.5 is migrated by
-  a newer plugin: the tooling wasn't available when this migration
-  first shipped, only when the vault actually upgrades through it.
+  above; `vault_check.py gm-leak` finds the heading-vocabulary
+  drift the re-nest step corrects. **Both landed in plugin
+  1.9.7** — say so when a 1.9.5 vault is migrated by a newer
+  plugin, since the tooling postdates this migration.
 - Otherwise none. The publish tool already reads both `session:` (link)
   and `session_number:` (scalar) forms and keeps its type-synonym
   compatibility set — unmigrated vaults keep working.
