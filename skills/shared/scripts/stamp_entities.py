@@ -48,10 +48,13 @@ Actions
 --increment KEY Add one to an integer field (absent counts as 0), for
                 counters like `sessions_played`. Writes bare. A
                 non-integer value is an error, not a reset.
---promote       `canon_status` DRAFT or absent -> AUTHORITATIVE. STUB
-                and SUPERSEDED are refused: a stub needs content
-                first, and a superseded entity's successor is what
-                should be promoted.
+--promote       `canon_status` DRAFT or absent -> AUTHORITATIVE, in
+                whatever case the file writes it. STUB and SUPERSEDED
+                are refused: a stub needs content first, and a
+                superseded entity's successor is what should be
+                promoted. So is any value outside those four states —
+                promoting an unrecognised status blind is exactly the
+                silent status flip the repair below exists to prevent.
 --supersede-by "[[Winner]]"
                 `canon_status: SUPERSEDED` plus `superseded_by`.
                 Mutually exclusive with --promote.
@@ -66,14 +69,35 @@ Actions
                 and `_meta/` included, and files with no legacy key
                 produce no row so the sweep stays readable.
 
+A trailing YAML comment is a comment, not part of the value:
+`canon_status: DRAFT  # confirmed` promotes, and a legacy key annotated
+the same way still counts as agreeing with it.
+
 Output
 ------
 One tab-separated row per file: `MODE<TAB>path<TAB>actions`, actions
 joined with `; `. MODE is STAMPED / WOULD-STAMP / UNCHANGED / ERROR,
-or REPAIRED / WOULD-REPAIR / CONFLICT / UNCHANGED / ERROR under
---repair-canon. The trailer counts files and errors. Exit status is 1
-if any row is an ERROR, else 0 — a CONFLICT is not an error, the
-repair is applied and only the resulting status wants confirming.
+or REPAIRED / WOULD-REPAIR / CONFLICT / WOULD-CONFLICT / UNCHANGED /
+ERROR under --repair-canon — the WOULD- forms are what a dry run
+prints. Trailers:
+
+  # stamped: N files, E errors
+  # repaired: N files, M conflicts, E errors
+
+with `dry-run would stamp` / `dry-run would repair` in place of the
+verb on a dry run. N counts files changed, conflicts included; M is how
+many of those had a legacy value disagreeing with `canon_status`.
+
+Exit status
+-----------
+0  no ERROR row. A CONFLICT is not an error: the repair is applied and
+   only the resulting status wants a GM's confirmation.
+1  at least one ERROR row. Every ERROR leaves its file byte-identical.
+2  usage. No action flag; FILE missing for anything but --repair-canon;
+   --repair-canon mixed with another action; --promote with
+   --supersede-by; a malformed --set / --increment / --retag / --session
+   / --supersede-by argument; a --date or --reconciled that is not
+   YYYY-MM-DD.
 """
 
 from __future__ import annotations
@@ -90,6 +114,7 @@ from vaultlib import (  # noqa: E402,F401 — YAML_LINE_RE re-exported
     frontmatter_span,
     get_key,
     raw_frontmatter,
+    scalar_value,
     set_key,
     set_nested_key,
     unquote,
@@ -185,11 +210,15 @@ def repair_canon(fm: list[str]) -> tuple[list[str], str | None]:
         for key in LEGACY_KEYS:
             if get_key(fm, key) is not None:
                 old_line = _rename_first(fm, key, "canon_status")
-                actions.append(f"renamed {old_line} -> canon_status: "
-                               f"{unquote(get_key(fm, 'canon_status') or '')}")
+                actions.append(
+                    f"renamed {old_line} -> canon_status: "
+                    f"{scalar_value(get_key(fm, 'canon_status') or '')}")
                 break
 
-    canon = unquote(get_key(fm, "canon_status") or "")
+    # scalar_value, not unquote: a trailing `# legacy note` is a YAML
+    # comment, and comparing it as part of the value turned an agreeing
+    # pair into a spurious CONFLICT.
+    canon = scalar_value(get_key(fm, "canon_status") or "")
     disagreements: list[str] = []
     for key in LEGACY_KEYS:
         # Loop: a file may carry the same legacy key twice, and leaving
@@ -198,8 +227,8 @@ def repair_canon(fm: list[str]) -> tuple[list[str], str | None]:
             raw = get_key(fm, key) or ""
             removed = delete_key(fm, key)
             actions.append(f"removed {removed}")
-            if unquote(raw).casefold() != canon.casefold():
-                disagreements.append(f"{key}: {unquote(raw)}")
+            if scalar_value(raw).casefold() != canon.casefold():
+                disagreements.append(f"{key}: {scalar_value(raw)}")
 
     conflict = None
     if disagreements:
@@ -241,21 +270,24 @@ def _plan_increment(fm: list[str], key: str,
                     eol: str) -> tuple[str, bool]:
     """One --increment write. Returns (action text, error)."""
     raw = get_key(fm, key)
-    text = unquote(raw) if raw is not None else ""
+    text = scalar_value(raw) if raw is not None else ""
     if text and not re.fullmatch(r"-?\d+", text):
         return (f"{key} is {raw} — not an integer; --increment refused",
                 True)
     new = (int(text) if text else 0) + 1
     added = set_key(fm, key, str(new), eol)
+    if raw is None:
+        return added, False
     # A counter reads better as `sessions_played: 3 -> 4` than as the
-    # full replacement text set_key reports.
-    return (f"{key}: {raw} -> {new}" if raw else added), False
+    # full replacement text set_key reports. An existing key with no
+    # value would otherwise read `sessions_played: -> sessions_played: 1`.
+    return f"{key}: {raw or '(empty)'} -> {new}", False
 
 
 def _plan_promote(fm: list[str], eol: str) -> tuple[str, bool]:
     """--promote. Returns (action text, error)."""
     raw = get_key(fm, "canon_status")
-    status = unquote(raw or "").upper()
+    status = scalar_value(raw or "").upper()
     if status in ("", "DRAFT"):
         return set_key(fm, "canon_status", "AUTHORITATIVE", eol), False
     if status == "AUTHORITATIVE":
@@ -277,7 +309,8 @@ def plan_file(rel: str, lines: list[str],
     """
     close, err = frontmatter_span(lines)
     if err:
-        return [f"{err} — not stamped"], None, True
+        verb = "repaired" if opts.repair_canon else "stamped"
+        return [f"{err} — not {verb}"], None, True
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = lines[1:close]
 
@@ -413,10 +446,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     for item in args.sets:
         key, sep, value = item.partition("=")
         key = key.strip()
-        parent, _, child = key.partition(".")
+        parent, dot, child = key.partition(".")
         if not sep:
             ap.error(f"--set needs KEY=VALUE, got {item!r}")
-        if not KEY_RE.match(parent) or (child and not KEY_RE.match(child)):
+        # Branch on the separator, not on the child's truthiness: with
+        # `child and ...` an empty child skipped validation entirely and
+        # `--set 'a.=1'` wrote `a:` with a nameless `: 1` under it, which
+        # every writer in the toolchain then refuses as non-YAML.
+        if not KEY_RE.match(parent) or (dot and not KEY_RE.match(child)):
             ap.error(f"--set key must be `key` or `parent.child`, got "
                      f"{key!r}")
         args.set_pairs.append((key, value))
@@ -475,6 +512,9 @@ def main() -> int:
     repairing = args.repair_canon
     sweeping = repairing and not args.files
 
+    # Past tense for a run that wrote, infinitive for a plan.
+    verb, infinitive = (("repaired", "repair") if repairing
+                        else ("stamped", "stamp"))
     errors = 0
     written = 0
     would = 0
@@ -496,7 +536,7 @@ def main() -> int:
                 text = f.read()
         except (UnicodeDecodeError, OSError) as e:
             print(f"ERROR\t{rel}\tunreadable ({e.__class__.__name__}) "
-                  f"— not stamped")
+                  f"— not {verb}")
             errors += 1
             continue
         lines = text.splitlines(keepends=True)
@@ -505,12 +545,16 @@ def main() -> int:
             print(f"ERROR\t{rel}\t{'; '.join(actions)}")
             errors += 1
             continue
-        if sweeping and not actions:
-            continue
+        if repairing and not actions:
+            # A sweep stays silent about the notes it had nothing to do
+            # with; a file the GM named by hand deserves an answer.
+            if sweeping:
+                continue
+            actions = ["no legacy key"]
         new_text = "".join(lines)
         changed = new_text != text
-        if override:
-            mode = override
+        if override == "CONFLICT":
+            mode = "CONFLICT" if args.write else "WOULD-CONFLICT"
         elif not changed:
             mode = "UNCHANGED"
         elif repairing:
@@ -527,13 +571,12 @@ def main() -> int:
                     f.write(new_text)
                 written += 1
     count = written if args.write else would
+    trailer = verb if args.write else f"dry-run would {infinitive}"
     if repairing:
-        verb = "repaired" if args.write else "dry-run would repair"
-        print(f"# {verb}: {count} files, {conflicts} conflicts, "
+        print(f"# {trailer}: {count} files, {conflicts} conflicts, "
               f"{errors} errors")
     else:
-        verb = "stamped" if args.write else "dry-run would stamp"
-        print(f"# {verb}: {count} files, {errors} errors")
+        print(f"# {trailer}: {count} files, {errors} errors")
     return 1 if errors else 0
 
 

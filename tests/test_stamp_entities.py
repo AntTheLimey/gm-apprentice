@@ -169,6 +169,24 @@ class SetTests(ScriptCase):
         self.run_script("Sessions/S02.md", "--set", "status", rc=2)
         self.run_script("Sessions/S02.md", "--set", "=prepped", rc=2)
         self.run_script("Sessions/S02.md", "--set", "a.b.c=1", rc=2)
+        # An empty dotted child used to skip validation and write a
+        # nameless `: 1` under the parent — YAML no writer can read back.
+        self.run_script("Sessions/S02.md", "--set", "a.=1", rc=2)
+        self.run_script("Sessions/S02.md", "--set", "documents.=X", rc=2)
+
+    def test_value_may_contain_an_equals_sign(self):
+        path = self.note("Sessions/S02.md", SESSION_INDEX)
+        self.run_script("Sessions/S02.md", "--set", "formula=hits=3d6+2",
+                        "--write")
+        self.assertIn('formula: "hits=3d6+2"\n',
+                      path.read_text(encoding="utf-8"))
+
+    def test_dotted_key_creates_an_absent_parent_block(self):
+        path = self.note("Sessions/S02.md", SESSION_INDEX)
+        self.run_script("Sessions/S02.md", "--set", "extras.note=hi",
+                        "--write")
+        after = path.read_text(encoding="utf-8")
+        self.assertIn("extras:\n  note: \"hi\"\n", after)
 
     def test_no_action_flag_is_a_usage_error(self):
         self.note("Sessions/S02.md", SESSION_INDEX)
@@ -182,6 +200,25 @@ class IncrementTests(ScriptCase):
                               "sessions_missed", "--write")
         self.assertIn("added sessions_missed: 1", out)
         self.assertIn("sessions_missed: 1\n",
+                      path.read_text(encoding="utf-8"))
+
+    def test_empty_value_reads_as_zero(self):
+        path = self.note("Campaign_Overview.md",
+                         OVERVIEW.replace("sessions_played: 3",
+                                          "sessions_played:"))
+        out = self.run_script("Campaign_Overview.md", "--increment",
+                              "sessions_played", "--write")
+        self.assertIn("sessions_played: (empty) -> 1", out)
+        self.assertIn("sessions_played: 1\n",
+                      path.read_text(encoding="utf-8"))
+
+    def test_trailing_comment_is_not_part_of_the_number(self):
+        path = self.note("Campaign_Overview.md",
+                         OVERVIEW.replace("sessions_played: 3",
+                                          "sessions_played: 3  # counted"))
+        self.run_script("Campaign_Overview.md", "--increment",
+                        "sessions_played", "--write")
+        self.assertIn("sessions_played: 4\n",
                       path.read_text(encoding="utf-8"))
 
     def test_quoted_integer_increments_bare(self):
@@ -212,6 +249,23 @@ class CanonStatusTests(ScriptCase):
         self.assertIn("STAMPED", out)
         self.assertIn("canon_status: DRAFT -> canon_status: AUTHORITATIVE",
                       out)
+        self.assertIn("canon_status: AUTHORITATIVE\n",
+                      path.read_text(encoding="utf-8"))
+
+    def test_promote_accepts_a_lowercase_draft(self):
+        # Real vaults are inconsistent about the case of these values;
+        # a `draft` that refused to promote would just look broken.
+        path = self.note("NPCs/Doc.md",
+                         SESSION_INDEX.replace("canon_status: DRAFT",
+                                               "canon_status: draft"))
+        self.run_script("NPCs/Doc.md", "--promote", "--write")
+        self.assertIn("canon_status: AUTHORITATIVE\n",
+                      path.read_text(encoding="utf-8"))
+
+    def test_promote_ignores_a_trailing_comment(self):
+        path = self.note("NPCs/Doc.md", SESSION_INDEX.replace(
+            "canon_status: DRAFT", "canon_status: DRAFT  # confirmed"))
+        self.run_script("NPCs/Doc.md", "--promote", "--write")
         self.assertIn("canon_status: AUTHORITATIVE\n",
                       path.read_text(encoding="utf-8"))
 
@@ -291,6 +345,17 @@ class RepairCanonTests(ScriptCase):
         self.assertIn("canon_status: DRAFT\n", after)
         self.assertNotIn("confidence:", after)
 
+    def test_case_two_ignores_a_trailing_comment(self):
+        path = self.note("NPCs/Noted.md", fm(
+            "---", "type: npc", "canon_status: DRAFT",
+            "confidence: DRAFT  # legacy note", "---", "", "# Noted"))
+        out = self.run_script("--repair-canon", "NPCs/Noted.md", "--write")
+        self.assertIn("REPAIRED", out)
+        self.assertNotIn("CONFLICT", out)
+        after = path.read_text(encoding="utf-8")
+        self.assertEqual(after.count("canon_status:"), 1)
+        self.assertNotIn("confidence:", after)
+
     def test_case_three_conflict_row_carries_both_values(self):
         path = self.note("NPCs/Clash.md", fm(
             "---", "type: npc", "canon_status: AUTHORITATIVE",
@@ -305,6 +370,31 @@ class RepairCanonTests(ScriptCase):
         self.assertIn("canon_status: AUTHORITATIVE\n", after)
         self.assertNotIn("confidence:", after)
 
+    def test_dry_run_conflict_is_labelled_would(self):
+        path = self.note("NPCs/Clash.md", fm(
+            "---", "type: npc", "canon_status: AUTHORITATIVE",
+            "confidence: DRAFT", "---", "", "# Clash"))
+        before = path.read_bytes()
+        out = self.run_script("--repair-canon", "NPCs/Clash.md")
+        self.assertIn("WOULD-CONFLICT", out)
+        self.assertIn("# dry-run would repair: 1 files, 1 conflicts", out)
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_crlf_is_preserved_through_a_repair(self):
+        path = self.note("NPCs/Legacy.md", fm(
+            "---", "type: npc", "source_" + "confidence: DRAFT", "---",
+            "", "# Legacy").replace("\n", "\r\n"))
+        self.run_script("--repair-canon", "NPCs/Legacy.md", "--write")
+        raw = path.read_bytes()
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertIn(b"canon_status: DRAFT\r\n", raw)
+
+    def test_refusal_wording_says_not_repaired(self):
+        self.note("NPCs/Bad.md", "---\ntype: npc\n--- \nBody.\n")
+        out = self.run_script("--repair-canon", "NPCs/Bad.md", rc=1)
+        self.assertIn("not repaired", out)
+        self.assertNotIn("not stamped", out)
+
     def test_dry_run_does_not_write(self):
         path = self.note("NPCs/Legacy.md", fm(
             "---", "type: npc", "source_" + "confidence: DRAFT", "---",
@@ -317,7 +407,8 @@ class RepairCanonTests(ScriptCase):
     def test_named_file_without_a_legacy_key_is_unchanged(self):
         self.note("NPCs/Clean.md", SESSION_INDEX)
         out = self.run_script("--repair-canon", "NPCs/Clean.md")
-        self.assertIn("UNCHANGED", out)
+        # Not a bare mode and an empty third column — say why.
+        self.assertIn("UNCHANGED\tNPCs/Clean.md\tno legacy key", out)
 
     def test_body_code_block_is_never_touched(self):
         path = self.note("Docs/Guide.md", fm(
@@ -401,6 +492,17 @@ class LegacyFlagTests(ScriptCase):
         after = path.read_text(encoding="utf-8")
         self.assertIn('lastUpdated: "2026-09-06"\n', after)
         self.assertIn("asOfSession: 2\n", after)
+
+    def test_retag_alone(self):
+        path = self.note("PCs/Hero.md", fm(
+            "---", "type: pc", "canon_status: DRAFT", "tags:",
+            "  - chapter-1", "---", "", "# Hero"))
+        out = self.run_script("PCs/Hero.md", "--retag",
+                              "chapter-1=chapter-2", "--write")
+        self.assertIn("tag chapter-1 -> chapter-2", out)
+        after = path.read_text(encoding="utf-8")
+        self.assertIn("  - chapter-2\n", after)
+        self.assertNotIn("chapter-1", after)
 
     def test_file_is_required_for_non_sweep_actions(self):
         self.note("PCs/Hero.md", SESSION_INDEX)
