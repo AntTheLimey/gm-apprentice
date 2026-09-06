@@ -127,6 +127,9 @@ jobs:
       - name: Vault utility regression
         run: python tests/test_vault_utilities.py
 
+      - name: stamp_entities tests
+        run: python tests/test_stamp_entities.py
+
       - name: gurps-check tests
         run: python tests/test_gurps_check.py
 
