@@ -103,11 +103,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Type-check shared scripts
-        run: |
-          pip install mypy
-          mypy --config-file mypy.ini
-
       - name: Validate campaign entity schemas
         run: python scripts/validate_schema.py tests/benchmark-campaign
 
@@ -140,6 +135,12 @@ jobs:
 
       - name: Relationship predicate vocabulary regression
         run: python tests/test_relationship_predicates.py
+
+      # Last: a type error must never mask a failing test.
+      - name: Type-check shared scripts
+        run: |
+          pip install 'mypy<3'
+          mypy --config-file mypy.ini
 
   pr-discipline:
     if: github.event_name == 'pull_request'

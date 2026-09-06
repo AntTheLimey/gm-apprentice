@@ -25,7 +25,8 @@ import fnmatch
 import sys
 from pathlib import Path
 
-from vaultlib import (  # noqa: F401 — LINK_RE re-exported for callers
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vaultlib import (  # noqa: E402
     LINK_RE,
     frontmatter_aliases,
     link_target,

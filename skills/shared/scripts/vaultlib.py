@@ -12,6 +12,14 @@ Every other script in this directory imports from here rather than
 re-deriving the same regexes: three private copies of "what counts as
 frontmatter" is how the fm dict and the body strip drift apart.
 Stdlib only, Python 3.10+.
+
+`scan_body` mirrors tools/publish/lib/processor.js but is NOT byte-parity
+with it. Headings inside code fences are inert here; `filterSections` in
+the publish tool does not track fences, so a fenced `## GM Notes` example
+still starts exclusion on the site. The divergence is deliberate and one
+-directional: this module errs toward reporting a line as published, which
+is the safe direction for a leak check — it over-reports what a reader
+might see rather than quietly assuming something is hidden.
 """
 
 from __future__ import annotations
@@ -273,12 +281,25 @@ def get_key(fm: list[str], key: str) -> str | None:
 
 
 def set_key(fm: list[str], key: str, value: str, eol: str) -> str:
+    """Replace (or append) a top-level `key:` line, keeping its own EOL.
+
+    The line is built literally rather than substituted through `re.sub`:
+    a replacement template eats one level of backslash escaping, so a
+    value of `"C:\\\\Users\\\\ant"` landed in the file as `"C:\\Users\\ant"`
+    and a value containing `\\g<0>` would expand to the whole matched
+    line. Values here are already YAML-encoded by `yaml_scalar` /
+    `yaml_value_for_cli`; nothing may re-interpret them.
+    """
     pattern = re.compile(rf"^{re.escape(key)}:[^\r\n]*")
     for i, line in enumerate(fm):
         m = pattern.match(line)
         if m:
             old = m.group(0)
-            fm[i] = pattern.sub(f"{key}: {value}", line, count=1)
+            # The pattern consumes everything up to the newline, so the
+            # remainder is exactly this line's own EOL — empty only for a
+            # file whose last line has none, where adding one would be a
+            # change of its own.
+            fm[i] = f"{key}: {value}{line[len(old):]}"
             return f"{old.strip()} -> {key}: {value}"
     fm.append(f"{key}: {value}{eol}")
     return f"added {key}: {value}"
@@ -323,8 +344,7 @@ def set_nested_key(fm: list[str], parent: str, child: str, value: str,
         text = fm[j].rstrip("\r\n")
         m = child_re.match(text)
         if m and len(m.group(1)) == indent:
-            line_eol = fm[j][len(text):] or eol
-            fm[j] = f"{m.group(1)}{child}: {value}{line_eol}"
+            fm[j] = f"{m.group(1)}{child}: {value}{fm[j][len(text):]}"
             return f"{text.strip()} -> {child}: {value}"
 
     pad = " " * (indent if indent is not None else 2)
@@ -336,7 +356,10 @@ def set_nested_key(fm: list[str], parent: str, child: str, value: str,
 
 
 def delete_key(fm: list[str], key: str) -> str | None:
-    """Remove the first top-level `key:` line; return it, or None.
+    """Remove the first top-level `key:` line; return its text, or None.
+
+    The returned text has no trailing newline — callers report it, they
+    do not re-insert it.
 
     Column 0 only: a nested `documents.type` is not the top-level `type`,
     and deleting the wrong one is a silent schema break.
@@ -344,7 +367,7 @@ def delete_key(fm: list[str], key: str) -> str | None:
     pattern = re.compile(rf"^{re.escape(key)}:")
     for i, line in enumerate(fm):
         if pattern.match(line):
-            return fm.pop(i)
+            return fm.pop(i).rstrip("\r\n")
     return None
 
 
@@ -563,6 +586,21 @@ def scan_body(text: str,
       with a boolean it ended the outer one and published everything
       after it, silently, which is the worst possible failure of the one
       primitive whose whole job is hiding things (#168).
+
+    Two deliberate divergences from `filterSections`, both erring toward
+    calling a line published — the safe direction for a leak check, since
+    over-reporting costs a false positive while under-reporting hides a
+    real leak:
+
+    * Heading detection here is gated on being outside a code fence.
+      `filterSections` does no fence tracking at all, so a `## GM Notes`
+      written inside a fenced example DOES start exclusion on the built
+      site. A line this module calls published may therefore be dropped
+      by the publish tool.
+    * Titles are compared with `str.casefold()`; `filterSections` uses
+      JavaScript `toLowerCase()`. The two differ on a handful of
+      non-ASCII titles (German `ß`, Turkish dotted/dotless `I`), so a
+      heading using them can match here and not there, or vice versa.
 
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.

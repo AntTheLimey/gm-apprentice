@@ -135,6 +135,29 @@ class FrontmatterEditorTests(unittest.TestCase):
         vl.set_key(fm, "lastUpdated", '"2026-09-06"', "\n")
         self.assertEqual(vl.get_key(fm, "lastUpdated"), '"2026-09-06"')
 
+    def test_set_key_writes_the_value_literally(self):
+        # The value must never be interpreted as an re.sub replacement
+        # template: a template eats one level of backslash escaping and
+        # expands \g<0> to the whole matched line.
+        for value in (r'"C:\\Users\\ant"', r'"\g<0>"', r'"a\1b"',
+                      r'"back\\slash"'):
+            with self.subTest(value=value):
+                fm = self.fm("---\ntype: npc\npath: old\n---\n")
+                vl.set_key(fm, "path", value, "\n")
+                self.assertIn(f"path: {value}\n", fm)
+                self.assertEqual(vl.get_key(fm, "path"), value)
+
+    def test_set_key_appends_literally_too(self):
+        fm = self.fm("---\ntype: npc\n---\n")
+        value = r'"C:\\Users\\ant"'
+        vl.set_key(fm, "path", value, "\n")
+        self.assertEqual(fm[-1], f"path: {value}\n")
+
+    def test_set_key_keeps_the_lines_own_eol(self):
+        fm = "---\r\ntype: npc\r\nx: 1\r\n---\r\n".splitlines(keepends=True)[1:3]
+        vl.set_key(fm, "x", "2", "\n")
+        self.assertEqual(fm[1], "x: 2\r\n")
+
     def test_set_nested_key_replaces_in_place(self):
         fm = self.fm(SESSION_INDEX)
         before = len(fm)
@@ -173,7 +196,7 @@ class FrontmatterEditorTests(unittest.TestCase):
         fm = self.fm("---\ntype: npc\ndocuments:\n  type: nested\n"
                      "type: duplicate\n---\n")
         removed = vl.delete_key(fm, "type")
-        self.assertEqual(removed.strip(), "type: npc")
+        self.assertEqual(removed, "type: npc")  # returned without its EOL
         joined = "".join(fm)
         self.assertIn("  type: nested\n", joined)
         self.assertIn("type: duplicate\n", joined)
