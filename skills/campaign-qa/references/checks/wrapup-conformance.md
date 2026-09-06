@@ -44,6 +44,8 @@ the spec's frontmatter block — `session:` link derivation
 existing value; the script never fabricates a link),
 `session_number:`, `play_date:`/`in_game_date:` normalization
 (including legacy `in_game_dates:`/`_start`/`_end` forms — a
+legacy range whose start and end differ is left in place with a
+WARNING until the range is preserved in body prose, and a
 non-Earth-calendar `in_game_date` is conformant as-is and is not
 normalized), `source_document:`, `type:` synonym normalization,
 and the remaining canonical fields (`chapter`, `campaign`,

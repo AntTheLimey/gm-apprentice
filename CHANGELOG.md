@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.7] — 2026-09-06
+
+### Added
+
+- **Mechanization Slice A — the Tier-1 safety and correctness
+  extensions from `docs/mechanization-analysis.md`.** Eight checks
+  and writers the skills used to perform by reading prose, now one
+  script call each:
+  - `vault_check.py version` — the vault/plugin version gate all
+    eight vault-aware skills did by eye (`1.8.9` vs `1.8.15` sorts
+    wrong lexically). One row whose first column is a verdict
+    (`OK` / `MISMATCH` / `AHEAD` / `SETUP` / `ERROR`), exit 1 on
+    anything but OK/SETUP; the plugin version comes from
+    `.claude-plugin/plugin.json`, falling back to the stamped
+    `shared/migrations.md`.
+  - `vault_check.py sessions` — derives each session's status from
+    which chain documents exist (Plan / Play Notes / Wrap-Up, with the
+    wrap-up's canon status deciding `reviewed`), scoped by chapter
+    the way `session_context.py` selects its bundle, and prints the
+    `stamp_entities.py --set status=…` fix for every mismatch.
+    Broken `documents.*` links and unlinked documents are listed.
+  - `vault_check.py gm-leak` — Keeper-facing content that would reach
+    the player site, with the fence containment grep cannot express:
+    orphan `<!-- /gm-only -->` closers (everything above them
+    publishes) and bold-wrapped excluded headings (`### **GM Notes**`
+    defeats the exclude list) are ERROR; unclosed openers and
+    published headings carrying an exclude-list entry or Keeper
+    keyword are WARNING; Keeper-looking bold labels and callouts are
+    INFO. Honours `publish: none` / `publish: stub` so it never
+    reports a line the site strips.
+  - `vault_check.py pc-body` — the `## Current Status` placement rule
+    (`shared/pc-body-structure.md`) that nothing checked: ERROR when
+    the block sits inside a gm-only or spoiler fence, WARNING when it
+    follows `## Notes` / `## GM Notes`, is not an H2, or an H2 is
+    duplicated; INFO for a missing block, no labelled fields, or a
+    skeleton not opening with `## Stat Sheet`.
+  - `vault_check.py wrapup [--file REL] [--fix]` — Session Wrap-Up
+    conformance against `shared/templates/session-wrap.md`:
+    frontmatter backfills (type synonym, `session:` link derived from
+    the unique session index, `session_number`, `play_date`, legacy
+    `in_game_dates`, `source_document`, `reconciled` from body date
+    evidence, `chapter` / `campaign` / `created_by` / `tags`),
+    Keeper-facing sibling H2s (ERROR when they publish), the single
+    gm-only fence, recap-heading variants, decorated template
+    headings, the filename pattern. `--fix` applies the mechanical
+    set including the re-nest the 1.9.5 migration specified in prose
+    (hoist the player-facing sections, demote Keeper H2s under
+    `## GM Notes`, one fence) — content-preserving, dry-run rows
+    first. Filename renames stay manual.
+  - `vault_check.py active-pcs` — exposes the roster helper the
+    wrap-up prose re-derived three times.
+  - `stamp_entities.py --set KEY=VALUE` / `--increment KEY` /
+    `--promote` / `--reconciled D` / `--supersede-by "[[X]]"` —
+    generic frontmatter writes (one-level dotted keys such as
+    `documents.wrap_up`; `--set` refuses the keys that have their own
+    flag) that retire the hand-bookkeeping in wrap-up 4b (campaign
+    overview), the session-index transitions, reconcile's promotion
+    step and world-evolution's stamps. `--session` and `--date` are
+    now independent.
+  - `stamp_entities.py --repair-canon [--write]` — the
+    `shared/canon-status.md` legacy-key repair as code: rename when
+    only a legacy key exists, collapse when both agree, keep
+    `canon_status` and raise a `CONFLICT` row when they disagree;
+    exactly one `canon_status:` line afterwards or the file is
+    refused. With no FILE it sweeps the whole vault, `_Templates/`
+    and `_meta/` included.
+  - `gm-publish sheet show --pc <name> [--player-safe] [--json]` —
+    prints a PC sheet as the site would show it (the same strip chain
+    the build uses, now shared as `processor.playerSafeMarkdown`, plus
+    `publishedFrontmatter` with per-file overrides). The
+    change-request loop answers player questions from this output
+    instead of remembering not to look at GM Notes (publish tool
+    1.11.29).
+- **`skills/shared/scripts/vaultlib.py`** — one vault-model module
+  the shared scripts import: frontmatter (dict, line-span and nested
+  views), fence-aware body scanning that mirrors the publish tool's
+  `stripMarkedBlocks` / `filterSections`, wikilink normalisation, the
+  vault walk, the active-PC set, semver. Collapses the four
+  hand-rolled frontmatter parsers and two link resolvers that had
+  drifted apart; `set_key` now writes values literally (a backslash
+  in a value used to lose an escaping level through `re.sub`).
+- **mypy in CI** (`mypy.ini`; strict for `vaultlib`, checked
+  untyped defs elsewhere), plus three new test files:
+  `tests/test_vaultlib.py`, `tests/test_stamp_entities.py`,
+  `tests/test_vault_check_slice_a.py`.
+- **The publish scanner names the untyped files it skips** — one
+  summary warning per build instead of silence (`lib/scanner.js`).
+
+### Changed
+
+- **Every prose site that restated a check now invokes the script**
+  (22 skill files): the eight version-check paragraphs, campaign-qa's
+  graph-health / legacy-canon / wrap-up-conformance procedures,
+  campaign-organizer's migration Step 3, session-wrapup's campaign
+  overview and session-index bookkeeping, reconcile's fast path and
+  promotion step, vault-ingest's per-entity self-check and
+  cross-reference pass, session-prep's gap check, and the
+  change-request loop's player-safe answer rule. The manual procedure
+  survives only as a labelled "Fallback without python" sentence.
+  `shared/vault-access.md` routes every new command.
+
+---
+
 ## [1.9.6] — 2026-09-04
 
 ### Added
