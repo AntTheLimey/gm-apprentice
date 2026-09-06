@@ -91,16 +91,17 @@ On first contact with a vault:
 
 ### Version Check
 
-After initialization confirms `_meta/` exists, check the vault
-version before proceeding with any user request:
-
-1. Read `gm_apprentice_version` from `_meta/vault-config.md`
-   frontmatter
-2. Read `current_version` from `shared/migrations.md` frontmatter (Read with `limit: 10` — the rest is migration history, not needed here)
-3. If versions match or vault is higher — proceed normally
-4. If vault version is lower or absent — run the migration
-   workflow from `references/migration-procedure.md` before
-   proceeding
+After initialization confirms `_meta/` exists, on first
+invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
+the row and hand off to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+proceeding with any user request; resume after it completes.
+Fallback without python: read `gm_apprentice_version` from
+`_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 This check runs once per session on first vault contact. It
 does not apply during first-time vault setup (when `_meta/` is
@@ -108,8 +109,8 @@ missing and initialization creates it — stamp the current
 version as part of setup).
 
 When initialization creates a new vault, set
-`gm_apprentice_version` in vault-config to the
-`current_version` from `shared/migrations.md` frontmatter.
+`gm_apprentice_version` in vault-config to
+`shared/migrations.md`'s `current_version` frontmatter value.
 
 ### Schema Evolution
 

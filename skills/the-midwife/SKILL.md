@@ -48,12 +48,16 @@ On start, before any creative conversation:
    Greenfield → let system emerge. If GM is undecided,
    cross-route to ttrpg-expert system files for guidance.
 
-**Version check:** Read `gm_apprentice_version` from
-`_meta/vault-config.md` and `current_version` from
-`shared/migrations.md` (frontmatter only — Read with `limit: 10`). If vault version is lower or absent,
-hand off to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`).
-Skip if no `_meta/`.
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
+the row and hand off to campaign-organizer's migration workflow
+(`campaign-organizer/references/migration-procedure.md`) before
+proceeding; resume after it completes. Fallback without python:
+read `gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md` (frontmatter only)
+and compare component-by-component as numbers — `1.8.9` is older
+than `1.8.15`.
 
 ## Content Management
 

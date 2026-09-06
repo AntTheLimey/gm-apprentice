@@ -231,6 +231,8 @@ Upcoming Triggers: [events based on timeline/conditions]
 Automatic checks when generating content:
 
 1. **Name collision** — similar name already exists?
+   `vault_check.py names` finds duplicate and confusable entity
+   names and aliases.
 2. **Timeline placement** — fits without contradictions?
 3. **Relationship coherence** — aligns with existing data?
 4. **Canon compliance** — respects AUTHORITATIVE entries?

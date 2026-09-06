@@ -20,15 +20,16 @@ draft prose from the GM's decisions, run checks); the GM makes the calls.
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
 
-**Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
+the row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding with prep. Resume after migration completes. Skip
-this check if `_meta/` doesn't exist (that's first-time setup,
-not migration).
+proceeding with prep; resume after it completes. Fallback without
+python: read `gm_apprentice_version` from `_meta/vault-config.md`
+and `current_version` from `shared/migrations.md` (frontmatter only)
+and compare component-by-component as numbers — `1.8.9` is older
+than `1.8.15`.
 
 **Document chain:** Read `shared/session-document-chain.md`.
 Session-prep writes Plan files and updates the session index.
@@ -96,8 +97,9 @@ faction rosters, NPC references, location atmosphere.
 
 ## Phase 1: Reconcile (conditional)
 
-Runs when most recent session has status `wrap-up` (not yet
-`reviewed`). Skip for first sessions or when already `reviewed`.
+Runs when the `Just played:` header line from `session_context.py`
+shows `status: wrap-up` (no separate index read). Skip for first
+sessions or when already `reviewed`.
 
 **Invoke `shared/reconcile.md`.** Reconcile walks the GM through
 reviewing the Wrap-Up, promotes canon status, and handles
@@ -405,9 +407,11 @@ to build artifacts, and raise only *genuine* craft issues conversationally.
 → Apply fixes in place; there is no audit-notes report for the GM to read.
 
 **16. Gap Check** — Surface, as questions or a short actionable list:
-- NPCs referenced but lacking vault files; locations not described
-- Stale entity files: flag for update vs retire
-- Missing entity stubs needed for planned scenes
+- NPCs referenced but lacking vault files; locations not
+  described; missing entity stubs needed for planned scenes —
+  run `graph_check.py unresolved` on the plan
+- Stale entity files: flag for update vs retire —
+  `vault_check.py stale-drafts`
 - **Unresolved calls** — anything the GM deferred, or you could not ground in
   canon, goes to `## Open Questions`, explicit and un-invented. This is where
   "Georgiana's post-Vienna SAN is unrecorded" lives — named, not guessed.

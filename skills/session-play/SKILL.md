@@ -17,15 +17,16 @@ to the Play Notes file for note capture.
 (`type: session-plan`) if it exists. This gives you the GM's
 intended scenes, NPCs, and hooks for quick reference during play.
 
-**Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
+the row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding with play support. Resume after migration completes.
-Skip this check if `_meta/` doesn't exist (that's first-time
-setup, not migration).
+proceeding with play support; resume after it completes. Fallback
+without python: read `gm_apprentice_version` from
+`_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 **Trigger phrases:** "we're playing now", "quick question",
 "during the session", "I need a [NPC/location]", "give me
@@ -87,7 +88,7 @@ Route these requests directly — don't search, load the file.
 | Need | Go to |
 |------|-------|
 | Rules dispute | `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
-| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
+| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS — for sheet arithmetic disputes, run `gurps_check.py <sheet> defenses` or `damage` instead of hand-checking) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
 | Improvise NPC | `ttrpg-expert/npc-generation.md` §The 3-Line NPC (Quick Generation) |
 | Random encounter | `ttrpg-expert/random-generation.md` §Random Encounter Generation |
 | Random NPC | `ttrpg-expert/random-generation.md` §Random NPC Generator |

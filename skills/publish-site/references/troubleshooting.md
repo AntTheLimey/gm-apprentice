@@ -141,7 +141,10 @@ One of:
 2. Check `excludeDirs` — if the folder is listed there, it is
    being intentionally skipped.
 3. Open the entity's markdown file and check its frontmatter
-   for a `type` field. If missing, the scanner skips it.
+   for a `type` field. If missing, the scanner skips it — not
+   silently: a build-time `scanner: skipped N file(s) with no
+   \`type:\` in frontmatter` warning names up to 5 of them, so
+   check the build log before hunting by hand.
    Unknown `type` values still render via the smart wiki fallback.
 
 ### Fix

@@ -55,15 +55,17 @@ folder structure, templates, and `_meta/` schema to file
 correctly. Without these, entities get created with wrong
 paths and missing metadata.
 
-**Version check:** After confirming the vault exists, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation, after confirming the vault
+exists, run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
+the row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding with ingestion. Resume after migration completes.
-Skip this check if `_meta/` doesn't exist (that's first-time
-setup, not migration).
+proceeding with ingestion; resume after it completes. Fallback
+without python: read `gm_apprentice_version` from
+`_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 ## Gotchas
 
@@ -194,12 +196,13 @@ Read `references/synthesis-templates.md` for the output format.
    Backstory Entries
 
 **Self-check after each entity:**
-1. Re-read the entity file just written
-2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
-3. Verify: `type` matches, `canon_status` is set, all required fields present
-4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
-5. Verify: `play_date` is `YYYY-MM-DD`; `in_game_date` uses a real-date form (ISO, month-name, or seasonal with a 4-digit year) or the campaign's own non-Earth calendar — never a fabricated Gregorian date, and no narrative time-of-day in the field (see `shared/session-document-chain.md`)
-6. Fix any issues before proceeding to the next entity
+1. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
+2. Verify: `play_date` is `YYYY-MM-DD`; `in_game_date` uses a real-date form (ISO, month-name, or seasonal with a 4-digit year) or the campaign's own non-Earth calendar — never a fabricated Gregorian date, and no narrative time-of-day in the field (see `shared/session-document-chain.md`)
+
+Run `vault_check.py frontmatter --folder <dir>` per bucket, not
+per file — it covers frontmatter-field comparison against the
+template, `type`/`canon_status`/required-field presence. Fix
+every ERROR before moving on to the next bucket.
 
 Include `> [!info] Reconstruction Note` with source descriptions
 and limitations. Mark uncertain items with `<!-- UNVERIFIED -->`.
@@ -223,10 +226,11 @@ AUTHORITATIVE canon status.
 After all buckets are processed:
 
 **Cross-reference pass:**
-- Deduplicate entities across buckets
-- Identify relationship chains spanning buckets
-- Check timeline consistency
-- Validate entity status progression
+- Deduplicate entities across buckets — `vault_check.py names`
+- Identify relationship chains spanning buckets — `graph_check.py all`
+- Check timeline consistency — `vault_check.py timeline`
+- Validate entity status progression — `vault_check.py stale-drafts`
+- Run `vault_check.py wrapup` over the generated wrap-ups
 - Inconsistencies → back through reconcile
 
 **Optional handoff:** Suggest `campaign-qa` for graph health

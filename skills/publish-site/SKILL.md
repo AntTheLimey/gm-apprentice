@@ -24,15 +24,16 @@ troubleshooting — clearly and without jargon. Most GMs using
 this skill are not technical. Never assume they know what npm,
 git, or a terminal command does without explaining it.
 
-**Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` or `AHEAD` → announce
+the row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding. Resume after migration completes. Skip this check
-if `_meta/` doesn't exist (that's first-time setup, not
-migration).
+proceeding; resume after it completes. Fallback without python:
+read `gm_apprentice_version` from `_meta/vault-config.md` and
+`current_version` from `shared/migrations.md` (frontmatter only)
+and compare component-by-component as numbers — `1.8.9` is older
+than `1.8.15`.
 
 ## The build tool
 
@@ -54,6 +55,7 @@ this skill's own cache path). You never replicate or rewrite its logic.
 ```bash
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
 node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
+node "$TOOL" sheet show --pc <name> [--player-safe] [--json]  # print one PC's sheet
 node "$TOOL" --version
 node "$TOOL" --help
 ```

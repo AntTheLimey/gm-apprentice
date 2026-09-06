@@ -13,6 +13,17 @@ re-voices prose. If a fix would require changing what a section
 *says*, that is not conformance drift; dismiss it or route it to
 Canon Audit.
 
+**Preferred procedure:** run `vault_check.py <vault> wrapup` and
+present its findings per file. For the mechanical set — the
+frontmatter backfills, the Keeper-facing sibling H2 re-nest, the
+`<!-- gm-only -->` fence, and the recap/template heading
+variants — the dry-run rows print `WOULD-FIX`; on GM
+confirmation, re-run with `wrapup --fix` (`FIXED` rows apply
+them). The steps below cover what the script leaves as judgment
+calls: dateless Reconciliation Context, unreconciled promotion,
+Keeper Checklist semantics, PC Carry-Forward format, and filename
+rename with relinks (filename renames are never automatic).
+
 ### Step 1: Enumerate Wrap-Ups
 
 Search for files whose frontmatter `type` is `session_wrap`,
@@ -23,50 +34,28 @@ chapter-level variants that a filename glob misses.
 
 ### Step 2: Frontmatter Conformance
 
-Per file, against the spec's frontmatter block:
+`vault_check.py wrapup` backfills the mechanical fields against
+the spec's frontmatter block — `session:` link derivation,
+`session_number:`, `play_date:`/`in_game_date:` normalization
+(including legacy `in_game_dates:`/`_start`/`_end` forms),
+`source_document:`, `type:` synonym normalization, and the
+remaining canonical fields (`chapter`, `campaign`, `created_by`,
+`tags`). Two items stay judgment calls the script surfaces but
+doesn't resolve:
 
-- **`session:` is a quoted wiki-link** to the session index
-  (`"[[Session NN - Title]]"`). Integer or plain-string values
-  are drift — Warning; fix derives the link from the session
-  index the file belongs to, matched by session number/filename
-  (flat `Sessions/` directories hold many indexes — "same
-  directory" alone is not a selector). Chapter-level wrap-ups
-  with no per-session index keep their existing value — never
-  fabricate a link.
-- **`session_number:` scalar present.** Absent — Info; backfill
-  from the session index or the filename.
-- **`play_date:`** present (`null` is a valid unknown). When
-  non-null, `"YYYY-MM-DD"` — non-ISO forms (`"May 21, 2026"`)
-  are Info; normalize.
-- **`in_game_date:`** present (`null` is a valid unknown). When
-  non-null, timeline format — or the world's own format for a
-  non-Earth calendar, which is conformant as-is. Legacy forms
-  (`in_game_dates:`, `in_game_date_start`/`_end` pairs) — Info;
-  map to a single `in_game_date` (session-end date), preserving
-  the range in body prose if not already there.
-- **`source_document:`** wiki-link to the Play Notes file where
-  one exists — Info; backfill.
-- **`reconciled:`** present. If absent — Info; backfill from
-  date evidence inside `### Reconciliation Context`: a
-  `**Reconciled:**` line, a dated reconcile callout
-  (`> [!success] Reconciled …`), or a dated decisions heading.
-  A Reconciliation Context with no derivable date → ask the GM
-  once for the date (or confirm `null`), rather than leaving
-  the file flagged forever. No Reconciliation Context at all →
-  write `reconciled: null` explicitly, so the field exists and
-  the unreconciled-promotion check below can fire.
+- **Dateless `reconciled:`.** The script backfills `reconciled:`
+  from date evidence inside `### Reconciliation Context` (a
+  `**Reconciled:**` line, a dated reconcile callout, or a dated
+  decisions heading) or writes `reconciled: null` when there's no
+  Reconciliation Context at all. When a Reconciliation Context
+  exists but carries no derivable date, ask the GM once for the
+  date (or confirm `null`), rather than leaving the file flagged
+  forever.
 - **Unreconciled promotion:** `canon_status: AUTHORITATIVE` with
   `reconciled: null` and no Reconciliation Context section —
   Warning; ask whether the review actually happened (stamp the
   date) or the status was stamped prematurely (demote to DRAFT
   and queue for reconcile).
-- **`type:` synonym drift** (`session-wrap-up`, `session-wrapup`)
-  — Info; normalize to `session_wrap`.
-- **Remaining canonical fields** — `chapter` (wiki-link),
-  `campaign`, `created_by`, `tags` present — Info; backfill
-  `chapter`/`campaign` from the session index or sibling
-  wrap-ups, `created_by` per provenance (`session-wrapup`, or
-  `vault-ingest` for reconstructed files).
 
 ### Step 3: Structure Conformance (publish safety)
 
@@ -81,40 +70,20 @@ nobody's `exclude_sections` list. If a flagged heading is
 genuinely player-facing, the GM dismisses the finding — that is
 what the fix-or-dismiss walkthrough is for.
 
-- **Keeper-facing sibling H2s** — any Keeper-facing section at
-  `##` instead of `###` under `## GM Notes`. Severity per
-  heading: a Keeper-facing H2 already inside a valid
-  `<!-- gm-only -->` fence never publishes — Warning (structure
-  drift only). Otherwise read the vault's **effective** exclude
-  list (the publish defaults, or the union of vault/site config
-  lists where set) — **Critical** when the heading is not
-  covered by it (it publishes today), Warning when it is. Fix: hoist the player-facing sections
-  **first** — `## Narrative Recap` then `## Memorable Moments`
-  to the top, in that order; real files interleave them between
-  Keeper H2s, and a player-facing section must never end up
-  inside the GM block. Then create `## GM Notes` if absent and
-  relocate every Keeper-facing section under it, demoting each
-  with its children one level. (The 1.8.52 Reconciliation
-  Context repair, generalized.)
-- **Missing `<!-- gm-only -->` fence** — Warning (Critical if
-  the vault has a published site). Fix: one pair, opening on
-  the line before `## GM Notes` (heading inside — outside the
-  fence it publishes as an orphan heading on any vault whose
-  exclude list lacks the name) and closing after the last
-  Keeper-facing section, which is end-of-file once player-facing
-  sections are hoisted. Fences are nesting-aware (1.8.52+), so
-  inner fences inside the block are safe.
-- **Decorated headings** — a template section under a decorated
-  name (`### Cross-Entity Claims — Held for Confirmation`,
-  `## What Happened — Narrative Recap`) — Info; normalize to
-  the template name, moving the qualifier into the first body
-  line when it carries meaning.
+`vault_check.py wrapup` finds and (with `--fix`) re-nests
+Keeper-facing sibling H2s under `## GM Notes`, applies the single
+`<!-- gm-only -->` fence, and normalizes decorated and recap
+heading variants to the template name. Severity for the sibling-H2
+and missing-fence cases: Critical when the vault's **effective**
+exclude list (the publish defaults, or the union of vault/site
+config lists where set) does not already cover the heading — it
+publishes today — Warning when it does or the vault has no
+published site. Three drift shapes the script doesn't resolve
+stay judgment calls:
+
 - **Section order drift** inside `## GM Notes` vs. the template
   — Info, opt-in; reorder whole sections only, never their
   contents.
-- **Recap heading variants** (`## What Happened — Narrative
-  Recap`) — Info; the publish tool's contains-match already
-  finds these, but normalize to `## Narrative Recap`.
 - **Keeper Checklist semantics** — a checklist of already-done
   `- [x]` bookkeeping (ingest-era logs) rather than
   forward-looking GM tasks — Info; offer to retitle the old list

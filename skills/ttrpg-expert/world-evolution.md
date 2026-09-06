@@ -105,12 +105,20 @@ or rejects each. Then execute the filing protocol.
 
 ### Filing Protocol
 
-**New entities:** create file per `shared/entity-schema.md` schema.
-Set `source: "world-evolution"`, `createdSession`, `lastUpdated`,
-`asOfSession` to current session.
+**New entities:** create file per `shared/entity-schema.md` schema,
+setting `createdSession` in the initial write. Then, for both new
+and changed entities, stamp the rest with the bundled stamper
+(dry-run first, `--write` on confirmation):
 
-**Changed entities:** update changed fields only. Set
-`lastUpdated` and `asOfSession`.
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+  <vault> <entity files> --set source=world-evolution --session N --date D
+```
+
+`--session`/`--date` write `asOfSession`/`lastUpdated`.
+
+**Changed entities:** update changed fields only, then apply the
+same stamp above.
 
 **Timeline entry (standalone only)** — when invoked outside
 reconcile, append to `campaign-timeline.md`. Skip when

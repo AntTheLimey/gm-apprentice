@@ -163,11 +163,13 @@ submission order (`timestamp` ascending), tracking **running unspent points**
 
      Then log a `⚠` line (character · the ambiguous request · "needs clarification").
      An override bypasses affordability, never an unknown target.
-3. **Question → answer** using **player-safe scope only** — the published
-   sheet/site + GURPS rules + the character's own non-GM sections. NEVER use
-   `GM Notes`, `DM Notes`, `Player Notes`, `Source References`,
-   `Reconciliation Context`, `Handoff to Reconcile`,
-   `<!-- gm-only -->` regions, other PCs' private data, or hidden plot/secret.
+3. **Question → answer.** Run `npx gm-apprentice-publish sheet show --pc
+   "<name>" --player-safe` and answer from that output only — never open the
+   vault sheet for a player question. The command is the data boundary; the
+   list of excluded sections is enforced by it, not remembered by you: it
+   already strips `GM Notes`, `DM Notes`, `Player Notes`,
+   `Source References`, `Reconciliation Context`, `Handoff to Reconcile`,
+   `<!-- gm-only -->` regions, other PCs' private data, and hidden plot/secret.
    If a good answer would need GM-only info, reply that it's beyond what you
    can see — never the hidden info itself. Answer as a brief bullet list, then
    finalize:
