@@ -15,6 +15,9 @@ Usage:
   vault_check.py VAULT timeline
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships
+  vault_check.py VAULT sessions
+  vault_check.py VAULT version
+  vault_check.py VAULT active-pcs
   vault_check.py VAULT all
 
 Skips hidden directories, `_Templates/`, and `_inbox/` (staging).
@@ -23,6 +26,13 @@ line as `LEVEL<TAB>path<TAB>message`.
 
 Levels: ERROR (schema violation), WARNING (needs GM attention),
 INFO (context the auditing skill should triage, not a defect).
+
+Two commands are gates rather than reports and sit outside `all`:
+`version` emits one row whose first column is a verdict
+(OK/MISMATCH/AHEAD/SETUP/ERROR) and sets the exit code — 0 for
+OK/SETUP, 1 otherwise — so a skill can branch on it; `active-pcs`
+emits `PC<TAB>path<TAB>roster line` for the session skills' opening
+roster read.
 """
 
 import argparse
@@ -55,11 +65,16 @@ from vaultlib import (  # noqa: F401
     PC_INACTIVE_STATUS,
     SKIP_DIRS,
     active_pc_names,
+    active_pcs,
     iter_body_lines,
     link_target,
+    nested_mapping,
     normalize,
+    parse_version,
+    plugin_version,
     raw_frontmatter,
     vault_files,
+    wikilink_target,
 )
 
 # A frontmatter line carrying an unquoted wikilink (Juggl breaks on these)
@@ -560,13 +575,229 @@ def check_relationships(vault: Path) -> list[str]:
     return rows
 
 
+MIGRATION_HINT = ("run campaign-organizer's migration workflow "
+                  "(references/migration-procedure.md) before proceeding")
+
+
+def check_version(vault: Path) -> tuple[list[str], int]:
+    """The vault/plugin semver gate eight skills open with.
+
+    Returns (rows, exit code). The single row's first column is a
+    *verdict*, not a level: this command exists to be branched on, and a
+    skill that has to grep prose to learn whether it may proceed is the
+    by-eye comparison all over again. Ordering is deliberate — an
+    unknown plugin version is an ERROR before anything about the vault
+    is read, and a vault with no `_meta/` is first-time SETUP rather
+    than a failed migration.
+
+    Comparison is numeric per component (`parse_version`), so 1.8.9 is
+    correctly behind 1.10.0; a lexical compare put it ahead.
+    """
+    found = plugin_version()
+    if found is None:
+        return ([("ERROR\t(plugin)\tcannot determine the plugin version "
+                  "(no .claude-plugin/plugin.json or shared/migrations.md)")],
+                1)
+    plugin, _source = found
+    if not (vault / "_meta").is_dir():
+        return (["SETUP\t(vault)\tno _meta/ — first-time setup, "
+                 "not migration"], 0)
+    rel = "_meta/vault-config.md"
+    fm: dict = {}
+    try:
+        fm = extract_frontmatter((vault / "_meta" / "vault-config.md")
+                                 .read_text(encoding="utf-8",
+                                            errors="replace")) or {}
+    except OSError:
+        # A `_meta/` with no readable config is the same situation as a
+        # config with no version field: the vault never recorded one.
+        fm = {}
+    current = fm.get("gm_apprentice_version")
+    if not current or isinstance(current, list):
+        return ([f"MISMATCH\t{rel}\tgm_apprentice_version absent — "
+                 f"{MIGRATION_HINT}"], 1)
+    vault_v, plugin_v = parse_version(str(current)), parse_version(plugin)
+    if vault_v == plugin_v:
+        return ([f"OK\t{rel}\tvault {current} = plugin {plugin}"], 0)
+    if vault_v < plugin_v:
+        return ([f"MISMATCH\t{rel}\tvault {current} < plugin {plugin} — "
+                 f"{MIGRATION_HINT}"], 1)
+    return ([f"AHEAD\t{rel}\tvault {current} > plugin {plugin} — update "
+             f"the plugin before touching this vault"], 1)
+
+
+def list_active_pcs(vault: Path) -> list[str]:
+    """The roster the session skills open with, as `PC` rows.
+
+    Level column is `PC` rather than INFO/WARNING/ERROR: nothing here is
+    a finding, and labelling a roster INFO invites a triage pass over
+    rows that only ever needed reading.
+    """
+    rows = []
+    for rel, fm in active_pcs(vault):
+        aliases = fm.get("aliases")
+        names = ", ".join(str(a).strip() for a in aliases
+                          if str(a).strip()) if isinstance(aliases, list) else ""
+        as_of = fm.get("asOfSession")
+        stamp = str(as_of) if as_of not in (None, "", []) else "?"
+        rows.append(f"PC\t{rel}\t{Path(rel).stem}; "
+                    f"aliases: {names or 'none'}; asOfSession: {stamp}")
+    return rows
+
+
+# YAML's null spellings, as `vaultlib.yaml_value_for_cli` writes them.
+YAML_NULLS = {"", "null", "~"}
+
+# Chain key -> (label used in prose, the `type:` values that fill it).
+# Insertion order is the reporting order; the wrap-up has three spellings
+# in the wild and all three are canon-bearing.
+SESSION_DOC_TYPES: dict[str, tuple[str, set[str]]] = {
+    "plan": ("plan", {"session-plan"}),
+    "play_notes": ("play notes", {"session-play-notes"}),
+    "wrap_up": ("wrap-up", {"session_wrap", "session-wrap-up",
+                            "session-wrapup"}),
+}
+
+
+def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
+                    types: set[str], stem: str, number: int | None,
+                    chapter: str | None) -> str | None:
+    """The note of one chain type belonging to a session index, or None.
+
+    A `session:` link naming the index wins outright. Otherwise the
+    session number has to agree AND the chapter has to be compatible —
+    numbering restarts per chapter, so number alone pairs Chapter 2's
+    session 1 with Chapter 1's plan (#162's shape). An unresolvable
+    chapter on either side still matches, mirroring
+    `session_context.prefer_chapter`, which keeps flat vaults working.
+
+    A document that names a *different* index is never claimed by the
+    number fallback: it already said where it belongs.
+    """
+    key = normalize(stem)
+    candidates: list[tuple[str, dict]] = []
+    for rel, _text, fm in files:
+        if fm.get("type") not in types:
+            continue
+        link = wikilink_target(fm.get("session"))
+        target = link_target(link) if link else ""
+        if target and target == key:
+            return rel
+        if target and target in stems:
+            continue
+        if number is None:
+            continue
+        n = parse_session_number(fm.get("session"))
+        if n is None:
+            n = parse_session_number(fm.get("session_number"))
+        if n == number:
+            candidates.append((rel, fm))
+    # The chapter's own document first, an unfiled one only as a fallback.
+    # Taking whichever number match came first let an archived copy at the
+    # vault root — which sorts before any Chapters/ path — outrank the
+    # chapter's real wrap-up.
+    if chapter is not None:
+        own = [rel for rel, fm in candidates if chapter_key(rel, fm) == chapter]
+        if own:
+            return own[0]
+    loose = [rel for rel, fm in candidates
+             if chapter is None or chapter_key(rel, fm) is None]
+    return loose[0] if loose else None
+
+
+def check_sessions(vault: Path) -> list[str]:
+    """Derive each session's status from the documents that exist.
+
+    `shared/session-document-chain.md` defines status as "the furthest
+    document that exists", which every skill has so far checked by
+    reading four filenames and remembering the table. Here the chain is
+    resolved both ways — the index's `documents:` links and the
+    documents' own `session:`/number/chapter — so the two disagreeing is
+    itself a finding rather than a silent divergence.
+    """
+    files = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault)]
+    stems = {normalize(Path(rel).stem): rel for rel, _t, _f in files}
+    by_rel = {rel: fm for rel, _t, fm in files}
+    indexes = [(rel, text, fm) for rel, text, fm in files
+               if fm.get("type") == "session"]
+    if not indexes:
+        return ["INFO\t(vault)\tno session indexes found"]
+
+    rows: list[str] = []
+    for rel, text, fm in indexes:
+        stem = Path(rel).stem
+        number = parse_session_number(fm.get("session_number"))
+        if number is None:
+            number = parse_session_number(stem)
+        chapter = chapter_key(rel, fm)
+        documents = nested_mapping(text, "documents")
+
+        chain: dict[str, str | None] = {}
+        broken: list[str] = []
+        unlinked: list[str] = []
+        for key, (kind, types) in SESSION_DOC_TYPES.items():
+            target = wikilink_target(documents.get(key))
+            if target.casefold() in YAML_NULLS:
+                # `plan: null` is the schema's own placeholder for "this
+                # document does not exist yet" — reporting it as a broken
+                # link would fire on nearly every index in a live vault.
+                target = ""
+            linked = stems.get(link_target(target)) if target else None
+            if target and linked is None:
+                broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
+                              f"'[[{target}]]' but no such note exists")
+            found = _chain_document(files, stems, types, stem, number, chapter)
+            chain[key] = linked or found
+            if found and not linked:
+                unlinked.append(
+                    f"INFO\t{rel}\t{kind} exists ({found}) but "
+                    f"documents.{key} does not link it — stamp_entities.py "
+                    f'VAULT "{rel}" --set '
+                    f'documents.{key}="[[{Path(found).stem}]]"')
+
+        wrap = chain["wrap_up"]
+        if wrap:
+            # A wrap-up the GM has confirmed is the 'reviewed' end state;
+            # one still in DRAFT means the wrap-up exists, nothing more.
+            derived = ("reviewed"
+                       if by_rel.get(wrap, {}).get("canon_status")
+                       == "AUTHORITATIVE" else "wrap-up")
+        elif chain["play_notes"]:
+            derived = "played"
+        elif chain["plan"]:
+            derived = "prepped"
+        else:
+            derived = "planned"
+
+        flags = " ".join(
+            f"{label}={'✓' if chain[key] else '–'}"
+            for key, label in (("plan", "plan"), ("play_notes", "play-notes"),
+                               ("wrap_up", "wrap-up")))
+        status = fm.get("status")
+        declared = (str(status) if status and not isinstance(status, list)
+                    else "?")
+        rows.append(f"INFO\t{rel}\tsession "
+                    f"{number if number is not None else '?'}: {flags} "
+                    f"declared={declared} derived={derived}")
+        if declared != derived:
+            rows.append(f"WARNING\t{rel}\tstatus '{declared}' but the "
+                        f"documents that exist derive '{derived}' — "
+                        f'stamp_entities.py VAULT "{rel}" '
+                        f"--set status={derived}")
+        rows.extend(broken)
+        rows.extend(unlinked)
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
-                                        "relationships", "all"])
+                                        "relationships", "sessions",
+                                        "version", "active-pcs", "all"])
     ap.add_argument("--folder", help="restrict frontmatter check to subfolder")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
@@ -582,6 +813,15 @@ def main() -> int:
             print("error: changed requires --since N", file=sys.stderr)
             return 2
         emit("changed", check_changed(args.vault, args.since))
+        return 0
+    # Gates, not reports: they answer one question and stay out of `all`
+    # so a full audit is never gated on the plugin's own version.
+    if args.command == "version":
+        rows, code = check_version(args.vault)
+        emit("version", rows)
+        return code
+    if args.command == "active-pcs":
+        emit("active-pcs", list_active_pcs(args.vault))
         return 0
 
     if args.command in ("frontmatter", "all"):
@@ -600,6 +840,8 @@ def main() -> int:
         emit("read-aloud", check_read_aloud(args.vault))
     if args.command in ("relationships", "all"):
         emit("relationships", check_relationships(args.vault))
+    if args.command in ("sessions", "all"):
+        emit("sessions", check_sessions(args.vault))
     return 0
 
 
