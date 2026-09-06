@@ -16,6 +16,8 @@ Usage:
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships
   vault_check.py VAULT sessions
+  vault_check.py VAULT gm-leak [--folder SUB]
+  vault_check.py VAULT pc-body
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
   vault_check.py VAULT all
@@ -34,6 +36,8 @@ OK/SETUP, 1 otherwise — so a skill can branch on it; `active-pcs`
 emits `PC<TAB>path<TAB>roster line` for the session skills' opening
 roster read.
 """
+
+from __future__ import annotations
 
 import argparse
 import re
@@ -64,8 +68,10 @@ from vaultlib import (  # noqa: F401
     LINK_RE,
     PC_INACTIVE_STATUS,
     SKIP_DIRS,
+    LineState,
     active_pc_names,
     active_pcs,
+    effective_exclude_sections,
     iter_body_lines,
     link_target,
     nested_mapping,
@@ -73,6 +79,7 @@ from vaultlib import (  # noqa: F401
     parse_version,
     plugin_version,
     raw_frontmatter,
+    scan_body,
     vault_files,
     wikilink_target,
 )
@@ -790,6 +797,246 @@ def check_sessions(vault: Path) -> list[str]:
     return rows
 
 
+# --------------------------------------------------------------------------
+# Publish safety
+#
+# Both checks answer the same question — "would a player see this?" — and
+# both answer it through `scan_body`, which mirrors the publish pipeline's
+# own fence tracking and section filter. That containment is the whole
+# point: a grep for "Keeper" cannot tell a heading nested under an excluded
+# `## GM Notes` from a sibling beside it, and reporting the first would
+# train the GM to ignore the second.
+# --------------------------------------------------------------------------
+
+# graph-health.md, "Un-fenced GM-only content". Matched as substrings of a
+# casefolded title, so "Tactics" hits "tactic" and "Secrets" hits "secret".
+KEEPER_WORDS = ("keeper", "gm only", "gm-only", "dm only", "secret",
+                "tactic", "confidential", "spoiler")
+
+# Types the publish pipeline never builds a page for. Nothing in them can
+# leak however it is written, and flagging their (correctly) Keeper-facing
+# headings would bury the findings that matter.
+GM_LEAK_SKIP_TYPES = {"session-plan", "session-play-notes", "plan", "meta"}
+
+# A bold label opening a paragraph: `**Secret:** he lied.` The colon is
+# optional and is dropped from the captured label.
+BOLD_LABEL_RE = re.compile(r"^\*\*([^*]+?):?\*\*")
+# A labelled Current Status field: `**Location:** the quay`.
+LABELLED_FIELD_RE = re.compile(r"^\*\*[A-Za-z][^*]*:\*\*")
+CALLOUT_RE = re.compile(r"^>\s*\[!(\w[\w-]*)\]\s*(.*)")
+# "GM" as a word — "gm" inside "Kingman" is not a Keeper marker.
+GM_WORD_RE = re.compile(r"\bgm\b")
+# Emphasis wrapping a whole heading title. `### **GM Notes**` is the case
+# that matters: processor.js `filterSections` compares the raw title, so
+# the asterisks turn an excluded section into a published one.
+EMPHASIS_RE = re.compile(r"^(\*\*|__|_)(.+?)\1$")
+
+FENCE_PROBLEM_RE = re.compile(r"^line (\d+): (.*)$")
+
+
+def _fence_rows(rel: str, problems: list[str]) -> list[str]:
+    """`scan_body`'s authoring problems as rows, with the consequence named.
+
+    An orphan closer is the worse of the two and is the ERROR: depth never
+    went above zero, so nothing above it was ever hidden and the GM has no
+    way to tell by looking. A block left open at EOF at least fails safe —
+    the publish tool strips everything from the opener down.
+    """
+    rows: list[str] = []
+    for problem in problems:
+        m = FENCE_PROBLEM_RE.match(problem)
+        if not m:
+            continue
+        lineno, detail = m.group(1), m.group(2)
+        if "with no opener" in detail:
+            rows.append(f"ERROR\t{rel}:{lineno}\t{detail} — "
+                        f"everything above it publishes")
+        else:
+            rows.append(f"WARNING\t{rel}:{lineno}\t{detail} — "
+                        f"publish strips to end of file")
+    return rows
+
+
+def _keeper_text(text: str, excludes: list[str]) -> bool:
+    """Does this title or label read as Keeper-facing?"""
+    low = text.casefold()
+    return (any(word in low for word in KEEPER_WORDS)
+            or any(s.casefold() in low for s in excludes))
+
+
+def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
+    """Rows for one published heading line."""
+    if state.heading is None:
+        return []
+    _level, raw = state.heading
+    m = EMPHASIS_RE.match(raw)
+    title = m.group(2).strip() if m else raw
+    if title.casefold() in {s.casefold() for s in excludes}:
+        # An unwrapped exact match never reaches here: `scan_body` has
+        # already marked that line excluded, exactly as the site would.
+        # Only the emphasis-wrapped spelling survives to publish.
+        return [f"ERROR\t{rel}:{state.lineno}\tbold-wrapped heading "
+                f"'{title}' defeats the exclude list and publishes — "
+                f"remove the ** or move it under ## GM Notes"]
+    if _keeper_text(title, excludes):
+        return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
+                f"'{title}' publishes — nest it under ## GM Notes or fence it"]
+    return []
+
+
+def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
+    """Keeper-facing content that would actually reach the player site.
+
+    Mechanises graph-health.md's "Un-fenced GM-only content" prose. The
+    levels encode how mechanical the fix is: a heading can be moved or
+    renamed (ERROR/WARNING), while a bold label or a callout is prose the
+    GM has to judge (INFO) — neither is auto-movable without rewriting
+    the paragraph around it.
+
+    Every line is filtered through `scan_body`, so nothing inside a
+    `<!-- gm-only -->`/`<!-- spoiler -->` fence, under an excluded
+    heading, or inside a code fence is ever reported.
+
+    A file's fence problems lead its rows rather than falling into line
+    order: an orphan closer changes what every line above it means, so
+    it is the first thing to read, not the fifth.
+    """
+    excludes = effective_exclude_sections(vault)
+    rows: list[str] = []
+    for rel, text in vault_files(vault, folder):
+        fm = extract_frontmatter(text) or {}
+        if fm.get("type") in GM_LEAK_SKIP_TYPES:
+            continue
+        states, problems = scan_body(text, excludes)
+        rows.extend(_fence_rows(rel, problems))
+        for state in states:
+            # `published` deliberately says nothing about code fences —
+            # vaultlib's divergence note — so exclude them here, or this
+            # repo's own documented examples become findings.
+            if state.in_code or not state.published:
+                continue
+            if state.heading is not None:
+                rows.extend(_heading_leak(rel, state, excludes))
+                continue
+            bold = BOLD_LABEL_RE.match(state.line)
+            if bold and _keeper_text(bold.group(1), excludes):
+                rows.append(f"INFO\t{rel}:{state.lineno}\tbold label "
+                            f"'{bold.group(1)}' looks Keeper-facing — confirm "
+                            f"with the GM (not a heading; not auto-movable)")
+                continue
+            callout = CALLOUT_RE.match(state.line)
+            if callout:
+                ctype, title = callout.group(1), callout.group(2).strip()
+                low = f"{ctype} {title}".casefold()
+                if GM_WORD_RE.search(low) or "keeper" in low:
+                    label = f"[!{ctype}] {title}".strip()
+                    rows.append(f"INFO\t{rel}:{state.lineno}\tcallout {label} "
+                                f"reads Keeper-facing — confirm it should "
+                                f"publish")
+    return rows
+
+
+CURRENT_STATUS = "current status"
+# The two protected sections `## Current Status` must precede.
+PROTECTED_H2 = {"notes", "gm notes"}
+CANONICAL_FIRST_H2 = "Stat Sheet"
+
+
+def _has_labelled_field(states: list[LineState], start: LineState,
+                        level: int) -> bool:
+    """Does the block `start` opens carry any `**Label:**` field?
+
+    The block runs to the next heading of the same level or shallower —
+    the same span the publish tool and session-wrapup read.
+    """
+    for state in states:
+        if state.lineno <= start.lineno:
+            continue
+        if state.heading is not None and state.heading[0] <= level:
+            break
+        if not state.in_code and LABELLED_FIELD_RE.match(state.line):
+            return True
+    return False
+
+
+def check_pc_body(vault: Path) -> list[str]:
+    """PC sheet skeleton and `## Current Status` placement.
+
+    `shared/pc-body-structure.md` makes three promises about the block
+    that every downstream consumer relies on: it publishes, it sits
+    before the protected sections, and its labelled fields are readable
+    by machine. Each is checked here at the level its breakage deserves —
+    a fenced block silently drops the PC's current state from the site
+    (ERROR), a misplaced or duplicated heading is a structure the GM
+    should fix (WARNING), and a missing block or an off-skeleton opening
+    is context for the auditing skill (INFO).
+
+    Every `type: pc` file is checked, whatever its status: a retired PC's
+    page still publishes. `*_Story.md` companions are narrative history,
+    not sheets, and are skipped.
+    """
+    excludes = effective_exclude_sections(vault)
+    rows: list[str] = []
+    for rel, text in vault_files(vault):
+        fm = extract_frontmatter(text) or {}
+        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
+            continue
+        states, problems = scan_body(text, excludes)
+        rows.extend(_fence_rows(rel, problems))
+
+        headings: list[tuple[LineState, int, str]] = []
+        for state in states:
+            if state.heading is not None:
+                headings.append((state, state.heading[0], state.heading[1]))
+        h2s = [(s, title) for s, level, title in headings if level == 2]
+
+        named = [h for h in headings if h[2].casefold() == CURRENT_STATUS]
+        current = next((h for h in named if h[1] == 2), None)
+        if current is None and named:
+            current = named[0]
+
+        if current is None:
+            rows.append(f"INFO\t{rel}\tno ## Current Status block — "
+                        f"session-wrapup Step 3c creates it")
+        else:
+            state, level, _title = current
+            n = state.lineno
+            if state.gm_depth or state.spoiler_depth:
+                rows.append(f"ERROR\t{rel}:{n}\t## Current Status is inside "
+                            f"a <!-- gm-only --> / <!-- spoiler --> fence — "
+                            f"it publishes; move it outside")
+            if level != 2:
+                rows.append(f"WARNING\t{rel}:{n}\tCurrent Status is an "
+                            f"H{level} — it must be an H2 outside the "
+                            f"protected sections")
+            protected = [(s.lineno, title) for s, title in h2s
+                         if title.casefold() in PROTECTED_H2]
+            if protected:
+                first_line, first_title = min(protected)
+                if n > first_line:
+                    rows.append(f"WARNING\t{rel}:{n}\t## Current Status "
+                                f"comes after ## {first_title} — it must "
+                                f"precede the protected sections")
+            if not _has_labelled_field(states, state, level):
+                rows.append(f"INFO\t{rel}:{n}\t## Current Status has no "
+                            f"labelled fields (**Location:** …) — machine "
+                            f"consumers read the labels")
+
+        seen: set[str] = set()
+        for s, title in h2s:
+            key = title.casefold()
+            if key in seen:
+                rows.append(f"WARNING\t{rel}:{s.lineno}\t"
+                            f"duplicate H2 '{title}'")
+            seen.add(key)
+
+        if h2s and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():
+            rows.append(f"INFO\t{rel}\tfirst body H2 is '## {h2s[0][1]}' — "
+                        f"the canonical skeleton opens with "
+                        f"## {CANONICAL_FIRST_H2}")
+    return rows
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
@@ -797,8 +1044,11 @@ def main() -> int:
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
                                         "relationships", "sessions",
+                                        "gm-leak", "pc-body",
                                         "version", "active-pcs", "all"])
-    ap.add_argument("--folder", help="restrict frontmatter check to subfolder")
+    ap.add_argument("--folder",
+                    help="restrict the frontmatter and gm-leak "
+                         "checks to a subfolder")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
     ap.add_argument("--since", type=int,
@@ -842,6 +1092,10 @@ def main() -> int:
         emit("relationships", check_relationships(args.vault))
     if args.command in ("sessions", "all"):
         emit("sessions", check_sessions(args.vault))
+    if args.command in ("gm-leak", "all"):
+        emit("gm-leak", check_gm_leak(args.vault, args.folder))
+    if args.command in ("pc-body", "all"):
+        emit("pc-body", check_pc_body(args.vault))
     return 0
 
 

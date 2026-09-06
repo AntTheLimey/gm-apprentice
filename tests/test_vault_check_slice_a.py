@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Regression tests for the Mechanization Slice A vault_check commands.
 
-Covers the three commands that replace by-eye procedures in the skills:
+Covers the commands that replace by-eye procedures in the skills:
 `version` (the vault/plugin semver gate eight skills open with),
-`active-pcs` (the roster helper), and `sessions` (deriving each
-session's status from which chain documents actually exist).
+`active-pcs` (the roster helper), `sessions` (deriving each session's
+status from which chain documents actually exist), and the two
+publish-safety checks — `gm-leak` (Keeper-facing content that would
+reach the player site) and `pc-body` (the PC sheet skeleton and where
+`## Current Status` sits).
 
 One class per command; later Slice A tasks append their own classes.
 
@@ -365,6 +368,215 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertIn("## sessions", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
         self.assertIn("## sessions", run_cli(FIXTURES / "sessions", "all").stdout)
+
+
+LEAK = FIXTURES / "leak"
+GOOD = "Characters/NPCs/Good.md"
+LEAKY = "Characters/NPCs/Leaky.md"
+CONFIG = "Characters/NPCs/Config.md"
+PLAN = "Chapters/C1/Sessions/S1/Session 01 - X - Plan.md"
+FINE = "Characters/PCs/Fine.md"
+FENCED = "Characters/PCs/Fenced.md"
+LATE = "Characters/PCs/Late.md"
+BARE = "Characters/PCs/Bare.md"
+STORY = "Characters/PCs/Fine_Story.md"
+
+
+class GmLeakCommandTests(unittest.TestCase):
+    """`vault_check.py VAULT gm-leak` — Keeper-facing content that would
+    actually reach the published site, with the fence and excluded-section
+    containment a grep cannot express."""
+
+    def setUp(self):
+        self.rows = vc.check_gm_leak(LEAK, None)
+
+    def test_bold_wrapped_exclude_heading_is_an_error(self):
+        # processor.js filterSections compares the raw title, so the `**`
+        # defeats the exclude list and the section publishes.
+        self.assertIn(
+            f"ERROR\t{LEAKY}:10\tbold-wrapped heading 'GM Notes' defeats "
+            f"the exclude list and publishes — remove the ** or move it "
+            f"under ## GM Notes",
+            self.rows)
+
+    def test_keeper_facing_sibling_heading_warns(self):
+        self.assertIn(
+            f"WARNING\t{LEAKY}:14\tKeeper-facing heading 'Keeper Checklist' "
+            f"publishes — nest it under ## GM Notes or fence it",
+            self.rows)
+
+    def test_bold_label_is_an_info(self):
+        self.assertIn(
+            f"INFO\t{LEAKY}:18\tbold label 'Secret' looks Keeper-facing — "
+            f"confirm with the GM (not a heading; not auto-movable)",
+            self.rows)
+
+    def test_keeper_callout_is_an_info(self):
+        self.assertIn(
+            f"INFO\t{LEAKY}:20\tcallout [!warning] Keeper eyes only reads "
+            f"Keeper-facing — confirm it should publish",
+            self.rows)
+
+    def test_orphan_closer_is_an_error(self):
+        self.assertIn(
+            f"ERROR\t{LEAKY}:23\t<!-- /gm-only --> with no opener — "
+            f"everything above it publishes",
+            self.rows)
+
+    def test_unclosed_marker_warns(self):
+        vault = make_vault(self)
+        (vault / "Open.md").write_text(
+            "---\ntype: npc\n---\n\n## Description\n\n"
+            "<!-- spoiler -->\nHe is the killer.\n", encoding="utf-8")
+        self.assertIn(
+            "WARNING\tOpen.md:7\t<!-- spoiler --> never closed — "
+            "publish strips to end of file",
+            vc.check_gm_leak(vault, None))
+
+    def test_a_config_exclude_entry_silences_its_own_section(self):
+        self.assertFalse(rows_for(self.rows, f"{CONFIG}:6"), self.rows)
+        self.assertFalse(rows_for(self.rows, f"{CONFIG}:10"), self.rows)
+
+    def test_a_heading_containing_an_exclude_entry_still_warns(self):
+        self.assertIn(
+            f"WARNING\t{CONFIG}:14\tKeeper-facing heading "
+            f"'Keeper Notes — Draft' publishes — nest it under ## GM Notes "
+            f"or fence it",
+            self.rows)
+
+    def test_the_clean_npc_is_silent(self):
+        # Fenced aside, a nested `### Tactics` under `## GM Notes`, and a
+        # fenced code example that quotes both a Keeper heading and a bold
+        # label — none of them reach a reader.
+        self.assertFalse(rows_for(self.rows, GOOD), self.rows)
+
+    def test_never_published_types_are_skipped(self):
+        self.assertFalse(rows_for(self.rows, PLAN), self.rows)
+
+    def test_canonical_pc_sheets_are_silent(self):
+        for rel in (FINE, FENCED, LATE, BARE, STORY):
+            with self.subTest(rel=rel):
+                self.assertFalse(rows_for(self.rows, rel), self.rows)
+
+    def test_that_is_every_row(self):
+        self.assertEqual(len(self.rows), 6, self.rows)
+
+    def test_folder_restricts_the_walk(self):
+        rows = vc.check_gm_leak(LEAK, "Characters/NPCs")
+        self.assertTrue(all("Characters/NPCs/" in r for r in rows), rows)
+        self.assertTrue(rows_for(rows, LEAKY), rows)
+
+    def test_cli_emits_the_section_and_all_includes_it(self):
+        proc = run_cli(LEAK, "gm-leak")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("## gm-leak", proc.stdout)
+        self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
+        self.assertIn("## gm-leak", run_cli(LEAK, "all").stdout)
+
+
+class PcBodyCommandTests(unittest.TestCase):
+    """`vault_check.py VAULT pc-body` — the skeleton and `## Current Status`
+    placement rules from shared/pc-body-structure.md."""
+
+    def setUp(self):
+        self.rows = vc.check_pc_body(LEAK)
+
+    def test_current_status_inside_a_fence_is_an_error(self):
+        self.assertIn(
+            f"ERROR\t{FENCED}:12\t## Current Status is inside a "
+            f"<!-- gm-only --> / <!-- spoiler --> fence — it publishes; "
+            f"move it outside",
+            self.rows)
+
+    def test_current_status_after_the_protected_sections_warns(self):
+        self.assertIn(
+            f"WARNING\t{LATE}:22\t## Current Status comes after ## Notes — "
+            f"it must precede the protected sections",
+            self.rows)
+
+    def test_duplicate_h2_warns_at_the_repeat(self):
+        self.assertIn(f"WARNING\t{LATE}:14\tduplicate H2 'Equipment'",
+                      self.rows)
+
+    def test_first_h2_that_is_not_stat_sheet_is_an_info(self):
+        self.assertIn(
+            f"INFO\t{LATE}\tfirst body H2 is '## Background' — the canonical "
+            f"skeleton opens with ## Stat Sheet",
+            self.rows)
+
+    def test_prose_only_current_status_is_an_info(self):
+        self.assertIn(
+            f"INFO\t{BARE}:10\t## Current Status has no labelled fields "
+            f"(**Location:** …) — machine consumers read the labels",
+            self.rows)
+
+    def test_the_canonical_sheet_is_silent(self):
+        self.assertFalse(rows_for(self.rows, FINE + "\t"), self.rows)
+        self.assertFalse(rows_for(self.rows, FINE + ":"), self.rows)
+
+    def test_the_story_companion_is_ignored(self):
+        self.assertFalse(rows_for(self.rows, STORY), self.rows)
+
+    def test_that_is_every_row(self):
+        self.assertEqual(len(self.rows), 5, self.rows)
+
+    def test_absent_block_is_an_info_pointing_at_wrapup(self):
+        vault = make_vault(self)
+        (vault / "Nobody.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\nSTR 10.\n",
+            encoding="utf-8")
+        self.assertEqual(
+            vc.check_pc_body(vault),
+            ["INFO\tNobody.md\tno ## Current Status block — "
+             "session-wrapup Step 3c creates it"])
+
+    def test_wrong_heading_level_warns(self):
+        vault = make_vault(self)
+        (vault / "Deep.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+            "### Current Status\n\n**Location:** Here\n", encoding="utf-8")
+        self.assertIn(
+            "WARNING\tDeep.md:7\tCurrent Status is an H3 — it must be an H2 "
+            "outside the protected sections",
+            vc.check_pc_body(vault))
+
+    def test_an_h2_wins_over_a_stray_lower_level_heading(self):
+        vault = make_vault(self)
+        (vault / "Both.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+            "### Current Status\n\n## Current Status\n\n"
+            "**Location:** Here\n", encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertFalse(rows_for(rows, "must be an H2"), rows)
+
+    def test_inactive_pcs_are_checked_because_they_still_publish(self):
+        vault = make_vault(self)
+        (vault / "Dead.md").write_text(
+            "---\ntype: pc\nstatus: dead\n---\n\n## Stat Sheet\n\n"
+            "STR 0.\n", encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault),
+                                 "no ## Current Status block"))
+
+    def test_fence_problems_are_reported_here_too(self):
+        vault = make_vault(self)
+        (vault / "Torn.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+            "<!-- /gm-only -->\n\n## Current Status\n\n"
+            "**Location:** Here\n", encoding="utf-8")
+        self.assertIn(
+            "ERROR\tTorn.md:7\t<!-- /gm-only --> with no opener — "
+            "everything above it publishes",
+            vc.check_pc_body(vault))
+
+    def test_a_vault_with_no_pcs_is_empty(self):
+        self.assertEqual(vc.check_pc_body(make_vault(self)), [])
+
+    def test_cli_emits_the_section_and_all_includes_it(self):
+        proc = run_cli(LEAK, "pc-body")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("## pc-body", proc.stdout)
+        self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
+        self.assertIn("## pc-body", run_cli(LEAK, "all").stdout)
 
 
 if __name__ == "__main__":
