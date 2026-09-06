@@ -25,23 +25,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gurps_calc as gc            # noqa: E402
 from schema_rules import extract_frontmatter  # noqa: E402
+from vaultlib import body_of  # noqa: E402
 
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$", re.M)
 WEIGHT_RE = re.compile(r"(\d+(?:\.\d+)?)")
 COST_RE = re.compile(r"[\[\(]?\s*([+\-−]?\d+)\s*[\]\)]?")
 LEVEL_ALIASES = {"extra-heavy": "x-heavy", "extra heavy": "x-heavy",
                  "xheavy": "x-heavy", "very heavy": "x-heavy"}
-# Mirrors the fence convention in schema_rules.extract_frontmatter
-# (anchored at file start, CRLF-tolerant, closing fence at newline or
-# EOF) so the fm dict and the body strip agree on the block boundary.
-FRONTMATTER_BLOCK_RE = re.compile(r"\A---\r?\n.*?\r?\n---(?:\r?\n|$)",
-                                  re.DOTALL)
 
 
 class Sheet:
     def __init__(self, text: str):
         self.fm = extract_frontmatter(text) or {}
-        body = FRONTMATTER_BLOCK_RE.sub("", text, count=1)
+        # vaultlib.body_of shares the fence convention with
+        # extract_frontmatter, so the fm dict and the body strip
+        # agree on where the block ends.
+        body = body_of(text)
         self._sections = []           # (title_lower, level, body)
         matches = list(HEADING_RE.finditer(body))
         for i, m in enumerate(matches):
@@ -65,7 +64,7 @@ class Sheet:
         sec_body = self.section(title)
         if sec_body is None:
             return []
-        rows = []
+        rows: list[list[str]] = []
         for line in sec_body.splitlines():
             line = line.strip()
             if not (line.startswith("|") and line.endswith("|")):

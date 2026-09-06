@@ -32,7 +32,6 @@ from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
 
-from graph_check import link_target
 from schema_rules import (
     CANON_STATUS_VALUES,
     DEPRECATED_FIELDS,
@@ -49,9 +48,20 @@ from schema_rules import (
     predicate_problem,
     predicate_vocabulary,
 )
+# LINK_RE, SKIP_DIRS and PC_INACTIVE_STATUS are re-exported: they were part
+# of this module's surface before vaultlib existed.
+from vaultlib import (  # noqa: F401
+    LINK_RE,
+    PC_INACTIVE_STATUS,
+    SKIP_DIRS,
+    active_pc_names,
+    iter_body_lines,
+    link_target,
+    normalize,
+    raw_frontmatter,
+    vault_files,
+)
 
-SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
-LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
 # A frontmatter line carrying an unquoted wikilink (Juggl breaks on these)
 UNQUOTED_LINK_RE = re.compile(r'^\s*(?:[\w-]+:|-)\s*\[\[')
 
@@ -67,38 +77,11 @@ STATUS_BY_TYPE = {
 }
 
 
-def vault_files(vault: Path, folder: str | None = None):
-    for path in sorted(vault.rglob("*.md")):
-        rel = path.relative_to(vault).as_posix()
-        parts = rel.split("/")
-        if any(p.startswith(".") for p in parts):
-            continue
-        if parts[0] in SKIP_DIRS:
-            continue
-        if folder and not rel.startswith(folder.strip("/") + "/"):
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as e:
-            print(f"warning: unreadable {rel}: {e}", file=sys.stderr)
-            continue
-        yield rel, text
-
-
-def normalize(name: str) -> str:
-    return re.sub(r"\s+", " ", name.replace("_", " ").strip()).casefold()
-
-
 def emit(label: str, rows: list[str]):
     print(f"## {label}")
     print(f"# count: {len(rows)}")
     for r in rows:
         print(r)
-
-
-def raw_frontmatter(text: str) -> str:
-    m = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", text, re.DOTALL)
-    return m.group(1) if m else ""
 
 
 def check_frontmatter(vault: Path, folder: str | None) -> list[str]:
@@ -129,11 +112,11 @@ def check_frontmatter(vault: Path, folder: str | None) -> list[str]:
                 rows.append(f"ERROR\t{rel}\t{field}: '{value}' not in "
                             f"{{{', '.join(sorted(allowed))}}}")
         status = fm.get("status")
-        allowed = STATUS_BY_TYPE.get(etype)
-        if status and allowed and not isinstance(status, list) \
-                and status not in allowed:
+        status_values = STATUS_BY_TYPE.get(etype)
+        if status and status_values and not isinstance(status, list) \
+                and status not in status_values:
             rows.append(f"ERROR\t{rel}\tstatus: '{status}' not in "
-                        f"{{{', '.join(sorted(allowed))}}}")
+                        f"{{{', '.join(sorted(status_values))}}}")
         for scope in ("*", etype):
             for old, new, since in DEPRECATED_FIELDS.get(scope, []):
                 if old in fm:
@@ -428,20 +411,6 @@ def check_changed(vault: Path, since: int) -> list[str]:
     return rows
 
 
-def iter_body_lines(text: str):
-    """Yield (lineno, line) for body lines, 1-based, skipping YAML
-    frontmatter so scans never trip on `aliases:` or `type:` values."""
-    lines = text.splitlines()
-    start = 0
-    if lines and lines[0].strip() == "---":
-        for i in range(1, len(lines)):
-            if lines[i].strip() == "---":
-                start = i + 1
-                break
-    for idx in range(start, len(lines)):
-        yield idx + 1, lines[idx]
-
-
 TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
 ALIAS_LINK_RE = re.compile(r"\[\[[^\[\]]*\|[^\[\]]*\]\]")
 
@@ -509,35 +478,6 @@ def check_timeline(vault: Path) -> list[str]:
                     f"multiple days) — offer to build a '## Timeline' clock "
                     f"with the GM so hours and same-day travel stay coherent")
     return rows
-
-
-PC_INACTIVE_STATUS = {"dead", "retired", "inactive"}
-
-
-def active_pc_names(vault: Path) -> set[str]:
-    """Active PCs, mirroring session_context.py: type: pc, not *_Story.md,
-    status not dead/retired/inactive. Name set = filename stem, each
-    capitalised stem token (len >= 3), and each alias — for whole-word
-    matching of both 'Katherine Winslow' and 'Katherine'."""
-    names: set[str] = set()
-    for rel, text in vault_files(vault):
-        fm = extract_frontmatter(text) or {}
-        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
-            continue
-        if str(fm.get("status", "")).casefold() in PC_INACTIVE_STATUS:
-            continue
-        stem = Path(rel).stem.replace("_", " ").strip()
-        if stem:
-            names.add(stem)
-            for tok in stem.split():
-                if len(tok) >= 3 and tok[:1].isupper():
-                    names.add(tok)
-        aliases = fm.get("aliases")
-        if isinstance(aliases, list):
-            for a in aliases:
-                if isinstance(a, str) and a.strip():
-                    names.add(a.strip())
-    return names
 
 
 def pc_name_regex(names: set[str]):

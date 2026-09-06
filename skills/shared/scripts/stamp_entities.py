@@ -31,56 +31,15 @@ import re
 import sys
 from pathlib import Path
 
-YAML_LINE_RE = re.compile(r"^\s*$|^\s*#|^[\w.-]+:|^\s+-\s|^\s+\S+:")
-
-
-def frontmatter_span(lines: list[str]) -> tuple[int, str | None]:
-    """Return (index of closing delimiter line, error).
-
-    Fail-safe rules: the file must open with exactly `---`; the FIRST
-    subsequent line starting with `---` must be exactly `---` (a
-    malformed delimiter like `--- ` is an error, not a reason to keep
-    scanning into the body); every line between must look like YAML.
-    """
-    if not lines or lines[0].rstrip("\r\n") != "---":
-        return -1, "no frontmatter"
-    for i, line in enumerate(lines[1:], start=1):
-        stripped = line.rstrip("\r\n")
-        if stripped.startswith("---"):
-            if stripped != "---":
-                return -1, f"malformed frontmatter delimiter {stripped!r}"
-            for body_line in lines[1:i]:
-                if not YAML_LINE_RE.match(body_line.rstrip("\r\n")):
-                    return -1, ("frontmatter region does not look like "
-                                f"YAML ({body_line.rstrip()!r}) — refusing")
-            return i, None
-    return -1, "unterminated frontmatter"
-
-
-def get_key(fm: list[str], key: str) -> str | None:
-    """Raw value text after `key:` (whitespace-stripped), or None."""
-    pattern = re.compile(rf"^{re.escape(key)}:([^\r\n]*)")
-    for line in fm:
-        m = pattern.match(line)
-        if m:
-            return m.group(1).strip()
-    return None
-
-
-def unquote(text: str) -> str:
-    """Strip one layer of matching surrounding quotes, if present."""
-    text = text.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        return text[1:-1]
-    return text
-
-
-def yaml_scalar(value: str, *, quoted_int: bool = False) -> str:
-    """An integer stays bare unless the file already quotes its integer
-    (`asOfSession: "9"` stays `"10"`); anything else is double-quoted."""
-    if re.fullmatch(r"\d+", value) and not quoted_int:
-        return value
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vaultlib import (  # noqa: E402,F401 — YAML_LINE_RE re-exported
+    YAML_LINE_RE,
+    frontmatter_span,
+    get_key,
+    set_key,
+    unquote,
+    yaml_scalar,
+)
 
 
 def session_shape(raw: str | None) -> str | None:
@@ -93,18 +52,6 @@ def session_shape(raw: str | None) -> str | None:
     if text == "":
         return None
     return "int" if re.fullmatch(r"\d+", text) else "label"
-
-
-def set_key(fm: list[str], key: str, value: str, eol: str) -> str:
-    pattern = re.compile(rf"^{re.escape(key)}:[^\r\n]*")
-    for i, line in enumerate(fm):
-        m = pattern.match(line)
-        if m:
-            old = m.group(0)
-            fm[i] = pattern.sub(f"{key}: {value}", line, count=1)
-            return f"{old.strip()} -> {key}: {value}"
-    fm.append(f"{key}: {value}{eol}")
-    return f"added {key}: {value}"
 
 
 def retag(fm: list[str], old: str, new: str) -> str | None:
@@ -214,11 +161,12 @@ def main() -> int:
                   f"--force-shape to override — not stamped")
             errors += 1
             continue
-        quoted_int = (old_shape == "int" and old_raw.strip()[:1] in "\"'")
+        quoted_int = (old_raw is not None and old_shape == "int"
+                      and old_raw.strip()[:1] in "\"'")
         actions = [set_key(fm, "asOfSession",
                            yaml_scalar(session, quoted_int=quoted_int), eol),
                    set_key(fm, "lastUpdated", f'"{args.date}"', eol)]
-        if tag_old:
+        if tag_old and tag_new:
             act = retag(fm, tag_old, tag_new)
             actions.append(act if act else
                            f"tag {tag_old} not present in tags — no swap")

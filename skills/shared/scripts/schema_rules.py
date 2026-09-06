@@ -1,18 +1,39 @@
 #!/usr/bin/env python3
-"""Canonical vault schema rules and frontmatter parser.
+"""Canonical vault schema rules and the relationship vocabulary.
 
 Single source of truth shared by the dev-side validator
 (scripts/validate_schema.py) and the vault-facing utility
 (skills/shared/scripts/vault_check.py). Lives under
 skills/shared/ so it ships with the plugin; the dev validator
 imports it from the repo. Stdlib only.
+
+The frontmatter parser itself now lives in vaultlib, alongside every
+other shared vault primitive; the names callers have always imported
+from here are re-exported below so nothing had to be rewritten.
 """
 
 import json
 import re
+import sys
 from difflib import get_close_matches
 from functools import lru_cache
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Re-exported for scripts/validate_schema.py, vault_check.py,
+# session_context.py and the test suite, all of which import these names
+# from here. vaultlib owns the definitions; this module owns the rules.
+from vaultlib import (  # noqa: E402,F401
+    FRONTMATTER_RE,
+    MAX_PLAUSIBLE_SESSION,
+    QUOTED_SCALAR_RE,
+    chapter_key,
+    chapter_of,
+    extract_frontmatter,
+    parse_session_number,
+    scalar_value,
+    wikilink_target,
+)
 
 # Valid enum values
 CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
@@ -106,154 +127,6 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 }
 
 
-# A complete quoted scalar and nothing else after it but blanks or a comment.
-# The closing quote is the *unescaped* one (`\"` inside double quotes, `''`
-# inside single), so `"5'4\" - 6'0\""` is one value rather than a truncated
-# prefix. Content after the closing quote means the line is not a valid quoted
-# scalar at all — see scalar_value.
-QUOTED_SCALAR_RE = re.compile(
-    r"""^(?:"((?:\\.|[^"\\])*)"|'((?:''|[^'])*)')\s*(?:\#.*)?$"""
-)
-
-
-def scalar_value(value: str) -> str:
-    """Unwrap a YAML scalar: quoted content, or unquoted up to a comment.
-
-    A quoted scalar with trailing content (`type: "npc" trailing`) is not
-    valid YAML. Unwrapping it would hand a clean-looking `npc` to the type
-    and predicate checks and pass malformed frontmatter silently, so the raw
-    text is returned instead and the caller reports it.
-    """
-    text = value.strip()
-    m = QUOTED_SCALAR_RE.match(text)
-    if m:
-        # Escapes are left as authored — nothing downstream compares against
-        # an unescaped form, and decoding them here would be a second guess
-        # at YAML this parser is deliberately not implementing.
-        return m.group(1) if m.group(1) is not None else m.group(2)
-    # Unquoted: a ' #' starts a YAML comment.
-    return re.split(r"\s+#", text, maxsplit=1)[0].strip()
-
-
-def extract_frontmatter(content: str) -> dict | None:
-    """Extract YAML frontmatter from markdown content."""
-    # Handle both LF and CRLF line endings
-    match = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", content, re.DOTALL)
-    if not match:
-        return None
-
-    frontmatter = {}
-    yaml_content = match.group(1)
-
-    # Simple YAML parsing (handles flat key: value and arrays)
-    current_key = None
-    for line in yaml_content.split("\n"):
-        # Skip empty lines
-        if not line.strip():
-            continue
-
-        # Array item
-        if line.strip().startswith("- "):
-            if current_key and current_key in frontmatter:
-                if not isinstance(frontmatter[current_key], list):
-                    frontmatter[current_key] = []
-                frontmatter[current_key].append(
-                    line.strip()[2:].strip('"').strip("'"))
-            continue
-
-        # Key: value pair
-        if ":" in line and not line.startswith(" ") and not line.startswith("\t"):
-            key, _, value = line.partition(":")
-            key = key.strip()
-            value = scalar_value(value)
-
-            # Handle empty value (might be start of array)
-            if value == "" or value == "[]":
-                frontmatter[key] = []
-            elif value.startswith("[") and value.endswith("]"):
-                # Inline array: aliases: [Doc, "The Colonel"]
-                frontmatter[key] = [
-                    v.strip().strip('"').strip("'")
-                    for v in value[1:-1].split(",") if v.strip()]
-            else:
-                frontmatter[key] = value
-            current_key = key
-
-    return frontmatter
-
-
-# Session numbers above this are implausible — a larger value is a
-# year or date fragment that leaked into a session field.
-MAX_PLAUSIBLE_SESSION = 500
-
-
-def parse_session_number(value) -> int | None:
-    """Parse a session reference like '3', 'Session 3', or 'session-03'.
-
-    Real vaults hold free-text values: compound references
-    ("Chapter 3, Session 7") must key on the session, not the first
-    number, and date-bearing prose ("Reconstructed 2026-07-04") must
-    parse as unknown rather than as session 2026.
-    """
-    if value is None or isinstance(value, list):
-        return None
-    text = str(value)
-    m = re.search(r"session\D{0,3}(\d+)", text, re.IGNORECASE)
-    if not m:
-        m = re.search(r"(\d+)", text)
-    if not m:
-        return None
-    n = int(m.group(1))
-    return n if n <= MAX_PLAUSIBLE_SESSION else None
-
-
-def wikilink_target(value) -> str:
-    """Bare target of a `[[Link|alias]]`, or the plain string.
-
-    A quoted wikilink reaches us as a one-item list, not a string: the
-    frontmatter reader treats the outer `[...]` of `"[[Note]]"` as a YAML
-    flow sequence and yields `['[Note]']`. Rejecting lists here silently
-    disabled every wikilink-valued lookup, so unwrap the single-item case
-    and strip whatever brackets survive.
-    """
-    if value is None:
-        return ""
-    if isinstance(value, list):
-        if len(value) != 1:
-            return ""
-        value = value[0]
-    return re.sub(r"[\[\]]", "", str(value)).split("|")[0].split("#")[0].strip()
-
-
-def chapter_of(rel: str, fm: dict) -> str | None:
-    """Which chapter a note belongs to, or None if it cannot be told.
-
-    Session numbering restarts per chapter in real vaults, so a bare
-    `session_number` is not a campaign-wide ordinal (#162). The
-    frontmatter ref is authoritative; the path is the fallback for
-    vaults that file by folder without tagging. Returns None for a
-    flat vault, where number alone is the only ordering available and
-    is correct.
-    """
-    ref = wikilink_target(fm.get("chapter"))
-    if ref:
-        # A ref may be written as a path ("[[Chapters/Chapter 4 - Calcutta]]")
-        # while the folder fallback yields only the segment. Keep the last
-        # segment either way, or one chapter acquires two identities and stops
-        # matching its own wrap-ups and plans.
-        return ref.rsplit("/", 1)[-1]
-    parts = rel.split("/")
-    if len(parts) > 1 and parts[0].casefold() in {"chapters", "_chapters"}:
-        return parts[1]
-    return None
-
-
-def chapter_key(rel: str, fm: dict) -> str | None:
-    """chapter_of, casefolded for comparison. None stays None."""
-    c = chapter_of(rel, fm)
-    return c.casefold() if c else None
-
-
 # Relationship predicate vocabulary
 #
 # The authoritative list is the predicate table in entity-schema.md; the
@@ -329,7 +202,7 @@ def iter_relationship_predicates(content: str):
     `relationships: []` or inline-flow value carries no edges to check.
     Line numbers are 1-based within the file, so findings are navigable.
     """
-    match = re.match(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", content, re.DOTALL)
+    match = FRONTMATTER_RE.match(content)
     if not match:
         return
     block_indent = None
