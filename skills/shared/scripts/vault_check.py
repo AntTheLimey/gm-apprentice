@@ -18,6 +18,7 @@ Usage:
   vault_check.py VAULT sessions
   vault_check.py VAULT gm-leak [--folder SUB]
   vault_check.py VAULT pc-body
+  vault_check.py VAULT wrapup [--file REL] [--fix]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
   vault_check.py VAULT all
@@ -28,6 +29,11 @@ line as `LEVEL<TAB>path<TAB>message`.
 
 Levels: ERROR (schema violation), WARNING (needs GM attention),
 INFO (context the auditing skill should triage, not a defect).
+
+`wrapup` is the one command that can write. It prints its findings
+first and then a repair row per action — `WOULD-FIX` on a dry run,
+`FIXED` when `--fix` applies them, `UNCHANGED` for a conformant
+file. It joins `all` as a dry run: `all` never writes.
 
 Two commands are gates rather than reports and sit outside `all`:
 `version` emits one row whose first column is a verdict
@@ -42,6 +48,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
@@ -72,7 +79,10 @@ from vaultlib import (  # noqa: F401
     LineState,
     active_pc_names,
     active_pcs,
+    delete_key,
     effective_exclude_sections,
+    frontmatter_span,
+    get_key,
     iter_body_lines,
     link_target,
     nested_mapping,
@@ -81,9 +91,12 @@ from vaultlib import (  # noqa: F401
     plugin_version,
     publish_mode,
     raw_frontmatter,
+    scalar_value,
     scan_body,
+    set_key,
     vault_files,
     wikilink_target,
+    yaml_scalar,
 )
 
 # A frontmatter line carrying an unquoted wikilink (Juggl breaks on these)
@@ -1121,6 +1134,840 @@ def check_pc_body(vault: Path) -> list[str]:
     return rows
 
 
+# --------------------------------------------------------------------------
+# Session Wrap-Up conformance
+#
+# Mechanises campaign-qa/references/checks/wrapup-conformance.md Steps 2–4
+# and, as `--fix`, the structural half of the 1.9.4 → 1.9.5 migration. The
+# failure this exists to prevent is narrow and expensive: a Keeper-facing
+# `## Open Questions for Reconcile` sits beside `## Narrative Recap` rather
+# than under `## GM Notes`, no exclude list anticipates its name, and it
+# publishes to the player site in full.
+#
+# Every fix is content-preserving. Headings move, are demoted, and are
+# renamed to the template's own names; frontmatter is backfilled from the
+# session index and from date evidence already written in the body. No
+# prose is reworded, nothing is deleted except a legacy date key whose
+# value has been carried across intact, and a conformant file comes back
+# byte-identical.
+# --------------------------------------------------------------------------
+
+# The three spellings in the wild. Enumeration is by `type:` only —
+# `Session NN - Title - Wrap-Up.md`, `Session_NN_Wrap_Up.md` and the
+# chapter-level variants have no filename in common.
+WRAP_TYPES = SESSION_DOC_TYPES["wrap_up"][1]
+CANONICAL_WRAP_TYPE = "session_wrap"
+
+WRAP_TEMPLATE_PATH = (Path(__file__).resolve().parent.parent
+                      / "templates" / "session-wrap.md")
+# Used only when the template is missing — a skill zip that shipped
+# without it must still normalise decorated headings rather than silently
+# stop recognising them.
+WRAP_SUBSECTIONS_FALLBACK: tuple[str, ...] = (
+    "Quick Bullets", "PC Carry-Forward", "What Carries Forward",
+    "World State", "Keeper Checklist",
+    "Name Conflicts (export vs. vault canon)", "Cross-Entity Claims",
+    "World Fact Findings", "Quality Notes", "Handoff to session-prep",
+    "Reconciliation Context",
+)
+
+
+def _wrap_template_subsections() -> tuple[str, ...]:
+    """The `###` names in shared/templates/session-wrap.md.
+
+    Read from the template rather than transcribed, so adding a
+    subsection there teaches the decorated-heading rename about it
+    without a code change. Resolved from this file's own location, like
+    `schema_rules.ONTOLOGY_PATH`: the template travels with the plugin,
+    never with the vault under audit.
+    """
+    try:
+        text = WRAP_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return WRAP_SUBSECTIONS_FALLBACK
+    found = tuple(m.group(1).strip() for m
+                  in re.finditer(r"^###\s+(.+)$", text, re.MULTILINE))
+    return found or WRAP_SUBSECTIONS_FALLBACK
+
+
+WRAP_TEMPLATE_SUBSECTIONS = _wrap_template_subsections()
+
+NARRATIVE_RECAP = "Narrative Recap"
+MEMORABLE_MOMENTS = "memorable moments"
+GM_NOTES = "gm notes"
+RECONCILIATION_CONTEXT = "reconciliation context"
+# A recap by any of the names three campaign vaults actually used.
+RECAP_TITLES = {"recap", "session recap", "what happened"}
+GM_ONLY_OPEN = "<!-- gm-only -->"
+GM_ONLY_CLOSE = "<!-- /gm-only -->"
+GM_MARKERS = ("open-gm", "close-gm")
+
+# `session: "[[Session 07 - The Ball]]"` and nothing else. An integer, a
+# bare title, or an unquoted `[[link]]` (a YAML flow sequence to every
+# real parser) all fail this.
+QUOTED_LINK_RE = re.compile(r'^(["\'])\[\[[^\[\]]+\]\]\1\s*(?:#.*)?$')
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SESSION_IN_NAME_RE = re.compile(r"session[ _-]?(\d+)", re.IGNORECASE)
+WRAP_FILENAME_RE = re.compile(r"^Chapter_\d{2}_Session_\d{2}_Wrap_Up$")
+CHAPTER_WRAP_FILENAME_RE = re.compile(r"^Chapter_\d+_Wrap_Up$")
+RECONSTRUCTION_NOTE_RE = re.compile(
+    r"^>\s*\[!\w[\w-]*\]\s*Reconstruction Note", re.IGNORECASE)
+RECONCILED_LINE_RE = re.compile(
+    r"\*\*Reconciled:?\*\*[^\n]*?(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
+RECONCILED_CALLOUT_RE = re.compile(
+    r"^>\s*(?:\[!\w[\w-]*\]\s*)?[^\n]*reconcil[^\n]*?(\d{4}-\d{2}-\d{2})",
+    re.IGNORECASE)
+# The legacy date keys, newest spelling last so `_end` wins the mapping.
+LEGACY_DATE_KEYS = ("in_game_dates", "in_game_date_start", "in_game_date_end")
+# The qualifier separators a decorated heading actually uses.
+HEADING_QUALIFIER_SEPARATORS = (" — ", " – ", " - ", ":")
+
+
+@dataclass
+class Finding:
+    """One wrap-up finding, and what `--fix` would do about it.
+
+    `kind` is how the fix layer reads a finding back: `fm` carries a
+    frontmatter operation in `data`, the structural kinds drive the
+    re-nest, and `""` is a finding with no mechanical repair at all.
+    """
+
+    level: str
+    where: str
+    message: str
+    kind: str = ""
+    data: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def row(self) -> str:
+        return f"{self.level}\t{self.where}\t{self.message}"
+
+
+@dataclass
+class WrapContext:
+    """What one wrap-up's fixes can be derived from.
+
+    Resolution is deliberately all-or-nothing: a session index that is
+    merely the most likely of several is not a fact, and writing a
+    `session:` link from a guess is how a wrap-up ends up pointing at
+    another chapter's session (#162's shape). `ambiguous_*` says the
+    candidates existed and disagreed, so the row can say so.
+    """
+
+    number: int | None
+    index_rel: str | None = None
+    index_text: str = ""
+    ambiguous_index: bool = False
+    notes_rel: str | None = None
+    ambiguous_notes: bool = False
+
+
+def is_recap_title(title: str) -> bool:
+    """A recap H2 under any of its spellings."""
+    low = title.casefold().strip()
+    return "narrative recap" in low or low in RECAP_TITLES
+
+
+def decorated_heading(title: str) -> tuple[str, str] | None:
+    """(template name, qualifier) for `Cross-Entity Claims — Held`.
+
+    Only a template `###` name followed by a separator counts: a
+    heading the template does not know is the GM's own, and renaming it
+    would be a content edit rather than a conformance fix.
+    """
+    low = title.casefold()
+    for name in sorted(WRAP_TEMPLATE_SUBSECTIONS, key=len, reverse=True):
+        for sep in HEADING_QUALIFIER_SEPARATORS:
+            prefix = f"{name}{sep}".casefold()
+            if low.startswith(prefix) and title[len(prefix):].strip():
+                return name, title[len(prefix):].strip()
+    return None
+
+
+def _wrap_eol(text: str) -> str:
+    """The file's line ending. Mixed endings normalise to the first one
+    seen — a wrap-up with both is already corrupt for every other tool."""
+    return "\r\n" if "\r\n" in text else "\n"
+
+
+def _session_number_of(rel: str, fm: dict) -> int | None:
+    """This note's session number, from frontmatter or its filename."""
+    for key in ("session_number", "session"):
+        n = parse_session_number(fm.get(key))
+        if n is not None:
+            return n
+    m = SESSION_IN_NAME_RE.search(Path(rel).stem)
+    return int(m.group(1)) if m else None
+
+
+def _chapters_agree(a: str | None, b: str | None) -> bool:
+    """Chapter compatibility, mirroring `session_context.prefer_chapter`:
+    an unresolvable chapter on either side still matches, which is what
+    keeps flat vaults working."""
+    return a is None or b is None or a == b
+
+
+def _wrap_context(rel: str, fm: dict,
+                  entries: list[tuple[str, str, dict]]) -> WrapContext:
+    """Resolve the session index and play notes this wrap-up belongs to."""
+    chapter = chapter_key(rel, fm)
+    ctx = WrapContext(number=_session_number_of(rel, fm))
+
+    indexes = [(r, t, f) for r, t, f in entries if f.get("type") == "session"]
+    link = wikilink_target(fm.get("session"))
+    if link:
+        target = link_target(link)
+        named = [(r, t) for r, t, _f in indexes
+                 if normalize(Path(r).stem) == target]
+        if len(named) == 1:
+            ctx.index_rel, ctx.index_text = named[0]
+    if ctx.index_rel is None:
+        found = [(r, t) for r, t, f in indexes
+                 if ctx.number is not None
+                 and _session_number_of(r, f) == ctx.number
+                 and _chapters_agree(chapter, chapter_key(r, f))]
+        if len(found) == 1:
+            ctx.index_rel, ctx.index_text = found[0]
+        elif found:
+            ctx.ambiguous_index = True
+
+    notes = [r for r, _t, f in entries
+             if f.get("type") == "session-play-notes"
+             and ctx.number is not None
+             and _session_number_of(r, f) == ctx.number
+             and _chapters_agree(chapter, chapter_key(r, f))]
+    if len(notes) == 1:
+        ctx.notes_rel = notes[0]
+    elif notes:
+        ctx.ambiguous_notes = True
+    return ctx
+
+
+def _index_value(ctx: WrapContext, key: str) -> str | None:
+    """A raw frontmatter value from the resolved session index."""
+    if ctx.index_rel is None:
+        return None
+    value = get_key(ctx.index_text.splitlines(keepends=True), key)
+    return value or None
+
+
+def _wrap_section(states: list[LineState], title: str) -> list[LineState]:
+    """The lines of the first `## `/`### ` block with this title.
+
+    Runs to the next heading at the same level or shallower — the same
+    span the publish tool reads.
+    """
+    out: list[LineState] = []
+    level: int | None = None
+    for state in states:
+        if state.heading is not None:
+            if level is not None and state.heading[0] <= level:
+                break
+            if level is None and state.heading[1].casefold() == title:
+                level = state.heading[0]
+                out.append(state)
+                continue
+        if level is not None:
+            out.append(state)
+    return out
+
+
+def _legacy_dates(fm_lines: list[str]) -> tuple[list[str], str, str, bool]:
+    """(legacy keys present, range start, range end, block form).
+
+    `in_game_date_start`/`_end` win over `in_game_dates` when both are
+    written. A string `in_game_dates` that reads as a range is split on
+    its own range marker, so `"5–6 March 1814"` is recognised as the
+    two-day span it is rather than a single opaque value.
+
+    "Block form" is the shape no fix may touch: a key whose value is an
+    indented list rather than a scalar. `delete_key` removes one line,
+    which would leave the `- "…"` items behind as orphan YAML — a
+    corrupt file is worse than an unmigrated one.
+    """
+    present = [k for k in LEGACY_DATE_KEYS if get_key(fm_lines, k) is not None]
+    if not present:
+        return [], "", "", False
+    if any(not (get_key(fm_lines, k) or "").strip() for k in present):
+        return present, "", "", True
+    start = scalar_value(get_key(fm_lines, "in_game_date_start") or "")
+    end = scalar_value(get_key(fm_lines, "in_game_date_end") or "")
+    if start or end:
+        return present, start or end, end or start, False
+    raw = get_key(fm_lines, "in_game_dates") or ""
+    if raw.startswith("[") and raw.endswith("]"):
+        items = [v.strip().strip("\"'") for v in raw[1:-1].split(",")
+                 if v.strip()]
+        if items:
+            return present, items[0], items[-1], False
+        return present, "", "", False
+    value = scalar_value(raw)
+    m = DATE_RANGE_RE.search(value)
+    if m:
+        return (present, value[:m.start()].strip(),
+                value[m.end():].strip() or value, False)
+    return present, value, value, False
+
+
+def wrapup_frontmatter_findings(rel: str, text: str,
+                                ctx: WrapContext) -> list[Finding]:
+    """Step 2 of the conformance check, as findings carrying their fix.
+
+    Field order follows the template's own frontmatter block, so a file
+    that needs every backfill comes out reading like the template rather
+    than like the order the checks happen to run in.
+    """
+    lines = text.splitlines(keepends=True)
+    close, err = frontmatter_span(lines)
+    if err:
+        return [Finding("ERROR", rel, f"{err} — frontmatter not checked")]
+    fm_lines = lines[1:close]
+    body = "".join(lines[close + 1:])
+    out: list[Finding] = []
+
+    etype = scalar_value(get_key(fm_lines, "type") or "")
+    if etype and etype != CANONICAL_WRAP_TYPE:
+        out.append(Finding(
+            "INFO", rel,
+            f"type: '{etype}' — normalise to {CANONICAL_WRAP_TYPE}",
+            "fm", ("set", "type", CANONICAL_WRAP_TYPE)))
+
+    link = (f'"[[{Path(ctx.index_rel).stem}]]"'
+            if ctx.index_rel is not None else "")
+    session = get_key(fm_lines, "session")
+    if session is None or not QUOTED_LINK_RE.match(session):
+        shown = "absent" if session is None else session
+        if link:
+            out.append(Finding(
+                "WARNING", rel,
+                f"session: {shown} is not a quoted wiki-link — derive {link}",
+                "fm", ("set", "session", link)))
+        else:
+            out.append(Finding(
+                "WARNING", rel,
+                f"session: {shown} is not a quoted wiki-link — no unique "
+                f"session index matches; set it by hand (a chapter-level "
+                f"wrap-up keeps its own value)"))
+
+    if get_key(fm_lines, "session_number") is None:
+        if ctx.number is not None:
+            out.append(Finding(
+                "INFO", rel, f"session_number: absent — backfill {ctx.number}",
+                "fm", ("set", "session_number", str(ctx.number))))
+        else:
+            out.append(Finding(
+                "INFO", rel, "session_number: absent — no session index or "
+                             "filename gives a number"))
+
+    play_date = get_key(fm_lines, "play_date")
+    if play_date is None:
+        out.append(Finding("INFO", rel, "play_date: absent — add "
+                                        "play_date: null",
+                           "fm", ("set", "play_date", "null")))
+    else:
+        value = scalar_value(play_date)
+        if value.casefold() not in YAML_NULLS and not ISO_DATE_RE.match(value):
+            out.append(Finding(
+                "INFO", rel,
+                f"play_date: '{value}' is not YYYY-MM-DD — fix it by hand"))
+
+    legacy, start, end, block_form = _legacy_dates(fm_lines)
+    has_date = get_key(fm_lines, "in_game_date") is not None
+    if legacy and block_form:
+        out.append(Finding(
+            "WARNING", rel,
+            f"legacy {', '.join(legacy)} is a block list — map it to "
+            f"in_game_date and remove the block by hand"))
+    elif legacy and not has_date:
+        names = ", ".join(legacy)
+        if start != end:
+            out.append(Finding(
+                "WARNING", rel,
+                f"legacy {names} — range {start}–{end} must be preserved in "
+                f"body prose before removing the legacy keys"))
+        else:
+            value = yaml_scalar(end) if end else "null"
+            out.append(Finding(
+                "INFO", rel,
+                f"legacy {names} — map to in_game_date: {value} and remove "
+                f"the legacy key(s)",
+                "fm", ("set", "in_game_date", value)))
+            for key in legacy:
+                out.append(Finding("INFO", rel,
+                                   f"legacy {key} — remove once mapped",
+                                   "fm", ("delete", key, "")))
+    elif legacy:
+        out.append(Finding(
+            "INFO", rel,
+            f"legacy {', '.join(legacy)} alongside in_game_date — remove the "
+            f"legacy key(s) once the range is in body prose"))
+    elif not has_date:
+        out.append(Finding("INFO", rel, "in_game_date: absent — add "
+                                        "in_game_date: null",
+                           "fm", ("set", "in_game_date", "null")))
+
+    if get_key(fm_lines, "source_document") is None:
+        if ctx.notes_rel is not None:
+            value = f'"[[{Path(ctx.notes_rel).stem}]]"'
+            out.append(Finding(
+                "INFO", rel,
+                f"source_document: absent — backfill {value}",
+                "fm", ("set", "source_document", value)))
+        else:
+            reason = ("more than one" if ctx.ambiguous_notes else "no")
+            out.append(Finding(
+                "INFO", rel,
+                f"source_document: absent — {reason} play notes resolve to "
+                f"this session; add it by hand"))
+
+    out.extend(_reconciled_findings(rel, text, fm_lines, body))
+
+    for key, label in (("chapter", "chapter"), ("campaign", "campaign")):
+        if get_key(fm_lines, key) is not None:
+            continue
+        inherited = _index_value(ctx, key)
+        if inherited:
+            out.append(Finding(
+                "INFO", rel,
+                f"{label}: absent — backfill {inherited} from the session "
+                f"index", "fm", ("set", key, inherited)))
+        else:
+            out.append(Finding(
+                "INFO", rel,
+                f"{label}: absent — no session index resolves it; set it "
+                f"by hand"))
+
+    if get_key(fm_lines, "created_by") is None:
+        who = ("vault-ingest"
+               if any(RECONSTRUCTION_NOTE_RE.match(ln)
+                      for ln in body.splitlines())
+               else "session-wrapup")
+        out.append(Finding("INFO", rel,
+                           f"created_by: absent — backfill {who}",
+                           "fm", ("set", "created_by", who)))
+    if get_key(fm_lines, "tags") is None:
+        out.append(Finding("INFO", rel, "tags: absent — backfill []",
+                           "fm", ("set", "tags", "[]")))
+    return out
+
+
+def _reconciled_findings(rel: str, text: str, fm_lines: list[str],
+                         body: str) -> list[Finding]:
+    """`reconciled:` backfill, and the promotion it can't explain.
+
+    The date is never invented: it is read back out of the
+    Reconciliation Context the reconcile pass already wrote. A section
+    with no date in it is the one case the script refuses — asking the
+    GM once beats stamping a guess into a machine-read field.
+    """
+    states, _problems = scan_body(text, ())
+    section_states = _wrap_section(states, RECONCILIATION_CONTEXT)
+    section = "\n".join(s.line for s in section_states)
+    raw = get_key(fm_lines, "reconciled")
+    value = scalar_value(raw) if raw is not None else ""
+    out: list[Finding] = []
+
+    if raw is None:
+        date = None
+        if section:
+            m = (RECONCILED_LINE_RE.search(section)
+                 or RECONCILED_CALLOUT_RE.search(section))
+            date = m.group(1) if m else None
+        if date:
+            out.append(Finding(
+                "INFO", rel,
+                f'reconciled: absent — backfill "{date}" from the '
+                f"Reconciliation Context",
+                "fm", ("set", "reconciled", f'"{date}"')))
+        elif section:
+            out.append(Finding(
+                "INFO", rel,
+                "reconciled: absent and the Reconciliation Context carries "
+                "no date — ask the GM once for the date (or confirm null)"))
+        else:
+            out.append(Finding(
+                "INFO", rel,
+                "reconciled: absent — no Reconciliation Context; add "
+                "reconciled: null",
+                "fm", ("set", "reconciled", "null")))
+
+    empty = raw is None or value.casefold() in YAML_NULLS
+    canon = scalar_value(get_key(fm_lines, "canon_status") or "")
+    if canon == "AUTHORITATIVE" and empty and not section:
+        out.append(Finding(
+            "WARNING", rel,
+            "canon_status: AUTHORITATIVE with reconciled: null and no "
+            "Reconciliation Context — the promotion bypassed reconcile"))
+    if section and canon == "DRAFT":
+        out.append(Finding(
+            "INFO", rel,
+            "Reconciliation Context present while canon_status: DRAFT — "
+            "reconcile promotes to AUTHORITATIVE"))
+    return out
+
+
+def wrapup_structure_findings(rel: str, text: str,
+                              exclude: list[str]) -> list[Finding]:
+    """Step 3 — publish safety. Every H2 is Keeper-facing by default.
+
+    Player-facing H2s are exactly the recap and `## Memorable Moments`;
+    anything else beside them is drift the re-nest repairs. The level
+    says what it costs today: an ERROR publishes, a WARNING is already
+    hidden by a fence or by the vault's effective exclude list and is
+    structure drift only. A heading quoted inside a code fence is
+    documentation — reported, never moved.
+    """
+    states, problems = scan_body(text, exclude)
+    out: list[Finding] = []
+    for row in _fence_rows(rel, problems):
+        # `_fence_rows` already words these — an orphan closer publishes
+        # everything above it, an unclosed one strips to EOF — and the
+        # re-nest is the repair for both.
+        fence_level, fence_where, fence_message = row.split("\t", 2)
+        out.append(Finding(fence_level, fence_where, fence_message, "renest"))
+
+    openers = [s for s in states if s.marker == "open-gm"]
+    if len(openers) > 1:
+        out.append(Finding(
+            "WARNING", f"{rel}:{openers[1].lineno}",
+            f"{len(openers)} {GM_ONLY_OPEN} openers outside code — the "
+            f"template uses a single pair", "renest"))
+
+    has_recap = False
+    for state in states:
+        if state.heading is None:
+            if state.in_code:
+                out.extend(_fenced_heading_finding(rel, state))
+            continue
+        level, title = state.heading
+        where = f"{rel}:{state.lineno}"
+        if level == 2:
+            has_recap = has_recap or is_recap_title(title)
+            out.extend(_wrap_h2_finding(rel, state, where, title))
+        found = decorated_heading(title)
+        if found:
+            name, qualifier = found
+            out.append(Finding(
+                "INFO", where,
+                f"decorated heading '{title}' — rename to the template name "
+                f"'{name}' and keep the qualifier as an italic first line",
+                "decorated", (title, name, qualifier)))
+
+    if not has_recap and any(f.kind == "keeper-h2" for f in out):
+        # Every H2 but the recap and Memorable Moments is Keeper-facing by
+        # default, so a wrap-up that never names its recap has its whole
+        # body re-nested into the GM block — correct, and a surprise. Say
+        # so before the GM confirms the fix, not after the site loses the
+        # session's recap.
+        out.append(Finding(
+            "WARNING", rel,
+            "no ## Narrative Recap — the publish tool lifts that section as "
+            "the session's player-facing recap, and --fix re-nests every "
+            "other H2 under ## GM Notes; retitle the player-facing one first"))
+    return out
+
+
+def _fenced_heading_finding(rel: str, state: LineState) -> list[Finding]:
+    """A Keeper-facing H2 quoted inside a code fence — never re-nested.
+
+    `scan_body` leaves `heading` unset inside a fence precisely so that
+    this repo's own documented examples are inert. Saying so out loud
+    beats a silent omission the GM reads as a clean bill of health.
+    """
+    m = HEADING_RE.match(state.line)
+    if not m or len(m.group(1)) != 2:
+        return []
+    title = m.group(2).strip()
+    if is_recap_title(title) or title.casefold() in (MEMORABLE_MOMENTS,
+                                                     GM_NOTES):
+        return []
+    return [Finding("WARNING", f"{rel}:{state.lineno}",
+                    f"Keeper-facing H2 '## {title}' is inside a code fence — "
+                    f"quoted, not re-nested")]
+
+
+def _wrap_h2_finding(rel: str, state: LineState, where: str,
+                     title: str) -> list[Finding]:
+    """One H2, classified. Player, GM Notes, or Keeper-facing drift."""
+    if is_recap_title(title):
+        if title != NARRATIVE_RECAP:
+            return [Finding("INFO", where,
+                            f"recap heading '## {title}' — rename to "
+                            f"## {NARRATIVE_RECAP}", "recap", (title,))]
+        return []
+    low = title.casefold()
+    if low == MEMORABLE_MOMENTS:
+        return []
+    if low == GM_NOTES:
+        if state.gm_depth:
+            return []
+        return [Finding("WARNING", where,
+                        f"## GM Notes is not inside a {GM_ONLY_OPEN} pair",
+                        "renest")]
+    if state.published:
+        return [Finding("ERROR", where,
+                        f"Keeper-facing H2 '## {title}' publishes — re-nest "
+                        f"it under ## GM Notes", "keeper-h2", (title,))]
+    return [Finding("WARNING", where,
+                    f"Keeper-facing H2 '## {title}' is already hidden "
+                    f"(exclude list or fence) — re-nest it under ## GM Notes",
+                    "keeper-h2", (title,))]
+
+
+def wrapup_filename_findings(rel: str) -> list[Finding]:
+    """Step 4. Never fixed: the filename derives the page's site URL, so
+    a rename 404s links players have already shared and has to update
+    every inbound reference in the same pass."""
+    stem = Path(rel).stem
+    if WRAP_FILENAME_RE.match(stem):
+        return []
+    if CHAPTER_WRAP_FILENAME_RE.match(stem):
+        return [Finding("INFO", rel,
+                        "chapter-level wrap-up filename — conformant as-is")]
+    return [Finding("WARNING", rel,
+                    f"filename '{Path(rel).name}' is not "
+                    f"Chapter_CC_Session_NN_Wrap_Up.md — opt-in on a "
+                    f"published vault — a rename changes the page URL and "
+                    f"needs every inbound link updated")]
+
+
+def _demoted(state: LineState) -> str:
+    """One line of a relocated block, its heading pushed a level deeper.
+
+    Capped at H6, and headings inside a code fence are left exactly as
+    written — `scan_body` never sets `heading` there.
+    """
+    if state.heading is None:
+        return state.line
+    m = HEADING_RE.match(state.line)
+    if not m:
+        return state.line
+    return "#" * min(state.heading[0] + 1, 6) + state.line[len(m.group(1)):]
+
+
+def _trim(lines: list[str]) -> list[str]:
+    """Drop trailing blank lines; leading spacing is the author's."""
+    out = list(lines)
+    while out and not out[-1].strip():
+        out.pop()
+    return out
+
+
+def renest_wrapup(text: str) -> str:
+    """The 1.9.5 migration's structural step, as a pure transform.
+
+    Player-facing sections are hoisted above the GM block first — real
+    files interleave them between Keeper-facing H2s, and a recap that
+    ended up inside `<!-- gm-only -->` would vanish from the site. Every
+    gm-only marker outside code is then removed and a single pair
+    rebuilt around one `## GM Notes`, existing GM content first and the
+    relocated Keeper blocks after it, each demoted a level with its
+    children. Content is never reordered inside a block and never
+    reworded; a conformant file comes back byte-identical.
+    """
+    states, _problems = scan_body(text, ())
+    if not states:
+        return text
+    raw = text.splitlines(keepends=True)
+    head = "".join(raw[:states[0].lineno - 1])
+    eol = _wrap_eol(text)
+
+    kept = [s for s in states if s.marker not in GM_MARKERS]
+    preamble: list[str] = []
+    blocks: list[tuple[str, list[LineState]]] = []
+    for state in kept:
+        if state.heading is not None and state.heading[0] == 2:
+            blocks.append((state.heading[1], [state]))
+        elif blocks:
+            blocks[-1][1].append(state)
+        else:
+            preamble.append(state.line)
+
+    player: list[list[str]] = []
+    moments: list[list[str]] = []
+    gm_content: list[str] = []
+    keeper: list[list[str]] = []
+    for title, group in blocks:
+        low = title.casefold()
+        if is_recap_title(title):
+            player.append([f"## {NARRATIVE_RECAP}"]
+                          + [s.line for s in group[1:]])
+        elif low == MEMORABLE_MOMENTS:
+            moments.append([s.line for s in group])
+        elif low == GM_NOTES:
+            gm_content.extend(_trim([s.line for s in group[1:]]))
+        else:
+            keeper.append([_demoted(s) for s in group])
+
+    parts = [t for t in (_trim(p) for p in (preamble, *player, *moments)) if t]
+    if gm_content or keeper:
+        block = [GM_ONLY_OPEN, "", "## GM Notes"] + _trim(gm_content)
+        for section_lines in keeper:
+            block += [""] + _trim(section_lines)
+        parts.append(block + ["", GM_ONLY_CLOSE])
+
+    body: list[str] = []
+    for part in parts:
+        if body:
+            body.append("")
+        body.extend(part)
+    tail = eol if text.endswith("\n") else ""
+    return head + eol.join(body) + tail
+
+
+def rename_decorated_headings(text: str) -> tuple[str, list[str]]:
+    """Split `### Name — Qualifier` into the template name and an italic
+    line. Returns (text, actions); the qualifier is kept, never dropped."""
+    states, _problems = scan_body(text, ())
+    if not states:
+        return text, []
+    raw = text.splitlines(keepends=True)
+    head = "".join(raw[:states[0].lineno - 1])
+    eol = _wrap_eol(text)
+    out: list[str] = []
+    actions: list[str] = []
+    for i, state in enumerate(states):
+        found = (decorated_heading(state.heading[1])
+                 if state.heading is not None else None)
+        if found is None or state.heading is None:
+            out.append(state.line)
+            continue
+        name, qualifier = found
+        out.append("#" * state.heading[0] + f" {name}")
+        out.append("")
+        out.append(f"*{qualifier}*")
+        if i + 1 < len(states) and states[i + 1].line.strip():
+            out.append("")
+        actions.append(f"renamed heading '{state.heading[1]}' to '{name}' "
+                       f"(qualifier kept as an italic line)")
+    tail = eol if text.endswith("\n") else ""
+    return head + eol.join(out) + tail, actions
+
+
+def apply_frontmatter_fixes(lines: list[str],
+                            fixes: list[tuple[str, ...]]) -> list[str]:
+    """Apply `('set', key, value)` / `('delete', key, '')` to the raw
+    frontmatter lines, returning one action description per edit.
+
+    Line editing, not a YAML round-trip: comments, field order and the
+    file's own line endings survive an edit that touches one key.
+    """
+    eol = "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
+    actions: list[str] = []
+    for op, key, value in fixes:
+        if op == "delete":
+            removed = delete_key(lines, key)
+            if removed is not None:
+                actions.append(f"removed {removed}")
+        else:
+            actions.append(set_key(lines, key, value, eol))
+    return actions
+
+
+def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
+    """Session Wrap-Up conformance, and the mechanical repairs.
+
+    Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
+    row per repair it would apply. With `--fix` the same repairs are
+    written and the rows read `FIXED`; a file with nothing to repair
+    reports `UNCHANGED`. Findings always print first, so the GM sees
+    what was wrong and not merely what changed.
+
+    A file the publish gate drops (`publish:` false/none) still gets its
+    frontmatter findings — the schema matters whether or not a page is
+    built — but its structure findings are capped at WARNING: nothing in
+    it publishes, so a Keeper-facing H2 there is drift, not a leak.
+
+    Exit code is not a gate here: wrap-up drift is triage, and an
+    ordinary vault of ingested back-history would fail every run.
+    """
+    excludes = effective_exclude_sections(vault)
+    entries = [(rel, text, extract_frontmatter(text) or {})
+               for rel, text in vault_files(vault)]
+    rows: list[str] = []
+    matched = False
+    for rel, _text, fm in entries:
+        if fm.get("type") not in WRAP_TYPES:
+            continue
+        if file is not None and rel != file:
+            continue
+        matched = True
+        rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes, fix))
+    if file is not None and not matched:
+        rows.append(f"INFO\t{file}\tno wrap-up with that path — `type:` must "
+                    f"be one of {', '.join(sorted(WRAP_TYPES))}")
+    return rows
+
+
+def _check_one_wrapup(vault: Path, rel: str, fm: dict,
+                      entries: list[tuple[str, str, dict]],
+                      excludes: list[str], fix: bool) -> list[str]:
+    """One wrap-up: findings, then the plan, then a single write."""
+    path = vault / rel
+    try:
+        # newline='' preserves the file's own line endings exactly, the
+        # same read stamp_entities.py uses before it edits in place.
+        with path.open("r", encoding="utf-8", newline="") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        return [f"ERROR\t{rel}\tunreadable ({e.__class__.__name__}) "
+                f"— not checked"]
+
+    lines = text.splitlines(keepends=True)
+    close, err = frontmatter_span(lines)
+    if err:
+        return [f"ERROR\t{rel}\t{err} — not checked"]
+
+    ctx = _wrap_context(rel, fm, entries)
+    fm_findings = wrapup_frontmatter_findings(rel, text, ctx)
+    structure = wrapup_structure_findings(rel, text, excludes)
+    if publish_mode(fm) == "none":
+        structure = [Finding("WARNING" if f.level == "ERROR" else f.level,
+                             f.where, f.message, f.kind, f.data)
+                     for f in structure]
+    structure.sort(key=lambda f: _line_of(f.where))
+    findings = fm_findings + structure + wrapup_filename_findings(rel)
+    rows = [f.row for f in findings]
+
+    fm_lines = lines[1:close]
+    actions = apply_frontmatter_fixes(
+        fm_lines, [f.data for f in findings if f.kind == "fm"])
+    lines[1:close] = fm_lines
+    new_text = "".join(lines)
+
+    keeper = [f for f in structure if f.kind == "keeper-h2"]
+    recaps = [f for f in structure if f.kind == "recap"]
+    if keeper or recaps or any(f.kind == "renest" for f in structure):
+        new_text = renest_wrapup(new_text)
+        if keeper:
+            actions.append(f"re-nested {len(keeper)} Keeper-facing H2 "
+                           f"sections under ## GM Notes in one "
+                           f"{GM_ONLY_OPEN} pair")
+        for finding in recaps:
+            actions.append(f"renamed heading '{finding.data[0]}' to "
+                           f"'{NARRATIVE_RECAP}'")
+    if any(f.kind == "decorated" for f in structure):
+        new_text, renamed = rename_decorated_headings(new_text)
+        actions.extend(renamed)
+
+    if not actions:
+        rows.append(f"UNCHANGED\t{rel}\tnothing to fix")
+        return rows
+    if fix and new_text != text:
+        with path.open("w", encoding="utf-8", newline="") as f:
+            f.write(new_text)
+    mode = "FIXED" if fix else "WOULD-FIX"
+    rows.extend(f"{mode}\t{rel}\t{action}" for action in actions)
+    return rows
+
+
+def _line_of(where: str) -> int:
+    """The line number in a `path:line` locator, or 0 for a whole-file
+    row — findings sort by where they are, not by which check found them."""
+    _path, _sep, tail = where.rpartition(":")
+    return int(tail) if tail.isdigit() else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
@@ -1128,11 +1975,21 @@ def main() -> int:
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
                                         "relationships", "sessions",
-                                        "gm-leak", "pc-body",
+                                        "gm-leak", "pc-body", "wrapup",
                                         "version", "active-pcs", "all"])
     ap.add_argument("--folder",
                     help="restrict the frontmatter and gm-leak "
                          "checks to a subfolder")
+    ap.add_argument("--file",
+                    help="restrict the wrapup check to one vault-relative "
+                         "file (e.g. \"Chapters/C3/Sessions/Session 07/"
+                         "Chapter_03_Session_07_Wrap_Up.md\")")
+    ap.add_argument("--fix", action="store_true",
+                    help="apply the wrapup check's mechanical repairs "
+                         "(frontmatter backfills and the Keeper-facing "
+                         "re-nest); without it the repairs print as "
+                         "WOULD-FIX rows and nothing is written. Ignored "
+                         "by `all`.")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
     ap.add_argument("--since", type=int,
@@ -1180,6 +2037,12 @@ def main() -> int:
         emit("gm-leak", check_gm_leak(args.vault, args.folder))
     if args.command in ("pc-body", "all"):
         emit("pc-body", check_pc_body(args.vault))
+    if args.command in ("wrapup", "all"):
+        # `all` is a report, so it never writes: a full audit that
+        # silently rewrote wrap-ups would be the last thing a GM expects
+        # from a command whose other twelve checks are read-only.
+        emit("wrapup", check_wrapup(args.vault, args.file,
+                                    args.fix and args.command == "wrapup"))
     return 0
 
 
