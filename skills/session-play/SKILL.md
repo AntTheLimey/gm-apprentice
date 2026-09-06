@@ -25,11 +25,12 @@ row and hand off to campaign-organizer's migration workflow
 proceeding with play support; resume after it completes. `AHEAD`
 → announce the row and tell the GM to update the plugin; do not
 proceed. `ERROR` → report the row; the plugin install is broken —
-do not proceed. Fallback without python: read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` (frontmatter only)
-and compare component-by-component as numbers — `1.8.9` is older
-than `1.8.15`.
+do not proceed. No verdict row and a `not a directory` error on
+stderr means the vault path is wrong — ask the GM for it rather than
+proceeding. Fallback without python: read `gm_apprentice_version`
+from `_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 **Trigger phrases:** "we're playing now", "quick question",
 "during the session", "I need a [NPC/location]", "give me

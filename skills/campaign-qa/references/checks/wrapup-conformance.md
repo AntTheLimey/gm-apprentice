@@ -14,7 +14,8 @@ re-voices prose. If a fix would require changing what a section
 Canon Audit.
 
 **Preferred procedure:** run `vault_check.py <vault> wrapup`
-(see `shared/vault-access.md`) and present its findings per file. For the mechanical set — the
+(see `shared/vault-access.md`) and present its findings per
+file. For the mechanical set — the
 frontmatter backfills, the Keeper-facing sibling H2 re-nest, the
 `<!-- gm-only -->` fence, and the recap/template heading
 variants — the dry-run rows print `WOULD-FIX`; on GM
@@ -99,6 +100,12 @@ excluded):
   it (it publishes today), Warning when it is.
 - **Missing `<!-- gm-only -->` fence** — Warning, Critical if the
   vault has a published site.
+- **Unbalanced `<!-- gm-only -->` fence** (an orphan closer, or
+  an opener that never closes) — the script reports it and
+  refuses to touch the body: which marker is missing, and where
+  it belonged, changes what publishes either way. Frontmatter
+  backfills still apply. Present it as a GM decision, fix the
+  marker by hand, then re-run `--fix` for the re-nest.
 
 Three drift shapes the script doesn't resolve stay judgment
 calls:

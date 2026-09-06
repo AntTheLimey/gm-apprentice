@@ -32,11 +32,12 @@ row and hand off to campaign-organizer's migration workflow
 proceeding; resume after it completes. `AHEAD` → announce the row
 and tell the GM to update the plugin; do not proceed. `ERROR` →
 report the row; the plugin install is broken — do not proceed.
+No verdict row and a `not a directory` error on stderr means the
+vault path is wrong — ask the GM for it rather than proceeding.
 Fallback without python: read `gm_apprentice_version` from
 `_meta/vault-config.md` and `current_version` from
 `shared/migrations.md` (frontmatter only) and compare
-component-by-component as numbers — `1.8.9` is older than
-`1.8.15`.
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 ## The build tool
 
@@ -58,7 +59,6 @@ this skill's own cache path). You never replicate or rewrite its logic.
 ```bash
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
 node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
-node "$TOOL" sheet show --pc <name> [--player-safe] [--json]  # print one PC's sheet
 node "$TOOL" --version
 node "$TOOL" --help
 ```
@@ -69,6 +69,8 @@ the `file:` pin the scaffold wrote, so no registry and no network):
 ```bash
 npm install      # links the pinned build tool (deps ship vendored)
 npm run build    # generate docs/ from the vault
+# print one PC's sheet — needs vault.config.json, so run it here
+npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 ```
 
 Node 22 or later is required. If the GM hits a version error,

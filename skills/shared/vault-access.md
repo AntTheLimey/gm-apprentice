@@ -83,13 +83,19 @@ after session N — the incremental-audit scope),
 the sanctioned predicate vocabulary), `sessions` (each
 session index's plan/play-notes/wrap-up document chain,
 declared vs. derived status), `gm-leak [--folder SUB]`
-(publish-safety scan of every publishable file's body: ERROR
+(publish-safety scan of every publishable file's body —
+session plans, play notes and `_meta/` pages are skipped as
+never-published; `publish: none` pages are skipped and
+`publish: stub` pages are scanned only over the sections they
+ship: ERROR
 for an orphan `<!-- /gm-only -->` closer — everything above it
 publishes — or a bold-wrapped excluded heading like `###
 **GM Notes**`; WARNING for an unclosed opener or a published
 heading whose title contains an exclude-list entry or Keeper
 keyword; INFO for a Keeper-facing bold label or callout),
-`pc-body` (for every `type: pc` sheet: ERROR when `##
+`pc-body [--folder SUB]` (for every `type: pc` sheet except
+`*_Story.md` companions and `publish: none` pages;
+fence-balance rows are reported here too: ERROR when `##
 Current Status` sits inside a gm-only/spoiler fence; WARNING
 when it comes after `## Notes`/`## GM Notes`, is not an H2, or
 an H2 is duplicated; INFO when the block is missing, has no
@@ -100,7 +106,11 @@ ERROR on a Keeper-facing sibling H2 that would publish, the
 single `<!-- gm-only -->` fence around `## GM Notes`, recap-
 heading and template-heading variants, filename pattern —
 `--fix` applies the mechanical set including the re-nest;
-dry-run rows print `WOULD-FIX`, `--fix` prints `FIXED`;
+dry-run rows print `WOULD-FIX`, `--fix` prints `FIXED`,
+`UNCHANGED` means the repaired text is byte-identical to what
+is on disk; a file whose gm-only fence is unbalanced or crosses
+a player-facing section boundary gets its frontmatter
+backfilled and its body left alone, for the GM to fix by hand;
 filename renames are never automatic), `all`. `all` runs
 `sessions`, `gm-leak`, `pc-body`, and `wrapup` (without
 `--fix`) alongside the rest — never `version` or `active-pcs`,

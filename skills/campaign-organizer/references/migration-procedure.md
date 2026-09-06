@@ -79,12 +79,18 @@ already satisfied:
   and **callout-only-marked content** — run
   `vault_check.py gm-leak` (see `shared/vault-access.md`) and
   read every row against the vault's
-  `_meta/vault-config.md` `exclude_sections` list. ERROR and
-  WARNING rows (an orphan `<!-- /gm-only -->` closer, a
-  bold-wrapped excluded heading, an unclosed opener, or a
-  published heading whose title matches an `exclude_sections`
-  entry or Keeper keyword) are mechanical re-nesting items —
-  pending, listed for the structural batch. INFO rows (a
+  `_meta/vault-config.md` `exclude_sections` list. Heading rows
+  (a bold-wrapped excluded heading, or a published heading whose
+  title matches an `exclude_sections` entry or Keeper keyword)
+  are mechanical re-nesting items — pending, listed for the
+  structural batch. Fence-balance rows (an orphan
+  `<!-- /gm-only -->` closer, an unclosed opener) are their own
+  pending item: the fix is adding or removing one marker, which
+  Step 6's re-nest does not do — list each file and line and fix
+  the marker before the re-nest runs, since an orphan closer
+  changes what every line above it means. `wrapup --fix` refuses
+  to touch the body of a wrap-up whose fence is unbalanced for
+  the same reason. INFO rows (a
   Keeper-facing bold label or callout) are judgment items — pending,
   listed for GM confirmation (not safe to auto-convert: a
   bold-paragraph line isn't a real heading, and a callout needs the
@@ -190,8 +196,13 @@ Apply all confirmed changes in this order:
    moved heading and any of its own sub-headings by the amount
    needed to sit one level below `## GM Notes`. For Session
    Wrap-Up files, run `vault_check.py wrapup --fix` instead — it
-   applies the same re-nest plus the `<!-- gm-only -->` fence in
-   one pass, tailored to that file type. Once every entry that
+   does the same re-nest plus the `<!-- gm-only -->` fence in one
+   pass, tailored to that file type. It also writes more than the
+   re-nest: the frontmatter backfills and the recap/decorated
+   heading renames from the 1.9.5 entry. Run it **without**
+   `--fix` first and add every `WOULD-FIX` row to the preview, so
+   the GM confirms the whole set before anything is written. Once
+   every entry that
    had at least one matching heading has been re-nested, collapse
    the vault's own `exclude_sections` list down to `["GM Notes"]`
    (structural)

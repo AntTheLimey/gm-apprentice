@@ -710,10 +710,19 @@ normalized to it.
   in `shared/scripts/schema_rules.py` `DEPRECATED_FIELDS`, so
   `validate_schema.py` and `vault_check.py` flag unmigrated files.
 - `vault_check.py wrapup --fix` applies the Structural steps
-  above; `vault_check.py gm-leak` finds the heading-vocabulary
-  drift the re-nest step corrects. **Both landed in plugin
-  1.9.7** — say so when a 1.9.5 vault is migrated by a newer
-  plugin, since the tooling postdates this migration.
+  above **and more**: it also backfills `chapter`, `campaign`,
+  `created_by` and `tags`, and normalizes recap and decorated
+  headings — which the Content section above routes to
+  campaign-qa's opt-in fix-or-dismiss workflow. Dry-run it and
+  present the `WOULD-FIX` rows before applying, so the
+  content-layout rows get a GM decision rather than riding along
+  with the structural batch. It refuses to touch the body of a
+  file whose `<!-- gm-only -->` fence is unbalanced; close the
+  fence by hand first. `vault_check.py gm-leak` finds the
+  heading-vocabulary drift the re-nest step corrects. **Both
+  landed in plugin 1.9.7** — say so when a 1.9.5 vault is
+  migrated by a newer plugin, since the tooling postdates this
+  migration.
 - Otherwise none. The publish tool already reads both `session:` (link)
   and `session_number:` (scalar) forms and keeps its type-synonym
   compatibility set — unmigrated vaults keep working.

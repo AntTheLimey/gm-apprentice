@@ -238,8 +238,11 @@ fence, breaking the one-fence invariant. If a Plan file
 exists, you may append a short pointer (`See Wrap-Up for
 reconciliation context`) but the Wrap-Up file is the canonical
 location. After writing, run `vault_check.py <vault> wrapup
---file "<wrap-up>"` to confirm the section landed inside the
-fence.
+--file "<wrap-up>"`. A `no wrap-up with that path` INFO means
+the path or the file's `type:` is wrong, not that the check
+passed — the command exits 0 either way. Confirmation is the
+absence of any row naming the Reconciliation Context heading
+(an unfenced or Keeper-facing-H2 finding at its line).
 
 **Why nested, not a top-level `## Reconciliation Context`:**
 every item in it is Keeper-facing — GM decisions and their
