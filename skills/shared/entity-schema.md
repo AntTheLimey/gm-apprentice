@@ -562,8 +562,10 @@ nemesis_of, negotiated_with
 `horror`, `scifi`, `superhero`, `historical`, `romance`. Filter
 suggestions to match the campaign's genre.
 
-For domain/range constraints and the full inverse name list,
-consult `relationship-patterns.md` in the ttrpg-expert skill.
+For the full inverse name list, the symmetric-storage rule
+worked through, and modeling patterns (families, hierarchies,
+triangles) in this vocabulary, consult
+`relationship-patterns.md` in the ttrpg-expert skill.
 
 **This table is the authoritative vocabulary.** The machine-readable
 export `shared/gm-apprentice-ontology.json` restates these predicates

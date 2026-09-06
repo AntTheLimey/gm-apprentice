@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.6] — 2026-09-04
+
+### Added
+
+- **`gm-publish <cmd> --help` is per-subcommand.** Every subcommand
+  (`init`, `build`, `inbox`, `flush`, `doctor`, `setup-status-bar`,
+  `setup-inbox`) now prints its own usage — arguments, flags, what it
+  writes — instead of the top-level banner, and an unknown argument on
+  a mutating command prints that command's usage, so the CLI now
+  documents what each command accepts.
+  Smoke test in `tools/publish/test/cli/help-cli-smoke.test.js`
+  (publish tool 1.11.28).
+- **Sound-alike names in `vault_check.py names`.** The
+  name-similarity check's Step 4 (phonetic collisions) existed only as
+  a manual fallback the preferred script path silently skipped. The
+  script now emits INFO `PHONETIC` cues for same-type entities whose
+  names share a consonant skeleton, opening sound, and similar length
+  once diacritics are folded, vowels dropped, and the commonly misheard
+  consonant pairs (p/b, t/d, c/g/k, m/n, s/z, f/v) collapsed —
+  `Herzfeld`/`Herzveld`, `Marina`/`Miriam`, `Barton`/`Parton` — and a
+  document pair the exact or fuzzy check already reported gets no
+  second row. Tuned against a 300-entity live vault.
+
+### Changed
+
+- **`ttrpg-expert/relationship-patterns.md` rewritten against the real
+  vocabulary.** The old file taught ~30 relationship types of which
+  only a handful (`knows`, `owns`, `fears`…) exist in the 77-predicate
+  ontology; two skills routed to it and everything authored from it
+  failed `vault_check.py relationships`. The new file is generated
+  from `shared/gm-apprentice-ontology.json`: the full predicate table
+  with inverse names (the list `entity-schema.md` always said lived
+  here), the single-direction storage rule worked through, and the
+  modeling patterns (family, faction hierarchy, love triangle, patron
+  and client, haunting) re-expressed in sanctioned predicates. A test
+  pins the table to the export so it cannot drift again.
+- **`ttrpg-expert/canon-management.md` describes the vault, not a
+  database.** Dropped ~40 lines of Go and a JSON conflict-record
+  schema for a conflict store that does not exist; the resolution
+  workflow now names where conflicts actually land (wrap-up Name
+  Conflicts / Cross-Entity Claims, `<!-- UNVERIFIED -->` markers,
+  campaign-qa audits, `vault_check.py names`) and how reconcile
+  resolves them. Adds the STUB state it omitted.
+- **Graph-health "bidirectional consistency" inverted.** The check
+  told the model to add the missing mirror of a one-way edge, which
+  `entity-schema.md` forbids storing. It now flags the opposite — the
+  same fact stored on both endpoints — and says to delete a side.
+  Same fix to campaign-organizer's Validate step.
+- **Scene-type enum in `session-templates.md`** now lists
+  `transition` and `downtime`, which `schema_rules.SCENE_TYPES` already
+  accepted.
+- **`continuity-engine.md` agency scan** notes what is mechanized
+  (the read-aloud blockquote cue) and that the plan-wide PC-subject
+  scan was built and deliberately dropped, so its absence is not
+  reported as a gap.
+
+### Fixed
+
+- **Attribution on five `systems/` files.** The three FitD files
+  carrying a one-line credit now carry the full CC-BY 3.0 attribution
+  the other eleven use, and all fourteen now carry the work and
+  license URIs CC-BY 3.0 asks for (the zips ship them without
+  `ATTRIBUTION.md`); `gurps-4e/session-procedures.md` had no SJG
+  Online Policy notice at all and `gurps-4e/character-sheet.md`
+  carried a non-standard one — both now open with the standard
+  blockquote. `ATTRIBUTION.md` records the per-file requirement.
+
+### Removed
+
+- **`ttrpg-expert/campaign-structure.md`.** Legacy database
+  documentation (UUID/JSONB fields, a `PLANNED → COMPLETED → SKIPPED`
+  session lifecycle contradicting `schema_rules.SESSION_STATUS`). The
+  INDEX row now routes to campaign-organizer's hierarchy,
+  `shared/session-document-chain.md`, and the discovery-state section
+  of `gm-session-patterns.md`, which already covered the parts worth
+  keeping.
+
+---
+
 ## [1.9.5] — 2026-09-03
 
 ### Added

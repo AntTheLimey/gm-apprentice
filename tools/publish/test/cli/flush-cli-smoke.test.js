@@ -58,7 +58,7 @@ describe('CLI: gm-publish flush argument handling (issue #178)', () => {
     for (const cmd of ['build', 'inbox', 'setup-inbox', 'doctor', 'init']) {
       const r = await runIn([cmd, '--help']);
       assert.strictEqual(r.code, 0, `${cmd} --help exits 0`);
-      assert.match(r.stdout, /Usage:/);
+      assert.match(r.stdout, new RegExp(`gm-apprentice-publish ${cmd} `));
     }
   });
 });

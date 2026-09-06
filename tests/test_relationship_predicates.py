@@ -13,6 +13,7 @@ Run: python tests/test_relationship_predicates.py
 """
 
 import io
+import re
 import json
 import subprocess
 import sys
@@ -171,6 +172,77 @@ class IterRelationshipPredicatesTests(unittest.TestCase):
 
     def test_no_frontmatter_yields_nothing(self):
         self.assertEqual(list(sr.iter_relationship_predicates("# Just a body\n")), [])
+
+
+class RelationshipPatternsDocTests(unittest.TestCase):
+    """`ttrpg-expert/relationship-patterns.md` is what two skills route to
+    for relationship modelling. Its first version taught a vocabulary that
+    did not exist (`friend`, `married`, `reports_to`, …) and everything
+    authored from it failed `vault_check.py relationships`. Pin its
+    predicate table to the ontology export so it cannot drift again."""
+
+    DOC = REPO / "skills" / "ttrpg-expert" / "relationship-patterns.md"
+    # Code spans that are edge/frontmatter keys or tone values, not predicates.
+    NON_PREDICATE_SPANS = {
+        "target", "source", "type", "tone", "strength", "bidirectional",
+        "description", "relationships", "parent_location", "territory",
+        "current_holder", "leads_to",
+        "friendly", "romantic", "respectful", "professional", "hostile",
+        "fearful", "distrustful", "contemptuous", "neutral", "unknown",
+        "complicated",
+    }
+    # A line that names a predicate in order to warn against it.
+    NEGATIVE_LINE_MARKERS = ("not in the vocabulary", "never as", "never ",
+                             "off-vocabulary", "there is no", "not a ",
+                             "not first-class", "do not")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ontology = json.loads(
+            (REPO / "skills" / "shared" / "gm-apprentice-ontology.json")
+            .read_text(encoding="utf-8"))
+        cls.text = cls.DOC.read_text(encoding="utf-8")
+        table = cls.text[cls.text.index("## Predicate Table"):cls.text.index("## Tones")]
+        row_re = re.compile(r"^\| `([a-z_]+)` \| (.+?) \| (.+?) \|$", re.M)
+        cls.rows = {m.group(1): (m.group(2), m.group(3))
+                    for m in row_re.finditer(table)}
+        taught = set()
+        for line in cls.text.splitlines():
+            if any(marker in line for marker in cls.NEGATIVE_LINE_MARKERS):
+                continue
+            taught.update(re.findall(r"`([a-z]+(?:_[a-z]+)*)`", line))
+        cls.taught = taught - cls.NON_PREDICATE_SPANS
+
+    def test_table_lists_exactly_the_ontology_predicates(self):
+        self.assertEqual(set(self.rows),
+                         {p["type"] for p in self.ontology["predicates"]})
+
+    def test_table_inverses_and_symmetry_match_the_ontology(self):
+        for p in self.ontology["predicates"]:
+            inverse_cell, _genre = self.rows[p["type"]]
+            if p["symmetric"]:
+                self.assertIn("symmetric", inverse_cell, p["type"])
+            else:
+                self.assertEqual(inverse_cell, f"`{p['inverse']}`", p["type"])
+
+    def test_prose_symmetric_list_matches_the_ontology(self):
+        section = self.text[self.text.index("**Symmetric predicates**"):
+                            self.text.index("**Asymmetric predicates**")]
+        listed = set(re.findall(r"`([a-z_]+)`", section))
+        self.assertEqual(listed, {p["type"] for p in self.ontology["predicates"]
+                                  if p["symmetric"]})
+
+    def test_no_off_vocabulary_predicate_is_taught(self):
+        # Every code span on a line that is not a warning must be a sanctioned
+        # predicate or a documented inverse name — single words included, so
+        # `friend` / `married` cannot come back.
+        allowed = sr.predicate_vocabulary() | set(sr.inverse_predicates())
+        self.assertEqual(self.taught - allowed, set())
+
+    def test_the_old_invented_vocabulary_is_really_gone(self):
+        for bad in ("friend", "married", "family", "employer", "colleague",
+                    "member", "leader", "lives_in", "reports_to"):
+            self.assertNotIn(bad, self.taught)
 
 
 class CheckRelationshipsTests(unittest.TestCase):

@@ -1,135 +1,240 @@
 # Relationship Patterns
 
-Guide to modeling entity relationships.
+How to model entity relationships in a vault: which predicate to
+write, which direction to store it, and how the common shapes
+(families, hierarchies, triangles) come out in the sanctioned
+vocabulary.
 
-## Relationship Structure
+**The vocabulary is fixed.** Every `relationships[].type` must be
+one of the 77 predicates in the table below — the same table as
+`shared/entity-schema.md` ("Relationship Types") and the
+machine-readable `shared/gm-apprentice-ontology.json` that
+`vault_check.py relationships` enforces. A vault's
+`_meta/relationship-types.md` is a genre-filtered subset of it.
+Never invent a type; when a play note gives you a narrative verb
+("reports to", "guards", "lives in"), map it with
+`shared/relationship-normalization.md`.
 
-### Core Fields
+## The Edge
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| source_entity_id | UUID | Yes | Relationship from |
-| target_entity_id | UUID | Yes | Relationship to |
-| relationship_type | string | Yes | Type of connection |
-| tone | string | No | Emotional quality |
-| description | string | No | Context/details |
-| bidirectional | boolean | No | Two-way relationship |
-| strength | integer | No | Intensity (1-10) |
+```yaml
+relationships:
+  - target: "[[Target Entity Name]]"
+    type: member_of         # a predicate from the table below
+    tone: respectful        # optional — see Tones
+    strength: 7             # optional — 1-10, see Strength
+    bidirectional: false    # true only for symmetric predicates
+    description: "Serves as lieutenant"
+```
 
-## Relationship Types
+`target` is a quoted wiki-link. `source` is the file the block
+lives in. There are no IDs.
 
-### Social Relationships
+## Direction and Storage
 
-| Type | Description | Example |
-|------|-------------|---------|
-| knows | Acquaintance | Met at party |
-| friend | Close relationship | Trusted ally |
-| family | Blood relation | Father, cousin |
-| married | Spouse | Husband, wife |
-| romantic | Love interest | Dating, affair |
-| rival | Competition | Business competitor |
-| enemy | Hostile | Active opposition |
+**Storage is single-direction.** Each predicate has an inverse
+name (right-hand column below) that is *implied* by the stored
+edge and must never be written as its own edge. Record
+`A --[employs]--> B` on A's file; do not also record
+`B --[employed_by]--> A` on B's — `employed_by` is off-vocabulary
+and the audit flags it.
 
-### Professional Relationships
+**Symmetric predicates** (`knows`, `sibling_of`, `spouse_of`,
+`betrothed_to`, `friend_of`, `rival_of`, `enemy_of`,
+`allied_with`, `at_war_with`, `borders`, `trades_with`,
+`negotiated_with`, `alter_ego_of`, `nemesis_of`) are stored
+**once**, on either endpoint, with `bidirectional: true`.
+Storing them on both endpoints is a duplicate edge, not
+"consistency".
 
-| Type | Description | Example |
-|------|-------------|---------|
-| employer | Employs | Boss |
-| employee | Works for | Staff member |
-| colleague | Works with | Co-worker |
-| mentor | Teaches | Professor |
-| student | Learns from | Pupil |
-| business | Business connection | Supplier |
+**Asymmetric predicates** are stored on the endpoint that is the
+*subject* of the verb: the employer `employs`, the contained place
+is `part_of` its container, the member is `member_of` the faction,
+the liege has a `vassal_of` recorded on the vassal's file.
 
-### Organization Relationships
+## Predicate Table
 
-| Type | Description | Example |
-|------|-------------|---------|
-| member | Belongs to | Cult member |
-| leader | Leads | Faction head |
-| founder | Created | Started org |
-| ally | Allied with | Friendly faction |
-| rival | Competes with | Opposing faction |
+Generated from `shared/gm-apprentice-ontology.json`; a test keeps
+this table and the export in step.
 
-### Location Relationships
+### Kinship
 
-| Type | Description | Example |
-|------|-------------|---------|
-| lives_in | Residence | Home |
-| works_in | Employment location | Office |
-| owns | Property | Landlord |
-| frequents | Regular visitor | Regular at bar |
-| guards | Protects | Watchman |
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `parent_of` | `child_of` | universal |
+| `ancestor_of` | `descendant_of` | universal |
+| `sibling_of` | — (symmetric) | universal |
+| `spouse_of` | — (symmetric) | universal |
+| `betrothed_to` | — (symmetric) | universal |
 
-### Item Relationships
+### Social
 
-| Type | Description | Example |
-|------|-------------|---------|
-| owns | Possesses | Property owner |
-| created | Made | Craftsman |
-| seeks | Wants | Quest item |
-| guards | Protects | Treasure guardian |
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `knows` | — (symmetric) | universal |
+| `friend_of` | — (symmetric) | universal |
+| `rival_of` | — (symmetric) | universal |
+| `mentors` | `mentored_by` | universal |
+| `trusts` | `trusted_by` | universal |
+| `betrayed` | `betrayed_by` | universal |
 
-### Knowledge Relationships
+### Power
 
-| Type | Description | Example |
-|------|-------------|---------|
-| knows_about | Has information | Witness |
-| studies | Researches | Scholar |
-| fears | Afraid of | Phobia |
-| worships | Religious devotion | Cultist |
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `rules` | `ruled_by` | universal |
+| `employs` | `employed_by` | universal |
+| `commands` | `commanded_by` | universal |
+| `serves` | `served_by` | universal |
+| `vassal_of` | `liege_of` | universal |
+| `imprisons` | `imprisoned_by` | universal |
 
-## Relationship Tones
+### Spatial
 
-### Positive Tones
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `located_at` | `location_of` | universal |
+| `headquartered_at` | `headquarters_of` | universal |
+| `part_of` | `has_part` | universal |
+| `borders` | — (symmetric) | universal |
+| `haunts` | `haunted_by` | universal |
 
-| Tone | Description |
-|------|-------------|
-| friendly | Warm, positive feelings |
-| romantic | Love, attraction |
-| respectful | Admiration, esteem |
-| professional | Business-like, cordial |
+### Possession
 
-### Negative Tones
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `owns` | `owned_by` | universal |
+| `created` | `created_by` | universal |
+| `wields` | `wielded_by` | universal |
+| `seeks` | `sought_by` | universal |
 
-| Tone | Description |
-|------|-------------|
-| hostile | Active animosity |
-| fearful | Fear, dread |
-| distrustful | Suspicion, doubt |
-| contemptuous | Disdain, scorn |
+### Knowledge
 
-### Neutral Tones
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `discovered` | `discovered_by` | universal |
+| `conceals` | `concealed_by` | universal |
+| `recorded_in` | `records` | universal |
+| `studies` | `studied_by` | universal |
 
-| Tone | Description |
-|------|-------------|
-| neutral | No strong feeling |
-| unknown | Relationship unclear |
-| complicated | Mixed feelings |
+### Conflict
 
-## Bidirectionality
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `enemy_of` | — (symmetric) | universal |
+| `at_war_with` | — (symmetric) | universal |
+| `conspires_against` | `conspired_against_by` | universal |
+| `allied_with` | — (symmetric) | universal |
 
-### Symmetric Relationships
+### Affiliation
 
-Bidirectional = true:
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `member_of` | `has_member` | universal |
+| `founded` | `founded_by` | universal |
+| `leads` | `led_by` | universal |
+| `defected_from` | `lost_member` | universal |
+| `infiltrates` | `infiltrated_by` | universal |
 
-- `married` (both are married to each other)
-- `friend` (mutual friendship)
-- `colleague` (mutual work relationship)
-- `rival` (mutual competition)
+### Supernatural
 
-### Asymmetric Relationships
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `bound_to` | `binds` | fantasy, horror |
+| `cursed_by` | `cursed` | fantasy, horror |
+| `summoned` | `summoned_by` | fantasy, horror |
+| `worships` | `worshipped_by` | fantasy, horror |
+| `corrupted_by` | `corrupted` | fantasy, horror |
 
-Bidirectional = false:
+### Temporal
 
-- `employer`/`employee` (different roles)
-- `mentor`/`student` (different roles)
-- `stalks` (not reciprocal)
-- `fears` (not reciprocal)
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `caused` | `caused_by` | universal |
+| `triggered` | `triggered_by` | universal |
+| `participated_in` | `had_participant` | universal |
+| `witnessed` | `witnessed_by` | universal |
 
-## Relationship Strength
+### Economic
 
-Scale of 1-10:
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `trades_with` | — (symmetric) | universal |
+| `supplies` | `supplied_by` | universal |
+| `finances` | `financed_by` | universal |
+| `indebted_to` | `creditor_of` | universal |
+
+### Event
+
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `murdered` | `murdered_by` | universal |
+| `poisoned` | `poisoned_by` | universal |
+| `wounded` | `wounded_by` | universal |
+| `rescued` | `rescued_by` | universal |
+| `captured` | `captured_by` | universal |
+| `deceived` | `deceived_by` | universal |
+
+### Horror
+
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `possessed_by` | `possesses` | horror |
+| `infected_by` | `infected` | horror |
+| `fears` | `feared_by` | horror |
+| `feeds_on` | `fed_upon_by` | horror |
+
+### Romance
+
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `courts` | `courted_by` | romance |
+| `rejected` | `rejected_by` | romance |
+| `disguised_as` | `disguise_of` | romance |
+| `blackmails` | `blackmailed_by` | romance |
+
+### Historical
+
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `conquered` | `conquered_by` | historical |
+| `exiled_from` | `exiled` | historical |
+| `succeeded` | `preceded` | historical |
+| `negotiated_with` | — (symmetric) | historical |
+
+### Sci-Fi
+
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `uploaded_to` | `upload_source_of` | scifi |
+| `augmented_by` | `augments` | scifi |
+| `cloned_from` | `clone_source_of` | scifi |
+| `hacked` | `hacked_by` | scifi |
+
+### Superhero
+
+| Type | Inverse (implied, never stored) | Genre |
+|------|--------------------------------|-------|
+| `alter_ego_of` | — (symmetric) | superhero |
+| `empowered_by` | `empowers` | superhero |
+| `nemesis_of` | — (symmetric) | superhero |
+
+## Tones
+
+Optional emotional colour on any edge. One of:
+
+| Positive | Negative | Neutral |
+|----------|----------|---------|
+| friendly, romantic, respectful, professional | hostile, fearful, distrustful, contemptuous | neutral, unknown, complicated |
+
+Tone is how the *source* feels about the *target*. A `rival_of`
+edge can be `respectful` (honourable competition) or `hostile`;
+a `serves` edge can be `professional` or `fearful`. Default to
+`neutral` when the source text is ambiguous.
+
+## Strength
+
+Optional 1-10 intensity, defaulting to 5 when unknown:
 
 | Strength | Meaning |
 |----------|---------|
@@ -139,9 +244,25 @@ Scale of 1-10:
 | 7-8 | Strong |
 | 9-10 | Defining |
 
+## Required Relationships
+
+campaign-qa's graph-health check and campaign-organizer's Validate
+step flag these when missing (a read-the-frontmatter check today —
+`vault_check.py relationships` validates vocabulary only):
+
+| Entity type | Must have |
+|-------------|-----------|
+| NPC, PC, creature | `located_at` |
+| Faction, organization | `headquartered_at` |
+
+A location's containment is written twice — the
+`parent_location:` scalar (site listing) *and* a `part_of` edge
+(the graph) — and the two must agree. See
+`shared/relationship-normalization.md`.
+
 ## Modeling Patterns
 
-### Family Networks
+### Family Network
 
 ```text
 Grandfather ─┬─ Grandmother
@@ -154,11 +275,17 @@ Grandfather ─┬─ Grandmother
              └─ Uncle ─── Cousin
 ```
 
-Relationships:
-- Father → PC: `family` (parent)
-- PC → Father: `family` (child)
-- PC → Sibling: `family` (sibling), bidirectional
-- PC → Cousin: `family` (cousin), bidirectional
+- Grandfather → Grandmother: `spouse_of`, `bidirectional: true`
+  (stored once)
+- Grandfather → Father, Grandfather → Uncle: `parent_of`
+- Father → Mother: `spouse_of`, `bidirectional: true`
+- Father → PC, Father → Sibling, Uncle → Cousin: `parent_of`
+- PC → Sibling: `sibling_of`, `bidirectional: true`
+- Cousins, aunts, in-laws: not first-class predicates — they are
+  *implied by traversal* (two `parent_of` hops). Do not add an
+  edge for a relationship the graph already expresses; note it in
+  `description` on the nearest real edge if it matters at the
+  table.
 
 ### Faction Hierarchy
 
@@ -173,11 +300,13 @@ Faction Leader
             └── Member C
 ```
 
-Relationships:
-- Leader → Faction: `leader`, strength 10
-- Lieutenant → Leader: `reports_to`
-- Member → Faction: `member`
-- Member → Lieutenant: `reports_to`
+- Leader → Faction: `leads`, strength 9-10
+- Every person → Faction: `member_of`
+- Leader → Lieutenant: `commands` (or `employs` for a payroll
+  relationship, `rules` for a sovereign)
+- Lieutenant → Member: `commands`
+- "Reports to" is the inverse view of `commands`; store it on the
+  commander's file, never as `reports_to`.
 
 ### Love Triangle
 
@@ -188,45 +317,56 @@ Relationships:
 Character B ─ Character C
 ```
 
-Relationships:
-- A → B: `romantic`, bidirectional
-- A → C: `romantic`, bidirectional
-- B → C: `rival`, bidirectional
+- A → B: `courts` (asymmetric — A is pursuing B); if mutual, a
+  second `courts` from B → A is a *different* edge, not a
+  duplicate
+- A → C: `courts`
+- B → C: `rival_of`, `bidirectional: true`, tone `hostile` or
+  `complicated`
+- A married to B while courting C: B → A `spouse_of`
+  (`bidirectional: true`), plus A → C `courts` — the graph now
+  carries the affair without a `romantic` type that doesn't exist.
+
+### Patron and Client
+
+- Patron → Client: `finances` (money) or `employs` (labour) or
+  `mentors` (craft)
+- Client → Patron: `serves` (loyalty) or `indebted_to` (obligation)
+- These are two different facts and may both be true; two edges
+  in opposite directions with *different* predicates are not a
+  duplicate.
+
+### Haunting and Possession
+
+- Ghost → Place: `haunts`
+- Victim → Entity: `possessed_by` (stored on the victim's file)
+- Cult → Deity: `worships`; Cultist → Deity: `corrupted_by` (on
+  the cultist's file)
 
 ## Best Practices
 
-### When Creating Relationships
+1. **Most specific predicate that fits.** Vague types like
+   `associated_with` / `related_to` are not in the vocabulary, on purpose.
+2. **One edge per fact.** If two entities share a fact, it lives
+   on one file. Do not mirror it "for completeness".
+3. **Description carries the nuance.** Predicate + tone +
+   strength is the queryable part; the *why* goes in
+   `description`, traceable to a source.
+4. **Update, don't accumulate.** When a relationship changes,
+   edit the edge (and `tone`/`strength`); do not leave the old
+   one beside the new one.
+5. **Graph edges are entity-to-entity.** "Appears in Session 3"
+   is a log reference, not a relationship — leave it out of
+   `relationships:`.
+6. **Sequencing is not a relationship.** "This clue leads to that
+   scene" goes in the `leads_to` frontmatter field on Clue and
+   Plan entities, never as an edge. There is no `precedes` or `alternative_to` predicate
+   (see `shared/entity-schema.md`).
 
-1. **Choose appropriate type**
-   Use the most specific type that fits
+### Visualization Hints
 
-2. **Set bidirectionality correctly**
-   Consider if relationship is mutual
-
-3. **Include context**
-   Add description for non-obvious connections
-
-4. **Consider tone**
-   Emotional quality adds depth
-
-5. **Update when things change**
-   Relationships evolve in play
-
-### When Querying Relationships
-
-1. **Consider bidirectionality**
-   Check both directions for bidirectional relationships
-
-2. **Filter by type**
-   Don't show all relationships at once
-
-3. **Include entity details**
-   Return enough context to understand
-
-### Relationship Visualization
-
-For network graphs:
-- Node size: Entity importance
-- Edge thickness: Relationship strength
-- Edge color: Relationship tone
-- Edge style: Bidirectional (solid) vs unidirectional (arrow)
+- Node size: entity importance (hub degree)
+- Edge thickness: `strength`
+- Edge colour: `tone`
+- Edge style: symmetric (no arrowhead) vs directed (arrow from
+  the stored source)

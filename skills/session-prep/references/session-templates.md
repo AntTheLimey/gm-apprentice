@@ -120,7 +120,7 @@ ticking clocks.]
 ## Planned Scenes
 
 ### Scene 1: [Title]
-**Type:** investigation | social | combat | chase | horror | other
+**Type:** investigation | social | combat | chase | transition | horror | downtime | other
 **Objective:** The *situation* this scene puts in front of the
 players — a thing that is happening, not a lesson to land or a
 feeling to produce. Name the pressure, not the theme. (Not "hand

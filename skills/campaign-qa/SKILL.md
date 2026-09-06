@@ -232,7 +232,8 @@ for the full procedure.
 **What it checks:**
 - Orphaned entities (zero relationships)
 - Broken wiki-links (links to files that don't exist)
-- Unidirectional relationships that should be bidirectional
+- Mirrored edges (the same fact stored on both endpoints —
+  storage is single-direction)
 - Hub overload (single entity with excessive connections)
 - Generic relationship types where specific ones exist
 - Missing required relationships (NPCs without `located_at`,

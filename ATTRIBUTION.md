@@ -34,6 +34,13 @@ score procedures. All content is paraphrased; setting IP
 (Doskvol, named factions, named NPCs) is excluded from
 distributed files.
 
+Every distributed file under `skills/ttrpg-expert/systems/fitd/`
+carries the attribution line above, with both URIs, as its closing
+paragraph — the skill zips ship those files without this document,
+and the CC-BY 3.0 condition is per-work, not per-repository. (The
+gitignored `personal/` working copies are excluded from the repo
+and from the zips.)
+
 ### Basic Roleplaying Universal Game Engine
 
 This work includes material from Basic Roleplaying: Universal
@@ -85,7 +92,10 @@ Martial Arts (perk names and page references only), and
 organized into topic-based reference files and archetype
 chargen kits.
 See `skills/ttrpg-expert/systems/gurps-4e/sources.md` for
-book coverage status.
+book coverage status. Every distributed file under
+`skills/ttrpg-expert/systems/gurps-4e/` opens with the notice above
+as a blockquote. (The gitignored `personal/` working copies are
+excluded from the repo and from the zips.)
 
 **`tools/publish/lib/templates/gurps/blocks/reference.js`**
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
