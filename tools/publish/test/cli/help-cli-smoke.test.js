@@ -101,6 +101,35 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     assert.doesNotMatch(r.stderr, /Unknown argument/);
   });
 
+  // M8: --publish/--exclude/--decide move an entry between manifest sections —
+  // only "apply" does that. Registering them for "diff" too meant the flag was
+  // silently accepted and ignored rather than rejected as a typo.
+  it('manifest diff rejects --publish/--exclude/--decide as unknown arguments', async () => {
+    const publish = await runIn(['manifest', 'diff', '--publish', 'A.md']);
+    assert.strictEqual(publish.code, 1);
+    assert.match(publish.stderr, /Unknown argument: --publish/);
+    assert.match(publish.stdout, /manifest <diff\|apply>/);
+
+    const exclude = await runIn(['manifest', 'diff', '--exclude', 'A.md=reason']);
+    assert.strictEqual(exclude.code, 1);
+    assert.match(exclude.stderr, /Unknown argument: --exclude/);
+
+    const decide = await runIn(['manifest', 'diff', '--decide', 'A.md']);
+    assert.strictEqual(decide.code, 1);
+    assert.match(decide.stderr, /Unknown argument: --decide/);
+  });
+
+  // P3: the verb forms of --help must print manifest's own usage, not fall through
+  // to the top-level banner — the bug bare `manifest --help` never had.
+  it('manifest diff --help and manifest apply --help print the manifest usage', async () => {
+    for (const verb of ['diff', 'apply']) {
+      const r = await runIn(['manifest', verb, '--help']);
+      assert.strictEqual(r.code, 0);
+      assert.match(r.stdout, /manifest <diff\|apply>/);
+      assert.doesNotMatch(r.stdout, /Static site generator for gm-apprentice campaign vaults/);
+    }
+  });
+
   it('explain without a path prints the explain usage and exits 1', async () => {
     const r = await runIn(['explain']);
     assert.strictEqual(r.code, 1);

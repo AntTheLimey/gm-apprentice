@@ -510,11 +510,14 @@ if (command === 'manifest') {
     printSubcommandHelp('manifest');
     process.exit(1);
   }
+  // --publish/--exclude/--decide move an entry between manifest sections, which
+  // only "apply" does — registering them for "diff" too meant `manifest diff
+  // --publish X` was accepted and silently did nothing (#M8).
   const parsed = parseSubcommandArgs(
     args.slice(2),
     { '--prune': 'prune', '--json': 'json' },
     {},
-    { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' },
+    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' } : {},
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
