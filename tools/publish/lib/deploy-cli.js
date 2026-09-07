@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { failureDetail } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
+const { loadVaultConfig } = require('./config');
 
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_WAIT_MS = 20000;
@@ -84,7 +85,7 @@ async function runDeploy(options, deps) {
 
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const siteRoot = path.dirname(configPath);
-  const config = d.config || require(configPath);
+  const config = loadVaultConfig(configPath, d);
   const host = config.host || 'github-pages';
   const projectName = projectNameFor(config, siteRoot);
   const isCloudflare = host === 'cloudflare-pages';
@@ -174,8 +175,16 @@ async function runDeploy(options, deps) {
       commands.push(`git ${args.join(' ')}`);
       return runCommand('git', args, { cwd: siteRoot });
     };
-    git(['add', outDir]);
+    const add = git(['add', outDir]);
+    if (add.code !== 0) {
+      say(`Deploy failed: ${failureDetail(add)}`);
+      return finish({}, 1);
+    }
     const status = git(['status', '--porcelain', outDir]);
+    if (status.code !== 0) {
+      say(`Deploy failed: ${failureDetail(status)}`);
+      return finish({}, 1);
+    }
     if (String(status.stdout || '').trim() === '') {
       // Still push: the build may be unchanged while an earlier commit is unpushed.
       say(`nothing to commit — ${outDir} unchanged`);

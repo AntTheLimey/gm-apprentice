@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const os = require('os');
 
 const { runDeploy } = require('../lib/deploy-cli');
 const { alignProjectName } = require('../lib/setup-backend');
@@ -180,6 +181,40 @@ describe('deploy: github-pages', () => {
     assert.ok(h.commands.every(c => c.cwd === SITE), 'git runs in the site root');
   });
 
+  // I3: `git add`'s exit code used to be discarded entirely, and a *failing*
+  // `git status` (non-zero, empty stdout) read as "clean" — so a failed add (e.g.
+  // docs/ gitignored, or not yet a repo) meant nothing was committed, the push was
+  // a no-op that still exited 0, and --verify then reported the *previous*
+  // deployment as freshly live.
+  it('exits 1 and does not push when `git add` fails', async () => {
+    const h = harness({
+      config: ghConfig,
+      command: (cmd, args) => (args[0] === 'add'
+        ? { code: 1, stderr: 'fatal: pathspec did not match any files' }
+        : { code: 0, stdout: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.text(), /Deploy failed: fatal: pathspec did not match any files/);
+    assert.deepStrictEqual(h.commands.map(c => c.args), [['add', 'docs/']]);
+  });
+
+  it('exits 1 and does not push when `git status` fails', async () => {
+    const h = harness({
+      config: ghConfig,
+      command: (cmd, args) => (args[0] === 'status'
+        ? { code: 1, stderr: 'fatal: not a git repository' }
+        : { code: 0, stdout: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.text(), /Deploy failed: fatal: not a git repository/);
+    assert.deepStrictEqual(h.commands.map(c => c.args), [
+      ['add', 'docs/'],
+      ['status', '--porcelain', 'docs/'],
+    ]);
+  });
+
   it('pushes anyway when docs/ is unchanged, and says so', async () => {
     const h = harness({ config: ghConfig, command: () => ({ code: 0, stdout: '' }) });
     const rc = await runDeploy({ configPath: CONFIG }, h.deps);
@@ -329,5 +364,23 @@ describe('deploy --verify', () => {
     assert.strictEqual(payload.status, 200);
     assert.strictEqual(payload.url, 'https://canticle.pages.dev');
     assert.deepStrictEqual(payload.commands, ['npx wrangler@4 pages deploy']);
+  });
+});
+
+// M3: deploy shares config loading with manifest and explain — a bad config path
+// must fail the same clean way instead of a raw `require()` "Cannot find module"
+// stack. Deliberately not routed through `harness()`, which always injects a
+// `config` override; this exercises the real read-from-disk path with none.
+describe('deploy: config loading', () => {
+  it('fails with a clean message on a config path that does not exist', async () => {
+    const configPath = path.join(os.tmpdir(), 'no-such-dir-' + Date.now(), 'vault.config.json');
+    await assert.rejects(
+      () => runDeploy({ configPath }, {}),
+      (err) => {
+        assert.doesNotMatch(err.message, /Cannot find module/);
+        assert.match(err.message, /could not be read as JSON/);
+        return true;
+      },
+    );
   });
 });
