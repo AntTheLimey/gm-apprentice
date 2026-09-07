@@ -51,6 +51,12 @@ function scanVaultReport(config) {
   // order, each with the number of pages it silently swallowed.
   const unmapped = [];
   const unmappedByDir = new Map();
+  // .md files gray-matter could not parse at all (bad YAML, an unterminated quoted
+  // scalar, …). Distinct from `untyped`: those parse fine and simply lack `type:`.
+  // A malformed file never produced frontmatter to inspect, so it belongs in its
+  // own bucket rather than silently vanishing — `doctor --site` and `explain` need
+  // to say the file itself is broken, not "no type:".
+  const malformed = [];
   // Output path -> the vault-relative source that first claimed it. Stripping combining
   // marks (#139) collapses names that used to slug apart ("Renée"/"Renee" both give
   // renee.html), and the later page silently overwrites the earlier one on disk.
@@ -71,7 +77,7 @@ function scanVaultReport(config) {
         try {
           ({ data: frontmatter, content } = matter(raw));
         } catch (e) {
-          console.warn(`scanner: skipping ${fullPath} — malformed frontmatter: ${e.message}`);
+          malformed.push({ rel: relPath, fullPath, message: e.message });
           continue;
         }
 
@@ -123,13 +129,16 @@ function scanVaultReport(config) {
   }
 
   walk(vaultPath);
-  return { pages, untyped, unmapped };
+  return { pages, untyped, unmapped, malformed };
 }
 
-// The build's entry point: the pages, with the two "could not publish this" classes
-// reported to the console rather than returned.
+// The build's entry point: the pages, with the three "could not publish this"
+// classes reported to the console rather than returned.
 function scanVault(config) {
-  const { pages, untyped, unmapped } = scanVaultReport(config);
+  const { pages, untyped, unmapped, malformed } = scanVaultReport(config);
+  for (const { fullPath, message } of malformed) {
+    console.warn(`scanner: skipping ${fullPath} — malformed frontmatter: ${message}`);
+  }
   for (const { dir } of unmapped) {
     console.warn(`scanner: skipping "${dir}" — not in folderMap; typed pages inside will not publish. Add it to folderMap to publish, or to excludeDirs to silence this warning.`);
   }

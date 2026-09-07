@@ -144,3 +144,72 @@ describe('build manifest-filter line counts allowlist membership only', () => {
     assert.ok(!fs.existsSync(path.join(work, 'docs', 'locations', 'attic.html')));
   });
 });
+
+// M1 (controller ruling): decidePage checks the manifest allowlist before the
+// auto-exclude heuristics, so a manifest-listed prep page's verdict is OK from the
+// start — it never passes through an AUTO_EXCLUDED_* code, so it never reaches the
+// "Auto-excluded N" tally at all. That count is the pages genuinely withheld today;
+// "Manifest override: re-included" is purely informational, not a subtraction from it.
+describe('build "Auto-excluded" count excludes a manifest-re-included prep page', () => {
+  let work;
+  let stdout;
+
+  before(() => {
+    work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-reinclude-count-'));
+    const vault = path.join(work, 'vault');
+    const write = (rel, body) => {
+      const full = path.join(vault, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, body);
+    };
+
+    // Genuinely withheld: prep-state, not listed anywhere in the manifest.
+    write('Locations/Hideout.md', '---\ntype: location\nstatus: planned\n---\n\nStill forming.\n');
+    // Also prep-state, but the GM explicitly listed it under Publishing: decidePage
+    // never classifies it AUTO_EXCLUDED_STATUS, so it must not inflate that count.
+    write('Locations/Sneak_Peek.md', '---\ntype: location\nstatus: planned\n---\n\nA teaser the GM wants live.\n');
+    write('_meta/publish-manifest.md', [
+      '---', 'mode: player', '---', '',
+      '## Publishing (1 files)', '',
+      '- [x] Locations/Sneak_Peek.md',
+      '',
+    ].join('\n'));
+
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      siteTitle: 'Reinclude Count',
+      siteUrl: 'https://example.github.io/reinclude-count',
+      vaultPath: vault,
+      outputDir: path.join(work, 'docs'),
+      excludeDirs: ['_meta', '_Templates'],
+      folderMap: { Locations: 'locations' },
+    }, null, 2));
+
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => lines.push(args.join(' '));
+    try {
+      build({ configPath });
+    } finally {
+      console.log = original;
+    }
+    stdout = lines.join('\n');
+  });
+
+  after(() => {
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+
+  it('counts only the genuinely withheld prep page as auto-excluded', () => {
+    assert.match(stdout, /^Auto-excluded 1 prep\/draft file\(s\)$/m, stdout);
+  });
+
+  it('reports the manifest-listed prep page as re-included, on top of that count', () => {
+    assert.match(stdout, /^Manifest override: re-included 1 auto-excluded file\(s\)$/m, stdout);
+  });
+
+  it('builds the re-included page and not the withheld one', () => {
+    assert.ok(fs.existsSync(path.join(work, 'docs', 'locations', 'sneak-peek.html')));
+    assert.ok(!fs.existsSync(path.join(work, 'docs', 'locations', 'hideout.html')));
+  });
+});

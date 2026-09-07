@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport } = require('./scanner');
-const { loadPublishConfig, vaultRelPath } = require('./config');
+const { loadPublishConfig, vaultRelPath, loadVaultConfig } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage } = require('./publish-decision');
 
@@ -145,7 +145,7 @@ function splitReason(arg) {
 function surveyVault(options, deps) {
   const configPath = path.resolve(options.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const config = deps.config || require(configPath);
+  const config = loadVaultConfig(configPath, deps, { requireVaultPath: true });
   const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
   const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
   const manifest = loadManifest(vaultPath);
@@ -154,19 +154,27 @@ function surveyVault(options, deps) {
   const pagesByRel = new Map(report.pages.map((p) => [vaultRelPath(vaultPath, p.sourcePath), p]));
   const untyped = new Set(report.untyped.map(canonicalPath));
   const unmappedDirs = new Set(report.unmapped.map((u) => canonicalPath(u.dir)));
+  // A file gray-matter could not parse at all never produced a scanner page, and
+  // decidePage would read that the same as "no `type:`" (NO_TYPE) — the wrong verdict,
+  // since there is no frontmatter to have a type. Both `manifest diff` and `explain`
+  // (which shares this verdicts map) need to say the file itself is broken instead.
+  const malformedByRel = new Map(report.malformed.map((m) => [canonicalPath(m.rel), m.message]));
 
   const files = listVaultMarkdown(vaultPath, config.excludeDirs);
   const verdicts = new Map();
   for (const rel of files) {
     const page = pagesByRel.get(rel);
     const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
-    verdicts.set(rel, decidePage(page || { rel, frontmatter: null }, {
-      rel,
-      publishConfig,
-      manifest,
-      pageIndex: pagesByRel,
-      folderMapped: page ? true : !(unmappedDirs.has(dir) && !untyped.has(rel)),
-    }));
+    const parseError = malformedByRel.get(rel);
+    verdicts.set(rel, parseError
+      ? { bucket: 'exclude', code: 'FILE_UNPARSEABLE', reason: `frontmatter could not be parsed: ${parseError}`, outputPath: null }
+      : decidePage(page || { rel, frontmatter: null }, {
+        rel,
+        publishConfig,
+        manifest,
+        pageIndex: pagesByRel,
+        folderMapped: page ? true : !(unmappedDirs.has(dir) && !untyped.has(rel)),
+      }));
   }
 
   return { config, configPath, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report };
@@ -265,10 +273,14 @@ async function runApply(options, deps, survey) {
     counted[move.section]++;
   }
 
+  // Deliberately NOT `onDisk` (the scanned file list): that set omits anything under
+  // excludeDirs, so adding a folder to excludeDirs would make prune read every entry
+  // under it as gone and silently delete the manifest's history for it. Prune only
+  // entries whose file is actually gone from the vault.
   let pruned = 0;
   if (options.prune) {
     for (const rel of [...entries.keys()]) {
-      if (!onDisk.has(rel)) { entries.delete(rel); pruned++; }
+      if (!exists(path.join(vaultPath, rel))) { entries.delete(rel); pruned++; }
     }
   }
 

@@ -172,4 +172,101 @@ describe('explain', () => {
     assert.match(c.text(), /explain needs a vault-relative path/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
+
+  // C1 + M6: a file gray-matter cannot parse at all used to fall through decidePage
+  // as "no `type:`" (NO_TYPE) — wrong, since there is no frontmatter to have read a
+  // type from — and explain's own re-read for "sections stripped"/"gm-only blocks"
+  // silently swallowed the same error, reporting "none"/"0" as if the file were clean.
+  // gray-matter caches a parse by exact string content for the life of the process,
+  // so re-scanning byte-identical malformed frontmatter a second time (the JSON
+  // check below, against the human-report check above) would see a cached, stale
+  // "success" instead of the real throw. Each check below therefore gets its own
+  // vault with its own marker so the content differs.
+  const malformedFrontmatter = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+
+  function siteForMalformed(marker) {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-'));
+    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter(marker));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-site-'));
+    const configPath = path.join(dir, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      siteTitle: 'Malformed Test',
+      vaultPath: vault,
+      outputDir: './docs',
+      excludeDirs: ['_meta', '_Templates'],
+      folderMap: { 'Characters/NPCs': 'characters/npcs' },
+    }, null, 2));
+    return { vault, dir, configPath };
+  }
+
+  it('says the frontmatter could not be parsed, not NO_TYPE, for an unparseable file', async () => {
+    const { vault, dir, configPath } = siteForMalformed('human-check');
+    const c = capture();
+    const rc = await runExplain({ configPath, target: 'Characters/NPCs/Bram.md' }, c.deps);
+    assert.strictEqual(rc, 0);
+    const text = c.text();
+    assert.doesNotMatch(text, /NO_TYPE/);
+    assert.match(text, /frontmatter: could not be parsed — [\s\S]*double quoted scalar/);
+    assert.match(text, /VERDICT: does not publish — frontmatter could not be parsed[\s\S]*\(FILE_UNPARSEABLE\)/);
+    assert.match(text, /sections stripped on publish: unknown — frontmatter could not be parsed/);
+    assert.match(text, /gm-only blocks: unknown/);
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('--json carries the same FILE_UNPARSEABLE verdict and null stripped/gm-only fields', async () => {
+    const { vault, dir, configPath } = siteForMalformed('json-check');
+    const j = capture();
+    await runExplain({ configPath, target: 'Characters/NPCs/Bram.md', json: true }, j.deps);
+    const payload = JSON.parse(j.out.join(''));
+    assert.strictEqual(payload.verdict.code, 'FILE_UNPARSEABLE');
+    assert.match(payload.frontmatterError, /double quoted scalar/);
+    assert.strictEqual(payload.strippedSections, null);
+    assert.strictEqual(payload.gmOnlyBlocks, null);
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  // M2: a directory this vault's own config excludes is not the same thing as a
+  // directory ALWAYS_EXCLUDE_DIRS names on every site — the reason text already
+  // said "listed in excludeDirs", but the code lied and called it DIR_ALWAYS_EXCLUDED.
+  it('names a config-only excludeDirs hit DIR_CONFIG_EXCLUDED, not DIR_ALWAYS_EXCLUDED', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-config-excluded-'));
+    write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-config-excluded-site-'));
+    const configPath = path.join(dir, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      siteTitle: 'Config Exclude Test',
+      vaultPath: vault,
+      outputDir: './docs',
+      excludeDirs: ['_meta', '_Templates', 'Drafts'],
+      folderMap: {},
+    }, null, 2));
+
+    const c = capture();
+    const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
+    assert.strictEqual(rc, 0);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in excludeDirs \(DIR_CONFIG_EXCLUDED\)/);
+
+    const j = capture();
+    await runExplain({ configPath, target: 'Drafts/Idea.md', json: true }, j.deps);
+    const payload = JSON.parse(j.out.join(''));
+    assert.strictEqual(payload.verdict.code, 'DIR_CONFIG_EXCLUDED');
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  // M3: explain shares surveyVault with `manifest`, so a bad config path must fail
+  // the same clean way instead of a raw `require()` "Cannot find module" stack.
+  it('fails with a clean message on a config path that does not exist', async () => {
+    const configPath = path.join(os.tmpdir(), 'no-such-dir-' + Date.now(), 'vault.config.json');
+    await assert.rejects(
+      () => runExplain({ configPath, target: 'Sessions/Session_07.md' }, {}),
+      (err) => {
+        assert.doesNotMatch(err.message, /Cannot find module/);
+        assert.match(err.message, /could not be read as JSON/);
+        return true;
+      },
+    );
+  });
 });

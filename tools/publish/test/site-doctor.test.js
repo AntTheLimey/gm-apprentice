@@ -233,4 +233,92 @@ describe('doctor --site', () => {
     assert.match(c.text(), /\+5 more/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
+
+  // C1: a file gray-matter cannot parse used to vanish entirely — neither untyped nor
+  // unmapped, so the audit found nothing wrong with a vault that was silently missing
+  // a page.
+  // gray-matter caches a parse by exact string content, so the two vaults below use
+  // distinct frontmatter bodies (a `marker` field) even though the shape of the
+  // brokenness — an unterminated double-quoted scalar — is the same one gray-matter
+  // caches: reusing one literal string across both checks would make only the first
+  // see the throw and silently "fix" the second.
+  const malformedFrontmatter = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+
+  it('reports an unparseable file as FILE_UNPARSEABLE, naming the YAML error', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-malformed-'));
+    write(vault, 'Sessions/Good.md', '---\ntype: session\nstatus: played\n---\n\nIt happened.\n');
+    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter('json-check'));
+    const { configPath } = siteFor(vault, {
+      folderMap: { 'Characters/NPCs': 'characters/npcs', Sessions: 'sessions' },
+    });
+    const c = capture();
+    const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0, 'a warning alone does not fail the audit');
+
+    const payload = JSON.parse(c.out.join(''));
+    const finding = payload.findings.find((f) => f.code === 'FILE_UNPARSEABLE');
+    assert.ok(finding, JSON.stringify(payload.findings));
+    assert.strictEqual(finding.path, 'Characters/NPCs/Bram.md');
+    assert.match(finding.detail, /double quoted scalar/);
+    assert.strictEqual(payload.ok, true);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('names the file in the human report too, not just the JSON payload', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-malformed-human-'));
+    write(vault, 'Sessions/Good.md', '---\ntype: session\nstatus: played\n---\n\nIt happened.\n');
+    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter('human-check'));
+    const { configPath } = siteFor(vault, {
+      folderMap: { 'Characters/NPCs': 'characters/npcs', Sessions: 'sessions' },
+    });
+    const c = capture();
+    await runSiteDoctor({ configPath }, c.deps);
+    assert.match(c.text(), /^FILE_UNPARSEABLE \(1 warning\)$/m);
+    assert.match(c.text(), /^ {2}Characters\/NPCs\/Bram\.md — frontmatter could not be parsed:/m);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('names the failure instead of going silent when detect() throws (M7)', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-detect-throws-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    const c = capture();
+    c.deps.detect = () => { throw new Error('plugin cache unreadable'); };
+    const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(c.out.join(''));
+    const finding = payload.findings.find((f) => f.code === 'VERSION_DRIFT');
+    assert.ok(finding, JSON.stringify(payload.findings));
+    assert.match(finding.detail, /plugin cache unreadable/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('names the failure instead of going silent when the site package.json is malformed JSON (M7)', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-pkg-bad-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    fs.writeFileSync(path.join(dir, 'package.json'), '{ not json');
+    const c = capture();
+    c.deps.detect = () => ({ pinned: '1.11.30', latest: '1.11.30', drift: false, versionsRoot: '/cache/gm-apprentice' });
+    const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(c.out.join(''));
+    const finding = payload.findings.find((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path));
+    assert.ok(finding, JSON.stringify(payload.findings));
+    assert.match(finding.detail, /could not be read as JSON/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('stays silent about package.json when the site simply has none yet', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-no-pkg-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    const c = capture();
+    c.deps.detect = () => ({ pinned: '1.11.30', latest: '1.11.30', drift: false, versionsRoot: '/cache/gm-apprentice' });
+    const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(c.out.join(''));
+    assert.strictEqual(payload.findings.filter((f) => f.code === 'VERSION_DRIFT').length, 0);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
 });

@@ -442,12 +442,68 @@ describe('scanVaultReport', () => {
 
   const TYPED = '---\ntype: npc\n---\n\nBody.\n';
   const UNTYPED = '---\nname: Nobody\n---\n\nBody.\n';
+  // An unterminated double-quoted scalar: gray-matter throws on this rather than
+  // returning empty/partial frontmatter. gray-matter caches by exact string content,
+  // so each call site needs a distinct body (via `marker`) — reusing one literal
+  // string across tests makes only the first one see the throw.
+  const malformed = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
 
   function silently(fn) {
     const orig = console.warn;
     console.warn = () => {};
     try { return fn(); } finally { console.warn = orig; }
   }
+
+  it('reports an unparseable file under `malformed`, not `untyped` or `pages` (C1)', () => {
+    const vault = makeVault({
+      'Characters/NPCs/Gatekeeper.md': TYPED,
+      'Characters/NPCs/Bram.md': malformed('report-shape'),
+    });
+    try {
+      const report = silently(() => scanVaultReport(config(vault)));
+      assert.strictEqual(report.pages.length, 1);
+      assert.strictEqual(report.pages[0].title, 'Gatekeeper');
+      assert.deepStrictEqual(report.untyped, []);
+      assert.deepStrictEqual(report.unmapped, []);
+      assert.strictEqual(report.malformed.length, 1);
+      assert.strictEqual(report.malformed[0].rel, 'Characters/NPCs/Bram.md');
+      assert.match(report.malformed[0].message, /double quoted scalar/);
+    } finally {
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
+
+  it('scanVaultReport itself prints nothing for a malformed file — only scanVault does', () => {
+    const vault = makeVault({ 'Characters/NPCs/Bram.md': malformed('silent-report') });
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...a) => warns.push(a.join(' '));
+    try {
+      scanVaultReport(config(vault));
+      assert.deepStrictEqual(warns, []);
+    } finally {
+      console.warn = orig;
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
+
+  it('scanVault warns about the malformed file, naming the file and the YAML error', () => {
+    const vault = makeVault({ 'Characters/NPCs/Bram.md': malformed('warn-text') });
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...a) => warns.push(a.join(' '));
+    try {
+      const pages = scanVault(config(vault));
+      assert.strictEqual(pages.length, 0);
+      const malformedWarns = warns.filter((w) => w.includes('malformed frontmatter'));
+      assert.strictEqual(malformedWarns.length, 1, warns.join(' | '));
+      assert.ok(malformedWarns[0].includes(path.join(vault, 'Characters', 'NPCs', 'Bram.md')), malformedWarns[0]);
+      assert.match(malformedWarns[0], /double quoted scalar/);
+    } finally {
+      console.warn = orig;
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
 
   it('returns the pages the scan produced', () => {
     const vault = makeVault({ 'Characters/NPCs/Gatekeeper.md': TYPED });

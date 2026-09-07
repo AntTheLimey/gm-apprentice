@@ -249,8 +249,14 @@ function build(options = {}) {
   if (autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
 
   if (manifest && publishConfig.mode !== 'full') {
-    // A prep file the GM explicitly listed under Publishing: named here because
-    // "auto-excluded 6" followed by a site with 7 prep pages needs an explanation.
+    // A prep file the GM explicitly listed under Publishing: named here because a
+    // reader landing on a published prep page deserves an explanation for why it's
+    // there. decidePage checks the manifest allowlist before the auto-exclude
+    // heuristics (publish-decision.js's evaluation order), so a re-included page's
+    // verdict code is OK, not AUTO_EXCLUDED_* — it never reaches the "Auto-excluded
+    // N" tally above at all. That count is therefore always the pages genuinely
+    // withheld today, not "auto-excluded, then some put back": this line is purely
+    // informational rather than a subtraction from the one above it.
     const reincluded = pages.filter(p => autoExcludeCode(p.frontmatter) && publishesPage(verdicts.get(p)));
     if (reincluded.length > 0) {
       console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);

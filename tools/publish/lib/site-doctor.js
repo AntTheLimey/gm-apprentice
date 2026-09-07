@@ -27,7 +27,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
-  'CONFIG_INVALID', 'VAULT_MISSING', 'VERSION_DRIFT', 'FOLDER_UNMAPPED', 'FILE_UNTYPED',
+  'CONFIG_INVALID', 'VAULT_MISSING', 'VERSION_DRIFT', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
 ];
 
@@ -171,19 +171,38 @@ async function runSiteDoctor(options, deps) {
   const findings = [];
 
   // --- the tool the site is pinned to -------------------------------------
-  const drift = (() => { try { return detect(); } catch { return null; } })();
+  let drift = null;
+  try {
+    drift = detect();
+  } catch (err) {
+    findings.push(finding(
+      'VERSION_DRIFT', 'warning', 'gm-apprentice-publish',
+      `could not check the installed tool version: ${err.message}`,
+      'this is usually harmless outside a plugin cache checkout; run `gm-publish update-pin` by hand if the site turns out stale',
+    ));
+  }
   if (drift) {
     let sitePin = null;
-    try {
-      const spec = (JSON.parse(readFile(path.join(siteRoot, 'package.json'))).dependencies || {})['gm-apprentice-publish'];
-      if (spec && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
-    } catch {
-      // No site package.json: the running tool's own drift is still worth saying.
+    const pkgPath = path.join(siteRoot, 'package.json');
+    // Absent is fine — plenty of sites have no package.json yet, and the running
+    // tool's own drift is still worth reporting. Present-but-unparseable is not:
+    // that means the sitePin below is unknown for a reason worth naming, not "none".
+    if (exists(pkgPath)) {
+      try {
+        const spec = (JSON.parse(readFile(pkgPath)).dependencies || {})['gm-apprentice-publish'];
+        if (spec && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
+      } catch (err) {
+        findings.push(finding(
+          'VERSION_DRIFT', 'warning', pkgPath,
+          `could not be read as JSON: ${err.message} — cannot confirm the site's pinned version`,
+          'fix the JSON in package.json',
+        ));
+      }
     }
     const stale = sitePin && sitePin !== drift.latest;
     if (drift.drift || stale) {
       findings.push(finding(
-        'VERSION_DRIFT', 'warning', path.join(siteRoot, 'package.json'),
+        'VERSION_DRIFT', 'warning', pkgPath,
         `site pinned to ${sitePin || drift.pinned}, newest installed is ${drift.latest} — the site builds with the old renderer`,
         'run `gm-publish update-pin`',
       ));
@@ -211,6 +230,13 @@ async function runSiteDoctor(options, deps) {
       'FILE_UNTYPED', 'warning', `+${report.untyped.length - shownUntyped.length} more`,
       'also carry no `type:`',
       'add `type:` to the frontmatter',
+    ));
+  }
+  for (const { rel, message } of report.malformed) {
+    findings.push(finding(
+      'FILE_UNPARSEABLE', 'warning', rel,
+      `frontmatter could not be parsed: ${message}`,
+      'fix the YAML in the frontmatter block',
     ));
   }
 

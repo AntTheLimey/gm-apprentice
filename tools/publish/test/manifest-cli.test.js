@@ -131,6 +131,42 @@ describe('manifest diff', () => {
     assert.match(c.text(), /^manifest: mode player — /m);
     fs.rmSync(vault, { recursive: true, force: true });
   });
+
+  // C1: shared with explain-cli via surveyVault — a file gray-matter cannot parse
+  // must not read as NO_TYPE here either.
+  it('classifies an unparseable file as FILE_UNPARSEABLE, not NO_TYPE', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.writeFileSync(
+      path.join(vault, 'Characters', 'NPCs', 'Bram.md'),
+      '---\ntype: npc\nmarker: manifest-diff\nname: "Unterminated\n---\n\nBody.\n',
+    );
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const rc = await runManifest({ verb: 'diff', configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(c.out.join(''));
+    const row = payload.new.find((e) => e.path === 'Characters/NPCs/Bram.md');
+    assert.ok(row, JSON.stringify(payload.new));
+    assert.strictEqual(row.bucket, 'exclude');
+    assert.strictEqual(row.code, 'FILE_UNPARSEABLE');
+    assert.match(row.reason, /double quoted scalar/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  // M3: manifest shares surveyVault's config loading with deploy and explain — a
+  // bad config path must fail the same clean way instead of a raw `require()`
+  // "Cannot find module" stack.
+  it('fails with a clean message on a config path that does not exist', async () => {
+    const configPath = path.join(os.tmpdir(), 'no-such-dir-' + Date.now(), 'vault.config.json');
+    await assert.rejects(
+      () => runManifest({ verb: 'diff', configPath }, {}),
+      (err) => {
+        assert.doesNotMatch(err.message, /Cannot find module/);
+        assert.match(err.message, /could not be read as JSON/);
+        return true;
+      },
+    );
+  });
 });
 
 describe('manifest diff: story companions', () => {
@@ -289,6 +325,39 @@ describe('manifest apply', () => {
     await runManifest({ verb: 'apply', configPath, prune: true }, c.deps);
     const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
     assert.doesNotMatch(written, /Long Gone/);
+    assert.match(written, /- \[x\] Sessions\/Played Session\.md/);
+    assert.match(c.text(), /manifest updated: \+0 publishing, \+0 excluded, \+0 needs decision, -1 pruned/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  // M9: --prune used to drop any entry whose path fell under excludeDirs, because
+  // the scanned `files` list never contains those paths at all — indistinguishable
+  // from a file that was actually deleted. Adding a folder to excludeDirs must not
+  // silently erase the manifest's memory of everything already in it.
+  it('--prune keeps an entry under excludeDirs whose file is still on disk', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_Templates'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_Templates', 'Old Template.md'), '---\ntype: npc\n---\n\nx\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
+      '---', 'mode: player', '---', '',
+      '## Publishing (2 files)', '',
+      '- [x] Sessions/Played Session.md',
+      '- [x] _Templates/Old Template.md',
+      '',
+      '## Excluded (1 files)', '',
+      '- [x] Locations/Long Gone.md',
+      '',
+    ].join('\n'));
+    const { configPath } = siteFor(vault);
+    const c = capture();
+
+    await runManifest({ verb: 'apply', configPath, prune: true }, c.deps);
+    const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
+    // Genuinely gone (no file on disk at all): pruned.
+    assert.doesNotMatch(written, /Long Gone/);
+    // Under excludeDirs but still a real file on disk: survives.
+    assert.match(written, /- \[x\] _Templates\/Old Template\.md/);
     assert.match(written, /- \[x\] Sessions\/Played Session\.md/);
     assert.match(c.text(), /manifest updated: \+0 publishing, \+0 excluded, \+0 needs decision, -1 pruned/);
     fs.rmSync(vault, { recursive: true, force: true });
