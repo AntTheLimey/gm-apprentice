@@ -36,14 +36,21 @@ function mapFolder(vaultRelPath, folderMap) {
   return null;
 }
 
-function scanVault(config) {
+// The walk, and everything it learned — including the two classes of file it could
+// NOT turn into a page. scanVault() prints those as warnings and throws the detail
+// away; `manifest diff`, `doctor --site` and `explain` need the detail itself, so
+// the walk reports and the printing lives one level up.
+function scanVaultReport(config) {
   const { vaultPath, excludeDirs, folderMap } = config;
   const pages = [];
-  const warnedDirs = new Set();
   // Vault-relative paths of .md files carrying no `type:`. They never publish,
   // and skipping them in silence is how a GM ends up hunting for a note that
-  // was never going to appear. Named after the walk, once, capped.
+  // was never going to appear.
   const untyped = [];
+  // Directories holding typed pages that no folderMap entry covers, in first-seen
+  // order, each with the number of pages it silently swallowed.
+  const unmapped = [];
+  const unmappedByDir = new Map();
   // Output path -> the vault-relative source that first claimed it. Stripping combining
   // marks (#139) collapses names that used to slug apart ("Renée"/"Renee" both give
   // renee.html), and the later page silently overwrites the earlier one on disk.
@@ -74,10 +81,13 @@ function scanVault(config) {
         const outputDir = mapFolder(dirRel, folderMap);
         if (!outputDir && dirRel !== '') {
           const dirKey = toPosix(dirRel);
-          if (!warnedDirs.has(dirKey)) {
-            warnedDirs.add(dirKey);
-            console.warn(`scanner: skipping "${dirKey}" — not in folderMap; typed pages inside will not publish. Add it to folderMap to publish, or to excludeDirs to silence this warning.`);
+          let entry = unmappedByDir.get(dirKey);
+          if (!entry) {
+            entry = { dir: dirKey, typedFileCount: 0 };
+            unmappedByDir.set(dirKey, entry);
+            unmapped.push(entry);
           }
+          entry.typedFileCount++;
           continue;
         }
 
@@ -113,6 +123,16 @@ function scanVault(config) {
   }
 
   walk(vaultPath);
+  return { pages, untyped, unmapped };
+}
+
+// The build's entry point: the pages, with the two "could not publish this" classes
+// reported to the console rather than returned.
+function scanVault(config) {
+  const { pages, untyped, unmapped } = scanVaultReport(config);
+  for (const { dir } of unmapped) {
+    console.warn(`scanner: skipping "${dir}" — not in folderMap; typed pages inside will not publish. Add it to folderMap to publish, or to excludeDirs to silence this warning.`);
+  }
   if (untyped.length > 0) {
     const shown = untyped.slice(0, 5).join(', ');
     const more = untyped.length > 5 ? ` (+${untyped.length - 5} more)` : '';
@@ -240,4 +260,4 @@ function pairStoryFiles(pages, vaultPath) {
   }
 }
 
-module.exports = { slugify, scanVault, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles };
+module.exports = { slugify, scanVault, scanVaultReport, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles };

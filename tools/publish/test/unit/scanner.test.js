@@ -420,3 +420,97 @@ describe('scanVault untyped-file warning', () => {
     }
   });
 });
+
+describe('scanVaultReport', () => {
+  const { scanVaultReport } = require('../../lib/scanner');
+
+  function makeVault(files) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scanner-report-'));
+    for (const [rel, body] of Object.entries(files)) {
+      const full = path.join(tmpDir, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, body);
+    }
+    return tmpDir;
+  }
+
+  const config = (vaultPath) => ({
+    vaultPath,
+    excludeDirs: ['_meta', '_Templates'],
+    folderMap: { 'Characters/NPCs': 'characters/npcs' },
+  });
+
+  const TYPED = '---\ntype: npc\n---\n\nBody.\n';
+  const UNTYPED = '---\nname: Nobody\n---\n\nBody.\n';
+
+  function silently(fn) {
+    const orig = console.warn;
+    console.warn = () => {};
+    try { return fn(); } finally { console.warn = orig; }
+  }
+
+  it('returns the pages the scan produced', () => {
+    const vault = makeVault({ 'Characters/NPCs/Gatekeeper.md': TYPED });
+    try {
+      const report = silently(() => scanVaultReport(config(vault)));
+      assert.strictEqual(report.pages.length, 1);
+      assert.strictEqual(report.pages[0].title, 'Gatekeeper');
+      assert.deepStrictEqual(report.untyped, []);
+      assert.deepStrictEqual(report.unmapped, []);
+    } finally {
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
+
+  it('names every untyped file, uncapped', () => {
+    const files = {};
+    for (let i = 1; i <= 7; i++) files[`Characters/NPCs/Untyped${i}.md`] = UNTYPED;
+    const vault = makeVault(files);
+    try {
+      const report = silently(() => scanVaultReport(config(vault)));
+      assert.strictEqual(report.untyped.length, 7);
+      assert.ok(report.untyped.includes('Characters/NPCs/Untyped3.md'), report.untyped.join(', '));
+    } finally {
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
+
+  it('reports each unmapped directory once, with how many typed pages it lost', () => {
+    const vault = makeVault({
+      'Characters/NPCs/Gatekeeper.md': TYPED,
+      'Session Notes/Note A.md': TYPED,
+      'Session Notes/Note B.md': TYPED,
+      'Session Notes/Scratch.md': UNTYPED,
+    });
+    try {
+      const report = silently(() => scanVaultReport(config(vault)));
+      assert.deepStrictEqual(report.unmapped, [{ dir: 'Session Notes', typedFileCount: 2 }]);
+      // The untyped file in an unmapped folder is reported as untyped, not as a lost page.
+      assert.deepStrictEqual(report.untyped, ['Session Notes/Scratch.md']);
+      assert.strictEqual(report.pages.length, 1);
+    } finally {
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
+
+  it('scanVault still prints both warnings and returns just the pages', () => {
+    const vault = makeVault({
+      'Characters/NPCs/Gatekeeper.md': TYPED,
+      'Characters/NPCs/Scratch.md': UNTYPED,
+      'Session Notes/Note A.md': TYPED,
+    });
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...a) => warns.push(a.join(' '));
+    try {
+      const pages = scanVault(config(vault));
+      assert.strictEqual(pages.length, 1);
+      assert.strictEqual(warns.filter(w => w.includes('no `type:`')).length, 1);
+      assert.strictEqual(warns.filter(w => w.includes('not in folderMap')).length, 1);
+      assert.ok(warns.find(w => w.includes('Session Notes')), warns.join(' | '));
+    } finally {
+      console.warn = orig;
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
+  });
+});
