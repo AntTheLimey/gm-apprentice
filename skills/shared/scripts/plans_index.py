@@ -302,8 +302,7 @@ def main() -> int:
             print(f"{a.name}\t{a.status or '?'}\t{a.dir}\t{n_files}")
         if resolved:
             print(f"RESOLVED: {resolved.name}")
-            for p, info in zip(_resolved_files(args.vault, resolved),
-                              resolved_files):
+            for info in resolved_files:
                 print(f"  {info['rel']}\t{info['summary']}")
         elif ambiguous:
             names = ", ".join(sorted(a.name for a in ambiguous))

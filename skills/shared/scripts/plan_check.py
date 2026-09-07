@@ -260,7 +260,7 @@ def _walk_body(states: list[vl.LineState]
 def _is_session_running(section_title: str | None) -> bool:
     if section_title is None:
         return True
-    return section_title.strip().casefold() not in SESSION_RUNNING_EXCLUDE
+    return _norm_title(section_title) not in SESSION_RUNNING_EXCLUDE
 
 
 def find_prep_state(text: str) -> tuple[int, str] | None:
@@ -507,10 +507,22 @@ def check_audit_trail(rel: str, states: list[vl.LineState]) -> list[Finding]:
     return findings
 
 
+_PC_STATE_EXEMPT_SECTIONS = {
+    _norm_title(PLANNED_SCENES_TITLE), _norm_title(CONTINGENCY_SCENES_TITLE),
+}
+
+
 def check_pc_state(rel: str, states: list[vl.LineState]) -> list[Finding]:
+    """A `**Location:**`/`**Condition:**`/etc. line reads as a Current
+    Status transcription almost everywhere in a plan — except inside
+    `## Planned Scenes` / `## Contingency Scenes`, where a scene's own
+    `**Location:**` field (naming where the scene happens, not a PC's
+    status) is legitimate and must not be silently edited away (#M14)."""
     findings = []
-    for lineno, line, _section, in_code, is_heading in _walk_body(states):
+    for lineno, line, section, in_code, is_heading in _walk_body(states):
         if in_code or is_heading:
+            continue
+        if section is not None and _norm_title(section) in _PC_STATE_EXEMPT_SECTIONS:
             continue
         m = PC_STATE_RE.match(line.strip())
         if m:

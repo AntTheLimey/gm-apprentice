@@ -411,5 +411,55 @@ class TableFindingsExtractedTests(unittest.TestCase):
         self.assertEqual(via_vault, via_files)
 
 
+class SessionRunningTitleNormTests(unittest.TestCase):
+    """M11: `_is_session_running` must use `_norm_title` (ellipsis-
+    tolerant), not a bare `.strip().casefold()` — otherwise an
+    "Open Questions…" heading (spelled with the ellipsis the rest of
+    the file tolerates) is wrongly treated as session-running and picks
+    up `duration`/`audit-trail` findings meant only for narrative text."""
+
+    def test_ellipsis_title_is_still_excluded(self):
+        self.assertFalse(pc._is_session_running("Open Questions…"))
+        self.assertFalse(pc._is_session_running("Open Questions..."))
+        self.assertFalse(pc._is_session_running("Open Questions"))
+        self.assertTrue(pc._is_session_running("Session Intent"))
+
+    def test_duration_not_flagged_under_ellipsis_titled_exclusion(self):
+        text = ("# Plan\n\n"
+               "## Open Questions…\n\n"
+               "Runtime is 20-30 minutes either way.\n")
+        states, _problems = pc.vl.scan_body(text)
+        self.assertEqual(pc.check_duration("plan.md", states), [])
+
+
+class PcStateSceneScopingTests(unittest.TestCase):
+    """M14: `pc-state` must not fire inside `## Planned Scenes` /
+    `## Contingency Scenes` — a scene's own `**Location:**` field names
+    where the scene happens, not a Current Status transcription, and
+    session-prep/SKILL.md lists pc-state among the warnings fixed
+    silently, so a false positive there would edit real content away
+    without asking."""
+
+    def test_exempt_inside_planned_and_contingency_scenes(self):
+        text = (
+            "# Plan\n\n"
+            "## Session Intent\n\n"
+            "**Location:** Vienna docks\n\n"
+            "## Planned Scenes\n\n"
+            "### Scene 1: Arrival\n"
+            "**Location:** Vienna docks\n\n"
+            "## Contingency Scenes\n\n"
+            "### If stalled\n"
+            "**Location:** The alley\n\n"
+            "## Gaps & Actions\n\n"
+            "**Location:** somewhere\n")
+        states, _problems = pc.vl.scan_body(text)
+        findings = pc.check_pc_state("plan.md", states)
+        loci = {f.locus for f in findings}
+        # Line 5 (Session Intent) and 19 (Gaps & Actions) still fire;
+        # line 10 (Planned Scenes) and 15 (Contingency Scenes) don't.
+        self.assertEqual(loci, {"plan.md:5", "plan.md:19"})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

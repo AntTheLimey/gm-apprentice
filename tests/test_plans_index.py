@@ -112,6 +112,19 @@ class ResolveAdventureTests(unittest.TestCase):
         self.assertIsNone(resolved)
         self.assertEqual({a.name for a in ambiguous}, {"east-arc", "west-arc"})
 
+    def test_resolves_single_non_ingested_when_no_candidate_mentions_chapter(self):
+        # M15: zero candidates mention the chapter at all (it isn't named
+        # in any manifest line or adventure index.md), but there is only
+        # one non-Ingested/Complete adventure in the whole vault — nothing
+        # else to pick, so it still resolves rather than reporting
+        # ambiguous.
+        adventures, _problem = pi.manifest_adventures(MIDWIFE_VAULT)
+        resolved, ambiguous = pi.resolve_adventure(
+            adventures, "Chapter 99 - Nowhere Mentioned", MIDWIFE_VAULT)
+        self.assertIsNotNone(resolved)
+        self.assertEqual(resolved.name, "vienna-nights")
+        self.assertEqual(ambiguous, [])
+
 
 class FileSummaryTests(unittest.TestCase):
 

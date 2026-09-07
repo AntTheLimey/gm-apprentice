@@ -449,6 +449,23 @@ def main() -> int:
         current = current_chosen["n"] if current_chosen else 0
         chapter = current_chosen["chapter"] if current_chosen else None
         target = args.session if args.session is not None else current + 1
+        if args.session is not None:
+            # An explicit --session N names a specific session, which may
+            # be filed under a different chapter than "current" — session
+            # numbering restarts per chapter, so resolving the chapter
+            # from the current session made a plan for N under another
+            # chapter unfindable (#M13). Prefer N's own copy under the
+            # current chapter (still handles the common, unambiguous
+            # case) and fall back to wherever else it's filed.
+            same_number = [(rel, text, fm) for rel, text, fm in files
+                          if fm.get("type") == "session"
+                          and parse_session_number(fm.get("session_number"))
+                          == target]
+            own = next((s for s in same_number
+                       if chapter_key(s[0], s[2]) == chapter), None)
+            target_session = own or (same_number[0] if same_number else None)
+            if target_session is not None:
+                chapter = chapter_key(target_session[0], target_session[2])
         plan = _find_plan(files, chapter, target)
         if plan is None:
             print(f"(no plan for session {target})")

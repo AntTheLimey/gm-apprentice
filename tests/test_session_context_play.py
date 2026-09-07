@@ -87,6 +87,39 @@ class PlayBriefCLITests(unittest.TestCase):
         self.assertNotIn("===== Threads =====", result.stdout)
 
 
+class PlaySessionChapterResolutionTests(unittest.TestCase):
+    """M13: `--play --session N` must resolve N's own chapter, not the
+    "current" session's — session numbering restarts per chapter, so a
+    plan for N filed under a different (non-current) chapter used to be
+    unfindable."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="session-context-chap-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        shutil.copytree(FIXTURE, self.vault, dirs_exist_ok=True)
+        # A session 20 (unique number, not present anywhere else) filed
+        # under Chapter 3 - Vienna, which is NOT the fixture's "current"
+        # chapter (Chapter 4 - Calcutta — see test_play_prints_only_brief,
+        # whose default target of 8 resolves there).
+        vienna = self.vault / "Chapters" / "Chapter 3 - Vienna" / "Sessions"
+        (vienna / "Session 20.md").write_text(
+            "---\ntype: session\nsession_number: 20\nstatus: reviewed\n"
+            "chapter: \"[[Chapter 3 - Vienna]]\"\ndocuments: []\n"
+            "---\n\n# Session 20\n", encoding="utf-8")
+        (vienna / "Session_20_Plan.md").write_text(
+            "---\ntype: session-plan\nsession: 20\n"
+            "chapter: \"[[Chapter 3 - Vienna]]\"\n---\n\n"
+            "# Session 20 Plan\n\n## Session Intent\n\n"
+            "M13 regression plan.\n", encoding="utf-8")
+
+    def test_plan_under_non_current_chapter_is_found(self):
+        result = run_cli(self.vault, "--play", "--session", "20")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("===== Play Brief — Session 20 =====", result.stdout)
+        self.assertIn("Session_20_Plan.md", result.stdout)
+        self.assertNotIn("(no plan for session 20)", result.stdout)
+
+
 class PlayBriefFunctionTests(unittest.TestCase):
     """`play_brief(files, plan_rel, plan_text)` directly."""
 
@@ -124,6 +157,40 @@ class PlayBriefFunctionTests(unittest.TestCase):
         self.assertIn("(no ## World State)", brief)
         self.assertIn("(no ## Contingency Scenes)", brief)
         self.assertIn("(no ## Session End Objectives)", brief)
+
+
+class FindPlanFallbackTests(unittest.TestCase):
+    """M15: `_find_plan`'s `documents.plan` fallback — when no
+    `type: session-plan` file directly names the session, the session
+    index's own `documents.plan` wikilink resolves it by filename stem.
+    Not exercised by FIXTURE (its plans all match directly by number)."""
+
+    @staticmethod
+    def _entry(rel, text):
+        return (rel, text, sc.extract_frontmatter(text) or {})
+
+    def test_resolves_via_documents_plan_link(self):
+        session_text = (
+            "---\ntype: session\nsession_number: 5\n"
+            "chapter: \"[[Chapter Five]]\"\n"
+            "documents:\n  plan: \"[[Loose Plan Doc]]\"\n---\n\n# Session 05\n")
+        plan_text = "---\ntype: note\n---\n\n## Session Intent\n\nAd hoc plan.\n"
+        files = [
+            self._entry("Chapters/Chapter Five/Sessions/Session 05.md",
+                       session_text),
+            self._entry("Notes/Loose Plan Doc.md", plan_text),
+        ]
+        plan = sc._find_plan(files, "chapter five", 5)
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan[0], "Notes/Loose Plan Doc.md")
+
+    def test_no_link_and_no_direct_plan_is_none(self):
+        session_text = (
+            "---\ntype: session\nsession_number: 6\n"
+            "chapter: \"[[Chapter Five]]\"\ndocuments: []\n---\n\n# Session 06\n")
+        files = [self._entry(
+            "Chapters/Chapter Five/Sessions/Session 06.md", session_text)]
+        self.assertIsNone(sc._find_plan(files, "chapter five", 6))
 
 
 class ThreadReportTests(unittest.TestCase):
