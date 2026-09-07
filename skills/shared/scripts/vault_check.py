@@ -456,32 +456,40 @@ TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
 ALIAS_LINK_RE = re.compile(r"\[\[[^\[\]]*\|[^\[\]]*\]\]")
 
 
-def check_tables(vault: Path) -> list[str]:
+def table_findings(rel: str, text: str) -> list[str]:
     r"""Pipes inside table cells break the table when Obsidian reflows it.
     Flag aliased wikilinks ([[A|B]]) and escaped pipes (\|) inside table
     blocks. ERROR: deterministic render break the apprentice silently fixes
-    as a chore (the level is internal — never shown to the GM as a report)."""
+    as a chore (the level is internal — never shown to the GM as a report).
+
+    Per-file body of `check_tables`, extracted so `plan_check.py` can run
+    the same table-cell lint over a single Session Plan without walking a
+    whole vault.
+    """
     rows = []
-    for rel, text in vault_files(vault):
-        body = list(iter_body_lines(text))
-        is_row = [bool(TABLE_ROW_RE.match(ln)) for _, ln in body]
-        for i, (lineno, ln) in enumerate(body):
-            if not is_row[i]:
-                continue
-            # Require a table *block*: a stray piped prose line is not a table.
-            neighbour = (i > 0 and is_row[i - 1]) or \
-                        (i < len(body) - 1 and is_row[i + 1])
-            if not neighbour:
-                continue
-            am = ALIAS_LINK_RE.search(ln)
-            if am:
-                rows.append(f"ERROR\t{rel}:{lineno}\taliased wikilink pipe "
-                            f"in table cell breaks Obsidian reflow: "
-                            f"{am.group(0)}")
-            if "\\|" in ln:
-                rows.append(f"ERROR\t{rel}:{lineno}\tescaped pipe '\\|' in "
-                            f"table cell breaks Obsidian reflow")
+    body = list(iter_body_lines(text))
+    is_row = [bool(TABLE_ROW_RE.match(ln)) for _, ln in body]
+    for i, (lineno, ln) in enumerate(body):
+        if not is_row[i]:
+            continue
+        # Require a table *block*: a stray piped prose line is not a table.
+        neighbour = (i > 0 and is_row[i - 1]) or \
+                    (i < len(body) - 1 and is_row[i + 1])
+        if not neighbour:
+            continue
+        am = ALIAS_LINK_RE.search(ln)
+        if am:
+            rows.append(f"ERROR\t{rel}:{lineno}\taliased wikilink pipe "
+                        f"in table cell breaks Obsidian reflow: "
+                        f"{am.group(0)}")
+        if "\\|" in ln:
+            rows.append(f"ERROR\t{rel}:{lineno}\tescaped pipe '\\|' in "
+                        f"table cell breaks Obsidian reflow")
     return rows
+
+
+def check_tables(vault: Path) -> list[str]:
+    return [r for rel, text in vault_files(vault) for r in table_findings(rel, text)]
 
 
 TIMELINE_SECTION_RE = re.compile(r"^##\s+Timeline\b", re.IGNORECASE | re.MULTILINE)

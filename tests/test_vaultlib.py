@@ -551,6 +551,74 @@ class TextHelperTests(unittest.TestCase):
         self.assertEqual(vl.section(text, "Current Status"), "Alive.")
         self.assertIsNone(vl.section(text, "Missing"))
 
+    def test_sections_splits_on_h2_in_document_order(self):
+        text = ("# Title\n\n## First\n\nA.\n\n### Sub\n\nStill first.\n\n"
+                "## Second\n\nB.\n")
+        got = vl.sections(text)
+        self.assertEqual([(lineno, level, title) for lineno, level, title, _
+                          in got],
+                         [(3, 2, "First"), (11, 2, "Second")])
+        self.assertIn("Still first.", got[0][3])
+        self.assertEqual(got[1][3], "B.")
+
+    def test_sections_ignores_a_heading_inside_a_code_fence(self):
+        text = ("## Real\n\n```markdown\n## Fake\n\nnot a section\n```\n\n"
+                "still Real's body\n\n## Next\n\nreal body\n")
+        got = vl.sections(text)
+        titles = [title for _l, _lv, title, _b in got]
+        self.assertEqual(titles, ["Real", "Next"])
+        self.assertIn("## Fake", got[0][3])
+        self.assertIn("still Real's body", got[0][3])
+
+    def test_sections_a_level_1_heading_ends_the_section(self):
+        text = "## First\n\nA.\n\n# Title\n\nnot in First\n"
+        got = vl.sections(text)
+        self.assertEqual(len(got), 1)
+        self.assertEqual(got[0][3], "A.")
+
+    def test_h3_blocks_splits_a_section_body(self):
+        body = ("### Scene 1: A\n\n**Type:** social\n\n### Scene 2: B\n\n"
+                "**Type:** combat\n")
+        got = vl.h3_blocks(body)
+        self.assertEqual([title for title, _b in got], ["Scene 1: A",
+                                                         "Scene 2: B"])
+        self.assertIn("**Type:** social", got[0][1])
+        self.assertIn("**Type:** combat", got[1][1])
+
+    def test_h3_blocks_ignores_a_heading_inside_a_code_fence(self):
+        body = ("### Real\n\n```\n### Fake\n```\n\nstill Real\n")
+        got = vl.h3_blocks(body)
+        self.assertEqual([title for title, _b in got], ["Real"])
+        self.assertIn("### Fake", got[0][1])
+
+    def test_h3_blocks_empty_when_no_h3(self):
+        self.assertEqual(vl.h3_blocks("just prose, no headings"), [])
+
+    def test_word_count_basic(self):
+        self.assertEqual(vl.word_count("one two three"), 3)
+        self.assertEqual(vl.word_count(""), 0)
+
+    def test_word_count_ignores_table_separator_rows(self):
+        text = ("| NPC | Role |\n|---|---|\n| [[Ada]] | Runs the desk |\n")
+        # header (2 words after stripping pipes... counted as whitespace
+        # tokens including the pipes themselves) plus the data row, minus
+        # the separator row entirely.
+        without_sep = vl.word_count("| NPC | Role |\n| [[Ada]] | Runs the "
+                                    "desk |\n")
+        self.assertEqual(vl.word_count(text), without_sep)
+
+    def test_word_count_ignores_a_bare_dash_separator(self):
+        self.assertEqual(vl.word_count("one two\n---\nthree"), 3)
+
+    def test_word_count_ignores_html_comments(self):
+        self.assertEqual(
+            vl.word_count("kept words\n<!-- dropped comment words -->\n"
+                          "more kept"),
+            4)
+        self.assertEqual(
+            vl.word_count("before\n<!-- multi\nline\ncomment -->\nafter"),
+            2)
+
     def test_iter_body_lines_skips_frontmatter(self):
         text = "---\ntype: npc\n---\nbody one\nbody two\n"
         self.assertEqual(list(vl.iter_body_lines(text)),

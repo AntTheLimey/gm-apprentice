@@ -598,6 +598,109 @@ def section(text: str, heading: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
+_SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+def _fenced_headings(text: str) -> list[tuple[int, int, str]]:
+    """(0-based line index, level, title) for every heading outside a
+    code fence. Shared walk behind `sections` and `h3_blocks` — both need
+    the same "don't mistake a fenced example for a real heading" fence
+    tracking `scan_body` already does, but neither needs `scan_body`'s
+    marker/exclusion bookkeeping."""
+    lines = text.splitlines()
+    fence_delim: str | None = None
+    heads: list[tuple[int, int, str]] = []
+    for i, line in enumerate(lines):
+        fence = FENCE_RE.match(line)
+        if fence:
+            delim, info = fence.group(1), fence.group(2)
+            if fence_delim is None:
+                if delim[0] != "`" or "`" not in info:
+                    fence_delim = delim
+                    continue
+            elif (delim[0] == fence_delim[0]
+                  and len(delim) >= len(fence_delim)
+                  and info.strip() == ""):
+                fence_delim = None
+                continue
+        if fence_delim is not None:
+            continue
+        m = _SECTION_HEADING_RE.match(line)
+        if m:
+            heads.append((i, len(m.group(1)), m.group(2).strip()))
+    return heads
+
+
+def sections(text: str) -> list[tuple[int, int, str, str]]:
+    """(lineno, level, title, body) for each `## ` heading outside a code
+    fence, in document order. `lineno` is 1-based; `body` is the text
+    between this heading and the next heading of level <= 2 (a `# ` title
+    ends a section too), stripped. A `### `+ heading inside the fence
+    tracking here still ends up in a prior `## `'s body — only level-1/2
+    headings are section boundaries."""
+    lines = text.splitlines()
+    heads = _fenced_headings(text)
+    result: list[tuple[int, int, str, str]] = []
+    for idx, (line_i, level, title) in enumerate(heads):
+        if level != 2:
+            continue
+        end = len(lines)
+        for later_i, later_level, _later_title in heads[idx + 1:]:
+            if later_level <= level:
+                end = later_i
+                break
+        body = "\n".join(lines[line_i + 1:end]).strip()
+        result.append((line_i + 1, level, title, body))
+    return result
+
+
+def h3_blocks(section_body: str) -> list[tuple[str, str]]:
+    """(title, body) for each `### ` heading inside a section body,
+    outside a code fence, in document order. Mirrors `sections`'s fence
+    tracking and boundary rule (next heading of level <= 3 ends a block),
+    scoped one level down — this is how `plan_check.py` reads Planned
+    Scenes' and Contingency Scenes' individual scene blocks."""
+    lines = section_body.splitlines()
+    heads = _fenced_headings(section_body)
+    result: list[tuple[str, str]] = []
+    for idx, (line_i, level, title) in enumerate(heads):
+        if level != 3:
+            continue
+        end = len(lines)
+        for later_i, later_level, _later_title in heads[idx + 1:]:
+            if later_level <= level:
+                end = later_i
+                break
+        body = "\n".join(lines[line_i + 1:end]).strip()
+        result.append((title, body))
+    return result
+
+
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_TABLE_SEP_CHARS_RE = re.compile(r"^[|:\- ]+$")
+
+
+def word_count(text: str) -> int:
+    """Whitespace-token count, ignoring markdown table separator rows
+    (`|---|---|`, or a bare `---`) and HTML comments (`<!-- ... -->`,
+    single- or multi-line).
+
+    Backs the Session Plan preamble/recap word budgets — a separator row
+    is Obsidian table scaffolding, not prose the Keeper reads, and an
+    editorial `<!-- -->` note is by definition not what gets said at the
+    table either. Counting either would make the budget punish the
+    template's own furniture rather than what the GM actually wrote.
+    """
+    stripped = _HTML_COMMENT_RE.sub(" ", text)
+    total = 0
+    for line in stripped.splitlines():
+        s = line.strip()
+        if s and _TABLE_SEP_CHARS_RE.match(s) and "-" in s:
+            continue
+        total += len(line.split())
+    return total
+
+
 FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
 _MARKERS = (("gm", "gm-only"), ("spoiler", "spoiler"))
