@@ -31,6 +31,7 @@ const CASES = {
   sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/],
   'update-pin': [/update-pin \[--site <dir>\]/, /--check/],
   manifest: [/manifest <diff\|apply>/, /--prune/],
+  deploy: [/deploy \[--config <path>\] \[--verify\]/, /--dry-run/, /--no-build/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {

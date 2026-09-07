@@ -123,6 +123,22 @@ publishes.
                      matches no vault file is an error and nothing is written.
   --help, -h         Show this help
 `,
+  deploy: `
+gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
+
+Builds the site and publishes it to the host named in vault.config.json:
+"cloudflare-pages" runs wrangler (checking authentication first, and aligning
+wrangler.toml's project name), "github-pages" commits docs/ and pushes.
+
+  --verify           After deploying, fetch the site URL up to 3 times, 20s
+                     apart. A site still propagating is reported, not failed.
+  --no-build         Deploy whatever is already in the output directory
+  --dry-run          Print the commands that would run; run none of them
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --json             Emit { host, built, deployed, url, verified, status,
+                     attempts, commands }
+  --help, -h         Show this help
+`,
   'update-pin': `
 gm-apprentice-publish update-pin [--site <dir>] [--check] [--json]
 
@@ -411,6 +427,32 @@ if (command === 'sheet') {
     configPath: parsed.configPath,
     pc: parsed.flags.pc,
     playerSafe: !!parsed.flags.playerSafe,
+    json: !!parsed.flags.json,
+  })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'deploy') {
+  const parsed = parseSubcommandArgs(args.slice(1), {
+    '--verify': 'verify',
+    '--no-build': 'noBuild',
+    '--dry-run': 'dryRun',
+    '-n': 'dryRun',
+    '--json': 'json',
+  });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('deploy');
+    process.exit(1);
+  }
+  const { runDeploy } = require('../lib/deploy-cli.js');
+  runDeploy({
+    configPath: parsed.configPath,
+    verify: !!parsed.flags.verify,
+    noBuild: !!parsed.flags.noBuild,
+    dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
   })
     .then((rc) => process.exit(rc))
