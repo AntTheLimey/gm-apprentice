@@ -183,10 +183,49 @@ class SetTests(ScriptCase):
         before = path.read_text(encoding="utf-8")
         for pair, hint in (("canon_status=AUTHORITATIVE", "--promote"),
                            ("asOfSession=9", "--session"),
-                           ("lastUpdated=2026-09-06", "--date")):
+                           ("lastUpdated=2026-09-06", "--date"),
+                           # Each flag carries a guard --set cannot apply:
+                           # --reconciled validates YYYY-MM-DD, and
+                           # superseded_by is only ever half a status flip.
+                           ("reconciled=2026-01-01", "--reconciled"),
+                           ("superseded_by=[[Winner]]", "--supersede-by")):
             out = self.run_script("Sessions/S02.md", "--set", pair,
                                   "--write", rc=1)
             self.assertIn("ERROR", out)
+            self.assertIn(hint, out)
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
+
+    def test_dotted_key_cannot_smuggle_in_a_reserved_parent(self):
+        """`canon_status.child` is still a write to `canon_status`.
+
+        The guard read the whole key, so only the exact name was
+        refused: `--set canon_status.x=1` sailed past it and turned a
+        scalar status every reader parses into a mapping.
+        """
+        path = self.note("Sessions/S02.md", SESSION_INDEX)
+        before = path.read_text(encoding="utf-8")
+        out = self.run_script("Sessions/S02.md", "--set",
+                              "canon_status.child=1", "--write", rc=1)
+        self.assertIn("ERROR", out)
+        self.assertIn("refusing --set canon_status.child", out)
+        self.assertIn("--promote", out)
+        self.assertEqual(path.read_text(encoding="utf-8"), before)
+
+    def test_increment_refuses_reserved_keys(self):
+        """--increment reached the generic writer with no guard at all.
+
+        `--increment asOfSession` bumped the session field straight past
+        the shape check that --session exists to enforce.
+        """
+        path = self.note("Sessions/S02.md", SESSION_INDEX)
+        before = path.read_text(encoding="utf-8")
+        for key, hint in (("asOfSession", "--session"),
+                          ("lastUpdated", "--date"),
+                          ("canon_status", "--promote")):
+            out = self.run_script("Sessions/S02.md", "--increment", key,
+                                  "--write", rc=1)
+            self.assertIn("ERROR", out)
+            self.assertIn(f"refusing --increment {key}", out)
             self.assertIn(hint, out)
             self.assertEqual(path.read_text(encoding="utf-8"), before)
 

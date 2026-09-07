@@ -77,8 +77,8 @@ already satisfied:
 - **GM-only heading vocabulary matches the canonical single
   heading**, **bold-wrapped or bold-paragraph GM-only content**,
   and **callout-only-marked content** — run
-  `vault_check.py gm-leak` (see `shared/vault-access.md`) and
-  read every row against the vault's
+  `vault_check.py <vault> gm-leak` (see `shared/vault-access.md`)
+  and read every row against the vault's
   `_meta/vault-config.md` `exclude_sections` list. Heading rows
   (a bold-wrapped excluded heading, or a published heading whose
   title matches an `exclude_sections` entry or Keeper keyword)
@@ -195,8 +195,9 @@ Apply all confirmed changes in this order:
    appending under an existing one otherwise), demoting the
    moved heading and any of its own sub-headings by the amount
    needed to sit one level below `## GM Notes`. For Session
-   Wrap-Up files, run `vault_check.py wrapup --fix` instead — it
-   does the same re-nest plus the `<!-- gm-only -->` fence in one
+   Wrap-Up files, run `vault_check.py <vault> wrapup --fix`
+   instead — it does the same re-nest plus the
+   `<!-- gm-only -->` fence in one
    pass, tailored to that file type. It also writes more than the
    re-nest: the frontmatter backfills and the recap/decorated
    heading renames from the 1.9.5 entry. Run it **without**

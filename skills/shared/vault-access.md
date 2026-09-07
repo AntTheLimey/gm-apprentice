@@ -83,11 +83,13 @@ after session N — the incremental-audit scope),
 the sanctioned predicate vocabulary), `sessions` (each
 session index's plan/play-notes/wrap-up document chain,
 declared vs. derived status), `gm-leak [--folder SUB]`
-(publish-safety scan of every publishable file's body —
-session plans, play notes and `_meta/` pages are skipped as
-never-published; `publish: none` pages are skipped and
-`publish: stub` pages are scanned only over the sections they
-ship: ERROR
+(publish-safety scan of every publishable file's body — the
+skip is by frontmatter, not by path: a `type:` of
+`session-plan`, `session-play-notes`, `plan` or `meta` is
+skipped as never-published, so an `_meta/` page carrying some
+other type is still scanned; `publish: none` pages are
+skipped and `publish: stub` pages are scanned only over the
+sections they ship: ERROR
 for an orphan `<!-- /gm-only -->` closer — everything above it
 publishes — or a bold-wrapped excluded heading like `###
 **GM Notes**`; WARNING for an unclosed opener or a published
@@ -154,8 +156,11 @@ either can be given alone. SESSION is written verbatim — a
 label (`"Chapter 4, Session 9"`) or a bare number — and a file
 already using the other shape is refused unless
 `--force-shape`. It also takes `--set KEY=VALUE` (repeatable;
-any other top-level or one-level dotted field), `--increment
-KEY` (repeatable; +1 on an integer counter), `--promote`
+any other top-level or one-level dotted field — the fields
+with their own flags below are refused, dotted forms
+included), `--increment
+KEY` (repeatable; +1 on an integer counter, and refused on
+those same fields), `--promote`
 (canon_status DRAFT/absent → AUTHORITATIVE; STUB and
 SUPERSEDED are refused), `--reconciled YYYY-MM-DD`, and
 `--supersede-by "[[Winner]]"` (canon_status → SUPERSEDED plus

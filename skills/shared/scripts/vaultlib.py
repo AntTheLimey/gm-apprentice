@@ -145,6 +145,19 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
     return frontmatter
 
 
+def entity_type(fm: dict[str, Any] | None) -> str:
+    """A file's `type` as a string, or "" when it has no usable one.
+
+    `extract_frontmatter` hands back `[]` for a bare `type:` line and a
+    list for `type: [a, b]`, so the raw value is not always hashable.
+    Every `type in SOME_SET` test would raise `TypeError` on such a file
+    and take the whole run down; a malformed `type` is ordinary bad-vault
+    input, so it reduces to "" and simply matches nothing.
+    """
+    value = (fm or {}).get("type")
+    return value if isinstance(value, str) else ""
+
+
 def raw_frontmatter(text: str) -> str:
     """The inner YAML text of the frontmatter block, or "" when absent."""
     m = FRONTMATTER_RE.match(text)
@@ -427,14 +440,15 @@ def yaml_value_for_cli(raw: str) -> str:
 
     A shell round-trip loses YAML's types, so the shape has to be
     recovered here: `null`/`~`/empty write the null literal, booleans and
-    integers stay bare, an already-quoted argument is re-quoted through
-    `yaml_scalar`, and everything else — wikilinks and prose labels most
-    of all — is double-quoted, because an unquoted `[[Link]]` is a flow
-    sequence to every YAML reader and a comma turns a label into two.
+    integers stay bare, an already-quoted argument keeps its quotes —
+    `'"9"'` asked for the string `"9"`, not the integer 9 — and
+    everything else — wikilinks and prose labels most of all — is
+    double-quoted, because an unquoted `[[Link]]` is a flow sequence to
+    every YAML reader and a comma turns a label into two.
     """
     text = raw.strip()
     if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        return yaml_scalar(unquote(text))
+        return yaml_scalar(unquote(text), quoted_int=True)
     low = text.casefold()
     if low in ("null", "~", ""):
         return "null"

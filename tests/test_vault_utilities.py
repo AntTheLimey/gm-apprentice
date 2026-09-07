@@ -296,6 +296,40 @@ check("session_context: the chapter's own wrap-up outranks an unfiled one",
        "unfiled wrap-up carrying no chapter" in _ctx_pref],
       [True, False])
 
+# A malformed `type:` must not take the whole bundle down. The frontmatter
+# reader hands back `[]` for a bare `type:` and a list for `type: [a, b]`, and
+# the wrap-up filter tests membership of a frozenset — so an unguarded `in`
+# hashes the left operand and raises TypeError on the first such file, losing
+# every other file's context with it. A bad `type` is ordinary bad-vault input:
+# match nothing, walk past.
+_bad_type_vault = Path(tempfile.mkdtemp()) / "v"
+shutil.copytree(PREP_VAULT, _bad_type_vault)
+(_bad_type_vault / "ListType.md").write_text(
+    "---\ntype: [session_wrap, note]\nsession: 2\n---\n\n"
+    "# Malformed list type\n", encoding="utf-8")
+(_bad_type_vault / "BareType.md").write_text(
+    "---\ntype:\nsession: 2\n---\n\n# Malformed empty type\n",
+    encoding="utf-8")
+_ctx_bad_type = "\n".join(run("session_context.py", vault=_bad_type_vault))
+check("session_context: a list-valued type does not abort the bundle",
+      ["lighthouse keeper vanished" in _ctx_bad_type,
+       "Just played: session 2" in _ctx_bad_type,
+       "Malformed list type" in _ctx_bad_type],
+      [True, True, False])
+shutil.rmtree(_bad_type_vault.parent, ignore_errors=True)
+
+# The same shape must not take vault_check down either — its gm-leak, names,
+# read-aloud, sessions and wrapup checks all test `type` against a set.
+_bad_type_check = Path(tempfile.mkdtemp()) / "v"
+shutil.copytree(PREP_VAULT, _bad_type_check)
+(_bad_type_check / "ListType.md").write_text(
+    "---\ntype: [session_wrap, note]\nsession: 2\n---\n\n"
+    "# Malformed list type\n", encoding="utf-8")
+for _cmd in ("names", "gm-leak", "read-aloud", "sessions", "wrapup"):
+    check(f"vault_check {_cmd}: survives a list-valued type",
+          [bool(run("vault_check.py", _cmd, vault=_bad_type_check))], [True])
+shutil.rmtree(_bad_type_check.parent, ignore_errors=True)
+
 # --- vault_check.py changed ---
 
 check("changed --since lists session-touched entities",

@@ -83,6 +83,7 @@ from vaultlib import (  # noqa: F401
     active_pcs,
     delete_key,
     effective_exclude_sections,
+    entity_type,
     frontmatter_span,
     get_key,
     iter_body_lines,
@@ -264,7 +265,7 @@ def check_names(vault: Path, threshold: float) -> list[str]:
     for rel, text in vault_files(vault):
         fm = extract_frontmatter(text) or {}
         stem = Path(rel).stem
-        if fm.get("type") in STRUCTURAL_TYPES:
+        if entity_type(fm) in STRUCTURAL_TYPES:
             continue
         if STRUCTURAL_NAME_RE.search(stem) and STRUCTURAL_DOC_RE.search(stem):
             continue
@@ -549,7 +550,7 @@ def check_read_aloud(vault: Path) -> list[str]:
     rows: list[str] = []
     for rel, text in vault_files(vault):
         fm = extract_frontmatter(text) or {}
-        if fm.get("type") not in READ_ALOUD_SCAN_TYPES:
+        if entity_type(fm) not in READ_ALOUD_SCAN_TYPES:
             continue
         for lineno, line in iter_body_lines(text):
             stripped = line.lstrip()
@@ -701,7 +702,7 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
     key = normalize(stem)
     candidates: list[tuple[str, dict]] = []
     for rel, _text, fm in files:
-        if fm.get("type") not in types:
+        if entity_type(fm) not in types:
             continue
         link = wikilink_target(fm.get("session"))
         target = link_target(link) if link else ""
@@ -979,7 +980,7 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
     rows: list[str] = []
     for rel, text in vault_files(vault, folder):
         fm = extract_frontmatter(text) or {}
-        if fm.get("type") in GM_LEAK_SKIP_TYPES:
+        if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
         if publish_mode(fm) == "none":
             continue
@@ -2119,7 +2120,7 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
     rows: list[str] = []
     matched = False
     for rel, _text, fm in entries:
-        if fm.get("type") not in WRAP_TYPES:
+        if entity_type(fm) not in WRAP_TYPES:
             continue
         if file is not None and rel != file:
             continue

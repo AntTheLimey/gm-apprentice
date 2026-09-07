@@ -42,12 +42,15 @@ Actions
                 inside the parent's block when it is missing. VALUE is
                 typed the way YAML would: `null`/`true`/`12` stay bare,
                 everything else — wikilinks and prose labels most of
-                all — is double-quoted. Repeatable. `canon_status`,
-                `asOfSession` and `lastUpdated` are refused here; they
-                have their own flags, which carry the guards.
+                all — is double-quoted. Repeatable. The fields with
+                their own flags — `canon_status`, `superseded_by`,
+                `asOfSession`, `lastUpdated`, `reconciled` — are
+                refused here, dotted forms included, because those
+                flags carry the guards.
 --increment KEY Add one to an integer field (absent counts as 0), for
                 counters like `sessions_played`. Writes bare. A
-                non-integer value is an error, not a reset.
+                non-integer value is an error, not a reset, and the
+                fields with their own flags are refused here too.
 --promote       `canon_status` DRAFT or absent -> AUTHORITATIVE, in
                 whatever case the file writes it. STUB and SUPERSEDED
                 are refused: a stub needs content first, and a
@@ -129,12 +132,19 @@ from vaultlib import (  # noqa: E402,F401 — YAML_LINE_RE re-exported
 # own.
 LEGACY_KEYS = ("source_confidence", "confidence")
 
-# Fields with a dedicated flag, because each carries a guard --set has
-# no way to apply (shape checking, status transitions, date validation).
-RESERVED_SET_KEYS = {
+# Fields with a dedicated flag, because each carries a guard the generic
+# writers have no way to apply (shape checking, status transitions, date
+# validation). Both generic paths consult this: --set on the *top-level*
+# component of its key, so `canon_status.child` cannot smuggle a mapping
+# in under a protected name, and --increment on the whole key, so
+# `--increment asOfSession` cannot walk a session label past its shape
+# rules.
+RESERVED_KEYS = {
     "canon_status": "use --promote or --supersede-by",
+    "superseded_by": "use --supersede-by",
     "asOfSession": "use --session",
     "lastUpdated": "use --date",
+    "reconciled": "use --reconciled",
 }
 
 KEY_RE = re.compile(r"^[A-Za-z_][\w-]*$")
@@ -268,10 +278,10 @@ def _plan_set(fm: list[str], key: str, value: str,
               eol: str) -> tuple[str, bool]:
     """One --set write. Returns (action text, error)."""
     parent, dot, child = key.partition(".")
+    hint = RESERVED_KEYS.get(parent)
+    if hint:
+        return f"refusing --set {key} — {hint}", True
     if not dot:
-        hint = RESERVED_SET_KEYS.get(key)
-        if hint:
-            return f"refusing --set {key} — {hint}", True
         return set_key(fm, key, yaml_value_for_cli(value), eol), False
     try:
         return set_nested_key(fm, parent, child, yaml_value_for_cli(value),
@@ -287,6 +297,9 @@ def _plan_set(fm: list[str], key: str, value: str,
 def _plan_increment(fm: list[str], key: str,
                     eol: str) -> tuple[str, bool]:
     """One --increment write. Returns (action text, error)."""
+    hint = RESERVED_KEYS.get(key)
+    if hint:
+        return f"refusing --increment {key} — {hint}", True
     raw = get_key(fm, key)
     text = scalar_value(raw) if raw is not None else ""
     if text and not re.fullmatch(r"-?\d+", text):

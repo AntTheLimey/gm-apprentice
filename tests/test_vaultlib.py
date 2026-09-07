@@ -251,10 +251,42 @@ class YamlValueForCliTests(unittest.TestCase):
             "[[Session 07 - X]]": '"[[Session 07 - X]]"',
             '"already"': '"already"',
             "Chapter 4, Session 9": '"Chapter 4, Session 9"',
+            # An explicitly quoted integer asked for the STRING "9".
+            # Unquoting it and re-typing it lost the quotes and changed
+            # the field's YAML type behind the caller's back.
+            '"9"': '"9"',
+            "'9'": '"9"',
         }
         for raw, want in cases.items():
             with self.subTest(raw=raw):
                 self.assertEqual(vl.yaml_value_for_cli(raw), want)
+
+    def test_bare_integer_stays_bare(self):
+        """The quoted-int fix must not spread to unquoted arguments."""
+        self.assertEqual(vl.yaml_value_for_cli("9"), "9")
+        self.assertEqual(vl.yaml_value_for_cli("-9"), "-9")
+
+
+class EntityTypeTests(unittest.TestCase):
+    """A malformed `type:` is bad-vault input, not a crash.
+
+    `extract_frontmatter` yields `[]` for a bare `type:` and a list for
+    `type: [a, b]`, so every `type in SOME_SET` test would hash an
+    unhashable value and take the whole run down.
+    """
+
+    def test_string_type_passes_through(self):
+        self.assertEqual(vl.entity_type({"type": "npc"}), "npc")
+
+    def test_unusable_types_reduce_to_empty(self):
+        for fm in ({"type": []}, {"type": ["a", "b"]}, {"type": None},
+                   {}, None):
+            with self.subTest(fm=fm):
+                self.assertEqual(vl.entity_type(fm), "")
+
+    def test_result_is_always_hashable(self):
+        self.assertNotIn(vl.entity_type({"type": ["session_wrap", "note"]}),
+                         vl.WRAP_UP_TYPES)
 
 
 SCAN_DOC = """---

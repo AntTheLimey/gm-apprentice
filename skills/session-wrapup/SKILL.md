@@ -363,8 +363,10 @@ locations, and NPC relationships.
 **Validation loop:** After writing entity files, run the
 bundled `vault_check.py frontmatter --folder <dir>` on the
 folders you touched (see `shared/vault-access.md`), plus
-`vault_check.py relationships`, `vault_check.py pc-body` on the
-PCs refreshed in Step 3c, and `vault_check.py wrapup --file
+`vault_check.py relationships`, `vault_check.py pc-body
+--folder Characters/PCs` (it has no per-file flag — read only
+the rows for the PCs refreshed in Step 3c), and
+`vault_check.py wrapup --file
 <wrap-up>` on the file written in this session — fix every ERROR
 before presenting receipts. Deterministic, one call each — do not
 re-read files to self-check instead.

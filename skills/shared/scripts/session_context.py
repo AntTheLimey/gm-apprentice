@@ -37,7 +37,7 @@ from pathlib import Path
 from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
 from vaultlib import (PC_INACTIVE_STATUS, SKIP_DIRS,  # noqa: F401
-                      WRAP_UP_TYPES, body_of, section)
+                      WRAP_UP_TYPES, body_of, entity_type, section)
 from vaultlib import vault_files as _vault_files
 
 
@@ -229,7 +229,7 @@ def main() -> int:
 
     wrap = prefer_chapter(
         [(rel, text, fm) for rel, text, fm in files
-         if fm.get("type") in WRAP_UP_TYPES
+         if entity_type(fm) in WRAP_UP_TYPES
          and parse_session_number(fm.get("session")) == current])
     if wrap is None:
         # Fallback: filename convention Chapter_CC_Session_NN_Wrap_Up.md
