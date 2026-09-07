@@ -226,6 +226,136 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
+class FlatVaultTests(unittest.TestCase):
+    """C2: a flat vault — no `Chapters/` folder, no `chapter:` link on
+    its sessions/scenes — must not silently drop them. They surface in
+    Stubs instead, and the round trip against `check_index` must hold."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-flat-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Sessions/Session_01.md",
+              "---\ntype: session\nsession_number: 1\nstatus: played\n"
+              "---\n\n# Session 01\n\nThe party met at the tavern.\n")
+        write(self.vault, "Sessions/Scene_01.md",
+              "---\ntype: scene\nstatus: ready\n---\n\n# Scene 01\n\n"
+              "The tavern is crowded.\n")
+
+    def test_flat_sessions_surface_in_stubs(self):
+        entries, chapters = ib.collect(self.vault)
+        self.assertEqual(chapters, [])
+        session = next(e for e in entries if e.stem == "Session_01")
+        self.assertEqual(session.type, "session")
+        self.assertEqual(session.stub_needs, "chapter link")
+        scene = next(e for e in entries if e.stem == "Scene_01")
+        self.assertEqual(scene.type, "scene")
+        self.assertEqual(scene.stub_needs, "chapter link")
+
+    def test_flat_vault_roundtrips_with_vault_check(self):
+        result = run_cli(self.vault, "--write", "--date", TODAY)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        rows = vc.check_index(self.vault)
+        self.assertEqual(rows, [])
+
+
+class MatchedStubTests(unittest.TestCase):
+    """M12: a plan, chain doc, or Story companion that is otherwise
+    placed (a Plans entry, nested under its session, or nested under
+    its PC) but still carries `canon_status: STUB` must surface in
+    Stubs too, without being double-counted as an orphan."""
+
+    def setUp(self):
+        self.vault = copy_fixture(self)
+        plan = self.vault / "Chapters/Chapter 1 - Arrival/Planning/Arc_Shape.md"
+        plan.write_text(
+            plan.read_text(encoding="utf-8")
+                .replace("type: plan\n", "type: plan\ncanon_status: STUB\n"),
+            encoding="utf-8")
+        chain = (self.vault / "Chapters/Chapter 1 - Arrival/Sessions"
+                / "Session_01_Plan.md")
+        chain.write_text(
+            chain.read_text(encoding="utf-8").replace(
+                "type: session-plan\n",
+                "type: session-plan\ncanon_status: STUB\n"
+            ) + "\n## Needs\n- a scene list\n",
+            encoding="utf-8")
+        story = self.vault / "Characters/PCs/Ada_Story.md"
+        story.write_text(
+            story.read_text(encoding="utf-8")
+                .replace("canon_status: DRAFT", "canon_status: STUB"),
+            encoding="utf-8")
+
+    def test_stub_plan_reaches_stubs(self):
+        entries, _chapters = ib.collect(self.vault)
+        plan = next(e for e in entries if e.stem == "Arc_Shape")
+        self.assertEqual(plan.stub_needs, "unspecified")
+
+    def test_stub_chain_doc_still_nested_and_stubbed(self):
+        entries, chapters = ib.collect(self.vault)
+        session_01 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 01")
+        self.assertIn(("plan", "Session_01_Plan"), session_01["chain"])
+        stub = next(e for e in entries if e.stem == "Session_01_Plan")
+        self.assertTrue(stub.already_placed)
+        self.assertEqual(stub.stub_needs, "a scene list")
+        chain_orphan = sum(1 for e in entries if e.type in ib.CHAIN_TYPES
+                           and not e.already_placed)
+        self.assertEqual(chain_orphan, 0)  # still matched, not an orphan
+
+    def test_stub_story_still_nested_and_stubbed(self):
+        entries, _chapters = ib.collect(self.vault)
+        ada = next(e for e in entries if e.stem == "Ada")
+        self.assertEqual(ada.story_stem, "Ada_Story")
+        stub = next(e for e in entries if e.stem == "Ada_Story")
+        self.assertTrue(stub.already_placed)
+        self.assertEqual(stub.stub_needs, "unspecified")
+
+    def test_rendered_stubs_section_includes_all_three(self):
+        text = ib.render(self.vault, today=TODAY, previous=None)
+        block = text.split("## Stubs (Needs Attention)", 1)[1]
+        self.assertIn(
+            "- [[Arc_Shape]] — type: plan, needs: unspecified", block)
+        self.assertIn(
+            "- [[Session_01_Plan]] — type: session-plan, "
+            "needs: a scene list", block)
+        self.assertIn(
+            "- [[Ada_Story]] — type: character-story, needs: unspecified",
+            block)
+
+
+class DocumentsTargetsFallbackTests(unittest.TestCase):
+    """M15: a chain doc with no parseable `session:` field matches its
+    session via the session's own `documents:` block (`_documents_targets`)
+    instead — not exercised by the main fixture, where every chain doc
+    matches by session number."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-docs-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Chapters/Chapter 1/Chapter 1.md",
+              "---\ntype: chapter\n---\n\n# Chapter 1\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 01.md",
+              "---\ntype: session\nsession_number: 1\n"
+              "chapter: \"[[Chapter 1]]\"\n"
+              "documents:\n  plan: \"[[Session One Notes]]\"\n"
+              "---\n\n# Session 01\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session One Notes.md",
+              "---\ntype: session-plan\nchapter: \"[[Chapter 1]]\"\n"
+              "---\n\n# Session One Notes\n")
+
+    def test_matched_by_documents_target_not_orphaned(self):
+        entries, chapters = ib.collect(self.vault)
+        session_01 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 01")
+        self.assertEqual(session_01["chain"], [("plan", "Session One Notes")])
+
+        all_stems = {e.stem for e in entries}
+        self.assertNotIn("Session One Notes", all_stems)  # nested, not orphaned
+        chain_orphan = sum(1 for e in entries if e.type in ib.CHAIN_TYPES
+                           and not e.already_placed)
+        self.assertEqual(chain_orphan, 0)
+
+
 class DryRunTests(unittest.TestCase):
     def test_dry_run_writes_nothing(self):
         before = (FIX / "_meta" / "index.md").read_bytes()

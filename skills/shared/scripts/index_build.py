@@ -93,6 +93,12 @@ CHAIN_ORDER = ["plan", "play notes", "wrap-up"]
 # under a session/PC when matched, or fall to Stubs when they don't.
 NARRATIVE_ADJACENT_TYPES: set[str] = CHAIN_TYPES | {"plan", "character-story"}
 
+# Same exclusion, extended to chapter/session/scene: those are ordinarily
+# folded into `chapters`, never into `entries` — but a flat-vault session
+# or scene that resolves to no chapter still becomes an `Entry` so it can
+# surface in Stubs (#C2), and it must not then double as a domain entity.
+NON_ENTITY_TYPES: set[str] = NARRATIVE_ADJACENT_TYPES | NARRATIVE_TYPES
+
 # Meta/overview documents are not index entries — the template lists
 # none of them. (Session-chain docs, Story companions, and plans used to
 # be skipped outright too; they now get placed instead — see above.)
@@ -116,6 +122,11 @@ class Entry:
     # Set only on a `pc` entry that has a matching `*_Story.md` companion;
     # `render` nests it directly under the PC's own line.
     story_stem: str | None = None
+    # True only for a chain-doc/Story `Entry` created purely to surface a
+    # `canon_status: STUB` flag on a document that *is* otherwise placed
+    # (nested under its session or PC) — so counting code doesn't also
+    # treat it as an orphan (#M12).
+    already_placed: bool = False
 
 
 class SessionEntry(TypedDict):
@@ -248,14 +259,19 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
     its chapter file (alphabetically, sessions can sort earlier) still
     finds the chapter's own display stem and status. Sessions and scenes
     are attributed to a chapter by `chapter_key` equality; one that
-    resolves to no chapter at all is not counted anywhere.
+    resolves to no chapter at all (a flat vault, with no `Chapters/`
+    folder and no `chapter:` link) becomes a Stubs-section `Entry`
+    instead, needing "chapter link".
 
     Session-chain documents (session-plan, session-play-notes, any
     `WRAP_UP_TYPES` spelling) and `*_Story.md` companions are matched to
     their session/PC in a second pass, once every session and PC entry
     is known; an unmatched one becomes a Stubs-section `Entry` instead
     of being dropped, so `check_index`'s "every file is referenced"
-    requirement still holds.
+    requirement still holds. A matched one that still carries
+    `canon_status: STUB` gets an additional, `already_placed` `Entry` so
+    that flag also reaches Stubs, without being double-counted as an
+    orphan.
     """
     files = _iter_content(vault)
     chapters: dict[str, ChapterRecord] = {}
@@ -271,19 +287,24 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
 
     entries: list[Entry] = []
     session_files: list[_SessionFile] = []
-    chain_docs: list[tuple[str, str, dict[str, object], str]] = []
-    story_files: list[tuple[str, str]] = []
+    chain_docs: list[tuple[str, str, dict[str, object], str, str]] = []
+    story_files: list[tuple[str, str, dict[str, object], str]] = []
 
     for rel, text, fm, stem in files:
         ftype = entity_type(fm)
         if ftype == "chapter":
             continue
         if stem.endswith("_Story"):
-            story_files.append((rel, stem))
+            story_files.append((rel, stem, fm, text))
             continue
         if ftype in NARRATIVE_TYPES:  # session, scene
             session_key = chapter_key(rel, fm)
             if session_key is None:
+                # A flat vault (no Chapters/ folder, no `chapter:` link) has
+                # no chapter to nest this under. Not silently dropped: it
+                # surfaces in Stubs, same as an orphaned chain doc (#C2).
+                entries.append(Entry(rel=rel, stem=stem, type=ftype,
+                                     descriptor="", stub_needs="chapter link"))
                 continue
             record = chapters.setdefault(session_key, _new_chapter_record())
             status_raw = fm.get("status")
@@ -307,13 +328,14 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
                 record["all_scenes"].append((stem, status))
             continue
         if ftype in CHAIN_TYPES:
-            chain_docs.append((rel, stem, fm, ftype))
+            chain_docs.append((rel, stem, fm, ftype, text))
             continue
         if ftype == "plan":
             plan_type = fm.get("plan_type")
             label = plan_type if isinstance(plan_type, str) and plan_type else "plan"
             entries.append(Entry(rel=rel, stem=stem, type="plan",
-                                 descriptor=label, stub_needs=None))
+                                 descriptor=label,
+                                 stub_needs=_stub_needs(fm, text, ftype)))
             continue
         if ftype in SKIP_TYPES:
             continue
@@ -327,7 +349,7 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
         (sf.chapter_key, sf.number): sf for sf in session_files
         if sf.number is not None}
 
-    for rel, stem, fm, ftype in chain_docs:
+    for rel, stem, fm, ftype, text in chain_docs:
         num = parse_session_number(fm.get("session"))
         matched: _SessionFile | None = None
         if num is not None:
@@ -342,15 +364,30 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
                     break
         if matched is not None:
             matched.entry["chain"].append((_chain_label(ftype), stem))
+            # Placed, but a canon_status: STUB chain doc still needs
+            # attention — surface that in Stubs too (#M12).
+            stub_needs = _stub_needs(fm, text, ftype)
+            if stub_needs is not None:
+                entries.append(Entry(rel=rel, stem=stem, type=ftype,
+                                     descriptor="", stub_needs=stub_needs,
+                                     already_placed=True))
         else:
             entries.append(Entry(rel=rel, stem=stem, type=ftype,
                                  descriptor="", stub_needs="session link"))
 
     pc_index = {e.stem.casefold(): e for e in entries if e.type == "pc"}
-    for rel, stem in story_files:
+    for rel, stem, fm, text in story_files:
         pc_entry = pc_index.get(stem[: -len("_Story")].casefold())
         if pc_entry is not None:
             pc_entry.story_stem = stem
+            # Same as above: placed under its PC, but still surface a
+            # canon_status: STUB flag in Stubs (#M12).
+            stub_needs = _stub_needs(fm, text, "character-story")
+            if stub_needs is not None:
+                entries.append(Entry(rel=rel, stem=stem,
+                                     type="character-story", descriptor="",
+                                     stub_needs=stub_needs,
+                                     already_placed=True))
         else:
             entries.append(Entry(rel=rel, stem=stem, type="character-story",
                                  descriptor="", stub_needs="PC page"))
@@ -365,10 +402,11 @@ def _counts(entries: list[Entry],
            chapters: list[ChapterRecord]) -> tuple[int, int, int]:
     """(entity_count, narrative_count, stub_count)."""
     typed = sum(1 for e in entries
-               if e.type and e.type not in NARRATIVE_ADJACENT_TYPES)
+               if e.type and e.type not in NON_ENTITY_TYPES)
     chain_matched = sum(len(sess["chain"]) for c in chapters
                         for sess in c["all_sessions"])
-    chain_orphan = sum(1 for e in entries if e.type in CHAIN_TYPES)
+    chain_orphan = sum(1 for e in entries
+                      if e.type in CHAIN_TYPES and not e.already_placed)
     plans = sum(1 for e in entries if e.type == "plan")
     narrative = (len(chapters)
                 + sum(c["sessions"] for c in chapters)
@@ -403,7 +441,7 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
     entries, chapters = collect(vault)
     entity_count, narrative_count, stub_count = _counts(entries, chapters)
     typed_entries = [e for e in entries
-                     if e.type and e.type not in NARRATIVE_ADJACENT_TYPES]
+                     if e.type and e.type not in NON_ENTITY_TYPES]
     plan_entries = sorted((e for e in entries if e.type == "plan"),
                           key=lambda e: e.stem.casefold())
     stub_entries = [e for e in entries if e.stub_needs is not None]
