@@ -95,7 +95,8 @@ Thousands of words of preamble is a defect, not thoroughness.
 Scenes themselves are not word-capped — a scene runs as long as
 its situation, initiator, branches, and mechanical notes earn;
 cut bloat, not substance. Over ~1,200 words, sanity-check that
-the length is load-bearing. -->
+the length is load-bearing. `plan_check.py` measures these budgets
+(`preamble`, `recap`, `scene-length`). -->
 
 ## Previously On...
 

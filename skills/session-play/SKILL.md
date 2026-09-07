@@ -13,9 +13,12 @@ first invocation.
 Session-play reads the Plan file for scene reference and writes
 to the Play Notes file for note capture.
 
-**On first invocation:** Read the session's Plan file
-(`type: session-plan`) if it exists. This gives you the GM's
-intended scenes, NPCs, and hooks for quick reference during play.
+**On first invocation:** Run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
+--play` — the plan brief (intent, scene titles with type/objective/setup,
+NPC table, world state, contingency triggers, end objectives). Open the
+Plan file itself only when a scene needs its full text. Fallback: read
+the Plan (`type: session-plan`) directly.
 
 **Version check:** On first invocation run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
@@ -101,7 +104,7 @@ Route these requests directly — don't search, load the file.
 | Scene fell flat | `ttrpg-expert/active-play-management.md` §Mid-Session Adjustments |
 | Pacing / tension | `ttrpg-expert/active-play-management.md` §Pacing and Flow |
 | Improvisation help | `ttrpg-expert/active-play-management.md` §Improvisation |
-| Narrative plan | `Chapters/{chapter}/Planning/` — read the relevant plan entity (scene designs, arc structure, investigation flow, or timeline). Also check the midwife workspace, which is often the only place the design lives: resolve the adventure directory via `_midwife/index.md` (dirs are named per adventure, not per chapter) and read by path, not frontmatter — those files carry none. `timeline.md` and `npcs/` first; if the manifest leaves it ambiguous, ask rather than guess |
+| Narrative plan | `plans_index.py <vault> --chapter "<chapter>"` — Planning/ entities and the resolved midwife adventure with per-file summaries; `AMBIGUOUS` means ask, never guess |
 
 Read `ttrpg-expert/active-play-management.md` when the GM needs
 GM-craft advice (spotlight, pacing, improv, difficulty tuning)

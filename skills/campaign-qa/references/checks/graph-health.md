@@ -50,6 +50,12 @@ number. Fallback without python: build a basename → file-list
 index across the whole vault, then flag every bare `[[...]]`
 target whose basename maps to more than one file.
 
+**Index drift:** what `vault_check.py index` reports — files
+not referenced from `_meta/index.md`, and index entries whose
+target file no longer exists. The fix is `index_build.py
+<vault> --write`, never a hand edit to `_meta/index.md`.
+Fallback without python: `campaign-organizer/references/index-template.md`.
+
 **Mirrored edges (duplicates, not gaps):** Storage is
 single-direction (`shared/entity-schema.md`, "Relationship
 Types"): an asymmetric edge lives on one endpoint and its

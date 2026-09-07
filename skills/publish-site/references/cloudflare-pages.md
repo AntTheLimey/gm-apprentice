@@ -192,7 +192,8 @@ so the deploy is the **bare** `npx wrangler@4 pages deploy` — no `docs/`
 argument; passing it positionally conflicts with the config and errors.
 Only a site with no `wrangler.toml` (an older scaffold) uses the explicit
 `pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true`
-form instead.
+form instead. `gm-publish deploy` chooses the form for you — the explanation
+above is the fallback for running wrangler by hand.
 
 The `project create` step is a one-time setup per site. When it finishes,
 the deploy prints two URLs:
@@ -215,6 +216,9 @@ npx wrangler@4 pages deploy
 ```
 
 wrangler only uploads files that changed, so repeat deploys are fast.
+`gm-publish deploy --verify` runs this same build-then-deploy pair and
+also probes the live URL — the commands above are the fallback for
+running it by hand.
 
 ---
 
@@ -406,7 +410,8 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    > same bare `npx wrangler@4 pages deploy` used throughout this guide — no
    > `docs/` argument. The `wrangler.toml` (`pages_build_output_dir = "docs"`)
    > is what makes the bare form required; there is nothing inbox-specific
-   > about it.
+   > about it. `gm-publish deploy` chooses the form for you; the commands
+   > above are the fallback for running wrangler by hand.
 
 5. **Verify the endpoint** — with no session code set yet, a submit must be
    rejected:
