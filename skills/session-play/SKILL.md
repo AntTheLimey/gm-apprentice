@@ -91,7 +91,7 @@ Route these requests directly — don't search, load the file.
 
 | Need | Go to |
 |------|-------|
-| Rules dispute | `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
+| Rules dispute | `rules_lookup.py {system} "<term>"` first — one row, cited `file:line`, is the answer at the table. No python: `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
 | Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS — for sheet arithmetic disputes, run `gurps_check.py <sheet> defenses` or `damage` instead of hand-checking) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
 | Improvise NPC | `ttrpg-expert/npc-generation.md` §The 3-Line NPC (Quick Generation) |
 | Random encounter | `ttrpg-expert/random-generation.md` §Random Encounter Generation |

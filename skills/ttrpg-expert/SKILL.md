@@ -19,15 +19,20 @@ Match user intent → go directly to the file. Skip clarification.
   Full workflow from Step 0 (Campaign Context). Track budget.
 
 **"How much does [trait] cost?"** / **"rules for [mechanic]?"**
-→ GURPS/CoC: use routing tables below. Others: `systems/{system}/rules-reference.md`.
+→ Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/rules_lookup.py"
+  <system> "<term>"` first (`--kind trait|skill|spell|monster|feat|item|class|condition`
+  narrows; `--variant regency` for Regency CoC; `<system>` = `all` when the
+  system is unknown). Answer from the row and cite its `file:line`. Open the
+  file only when the row's notes aren't enough or the question is about a
+  rule rather than a record. No python: fall back to the routing tables below.
 
-**CoC skill lookup** → `systems/coc-7e/skills.md`
-**CoC creature** → `systems/coc-7e/creatures.md`
-**CoC weapon/equipment** → `systems/coc-7e/equipment-weapons.md`
+**CoC skill lookup** → lookup first: `rules_lookup.py coc-7e "<term>" --kind skill`. Full read: `systems/coc-7e/skills.md`
+**CoC creature** → lookup first: `rules_lookup.py coc-7e "<term>" --kind monster`. Full read: `systems/coc-7e/creatures.md`
+**CoC weapon/equipment** → lookup first: `rules_lookup.py coc-7e "<term>" --kind item`. Full read: `systems/coc-7e/equipment-weapons.md`
 **CoC armour** → `systems/coc-7e/equipment-armor.md`
 **CoC setting/location** → `systems/coc-7e/setting-lovecraft.md`
 **CoC magic/spells** → `systems/coc-7e/powers-magic.md`
-**CoC occupation** → `systems/coc-7e/occupations.md`
+**CoC occupation** → lookup first: `rules_lookup.py coc-7e "<term>" --kind class`. Full read: `systems/coc-7e/occupations.md`
 **CoC combat** → `systems/coc-7e/combat-reference.md`
 
 **Regency CoC skill** → `systems/coc-7e/skills.md` + `systems/coc-7e/variants/regency/skills.md`
@@ -46,23 +51,23 @@ Match user intent → go directly to the file. Skip clarification.
 **FitD entanglement/heat** → `systems/fitd/entanglements.md`
 **FitD magnitude** → `systems/fitd/magnitude.md`
 
-**D&D monster** → `systems/dnd-5e-2024/monsters.md` (index)
+**D&D monster** → lookup first: `rules_lookup.py dnd-5e-2024 "<term>" --kind monster`. Full read: `systems/dnd-5e-2024/monsters.md` (index)
   → detail: `monsters-cr0-1.md`, `monsters-cr2-4.md`, `monsters-cr5-10.md`, `monsters-cr11-16.md`, `monsters-cr17-plus.md`
 **D&D animal/beast** → `systems/dnd-5e-2024/animals.md`
-**D&D spell** → `systems/dnd-5e-2024/spells.md` (index)
+**D&D spell** → lookup first: `rules_lookup.py dnd-5e-2024 "<term>" --kind spell`. Full read: `systems/dnd-5e-2024/spells.md` (index)
   → detail: `spells-cantrips.md`, `spells-1.md` through `spells-9.md`
-**D&D magic item** → `systems/dnd-5e-2024/magic-items.md` (index)
+**D&D magic item** → lookup first: `rules_lookup.py dnd-5e-2024 "<term>" --kind item`. Full read: `systems/dnd-5e-2024/magic-items.md` (index)
   → detail by category: `magic-items-armor.md`, `magic-items-weapons.md`, etc.
 **D&D equipment/weapon/armor** → `systems/dnd-5e-2024/equipment.md`
 **D&D class** → `systems/dnd-5e-2024/classes.md`
-**D&D feat** → `systems/dnd-5e-2024/feats.md`
+**D&D feat** → lookup first: `rules_lookup.py dnd-5e-2024 "<term>" --kind feat`. Full read: `systems/dnd-5e-2024/feats.md`
 **D&D condition/rule** → `systems/dnd-5e-2024/conditions-rules.md`
 
-**PF2e monster** → `systems/pf2e/monsters.md` (index)
+**PF2e monster** → lookup first: `rules_lookup.py pf2e "<term>" --kind monster`. Full read: `systems/pf2e/monsters.md` (index)
   → detail: `monsters-level-neg1-1.md`, `monsters-level-2-4.md`, `monsters-level-5-7.md`, `monsters-level-8-10.md`, `monsters-level-11-16.md`, `monsters-level-17-plus.md`
-**PF2e spell** → `systems/pf2e/spells.md` (index)
+**PF2e spell** → lookup first: `rules_lookup.py pf2e "<term>" --kind spell`. Full read: `systems/pf2e/spells.md` (index)
   → detail: `spells-cantrips.md`, `spells-rank-1.md` through `spells-rank-10.md`
-**PF2e feat** → `systems/pf2e/feats.md` (index)
+**PF2e feat** → lookup first: `rules_lookup.py pf2e "<term>" --kind feat`. Full read: `systems/pf2e/feats.md` (index)
   → detail by category: `feats-general-skill.md`, `feats-ancestry.md`, `feats-class.md`, `feats-archetype.md`
 **PF2e class** → `systems/pf2e/classes.md`
 **PF2e ancestry/heritage/background** → `systems/pf2e/ancestries.md`
