@@ -16,10 +16,7 @@ const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { resolveBackendFlags } = require('./backend-flags');
-
-const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
-const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
-const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
+const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
@@ -230,72 +227,52 @@ function build(options = {}) {
 
   pairStoryFiles(pages, config.vaultPath);
 
-  // Exclude DRAFT entities when configured (after pairing so story files resolve)
-  if (publishConfig.exclude_drafts) {
-    const { getCanonStatus } = require('./templates/base');
-    const before = pages.length;
-    pages = pages.filter(p => getCanonStatus(p.frontmatter) !== 'DRAFT');
-    const excluded = before - pages.length;
-    if (excluded > 0) console.log(`Excluded ${excluded} DRAFT entity/entities`);
-  }
-
-  // Auto-exclude prep/draft files based on frontmatter (player mode only)
-  function isAutoExcluded(fm) {
-    const status = String(fm.status || '').toLowerCase();
-    const stage = String(fm.stage || '').toLowerCase();
-    const source = String(fm.source || '').toLowerCase();
-    return AUTO_EXCLUDE_STATUS.has(status)
-      || AUTO_EXCLUDE_STAGE.has(stage)
-      || AUTO_EXCLUDE_SOURCE.has(source);
-  }
-
-  const autoExcludedPages = [];
-  if (publishConfig.mode !== 'full') {
-    const keptPages = [];
-    for (const page of pages) {
-      if (isAutoExcluded(page.frontmatter)) {
-        autoExcludedPages.push(page);
-      } else {
-        keptPages.push(page);
-      }
-    }
-    pages = keptPages;
-    if (autoExcludedPages.length > 0) {
-      console.log(`Auto-excluded ${autoExcludedPages.length} prep/draft file(s)`);
-    }
-
-    // If manifest explicitly lists an auto-excluded file, re-add it
-    if (manifest) {
-      const allowSet = new Set(manifest.publishing);
-      const reincluded = autoExcludedPages.filter(page => allowSet.has(vaultRelPathOf(page)));
-      if (reincluded.length > 0) {
-        pages = pages.concat(reincluded);
-        console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);
-      }
-    }
-  }
-
-  // Filter pages by manifest if present
-  if (manifest && publishConfig.mode === 'player') {
-    const allowSet = new Set(manifest.publishing);
-    const beforeCount = pages.length;
-    pages = pages.filter(page => allowSet.has(vaultRelPathOf(page)));
-    console.log(`Manifest filter: ${beforeCount} → ${pages.length} pages`);
-  }
-
-  // `publish: false` — the GM said never publish this file. Honoured in EVERY
-  // mode, unlike the auto-exclusions above: those are heuristics about draft
-  // state, this is an explicit instruction, and a flag named "never publish"
-  // that publishes under some setting is worse than no flag at all.
+  // One verdict per page, from the shared decision module — the same call
+  // `manifest diff`, `doctor --site` and `explain` make, so what those commands
+  // predict is exactly what the build does. Everything that is not published is
+  // dropped here, before the link map, so a link to a withheld page resolves to
+  // nothing and renders as plain text rather than as a broken href.
   //
-  // Dropped before the link map, so links to it resolve to nothing and render
-  // as plain text rather than as a broken href — the file still parses, it
-  // just never becomes a page.
-  const neverPublish = pages.filter(p => publishMode(p.frontmatter) === 'none');
+  // (Story companion files are already folded into their PC by pairStoryFiles
+  // above, and the DRAFT rule needs that pairing to have happened.)
+  const verdicts = new Map();
+  for (const page of pages) {
+    verdicts.set(page, decidePage(page, { rel: vaultRelPathOf(page), publishConfig, manifest }));
+  }
+  const withCode = (...codes) => pages.filter(p => codes.includes(verdicts.get(p).code));
+
+  const draftExcluded = withCode('DRAFT_EXCLUDED');
+  if (draftExcluded.length > 0) console.log(`Excluded ${draftExcluded.length} DRAFT entity/entities`);
+
+  const autoExcluded = withCode(
+    'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE', 'SCENE_CUT_SKIPPED');
+  if (autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
+
+  if (manifest && publishConfig.mode !== 'full') {
+    // A prep file the GM explicitly listed under Publishing: named here because
+    // "auto-excluded 6" followed by a site with 7 prep pages needs an explanation.
+    const reincluded = pages.filter(p => autoExcludeCode(p.frontmatter) && publishesPage(verdicts.get(p)));
+    if (reincluded.length > 0) {
+      console.log(`Manifest override: re-included ${reincluded.length} auto-excluded file(s)`);
+    }
+  }
+
+  const neverPublish = withCode('PUBLISH_FALSE', 'PUBLISH_NONE');
   if (neverPublish.length > 0) {
-    pages = pages.filter(p => publishMode(p.frontmatter) !== 'none');
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
   }
+
+  if (manifest && publishConfig.mode === 'player') {
+    // Pages the manifest allowlist is the only thing standing between and the site.
+    const reachedManifest = pages.filter(p => {
+      const code = verdicts.get(p).code;
+      return code === 'OK' || code === 'SUPERSEDED_NO_TARGET' || code.startsWith('MANIFEST_');
+    });
+    const kept = reachedManifest.filter(p => publishesPage(verdicts.get(p)));
+    console.log(`Manifest filter: ${reachedManifest.length} → ${kept.length} pages`);
+  }
+
+  pages = pages.filter(p => publishesPage(verdicts.get(p)));
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
