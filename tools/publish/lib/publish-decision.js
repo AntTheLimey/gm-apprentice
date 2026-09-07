@@ -13,6 +13,23 @@
 // `bucket` answers the GM's question (publish / exclude / you decide).
 // `publishesPage(verdict)` answers the build's, which is not the same question:
 // see the note on PUBLISHED_DECIDE_CODES.
+//
+// The evaluation order below is not arbitrary: it reproduces the order build.js
+// applied its four passes in, because the build's console breakdown ("Auto-excluded
+// N prep/draft file(s)", "Excluded N DRAFT entity/entities", "publish: false —
+// skipped N file(s)") attributes each dropped page to whichever pass caught it
+// first. A page carrying both `publish: false` and `status: planned` was counted as
+// auto-excluded, and still is. The order is:
+//
+//   directory checks → NO_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
+//   AUTO_EXCLUDED_* → SCENE_CUT_SKIPPED → manifest codes → PUBLISH_FALSE/NONE →
+//   SUPERSEDED_NO_TARGET → OK
+//
+// SUPERSEDED_NO_TARGET sits last, immediately before OK, and that placement is
+// load-bearing: it is the one `decide` the build still publishes, so putting it
+// ahead of any real exclusion would make a superseded page outrank the manifest
+// allowlist or an explicit `publish: false` and reach the site when the old build
+// dropped it.
 const { publishMode } = require('./processor');
 const { getCanonStatus } = require('./templates/base');
 
@@ -78,6 +95,17 @@ function indexOf(manifest) {
   return idx;
 }
 
+// The PC page a `<Name>_Story.md` file belongs to, or null. Mirrors the condition
+// pairStoryFiles splices on: same directory, stem minus the `_Story` suffix, and a
+// scanned page there whose type is `pc`. `pageIndex` is a Map of vault-relative
+// path to scanner page; without one there is nothing to resolve against and every
+// story file falls through to the normal chain.
+function storyCompanionPc(rel, pageIndex) {
+  if (!pageIndex || !/_Story\.md$/i.test(String(rel || ''))) return null;
+  const pc = pageIndex.get(String(rel).replace(/_Story\.md$/i, '.md'));
+  return pc && pc.frontmatter && pc.frontmatter.type === 'pc' ? pc : null;
+}
+
 /**
  * Classify one file.
  *
@@ -89,6 +117,9 @@ function indexOf(manifest) {
  * @param {object|null} options.manifest loadManifest() output, or null.
  * @param {boolean} [options.folderMapped=true] False for a file whose directory is
  *   absent from folderMap, which is why the scanner produced no page for it.
+ * @param {Map<string,object>} [options.pageIndex] Vault-relative path to scanner
+ *   page. Only needed to recognise a PC's story companion; omit it and story files
+ *   are classified as ordinary pages.
  * @returns {{bucket:'publish'|'exclude'|'decide', code:string, reason:string,
  *   outputPath:string|null}}
  */
@@ -111,17 +142,23 @@ function decidePage(page, options) {
     return verdict('decide', 'NO_TYPE', 'no `type:` in frontmatter');
   }
 
-  // `publish: false` is an instruction, not a heuristic — honoured in every mode,
-  // and never overridden by a manifest entry.
-  if (publishMode(frontmatter) === 'none') {
-    return frontmatter.publish === 'none'
-      ? verdict('exclude', 'PUBLISH_NONE', 'publish: none')
-      : verdict('exclude', 'PUBLISH_FALSE', 'publish: false');
+  // A PC's story companion has no page of its own: the scanner folds it into the
+  // PC (pairStoryFiles) and drops it from the page list, so the build never asks
+  // about it. Anything walking the raw vault does, and "does not publish" would be
+  // the wrong answer — the content is on the site, at the PC's URL.
+  const storyPc = storyCompanionPc(rel, opts.pageIndex);
+  if (storyPc) {
+    return verdict('publish', 'STORY_COMPANION',
+      `merged into ${storyPc.displayTitle || storyPc.title}'s page`);
   }
 
   const mode = publishConfig.mode || 'player';
   const index = manifest ? indexOf(manifest) : null;
   const listedForPublish = !!(index && index.publishing.has(rel));
+
+  if (publishConfig.exclude_drafts && getCanonStatus(frontmatter) === 'DRAFT') {
+    return verdict('exclude', 'DRAFT_EXCLUDED', 'canon_status: DRAFT and exclude_drafts is on');
+  }
 
   // The prep-state heuristics. Off in full mode (the GM's own copy shows
   // everything) and overridden by an explicit manifest Publishing entry.
@@ -133,21 +170,27 @@ function decidePage(page, options) {
     }
   }
 
-  if (publishConfig.exclude_drafts && getCanonStatus(frontmatter) === 'DRAFT') {
-    return verdict('exclude', 'DRAFT_EXCLUDED', 'canon_status: DRAFT and exclude_drafts is on');
-  }
-
-  // Ambiguous, not withheld: the page publishes, and the GM is asked which entity
-  // replaced it so the link map can redirect.
-  if (getCanonStatus(frontmatter) === 'SUPERSEDED' && !frontmatter.superseded_by) {
-    return verdict('decide', 'SUPERSEDED_NO_TARGET', 'canon_status: SUPERSEDED with no superseded_by');
-  }
-
-  if (manifest && mode === 'player') {
-    if (listedForPublish) return verdict('publish', 'OK', 'manifest: Publishing');
+  // The manifest is an allowlist in player mode only. A listed page falls through
+  // rather than returning: `publish: false` still has to be honoured below.
+  if (manifest && mode === 'player' && !listedForPublish) {
     if (index.excluded.has(rel)) return verdict('exclude', 'MANIFEST_EXCLUDED', 'manifest: Excluded');
     if (index.needsDecision.has(rel)) return verdict('decide', 'MANIFEST_NEEDS_DECISION', 'manifest: Needs Decision');
     return verdict('decide', 'MANIFEST_UNLISTED', 'in no manifest section');
+  }
+
+  // `publish: false` is an instruction, not a heuristic — honoured in every mode,
+  // and never overridden by a manifest entry.
+  if (publishMode(frontmatter) === 'none') {
+    return frontmatter.publish === 'none'
+      ? verdict('exclude', 'PUBLISH_NONE', 'publish: none')
+      : verdict('exclude', 'PUBLISH_FALSE', 'publish: false');
+  }
+
+  // Ambiguous, not withheld: the page publishes, and the GM is asked which entity
+  // replaced it so the link map can redirect. Last, so it can never outrank a real
+  // exclusion.
+  if (getCanonStatus(frontmatter) === 'SUPERSEDED' && !frontmatter.superseded_by) {
+    return verdict('decide', 'SUPERSEDED_NO_TARGET', 'canon_status: SUPERSEDED with no superseded_by');
   }
 
   return verdict('publish', 'OK', listedForPublish ? 'manifest: Publishing' : `mode: ${mode}`);
@@ -165,6 +208,7 @@ function publishesPage(verdict) {
 
 module.exports = {
   decidePage,
+  storyCompanionPc,
   publishesPage,
   autoExcludeCode,
   ALWAYS_EXCLUDE_DIRS,

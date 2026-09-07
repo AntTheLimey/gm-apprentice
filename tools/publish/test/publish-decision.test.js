@@ -256,3 +256,105 @@ describe('publish-decision: over the fixture vaults', () => {
     assert.strictEqual(verdicts['Characters/NPCs/New Name.md'].bucket, 'publish');
   });
 });
+
+describe('publish-decision: evaluation order reproduces the build log', () => {
+  // build.js attributes each dropped page to the pass that caught it FIRST, and
+  // that attribution is what the console breakdown counts. A page carrying two
+  // reasons must land in the same bucket it always did.
+  it('a page that is both publish: false and status: planned is auto-excluded', () => {
+    const v = decide({ type: 'session', status: 'planned', publish: false });
+    assert.strictEqual(v.code, 'AUTO_EXCLUDED_STATUS');
+  });
+
+  it('a DRAFT page that is also publish: false is a DRAFT exclusion', () => {
+    const v = decide({ type: 'npc', canon_status: 'DRAFT', publish: false }, {
+      publishConfig: { mode: 'player', exclude_drafts: true },
+    });
+    assert.strictEqual(v.code, 'DRAFT_EXCLUDED');
+  });
+
+  it('a DRAFT page that is also status: planned is a DRAFT exclusion', () => {
+    const v = decide({ type: 'session', status: 'planned', canon_status: 'DRAFT' }, {
+      publishConfig: { mode: 'player', exclude_drafts: true },
+    });
+    assert.strictEqual(v.code, 'DRAFT_EXCLUDED');
+  });
+
+  it('the manifest allowlist outranks publish: false, as the build passes did', () => {
+    const v = decide({ type: 'npc', publish: false }, {
+      manifest: manifestOf({ publishing: ['Other.md'] }),
+    });
+    assert.strictEqual(v.code, 'MANIFEST_UNLISTED');
+  });
+
+  it('a listed page still honours publish: false', () => {
+    const v = decide({ type: 'npc', publish: false }, {
+      rel: 'Characters/NPCs/Someone.md',
+      manifest: manifestOf({ publishing: ['Characters/NPCs/Someone.md'] }),
+    });
+    assert.strictEqual(v.code, 'PUBLISH_FALSE');
+  });
+
+  // SUPERSEDED_NO_TARGET is the one `decide` the build publishes, so it is
+  // evaluated last: ahead of these it would drag a page onto the site that the
+  // old build dropped.
+  it('a superseded page with no target does not escape the manifest allowlist', () => {
+    const v = decide({ type: 'npc', canon_status: 'SUPERSEDED' }, {
+      manifest: manifestOf({ publishing: ['Other.md'] }),
+    });
+    assert.strictEqual(v.code, 'MANIFEST_UNLISTED');
+    assert.strictEqual(publishesPage(v), false);
+  });
+
+  it('a superseded page with no target still honours publish: false', () => {
+    const v = decide({ type: 'npc', canon_status: 'SUPERSEDED', publish: false });
+    assert.strictEqual(v.code, 'PUBLISH_FALSE');
+    assert.strictEqual(publishesPage(v), false);
+  });
+});
+
+describe('publish-decision: STORY_COMPANION', () => {
+  const { storyCompanionPc } = require('../lib/publish-decision');
+
+  const pcPage = {
+    frontmatter: { type: 'pc' },
+    title: 'Adrien',
+    displayTitle: 'Adrien',
+    outputPath: 'characters/pcs/adrien.html',
+  };
+  const index = new Map([['Characters/PCs/Adrien.md', pcPage]]);
+
+  it('resolves a story file to its sibling PC', () => {
+    assert.strictEqual(storyCompanionPc('Characters/PCs/Adrien_Story.md', index), pcPage);
+  });
+
+  it('resolves to null when the sibling is not a PC', () => {
+    const npcIndex = new Map([['Characters/NPCs/Vex.md', { frontmatter: { type: 'npc' } }]]);
+    assert.strictEqual(storyCompanionPc('Characters/NPCs/Vex_Story.md', npcIndex), null);
+  });
+
+  it('resolves to null without a page index', () => {
+    assert.strictEqual(storyCompanionPc('Characters/PCs/Adrien_Story.md', null), null);
+  });
+
+  it('names the PC whose page carries the content', () => {
+    const v = decidePage({ frontmatter: { type: 'character-story' }, outputPath: 'characters/pcs/adrien-story.html' }, {
+      rel: 'Characters/PCs/Adrien_Story.md',
+      publishConfig: { mode: 'player' },
+      pageIndex: index,
+    });
+    assert.strictEqual(v.bucket, 'publish');
+    assert.strictEqual(v.code, 'STORY_COMPANION');
+    assert.strictEqual(v.reason, "merged into Adrien's page");
+    assert.strictEqual(publishesPage(v), true);
+  });
+
+  it('a story file with no sibling PC falls through to the normal chain', () => {
+    const v = decidePage({ frontmatter: { type: 'character-story' }, outputPath: 'x.html' }, {
+      rel: 'Characters/PCs/Orphan_Story.md',
+      publishConfig: { mode: 'player' },
+      pageIndex: new Map(),
+    });
+    assert.strictEqual(v.code, 'OK');
+  });
+});

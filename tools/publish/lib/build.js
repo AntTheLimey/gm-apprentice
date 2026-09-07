@@ -257,19 +257,23 @@ function build(options = {}) {
     }
   }
 
+  if (manifest && publishConfig.mode === 'player') {
+    // Everything the earlier rules let through: the manifest allowlist is the only
+    // thing between these pages and the site. decidePage evaluates the allowlist
+    // before `publish: false`, in the order build's own passes ran, so both those
+    // codes count as having reached this stage.
+    const beforeManifest = new Set([
+      'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
+      'SCENE_CUT_SKIPPED', 'DIR_ALWAYS_EXCLUDED', 'DIR_UNMAPPED', 'NO_TYPE',
+    ]);
+    const reachedManifest = pages.filter(p => !beforeManifest.has(verdicts.get(p).code));
+    const kept = reachedManifest.filter(p => publishesPage(verdicts.get(p)));
+    console.log(`Manifest filter: ${reachedManifest.length} → ${kept.length} pages`);
+  }
+
   const neverPublish = withCode('PUBLISH_FALSE', 'PUBLISH_NONE');
   if (neverPublish.length > 0) {
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
-  }
-
-  if (manifest && publishConfig.mode === 'player') {
-    // Pages the manifest allowlist is the only thing standing between and the site.
-    const reachedManifest = pages.filter(p => {
-      const code = verdicts.get(p).code;
-      return code === 'OK' || code === 'SUPERSEDED_NO_TARGET' || code.startsWith('MANIFEST_');
-    });
-    const kept = reachedManifest.filter(p => publishesPage(verdicts.get(p)));
-    console.log(`Manifest filter: ${reachedManifest.length} → ${kept.length} pages`);
   }
 
   pages = pages.filter(p => publishesPage(verdicts.get(p)));
