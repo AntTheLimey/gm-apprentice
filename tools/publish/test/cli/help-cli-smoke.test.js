@@ -29,6 +29,7 @@ const CASES = {
   'setup-inbox': [/setup-inbox \[--config/, /--config <path>/],
   flush: [/flush \[--config/, /--dry-run/],
   sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/],
+  'update-pin': [/update-pin \[--site <dir>\]/, /--check/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {

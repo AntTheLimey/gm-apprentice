@@ -16,7 +16,11 @@ Usage:
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
-  gm-apprentice-publish doctor [options]     Preflight: check tools/auth, save Cloudflare creds
+  gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
+  gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
+  gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
+  gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
+  gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
   gm-apprentice-publish --version            Show version
@@ -98,6 +102,22 @@ is the sheet a player can see, not a reminder to look away.
   --player-safe      Print only what a player can see
   --json             Emit { pc, sourcePath, playerSafe, frontmatter, markdown }
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
+`,
+  'update-pin': `
+gm-apprentice-publish update-pin [--site <dir>] [--check] [--json]
+
+Repoints this site's gm-apprentice-publish dependency at the newest version in
+the plugin cache and runs npm install. A "/plugin update" installs a new version
+alongside the old one but never touches the site's pin, so the site keeps
+building with the old renderer until this runs. Pair it with "deploy".
+
+  --site <dir>       The site directory holding package.json (default: the
+                     directory of --config, i.e. the current directory)
+  --config <path>    Path to vault.config.json — names the site directory
+  --check            Report the drift and exit 1; change nothing
+  --json             Emit { pinnedBefore, pinnedAfter, installedBefore,
+                     installedAfter, desired, changed, ok }
   --help, -h         Show this help
 `,
   doctor: `
@@ -367,6 +387,25 @@ if (command === 'sheet') {
     playerSafe: !!parsed.flags.playerSafe,
     json: !!parsed.flags.json,
   })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'update-pin') {
+  const parsed = parseSubcommandArgs(
+    args.slice(1),
+    { '--check': 'check', '--json': 'json' },
+    { '--site': 'site' },
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('update-pin');
+    process.exit(1);
+  }
+  const siteDir = parsed.flags.site || path.dirname(path.resolve(parsed.configPath));
+  const { runUpdatePin } = require('../lib/update-pin.js');
+  runUpdatePin({ siteDir, check: !!parsed.flags.check, json: !!parsed.flags.json })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
