@@ -225,6 +225,23 @@ describe('update-pin', () => {
     assert.match(h.out.join('\n'), /no package\.json/i);
   });
 
+  it('--json still emits a payload when the site has no package.json', async () => {
+    const h = harness({ files: {}, detect: drift('1.11.29', '1.11.30') });
+    const rc = await runUpdatePin({ siteDir: '/site', json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    // The payload is the whole of stdout — a caller parsing it must not trip over
+    // a human sentence printed alongside it.
+    assert.deepStrictEqual(JSON.parse(h.out.join('')), {
+      pinnedBefore: null,
+      pinnedAfter: null,
+      installedBefore: null,
+      installedAfter: null,
+      desired: '1.11.30',
+      changed: false,
+      ok: false,
+    });
+  });
+
   it('leaves a site with no gm-apprentice-publish dependency alone', async () => {
     const h = harness({
       files: { [path.resolve('/site/package.json')]: JSON.stringify({ name: 'x' }) },

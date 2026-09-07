@@ -39,6 +39,21 @@ function siteFor(vaultPath) {
   return configPath;
 }
 
+// The committed `story` fixture carries Adrien.md (type: pc) alongside
+// Adrien_Story.md (type: character-story) — the pairing the scanner folds together.
+function siteForFixtureStory() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-story-'));
+  const configPath = path.join(dir, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({
+    siteTitle: 'Story Fixture',
+    vaultPath: path.join(__dirname, 'fixtures', 'story'),
+    outputDir: './docs',
+    excludeDirs: ['_meta', '_Templates'],
+    folderMap: { 'Characters/PCs': 'characters/pcs', Locations: 'locations', Chapters: 'chapters' },
+  }, null, 2));
+  return configPath;
+}
+
 function capture() {
   const out = [];
   return { out, deps: { out: (line) => out.push(String(line)) }, text: () => out.join('\n') };
@@ -130,6 +145,22 @@ describe('explain', () => {
     assert.deepStrictEqual(payload.strippedSections, ['GM Notes', 'Reconciliation Context']);
     assert.strictEqual(payload.gmOnlyBlocks, 1);
     fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it("says a PC's story companion publishes as part of the PC's page", async () => {
+    const configPath = siteForFixtureStory();
+    const c = capture();
+    const rc = await runExplain({ configPath, target: 'Characters/PCs/Adrien_Story.md' }, c.deps);
+    assert.strictEqual(rc, 0);
+    assert.match(c.text(), /^ {2}VERDICT: publishes as part of docs\/characters\/pcs\/adrien\.html$/m);
+
+    const j = capture();
+    await runExplain({ configPath, target: 'Characters/PCs/Adrien_Story.md', json: true }, j.deps);
+    const payload = JSON.parse(j.out.join(''));
+    assert.strictEqual(payload.verdict.code, 'STORY_COMPANION');
+    assert.strictEqual(payload.verdict.reason, "merged into Adrien's page");
+    assert.strictEqual(payload.mergedInto, 'Adrien');
+    assert.strictEqual(payload.outputPath, 'docs/characters/pcs/adrien.html');
   });
 
   it('needs a path', async () => {

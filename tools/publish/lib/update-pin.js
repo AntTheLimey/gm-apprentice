@@ -71,9 +71,14 @@ async function runUpdatePin(options, deps) {
   try {
     sitePkg = JSON.parse(readFile(sitePkgPath));
   } catch (err) {
-    out(`Could not read ${sitePkgPath} — no package.json there, or it is not valid JSON (${err.message}).`);
-    out('Point --site at the directory holding your vault.config.json.');
-    return 1;
+    if (!asJson) {
+      out(`Could not read ${sitePkgPath} — no package.json there, or it is not valid JSON (${err.message}).`);
+      out('Point --site at the directory holding your vault.config.json.');
+    }
+    return report({
+      pinnedBefore: null, pinnedAfter: null, installedBefore: null, installedAfter: null,
+      desired, changed: false, ok: false,
+    }, 1);
   }
 
   const dependencies = sitePkg.dependencies || {};

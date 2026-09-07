@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { mapFolder } = require('./scanner');
-const { decidePage, publishesPage, autoExcludeCode, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { extractSections, publishMode } = require('./processor');
@@ -87,6 +87,7 @@ async function runExplain(options, deps) {
         rel: target,
         publishConfig,
         manifest,
+        pageIndex: pagesByRel,
         folderMapped: page ? true : !(unmappedDirs.has(dir) && !untyped.has(target)),
       }));
 
@@ -101,7 +102,12 @@ async function runExplain(options, deps) {
   const gmOnlyBlocks = (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
-  const outputPath = publishes && verdict.outputPath ? `${outputRoot(config)}/${verdict.outputPath}` : null;
+  // A story companion has no page of its own; its content is on the PC's page, so
+  // that is the URL to name.
+  const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
+  const outputPath = mergedInto
+    ? `${outputRoot(config)}/${mergedInto.outputPath}`
+    : (publishes && verdict.outputPath ? `${outputRoot(config)}/${verdict.outputPath}` : null);
   const auto = frontmatter ? autoExcludeCode(frontmatter) : null;
   const canonStatus = frontmatter ? getCanonStatus(frontmatter) : null;
   const section = manifestSectionOf(manifest, target);
@@ -121,6 +127,7 @@ async function runExplain(options, deps) {
       verdict,
       publishes,
       outputPath,
+      mergedInto: mergedInto ? mergedInto.displayTitle || mergedInto.title : null,
       strippedSections: stripped,
       gmOnlyBlocks,
     }, null, 2));
@@ -139,9 +146,11 @@ async function runExplain(options, deps) {
   out(`  auto-exclude: ${auto ? autoExcludeLabel(frontmatter, auto) : 'none'}`);
   out(`  canon status: ${canonStatus || 'none'} (exclude_drafts ${publishConfig.exclude_drafts ? 'on' : 'off'})`);
   out(`  manifest: ${manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : 'no manifest'}`);
-  out(publishes
-    ? `  VERDICT: publishes at ${outputPath}`
-    : `  VERDICT: does not publish — ${verdict.reason} (${verdict.code})`);
+  out(mergedInto
+    ? `  VERDICT: publishes as part of ${outputPath}`
+    : publishes
+      ? `  VERDICT: publishes at ${outputPath}`
+      : `  VERDICT: does not publish — ${verdict.reason} (${verdict.code})`);
   out('');
   out(`  sections stripped on publish: ${stripped.length ? stripped.join(', ') : 'none'}`);
   out(`  gm-only blocks: ${gmOnlyBlocks}`);

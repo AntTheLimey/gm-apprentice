@@ -164,6 +164,7 @@ function surveyVault(options, deps) {
       rel,
       publishConfig,
       manifest,
+      pageIndex: pagesByRel,
       folderMapped: page ? true : !(unmappedDirs.has(dir) && !untyped.has(rel)),
     }));
   }
@@ -233,6 +234,7 @@ async function runApply(options, deps, survey) {
   const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
   const exists = deps.exists || ((p) => fs.existsSync(p));
+  const mkdir = deps.mkdir || ((p) => fs.mkdirSync(p, { recursive: true }));
   const now = deps.now || (() => new Date());
   const { config, vaultPath, publishConfig, files } = survey;
 
@@ -277,7 +279,7 @@ async function runApply(options, deps, survey) {
     mode: publishConfig.mode,
     totalFiles: files.length,
   });
-  fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+  mkdir(path.dirname(manifestPath));
   writeFile(manifestPath, text);
 
   const sectionCounts = { publishing: 0, excluded: 0, needsDecision: 0 };

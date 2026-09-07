@@ -130,6 +130,21 @@ describe('manifest diff', () => {
   });
 });
 
+describe('manifest diff: story companions', () => {
+  it("classifies a PC's story companion as merged into the PC's page", async () => {
+    const { configPath } = siteFor(path.join(FIXTURES, 'story'));
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'diff', configPath, json: true }, c.deps), 0);
+
+    const payload = JSON.parse(c.out.join(''));
+    const story = payload.new.find(e => e.path === 'Characters/PCs/Adrien_Story.md');
+    assert.ok(story, payload.new.map(e => e.path).join(', '));
+    assert.strictEqual(story.bucket, 'publish');
+    assert.strictEqual(story.code, 'STORY_COMPANION');
+    assert.strictEqual(story.reason, "merged into Adrien's page");
+  });
+});
+
 describe('manifest apply', () => {
   it('creates the documented format for a two-entry manifest', async () => {
     const vault = copyVault('auto-exclude');
@@ -285,6 +300,18 @@ describe('manifest apply', () => {
       c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
       /- \[x\] Sessions\/Planned Session\.md\n/,
     );
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('creates _meta/ through the injected mkdir rather than touching fs directly', async () => {
+    const vault = copyVault('auto-exclude');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const made = [];
+    c.deps.mkdir = (p) => { made.push(p); fs.mkdirSync(p, { recursive: true }); };
+
+    await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
+    assert.deepStrictEqual(made, [path.join(vault, '_meta')]);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
