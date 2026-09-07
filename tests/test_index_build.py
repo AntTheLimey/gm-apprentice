@@ -257,6 +257,17 @@ class FlatVaultTests(unittest.TestCase):
         rows = vc.check_index(self.vault)
         self.assertEqual(rows, [])
 
+    def test_flat_orphans_still_count_as_narrative(self):
+        # A flat session/scene surfacing in Stubs must not also vanish
+        # from narrative_count — the frontmatter count and the CLI's own
+        # summary line must agree, and both must be > 0.
+        text = ib.render(self.vault, today=TODAY, previous=None)
+        self.assertIn("narrative_count: 2", text)
+
+        result = run_cli(self.vault, "--date", TODAY)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("# entities: 0  narrative: 2  stubs: 2", result.stdout)
+
 
 class MatchedStubTests(unittest.TestCase):
     """M12: a plan, chain doc, or Story companion that is otherwise

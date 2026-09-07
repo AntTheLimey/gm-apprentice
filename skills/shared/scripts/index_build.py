@@ -408,10 +408,16 @@ def _counts(entries: list[Entry],
     chain_orphan = sum(1 for e in entries
                       if e.type in CHAIN_TYPES and not e.already_placed)
     plans = sum(1 for e in entries if e.type == "plan")
+    # A session/scene only ever becomes an `Entry` when it resolved to no
+    # chapter at all (#C2) — every chaptered one is tallied via `chapters`
+    # instead, so this can't double-count. Without this, a flat vault's
+    # sessions/scenes were correctly surfaced in Stubs but still missing
+    # from narrative_count entirely.
+    flat_narrative = sum(1 for e in entries if e.type in ("session", "scene"))
     narrative = (len(chapters)
                 + sum(c["sessions"] for c in chapters)
                 + sum(c["scenes"] for c in chapters)
-                + chain_matched + chain_orphan + plans)
+                + chain_matched + chain_orphan + plans + flat_narrative)
     stubs = sum(1 for e in entries if e.stub_needs is not None)
     return typed, narrative, stubs
 
