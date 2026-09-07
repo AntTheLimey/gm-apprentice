@@ -24,15 +24,20 @@ troubleshooting — clearly and without jargon. Most GMs using
 this skill are not technical. Never assume they know what npm,
 git, or a terminal command does without explaining it.
 
-**Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
+row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding. Resume after migration completes. Skip this check
-if `_meta/` doesn't exist (that's first-time setup, not
-migration).
+proceeding; resume after it completes. `AHEAD` → announce the row
+and tell the GM to update the plugin; do not proceed. `ERROR` →
+report the row; the plugin install is broken — do not proceed.
+No verdict row and a `not a directory` error on stderr means the
+vault path is wrong — ask the GM for it rather than proceeding.
+Fallback without python: read `gm_apprentice_version` from
+`_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 ## The build tool
 
@@ -64,6 +69,8 @@ the `file:` pin the scaffold wrote, so no registry and no network):
 ```bash
 npm install      # links the pinned build tool (deps ship vendored)
 npm run build    # generate docs/ from the vault
+# print one PC's sheet — needs vault.config.json, so run it here
+npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 ```
 
 Node 22 or later is required. If the GM hits a version error,

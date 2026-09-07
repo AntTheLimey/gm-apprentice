@@ -22,47 +22,16 @@ spaces vs underscores, case differences, and frontmatter `aliases:`.
 
 import argparse
 import fnmatch
-import re
 import sys
 from pathlib import Path
 
-LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
-ALIASES_BLOCK_RE = re.compile(
-    r"^aliases:\s*(?:\[(?P<inline>[^\]]*)\]\s*$|(?P<list>(?:\n\s*-\s*.+)+))",
-    re.MULTILINE,
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vaultlib import (  # noqa: E402
+    LINK_RE,
+    frontmatter_aliases,
+    link_target,
+    normalize,
 )
-
-
-def normalize(name: str) -> str:
-    """Normalize a note name or link target for matching."""
-    return re.sub(r"\s+", " ", name.replace("_", " ").strip()).casefold()
-
-
-def link_target(raw: str) -> str:
-    """Reduce a wikilink body to its target note name."""
-    target = raw.split("|", 1)[0]
-    target = re.split(r"[#^]", target, maxsplit=1)[0]
-    # Path-style links resolve by final segment, like Obsidian.
-    target = target.rstrip("/").rsplit("/", 1)[-1]
-    if target.endswith(".md"):
-        target = target[:-3]
-    return normalize(target)
-
-
-def frontmatter_aliases(text: str) -> list[str]:
-    if not text.startswith("---"):
-        return []
-    end = text.find("\n---", 3)
-    if end == -1:
-        return []
-    m = ALIASES_BLOCK_RE.search(text[:end])
-    if not m:
-        return []
-    if m.group("inline") is not None:
-        items = m.group("inline").split(",")
-    else:
-        items = re.findall(r"-\s*(.+)", m.group("list"))
-    return [i.strip().strip("\"'") for i in items if i.strip().strip("\"'")]
 
 
 def collect(vault: Path, excludes: list[str]):
@@ -72,7 +41,9 @@ def collect(vault: Path, excludes: list[str]):
     names: normalized name/alias -> set of relpaths it resolves to
     outbound: relpath -> set of normalized link targets
     """
-    notes, names, outbound = {}, {}, {}
+    notes: dict[str, str] = {}
+    names: dict[str, set[str]] = {}
+    outbound: dict[str, set[str]] = {}
     for path in sorted(vault.rglob("*.md")):
         rel = path.relative_to(vault).as_posix()
         parts = rel.split("/")
@@ -97,7 +68,7 @@ def collect(vault: Path, excludes: list[str]):
 
 def inbound_map(notes, names, outbound):
     """relpath -> set of relpaths that link to it (self-links excluded)."""
-    inbound = {rel: set() for rel in notes}
+    inbound: dict[str, set[str]] = {rel: set() for rel in notes}
     for src, targets in outbound.items():
         for t in targets:
             for dst in names.get(t, ()):
@@ -147,7 +118,7 @@ def main() -> int:
 
     def unresolved():
         known = set(names)
-        missing = {}
+        missing: dict[str, set[str]] = {}
         for src, targets in outbound.items():
             for t in targets:
                 if t and t not in known:
@@ -171,7 +142,7 @@ def main() -> int:
         # Filename collisions only: Obsidian resolves bare links by
         # filename, so an alias shadowing another note's name does not
         # compete with it.
-        stems = {}
+        stems: dict[str, set[str]] = {}
         for rel, base in notes.items():
             stems.setdefault(base, set()).add(rel)
         linked = {t for targets in outbound.values() for t in targets}

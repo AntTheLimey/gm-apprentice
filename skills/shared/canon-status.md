@@ -36,6 +36,10 @@ never write them.
 
 ## Repairing Legacy Keys
 
+**Mechanised:** `stamp_entities.py <vault> --repair-canon
+[--write]` applies exactly this; the cases below are its
+specification and the no-python fallback.
+
 This is the single authoritative repair algorithm. The 1.8.0
 migration sweep, campaign-qa's Legacy Canon Field Repair check,
 and any skill touching a file with a legacy key all apply it.

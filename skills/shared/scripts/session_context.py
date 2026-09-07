@@ -36,38 +36,21 @@ from pathlib import Path
 
 from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
-
-SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
+from vaultlib import (PC_INACTIVE_STATUS, SKIP_DIRS,  # noqa: F401
+                      WRAP_UP_TYPES, body_of, entity_type, section)
+from vaultlib import vault_files as _vault_files
 
 
 def vault_files(vault: Path):
-    for path in sorted(vault.rglob("*.md")):
-        rel = path.relative_to(vault).as_posix()
-        parts = rel.split("/")
-        if any(p.startswith(".") for p in parts) or parts[0] in SKIP_DIRS:
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
+    """vaultlib.vault_files, with the frontmatter dict every caller here
+    wants — parsed once per file rather than at each use site."""
+    for rel, text in _vault_files(vault):
         yield rel, text, extract_frontmatter(text) or {}
 
 
 def stem_of(entry) -> str:
     """Filename stem of a session record, casefolded, for ref matching."""
     return entry["rel"].rsplit("/", 1)[-1][:-3].casefold()
-
-
-def section(text: str, heading: str) -> str | None:
-    """Extract a `## Heading` block up to the next same-level heading."""
-    m = re.search(rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)",
-                  text, re.MULTILINE | re.DOTALL)
-    return m.group(1).strip() if m else None
-
-
-def body_of(text: str) -> str:
-    m = re.match(r"^---\r?\n.*?\r?\n---\r?\n?(.*)$", text, re.DOTALL)
-    return (m.group(1) if m else text).strip()
 
 
 def emit(title: str, source: str | None, content: str | None):
@@ -246,7 +229,7 @@ def main() -> int:
 
     wrap = prefer_chapter(
         [(rel, text, fm) for rel, text, fm in files
-         if fm.get("type") in ("session-wrap-up", "session_wrap")
+         if entity_type(fm) in WRAP_UP_TYPES
          and parse_session_number(fm.get("session")) == current])
     if wrap is None:
         # Fallback: filename convention Chapter_CC_Session_NN_Wrap_Up.md
@@ -264,8 +247,7 @@ def main() -> int:
     for rel, text, fm in files:
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
-        if str(fm.get("status", "")).casefold() in {"dead", "retired",
-                                                    "inactive"}:
+        if str(fm.get("status", "")).casefold() in PC_INACTIVE_STATUS:
             continue
         found_pc = True
         as_of = fm.get("asOfSession", "?")

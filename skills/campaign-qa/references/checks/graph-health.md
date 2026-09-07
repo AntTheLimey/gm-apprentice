@@ -3,8 +3,10 @@
 The graph health check examines the structural integrity of
 the entity relationship graph in the vault.
 
-**Preferred procedure:** run the bundled graph utility once
-and work from its output instead of hand-building a link map:
+**Preferred procedure:** run the bundled utilities once and
+work from their output instead of hand-building checks by eye
+— `graph_check.py` for the link graph, `vault_check.py` for
+schema, GM-leak, and relationship checks:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
@@ -31,20 +33,22 @@ Read all entity files in scope. For each, extract:
 (what `graph_check.py orphans` reports). These are disconnected
 from the graph and probably forgotten.
 
-**Broken links:** Wiki-links that point to files that don't
-exist. Search for `[[...]]` patterns across all files, then
-verify each linked target file exists.
+**Broken links:** what `graph_check.py unresolved` reports —
+wiki-links that point to files that don't exist. Fallback
+without python: search for `[[...]]` patterns across all
+files, then verify each linked target file exists.
 
-**Ambiguous links:** Wiki-links using a bare basename that
-matches more than one file in the vault. Obsidian resolves these
-silently to one of the matches — which one is unspecified and
-can change as files are added — so this is not a broken link,
-it's a wrong one waiting to happen. Build a basename → file-list
+**Ambiguous links:** what `graph_check.py ambiguous` reports —
+wiki-links using a bare basename that matches more than one
+file in the vault. Obsidian resolves these silently to one of
+the matches — which one is unspecified and can change as files
+are added — so this is not a broken link, it's a wrong one
+waiting to happen. Most common cause: Session Wrap-Up files
+still on the pre-migration `Session_NN_Wrap_Up.md` pattern (no
+chapter number) after a second chapter reused a session
+number. Fallback without python: build a basename → file-list
 index across the whole vault, then flag every bare `[[...]]`
-target whose basename maps to more than one file. Most common
-cause: Session Wrap-Up files still on the pre-migration
-`Session_NN_Wrap_Up.md` pattern (no chapter number) after a
-second chapter reused a session number.
+target whose basename maps to more than one file.
 
 **Mirrored edges (duplicates, not gaps):** Storage is
 single-direction (`shared/entity-schema.md`, "Relationship
@@ -67,13 +71,15 @@ relationships (more than 2 standard deviations above the mean
 for their type). These are often over-linked — some
 connections are implied by traversal rather than direct.
 
-**Un-fenced GM-only content:** Search every file for headings
-(any level) and bold-paragraph lines (`**Text:**` with no `#`)
-whose text contains one of: "keeper", "secret", "tactic",
-"confidential", "gm-only", "dm notes" — case-insensitive. For
-each match, check whether it sits inside a `## GM Notes` section
-or a `<!-- gm-only -->`/`<!-- spoiler -->` fence. If it doesn't,
-flag it — this is exactly the shape of content that silently
+**Un-fenced GM-only content:** `vault_check.py gm-leak` produces
+the findings — ERROR for an orphan `<!-- /gm-only -->` closer
+(everything above it publishes) or a bold-wrapped excluded
+heading like `### **GM Notes**`; WARNING for an unclosed opener
+or a published heading whose title contains an exclude-list
+entry or Keeper keyword; INFO for a Keeper-facing bold label or
+callout. The keyword list ("keeper", "secret", "tactic",
+"confidential", "gm-only", "dm notes", …) lives in the script,
+not here. This is exactly the shape of content that silently
 leaks to the published site (an NPC's tactical notes under a
 bold-wrapped `### **Keeper Notes**` heading defeat exact-string
 matching the same way a genuinely un-fenced heading does).
@@ -85,12 +91,26 @@ that would actually reach the site.
 Severity: Critical if the vault has `publish.site_dir`
 configured (it's actually publishing); Warning otherwise.
 
+Fallback without python: search every file for headings (any
+level) and bold-paragraph lines (`**Text:**` with no `#`) whose
+text contains one of the keywords above — case-insensitive —
+and for each match, check whether it sits inside a
+`## GM Notes` section or a `<!-- gm-only -->`/`<!-- spoiler -->`
+fence.
+
 ### Step 3: Schema Compliance
 
-Read `_meta/entity-types.md` for the type hierarchy and
-required fields. For each entity:
-- Verify all required frontmatter fields are present
-- Verify field values match expected types
+**Preferred procedure:**
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
+  <vault-path> frontmatter
+```
+
+`vault_check.py frontmatter` checks required fields, enum
+values, legacy field names, and unquoted frontmatter links in
+one pass. Read `_meta/entity-types.md` for the type hierarchy
+and interpret its findings against it:
 - Verify the entity's `type` field matches a known type
 - Flag entities still marked as STUB that have been
   referenced in played sessions (they need fleshing out)

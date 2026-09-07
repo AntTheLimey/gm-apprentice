@@ -15,6 +15,7 @@ Usage:
   gm-apprentice-publish build [options]      Build the site
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
+  gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth, save Cloudflare creds
   gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
@@ -83,6 +84,22 @@ source only — no rebuild, no deploy.
   --dry-run, -n      Print the same per-PC "✓ Name — HP 10→13" lines, write nothing
   --help, -h         Show this help
 `,
+  sheet: `
+gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json] [--config <path>]
+
+Prints one PC's character sheet from the vault. The default view is the raw
+source file, exactly as it sits on disk. --player-safe prints the sheet with
+everything the published site strips already gone — excluded sections (GM
+Notes and friends), gm-only and spoiler blocks, HTML comments, excluded
+callouts, gm_only relationship edges and excluded frontmatter fields — so it
+is the sheet a player can see, not a reminder to look away.
+
+  --pc <name>        Which PC: file name, title, or frontmatter name
+  --player-safe      Print only what a player can see
+  --json             Emit { pc, sourcePath, playerSafe, frontmatter, markdown }
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
+`,
   doctor: `
 gm-apprentice-publish doctor [--host <host>] [--json] [--set-cloudflare-creds]
 
@@ -126,7 +143,11 @@ function printSubcommandHelp(cmd) {
 // A mutating command must never let an unrecognised argument fall through to
 // execution: `flush --help` used to perform the flush (#178). Returns
 // { configPath, flags } or { error }.
-function parseSubcommandArgs(rest, allowedFlags) {
+// `valueFlags` maps a flag that takes a value (`--pc Jane`) to its key, the
+// same way `allowedFlags` maps a bare switch. Value flags reject a following
+// option token for the same reason `--config` does: `--pc --json` is a typo,
+// not a PC called "--json".
+function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}) {
   let configPath = './vault.config.json';
   const flags = {};
   for (let i = 0; i < rest.length; i++) {
@@ -134,6 +155,9 @@ function parseSubcommandArgs(rest, allowedFlags) {
     if (a === '--config') {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
       configPath = rest[i + 1]; i++;
+    } else if (Object.prototype.hasOwnProperty.call(valueFlags, a)) {
+      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
+      flags[valueFlags[a]] = rest[i + 1]; i++;
     } else if (Object.prototype.hasOwnProperty.call(allowedFlags, a)) {
       flags[allowedFlags[a]] = true;
     } else {
@@ -309,6 +333,40 @@ if (command === 'flush') {
   }
   const { runFlush } = require('../lib/flush-cli.js');
   runFlush({ configPath: parsed.configPath, dryRun: !!parsed.flags.dryRun })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'sheet') {
+  const verb = args[1];
+  if (verb !== 'show') {
+    console.error(verb ? `Error: Unknown sheet command: ${verb}` : 'Error: sheet needs a command (show)');
+    printSubcommandHelp('sheet');
+    process.exit(1);
+  }
+  const parsed = parseSubcommandArgs(
+    args.slice(2),
+    { '--player-safe': 'playerSafe', '--json': 'json' },
+    { '--pc': 'pc' },
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('sheet');
+    process.exit(1);
+  }
+  if (!parsed.flags.pc) {
+    console.error('Error: sheet show needs --pc <name>');
+    printSubcommandHelp('sheet');
+    process.exit(1);
+  }
+  const { runSheetShow } = require('../lib/sheet-cli.js');
+  runSheetShow({
+    configPath: parsed.configPath,
+    pc: parsed.flags.pc,
+    playerSafe: !!parsed.flags.playerSafe,
+    json: !!parsed.flags.json,
+  })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;

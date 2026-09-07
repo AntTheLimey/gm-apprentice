@@ -94,9 +94,10 @@ Constraints" in `scenario-writing.md`.)
 5. Verify every confrontation has ≥2 contingencies (cooperative + hostile)
 
 **What is mechanized:** only item 4. `vault_check.py read-aloud`
-scans `> ` blockquote lines in plan and scene files for a named
-PC, a 2nd-person feeling verb, or a 3rd-person pronoun, and emits
-an INFO cue to raise with the GM. Items 1-3 and 5 are read, not
+(see `shared/vault-access.md`) scans `> ` blockquote lines in
+plan and scene files for a named PC, a 2nd-person feeling verb,
+or a 3rd-person pronoun, and emits an INFO cue to raise with the
+GM. Items 1-3 and 5 are read, not
 grepped — a plan-wide "PC name as subject of an action verb" scan
 was built and deliberately dropped because it scolded the GM's
 own notes as often as it caught a real violation. Do not report
@@ -231,6 +232,8 @@ Upcoming Triggers: [events based on timeline/conditions]
 Automatic checks when generating content:
 
 1. **Name collision** — similar name already exists?
+   `vault_check.py names` finds duplicate and confusable entity
+   names and aliases.
 2. **Timeline placement** — fits without contradictions?
 3. **Relationship coherence** — aligns with existing data?
 4. **Canon compliance** — respects AUTHORITATIVE entries?

@@ -38,11 +38,15 @@ If all three pass, offer the fast path:
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
-On GM confirmation:
-- Set Wrap-Up `canon_status` to `AUTHORITATIVE` and stamp
-  `reconciled:` with today's date (`"YYYY-MM-DD"`)
-- Promote all DRAFT entities from this session to AUTHORITATIVE
-- Update session index `status` to `reviewed`
+On GM confirmation, using the bundled stamper (dry-run first,
+`--write` on confirmation; see `shared/vault-access.md`):
+- `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py"
+  <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD` —
+  promotes the Wrap-Up's `canon_status` and stamps `reconciled:`
+  in one call
+- `stamp_entities.py <vault> <entity files> --promote` — all
+  DRAFT entities from this session to AUTHORITATIVE
+- `stamp_entities.py <vault> "<index>" --set status=reviewed`
 - Skip to step 6.5 (world evolution offer)
 
 If any condition fails → proceed with the full 6-step procedure
@@ -143,12 +147,13 @@ forward into the next session's prep.
 
 ### 6. Promote canon status
 
-On GM approval:
-1. Set Wrap-Up `canon_status` to `AUTHORITATIVE` and stamp
-   `reconciled:` with today's date (`"YYYY-MM-DD"`)
-2. Update session index `status` to `reviewed`
-3. Promote related entity `canon_status` from DRAFT
-   to AUTHORITATIVE where GM confirmed content
+On GM approval, using the bundled stamper (dry-run first,
+`--write` on confirmation):
+1. `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled
+   YYYY-MM-DD`
+2. `stamp_entities.py <vault> "<index>" --set status=reviewed`
+3. `stamp_entities.py <vault> <entity files> --promote` where GM
+   confirmed content
    3b. Before finalizing each entity promotion, check the entity
        against active `_World/` rules (if `_World/` exists).
        If a world rule is violated:
@@ -158,8 +163,8 @@ On GM approval:
          the exception
        - **Correct it** → update the entity before promotion
        - **Defer** → promote but tag `needs_review: true`
-4. Mark any contradicted content as `SUPERSEDED` with
-   `superseded_by` reference
+4. `stamp_entities.py <vault> "<loser>" --supersede-by
+   "[[Winner]]"` for any contradicted content
 
 Do the bookkeeping immediately — don't leave a list for
 the GM. Hand off to campaign-organizer if entity filing
@@ -186,11 +191,11 @@ changes. One item at a time, GM approves each — same
 conversational style as the rest of reconcile.
 
 **On completion:**
-- Set `world_evolved: "Session_NN"` on the session index
-  (current session reference)
-- Entity files created or updated use
-  `source: "world-evolution"`, with `lastUpdated` and
-  `asOfSession` set to the current session
+- `stamp_entities.py <vault> "<index>" --set
+  world_evolved="Session_NN"` (current session reference)
+- `stamp_entities.py <vault> <entity files> --set
+  source=world-evolution --session N --date D` on entities
+  created or updated by this pass
 - Results feed into step 7's `### Reconciliation Context`
   under `#### World Evolution`, containing:
   - Faction turn summaries (one line per faction: action,
@@ -232,7 +237,12 @@ closer — appending after it leaves the section outside the
 fence, breaking the one-fence invariant. If a Plan file
 exists, you may append a short pointer (`See Wrap-Up for
 reconciliation context`) but the Wrap-Up file is the canonical
-location.
+location. After writing, run `vault_check.py <vault> wrapup
+--file "<wrap-up>"`. A `no wrap-up with that path` INFO means
+the path or the file's `type:` is wrong, not that the check
+passed — the command exits 0 either way. Confirmation is the
+absence of any row naming the Reconciliation Context heading
+(an unfenced or Keeper-facing-H2 finding at its line).
 
 **Why nested, not a top-level `## Reconciliation Context`:**
 every item in it is Keeper-facing — GM decisions and their

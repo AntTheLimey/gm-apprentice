@@ -58,15 +58,20 @@ queries and `vault_search.py` for ranked search. See
 `shared/vault-access.md` for the tool mapping and
 utility usage.
 
-**Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
+row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-running any audits. Resume after migration completes. Skip this
-check if `_meta/` doesn't exist (that's first-time setup, not
-migration).
+running any audits; resume after it completes. `AHEAD` → announce
+the row and tell the GM to update the plugin; do not proceed.
+`ERROR` → report the row; the plugin install is broken — do not
+proceed. No verdict row and a `not a directory` error on stderr
+means the vault path is wrong — ask the GM for it rather than
+proceeding. Fallback without python: read `gm_apprentice_version`
+from `_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 Audits run the same procedures on any vault folder — only
 the tools differ. The procedures in `references/checks/`
@@ -240,16 +245,17 @@ for the full procedure.
   factions without `headquartered_at`)
 - Stale STUB entities that need fleshing out
 - Frontmatter schema violations (missing required fields,
-  wrong types)
+  wrong types) — `vault_check.py frontmatter`
 - Legacy canon field names (`source_confidence:`,
   `confidence:`) — always repaired to `canon_status`, never
-  leaving duplicate keys (see
+  leaving duplicate keys, via `stamp_entities.py <vault>
+  --repair-canon` (see
   `references/checks/legacy-canon-field-repair.md`)
 - Session document chain validation: sessions with Play Notes
   but no Wrap-Up (suggests wrap-up was skipped), sessions stuck
   at `wrap-up` status for multiple prep cycles (review was
   deferred too long), session index `documents:` links pointing
-  to files that don't exist
+  to files that don't exist — `vault_check.py sessions`
 - Wrap-Up conformance runs as its **own pass**
   (`references/checks/wrapup-conformance.md`) — Full Audit
   schedules it after Stale DRAFT Detection, and it can be

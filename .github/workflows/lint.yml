@@ -121,8 +121,14 @@ jobs:
       - name: PC Current Status consumer regression
         run: python tests/test_current_status_consumers.py
 
+      - name: vaultlib tests
+        run: python tests/test_vaultlib.py
+
       - name: Vault utility regression
         run: python tests/test_vault_utilities.py
+
+      - name: stamp_entities tests
+        run: python tests/test_stamp_entities.py
 
       - name: gurps-check tests
         run: python tests/test_gurps_check.py
@@ -132,6 +138,15 @@ jobs:
 
       - name: Relationship predicate vocabulary regression
         run: python tests/test_relationship_predicates.py
+
+      - name: vault_check Slice A tests
+        run: python tests/test_vault_check_slice_a.py
+
+      # Last: a type error must never mask a failing test.
+      - name: Type-check shared scripts
+        run: |
+          pip install 'mypy<3'
+          mypy --config-file mypy.ini
 
   pr-discipline:
     if: github.event_name == 'pull_request'

@@ -505,6 +505,36 @@ function portraitBasename(frontmatter) {
   return portrait ? String(portrait).split('/').pop() : null;
 }
 
+// The player-safe strip chain: everything a reader must never see, removed, with
+// nothing renderer-specific done yet. This is the ONE definition of that chain —
+// build.js's PC path and the `sheet show --player-safe` CLI both call it, so a
+// strip step added here reaches both. They used to be hand-copies of each other,
+// which meant the CLI's "this is what a player sees" promise was only as true as
+// somebody's memory to update two files.
+//
+// Deliberately excluded from this helper, because they are not part of "what a
+// player may see": stripLeadingH1 (a page-template concern — the CLI's text view
+// must keep the H1), wikilink/image resolution, and section extraction.
+// Returns { text, warnings } — warnings are the strip functions' own
+// (unclosed markers), for the caller to log wherever its warnings go.
+function playerSafeMarkdown(markdown, options = {}) {
+  const warnings = [];
+  let text = String(markdown == null ? '' : markdown).replace(/\r/g, '');
+  text = stripDataview(text);
+  for (const strip of [stripGmOnly, stripSpoiler, stripHtmlComments]) {
+    const result = strip(text);
+    if (typeof result === 'string') {
+      text = result;
+    } else {
+      text = result.text;
+      if (Array.isArray(result.warnings)) warnings.push(...result.warnings);
+    }
+  }
+  text = stripCallouts(text, options.excludeCallouts);
+  text = filterSections(text, options.excludeSections);
+  return { text, warnings };
+}
+
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
   let markdown = page.markdown.replace(/\r/g, '');
   const warnings = [];
@@ -633,4 +663,4 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
-module.exports = { processContent, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, publishMode, isGmOnlyEdge, keepOnlySections };
+module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, publishMode, isGmOnlyEdge, keepOnlySections };

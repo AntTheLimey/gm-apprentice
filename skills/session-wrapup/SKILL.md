@@ -10,15 +10,20 @@ via the Wrap-Up file.
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
 
-**Version check:** On first invocation, read
-`gm_apprentice_version` from `_meta/vault-config.md` and
-`current_version` from `shared/migrations.md` — frontmatter only, Read with `limit: 10`; the rest of the file is a long migration history you don't need for the check. If the vault
-version is lower or absent, announce the mismatch and hand off
-to campaign-organizer's migration workflow
+**Version check:** On first invocation run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
+row and hand off to campaign-organizer's migration workflow
 (`campaign-organizer/references/migration-procedure.md`) before
-proceeding with wrap-up. Resume after migration completes. Skip
-this check if `_meta/` doesn't exist (that's first-time setup,
-not migration).
+proceeding with wrap-up; resume after it completes. `AHEAD` →
+announce the row and tell the GM to update the plugin; do not
+proceed. `ERROR` → report the row; the plugin install is broken —
+do not proceed. No verdict row and a `not a directory` error on
+stderr means the vault path is wrong — ask the GM for it rather than
+proceeding. Fallback without python: read `gm_apprentice_version`
+from `_meta/vault-config.md` and `current_version` from
+`shared/migrations.md` (frontmatter only) and compare
+component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 
 **Document chain:** Read `shared/session-document-chain.md`.
 Session-wrapup reads the Play Notes file and writes the Wrap-Up
@@ -54,10 +59,19 @@ file. It also creates/updates entity files and timeline entries.
 - Session index `documents.wrap_up` link:
   `"[[Chapter_03_Session_07_Wrap_Up]]"`
 
-**Session index fields:** The session index uses `play_date:`
-(real-world date played) and `in_game_date:` (fictional date).
-When updating the session index during wrap-up, use these field
-names — not `planned_date` or `actual_date`.
+**Session index fields:** update the session index with the
+bundled stamper:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+  <vault> "<session index>" --set status=wrap-up \
+  --set play_date=YYYY-MM-DD --set in_game_date="<fictional date>" \
+  --set documents.wrap_up="[[Chapter_CC_Session_NN_Wrap_Up]]"
+```
+
+`play_date:` is the real-world date played, `in_game_date:` the
+fictional date — not `planned_date` or `actual_date`. Dry-run
+first, `--write` on confirmation.
 
 **Trigger phrases:** "session's over", "wrap up", "post-session",
 "process my notes", "what happened today"
@@ -121,6 +135,10 @@ path. Session-prep reads it later — never regenerates.
 
 ### 3. PC Carry-Forward
 
+**Active PC roster** (also the roster Steps 3b and 3c use): run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py"
+<vault> active-pcs`, minus any PC off-screen this session.
+
 Per active PC, note what carries forward. Focus on **player
 intent** — stated plans, unfinished actions, shifted NPC
 relationships, exclusive information. Ground in observable
@@ -132,8 +150,8 @@ omit labels with nothing to say.
 
 ### 3b. Character Story Entries
 
-For each active PC in the session, append a story entry to
-their companion file. Read `shared/character-story-format.md`
+For each PC on the Step 3 active-PC roster, append a story entry
+to their companion file. Read `shared/character-story-format.md`
 for the full format, voice, and append protocol.
 
 1. Look for `Characters/PCs/{Name}_Story.md` — if it doesn't
@@ -172,9 +190,8 @@ its frontmatter and its **published** `## Current Status` freeze
 sessions behind the narrative. The `## Current Status` block is
 the PC's **cumulative living state** — the canonical, always-current
 answer to "where is this character now, and what's still open for
-them." Refresh the sheet of each PC **active in this session** (the
-same set Step 3b writes a story entry for — this excludes `dead` PCs
-and any who were off-screen this session):
+them." Refresh the sheet of each PC on the Step 3 active-PC roster
+(the same set Step 3b writes a story entry for):
 
 1. Frontmatter: set `asOfSession` and `lastUpdated` to the
    current session (same values Step 3b writes to the Story file).
@@ -345,9 +362,14 @@ locations, and NPC relationships.
 
 **Validation loop:** After writing entity files, run the
 bundled `vault_check.py frontmatter --folder <dir>` on the
-folders you touched (see `shared/vault-access.md`) and fix
-every ERROR before presenting receipts. Deterministic, one
-call — do not re-read files to self-check instead.
+folders you touched (see `shared/vault-access.md`), plus
+`vault_check.py relationships`, `vault_check.py pc-body
+--folder Characters/PCs` (it has no per-file flag — read only
+the rows for the PCs refreshed in Step 3c), and
+`vault_check.py wrapup --file
+<wrap-up>` on the file written in this session — fix every ERROR
+before presenting receipts. Deterministic, one call each — do not
+re-read files to self-check instead.
 
 **Receipt lifecycle:** Show new/updated entity content to the
 GM **in the conversation** as `## New Entity Files` and
@@ -361,32 +383,23 @@ Every entity reference: `[[wiki-link]]`.
 ### 4b. Update Campaign Overview
 
 If `_Campaign/Campaign Overview.md` exists, update its mechanical
-frontmatter fields. Read the file first, then present proposed
-changes to the GM for confirmation.
+frontmatter fields with the bundled stamper:
 
-**Auto-updated fields:**
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+  <vault> "_Campaign/Campaign Overview.md" \
+  --set current_game_date="<in-game date at session end>" \
+  --increment sessions_played \
+  --set last_session="[[<this session's index title>]]" \
+  --set last_play_date=YYYY-MM-DD \
+  --session N --date YYYY-MM-DD
+```
 
-| Field | Source | Logic |
-|-------|--------|-------|
-| `current_game_date` | In-game date at session end (from World State or GM) | Overwrite |
-| `sessions_played` | Current value + 1 | Increment |
-| `last_session` | Wiki-link to this session's index file | Overwrite |
-| `last_play_date` | This session's `play_date` | Overwrite |
-| `lastUpdated` | Current session reference | Overwrite |
-| `asOfSession` | Current session reference | Overwrite |
-
-**Confirmation prompt:**
-
-"Campaign overview updates:
-  current_game_date: "{old}" → "{new}"
-  sessions_played: {old} → {new}
-  last_session: [[{session title}]]
-  last_play_date: {date}
-
-Apply these updates?"
-
-On yes: write the updated frontmatter. On no: skip — the GM
-can update manually later.
+`--session`/`--date` write `asOfSession`/`lastUpdated`; the other
+four fields are `--set`/`--increment`. It dry-runs by default —
+the printed rows **are** the confirmation prompt; show them to the
+GM as-is. On yes, re-run the same command with `--write`
+appended. On no: skip — the GM can update manually later.
 
 **Do not update:** `current_arc`, `arcs_planned`,
 `current_chapter`, `chapters_planned`, `status`, or any body
@@ -488,9 +501,9 @@ Entity files and timeline are updated separately (Step 4).
 Character story files are updated separately (Step 3b).
 Active PC entity sheets are refreshed separately (Step 3c) —
 frontmatter, chapter tags, and the published `## Current Status`.
-The session index is updated to `wrap-up` status (or `reviewed`
-if reconcile completes). Update `play_date` and `in_game_date`
-on the session index if not already set.
+The session index is updated per **Session index fields** above
+(status `wrap-up`, or `reviewed` if reconcile completes; `play_date`
+and `in_game_date` if not already set).
 
 ## Sub-agent Opportunity (Claude Code only)
 

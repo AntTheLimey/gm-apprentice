@@ -76,7 +76,7 @@ def main() -> int:
 
     n = len(docs)
     avg_len = sum(length for _, length, _ in docs.values()) / n
-    df = Counter()
+    df: Counter[str] = Counter()
     for tf, _, _ in docs.values():
         for t in set(terms):
             if tf[t]:

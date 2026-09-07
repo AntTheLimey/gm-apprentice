@@ -40,6 +40,10 @@ function scanVault(config) {
   const { vaultPath, excludeDirs, folderMap } = config;
   const pages = [];
   const warnedDirs = new Set();
+  // Vault-relative paths of .md files carrying no `type:`. They never publish,
+  // and skipping them in silence is how a GM ends up hunting for a note that
+  // was never going to appear. Named after the walk, once, capped.
+  const untyped = [];
   // Output path -> the vault-relative source that first claimed it. Stripping combining
   // marks (#139) collapses names that used to slug apart ("Renée"/"Renee" both give
   // renee.html), and the later page silently overwrites the earlier one on disk.
@@ -64,7 +68,7 @@ function scanVault(config) {
           continue;
         }
 
-        if (!frontmatter.type) continue; // skip files without typed frontmatter
+        if (!frontmatter.type) { untyped.push(relPath); continue; } // skip files without typed frontmatter
 
         const dirRel = path.relative(vaultPath, dir);
         const outputDir = mapFolder(dirRel, folderMap);
@@ -109,6 +113,15 @@ function scanVault(config) {
   }
 
   walk(vaultPath);
+  if (untyped.length > 0) {
+    const shown = untyped.slice(0, 5).join(', ');
+    const more = untyped.length > 5 ? ` (+${untyped.length - 5} more)` : '';
+    console.warn(
+      `scanner: skipped ${untyped.length} file(s) with no \`type:\` in frontmatter — ` +
+      `they will not publish: ${shown}${more}. Add \`type:\` to publish them, or list ` +
+      `their folder in excludeDirs to silence this.`
+    );
+  }
   return pages;
 }
 

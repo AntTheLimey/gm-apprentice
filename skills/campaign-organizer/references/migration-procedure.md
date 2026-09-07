@@ -17,7 +17,7 @@ Read the following:
 
 - `gm_apprentice_version` from `_meta/vault-config.md`
   (absent = "pre-versioning")
-- `current_version` from `shared/migrations.md`
+- `shared/migrations.md`'s `current_version` value
 - List files in `_meta/` — which of the four schema files exist?
 - If `_meta/entity-types.md` exists, read its
   `## Type-Specific Fields` section
@@ -75,28 +75,29 @@ already satisfied:
   an old-pattern file can reappear from any skill that still
   emits the old link, not just from a pending versioned migration
 - **GM-only heading vocabulary matches the canonical single
-  heading** — read the vault's own `_meta/vault-config.md`
-  `exclude_sections` list. If it's exactly `["GM Notes"]` (or a
-  subset of it), skip. Otherwise, for each other entry, search the
-  vault for real markdown headings (any level) matching that text
-  exactly — pending, listed as a mechanical re-nesting item. This
+  heading**, **bold-wrapped or bold-paragraph GM-only content**,
+  and **callout-only-marked content** — run
+  `vault_check.py <vault> gm-leak` (see `shared/vault-access.md`)
+  and read every row against the vault's
+  `_meta/vault-config.md` `exclude_sections` list. Heading rows
+  (a bold-wrapped excluded heading, or a published heading whose
+  title matches an `exclude_sections` entry or Keeper keyword)
+  are mechanical re-nesting items — pending, listed for the
+  structural batch. Fence-balance rows (an orphan
+  `<!-- /gm-only -->` closer, an unclosed opener) are their own
+  pending item: the fix is adding or removing one marker, which
+  Step 6's re-nest does not do — list each file and line and fix
+  the marker before the re-nest runs, since an orphan closer
+  changes what every line above it means. `wrapup --fix` refuses
+  to touch the body of a wrap-up whose fence is unbalanced for
+  the same reason. INFO rows (a
+  Keeper-facing bold label or callout) are judgment items — pending,
+  listed for GM confirmation (not safe to auto-convert: a
+  bold-paragraph line isn't a real heading, and a callout needs the
+  GM to say whether it becomes `## GM Notes` or a spoiler). This
   check always runs, for the same reason as the two checks above —
   drift accumulates one new heading name at a time, from any skill
   invocation, not from a single migration event
-- **Bold-wrapped or bold-paragraph GM-only content** — for each
-  entry in the vault's `exclude_sections` list, also search for
-  that text appearing inside a bold-wrapped heading
-  (`### **{text}**`) or as a bold-paragraph line with no heading
-  marker at all (`**{text}:**`). Any match → pending, listed as a
-  judgment item requiring GM confirmation (not safe to auto-convert
-  — a bold-paragraph line isn't a real heading, and converting it
-  needs the GM to confirm the boundary of what should move)
-- **Callout-only-marked content** — any Obsidian callout (`> [!info]`,
-  `> [!warning]`, etc.) whose title contains "keeper" or "gm" and
-  which is NOT already inside an excluded heading or a
-  `<!-- gm-only -->`/`<!-- spoiler -->` fence → pending, listed as a
-  judgment item (no automatic signal for what it should become —
-  the GM decides whether it's `## GM Notes` or a spoiler)
 
 Only unsatisfied steps appear in the preview.
 
@@ -193,10 +194,19 @@ Apply all confirmed changes in this order:
    GM Notes` in its file (creating `## GM Notes` if absent,
    appending under an existing one otherwise), demoting the
    moved heading and any of its own sub-headings by the amount
-   needed to sit one level below `## GM Notes`. Once every
-   entry that had at least one matching heading has been
-   re-nested, collapse the vault's own `exclude_sections` list
-   down to `["GM Notes"]` (structural)
+   needed to sit one level below `## GM Notes`. For Session
+   Wrap-Up files, run `vault_check.py <vault> wrapup --fix`
+   instead — it does the same re-nest plus the
+   `<!-- gm-only -->` fence in one
+   pass, tailored to that file type. It also writes more than the
+   re-nest: the frontmatter backfills and the recap/decorated
+   heading renames from the 1.9.5 entry. Run it **without**
+   `--fix` first and add every `WOULD-FIX` row to the preview, so
+   the GM confirms the whole set before anything is written. Once
+   every entry that
+   had at least one matching heading has been re-nested, collapse
+   the vault's own `exclude_sections` list down to `["GM Notes"]`
+   (structural)
 7. Copy selected templates to `_Templates/` (content)
 8. Overwrite selected templates in `_Templates/` (content)
 9. Update or add selected `_meta/entity-types.md`

@@ -130,8 +130,9 @@ extends rather than creates. Size: S <100 lines, M 100–400, L 400+.
 These were live when the analysis was written, independent of any
 script work. **Status (2026-09-04):** everything below except the
 `lib/scanner.js` silence, the three-copy entity schema, and the
-`_flags.md` entry format was fixed in Mechanization Slice 0 (PR #193);
-those three belong to Slices A, D and C respectively. The sub-reports
+`_flags.md` entry format was fixed in Mechanization Slice 0 (PR #193).
+The scanner silence was fixed in Slice A (1.9.7); the other two belong
+to Slices D and C respectively. The sub-reports
 under `docs/mechanization-analysis/` are dated snapshots and keep
 their original line references.
 

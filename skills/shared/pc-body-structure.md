@@ -91,6 +91,9 @@ The block **must** sit outside any `<!-- gm-only -->` or
 The GM may also edit it directly; the next wrap-up reconciles it either
 way.
 
+`vault_check.py pc-body` (see `shared/vault-access.md`) checks
+placement and the labelled-field shape.
+
 **Consumed by:** session-prep (Context Source, Threads, PC arc check),
 the-midwife (new-chapter hooks), ttrpg-expert (arc/thread analysis),
 campaign-qa (Current Status consistency check).

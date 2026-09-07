@@ -29,8 +29,9 @@ Prep builds new potential on established reality.
   sessions, scenes — all linked. **Inside a markdown table
   cell, use alias-form links only** (`[[Hassan]]`) — never an
   aliased link (`[[Target|Alias]]`) or an escaped pipe (`\|`),
-  because both break the table when Obsidian reflows it. Full
-  rule: `docs/file-format-standards.md` §4.
+  because both break the table when Obsidian reflows it.
+  `vault_check.py <vault> tables` catches violations after the
+  fact. Full rule: `docs/file-format-standards.md` §4.
 
 - **Reality over plans.** Once played, the plan is dead.
   Unplayed prep is scrap — only mention if it contains

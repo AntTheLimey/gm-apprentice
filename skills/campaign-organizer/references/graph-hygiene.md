@@ -42,7 +42,8 @@ Flag missing required relationships in every audit.
 ## Wiki-Link Conventions
 
 **Frontmatter:** `"[[Entity Name]]"` (quoted, double brackets).
-Juggl reads these as graph edges.
+Juggl reads these as graph edges. `vault_check.py frontmatter`
+(see `shared/vault-access.md`) flags unquoted frontmatter links.
 
 **Body text:** `[[Entity Name]]` on first mention per section.
 Alias syntax: `[[Professor Albin Herzfeld|Herzfeld]]`.

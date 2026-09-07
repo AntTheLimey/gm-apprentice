@@ -348,3 +348,75 @@ describe('scanVault page slug collision warning (#139)', () => {
     }
   });
 });
+
+describe('scanVault untyped-file warning', () => {
+  // A file with no `type:` never publishes. Skipping it silently is how a GM
+  // ends up staring at a site that is missing a note they definitely wrote, so
+  // the scan names the files it dropped and how to fix them.
+  function captureWarns(fn) {
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try { return { result: fn(), warns }; } finally { console.warn = orig; }
+  }
+
+  function makeVault(files) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scanner-untyped-'));
+    const npcDir = path.join(tmpDir, 'Characters', 'NPCs');
+    fs.mkdirSync(npcDir, { recursive: true });
+    for (const [name, body] of Object.entries(files)) {
+      fs.writeFileSync(path.join(npcDir, name + '.md'), body);
+    }
+    return tmpDir;
+  }
+
+  const config = (vaultPath) => ({
+    vaultPath,
+    excludeDirs: ['_meta', '_Templates'],
+    folderMap: { 'Characters/NPCs': 'characters/npcs' },
+  });
+
+  const TYPED = '---\ntype: npc\n---\n\nBody.\n';
+  const UNTYPED = '---\nname: Nobody\n---\n\nBody.\n';
+
+  it('warns once, names the file, and still returns the typed pages', () => {
+    const tmpDir = makeVault({ Gatekeeper: TYPED, Scratchpad: UNTYPED });
+    try {
+      const { result: pages, warns } = captureWarns(() => scanVault(config(tmpDir)));
+      const untypedWarns = warns.filter(w => w.includes('no `type:`'));
+      assert.strictEqual(untypedWarns.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
+      assert.ok(untypedWarns[0].includes('Characters/NPCs/Scratchpad.md'), untypedWarns[0]);
+      assert.ok(untypedWarns[0].includes('skipped 1 file(s)'), untypedWarns[0]);
+      assert.ok(untypedWarns[0].includes('excludeDirs'), untypedWarns[0]);
+      assert.strictEqual(pages.length, 1);
+      assert.strictEqual(pages[0].title, 'Gatekeeper');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('lists at most five paths and counts the rest', () => {
+    const files = {};
+    for (let i = 1; i <= 7; i++) files['Untyped' + i] = UNTYPED;
+    const tmpDir = makeVault(files);
+    try {
+      const { warns } = captureWarns(() => scanVault(config(tmpDir)));
+      const w = warns.find(x => x.includes('no `type:`'));
+      assert.ok(w, warns.join(' | '));
+      assert.ok(w.includes('skipped 7 file(s)'), w);
+      assert.ok(w.includes('(+2 more)'), w);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('says nothing when every file is typed', () => {
+    const tmpDir = makeVault({ Gatekeeper: TYPED, Bjorn: TYPED });
+    try {
+      const { warns } = captureWarns(() => scanVault(config(tmpDir)));
+      assert.strictEqual(warns.filter(w => w.includes('no `type:`')).length, 0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});

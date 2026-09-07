@@ -28,6 +28,7 @@ const CASES = {
   'setup-status-bar': [/setup-status-bar \[--config/, /--config <path>/],
   'setup-inbox': [/setup-inbox \[--config/, /--config <path>/],
   flush: [/flush \[--config/, /--dry-run/],
+  sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
@@ -51,6 +52,35 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     assert.strictEqual(r.code, 0);
     assert.match(r.stdout, /Usage:/);
     assert.match(r.stdout, /setup-inbox/);
+  });
+
+  it('sheet show --help prints the sheet usage and exits 0', async () => {
+    const r = await runIn(['sheet', 'show', '--help']);
+    assert.strictEqual(r.code, 0);
+    assert.match(r.stdout, /sheet show --pc <name>/);
+    assert.doesNotMatch(r.stdout, /Static site generator/);
+  });
+
+  it('sheet with an unknown verb prints the sheet usage and exits 1', async () => {
+    const r = await runIn(['sheet', 'summon', '--pc', 'Jane']);
+    assert.strictEqual(r.code, 1);
+    assert.match(r.stderr, /Unknown sheet command: summon/);
+    assert.match(r.stdout, /sheet show --pc <name>/);
+  });
+
+  it('sheet show without --pc prints the sheet usage and exits 1', async () => {
+    const r = await runIn(['sheet', 'show']);
+    assert.strictEqual(r.code, 1);
+    assert.match(r.stderr, /--pc/);
+    assert.match(r.stdout, /sheet show --pc <name>/);
+    assert.doesNotMatch(r.stderr, /Cannot find module|ENOENT/);
+  });
+
+  it('an unknown flag on sheet show is rejected with usage, not executed', async () => {
+    const r = await runIn(['sheet', 'show', '--pc', 'Jane', '--nope']);
+    assert.strictEqual(r.code, 1);
+    assert.match(r.stderr, /Unknown argument: --nope/);
+    assert.match(r.stdout, /sheet show --pc <name>/);
   });
 
   it('a bad argument on setup-inbox prints setup-inbox usage, not the top-level banner', async () => {
