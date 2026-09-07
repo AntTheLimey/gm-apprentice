@@ -148,8 +148,16 @@ function decidePage(page, options) {
   // the wrong answer — the content is on the site, at the PC's URL.
   const storyPc = storyCompanionPc(rel, opts.pageIndex);
   if (storyPc) {
-    return verdict('publish', 'STORY_COMPANION',
-      `merged into ${storyPc.displayTitle || storyPc.title}'s page`);
+    // outputPath is null rather than the story file's own scanner path: no such page
+    // is ever built, and handing a caller a URL the site does not serve is worse than
+    // handing it nothing. The PC's page is the destination; `explain` resolves it
+    // through storyCompanionPc.
+    return {
+      bucket: 'publish',
+      code: 'STORY_COMPANION',
+      reason: `merged into ${storyPc.displayTitle || storyPc.title}'s page`,
+      outputPath: null,
+    };
   }
 
   const mode = publishConfig.mode || 'player';

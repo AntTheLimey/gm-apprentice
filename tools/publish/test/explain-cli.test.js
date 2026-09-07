@@ -159,6 +159,8 @@ describe('explain', () => {
     const payload = JSON.parse(j.out.join(''));
     assert.strictEqual(payload.verdict.code, 'STORY_COMPANION');
     assert.strictEqual(payload.verdict.reason, "merged into Adrien's page");
+    // No page is built at the story file's own path, so the verdict must not name one.
+    assert.strictEqual(payload.verdict.outputPath, null);
     assert.strictEqual(payload.mergedInto, 'Adrien');
     assert.strictEqual(payload.outputPath, 'docs/characters/pcs/adrien.html');
   });

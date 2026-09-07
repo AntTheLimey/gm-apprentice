@@ -74,3 +74,73 @@ describe('build exclusion log attribution', () => {
     assert.ok(!fs.existsSync(path.join(work, 'docs', 'characters', 'npcs', 'hidden.html')));
   });
 });
+
+// The manifest line counts allowlist membership and nothing else. `publish: false`
+// was dropped by a later pass, so a page that is both listed and never-publish is
+// still on the right-hand side of this line — and then subtracted on the next one.
+describe('build manifest-filter line counts allowlist membership only', () => {
+  let work;
+  let stdout;
+
+  before(() => {
+    work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-manifest-line-'));
+    const vault = path.join(work, 'vault');
+    const write = (rel, body) => {
+      const full = path.join(vault, rel);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, body);
+    };
+
+    write('Locations/Tavern.md', '---\ntype: location\n---\n\nA tavern.\n');
+    // Listed under Publishing AND never-publish: counted by the manifest line,
+    // removed by the publish-false line.
+    write('Locations/Cellar.md', '---\ntype: location\npublish: false\n---\n\nA cellar.\n');
+    // Not listed at all — the allowlist drops it, so it is not in either count.
+    write('Locations/Attic.md', '---\ntype: location\n---\n\nAn attic.\n');
+    write('_meta/publish-manifest.md', [
+      '---', 'mode: player', '---', '',
+      '## Publishing (2 files)', '',
+      '- [x] Locations/Tavern.md',
+      '- [x] Locations/Cellar.md',
+      '',
+    ].join('\n'));
+
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      siteTitle: 'Manifest Line',
+      siteUrl: 'https://example.github.io/manifest-line',
+      vaultPath: vault,
+      outputDir: path.join(work, 'docs'),
+      excludeDirs: ['_meta', '_Templates'],
+      folderMap: { Locations: 'locations' },
+    }, null, 2));
+
+    const lines = [];
+    const original = console.log;
+    console.log = (...args) => lines.push(args.join(' '));
+    try {
+      build({ configPath });
+    } finally {
+      console.log = original;
+    }
+    stdout = lines.join('\n');
+  });
+
+  after(() => {
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+
+  it('counts a listed publish: false page on the right-hand side of the manifest line', () => {
+    assert.match(stdout, /^Manifest filter: 3 → 2 pages$/m, stdout);
+  });
+
+  it('subtracts it on the publish: false line instead', () => {
+    assert.match(stdout, /^publish: false — skipped 1 file\(s\)$/m, stdout);
+  });
+
+  it('and does not build a page for it', () => {
+    assert.ok(fs.existsSync(path.join(work, 'docs', 'locations', 'tavern.html')));
+    assert.ok(!fs.existsSync(path.join(work, 'docs', 'locations', 'cellar.html')));
+    assert.ok(!fs.existsSync(path.join(work, 'docs', 'locations', 'attic.html')));
+  });
+});

@@ -267,7 +267,11 @@ function build(options = {}) {
       'SCENE_CUT_SKIPPED', 'DIR_ALWAYS_EXCLUDED', 'DIR_UNMAPPED', 'NO_TYPE',
     ]);
     const reachedManifest = pages.filter(p => !beforeManifest.has(verdicts.get(p).code));
-    const kept = reachedManifest.filter(p => publishesPage(verdicts.get(p)));
+    // Allowlist membership alone, exactly as the old pass counted it: `publish: false`
+    // was dropped by a LATER pass, so a page that is both listed and never-publish
+    // still counted on this line. It is subtracted on the next line instead.
+    const allowSet = new Set(manifest.publishing);
+    const kept = reachedManifest.filter(p => allowSet.has(vaultRelPathOf(p)));
     console.log(`Manifest filter: ${reachedManifest.length} → ${kept.length} pages`);
   }
 

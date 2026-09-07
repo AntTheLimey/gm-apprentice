@@ -346,6 +346,8 @@ describe('publish-decision: STORY_COMPANION', () => {
     assert.strictEqual(v.bucket, 'publish');
     assert.strictEqual(v.code, 'STORY_COMPANION');
     assert.strictEqual(v.reason, "merged into Adrien's page");
+    // Never the story file's own scanner path: nothing is built there.
+    assert.strictEqual(v.outputPath, null);
     assert.strictEqual(publishesPage(v), true);
   });
 
