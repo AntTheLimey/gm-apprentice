@@ -142,6 +142,9 @@ jobs:
       - name: vault_check Slice A tests
         run: python tests/test_vault_check_slice_a.py
 
+      - name: rules_lookup tests
+        run: python tests/test_rules_lookup.py
+
       # Last: a type error must never mask a failing test.
       - name: Type-check shared scripts
         run: |
