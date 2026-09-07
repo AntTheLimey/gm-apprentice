@@ -11,11 +11,13 @@ const FIXES = {
 };
 
 function parseArgs(argv) {
-  const o = { json: false, host: 'cloudflare-pages', setCreds: false };
+  const o = { json: false, host: 'cloudflare-pages', setCreds: false, site: false, configPath: './vault.config.json' };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--json') o.json = true;
     else if (argv[i] === '--set-cloudflare-creds') o.setCreds = true;
+    else if (argv[i] === '--site') o.site = true;
     else if (argv[i] === '--host' && argv[i + 1]) { o.host = argv[i + 1]; i++; }
+    else if (argv[i] === '--config' && argv[i + 1]) { o.configPath = argv[i + 1]; i++; }
   }
   return o;
 }
@@ -45,6 +47,14 @@ async function runDoctor(argv, deps = {}) {
   const platform = deps.platform || process.platform;
   const homedir = deps.homedir || os.homedir();
   const opts = parseArgs(argv);
+
+  // Two audits behind one command. Without --site this is the machine preflight it
+  // has always been; with --site it is the vault's own health, which is a different
+  // question with different fixes.
+  if (opts.site) {
+    const { runSiteDoctor } = require('./site-doctor');
+    return runSiteDoctor({ configPath: opts.configPath, json: opts.json }, deps);
+  }
 
   if (opts.setCreds) {
     const readStdin = deps.readStdin || defaultReadStdin;

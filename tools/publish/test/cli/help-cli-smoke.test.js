@@ -24,7 +24,7 @@ const CASES = {
   init: [/init \[target-dir\]/, /Refuses to overwrite/],
   build: [/build \[--config/, /--config <path>/],
   inbox: [/inbox <open\|code\|pull\|handled\|flag\|reply>/, /inbox reply <id>/],
-  doctor: [/doctor \[--host/, /--set-cloudflare-creds/, /--json/],
+  doctor: [/doctor \[--host/, /--set-cloudflare-creds/, /--json/, /doctor --site/],
   'setup-status-bar': [/setup-status-bar \[--config/, /--config <path>/],
   'setup-inbox': [/setup-inbox \[--config/, /--config <path>/],
   flush: [/flush \[--config/, /--dry-run/],

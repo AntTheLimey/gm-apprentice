@@ -157,12 +157,21 @@ building with the old renderer until this runs. Pair it with "deploy".
 `,
   doctor: `
 gm-apprentice-publish doctor [--host <host>] [--json] [--set-cloudflare-creds]
+gm-apprentice-publish doctor --site [--config <path>] [--json]
 
 Preflight for publishing: checks Node, git, and the host CLI (wrangler for
 Cloudflare Pages, gh for GitHub Pages) with its authentication, and prints a
 fix for each failing row.
 
+--site audits the vault instead of the machine: the stale build-tool pin,
+folders missing from folderMap, files with no type:, portraits pointing at
+absent images, wikilinks that match no published page, manifest entries whose
+file is gone, and played sessions in no manifest section. Each finding names
+the edit that fixes it. Exits 1 only on an error, not on a warning.
+
   --host <host>              cloudflare-pages (default) or github-pages
+  --site                     Audit the vault named by --config
+  --config <path>            Path to vault.config.json, with --site
   --json                     Machine-readable report instead of the checklist
   --set-cloudflare-creds     Read a Cloudflare API token from stdin, verify it,
                              and save it (plus the account id) to your shell env
