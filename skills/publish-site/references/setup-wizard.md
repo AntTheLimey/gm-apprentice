@@ -657,12 +657,13 @@ gh repo create <project_name> --public --source . --remote origin --push
 
    ```bash
    git remote add origin https://github.com/<github_username>/<project_name>.git
-   git push -u origin main
+   node "$TOOL" deploy --verify --config vault.config.json
    ```
 
-   This first push establishes the upstream tracking branch — `deploy`'s
-   plain `git push` needs it to already exist. Every push after this one
-   (routine updates, capability 2) runs through `deploy --verify` instead.
+   `deploy --verify` builds, deploys, and probes the live URL in one
+   step — relay its final line to the GM verbatim. It sets the upstream
+   tracking branch on this first push; every push after this one
+   (routine updates, capability 2) runs through the same command.
 
 **Enable GitHub Pages.** If `gh` was used, offer to enable it
 programmatically:

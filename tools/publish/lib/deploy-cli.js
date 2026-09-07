@@ -107,7 +107,12 @@ async function runDeploy(options, deps) {
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
     } else {
-      commands.push(`git add ${outDir}`, 'git commit -m "Rebuild site"', 'git push');
+      commands.push(`git add ${outDir}`, 'git commit -m "Rebuild site"');
+      // Whether the push needs -u depends on the branch's upstream, which a dry run
+      // can only learn by asking git — a read-only rev-parse, so running it here
+      // doesn't violate "nothing will run".
+      const upstream = runCommand('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { cwd: siteRoot });
+      commands.push(upstream.code === 0 ? 'git push' : 'git push -u origin HEAD');
     }
     if (opts.json) {
       out(JSON.stringify({
@@ -181,7 +186,14 @@ async function runDeploy(options, deps) {
         return finish({}, 1);
       }
     }
-    const push = git(['push']);
+    // A brand-new repo's current branch has no upstream yet, so a bare `git push`
+    // fails with "no upstream branch" — exactly the first-deploy case the setup
+    // wizard walks a user through. Check first and set the upstream on that push;
+    // once it's set, every later push keeps using the bare form.
+    const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+    const hasUpstream = upstream.code === 0;
+    if (!hasUpstream) say('no upstream branch yet — pushing with -u origin HEAD');
+    const push = git(hasUpstream ? ['push'] : ['push', '-u', 'origin', 'HEAD']);
     if (push.code !== 0) {
       say(`Push failed: ${failureDetail(push)}`);
       return finish({}, 1);
