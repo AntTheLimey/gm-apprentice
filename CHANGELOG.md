@@ -17,42 +17,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and rebuild prose into one deterministic call each:
   - `rules_lookup.py SYSTEM "term" [--kind KIND] [--variant VARIANT]
     [--limit N] [--json] [--personal] [--systems-dir DIR]` — record-level
-    lookup over the `systems/` corpus (9,812 non-personal records across
+    lookup over the `systems/` corpus (9,887 non-personal records across
     139 files) instead of opening a whole reference file for one row.
     `SYSTEM` accepts a system slug or `all`; `--kind` restricts to one
     record kind (`trait`, `skill`, `spell`, `monster`, `feat`, `item`,
     `class`, `condition`, and others derived from the file's own stem
-    when it isn't one of the named kinds); `--variant` includes a
-    variant's records (e.g. `regency`) alongside the base system.
-    Matching runs exact, then substring, then `difflib`-fuzzy (cutoff
-    0.72), each tier ordered `(file, line)`. Prints one record at a time,
-    never a whole table or file, and writes nothing to disk — `personal/`
-    is skipped unless `--personal` is passed, keeping every emitted line
-    within the "names, point costs, short notes" the SJG Online Policy
-    (and the parallel ORC/CC-BY terms for the other systems) permits.
+    when it isn't one of the named kinds) — a `--kind` that matches
+    nothing retries without it and prints `# match: none for kind=K —
+    closest without it:` rather than reporting the rule doesn't exist;
+    `--variant` includes a variant's records (e.g. `regency`) alongside
+    the base system. A bold-lead record (`**Name** — description`) may
+    carry a parenthetical before the dash and either an em/en-dash or
+    ASCII `--` tail. Matching runs exact, then substring, then
+    `difflib`-fuzzy (cutoff 0.72), each tier mutually exclusive and
+    ordered `(file, line)`; `# match: exact (N)` reports that tier's true
+    count and notes when `--limit` suppressed rows. Prints one record at
+    a time, never a whole table or file, and writes nothing to disk —
+    `personal/` is skipped unless `--personal` is passed, keeping every
+    emitted line within the "names, point costs, short notes" the SJG
+    Online Policy (and the parallel ORC/CC-BY terms for the other
+    systems) permits. Exits 0 on a match, 1 on none, 2 on a bad
+    invocation — a blank term or a `--systems-dir` that isn't a
+    directory.
   - `index_build.py VAULT [--write] [--date YYYY-MM-DD]` — derives
     `_meta/index.md` from a vault scan instead of hand-editing a file
     that already declares itself derived. Dry-run diff by default,
     `--write` applies (EOL preserved); nests each session's Plan/Play
     Notes/Wrap-Up under its own bullet, a PC's `_Story` companion under
     the PC, and `type: plan` entities under a `### Plans (N)` section;
-    unmatched chain docs and orphaned Story files surface in
-    `## Stubs (Needs Attention)` instead of being silently dropped.
+    unmatched chain docs and orphaned Story files, a session or scene in
+    a flat vault (no `Chapters/` folder, no `chapter:` link), and any
+    plan, chain doc, or Story companion carrying `canon_status: STUB` —
+    even one already nested under its session/PC or listed under Plans
+    — all surface in `## Stubs (Needs Attention)` instead of being
+    silently dropped.
   - `plan_check.py PLAN.md [--headless] [--inventory] [--state]
     [--json]` — Session Plan conformance against the fourteen rules
     `session-prep/SKILL.md` and `shared/session-principles.md` state and
     nothing previously checked. Nineteen check ids: `type`, `frontmatter`,
     `sections`, `order`, `placeholder` (structure); `preamble`, `recap`,
     `npc-table`, `scene-length` (budgets); `scene-labels`, `scene-type`,
-    `duration`, `audit-trail`, `pc-state`, `read-aloud`, `table`, `guess`
-    (authoring rules); `hard-guard` (only under `--headless`, groups
-    hard-wrapped Open Questions bullets into one logical item each); and
-    `prep-state` (the resumable prep-state marker, now tokenized with a
-    bracket/paren-aware regex so a value like `open=[Freddy beat?]`
-    parses whole). Every message is prefixed with its own id; exit 1 on
-    any ERROR. `--inventory` lists each template H2 as
-    present/absent/placeholder with a word count; `--state` prints the
-    prep-state tokens.
+    `duration`, `audit-trail` (recognizing an ellipsis-spelled `Open
+    Questions` heading as excluded, same as the plain-dots form),
+    `pc-state` (exempting a scene's own `**Location:**` line inside
+    `## Planned Scenes`/`## Contingency Scenes`), `read-aloud`, `table`,
+    `guess` (authoring rules); `hard-guard` (only under `--headless`,
+    groups hard-wrapped Open Questions bullets into one logical item
+    each); and `prep-state` (the resumable prep-state marker, now
+    tokenized with a bracket/paren-aware regex so a value like
+    `open=[Freddy beat?]` parses whole). Every message is prefixed with
+    its own id; exit 1 on any ERROR. `--inventory` lists each template H2
+    as present/absent/placeholder with a word count; `--state` prints
+    the prep-state tokens.
   - `session_context.py --play` and `--threads` — two new modes sharing
     the existing bundle's chapter-scoped session selection
     (`select_session`, factored out verbatim from the old `main()`).
@@ -61,7 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Objectives`, plus each Planned/Contingency scene reduced to its
     title and `**Type:**`/`**Objective:**`/`**Setup:**`/`**Trigger:**`
     lines — `**Behaviours:**`, `**Branching:**`, `**Complications:**`,
-    and `## Active Threads` are dropped. `--threads` prints per-PC
+    and `## Active Threads` are dropped; `--session N` resolves N's own
+    chapter before selecting its plan rather than the "current"
+    session's, since session numbers restart per chapter and N may be
+    filed elsewhere. `--threads` prints per-PC
     `**Open threads:**` bullets fuzzy-matched (`difflib`, ratio >= 0.6)
     against every chapter-scoped Wrap-Up's Unresolved Threads and
     PC Carry-Forward bullets, reporting `first=`/`last=`/`age=`/`STALE`
@@ -87,7 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     across the vault by `check_tables`.
   - Five `gm-publish` subcommands built on a new `lib/publish-decision.js`
     (`decidePage`), which now also drives `build.js` itself so the CLI
-    and the build agree on why every page does or doesn't publish:
+    and the build agree on why every page does or doesn't publish.
+    `manifest`, `deploy`, and `explain` share one `vault.config.json`
+    loader, so a missing or invalid config file fails the same clean way
+    `doctor --site` already did — a named error and exit 1, not a raw
+    `require()` stack trace:
     - `update-pin [--site DIR] [--check] [--json]` — repoints a site's
       `gm-apprentice-publish` dependency at the newest version in the
       plugin cache and runs `npm install`; `--check` reports drift and
@@ -98,26 +121,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       every vault file with the same decision the build makes and lists
       what the manifest doesn't mention plus entries whose file is gone;
       `apply` moves paths between sections and rewrites the file,
-      `--prune` drops dead entries. A path matching no vault file is an
-      error: nothing is written.
+      `--prune` drops entries whose file is actually gone from the vault
+      (one under an `excludeDirs` folder that's still on disk survives).
+      `--publish`/`--exclude`/`--decide` move entries and are
+      `apply`-only — `diff` rejects them. A path matching no vault file
+      is an error: nothing is written.
     - `deploy [--verify] [--no-build] [--dry-run] [--json]` — builds,
       then deploys to the host named in `vault.config.json` (Cloudflare
       Pages via `wrangler`, checking auth first; GitHub Pages via
-      add/commit/push). `--verify` fetches the site URL up to three
-      times 20s apart, reporting a still-propagating site rather than
-      failing it.
+      add/commit/push, checking `git add`'s and `git status`'s exit
+      codes and failing the deploy on either rather than silently
+      pushing nothing and reporting a stale site as freshly live).
+      `--verify` fetches the site URL up to three times 20s apart,
+      reporting a still-propagating site rather than failing it.
     - `doctor --site [--config PATH] [--json]` — audits the vault
-      instead of the machine. Ten finding codes: `CONFIG_INVALID`,
+      instead of the machine. Eleven finding codes: `CONFIG_INVALID`,
       `VAULT_MISSING`, `VERSION_DRIFT`, `FOLDER_UNMAPPED`,
-      `FILE_UNTYPED`, `PORTRAIT_MISSING`, `LINK_UNRESOLVED`,
-      `MANIFEST_ORPHAN`, `MANIFEST_UNREGISTERED`, `RECAP_INCOMPLETE` —
-      each finding names the edit that fixes it. Exits 1 only on an
-      error, never a warning.
+      `FILE_UNTYPED`, `FILE_UNPARSEABLE`, `PORTRAIT_MISSING`,
+      `LINK_UNRESOLVED`, `MANIFEST_ORPHAN`, `MANIFEST_UNREGISTERED`,
+      `RECAP_INCOMPLETE` — each finding names the edit that fixes it.
+      `FILE_UNPARSEABLE` names the YAML error for a file gray-matter
+      can't read; `VERSION_DRIFT` also now fires, naming the failure,
+      when the installed-tool check or the site's own `package.json`
+      can't be read, instead of going silent. Exits 1 only on an error,
+      never a warning.
     - `explain PATH [--config PATH] [--json]` — prints the chain the
       build walks for one file (directory, type, publish mode,
       auto-exclusion, canon status, manifest section) and the verdict:
       where it publishes, or which rule stopped it, plus the H2 sections
-      stripped on publish and the gm-only block count.
+      stripped on publish and the gm-only block count. A file whose
+      frontmatter gray-matter can't parse reports that directly instead
+      of a false `NO_TYPE`, with the stripped-sections and gm-only
+      counts reported as unknown rather than 0; a directory named in
+      this vault's own `excludeDirs` (rather than the fixed, every-site
+      list) reports `DIR_CONFIG_EXCLUDED`.
     - `decidePage`'s verdict codes, evaluated in the order the old build
       passes attributed them (directory checks first, `OK` last):
       `DIR_ALWAYS_EXCLUDED`, `DIR_UNMAPPED`, `NO_TYPE`, `STORY_COMPANION`
@@ -142,7 +179,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `session-play/SKILL.md`'s Rules dispute row and narrative-plan lookup
   row route to `rules_lookup.py` and `plans_index.py` respectively.
   `campaign-organizer/SKILL.md`'s Organize/Dissect/Weave index-update
-  steps now run `index_build.py <vault>` (dry-run, then `--write`).
+  steps now run `index_build.py <vault>` (dry-run, then `--write`); Weave
+  now carries the same idempotency note Dissect already had — it's
+  Organize's full-rebuild command, so there's no separate incremental
+  mode.
   `campaign-qa` gains its first prose site for `vault_check.py index`
   (SKILL.md's Graph Health checklist and `references/checks/graph-
   health.md` Step 2), pointing any drift finding at `index_build.py
