@@ -104,6 +104,25 @@ is the sheet a player can see, not a reminder to look away.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
+  manifest: `
+gm-apprentice-publish manifest <diff|apply> [options]
+
+Compares the publish manifest (_meta/publish-manifest.md) with what is actually
+in the vault, and edits it. "diff" classifies every vault file with the same
+decision the build makes, so a file it calls "publish" is a file the build
+publishes.
+
+  manifest diff [--config <path>] [--json]
+                     List files the manifest does not mention (with the bucket,
+                     code and reason for each), entries whose file is gone, and
+                     the per-section unchanged counts
+  manifest apply [--publish <path>]... [--exclude "<path>=<reason>"]...
+                 [--decide <path>]... [--prune] [--config <path>] [--json]
+                     Move paths between the three sections and rewrite the file.
+                     --prune drops entries with no file on disk. A path that
+                     matches no vault file is an error and nothing is written.
+  --help, -h         Show this help
+`,
   'update-pin': `
 gm-apprentice-publish update-pin [--site <dir>] [--check] [--json]
 
@@ -167,14 +186,21 @@ function printSubcommandHelp(cmd) {
 // same way `allowedFlags` maps a bare switch. Value flags reject a following
 // option token for the same reason `--config` does: `--pc --json` is a typo,
 // not a PC called "--json".
-function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}) {
+// `repeatedFlags` are value flags a caller may give more than once
+// (`--publish A.md --publish B.md`); their key collects an array, empty when the
+// flag never appears.
+function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}, repeatedFlags = {}) {
   let configPath = './vault.config.json';
   const flags = {};
+  for (const key of Object.values(repeatedFlags)) flags[key] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === '--config') {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
       configPath = rest[i + 1]; i++;
+    } else if (Object.prototype.hasOwnProperty.call(repeatedFlags, a)) {
+      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
+      flags[repeatedFlags[a]].push(rest[i + 1]); i++;
     } else if (Object.prototype.hasOwnProperty.call(valueFlags, a)) {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
       flags[valueFlags[a]] = rest[i + 1]; i++;
@@ -385,6 +411,39 @@ if (command === 'sheet') {
     configPath: parsed.configPath,
     pc: parsed.flags.pc,
     playerSafe: !!parsed.flags.playerSafe,
+    json: !!parsed.flags.json,
+  })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'manifest') {
+  const verb = args[1];
+  if (verb !== 'diff' && verb !== 'apply') {
+    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff or apply)');
+    printSubcommandHelp('manifest');
+    process.exit(1);
+  }
+  const parsed = parseSubcommandArgs(
+    args.slice(2),
+    { '--prune': 'prune', '--json': 'json' },
+    {},
+    { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' },
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('manifest');
+    process.exit(1);
+  }
+  const { runManifest } = require('../lib/manifest-cli.js');
+  runManifest({
+    verb,
+    configPath: parsed.configPath,
+    publish: parsed.flags.publish,
+    exclude: parsed.flags.exclude,
+    decide: parsed.flags.decide,
+    prune: !!parsed.flags.prune,
     json: !!parsed.flags.json,
   })
     .then((rc) => process.exit(rc))

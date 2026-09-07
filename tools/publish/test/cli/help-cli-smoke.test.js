@@ -30,6 +30,7 @@ const CASES = {
   flush: [/flush \[--config/, /--dry-run/],
   sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/],
   'update-pin': [/update-pin \[--site <dir>\]/, /--check/],
+  manifest: [/manifest <diff\|apply>/, /--prune/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
@@ -82,6 +83,20 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     assert.strictEqual(r.code, 1);
     assert.match(r.stderr, /Unknown argument: --nope/);
     assert.match(r.stdout, /sheet show --pc <name>/);
+  });
+
+  it('manifest with an unknown verb prints the manifest usage and exits 1', async () => {
+    const r = await runIn(['manifest', 'rebuild']);
+    assert.strictEqual(r.code, 1);
+    assert.match(r.stderr, /Unknown manifest command: rebuild/);
+    assert.match(r.stdout, /manifest <diff\|apply>/);
+  });
+
+  it('a repeated --publish collects both paths rather than overwriting', async () => {
+    // Reaching execution means the parser accepted both; the missing config is
+    // what stops it, and that is a different error from "Unknown argument".
+    const r = await runIn(['manifest', 'apply', '--publish', 'A.md', '--publish', 'B.md']);
+    assert.doesNotMatch(r.stderr, /Unknown argument/);
   });
 
   it('a bad argument on setup-inbox prints setup-inbox usage, not the top-level banner', async () => {
