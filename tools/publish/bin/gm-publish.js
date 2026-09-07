@@ -123,6 +123,20 @@ publishes.
                      matches no vault file is an error and nothing is written.
   --help, -h         Show this help
 `,
+  explain: `
+gm-apprentice-publish explain <vault-relative path> [--config <path>] [--json]
+
+Prints the chain the build walks for one file — directory, type, publish mode,
+auto-exclusion, canon status, manifest section — and then the build's own
+verdict: where it publishes, or which rule stopped it. Follows with the H2
+sections stripped on publish and how many gm-only blocks the file carries.
+
+  gm-apprentice-publish explain "Sessions/Session 7.md"
+
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --json             Emit the whole chain as an object
+  --help, -h         Show this help
+`,
   deploy: `
 gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
 
@@ -438,6 +452,26 @@ if (command === 'sheet') {
     playerSafe: !!parsed.flags.playerSafe,
     json: !!parsed.flags.json,
   })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'explain') {
+  const target = args[1];
+  if (!target || target.startsWith('-')) {
+    console.error('Error: explain needs a vault-relative path');
+    printSubcommandHelp('explain');
+    process.exit(1);
+  }
+  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('explain');
+    process.exit(1);
+  }
+  const { runExplain } = require('../lib/explain-cli.js');
+  runExplain({ configPath: parsed.configPath, target, json: !!parsed.flags.json })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;

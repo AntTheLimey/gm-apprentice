@@ -168,7 +168,7 @@ function surveyVault(options, deps) {
     }));
   }
 
-  return { config, configPath, vaultPath, publishConfig, manifest, files, verdicts };
+  return { config, configPath, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report };
 }
 
 async function runDiff(options, deps, survey) {
@@ -309,4 +309,6 @@ async function runManifest(options, deps) {
   return 1;
 }
 
-module.exports = { runManifest, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };
+// surveyVault is shared with explain-cli so both commands see one vault the same
+// way: the same file list, the same verdicts, the same config resolution.
+module.exports = { runManifest, surveyVault, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };

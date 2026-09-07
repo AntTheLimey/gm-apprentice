@@ -32,6 +32,7 @@ const CASES = {
   'update-pin': [/update-pin \[--site <dir>\]/, /--check/],
   manifest: [/manifest <diff\|apply>/, /--prune/],
   deploy: [/deploy \[--config <path>\] \[--verify\]/, /--dry-run/, /--no-build/],
+  explain: [/explain <vault-relative path>/, /gm-only blocks/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
@@ -98,6 +99,13 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     // what stops it, and that is a different error from "Unknown argument".
     const r = await runIn(['manifest', 'apply', '--publish', 'A.md', '--publish', 'B.md']);
     assert.doesNotMatch(r.stderr, /Unknown argument/);
+  });
+
+  it('explain without a path prints the explain usage and exits 1', async () => {
+    const r = await runIn(['explain']);
+    assert.strictEqual(r.code, 1);
+    assert.match(r.stderr, /explain needs a vault-relative path/);
+    assert.match(r.stdout, /explain <vault-relative path>/);
   });
 
   it('a bad argument on setup-inbox prints setup-inbox usage, not the top-level banner', async () => {
