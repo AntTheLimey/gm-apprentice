@@ -10,7 +10,17 @@ It is a one-way companion to `vault_check.py check_index`, which is the
 drift *detector*: this script does not import that module (and must not),
 but the two are designed to agree on what counts as indexable content —
 `_`-prefixed top-level directories and `SKIP_DIRS` are infrastructure, not
-content, in both places.
+content, in both places. `check_index` requires every other `.md` file to
+be referenced by its own stem or an `aliases:` entry, so this generator
+links everything it finds a place for: chapters, every session and scene
+(nested under its chapter), every session-chain document (nested under
+its session), every `*_Story.md` companion (nested under its PC), and
+every `type: plan` entity (its own section). A document this script
+cannot place — a session-chain doc with no matching session, a Story
+file with no matching PC — is not silently dropped; it surfaces in
+`## Stubs (Needs Attention)` instead, still linked, so the round trip
+against `check_index` holds even for content the generator can't file
+anywhere sensible.
 
 Usage:
   index_build.py VAULT [--write] [--date YYYY-MM-DD]
@@ -34,12 +44,17 @@ from pathlib import Path
 from typing import TypedDict
 
 from vaultlib import (
+    WRAP_UP_TYPES,
     chapter_key,
     chapter_of,
     entity_type,
     extract_frontmatter,
+    nested_mapping,
+    normalize,
+    parse_session_number,
     section,
     vault_files,
+    wikilink_target,
 )
 
 # type -> (H2/H3 section title, subgroup label | "" for no subgroup).
@@ -67,10 +82,21 @@ SECTION_ORDER = ["Characters", "Locations", "Factions & Organizations",
 
 NARRATIVE_TYPES = {"chapter", "session", "scene"}
 
-# Plan entities and session-chain docs are not index entries — the
-# template lists none of them.
-SKIP_TYPES = {"meta", "campaign_overview", "session-plan",
-              "session-play-notes", "plan"}
+# Session-chain documents: nest under their session in the Chapters
+# section, or fall to Stubs when no session claims them.
+CHAIN_TYPES: set[str] = {"session-plan", "session-play-notes", *WRAP_UP_TYPES}
+CHAIN_ORDER = ["plan", "play notes", "wrap-up"]
+
+# Types that are narrative apparatus, not domain entities: never counted
+# in entity_count and never bucketed into "Entities by Type". Plans get
+# their own "### Plans" section; chain docs and Story companions nest
+# under a session/PC when matched, or fall to Stubs when they don't.
+NARRATIVE_ADJACENT_TYPES: set[str] = CHAIN_TYPES | {"plan", "character-story"}
+
+# Meta/overview documents are not index entries — the template lists
+# none of them. (Session-chain docs, Story companions, and plans used to
+# be skipped outright too; they now get placed instead — see above.)
+SKIP_TYPES = {"meta", "campaign_overview"}
 
 # Statuses that make a session worth surfacing under "Active Session".
 ACTIVE_SESSION_STATUSES = {"planned", "prepped"}
@@ -87,6 +113,17 @@ class Entry:
     type: str
     descriptor: str
     stub_needs: str | None
+    # Set only on a `pc` entry that has a matching `*_Story.md` companion;
+    # `render` nests it directly under the PC's own line.
+    story_stem: str | None = None
+
+
+class SessionEntry(TypedDict):
+    stem: str
+    status: str
+    # (label, stem) pairs — "plan"/"play notes"/"wrap-up" — for whichever
+    # session-chain documents matched this session.
+    chain: list[tuple[str, str]]
 
 
 class ChapterRecord(TypedDict):
@@ -95,8 +132,20 @@ class ChapterRecord(TypedDict):
     sessions: int
     scenes: int
     active: list[tuple[str, str, str]]
-    all_sessions: list[tuple[str, str]]
+    all_sessions: list[SessionEntry]
     all_scenes: list[tuple[str, str]]
+
+
+@dataclass
+class _SessionFile:
+    """Internal — a session found during `collect`, kept around so a
+    session-chain document processed later in the same pass can be
+    matched and attached to its `SessionEntry` in place."""
+    stem: str
+    chapter_key: str
+    number: int | None
+    documents_targets: set[str]
+    entry: SessionEntry
 
 
 def _new_chapter_record() -> ChapterRecord:
@@ -151,14 +200,35 @@ def _stub_needs(fm: dict[str, object], text: str, ftype: str) -> str | None:
     return None
 
 
+def _chain_label(ftype: str) -> str:
+    if ftype == "session-plan":
+        return "plan"
+    if ftype == "session-play-notes":
+        return "play notes"
+    return "wrap-up"  # one of WRAP_UP_TYPES
+
+
+def _documents_targets(text: str) -> set[str]:
+    """Normalized wikilink targets named in a session's own `documents:`
+    block — the fallback a session-chain doc is matched against when its
+    own `session:` field doesn't resolve to a number."""
+    targets = set()
+    for value in nested_mapping(text, "documents").values():
+        target = wikilink_target(value)
+        if target:
+            targets.add(normalize(target))
+    return targets
+
+
 def _iter_content(vault: Path) -> list[tuple[str, str, dict[str, object], str]]:
     """(rel, text, frontmatter, stem) for every file `collect` considers.
 
     Excludes `vault_files`'s own `SKIP_DIRS`/hidden-dir skips (applied
-    already), every `_`-prefixed top-level directory — infrastructure,
-    not content, matching `vault_check.check_index`'s definition — and
-    `*_Story.md` companion pages, which are narrative history, not index
-    entries.
+    already) and every `_`-prefixed top-level directory — infrastructure,
+    not content, matching `vault_check.check_index`'s definition. Nothing
+    else is filtered here: `*_Story.md` companions, session-chain docs,
+    and plans are all still content that must end up referenced
+    somewhere in the rendered index.
     """
     out = []
     for rel, text in vault_files(vault):
@@ -166,8 +236,6 @@ def _iter_content(vault: Path) -> list[tuple[str, str, dict[str, object], str]]:
         if top.startswith("_"):
             continue
         stem = Path(rel).stem
-        if stem.endswith("_Story"):
-            continue
         fm = extract_frontmatter(text) or {}
         out.append((rel, text, fm, stem))
     return out
@@ -181,6 +249,13 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
     finds the chapter's own display stem and status. Sessions and scenes
     are attributed to a chapter by `chapter_key` equality; one that
     resolves to no chapter at all is not counted anywhere.
+
+    Session-chain documents (session-plan, session-play-notes, any
+    `WRAP_UP_TYPES` spelling) and `*_Story.md` companions are matched to
+    their session/PC in a second pass, once every session and PC entry
+    is known; an unmatched one becomes a Stubs-section `Entry` instead
+    of being dropped, so `check_index`'s "every file is referenced"
+    requirement still holds.
     """
     files = _iter_content(vault)
     chapters: dict[str, ChapterRecord] = {}
@@ -195,9 +270,16 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
         record["status"] = status if isinstance(status, str) else ""
 
     entries: list[Entry] = []
+    session_files: list[_SessionFile] = []
+    chain_docs: list[tuple[str, str, dict[str, object], str]] = []
+    story_files: list[tuple[str, str]] = []
+
     for rel, text, fm, stem in files:
         ftype = entity_type(fm)
         if ftype == "chapter":
+            continue
+        if stem.endswith("_Story"):
+            story_files.append((rel, stem))
             continue
         if ftype in NARRATIVE_TYPES:  # session, scene
             session_key = chapter_key(rel, fm)
@@ -210,12 +292,28 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
                             or session_key)
             if ftype == "session":
                 record["sessions"] += 1
-                record["all_sessions"].append((stem, status))
+                session_entry: SessionEntry = {
+                    "stem": stem, "status": status, "chain": []}
+                record["all_sessions"].append(session_entry)
+                session_files.append(_SessionFile(
+                    stem=stem, chapter_key=session_key,
+                    number=parse_session_number(fm.get("session_number")),
+                    documents_targets=_documents_targets(text),
+                    entry=session_entry))
                 if status in ACTIVE_SESSION_STATUSES:
                     record["active"].append((stem, chapter_stem, status))
             else:
                 record["scenes"] += 1
                 record["all_scenes"].append((stem, status))
+            continue
+        if ftype in CHAIN_TYPES:
+            chain_docs.append((rel, stem, fm, ftype))
+            continue
+        if ftype == "plan":
+            plan_type = fm.get("plan_type")
+            label = plan_type if isinstance(plan_type, str) and plan_type else "plan"
+            entries.append(Entry(rel=rel, stem=stem, type="plan",
+                                 descriptor=label, stub_needs=None))
             continue
         if ftype in SKIP_TYPES:
             continue
@@ -224,6 +322,38 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
             descriptor=descriptor_of(fm, text),
             stub_needs=_stub_needs(fm, text, ftype),
         ))
+
+    by_key_number: dict[tuple[str, int], _SessionFile] = {
+        (sf.chapter_key, sf.number): sf for sf in session_files
+        if sf.number is not None}
+
+    for rel, stem, fm, ftype in chain_docs:
+        num = parse_session_number(fm.get("session"))
+        matched: _SessionFile | None = None
+        if num is not None:
+            chain_key = chapter_key(rel, fm)
+            if chain_key is not None:
+                matched = by_key_number.get((chain_key, num))
+        else:
+            target = normalize(stem)
+            for sf in session_files:
+                if target in sf.documents_targets:
+                    matched = sf
+                    break
+        if matched is not None:
+            matched.entry["chain"].append((_chain_label(ftype), stem))
+        else:
+            entries.append(Entry(rel=rel, stem=stem, type=ftype,
+                                 descriptor="", stub_needs="session link"))
+
+    pc_index = {e.stem.casefold(): e for e in entries if e.type == "pc"}
+    for rel, stem in story_files:
+        pc_entry = pc_index.get(stem[: -len("_Story")].casefold())
+        if pc_entry is not None:
+            pc_entry.story_stem = stem
+        else:
+            entries.append(Entry(rel=rel, stem=stem, type="character-story",
+                                 descriptor="", stub_needs="PC page"))
 
     entries.sort(key=lambda e: e.stem.casefold())
     chapter_list = sorted(chapters.values(),
@@ -234,10 +364,16 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
 def _counts(entries: list[Entry],
            chapters: list[ChapterRecord]) -> tuple[int, int, int]:
     """(entity_count, narrative_count, stub_count)."""
-    typed = sum(1 for e in entries if e.type)
+    typed = sum(1 for e in entries
+               if e.type and e.type not in NARRATIVE_ADJACENT_TYPES)
+    chain_matched = sum(len(sess["chain"]) for c in chapters
+                        for sess in c["all_sessions"])
+    chain_orphan = sum(1 for e in entries if e.type in CHAIN_TYPES)
+    plans = sum(1 for e in entries if e.type == "plan")
     narrative = (len(chapters)
                 + sum(c["sessions"] for c in chapters)
-                + sum(c["scenes"] for c in chapters))
+                + sum(c["scenes"] for c in chapters)
+                + chain_matched + chain_orphan + plans)
     stubs = sum(1 for e in entries if e.stub_needs is not None)
     return typed, narrative, stubs
 
@@ -266,7 +402,10 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
     """The full rendered `_meta/index.md` text for `vault`."""
     entries, chapters = collect(vault)
     entity_count, narrative_count, stub_count = _counts(entries, chapters)
-    typed_entries = [e for e in entries if e.type]
+    typed_entries = [e for e in entries
+                     if e.type and e.type not in NARRATIVE_ADJACENT_TYPES]
+    plan_entries = sorted((e for e in entries if e.type == "plan"),
+                          key=lambda e: e.stem.casefold())
     stub_entries = [e for e in entries if e.stub_needs is not None]
 
     lines: list[str] = [
@@ -289,8 +428,11 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
             lines.append(
                 f"- [[{chapter['stem']}]] (sessions: {chapter['sessions']}, "
                 f"scenes: {chapter['scenes']}, status: {chapter['status']})")
-            for sess_stem, sess_status in chapter["all_sessions"]:
-                lines.append(f"  - [[{sess_stem}]] (status: {sess_status})")
+            for sess in chapter["all_sessions"]:
+                lines.append(f"  - [[{sess['stem']}]] (status: {sess['status']})")
+                for label, doc_stem in sorted(
+                        sess["chain"], key=lambda c: CHAIN_ORDER.index(c[0])):
+                    lines.append(f"    - {label}: [[{doc_stem}]]")
             for scene_stem, scene_status in chapter["all_scenes"]:
                 lines.append(f"  - [[{scene_stem}]] (status: {scene_status})")
 
@@ -301,6 +443,11 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
         for stem, chapter_stem, status in active:
             lines.append(
                 f"- [[{stem}]] (chapter: {chapter_stem}, status: {status})")
+
+    if plan_entries:
+        lines.append("")
+        lines.append(f"### Plans ({len(plan_entries)})")
+        lines.extend(_entry_line(e) for e in plan_entries)
 
     lines.append("")
     lines.append("## Entities by Type")
@@ -326,7 +473,10 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
                     continue
                 lines.append("")
                 lines.append(f"**{sub} ({len(items)}):**")
-                lines.extend(_entry_line(e) for e in items)
+                for entry in items:
+                    lines.append(_entry_line(entry))
+                    if sub == "PCs" and entry.story_stem:
+                        lines.append(f"  - story: [[{entry.story_stem}]]")
         else:
             items = subs.get("", [])
             if not items:
@@ -379,6 +529,21 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
     return "\n".join(lines)
 
 
+_COUNT_RE = re.compile(
+    r"^entity_count: (\d+)\nnarrative_count: (\d+)\nstub_count: (\d+)$",
+    re.MULTILINE)
+
+
+def _counts_from_rendered(rendered: str) -> tuple[int, int, int]:
+    """Pull the three frontmatter counts back out of `render()`'s own
+    output, so the CLI's summary line never re-scans the vault — a
+    second `collect()` call would double the vault walk for no reason,
+    since `render()` already computed these."""
+    m = _COUNT_RE.search(rendered)
+    assert m is not None, "render() always emits the three count lines"
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
+
+
 def _read_existing(index_path: Path) -> tuple[str, str]:
     """(text with LF line endings, the file's own EOL) for `index_path`."""
     raw = index_path.read_bytes()
@@ -408,8 +573,7 @@ def main(argv: list[str] | None = None) -> int:
         previous, eol = _read_existing(index_path)
 
     rendered = render(vault, today=today, previous=previous)
-    entries, chapters = collect(vault)
-    entity_count, narrative_count, stub_count = _counts(entries, chapters)
+    entity_count, narrative_count, stub_count = _counts_from_rendered(rendered)
     count_line = (f"# entities: {entity_count}  narrative: {narrative_count}"
                  f"  stubs: {stub_count}")
 

@@ -1,7 +1,6 @@
 ---
 type: character-story
 character: "[[Ada]]"
-aliases: [Ada]
 canon_status: DRAFT
 ---
 

@@ -3,10 +3,10 @@
 vault scan.
 
 Covers `collect()`'s counting rules (entities vs. narrative, skips), the
-shape of `render()`'s output against the index template, Recent Changes
-carry-over, the round trip against `vault_check.check_index` (the drift
-detector this generator must agree with), and the CLI's dry-run/--write/
-EOL-preservation behaviour.
+shape of `render()`'s output against the index template — including the
+nested session-chain documents and Story companions the round trip
+against `vault_check.check_index` requires — Recent Changes carry-over,
+and the CLI's dry-run/--write/EOL-preservation behaviour.
 
 Run: python3 tests/test_index_build.py
 """
@@ -45,25 +45,60 @@ def copy_fixture(case) -> Path:
     return d
 
 
+def write(root: Path, rel: str, text: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
 class CollectTests(unittest.TestCase):
     def test_counts(self):
         entries, chapters = ib.collect(FIX)
-        typed = [e for e in entries if e.type]
+        typed = [e for e in entries
+                 if e.type and e.type not in ib.NARRATIVE_ADJACENT_TYPES]
         stems = sorted(e.stem for e in typed)
         self.assertEqual(
             stems, ["Ada", "Bram", "Docks", "Key", "Stub Guy", "The Guild"])
 
+        chain_matched = sum(len(sess["chain"]) for c in chapters
+                            for sess in c["all_sessions"])
+        chain_orphan = sum(1 for e in entries if e.type in ib.CHAIN_TYPES)
+        plans = sum(1 for e in entries if e.type == "plan")
+        self.assertEqual(chain_orphan, 0)  # both chain docs match session 1
+        self.assertEqual(chain_matched, 2)  # Session_01_Plan + Wrap_Up
+        self.assertEqual(plans, 1)  # Arc_Shape
+
         narrative = (len(chapters)
                      + sum(c["sessions"] for c in chapters)
-                     + sum(c["scenes"] for c in chapters))
-        self.assertEqual(narrative, 4)
+                     + sum(c["scenes"] for c in chapters)
+                     + chain_matched + chain_orphan + plans)
+        self.assertEqual(narrative, 7)
 
         all_stems = {e.stem for e in entries}
-        self.assertNotIn("Ada_Story", all_stems)
         self.assertNotIn("_Template_NPC", all_stems)
+        # Ada_Story is matched to Ada, not a free-standing entry.
+        self.assertNotIn("Ada_Story", all_stems)
 
         untyped = [e for e in entries if not e.type]
         self.assertEqual([e.stem for e in untyped], ["Untyped Note"])
+
+    def test_ada_story_matched_to_pc(self):
+        entries, _chapters = ib.collect(FIX)
+        ada = next(e for e in entries if e.stem == "Ada")
+        self.assertEqual(ada.story_stem, "Ada_Story")
+
+    def test_chain_docs_attached_to_session_01(self):
+        _entries, chapters = ib.collect(FIX)
+        chapter = chapters[0]
+        session_01 = next(s for s in chapter["all_sessions"]
+                          if s["stem"] == "Session 01")
+        labels = dict(session_01["chain"])
+        self.assertEqual(labels.get("plan"), "Session_01_Plan")
+        self.assertEqual(labels.get("wrap-up"),
+                         "Chapter_01_Session_01_Wrap_Up")
+        session_02 = next(s for s in chapter["all_sessions"]
+                          if s["stem"] == "Session 02")
+        self.assertEqual(session_02["chain"], [])
 
 
 class RenderShapeTests(unittest.TestCase):
@@ -77,7 +112,7 @@ class RenderShapeTests(unittest.TestCase):
             "purpose: vault-index\n"
             f"last_updated: {TODAY}\n"
             "entity_count: 6\n"
-            "narrative_count: 4\n"
+            "narrative_count: 7\n"
             "stub_count: 2\n"
             "---\n"))
 
@@ -88,17 +123,31 @@ class RenderShapeTests(unittest.TestCase):
             "(sessions: 2, scenes: 1, status: in_progress)",
             self.text)
 
+    def test_session_chain_nested(self):
+        self.assertIn("  - [[Session 01]] (status: played)", self.text)
+        self.assertIn("    - plan: [[Session_01_Plan]]", self.text)
+        self.assertIn(
+            "    - wrap-up: [[Chapter_01_Session_01_Wrap_Up]]", self.text)
+        self.assertIn("  - [[Session 02]] (status: prepped)", self.text)
+
     def test_active_session_section(self):
         self.assertIn("### Active Session", self.text)
-        self.assertIn("[[Session 02]]", self.text.split("### Active Session", 1)[1]
-                       .split("## Entities by Type", 1)[0])
-        self.assertIn("status: prepped", self.text)
+        active_block = (self.text.split("### Active Session", 1)[1]
+                        .split("### Plans", 1)[0])
+        self.assertIn("[[Session 02]]", active_block)
+        self.assertIn("status: prepped", active_block)
 
-    def test_pcs(self):
+    def test_plans_section(self):
+        self.assertIn("### Plans (1)", self.text)
+        self.assertIn("- [[Arc_Shape]] — arc", self.text)
+
+    def test_pcs_with_story_nested(self):
         self.assertIn("**PCs (1):**", self.text)
+        pc_block = self.text.split("**PCs (1):**", 1)[1].split("\n\n", 1)[0]
         self.assertIn(
             "- [[Ada]] — Dockworker searching for her missing brother.",
-            self.text)
+            pc_block)
+        self.assertIn("  - story: [[Ada_Story]]", pc_block)
 
     def test_locations(self):
         self.assertIn("### Locations (1)", self.text)
@@ -110,6 +159,46 @@ class RenderShapeTests(unittest.TestCase):
         self.assertIn(
             "- [[Untyped Note]] — type: (none), needs: type field",
             self.text)
+
+
+class OrphanHandlingTests(unittest.TestCase):
+    """A session-chain doc that matches no session, and a Story file
+    that matches no PC, must still end up referenced somewhere — the
+    round-trip contract requires it. Neither is exercised by the main
+    fixture (everything there matches), so this proves the fallback
+    path independently with a minimal synthetic vault."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-orphan-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Characters/PCs/Zoe.md",
+              "---\ntype: pc\n---\n\n# Zoe\n")
+        write(self.vault, "Characters/PCs/Orphan_Story.md",
+              "---\ntype: character-story\ncharacter: \"[[Nobody]]\"\n"
+              "---\n\n# Orphan Story\n")
+        write(self.vault, "Notes/Loose_Plan.md",
+              "---\ntype: session-plan\nsession: 99\n---\n\n# Loose Plan\n")
+
+    def test_orphans_surface_in_stubs(self):
+        entries, _chapters = ib.collect(self.vault)
+        loose_plan = next(e for e in entries if e.stem == "Loose_Plan")
+        self.assertEqual(loose_plan.type, "session-plan")
+        self.assertEqual(loose_plan.stub_needs, "session link")
+
+        orphan_story = next(e for e in entries if e.stem == "Orphan_Story")
+        self.assertEqual(orphan_story.type, "character-story")
+        self.assertEqual(orphan_story.stub_needs, "PC page")
+
+        zoe = next(e for e in entries if e.stem == "Zoe")
+        self.assertIsNone(zoe.story_stem)
+
+        text = ib.render(self.vault, today=TODAY, previous=None)
+        self.assertIn(
+            "- [[Loose_Plan]] — type: session-plan, needs: session link",
+            text)
+        self.assertIn(
+            "- [[Orphan_Story]] — type: character-story, needs: PC page",
+            text)
 
 
 class RecentChangesTests(unittest.TestCase):
@@ -146,7 +235,7 @@ class DryRunTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("+- [[Bram]]", result.stdout)
         self.assertIn("\n-", result.stdout)
-        self.assertIn("# entities: 6  narrative: 4  stubs: 2", result.stdout)
+        self.assertIn("# entities: 6  narrative: 7  stubs: 2", result.stdout)
 
 
 class CrlfTests(unittest.TestCase):
