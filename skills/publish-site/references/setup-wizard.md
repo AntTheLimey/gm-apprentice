@@ -688,8 +688,11 @@ two-minute enablement steps. Then continue to Phase F.
 
 Do not declare victory blind. **Cloudflare (Step 21a):** `deploy
 --verify` already probed the URL and its final line said whether it
-came back live — relay that line. **GitHub Pages (Step 21b):** the push
-happened via plain `git`, not `deploy`, so run the probe now:
+came back live — relay that line. **GitHub Pages (Step 21b), manual
+path:** `deploy --verify` in that step already probed it — relay its
+final line from Step 21b and skip the probe below. **GitHub Pages
+(Step 21b), `gh repo create --push` path:** that push was plain `git`,
+not `deploy`, so run the probe now:
 
 ```bash
 node "$TOOL" deploy --verify --no-build --config vault.config.json
