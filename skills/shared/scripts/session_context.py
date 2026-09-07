@@ -29,6 +29,8 @@ Each section is headed with its source path; missing pieces are
 reported, not fatal.
 """
 
+from __future__ import annotations
+
 import argparse
 import re
 import sys

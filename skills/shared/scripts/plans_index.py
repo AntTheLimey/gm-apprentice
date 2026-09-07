@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from vaultlib import (chapter_of, extract_frontmatter,  # noqa: E402
+from vaultlib import (body_of, chapter_of, extract_frontmatter,  # noqa: E402
                       vault_files, wikilink_target)
 
 STATUS_RE = re.compile(r"\b(Active|Parked|Complete|Ingested)\b", re.IGNORECASE)
@@ -207,12 +207,7 @@ def resolve_adventure(adventures: list[Adventure], chapter: str | None,
 def file_summary(path: Path) -> str:
     """"H1 — ## a | ## b | ## c", truncated to 120 characters."""
     text = path.read_text(encoding="utf-8", errors="replace")
-    fm = extract_frontmatter(text)
-    body = text
-    if fm is not None:
-        m = re.match(r"^---\r?\n.*?\r?\n---\r?\n?(.*)$", text, re.DOTALL)
-        if m:
-            body = m.group(1)
+    body = body_of(text)
     h1 = ""
     h2s = []
     for m in _HEADING_RE.finditer(body):
