@@ -148,6 +148,9 @@ jobs:
       - name: index_build tests
         run: python tests/test_index_build.py
 
+      - name: plan_check tests
+        run: python tests/test_plan_check.py
+
       # Last: a type error must never mask a failing test.
       - name: Type-check shared scripts
         run: |
