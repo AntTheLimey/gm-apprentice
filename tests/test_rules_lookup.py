@@ -50,7 +50,7 @@ def line_of(rel_path, prefix):
 
 class TableRecords(unittest.TestCase):
     def test_table_row_exact(self):
-        mode, recs = rl.lookup("Absolute Timing", system="gurps-4e",
+        mode, recs, _total = rl.lookup("Absolute Timing", system="gurps-4e",
                                systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(len(recs), 1)
@@ -80,7 +80,7 @@ class TableRecords(unittest.TestCase):
         self.assertNotIn("-------", names)
 
     def test_parenthetical_strip(self):
-        mode, recs = rl.lookup("fast-draw", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("fast-draw", systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual({r.name for r in recs},
                          {"Fast-Draw (Sword)", "Fast-Draw (Bandage)"})
@@ -88,7 +88,7 @@ class TableRecords(unittest.TestCase):
 
 class BlockRecords(unittest.TestCase):
     def test_bold_lead_block_dnd_monster(self):
-        mode, recs = rl.lookup("Commoner", system="dnd-5e-2024",
+        mode, recs, _total = rl.lookup("Commoner", system="dnd-5e-2024",
                                systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(len(recs), 1)
@@ -101,7 +101,7 @@ class BlockRecords(unittest.TestCase):
         self.assertEqual(rec.cells, [])
 
     def test_dnd_spell_bullet(self):
-        mode, recs = rl.lookup("Alarm", system="dnd-5e-2024", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Alarm", system="dnd-5e-2024", systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0].name, "Alarm")
@@ -113,7 +113,7 @@ class BlockRecords(unittest.TestCase):
         self.assertFalse([n for n in names if n.startswith("Legend")])
 
     def test_h3_block_coc_creature(self):
-        mode, recs = rl.lookup("Bear", system="coc-7e", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Bear", system="coc-7e", systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(len(recs), 1)
         rec = recs[0]
@@ -125,31 +125,31 @@ class BlockRecords(unittest.TestCase):
 
 class MatchTiers(unittest.TestCase):
     def test_substring_then_fuzzy(self):
-        mode, recs = rl.lookup("Timing", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Timing", systems_dir=FIX)
         self.assertEqual(mode, "substring")
         self.assertIn("Absolute Timing", {r.name for r in recs})
 
-        mode, recs = rl.lookup("Absolut Timming", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Absolut Timming", systems_dir=FIX)
         self.assertEqual(mode, "fuzzy")
         self.assertEqual(recs[0].name, "Absolute Timing")
 
-        self.assertEqual(rl.lookup("zzzz", systems_dir=FIX), ("none", []))
+        self.assertEqual(rl.lookup("zzzz", systems_dir=FIX), ("none", [], 0))
 
     def test_kind_filter(self):
-        mode, recs = rl.lookup("Bracketwork", kind="trait", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Bracketwork", kind="trait", systems_dir=FIX)
         self.assertNotEqual(mode, "exact")
-        mode, recs = rl.lookup("Bracketwork", kind="skill", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Bracketwork", kind="skill", systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(recs[0].kind, "skill")
 
 
 class Gating(unittest.TestCase):
     def test_variant_gating(self):
-        mode, recs = rl.lookup("Cartography", system="coc-7e", systems_dir=FIX)
+        mode, recs, _total = rl.lookup("Cartography", system="coc-7e", systems_dir=FIX)
         self.assertNotEqual(mode, "exact")
         self.assertEqual([r for r in recs if r.system == "coc-7e/regency"], [])
 
-        mode, recs = rl.lookup("Cartography", system="coc-7e",
+        mode, recs, _total = rl.lookup("Cartography", system="coc-7e",
                                variant="regency", systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(recs[0].system, "coc-7e/regency")
@@ -161,11 +161,101 @@ class Gating(unittest.TestCase):
         self.assertIn("Secret Trait",
                       {r.name for r in rl.iter_records(FIX, personal=True)})
 
-        mode, _ = rl.lookup("Secret Trait", systems_dir=FIX)
+        mode, _, _total = rl.lookup("Secret Trait", systems_dir=FIX)
         self.assertNotEqual(mode, "exact")
-        mode, recs = rl.lookup("Secret Trait", systems_dir=FIX, personal=True)
+        mode, recs, _total = rl.lookup("Secret Trait", systems_dir=FIX, personal=True)
         self.assertEqual(mode, "exact")
         self.assertEqual(recs[0].cells[1], "99")
+
+
+class ParenAndDashLeads(unittest.TestCase):
+    """I1: a parenthetical, or an ASCII '--' dash, after a bold lead still
+    introduces a record (`**Spot Hidden** (25%) — ...`); a colon label
+    still doesn't (`**Detective:** Spot Hidden 60%`)."""
+
+    def test_parenthetical_lead_is_a_record(self):
+        mode, recs, _total = rl.lookup("Spot Hidden", system="coc-7e",
+                                       kind="skill", systems_dir=FIX)
+        self.assertEqual(mode, "exact")
+        self.assertEqual(recs[0].name, "Spot Hidden")
+
+    def test_ascii_dash_lead_is_a_record(self):
+        mode, recs, _total = rl.lookup("Mechanical Identity", system="coc-7e",
+                                       kind="skill", systems_dir=FIX)
+        self.assertEqual(mode, "exact")
+        self.assertEqual(recs[0].name, "Mechanical Identity")
+
+    def test_colon_label_is_not_a_record(self):
+        names = {r.name for r in rl.iter_records(FIX, systems=["coc-7e"])}
+        self.assertNotIn("Detective:", names)
+
+
+class ExactCountAndLimit(unittest.TestCase):
+    """M4: the header count reflects the true exact-tier total, not the
+    post-slice, substring-mixed list, and says when --limit suppressed
+    some of it."""
+
+    def test_exact_count_not_inflated_by_substring(self):
+        mode, recs, total = rl.lookup("fast-draw", systems_dir=FIX, limit=1)
+        self.assertEqual(mode, "exact")
+        self.assertEqual(total, 2)
+        self.assertEqual(len(recs), 1)
+        text = rl.render(mode, recs, total=total)
+        self.assertIn("# match: exact (2)", text)
+        self.assertIn("showing 1", text)
+        self.assertIn("1 suppressed by --limit", text)
+
+    def test_no_suppression_note_when_everything_shown(self):
+        mode, recs, total = rl.lookup("fast-draw", systems_dir=FIX)
+        text = rl.render(mode, recs, total=total)
+        self.assertEqual(text.splitlines()[0], "# match: exact (2)")
+        self.assertNotIn("suppressed", text)
+
+
+class BlankTerm(unittest.TestCase):
+    """M5: a blank term must never dump the corpus."""
+
+    def test_blank_term_matches_nothing(self):
+        self.assertEqual(rl.lookup("", systems_dir=FIX), ("none", [], 0))
+        self.assertEqual(rl.lookup("   ", systems_dir=FIX), ("none", [], 0))
+
+    def test_cli_rejects_blank_term(self):
+        out = run_cli("gurps-4e", "", "--limit", "400",
+                      "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("error: blank lookup term", out.stderr)
+        self.assertEqual(out.stdout, "")
+
+
+class KindFallback(unittest.TestCase):
+    """I2: a --kind filter that matches nothing retries without it and
+    says so, instead of reporting the rule doesn't exist at all."""
+
+    def test_kind_miss_falls_back_and_says_so(self):
+        out = run_cli("gurps-4e", "Bracketwork", "--kind", "trait",
+                      "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("# match: none for kind=trait", out.stdout)
+        self.assertIn("Bracketwork", out.stdout)
+
+    def test_kind_hit_has_no_fallback_note(self):
+        out = run_cli("gurps-4e", "Bracketwork", "--kind", "skill",
+                      "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertNotIn("fallback", out.stdout)
+        self.assertNotIn("closest without it", out.stdout)
+
+
+class BadSystemsDir(unittest.TestCase):
+    """I4: a wrong or missing corpus path is a reported error, not an
+    indistinguishable "no such rule"."""
+
+    def test_missing_systems_dir_is_an_error(self):
+        out = run_cli("all", "Combat Reflexes", "--systems-dir",
+                      "/nonexistent/gm-apprentice-test-path")
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("error: no systems directory at", out.stderr)
+        self.assertEqual(out.stdout, "")
 
 
 class Cli(unittest.TestCase):
@@ -210,16 +300,22 @@ class RealCorpus(unittest.TestCase):
     """Presence-and-provenance only — never the text of a record."""
 
     def test_real_corpus_smoke(self):
-        mode, recs = rl.lookup("Combat Reflexes", system="gurps-4e")
+        mode, recs, _total = rl.lookup("Combat Reflexes", system="gurps-4e")
         self.assertEqual(mode, "exact")
         self.assertTrue([r for r in recs
                          if r.file.startswith("gurps-4e/traits-")],
                         sorted(r.file for r in recs))
 
-        mode, _ = rl.lookup("Spot Hidden", system="coc-7e")
+        mode, _, _total = rl.lookup("Spot Hidden", system="coc-7e")
         self.assertEqual(mode, "exact")
+        # The prose (ttrpg-expert/SKILL.md, session-play/SKILL.md) tells the
+        # model to pass --kind, so the lookup must resolve with it too.
+        mode, recs, _total = rl.lookup("Spot Hidden", system="coc-7e",
+                                       kind="skill")
+        self.assertEqual(mode, "exact")
+        self.assertTrue(any(r.name == "Spot Hidden" for r in recs))
 
-        mode, recs = rl.lookup("Fireball", system="dnd-5e-2024", kind="spell")
+        mode, recs, _total = rl.lookup("Fireball", system="dnd-5e-2024", kind="spell")
         self.assertEqual(mode, "exact")
         self.assertTrue(all(r.kind == "spell" for r in recs))
 

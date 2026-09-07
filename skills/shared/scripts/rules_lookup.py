@@ -23,13 +23,17 @@ Usage:
 SYSTEM is a system slug (`gurps-4e`) or `all`. Output is one
 `name<TAB>system<TAB>kind<TAB>file:line<TAB>summary` row per record,
 under a `# match: ...` header line; block records print their text
-indented two spaces. Exit 0 on a match, 1 on none.
+indented two spaces. A `--kind` filter that matches nothing falls back
+to an unfiltered lookup and says so, rather than reporting "no such
+rule". Exit 0 on a match, 1 on none, 2 on a bad invocation (blank term,
+missing `--systems-dir`).
 
 Copyright: this prints back only what the corpus files already contain,
 one record at a time — never a whole table or file, and it writes
-nothing to disk (no index, no cache). Files under `personal/` are the
-user's private licensed copies and are skipped unless `--personal` is
-passed explicitly.
+nothing to disk (no index, no cache). A blank term is rejected outright
+rather than matching (and printing) the whole corpus. Files under
+`personal/` are the user's private licensed copies and are skipped
+unless `--personal` is passed explicitly.
 """
 
 from __future__ import annotations
@@ -69,9 +73,10 @@ HEADING_RE = re.compile(r"^#{1,6}\s")
 H3_RE = re.compile(r"^###\s+(.+?)\s*$")
 BOLD_LEAD_RE = re.compile(r"^(?:- )?\*\*([^*]+)\*\*(?P<rest>.*)$")
 # A bold lead introduces a record only when a column separator, a dash,
-# or the end of the line follows it. A colon (`**XP trigger**:`) marks a
-# label, not a record.
-LEAD_TAIL_RE = re.compile(r"^\s*(?:[|—–]|$)")
+# the end of the line, or an optional parenthetical followed by one of
+# those follows it (`**Spot Hidden** (25%) — ...`). A colon
+# (`**XP trigger**:`) marks a label, not a record.
+LEAD_TAIL_RE = re.compile(r"^\s*(?:\([^)]*\)\s*)?(?:[|—–]|--\s|$)")
 SEPARATOR_CELL_RE = re.compile(r"^:?-+:?$")
 TRAILING_TAG_RE = re.compile(r"\s*\[[^\[\]]*\]\s*$")
 TRAILING_PAREN_RE = re.compile(r"\s*\([^()]*\)\s*$")
@@ -298,8 +303,20 @@ def _matches_filters(rec: Record, system: str | None, kind: str | None,
 def lookup(term: str, *, system: str | None = None, kind: str | None = None,
            variant: str | None = None, limit: int = 10,
            personal: bool = False,
-           systems_dir: Path = SYSTEMS_DIR) -> tuple[str, list[Record]]:
-    """Find `term`, best tier first. Returns (match_mode, records)."""
+           systems_dir: Path = SYSTEMS_DIR
+           ) -> tuple[str, list[Record], int]:
+    """Find `term`, best tier first. Returns (match_mode, records, total)
+    where `total` is the number of records at the reported tier before
+    `--limit` truncates the list — so a caller can tell "5 shown" from
+    "5 shown of 40 found".
+
+    A blank (or all-whitespace) term matches nothing: an empty needle is
+    a substring of every record name, which would otherwise dump close
+    to the whole corpus — the opposite of this module's one-record-at-a-
+    time copyright guard.
+    """
+    if not term.strip():
+        return "none", [], 0
     needle = term.casefold()
     systems = [system.split("/")[0]] if system else None
     candidates = [rec for rec in iter_records(systems_dir, personal=personal,
@@ -315,28 +332,44 @@ def lookup(term: str, *, system: str | None = None, kind: str | None = None,
         elif needle in folded:
             substring.append(rec)
 
-    if exact or substring:
-        hits = sorted(exact, key=_sort_key) + sorted(substring, key=_sort_key)
-        return ("exact" if exact else "substring"), hits[:limit]
+    # Tiers are exclusive: a hit in a higher tier stops the lower ones
+    # from being reported at all, so "exact (N)" never silently counts
+    # substring rows in N (#M4).
+    if exact:
+        hits = sorted(exact, key=_sort_key)
+        return "exact", hits[:limit], len(hits)
+    if substring:
+        hits = sorted(substring, key=_sort_key)
+        return "substring", hits[:limit], len(hits)
 
     names = sorted({rec.name.casefold() for rec in candidates})
     close = difflib.get_close_matches(needle, names, n=limit,
                                       cutoff=FUZZY_CUTOFF)
     if not close:
-        return "none", []
+        return "none", [], 0
     rank = {name: i for i, name in enumerate(close)}
     fuzzy = [rec for rec in candidates if rec.name.casefold() in rank]
     fuzzy.sort(key=lambda rec: (rank[rec.name.casefold()], _sort_key(rec)))
-    return "fuzzy", fuzzy[:limit]
+    return "fuzzy", fuzzy[:limit], len(fuzzy)
 
 
-def render(mode: str, records: list[Record]) -> str:
+def render(mode: str, records: list[Record], *, total: int = 0,
+          kind: str | None = None, fallback: list[Record] | None = None
+          ) -> str:
     if mode == "none":
-        return "# match: none"
-    if mode == "fuzzy":
+        if kind and fallback:
+            out = [f"# match: none for kind={kind} — closest without it:"]
+            records = fallback
+        else:
+            return "# match: none"
+    elif mode == "fuzzy":
         out = ["# match: fuzzy — no exact hit, closest:"]
     else:
-        out = [f"# match: {mode} ({len(records)})"]
+        header = f"# match: {mode} ({total})"
+        if total > len(records):
+            header += (f" — showing {len(records)}, "
+                      f"{total - len(records)} suppressed by --limit")
+        out = [header]
     for rec in records:
         out.append("\t".join([rec.name, rec.system, rec.kind,
                               f"{rec.file}:{rec.line}", rec.summary()]))
@@ -360,16 +393,32 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR)
     args = parser.parse_args(argv)
 
-    mode, records = lookup(
-        args.term,
-        system=None if args.system == "all" else args.system,
-        kind=args.kind, variant=args.variant, limit=args.limit,
-        personal=args.personal, systems_dir=args.systems_dir)
+    if not args.systems_dir.is_dir():
+        print(f"error: no systems directory at {args.systems_dir}",
+              file=sys.stderr)
+        return 2
+    if not args.term.strip():
+        print("error: blank lookup term", file=sys.stderr)
+        return 2
+
+    system = None if args.system == "all" else args.system
+    mode, records, total = lookup(
+        args.term, system=system, kind=args.kind, variant=args.variant,
+        limit=args.limit, personal=args.personal,
+        systems_dir=args.systems_dir)
+
+    fallback: list[Record] = []
+    if mode == "none" and args.kind:
+        _, fallback, _ = lookup(
+            args.term, system=system, kind=None, variant=args.variant,
+            limit=args.limit, personal=args.personal,
+            systems_dir=args.systems_dir)
 
     if args.json:
         print(json.dumps([rec.as_dict() for rec in records], indent=2))
     else:
-        print(render(mode, records))
+        print(render(mode, records, total=total, kind=args.kind,
+                     fallback=fallback))
     return 0 if records else 1
 
 
