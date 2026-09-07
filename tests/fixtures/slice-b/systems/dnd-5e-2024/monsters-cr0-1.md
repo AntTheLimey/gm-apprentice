@@ -1,6 +1,9 @@
 # Fixture Monsters CR 0-1
 
-Invented parser fixture. All statistics below are made up.
+Invented parser fixture for the bold-lead block shape. The Commoner
+block mirrors the SRD 5.2 (CC-BY 4.0) Commoner stat block, already
+attributed in ATTRIBUTION.md, rather than being invented; Thatcher is
+an invented variant for the second-record case.
 
 ## CR 0
 

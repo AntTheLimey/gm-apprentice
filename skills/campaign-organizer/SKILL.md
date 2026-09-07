@@ -312,7 +312,9 @@ new values against `_World/` rules (if `_World/` exists).
 Follow `references/world-validation.md`.
 6. **Update index** — Run
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
-   show the diff summary, then `--write`. Fallback without python:
+   show the diff summary, then `--write`. It's the same command as
+   Organize's full rebuild — the script is idempotent, so there is no
+   separate incremental mode. Fallback without python:
    `references/index-template.md`.
 7. **Graph audit** — Read `references/graph-hygiene.md` and
    run full hygiene check.
