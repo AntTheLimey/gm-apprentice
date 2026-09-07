@@ -151,6 +151,12 @@ jobs:
       - name: plan_check tests
         run: python tests/test_plan_check.py
 
+      - name: session_context --play/--threads tests
+        run: python tests/test_session_context_play.py
+
+      - name: plans_index tests
+        run: python tests/test_plans_index.py
+
       # Last: a type error must never mask a failing test.
       - name: Type-check shared scripts
         run: |
