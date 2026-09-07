@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Regression tests for plan_check.py — Session Plan conformance.
 
-Mechanises the fourteen rules skills/session-prep/SKILL.md states for the
-Session Plan file it writes (required sections, preamble/recap word
-budgets, no scene-duration estimates, no audit-trail language, read-aloud
-form, and the headless Hard Guard).
+Mechanises the rules skills/session-prep/SKILL.md and
+shared/session-principles.md state for the Session Plan file it writes
+(required sections, preamble/recap word budgets, no scene-duration
+estimates, no audit-trail language, read-aloud form, and the headless
+Hard Guard).
 
 Fixtures live in tests/fixtures/slice-b/plans/:
   Good Plan.md     - every template H2, real content, clean under every
@@ -12,8 +13,9 @@ Fixtures live in tests/fixtures/slice-b/plans/:
   Bad Plan.md      - one deliberate defect per check id (except
                      hard-guard, which only ever fires under --headless).
   Headless Plan.md - a populated Session Intent and an Open Questions
-                     section with one labelled, one unlabelled line — for
-                     the --headless-only Hard Guard checks.
+                     section with one labelled bullet and one unlabelled,
+                     hard-wrapped bullet — for the --headless-only Hard
+                     Guard checks.
 
 Run: python3 tests/test_plan_check.py
 """
@@ -23,6 +25,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -222,6 +225,10 @@ class SectionsOrderTests(unittest.TestCase):
 
 
 class HeadlessTests(unittest.TestCase):
+    """Regression coverage for the wrapped-bullet grouping fix: a
+    hard-wrapped Open Questions bullet is one logical item, so it earns
+    exactly one hard-guard row, not one per physical line."""
+
     def test_headless_plan_two_errors_and_exit_one(self):
         proc = run_cli(HEADLESS, "--headless")
         self.assertEqual(proc.returncode, 1, proc.stdout)
@@ -231,6 +238,17 @@ class HeadlessTests(unittest.TestCase):
         self.assertTrue(any("Session Intent" in r for r in rows), rows)
         self.assertTrue(any("no marker at all" in r for r in rows), rows)
 
+    def test_headless_plan_wrapped_unlabelled_bullet_is_one_row(self):
+        # The unlabelled bullet hard-wraps across two physical lines in
+        # the fixture. Before the item-grouping fix this produced one
+        # ERROR per physical line.
+        findings = findings_for(HEADLESS, headless=True)
+        guard_rows = rows_for(findings, "hard-guard")
+        open_questions_rows = [f for f in guard_rows
+                               if "no marker at all" in f.message]
+        self.assertEqual(len(open_questions_rows), 1, guard_rows)
+        self.assertEqual(open_questions_rows[0].locus.split(":")[-1], "18")
+
     def test_headless_plan_labelled_line_does_not_fire(self):
         findings = findings_for(HEADLESS, headless=True)
         guard_rows = rows_for(findings, "hard-guard")
@@ -238,14 +256,22 @@ class HeadlessTests(unittest.TestCase):
             any("Confirm the guard fires here too" in f.message
                 for f in guard_rows), guard_rows)
 
-    def test_good_plan_headless_flags_the_populated_creative_spine(self):
+    def test_good_plan_headless_flags_exactly_the_creative_spine(self):
+        # Good Plan's own Open Questions bullet is hard-wrapped across
+        # three physical lines and carries the apprentice-guess marker,
+        # so it must contribute zero hard-guard rows: before the
+        # item-grouping fix, three physical lines with no marker each
+        # produced a duplicate ERROR (6 total instead of 3).
         findings = findings_for(GOOD, headless=True)
         guard_rows = rows_for(findings, "hard-guard")
+        self.assertEqual(len(guard_rows), 3, guard_rows)
         self.assertTrue(all(f.level == "ERROR" for f in guard_rows))
         messages = " ".join(f.message for f in guard_rows)
         self.assertIn("Session Intent", messages)
         self.assertIn("Planned Scenes", messages)
         self.assertIn("Spotlight Forecast", messages)
+        self.assertFalse(any("Open Questions" in f.message
+                             for f in guard_rows), guard_rows)
 
     def test_default_mode_never_runs_the_guard(self):
         self.assertEqual(rows_for(findings_for(HEADLESS), "hard-guard"), [])
@@ -295,6 +321,41 @@ class StateTests(unittest.TestCase):
     def test_headless_plan_has_no_marker_at_all(self):
         proc = run_cli(HEADLESS, "--state")
         self.assertEqual(proc.stdout.strip(), "# no prep-state marker")
+
+
+# skills/session-prep/SKILL.md, Resumable prep — the exact worked example.
+SKILL_MD_EXAMPLE_MARKER = (
+    "<!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 "
+    "open=[Freddy beat?] -->"
+)
+
+
+class PrepStateTokenizerTests(unittest.TestCase):
+    """The tokenizer must accept SKILL.md's own worked example — a
+    bracketed value (`open=[Freddy beat?]`) carries an internal space
+    that a plain whitespace split misreads as two malformed tokens."""
+
+    @staticmethod
+    def _text() -> str:
+        return ("---\ntype: session-plan\nsession: \"[[S]]\"\n"
+                "chapter: \"[[C]]\"\n---\n\n" + SKILL_MD_EXAMPLE_MARKER
+                + "\n\n## Session Intent\n\nSomething.\n")
+
+    def test_no_prep_state_finding(self):
+        self.assertEqual(pc.check_prep_state("x.md", self._text()), [])
+
+    def test_bracketed_value_keeps_its_internal_space(self):
+        state = pc.build_state(self._text())
+        self.assertEqual(
+            state, {"intent": "set", "spotlight": "Emma(B)",
+                    "scenes": "1of3", "open": "[Freddy beat?]"})
+
+    def test_cli_state_output(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "Example Plan.md"
+            path.write_text(self._text(), encoding="utf-8")
+            proc = run_cli(path, "--state")
+        self.assertIn("open\t[Freddy beat?]", proc.stdout.splitlines())
 
 
 class JsonShapeTests(unittest.TestCase):

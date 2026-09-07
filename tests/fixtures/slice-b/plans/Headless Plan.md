@@ -15,4 +15,6 @@ never actually in the loop for this content.
 ## Open Questions
 
 - [ ] Confirm the guard fires here too (apprentice guess — confirm)
-- [ ] This line has no marker at all.
+- [ ] This bullet has no marker at all, and it hard-wraps across two
+  physical lines to prove the guard reports one row per logical item,
+  not one row per line.

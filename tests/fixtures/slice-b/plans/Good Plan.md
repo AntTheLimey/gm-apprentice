@@ -155,8 +155,9 @@ flagged — the Ada-heavy split is intentional this week.
 ## Open Questions
 
 - [ ] Whether Sternberg reports directly to the Brotherhood or just to
-  Metternich — nobody's confirmed it yet, and it changes how dangerous
-  tonight's exchange really is.
+  Metternich (apprentice guess — confirm) — nothing in the vault
+  settles it, and it changes how dangerous tonight's exchange really
+  is.
 
 ## Gaps & Actions
 

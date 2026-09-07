@@ -194,8 +194,16 @@ GUARD_MARKER_RE = re.compile(
 GUARD_SECTIONS: tuple[str, ...] = (
     "Session Intent", PLANNED_SCENES_TITLE, "Spotlight Forecast",
 )
+# A list item opener: `- `, `* `, or `1. `. A hard-wrapped continuation
+# line carries none of these and belongs to the item above it.
+LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
 
 PREP_STATE_RE = re.compile(r"<!--\s*prep-state:\s*(.*?)-->", re.DOTALL)
+# key=value, where a value may be a `[...]`/`(...)` group carrying
+# internal spaces (SKILL.md's own worked example:
+# `open=[Freddy beat?]`) or a plain whitespace-delimited token.
+PREP_STATE_TOKEN_RE = re.compile(
+    r"(\w[\w-]*)=(\[[^\]]*\]|\([^)]*\)|\S+)")
 
 
 # --------------------------------------------------------------------------
@@ -234,13 +242,13 @@ def _by_norm_title(text: str) -> dict[str, tuple[int, str, str]]:
     return out
 
 
-def _walk_body(text: str
+def _walk_body(states: list[vl.LineState]
               ) -> Iterator[tuple[int, str, str | None, bool, bool]]:
     """(lineno, line, current-H2-title, in_code, is_heading) for every body
     line — the current H2 is the nearest preceding level-2 heading outside
-    a code fence, None before the first one. Reuses `scan_body`'s fence
-    tracking rather than re-deriving it."""
-    states, _problems = vl.scan_body(text)
+    a code fence, None before the first one. Takes `scan_body`'s own
+    output (computed once in `run_checks` and shared by every
+    line-oriented check) rather than re-scanning the file per check."""
     current: str | None = None
     for state in states:
         is_heading = state.heading is not None
@@ -264,15 +272,31 @@ def find_prep_state(text: str) -> tuple[int, str] | None:
     return lineno, m.group(1).strip()
 
 
+def _tokenize_prep_state(raw: str) -> tuple[dict[str, str], list[str]]:
+    """(key -> value pairs, malformed leftover fragments).
+
+    A value is either a `[...]`/`(...)` group — which may carry internal
+    spaces, as in SKILL.md's own worked example `open=[Freddy beat?]` —
+    or a plain whitespace-delimited token. Anything sitting between or
+    after the recognised `key=value` tokens that isn't pure whitespace
+    is malformed and reported as such.
+    """
+    tokens: dict[str, str] = {}
+    bad: list[str] = []
+    pos = 0
+    for m in PREP_STATE_TOKEN_RE.finditer(raw):
+        bad.extend(raw[pos:m.start()].split())
+        tokens[m.group(1)] = m.group(2)
+        pos = m.end()
+    bad.extend(raw[pos:].split())
+    return tokens, bad
+
+
 def parse_prep_state_tokens(raw: str) -> dict[str, str]:
     """Well-formed `key=value` tokens only — malformed ones are the
     `prep-state` WARNING's job, not this parser's."""
-    out: dict[str, str] = {}
-    for tok in raw.split():
-        if "=" in tok and not tok.startswith("=") and not tok.endswith("="):
-            key, _, value = tok.partition("=")
-            out[key] = value
-    return out
+    tokens, _bad = _tokenize_prep_state(raw)
+    return tokens
 
 
 # --------------------------------------------------------------------------
@@ -448,9 +472,9 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
     return findings
 
 
-def check_duration(rel: str, text: str) -> list[Finding]:
+def check_duration(rel: str, states: list[vl.LineState]) -> list[Finding]:
     findings = []
-    for lineno, line, section, in_code, is_heading in _walk_body(text):
+    for lineno, line, section, in_code, is_heading in _walk_body(states):
         if in_code or is_heading or not _is_session_running(section):
             continue
         m = DURATION_RANGE_RE.search(line) or DURATION_TILDE_RE.search(line)
@@ -466,9 +490,9 @@ def check_duration(rel: str, text: str) -> list[Finding]:
     return findings
 
 
-def check_audit_trail(rel: str, text: str) -> list[Finding]:
+def check_audit_trail(rel: str, states: list[vl.LineState]) -> list[Finding]:
     findings = []
-    for lineno, line, section, in_code, is_heading in _walk_body(text):
+    for lineno, line, section, in_code, is_heading in _walk_body(states):
         if in_code or is_heading or not _is_session_running(section):
             continue
         low = line.casefold()
@@ -483,9 +507,9 @@ def check_audit_trail(rel: str, text: str) -> list[Finding]:
     return findings
 
 
-def check_pc_state(rel: str, text: str) -> list[Finding]:
+def check_pc_state(rel: str, states: list[vl.LineState]) -> list[Finding]:
     findings = []
-    for lineno, line, _section, in_code, is_heading in _walk_body(text):
+    for lineno, line, _section, in_code, is_heading in _walk_body(states):
         if in_code or is_heading:
             continue
         m = PC_STATE_RE.match(line.strip())
@@ -502,7 +526,7 @@ def _quote_sentences(quote_text: str) -> list[str]:
     return [p for p in parts if p.strip()]
 
 
-def check_read_aloud(rel: str, text: str) -> list[Finding]:
+def check_read_aloud(rel: str, states: list[vl.LineState]) -> list[Finding]:
     findings = []
     quote_lines: list[tuple[int, str]] = []
 
@@ -530,7 +554,7 @@ def check_read_aloud(rel: str, text: str) -> list[Finding]:
                 "read-aloud: " + "; ".join(problems)))
         quote_lines.clear()
 
-    for lineno, line, _section, in_code, _is_heading in _walk_body(text):
+    for lineno, line, _section, in_code, _is_heading in _walk_body(states):
         if in_code:
             flush()
             continue
@@ -551,10 +575,10 @@ def check_table(rel: str, text: str) -> list[Finding]:
     return findings
 
 
-def check_guess(rel: str, text: str) -> list[Finding]:
+def check_guess(rel: str, states: list[vl.LineState]) -> list[Finding]:
     findings = []
     open_q_norm = _norm_title(OPEN_QUESTIONS_TITLE)
-    for lineno, line, section, in_code, _is_heading in _walk_body(text):
+    for lineno, line, section, in_code, _is_heading in _walk_body(states):
         if in_code or not GUESS_RE.search(line):
             continue
         if section is not None and _norm_title(section) == open_q_norm:
@@ -566,7 +590,50 @@ def check_guess(rel: str, text: str) -> list[Finding]:
     return findings
 
 
-def check_hard_guard(rel: str, text: str,
+def _open_questions_items(states: list[vl.LineState]
+                          ) -> list[tuple[int, str]]:
+    """(first lineno, joined text) per logical list item under
+    `## Open Questions`, outside code fences.
+
+    A list item is its `- `/`* `/`1. ` opener line plus every following
+    line up to the next list marker, heading, or blank line — so a
+    hard-wrapped bullet is one item, not one item per physical line. A
+    content line with no list marker at all (plain prose under the
+    heading) is still its own one-line item.
+    """
+    open_q_norm = _norm_title(OPEN_QUESTIONS_TITLE)
+    items: list[tuple[int, list[str]]] = []
+    current: list[str] | None = None
+    current_start = 0
+
+    def flush() -> None:
+        nonlocal current
+        if current:
+            items.append((current_start, current))
+        current = None
+
+    for lineno, line, section, in_code, is_heading in _walk_body(states):
+        in_open_questions = (not in_code and not is_heading
+                             and section is not None
+                             and _norm_title(section) == open_q_norm)
+        if not in_open_questions:
+            flush()
+            continue
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            continue
+        if current is None or LIST_MARKER_RE.match(stripped):
+            flush()
+            current = [stripped]
+            current_start = lineno
+        else:
+            current.append(stripped)
+    flush()
+    return [(start, " ".join(lines)) for start, lines in items]
+
+
+def check_hard_guard(rel: str, states: list[vl.LineState],
                      by_norm: dict[str, tuple[int, str, str]]
                      ) -> list[Finding]:
     findings: list[Finding] = []
@@ -580,21 +647,13 @@ def check_hard_guard(rel: str, text: str,
                 "hard-guard", "ERROR", f"{rel}:§{raw_title}",
                 f"hard-guard: '## {raw_title}' has non-placeholder "
                 f"content while running headless — GM input required"))
-    open_q_norm = _norm_title(OPEN_QUESTIONS_TITLE)
-    for lineno, line, section, in_code, is_heading in _walk_body(text):
-        if in_code or is_heading or section is None:
-            continue
-        if _norm_title(section) != open_q_norm:
-            continue
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if GUARD_MARKER_RE.search(stripped):
+    for start, joined in _open_questions_items(states):
+        if GUARD_MARKER_RE.search(joined):
             continue
         findings.append(Finding(
-            "hard-guard", "ERROR", f"{rel}:{lineno}",
-            f"hard-guard: Open Questions line lacks the "
-            f"'(apprentice guess — confirm)' marker: {stripped!r}"))
+            "hard-guard", "ERROR", f"{rel}:{start}",
+            f"hard-guard: Open Questions item lacks the "
+            f"'(apprentice guess — confirm)' marker: {joined!r}"))
     return findings
 
 
@@ -605,8 +664,7 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
             "prep-state", "INFO", f"{rel}:1",
             "prep-state: no <!-- prep-state: ... --> marker found")]
     lineno, raw = found
-    bad = [tok for tok in raw.split()
-          if "=" not in tok or tok.startswith("=") or tok.endswith("=")]
+    _tokens, bad = _tokenize_prep_state(raw)
     if bad:
         return [Finding(
             "prep-state", "WARNING", f"{rel}:{lineno}",
@@ -623,6 +681,7 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
 def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
               ) -> list[Finding]:
     by_norm = _by_norm_title(text)
+    states, _problems = vl.scan_body(text)
     findings: list[Finding] = []
     findings.extend(check_type(rel, fm))
     findings.extend(check_frontmatter_links(rel, fm))
@@ -633,15 +692,15 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
     findings.extend(check_recap(rel, by_norm))
     findings.extend(check_npc_table(rel, by_norm))
     findings.extend(check_scenes(rel, by_norm))
-    findings.extend(check_duration(rel, text))
-    findings.extend(check_audit_trail(rel, text))
-    findings.extend(check_pc_state(rel, text))
-    findings.extend(check_read_aloud(rel, text))
+    findings.extend(check_duration(rel, states))
+    findings.extend(check_audit_trail(rel, states))
+    findings.extend(check_pc_state(rel, states))
+    findings.extend(check_read_aloud(rel, states))
     findings.extend(check_table(rel, text))
-    findings.extend(check_guess(rel, text))
+    findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
     if headless:
-        findings.extend(check_hard_guard(rel, text, by_norm))
+        findings.extend(check_hard_guard(rel, states, by_norm))
     return findings
 
 
