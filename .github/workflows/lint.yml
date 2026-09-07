@@ -145,6 +145,9 @@ jobs:
       - name: rules_lookup tests
         run: python tests/test_rules_lookup.py
 
+      - name: index_build tests
+        run: python tests/test_index_build.py
+
       # Last: a type error must never mask a failing test.
       - name: Type-check shared scripts
         run: |
