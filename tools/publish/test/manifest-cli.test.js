@@ -54,7 +54,7 @@ function capture() {
 
 describe('manifest diff', () => {
   it('classifies every vault file when there is no manifest', async () => {
-    const vault = path.join(FIXTURES, 'auto-exclude');
+    const vault = copyVault('auto-exclude');
     const { configPath } = siteFor(vault);
     const c = capture();
     const rc = await runManifest({ verb: 'diff', configPath }, c.deps);
@@ -67,10 +67,12 @@ describe('manifest diff', () => {
     assert.match(text, /^ {2}Characters\/NPCs\/Prep Source\.md\texclude\tAUTO_EXCLUDED_SOURCE\tsource: prep$/m);
     assert.match(text, /^ {2}Sessions\/Played Session\.md\tpublish\tOK\tmode: player$/m);
     assert.match(text, /^New \(5\):$/m);
+    fs.rmSync(vault, { recursive: true, force: true });
   });
 
   it('--json reports the same classification', async () => {
-    const { configPath } = siteFor(path.join(FIXTURES, 'auto-exclude'));
+    const vault = copyVault('auto-exclude');
+    const { configPath } = siteFor(vault);
     const c = capture();
     assert.strictEqual(await runManifest({ verb: 'diff', configPath, json: true }, c.deps), 0);
 
@@ -88,6 +90,7 @@ describe('manifest diff', () => {
       code: 'AUTO_EXCLUDED_STATUS',
       reason: 'status: planned',
     });
+    fs.rmSync(vault, { recursive: true, force: true });
   });
 
   it('separates new files, removed entries and unchanged ones', async () => {
