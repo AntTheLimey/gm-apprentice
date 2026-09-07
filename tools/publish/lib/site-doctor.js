@@ -157,8 +157,12 @@ async function runSiteDoctor(options, deps) {
   const attachments = scanAttachments(scanConfig);
 
   const pages = report.pages;
-  pairStoryFiles(pages, vaultPath);
   const relOf = (page) => vaultRelPath(vaultPath, page.sourcePath);
+  // Snapshot before pairing, exactly as build.js does: pairStoryFiles removes a PC's
+  // `_Story.md` companion from the page list, and a manifest entry naming one is not
+  // an orphan — the build folds its content into the PC page.
+  const corpus = pages.slice();
+  pairStoryFiles(pages, vaultPath);
   const published = pages.filter((page) => publishesPage(
     decidePage(page, { rel: relOf(page), publishConfig, manifest })));
   const linkMap = buildLinkMap(published);
@@ -257,7 +261,7 @@ async function runSiteDoctor(options, deps) {
 
   // --- the manifest against the vault -------------------------------------
   if (manifest) {
-    const scanned = new Set(pages.map(relOf));
+    const scanned = new Set(corpus.map(relOf));
     for (const entry of manifest.publishing) {
       if (!scanned.has(entry)) {
         findings.push(finding(
@@ -269,7 +273,7 @@ async function runSiteDoctor(options, deps) {
     }
     if (publishConfig.mode === 'player') {
       const registered = new Set([...manifest.publishing, ...(manifest.excluded || []), ...(manifest.needsDecision || [])]);
-      for (const page of pages) {
+      for (const page of corpus) {
         const type = page.frontmatter && page.frontmatter.type;
         if (!REGISTRABLE_TYPES.has(type)) continue;
         const rel = relOf(page);

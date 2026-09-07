@@ -56,7 +56,8 @@ async function runUpdatePin(options, deps) {
   if (!cache) {
     // A dev checkout, or a tool copied out of the cache. There is no "newest
     // installed version" to point at, so there is nothing this command can do.
-    const version = (d.toolPackage || require(path.join(toolDir, 'package.json'))).version;
+    let version = 'unknown';
+    try { version = JSON.parse(readFile(path.join(toolDir, 'package.json'))).version; } catch { /* keep 'unknown' */ }
     if (!asJson) out(`not in a versioned plugin cache — the running tool is ${version}; nothing to repoint`);
     return report({
       pinnedBefore: null, pinnedAfter: null, installedBefore: null, installedAfter: null,

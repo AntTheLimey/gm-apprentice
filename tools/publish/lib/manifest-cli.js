@@ -173,10 +173,11 @@ function surveyVault(options, deps) {
 
 async function runDiff(options, deps, survey) {
   const out = deps.out || console.log;
+  const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const { vaultPath, publishConfig, manifest, files, verdicts } = survey;
 
   const listed = manifest
-    ? parseAnnotatedManifest(fs.readFileSync(path.join(vaultPath, '_meta', 'publish-manifest.md'), 'utf8'))
+    ? parseAnnotatedManifest(readFile(path.join(vaultPath, '_meta', 'publish-manifest.md')))
     : new Map();
 
   const added = [];
@@ -229,13 +230,15 @@ async function runDiff(options, deps, survey) {
 
 async function runApply(options, deps, survey) {
   const out = deps.out || console.log;
+  const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
+  const exists = deps.exists || ((p) => fs.existsSync(p));
   const now = deps.now || (() => new Date());
   const { config, vaultPath, publishConfig, files } = survey;
 
   const manifestPath = path.join(vaultPath, '_meta', 'publish-manifest.md');
-  const entries = fs.existsSync(manifestPath)
-    ? parseAnnotatedManifest(fs.readFileSync(manifestPath, 'utf8'))
+  const entries = exists(manifestPath)
+    ? parseAnnotatedManifest(readFile(manifestPath))
     : new Map();
 
   const moves = [

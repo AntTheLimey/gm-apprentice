@@ -64,9 +64,10 @@ function siteFiles(spec, installed) {
 
 describe('update-pin', () => {
   it('says nothing to repoint when the tool is not in a plugin cache', async () => {
-    const h = harness({ files: { '/opt/tool/package.json': JSON.stringify({ version: '9.9.9' }) }, detect: null });
-    // toolDir's package.json is read through require in the real runner; inject it.
-    h.deps.toolPackage = { version: '9.9.9' };
+    const h = harness({
+      files: { [path.resolve('/opt/tool/package.json')]: JSON.stringify({ version: '9.9.9' }) },
+      detect: null,
+    });
     const rc = await runUpdatePin({ siteDir: '/site' }, h.deps);
     assert.strictEqual(rc, 0);
     assert.match(h.out.join('\n'), /not in a versioned plugin cache — the running tool is 9\.9\.9; nothing to repoint/);

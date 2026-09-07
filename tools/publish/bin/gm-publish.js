@@ -147,7 +147,7 @@ wrangler.toml's project name), "github-pages" commits docs/ and pushes.
   --verify           After deploying, fetch the site URL up to 3 times, 20s
                      apart. A site still propagating is reported, not failed.
   --no-build         Deploy whatever is already in the output directory
-  --dry-run          Print the commands that would run; run none of them
+  --dry-run, -n      Print the commands that would run; run none of them
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --json             Emit { host, built, deployed, url, verified, status,
                      attempts, commands }
