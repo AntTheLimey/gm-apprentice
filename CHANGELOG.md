@@ -7,6 +7,199 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.8] — 2026-09-07
+
+### Added
+
+- **Mechanization Slice B — the Tier-2 token-sink extensions from
+  `docs/mechanization-analysis.md`.** Five new scripts and five new
+  `gm-publish` subcommands that turn routine lookup, index, conformance,
+  and rebuild prose into one deterministic call each:
+  - `rules_lookup.py SYSTEM "term" [--kind KIND] [--variant VARIANT]
+    [--limit N] [--json] [--personal] [--systems-dir DIR]` — record-level
+    lookup over the `systems/` corpus (9,812 non-personal records across
+    139 files) instead of opening a whole reference file for one row.
+    `SYSTEM` accepts a system slug or `all`; `--kind` restricts to one
+    record kind (`trait`, `skill`, `spell`, `monster`, `feat`, `item`,
+    `class`, `condition`, and others derived from the file's own stem
+    when it isn't one of the named kinds); `--variant` includes a
+    variant's records (e.g. `regency`) alongside the base system.
+    Matching runs exact, then substring, then `difflib`-fuzzy (cutoff
+    0.72), each tier ordered `(file, line)`. Prints one record at a time,
+    never a whole table or file, and writes nothing to disk — `personal/`
+    is skipped unless `--personal` is passed, keeping every emitted line
+    within the "names, point costs, short notes" the SJG Online Policy
+    (and the parallel ORC/CC-BY terms for the other systems) permits.
+  - `index_build.py VAULT [--write] [--date YYYY-MM-DD]` — derives
+    `_meta/index.md` from a vault scan instead of hand-editing a file
+    that already declares itself derived. Dry-run diff by default,
+    `--write` applies (EOL preserved); nests each session's Plan/Play
+    Notes/Wrap-Up under its own bullet, a PC's `_Story` companion under
+    the PC, and `type: plan` entities under a `### Plans (N)` section;
+    unmatched chain docs and orphaned Story files surface in
+    `## Stubs (Needs Attention)` instead of being silently dropped.
+  - `plan_check.py PLAN.md [--headless] [--inventory] [--state]
+    [--json]` — Session Plan conformance against the fourteen rules
+    `session-prep/SKILL.md` and `shared/session-principles.md` state and
+    nothing previously checked. Nineteen check ids: `type`, `frontmatter`,
+    `sections`, `order`, `placeholder` (structure); `preamble`, `recap`,
+    `npc-table`, `scene-length` (budgets); `scene-labels`, `scene-type`,
+    `duration`, `audit-trail`, `pc-state`, `read-aloud`, `table`, `guess`
+    (authoring rules); `hard-guard` (only under `--headless`, groups
+    hard-wrapped Open Questions bullets into one logical item each); and
+    `prep-state` (the resumable prep-state marker, now tokenized with a
+    bracket/paren-aware regex so a value like `open=[Freddy beat?]`
+    parses whole). Every message is prefixed with its own id; exit 1 on
+    any ERROR. `--inventory` lists each template H2 as
+    present/absent/placeholder with a word count; `--state` prints the
+    prep-state tokens.
+  - `session_context.py --play` and `--threads` — two new modes sharing
+    the existing bundle's chapter-scoped session selection
+    (`select_session`, factored out verbatim from the old `main()`).
+    `--play` prints only the at-table Play Brief: verbatim `## Session
+    Intent`, `## NPC Quick Reference`, `## World State`, `## Session End
+    Objectives`, plus each Planned/Contingency scene reduced to its
+    title and `**Type:**`/`**Objective:**`/`**Setup:**`/`**Trigger:**`
+    lines — `**Behaviours:**`, `**Branching:**`, `**Complications:**`,
+    and `## Active Threads` are dropped. `--threads` prints per-PC
+    `**Open threads:**` bullets fuzzy-matched (`difflib`, ratio >= 0.6)
+    against every chapter-scoped Wrap-Up's Unresolved Threads and
+    PC Carry-Forward bullets, reporting `first=`/`last=`/`age=`/`STALE`
+    or "not in any wrap-up", plus a second block for wrap-up threads that
+    matched no PC (thread-decay candidates). Default (no-flag) output is
+    byte-identical to before.
+  - `plans_index.py VAULT [--chapter CHAPTER] [--against NAME]...
+    [--json]` — narrative-plan and midwife-adventure discovery in one
+    read instead of walking a chapter's `Planning/` folder by hand and
+    re-reading `_midwife/index.md`'s manifest table by eye. Lists every
+    `type: plan` entry (arc/scene/investigation/timeline, with who and
+    where each names); resolves which `_midwife/` adventure directory an
+    in-progress chapter continues (RESOLVED, or AMBIGUOUS with the
+    reason); `--against NAME` (repeatable) adds an Overlap section for
+    Planning/ entries naming that participant or location. Exit is
+    always 0 — an unresolved midwife manifest is a report for the GM to
+    settle, not an error.
+  - **`vaultlib.py`** gains `sections()`, `h3_blocks()`, and
+    `word_count()` (fence-aware, ignoring table-separator rows and HTML
+    comments) — shared by `plan_check.py` and available to any future
+    script. `vault_check.py`'s per-file table-row logic is extracted into
+    `table_findings()` so it's callable standalone as well as summed
+    across the vault by `check_tables`.
+  - Five `gm-publish` subcommands built on a new `lib/publish-decision.js`
+    (`decidePage`), which now also drives `build.js` itself so the CLI
+    and the build agree on why every page does or doesn't publish:
+    - `update-pin [--site DIR] [--check] [--json]` — repoints a site's
+      `gm-apprentice-publish` dependency at the newest version in the
+      plugin cache and runs `npm install`; `--check` reports drift and
+      exits 1 without writing.
+    - `manifest diff [--config PATH] [--json]` / `manifest apply
+      [--publish PATH]... [--exclude "PATH=REASON"]... [--decide
+      PATH]... [--prune] [--config PATH] [--json]` — `diff` classifies
+      every vault file with the same decision the build makes and lists
+      what the manifest doesn't mention plus entries whose file is gone;
+      `apply` moves paths between sections and rewrites the file,
+      `--prune` drops dead entries. A path matching no vault file is an
+      error: nothing is written.
+    - `deploy [--verify] [--no-build] [--dry-run] [--json]` — builds,
+      then deploys to the host named in `vault.config.json` (Cloudflare
+      Pages via `wrangler`, checking auth first; GitHub Pages via
+      add/commit/push). `--verify` fetches the site URL up to three
+      times 20s apart, reporting a still-propagating site rather than
+      failing it.
+    - `doctor --site [--config PATH] [--json]` — audits the vault
+      instead of the machine. Ten finding codes: `CONFIG_INVALID`,
+      `VAULT_MISSING`, `VERSION_DRIFT`, `FOLDER_UNMAPPED`,
+      `FILE_UNTYPED`, `PORTRAIT_MISSING`, `LINK_UNRESOLVED`,
+      `MANIFEST_ORPHAN`, `MANIFEST_UNREGISTERED`, `RECAP_INCOMPLETE` —
+      each finding names the edit that fixes it. Exits 1 only on an
+      error, never a warning.
+    - `explain PATH [--config PATH] [--json]` — prints the chain the
+      build walks for one file (directory, type, publish mode,
+      auto-exclusion, canon status, manifest section) and the verdict:
+      where it publishes, or which rule stopped it, plus the H2 sections
+      stripped on publish and the gm-only block count.
+    - `decidePage`'s verdict codes, evaluated in the order the old build
+      passes attributed them (directory checks first, `OK` last):
+      `DIR_ALWAYS_EXCLUDED`, `DIR_UNMAPPED`, `NO_TYPE`, `STORY_COMPANION`
+      (a PC's `_Story.md` companion — merges into the PC's page, no
+      separate output path), `DRAFT_EXCLUDED`,
+      `AUTO_EXCLUDED_STATUS`/`AUTO_EXCLUDED_STAGE`/`AUTO_EXCLUDED_SOURCE`,
+      `SCENE_CUT_SKIPPED`, `MANIFEST_EXCLUDED`/`MANIFEST_NEEDS_DECISION`/
+      `MANIFEST_UNLISTED`, `PUBLISH_FALSE`/`PUBLISH_NONE`,
+      `SUPERSEDED_NO_TARGET` (the one `decide` code the build still
+      publishes — dropping it would break every link naming the old
+      entity), `OK`.
+  - Publish tool **1.11.30**.
+
+### Changed
+
+- **Every prose site that restated a lookup, index, or rebuild procedure
+  now invokes the script** (14 skill files): `ttrpg-expert/SKILL.md`'s
+  "How much does [trait] cost?" and eleven per-system rows now run
+  `rules_lookup.py` first, citing `file:line`, before opening the full
+  reference file; `ttrpg-expert/INDEX.md`'s Per-System Requests table
+  gains the same `rules_lookup.py --kind` prefix on seven rows;
+  `session-play/SKILL.md`'s Rules dispute row and narrative-plan lookup
+  row route to `rules_lookup.py` and `plans_index.py` respectively.
+  `campaign-organizer/SKILL.md`'s Organize/Dissect/Weave index-update
+  steps now run `index_build.py <vault>` (dry-run, then `--write`).
+  `campaign-qa` gains its first prose site for `vault_check.py index`
+  (SKILL.md's Graph Health checklist and `references/checks/graph-
+  health.md` Step 2), pointing any drift finding at `index_build.py
+  --write` rather than a hand edit. `session-prep/SKILL.md` Steps 6
+  (`plan_check.py --inventory`/`--state`), 8 (`session_context.py
+  --threads`), 10c (`plans_index.py`, replacing ~50 lines of manual
+  Planning/-folder and manifest-table walking), 15 (`plan_check.py`
+  opening the verify-chores pass), the Hard Guard gate
+  (`--headless`), and Resumable prep (`--state`) all reroute to the new
+  scripts; `session-play/SKILL.md`'s first-invocation step now uses
+  `session_context.py --play` for the at-table brief;
+  `session-wrapup/SKILL.md` adds a `plan_check.py --inventory` pointer
+  for planned-vs-actual comparison. `shared/vault-access.md`'s Tools
+  table and Bundled Utilities section route all seven new commands.
+  `campaign-organizer/references/index-template.md` is rebuilt to show
+  the nested structure `index_build.py` actually renders (session-chain
+  docs and Story companions under their parent, a `### Plans (N)`
+  section, an `### Other` bucket for off-schema types).
+- **`publish-site`** collapses Capability 2 (Routine updates) from a
+  ~108-line manual version-check/manifest-freshness/deploy walk to four
+  steps built on `update-pin --site`, `manifest diff`/`manifest apply`,
+  and `deploy --verify`; Capability 3 (Troubleshooting) and
+  `references/troubleshooting.md` now open with `doctor --site`/
+  `explain PATH` before the manual diagnosis tables (five failure
+  entries rewritten to name the finding code that catches them);
+  `references/setup-wizard.md` Step 21a/22 route the Cloudflare deploy
+  and verify through `deploy --verify`, and Step 21b's manual GitHub
+  Pages path now runs `deploy --verify` for its final push and its
+  verify step; `references/cloudflare-pages.md` and
+  `references/content-filtering.md` each get a pointer sentence to the
+  command that now does the work.
+- **`build.js` now computes one verdict per page via `decidePage`** and
+  filters on it, replacing four separate exclusion passes — verified
+  byte-identical (full emitted `docs/` tree and stdout) against the
+  previous build across twelve fixture vaults plus a purpose-built
+  overlap vault exercising doubly-excluded pages.
+
+### Fixed
+
+- **Cut and skipped scenes are now excluded from player-mode sites**, as
+  `publish-site/references/content-filtering.md` has always documented
+  under "Always excluded (scene-level)" — the build never implemented
+  the rule, so `status: cut`/`status: skipped` scenes had been
+  publishing. `decidePage`'s `SCENE_CUT_SKIPPED` code closes the gap,
+  gated the same way as the other prep-state heuristics (off in
+  `mode: full`; an explicit manifest `Publishing` entry still wins).
+- **`gm-publish deploy` sets the upstream on a GitHub Pages site's first
+  push.** The bare `git push` in the deploy path failed with "no
+  upstream branch" on a fresh remote — exactly the first-deploy case the
+  setup wizard walks a user through. `deploy` now checks for an existing
+  upstream (`git rev-parse --abbrev-ref --symbolic-full-name @{u}`) and
+  pushes `git push -u origin HEAD` when there isn't one, leaving the
+  already-tracked case's plain `git push` unchanged; `--dry-run` reports
+  whichever form the real run would take.
+
+---
+
 ## [1.9.7] — 2026-09-06
 
 ### Added
