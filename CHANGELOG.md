@@ -41,6 +41,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session-prep's Context Source, and the no-python paragraph in
   `vault-access.md`.
 
+### Fixed
+
+- `ingest_survey.py` misclassified two of the three benchmark inbox
+  files (surfaced by the proof run). The `charsheet_stats` indicator
+  now matches stats laid out in markdown tables (`| STR | 45 |`) and as
+  bold labels (`**STR:** 50`), not only bare `STR 50`; and a document with play indicators alongside prep, research or
+  Keeper-recollection indicators is proposed as "Play fragment (mixed
+  content — consider a section split)" even when an embedded NPC stat
+  block outscores the play hits — a stat block inside prep notes does
+  not make the file a character sheet. Regression tests run the script
+  over `tests/benchmark-campaign/_inbox/`.
+- `gm-publish sheet show --help`, `manifest --help` and `explain --help`
+  now carry the how-to-act rules the deleted `vault-access.md` prose
+  held: prefer the player-safe view whenever the audience is a player;
+  the manifest tool shows drift and the exclude-versus-missing call is
+  the GM's; run `explain` before `doctor --site` for a single-file
+  question.
+- The benchmark fixture vault (`tests/benchmark-campaign/`) gains a
+  `_meta/vault-config.md` and its three wrap-ups are migrated to the
+  1.9.5 template, so the version gate returns OK and the wrap-up check
+  reports no ERRORs. The deliberate defects the QA benchmarks rely on
+  are untouched.
+
 ---
 
 ## [1.9.9] — 2026-09-07

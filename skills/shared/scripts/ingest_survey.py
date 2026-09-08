@@ -160,10 +160,17 @@ INDICATORS: list[tuple[str, re.Pattern]] = [
         r"\bI remember\b|\bI recall\b|\bthe group did\b", re.IGNORECASE,
     )),
     ("charsheet_stats", re.compile(
+        # Between the label and its number, a sheet may have nothing but
+        # whitespace ("STR 50"), a colon/equals ("STR: 50"), Markdown bold
+        # wrapping the label with the closer landing *before* the number
+        # ("**STR:** 50"), or a table pipe cell boundary ("| STR | 50 |").
+        # All of those are just punctuation/whitespace noise around the
+        # number, so one permissive class covers every shape instead of
+        # requiring the label to be followed directly by the digits.
         r"\b(?:STR|DEX|CON|INT|POW|APP|SIZ|EDU|HP|MP|SAN|ST|DX|IQ|HT)"
-        r"\s*[:=]?\s*\d{1,3}\b"
+        r"[\s*:=|]*\d{1,3}\b"
         r"|\b(?:Strength|Dexterity|Constitution|Intelligence|Wisdom|"
-        r"Charisma|Hit Points?|Sanity)\s*[:=]?\s*\d{1,3}\b",
+        r"Charisma|Hit Points?|Sanity)[\s*:=|]*\d{1,3}\b",
     )),
 ]
 
@@ -214,16 +221,25 @@ def propose(counts: dict[str, int]) -> tuple[str, str]:
     keeper = counts["keeper_recollection"]
     charsheet = counts["charsheet_stats"]
 
-    # Tested before play: a character sheet's attribute block routinely
-    # trips a handful of play-shaped patterns (a stray "HP 12", a "round"
-    # in prose) without being one — structured stats dominating the line
-    # count is the stronger signal.
+    # Tested first, ahead of both the charsheet-dominance rule and the
+    # plain play-transcript rule: a stat block embedded in prep notes (an
+    # NPC profile with a `STR 60, CON 70, ...` block, say) can rack up more
+    # charsheet_stats hits than the document has play hits, but that does
+    # not make the whole file a character sheet — it makes it a mixed
+    # document that also happens to contain a stat block. Any document
+    # with play indicators AND at least one of prep/research/keeper wins
+    # the mixed-content verdict outright, regardless of how the charsheet
+    # count compares to play.
+    if play and (prep or research or keeper):
+        return ("Play fragment (mixed content — consider a section "
+                "split)", "medium")
+    # A character sheet's attribute block routinely trips a handful of
+    # play-shaped patterns (a stray "HP 12", a "round" in prose) without
+    # being one — structured stats dominating the line count is the
+    # stronger signal, so this is tested before the plain play rule.
     if charsheet >= 3 and charsheet > play:
         return "Character sheet", "high" if charsheet >= 6 else "medium"
     if play:
-        if prep or research or keeper:
-            return ("Play fragment (mixed content — consider a section "
-                    "split)", "medium")
         return "Play transcript", "high" if play >= 3 else "medium"
     if charsheet >= 3:
         return "Character sheet", "high" if charsheet >= 6 else "medium"

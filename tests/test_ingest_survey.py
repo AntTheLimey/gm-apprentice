@@ -165,6 +165,60 @@ class ScoredTests(ScriptCase):
         out = self.run_script(str(self.tmp))
         self.assertIn("SCORED\tworldbuilding.md\tResearch/brainstorm", out)
 
+    def test_bold_label_stats_count_as_charsheet_indicators(self):
+        # A sheet that bolds its labels ("**STR:** 50") used to score zero
+        # charsheet_stats hits — the regex required a label to be followed
+        # directly by optional `:`/`=` then digits, and the closing `**`
+        # sat in between and blocked the match.
+        self.write("bold-sheet.md", (
+            "**STR:** 50\n"
+            "**DEX:** 60\n"
+            "**Hit Points:** 12\n"
+            "**Sanity:** 60\n"
+            "Skills: Library Use 70%, Spot Hidden 55%, Psychology 40%\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tbold-sheet.md\tCharacter sheet", out)
+        # Exactly the four bold-label lines count — the percentage-suffixed
+        # "Skills: ... 70%" line (line 5) must not itself count.
+        self.assertIn("charsheet_stats=4(L1,2,3)", out)
+
+    def test_statblock_inside_prep_notes_is_not_misread_as_character_sheet(self):
+        # A stat block embedded in prep notes used to outscore the play
+        # indicators and win "Character sheet" outright — the mixed
+        # verdict must win whenever play indicators AND at least one of
+        # prep/research/keeper are both present, regardless of the
+        # charsheet count.
+        self.write("prep-with-statblock.md", (
+            "If the investigators explore the shrine, they find the "
+            "altar.\n"
+            "NPC stat block: STR 60, CON 70, SIZ 65, DEX 85, HP 13\n"
+            "Georgiana rolled a 12 and failed her Spot Hidden.\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("Play fragment (mixed content", out)
+        self.assertNotIn("Character sheet", out)
+
+
+class BenchmarkInboxTests(unittest.TestCase):
+    """Regression pins for the three real vault-ingest benchmark fixtures —
+    see tests/proof-runs/mechanization/ground-truth/q5-expected.md for the
+    hand-verified reading these proposals are checked against."""
+
+    def test_benchmark_inbox_classifications(self):
+        inbox = ROOT / "tests" / "benchmark-campaign" / "_inbox"
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), str(inbox)],
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(proc.returncode, 0,
+                          f"stdout={proc.stdout}\nstderr={proc.stderr}")
+        out = proc.stdout
+        self.assertIn("SCORED\tcharacter-sheet.md\tCharacter sheet", out)
+        self.assertIn(
+            "SCORED\tmixed-source.md\tPlay fragment (mixed content — "
+            "consider a section split)", out)
+        self.assertIn("SCORED\told-session-notes.md\tPlay transcript", out)
+
 
 class TrailerTests(ScriptCase):
     def test_trailer_counts_every_verdict(self):

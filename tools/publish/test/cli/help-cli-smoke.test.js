@@ -28,11 +28,11 @@ const CASES = {
   'setup-status-bar': [/setup-status-bar \[--config/, /--config <path>/],
   'setup-inbox': [/setup-inbox \[--config/, /--config <path>/],
   flush: [/flush \[--config/, /--dry-run/],
-  sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/],
+  sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/, /whenever the audience is a player/],
   'update-pin': [/update-pin \[--site <dir>\]/, /--check/],
-  manifest: [/manifest <diff\|apply>/, /--prune/],
+  manifest: [/manifest <diff\|apply>/, /--prune/, /is the GM's call/],
   deploy: [/deploy \[--config <path>\] \[--verify\]/, /--dry-run/, /--no-build/],
-  explain: [/explain <vault-relative path>/, /gm-only blocks/],
+  explain: [/explain <vault-relative path>/, /gm-only blocks/, /before "doctor --site"/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
@@ -62,6 +62,7 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     const r = await runIn(['sheet', 'show', '--help']);
     assert.strictEqual(r.code, 0);
     assert.match(r.stdout, /sheet show --pc <name>/);
+    assert.match(r.stdout, /whenever the audience is a player/);
     assert.doesNotMatch(r.stdout, /Static site generator/);
   });
 
