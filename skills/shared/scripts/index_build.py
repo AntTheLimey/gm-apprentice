@@ -599,8 +599,7 @@ def _read_existing(index_path: Path) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Derive _meta/index.md from a vault scan.")
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("vault", type=Path)
     parser.add_argument("--write", action="store_true",
                         help="apply the rendered index (default: dry run)")

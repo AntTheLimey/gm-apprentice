@@ -96,7 +96,9 @@ source file, exactly as it sits on disk. --player-safe prints the sheet with
 everything the published site strips already gone — excluded sections (GM
 Notes and friends), gm-only and spoiler blocks, HTML comments, excluded
 callouts, gm_only relationship edges and excluded frontmatter fields — so it
-is the sheet a player can see, not a reminder to look away.
+is the sheet a player can see, not a reminder to look away. Prefer it over
+reading the vault sheet directly whenever the audience is a player, not
+the GM.
 
   --pc <name>        Which PC: file name, title, or frontmatter name
   --player-safe      Print only what a player can see
@@ -110,7 +112,8 @@ gm-apprentice-publish manifest <diff|apply> [options]
 Compares the publish manifest (_meta/publish-manifest.md) with what is actually
 in the vault, and edits it. "diff" classifies every vault file with the same
 decision the build makes, so a file it calls "publish" is a file the build
-publishes.
+publishes. The tool only shows the drift — which files are correctly
+excluded versus missing is the GM's call.
 
   manifest diff [--config <path>] [--json]
                      List files the manifest does not mention (with the bucket,
@@ -130,6 +133,8 @@ Prints the chain the build walks for one file — directory, type, publish mode,
 auto-exclusion, canon status, manifest section — and then the build's own
 verdict: where it publishes, or which rule stopped it. Follows with the H2
 sections stripped on publish and how many gm-only blocks the file carries.
+Run it before "doctor --site" when the question is about one specific file
+rather than the whole vault.
 
   gm-apprentice-publish explain "Sessions/Session 7.md"
 

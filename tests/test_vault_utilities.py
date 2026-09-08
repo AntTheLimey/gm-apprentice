@@ -182,6 +182,20 @@ for expect, present, label in [
 ]:
     check(f"session_context: {label}", [expect in ctx], [present])
 
+# A later session that is already PLAYED is not "unplayed" — it means the
+# selection (here an explicit --session 1 behind played session 2) may be
+# stale, and the Note has to say so rather than mislabel it.
+ctx_s1 = "\n".join(run("session_context.py", "--session", "1",
+                       vault=PREP_VAULT))
+check("session_context: later played session gets its own stale Note",
+      ["session(s) [2] in this chapter are numbered after the selected one "
+       "and carry a played status" in ctx_s1,
+       "session index(es) [3] exist with unplayed status" in ctx_s1,
+       "session index(es) [2" in ctx_s1],
+      [True, True, False])
+check("session_context: default selection reports no played-later Note",
+      ["carry a played status" in ctx], [False])
+
 # --- session_context.py with per-chapter session numbering (#162) ---
 #
 # Chapter 3 ran to Session 14; Chapter 4 restarted and is at Session 07. A

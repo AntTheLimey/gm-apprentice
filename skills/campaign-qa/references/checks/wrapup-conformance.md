@@ -20,24 +20,14 @@ frontmatter backfills, the Keeper-facing sibling H2 re-nest, the
 `<!-- gm-only -->` fence, and the recap/template heading
 variants — the dry-run rows print `WOULD-FIX`; on GM
 confirmation, re-run with `wrapup --fix` (`FIXED` rows apply
-them). Fallback without python: apply the Structural steps in
-`shared/migrations.md`'s 1.9.5 entry by hand — it's the same
-frontmatter-backfill and re-nest procedure this check mechanizes.
+them).
 The steps below cover what the script leaves as judgment calls:
 dateless Reconciliation Context, unreconciled promotion, Section
 order drift, Keeper Checklist semantics, PC Carry-Forward format,
 and filename rename with relinks (filename renames are never
 automatic).
 
-### Step 1: Enumerate Wrap-Ups
-
-Search for files whose frontmatter `type` is `session_wrap`,
-`session-wrap-up`, or `session-wrapup`. Frontmatter is
-authoritative — do not rely on filenames; real vaults contain
-`Session NN - Title - Wrap-Up.md`, `Session_NN_Wrap_Up.md`, and
-chapter-level variants that a filename glob misses.
-
-### Step 2: Frontmatter Conformance
+### Step 1: Frontmatter Conformance
 
 `vault_check.py wrapup` backfills the mechanical fields against
 the spec's frontmatter block — `session:` link derivation
@@ -67,7 +57,7 @@ surfaces but doesn't resolve:
   date) or the status was stamped prematurely (demote to DRAFT
   and queue for reconcile).
 
-### Step 3: Structure Conformance (publish safety)
+### Step 2: Structure Conformance (publish safety)
 
 Classify every H2 first. **Player-facing H2s are exactly**
 `## Narrative Recap` (and its recap variants) and
@@ -122,7 +112,7 @@ calls:
   of `#### [[PC Name]] (Player)` blocks — Info, opt-in; the fix
   re-headings each PC's existing bullets without rewording them.
 
-### Step 4: Filename Conformance
+### Step 3: Filename Conformance
 
 Filename should be `Chapter_CC_Session_NN_Wrap_Up.md`
 (zero-padded, no title). Drifted names — Warning, **opt-in on a
