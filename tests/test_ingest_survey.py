@@ -85,6 +85,24 @@ class ScoredTests(ScriptCase):
         self.assertIn("SCORED\tsession-notes.md\tPlay transcript", out)
         self.assertIn("play_dice=", out)
 
+    def test_play_dice_matches_sentence_initial_capitals(self):
+        # "Rolled a 15." / "Failed his Listen." at the start of a sentence
+        # used to score zero because the verb alternatives were
+        # lowercase-only, leaving a pure play transcript "Unclassified".
+        self.write("notes.md", (
+            "Rolled a 15 for Spot Hidden.\n"
+            "Failed his Listen roll badly.\n"
+            "Passed her Psychology check.\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tnotes.md\tPlay transcript\thigh", out)
+        self.assertIn("play_dice=3", out)
+
+    def test_play_dice_still_requires_a_capitalised_skill_name(self):
+        self.write("prose.md", "He failed his attempt to sleep that night.\n")
+        out = self.run_script(str(self.tmp))
+        self.assertNotIn("play_dice=", out)
+
     def test_prep_indicators_propose_scenario_prep(self):
         self.write("prep.md", (
             "If the investigators search the study, they find a diary.\n"
@@ -205,6 +223,49 @@ class ArchiveTests(ScriptCase):
             encoding="utf-8"), "first\n")
         self.assertEqual((processed_dir / "notes (2).txt").read_text(
             encoding="utf-8"), "second\n")
+
+    def test_archive_accepts_vault_relative_spelling(self):
+        # The skill hands the script vault-relative paths ("_inbox/x").
+        # That spelling used to double up as _inbox/_inbox/x and fail.
+        src = self.vault / "_inbox" / "notes" / "a.txt"
+        src.parent.mkdir()
+        src.write_text("a\n", encoding="utf-8")
+        out = self.run_script(str(self.vault), "--archive",
+                              "_inbox/notes/a.txt", "--write")
+        self.assertIn("ARCHIVED\t_inbox/notes/a.txt\t-> _inbox/_processed/",
+                      out)
+        self.assertFalse(src.exists())
+        archived = list((self.vault / "_inbox" / "_processed").rglob("a.txt"))
+        self.assertEqual(len(archived), 1)
+        # Preserves the _inbox-relative subpath, and only that — no
+        # leaked "_inbox/" component from how the caller spelled it.
+        self.assertEqual(archived[0].parent.name, "notes")
+        self.assertEqual(archived[0].parent.parent.parent.name, "_processed")
+
+    def test_archive_accepts_absolute_path_and_lands_in_processed(self):
+        # An absolute path used to survive the escape check and then be
+        # renamed *in place* ("a (2).txt" next to itself) instead of
+        # moved under _processed/ — the one outcome Gotcha 5 forbids.
+        src = self.vault / "_inbox" / "notes" / "a.txt"
+        src.parent.mkdir()
+        src.write_text("a\n", encoding="utf-8")
+        out = self.run_script(str(self.vault), "--archive", str(src),
+                              "--write")
+        self.assertIn("-> _inbox/_processed/", out)
+        self.assertFalse(src.exists())
+        self.assertEqual(sorted(p.name for p in src.parent.iterdir()), [])
+        archived = list((self.vault / "_inbox" / "_processed").rglob("a.txt"))
+        self.assertEqual(len(archived), 1)
+        self.assertEqual(archived[0].parent.name, "notes")
+
+    def test_archive_refuses_an_already_archived_file(self):
+        old = self.vault / "_inbox" / "_processed" / "2020-01-01" / "a.txt"
+        old.parent.mkdir(parents=True)
+        old.write_text("a\n", encoding="utf-8")
+        out = self.run_script(str(self.vault), "--archive",
+                              "_processed/2020-01-01/a.txt", "--write", rc=1)
+        self.assertIn("already under _inbox/_processed/", out)
+        self.assertTrue(old.exists())
 
     def test_archive_refuses_a_path_escaping_inbox(self):
         out = self.run_script(str(self.vault), "--archive", "../outside.txt",

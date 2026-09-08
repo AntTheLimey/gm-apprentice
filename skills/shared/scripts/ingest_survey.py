@@ -43,7 +43,10 @@ Archive mode (`--archive`) implements Gotcha 5 — move processed `_inbox/`
 files to `_inbox/_processed/<date>/`, preserving their relative path under
 `_inbox/`, never deleting, never overwriting an existing archived copy
 (a name collision gets a numeric suffix). VAULT here is the vault root, and
-each FILE is a vault-relative path expected under `_inbox/`. Dry-run by
+each FILE may be given vault-relative (`_inbox/notes/a.txt`),
+`_inbox/`-relative (`notes/a.txt`), or absolute — all three resolve to the
+same file, and a path that lands outside `_inbox/` (or inside
+`_inbox/_processed/`, i.e. already archived) is refused. Dry-run by
 default, matching every other mutating script in `shared/scripts/` —
 prints `WOULD-ARCHIVE<TAB>path<TAB>-> new-path` and moves nothing; pass
 `--write` to actually move. A move that fails (permissions, cross-device)
@@ -115,8 +118,12 @@ def walk(root: Path) -> list[Path]:
 # first three matching line numbers kept as evidence.
 INDICATORS: list[tuple[str, re.Pattern]] = [
     ("play_dice", re.compile(
-        r"\brolled (?:a |an )?\d+\b"
-        r"|\b(?:failed|succeeded|passed)\s+(?:her|his|their|its)\s+"
+        # Verb and pronoun are case-insensitive (a sentence may open with
+        # "Rolled a 15" or "Failed his Listen"); the skill name that
+        # follows must still be capitalised, so "failed his attempt" is
+        # not a dice indicator.
+        r"\b(?i:rolled) (?:a |an )?\d+\b"
+        r"|\b(?i:failed|succeeded|passed)\s+(?i:her|his|their|its)\s+"
         r"[A-Z][\w' -]{1,30}\b",
     )),
     ("play_dialogue", re.compile(
@@ -301,25 +308,56 @@ def run_survey(root: Path) -> int:
 # --------------------------------------------------------------------------
 
 
+def resolve_inbox_source(vault: Path, inbox: Path, given: str) -> Path:
+    """The file `given` names, as an absolute resolved path.
+
+    Accepts an absolute path, a vault-relative path (`_inbox/x`) or an
+    `_inbox/`-relative one (`x`). A relative path whose first component is
+    `_inbox` is tried vault-relative first and falls back to
+    `_inbox/`-relative only if nothing is there — a sub-folder literally
+    named `_inbox` inside `_inbox/` is possible but the vault-relative
+    reading is the one the skill documents. The caller still checks the
+    result stays inside `inbox`; this only picks which reading to use.
+    """
+    p = Path(given).expanduser()
+    if p.is_absolute():
+        return p.resolve()
+    if p.parts and p.parts[0] == "_inbox":
+        vault_rel = (vault / p).resolve()
+        if vault_rel.exists():
+            return vault_rel
+    return (inbox / p).resolve()
+
+
 def run_archive(vault: Path, files: list[str], write: bool) -> int:
     if not vault.is_dir():
         print(f"ERROR: not a directory: {vault}", file=sys.stderr)
         return 2
     inbox = (vault / "_inbox").resolve()
+    processed_root = inbox / "_processed"
     stamp = datetime.date.today().isoformat()
     errors = archived = 0
     for rel in files:
-        src = (vault / "_inbox" / rel).resolve()
-        if not src.is_relative_to(inbox):
+        src = resolve_inbox_source(vault, inbox, rel)
+        if src == inbox or not src.is_relative_to(inbox):
             print(f"ERROR\t{rel}\tescapes _inbox/ — refused")
+            errors += 1
+            continue
+        if src.is_relative_to(processed_root):
+            print(f"ERROR\t{rel}\talready under _inbox/_processed/ — refused")
             errors += 1
             continue
         if not src.is_file():
             print(f"ERROR\t{rel}\tfile not found under _inbox/")
             errors += 1
             continue
-        dest_dir = inbox / "_processed" / stamp / Path(rel).parent
-        dest = dest_dir / Path(rel).name
+        # The archived subpath comes from where the file actually sits
+        # under _inbox/, not from however the caller spelled it — an
+        # absolute or vault-relative spelling must not leak its own
+        # leading components into the destination.
+        sub = src.relative_to(inbox)
+        dest_dir = processed_root / stamp / sub.parent
+        dest = dest_dir / sub.name
         if dest.exists():
             stem, suffix = dest.stem, dest.suffix
             n = 2
@@ -350,8 +388,9 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("dir", type=Path, help="DIR to survey, or VAULT with --archive")
     ap.add_argument("--archive", nargs="+", metavar="FILE", default=None,
-                    help="vault-relative paths under _inbox/ to archive to "
-                         "_inbox/_processed/<date>/")
+                    help="files under _inbox/ to archive to "
+                         "_inbox/_processed/<date>/ (vault-relative, "
+                         "_inbox/-relative, or absolute)")
     ap.add_argument("--write", action="store_true",
                     help="apply the archive move (default: dry-run plan). "
                          "Only meaningful with --archive.")

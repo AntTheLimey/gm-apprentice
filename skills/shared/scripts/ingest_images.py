@@ -84,11 +84,16 @@ DUP-FLAG (same destination, different content — from an on-disk file or
 from a same-batch slug collision — needs a GM replace/keep-both/skip
 decision), UNMATCHED, SKIP-FORMAT (not a recognized image extension),
 SKIP-NO-CONVERTER (non-web-safe, neither `sips` nor `magick` available, or
-conversion failed), SKIP-BATCH-DUP (same filename, or same destination
-with identical content, seen earlier in this run), AMBIGUOUS-ENTITY (two+
-vault entities share this slug), or ERROR. A trailer line follows:
+conversion failed), SKIP-BATCH-DUP (same destination with identical
+content seen earlier in this run — a same-named file with *different*
+bytes is a DUP-FLAG, never a silent drop), AMBIGUOUS-ENTITY (two+
+vault entities share this slug), or ERROR. A trailer line follows; N counts
+image files only and the six buckets sum to it (SKIP-NO-CONVERTER and
+SKIP-BATCH-DUP are the "skipped" bucket), with SKIP-FORMAT rows counted
+separately as non-image files:
 
-  # N images: F filed, D identical-skipped, L flagged, U unmatched, E errors
+  # N images: F filed, D identical-skipped, L flagged, U unmatched,
+  #   S skipped, E errors; X non-image files ignored
 
 Dry-run by default: computes and reports the full plan, including
 duplicate-identical/differs verdicts (which require actually performing any
@@ -307,17 +312,17 @@ def build_plans(vault: Path, dir_: Path, tmp_dir: Path) -> list[Plan]:
     index, ambiguous = build_entity_index(vault)
     attach_root = (vault / "_attachments").resolve()
 
-    seen_names: set[str] = set()
+    # No basename-only pre-dedup here: two files that merely share a name
+    # (dropbox/a/portrait.jpg vs dropbox/b/portrait.jpg) may hold entirely
+    # different images. They slugify to the same destination, so the
+    # dest_claims check below settles them on *content* — identical bytes
+    # make the later one SKIP-BATCH-DUP (image-handling.md's "using the
+    # first copy"), different bytes flag both, never a silent drop.
     candidates: list[tuple[str, Path]] = []
     for path in walk(dir_):
         if path.suffix.lower() not in IMAGE_EXTS:
             candidates.append(("skip-format", path))
             continue
-        key = path.name.casefold()
-        if key in seen_names:
-            candidates.append(("skip-batch-dup", path))
-            continue
-        seen_names.add(key)
         candidates.append(("ok", path))
 
     plans: list[Plan] = []
@@ -331,9 +336,6 @@ def build_plans(vault: Path, dir_: Path, tmp_dir: Path) -> list[Plan]:
         rel_src = path.relative_to(dir_).as_posix()
         if kind == "skip-format":
             plans.append(Plan("SKIP-FORMAT", rel_src))
-            continue
-        if kind == "skip-batch-dup":
-            plans.append(Plan("SKIP-BATCH-DUP", rel_src))
             continue
 
         slug = slugify(path.stem)
@@ -451,15 +453,22 @@ def build_plans(vault: Path, dir_: Path, tmp_dir: Path) -> list[Plan]:
 
 
 def insert_embed(text: str, filename: str) -> str:
+    """Add `![[filename]]` under `## Attachments`, creating the heading at
+    the end of the body if absent. Uses the file's own line ending
+    throughout — `\\s*` is deliberately avoided in the heading match,
+    since it would swallow a CRLF blank line and inject a bare LF."""
     embed_line = f"![[{filename}]]"
     if embed_line in text:
         return text
-    if re.search(r"^##\s+Attachments\s*$", text, re.MULTILINE):
-        return re.sub(r"^(##\s+Attachments\s*)$",
-                      lambda m: f"{m.group(1)}\n{embed_line}",
-                      text, count=1, flags=re.MULTILINE)
-    sep = "" if text.endswith("\n") else "\n"
-    return f"{text}{sep}\n## Attachments\n\n{embed_line}\n"
+    eol = "\r\n" if "\r\n" in text else "\n"
+    # `$` under MULTILINE matches before "\n" only, so a CRLF line needs
+    # the "\r" allowed for explicitly (lookahead — it must not be consumed).
+    heading = re.compile(r"^(##[ \t]+Attachments)[ \t]*(?=\r?$)", re.MULTILINE)
+    if heading.search(text):
+        return heading.sub(lambda m: f"{m.group(1)}{eol}{embed_line}",
+                           text, count=1)
+    sep = "" if text.endswith(("\n", "\r\n")) or not text else eol
+    return f"{text}{sep}{eol}## Attachments{eol}{eol}{embed_line}{eol}"
 
 
 def apply_metadata(vault: Path, rel: str, disposition: str,
@@ -540,7 +549,7 @@ def main() -> int:
         print(f"ERROR: not a directory: {dir_}", file=sys.stderr)
         return 2
 
-    filed = dup_skip = flagged = unmatched = errors = 0
+    filed = dup_skip = flagged = unmatched = skipped = non_image = errors = 0
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         plans = build_plans(vault, dir_, tmp_dir)
@@ -577,10 +586,15 @@ def main() -> int:
                     unmatched += 1
                 elif plan.action == "ERROR":
                     errors += 1
+                elif plan.action == "SKIP-FORMAT":
+                    non_image += 1
+                else:
+                    skipped += 1
 
-    total = len(plans)
+    total = len(plans) - non_image
     print(f"# {total} images: {filed} filed, {dup_skip} identical-skipped, "
-          f"{flagged} flagged, {unmatched} unmatched, {errors} errors")
+          f"{flagged} flagged, {unmatched} unmatched, {skipped} skipped, "
+          f"{errors} errors; {non_image} non-image files ignored")
     if not args.execute:
         print("dry-run — pass --execute to write")
     return 1 if errors else 0

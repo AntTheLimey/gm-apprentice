@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9.9] — 2026-09-08
+## [1.9.9] — 2026-09-07
 
 ### Added
 
@@ -29,7 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Gotcha 5: moves a processed `_inbox/` file to
     `_inbox/_processed/<date>/`, preserving its subpath, never deleting,
     a name collision getting a numeric suffix instead of a silent
-    overwrite. Dry-run by default like every other mutating script here.
+    overwrite. FILE may be spelled vault-relative, `_inbox/`-relative or
+    absolute; an already-archived file is refused. Dry-run by default
+    like every other mutating script here.
   - `ingest_images.py VAULT DIR [--execute]` — the `image-handling.md`
     procedure as a script: slugify each image filename, match it against
     a vault entity's own slug (exact, then one suffix-strip), convert a

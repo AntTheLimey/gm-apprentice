@@ -107,30 +107,14 @@ records regardless of what surrounds them.
 
 **Image handling:** Run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_images.py"
-<vault> <source-dir>` (dry-run) to get the full filing plan —
-format conversion, slug match, destination subfolder, duplicate
-verdict, and portrait vs. body-embed disposition — before
-touching any image by hand. Read `references/image-handling.md`
-for the full procedure the script implements. Then `--execute`
-to copy/convert into `_attachments/` and write the automatic
-part (a lone or clear-default match's `portrait:` field, and the
-`![[filename]]` body embeds). What's left is manual, by design —
-the script flags these rather than guessing:
-- `UNMATCHED` and `portrait-ambiguous` rows are the Phase 4
-  keeper interview questions (`references/image-handling.md` §
-  Keeper Interview Questions). Apply the GM's answer with
-  `stamp_entities.py <vault> FILE --set portrait="_attachments/..."
-  --write` — re-running `ingest_images.py --execute` afterward
-  will then pick up the remaining body embeds for that entity's
-  other images automatically.
-- `DUP-FLAG` (a same-name file already at the destination with
-  different content, or two batch sources landing on the same
-  slug) needs the GM's replace/keep-both/skip call — apply it by
-  hand (for keep-both, rename the new file with a `-2` suffix and
-  re-run).
-- An image the GM marks "general atmosphere art" has no dedicated
-  destination in the filing table — file it under
-  `_attachments/documents/` by hand.
+<vault> <source-dir>` (dry-run) for the full filing plan —
+conversion, slug match, destination, duplicate verdict, portrait
+vs. body-embed — before touching any image by hand; then
+`--execute` to copy/convert into `_attachments/` and write the
+`portrait:` field and `![[filename]]` embeds. `UNMATCHED`,
+`portrait-ambiguous` and `DUP-FLAG` rows are deliberately left
+for the GM — see `references/image-handling.md` § What the
+Script Leaves to You for how each is resolved.
 
 **Output:** Classified manifest — summary table of every source
 item with classification, brief content summary, and time-period

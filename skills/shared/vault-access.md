@@ -279,8 +279,10 @@ exists for it, and it is never guessed at. `ingest_survey.py VAULT
 --archive FILE... [--write]` implements Gotcha 5: moves a processed
 `_inbox/` file to `_inbox/_processed/<date>/`, preserving its subpath,
 refusing to delete or silently overwrite (a name collision gets a numeric
-suffix). Dry-run by default, like every other mutating script here —
-`--write` applies the move.
+suffix). FILE may be spelled vault-relative (`_inbox/notes/a.txt`),
+`_inbox/`-relative (`notes/a.txt`) or absolute; a path outside `_inbox/`
+or already under `_processed/` is refused. Dry-run by default, like every
+other mutating script here — `--write` applies the move.
 
 `ingest_images.py VAULT DIR [--execute]` is vault-ingest's image-handling
 procedure (`references/image-handling.md`) as a script rather than a

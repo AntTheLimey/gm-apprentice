@@ -202,6 +202,28 @@ class DuplicateTests(ScriptCase):
         self.image("b/ronnie-vint.jpg")
         out = self.run_script("--execute")
         self.assertIn("SKIP-BATCH-DUP", out)
+        self.assertEqual(out.count("FILED"), 1)
+
+    def test_same_filename_different_bytes_in_one_batch_flags_both(self):
+        # A basename-only dedup used to drop b/ronnie-vint.jpg unread.
+        # Same name, different image: neither may be silently preferred.
+        self.entity("Characters/Ronnie Vint.md", "npc")
+        self.image("a/ronnie-vint.jpg", b"\xff\xd8\xff\xe0AAAA")
+        self.image("b/ronnie-vint.jpg", b"\xff\xd8\xff\xe0BBBB")
+        out = self.run_script("--execute")
+        self.assertEqual(out.count("DUP-FLAG"), 2)
+        self.assertNotIn("SKIP-BATCH-DUP", out)
+        self.assertNotIn("FILED", out)
+        self.assertFalse((self.vault / "_attachments").exists())
+
+    def test_trailer_counts_only_image_files(self):
+        self.image("notes.txt", b"not an image")
+        self.image("readme.md", b"# hi")
+        self.image("mystery.jpg")
+        out = self.run_script()
+        self.assertIn("# 1 images: 0 filed, 0 identical-skipped, 0 flagged, "
+                      "1 unmatched, 0 skipped, 0 errors; "
+                      "2 non-image files ignored", out)
 
 
 class SlugCollisionTests(ScriptCase):
@@ -310,6 +332,29 @@ class CrlfEntityTests(ScriptCase):
         self.assertIn("\r\n", text)
         for line in text.splitlines(keepends=True)[:-1]:
             self.assertTrue(line.endswith("\r\n"), repr(line))
+
+
+class InsertEmbedTests(unittest.TestCase):
+    def test_second_embed_into_crlf_attachments_keeps_crlf(self):
+        # `\s*$` in the old heading match ate into the CRLF blank line and
+        # inserted a bare LF — a mixed-EOL file after the second image.
+        text = "## Attachments\r\n\r\n![[old.jpg]]\r\n"
+        out = ii.insert_embed(text, "new.jpg")
+        self.assertNotIn("\r\n\n", out)
+        self.assertNotIn("]]\n", out)
+        self.assertEqual(out, "## Attachments\r\n![[new.jpg]]\r\n\r\n"
+                              "![[old.jpg]]\r\n")
+
+    def test_new_attachments_section_uses_file_eol(self):
+        out = ii.insert_embed("---\r\ntype: npc\r\n---\r\n\r\n# X\r\n", "a.jpg")
+        self.assertNotIn("\n\n", out.replace("\r\n", ""))
+        self.assertTrue(out.endswith("## Attachments\r\n\r\n![[a.jpg]]\r\n"))
+        lf = ii.insert_embed("# X\n", "a.jpg")
+        self.assertEqual(lf, "# X\n\n## Attachments\n\n![[a.jpg]]\n")
+
+    def test_embed_is_idempotent(self):
+        once = ii.insert_embed("# X\n", "a.jpg")
+        self.assertEqual(ii.insert_embed(once, "a.jpg"), once)
 
 
 class NonFolderTypeTests(ScriptCase):
