@@ -158,6 +158,12 @@ jobs:
       - name: plans_index tests
         run: python tests/test_plans_index.py
 
+      - name: ingest_survey tests
+        run: python tests/test_ingest_survey.py
+
+      - name: ingest_images tests
+        run: python tests/test_ingest_images.py
+
       # Last: a type error must never mask a failing test.
       - name: Type-check shared scripts
         run: |

@@ -3,6 +3,37 @@
 Reference for image processing during vault ingestion. Read when
 any source material includes image files.
 
+`ingest_images.py VAULT DIR [--execute]` (in `shared/scripts/`)
+implements everything below except the GM decisions — run it
+first, then work its report. Its row vocabulary: `WOULD-FILE` /
+`FILED`, `DUP-SKIP` (identical file already filed), `DUP-FLAG`,
+`UNMATCHED`, `AMBIGUOUS-ENTITY` (two vault entities share the
+slug), `SKIP-FORMAT`, `SKIP-NO-CONVERTER`, `SKIP-BATCH-DUP`,
+`ERROR`; the disposition column carries `portrait`,
+`body-embed`, or `portrait-ambiguous`.
+
+## What the Script Leaves to You
+
+The script flags these rather than guessing (Design Principle 6):
+
+- **`UNMATCHED` and `portrait-ambiguous` rows** are the Phase 4
+  keeper interview questions (§ Keeper Interview Questions
+  below). Apply the GM's answer with
+  `stamp_entities.py <vault> FILE --set portrait="_attachments/..."
+  --write`; re-running `ingest_images.py --execute` afterward
+  picks up the remaining body embeds for that entity's other
+  images automatically.
+- **`DUP-FLAG`** (a same-name file already at the destination
+  with different content, or two batch sources landing on the
+  same slug) needs the GM's replace / keep-both / skip call —
+  apply it by hand (for keep-both, rename the new file with a
+  `-2` suffix and re-run).
+- **"General atmosphere art"** has no entity and no row in the
+  filing table — file it under `_attachments/documents/` by hand.
+- **`AMBIGUOUS-ENTITY`** — two vault entities share a slug; ask
+  the GM which one the image belongs to, then set `portrait` /
+  embed by hand as for an unmatched image.
+
 ## Supported Formats
 
 **Web-safe (pass through):** jpg, jpeg, png, webp, gif, svg
@@ -24,8 +55,10 @@ When a non-web-safe image is encountered:
    > and re-ingest."
 
 Use the original filename stem with `.jpg` extension for
-converted files. Delete the non-web-safe original from the
-vault after successful conversion (it was just copied in).
+converted files. `ingest_images.py` converts through a private
+temp file that it deletes immediately after use — the source
+image (external or in `_inbox/`) is read-only throughout and is
+never copied into the vault or deleted (Gotcha 3).
 
 ## Entity Matching
 
@@ -89,12 +122,18 @@ already filed — no action needed.
 If the GM chooses "keep both," rename the new image with a
 numeric suffix: `ronnie-vint-2.jpg`.
 
-**Same-batch duplicates:** If the same filename appears more
-than once in a single ingestion batch, keep the first
-occurrence and skip the rest with a note:
+**Same-batch duplicates:** If two files in a single ingestion
+batch land on the same destination (same filename in two
+folders, or two spellings of one name — `Ronnie Vint.jpg` and
+`ronnie_vint.jpg`), compare their content. Identical: keep the
+first occurrence and skip the rest with a note:
 
 > "Found duplicate `ronnie-vint.jpg` in the batch — using
 > the first copy."
+
+Different content: flag both for the GM exactly as for a
+same-name file already on disk — neither copy is silently
+preferred.
 
 ## Entity Linking
 
