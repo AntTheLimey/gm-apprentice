@@ -545,6 +545,13 @@ def write_dest_bytes(vault: Path, plan: Plan, tmp_dir: Path) -> str | None:
         with os.fdopen(fd, "wb") as f:
             f.write(content)
     except OSError as e:
+        # This run created the file, so a partial write is ours to remove
+        # — left behind, a re-run would read it as a differing DUP-FLAG
+        # instead of retrying the copy.
+        try:
+            dest_path.unlink()
+        except OSError:
+            pass
         return f"write failed ({e.__class__.__name__})"
     return None
 

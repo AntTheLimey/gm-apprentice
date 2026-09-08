@@ -436,6 +436,41 @@ class NoClobberWriteTests(unittest.TestCase):
             self.assertEqual(dest.read_bytes(), b"\xff\xd8existing")
 
 
+    def test_partial_write_failure_removes_the_created_file(self):
+        import io
+
+        class Failing(io.RawIOBase):
+            def writable(self):
+                return True
+
+            def write(self, b):
+                raise OSError("disk full")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            src = vault / "src.jpg"
+            src.write_bytes(b"\xff\xd8new")
+            plan = ii.Plan("FILE", "src.jpg", "src", "X.md",
+                           "_attachments/characters/src.jpg",
+                           src_path=src, final_ext=".jpg")
+            dest = vault / "_attachments" / "characters" / "src.jpg"
+            orig = ii.os.fdopen
+
+            def failing_fdopen(fd, *a, **kw):
+                ii.os.close(fd)
+                return Failing()
+
+            ii.os.fdopen = failing_fdopen
+            try:
+                err = ii.write_dest_bytes(vault, plan, vault)
+            finally:
+                ii.os.fdopen = orig
+            self.assertIn("write failed", err or "")
+            self.assertFalse(dest.exists(),
+                             "a failed write must not leave a partial file "
+                             "for the next run to DUP-FLAG")
+
+
 class NoConverterTests(unittest.TestCase):
     def test_no_converter_available_reports_skip_reason(self):
         # Exercises the real shutil.which check — only meaningful on a
