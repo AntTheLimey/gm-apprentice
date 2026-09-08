@@ -322,6 +322,14 @@ class StateTests(unittest.TestCase):
         proc = run_cli(HEADLESS, "--state")
         self.assertEqual(proc.stdout.strip(), "# no prep-state marker")
 
+    def test_inventory_and_state_together_is_a_usage_error(self):
+        # main() only ever checks one mode and returns after it, so
+        # --state silently never printed when both flags were accepted —
+        # reject the combination instead of picking one silently.
+        proc = run_cli(GOOD, "--inventory", "--state")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("not allowed with argument", proc.stderr)
+
 
 # skills/session-prep/SKILL.md, Resumable prep — the exact worked example.
 SKILL_MD_EXAMPLE_MARKER = (

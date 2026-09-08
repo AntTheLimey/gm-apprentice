@@ -415,7 +415,8 @@ def main(argv: list[str] | None = None) -> int:
             systems_dir=args.systems_dir)
 
     if args.json:
-        print(json.dumps([rec.as_dict() for rec in records], indent=2))
+        shown = records or fallback
+        print(json.dumps([rec.as_dict() for rec in shown], indent=2))
     else:
         print(render(mode, records, total=total, kind=args.kind,
                      fallback=fallback))

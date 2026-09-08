@@ -245,6 +245,15 @@ class KindFallback(unittest.TestCase):
         self.assertNotIn("fallback", out.stdout)
         self.assertNotIn("closest without it", out.stdout)
 
+    def test_kind_miss_falls_back_in_json_too(self):
+        out = run_cli("gurps-4e", "Bracketwork", "--kind", "trait",
+                      "--systems-dir", str(FIX), "--json")
+        self.assertEqual(out.returncode, 1, out.stderr)
+        payload = json.loads(out.stdout)
+        self.assertTrue(payload, "the text mode shows the fallback rows; "
+                                 "--json must not print an empty array here")
+        self.assertTrue(any(rec["name"] == "Bracketwork" for rec in payload))
+
 
 class BadSystemsDir(unittest.TestCase):
     """I4: a wrong or missing corpus path is a reported error, not an

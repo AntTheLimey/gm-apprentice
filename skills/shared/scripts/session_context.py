@@ -214,7 +214,7 @@ def thread_report(files, current: int, chapter) -> str:
         carry = _bullets(carry_block) if carry_block else []
         wrap_ups.append((n, unresolved, carry))
 
-    pcs = [(rel, fm) for rel, _t, fm in files
+    pcs = [(rel, text) for rel, text, fm in files
            if fm.get("type") == "pc" and not rel.endswith("_Story.md")
            and str(fm.get("status", "")).casefold() not in PC_INACTIVE_STATUS]
 
@@ -224,8 +224,7 @@ def thread_report(files, current: int, chapter) -> str:
 
     if not pcs:
         lines.append("(no active PC entities found)")
-    for rel, fm in pcs:
-        text = next(t for r, t, f in files if r == rel)
+    for rel, text in pcs:
         lines.append(f"--- {Path(rel).stem} ---")
         status_block = section(text, "Current Status") or ""
         threads_block = _labelled_block(status_block, "Open threads")

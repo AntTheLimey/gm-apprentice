@@ -742,8 +742,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("plan", type=Path)
     ap.add_argument("--headless", action="store_true")
-    ap.add_argument("--inventory", action="store_true")
-    ap.add_argument("--state", action="store_true")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--inventory", action="store_true")
+    mode.add_argument("--state", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
