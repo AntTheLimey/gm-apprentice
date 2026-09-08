@@ -77,7 +77,7 @@ component-by-component as numbers — `1.8.9` is older than `1.8.15`.
 2. **ONE file per entity** — Multiple entities in one file break wiki-link resolution and publish rendering.
 3. **Never modify external source files** — Read-only access. The GM's originals are their backup and legal proof of ownership.
 4. **Process buckets chronologically, earliest first** — Later buckets reference entities created by earlier ones. Out-of-order processing creates dangling wiki-links and duplicate entities.
-5. **Move processed `_inbox/` files to `_inbox/_processed/` with date stamp, never delete** — Source provenance. The GM may need to re-ingest if errors are found, and the original file is the audit trail.
+5. **Move processed `_inbox/` files to `_inbox/_processed/` with date stamp, never delete** — Source provenance. The GM may need to re-ingest if errors are found, and the original file is the audit trail. Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_survey.py" <vault> --archive FILE... --write` rather than moving files by hand — it date-stamps, preserves the `_inbox/`-relative subpath, and refuses to delete or silently overwrite a name collision. Dry-run (no `--write`) first to confirm the destination paths.
 6. **Validate each bucket's entities before the next bucket** — run the bundled `vault_check.py frontmatter` (see `shared/vault-access.md`) on folders you wrote; fix every ERROR first. Later buckets build on earlier files, so schema drift compounds.
 
 ## The Pipeline
@@ -89,20 +89,48 @@ exist, process each through Phases 3-6 before the next
 
 ### Phase 1: Survey & Classify
 
-Read all source material. Classify every document or section.
-Read `references/classification-taxonomy.md` for the full
-taxonomy and heuristics.
+Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_survey.py"
+<source-dir>` before reading anything. Three of the nine
+taxonomy rows resolve with zero content read (extension or
+existing frontmatter alone) and print `DECIDED`; the rest print
+`SCORED` with per-indicator hit counts, line numbers, a proposed
+classification and a confidence — read the file yourself only
+to confirm or override a `SCORED` row, not to classify from
+scratch. An `UNSCORED` row (Word/PDF/VTT — no stdlib text
+extractor) still needs a manual read. Read
+`references/classification-taxonomy.md` for the full taxonomy
+and heuristics behind the proposal.
 
 **Key heuristic:** If a document contains dice rolls, skill
 check results, or specific PC actions, those lines are play
 records regardless of what surrounds them.
 
-**Image handling:** Read `references/image-handling.md` for
-full procedures. Summary: classify every image file, convert
-non-web-safe formats (best-effort via `sips` or `magick`),
-match to entities by slugified filename, file in the correct
-`_attachments/` subfolder, and link to matched entities.
-Unmatched images go on the Phase 4 keeper interview list.
+**Image handling:** Run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_images.py"
+<vault> <source-dir>` (dry-run) to get the full filing plan —
+format conversion, slug match, destination subfolder, duplicate
+verdict, and portrait vs. body-embed disposition — before
+touching any image by hand. Read `references/image-handling.md`
+for the full procedure the script implements. Then `--execute`
+to copy/convert into `_attachments/` and write the automatic
+part (a lone or clear-default match's `portrait:` field, and the
+`![[filename]]` body embeds). What's left is manual, by design —
+the script flags these rather than guessing:
+- `UNMATCHED` and `portrait-ambiguous` rows are the Phase 4
+  keeper interview questions (`references/image-handling.md` §
+  Keeper Interview Questions). Apply the GM's answer with
+  `stamp_entities.py <vault> FILE --set portrait="_attachments/..."
+  --write` — re-running `ingest_images.py --execute` afterward
+  will then pick up the remaining body embeds for that entity's
+  other images automatically.
+- `DUP-FLAG` (a same-name file already at the destination with
+  different content, or two batch sources landing on the same
+  slug) needs the GM's replace/keep-both/skip call — apply it by
+  hand (for keep-both, rename the new file with a `-2` suffix and
+  re-run).
+- An image the GM marks "general atmosphere art" has no dedicated
+  destination in the filing table — file it under
+  `_attachments/documents/` by hand.
 
 **Output:** Classified manifest — summary table of every source
 item with classification, brief content summary, and time-period
@@ -144,12 +172,14 @@ confirmed play events.
 - Confirmed events (with source citations)
 - Gaps (things prep says could have happened but unconfirmed)
 
-**Image linking:** For each entity created or updated in this
-bucket, check filed images (from Phase 1) for matches. Single
-match → set `portrait`. Multiple matches with clear default
-(unsuffixed filename) → set `portrait`, embed rest via
-`![[filename]]`. Multiple matches with no default → defer
-portrait selection to Phase 4. See `references/image-handling.md`.
+**Image linking:** Already resolved by `ingest_images.py`'s
+Phase 1 plan for any entity that existed when it ran — re-run it
+with `--execute` once new entities from this bucket are created
+and it will pick up matches against them too. It sets `portrait`
+on a single or clear-default match, embeds the rest via
+`![[filename]]` under a `## Attachments` heading, and never
+overwrites an existing `portrait`. See
+`references/image-handling.md` for the underlying rules.
 
 ### Phase 4: Keeper Interview
 

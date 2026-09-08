@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.9] — 2026-09-08
+
+### Added
+
+- **Mechanization Slice C — vault-ingest survey and image filing** from
+  `docs/mechanization-analysis.md` (Tier 2 #12–13). Two new scripts that
+  turn vault-ingest Phase 1 from "read all source material" into "read
+  the manifest, then read only what it flags":
+  - `ingest_survey.py DIR` — a classification manifest over the nine
+    `classification-taxonomy.md` rows. Three resolve with zero content
+    read (Image/map, Spreadsheet/data by extension; Session wrap-up by
+    existing `type:` frontmatter) and print `DECIDED`; the rest are
+    scored against the taxonomy's own named indicator phrases (dice
+    rolls, "if the investigators...", "the GM should...", Q&A shape,
+    first-person recollection, structured attribute blocks) with
+    per-indicator line numbers, a proposed classification and a
+    confidence, printed `SCORED`. A Word/PDF/VTT file — no stdlib text
+    extractor — prints `UNSCORED` rather than being guessed at.
+    `ingest_survey.py VAULT --archive FILE... [--write]` implements
+    Gotcha 5: moves a processed `_inbox/` file to
+    `_inbox/_processed/<date>/`, preserving its subpath, never deleting,
+    a name collision getting a numeric suffix instead of a silent
+    overwrite. Dry-run by default like every other mutating script here.
+  - `ingest_images.py VAULT DIR [--execute]` — the `image-handling.md`
+    procedure as a script: slugify each image filename, match it against
+    a vault entity's own slug (exact, then one suffix-strip), convert a
+    non-web-safe format via `sips`/`magick` when available, file it
+    under the right `_attachments/` subfolder gated on
+    `schema_rules.PORTRAIT_TYPES`, and decide portrait vs. body-embed — a
+    lone match gets the portrait, several matches for one entity give the
+    unsuffixed one the portrait and embed the rest, all-suffixed with no
+    default is left unset and reported `portrait-ambiguous` for the
+    keeper interview, and an entity that already has a portrait never has
+    it overwritten. Two different sources that slugify to the same
+    destination are `DUP-FLAG`, not a silent last-write-wins, same as a
+    same-name file with different bytes already at the destination —
+    never auto-resolved. Re-running `--execute` after a portrait is
+    resolved by hand picks up the outstanding embeds; only a content
+    digest, not full image bytes, is held across the planning pass.
+    Dry-run by default; `--execute` writes.
+  - `skills/vault-ingest/SKILL.md` Phase 1 and the Image handling /
+    Image linking sections now route to these scripts before any manual
+    read or file-by-file matching; `skills/shared/vault-access.md`
+    documents both.
+
+---
+
 ## [1.9.8] — 2026-09-07
 
 ### Added

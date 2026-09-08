@@ -24,8 +24,10 @@ When a non-web-safe image is encountered:
    > and re-ingest."
 
 Use the original filename stem with `.jpg` extension for
-converted files. Delete the non-web-safe original from the
-vault after successful conversion (it was just copied in).
+converted files. `ingest_images.py` converts through a private
+temp file that it deletes immediately after use — the source
+image (external or in `_inbox/`) is read-only throughout and is
+never copied into the vault or deleted (Gotcha 3).
 
 ## Entity Matching
 

@@ -30,6 +30,9 @@ and Obsidian is a viewer the user may or may not have open.
 | Session Plan conformance | `plan_check.py` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
 | Frontmatter writes (set/increment/promote/supersede/reconciled) and legacy canon-key repair | `stamp_entities.py` |
+| Ingest source classification manifest (zero-read where extension/frontmatter settles it, indicator-scored otherwise) | `ingest_survey.py` |
+| Ingest `_inbox/` processed-file archival (date-stamped, never deletes) | `ingest_survey.py --archive` |
+| Ingest image filing (slug match, convert non-web-safe, portrait/embed) | `ingest_images.py` |
 | Player-safe PC sheet view | `gm-publish sheet show --player-safe` |
 | Site rebuild (repoint, manifest, deploy+verify) | `gm-publish update-pin` / `manifest diff` / `deploy --verify` |
 | Site audit / why didn't this page publish | `gm-publish doctor --site` / `explain PATH` |
@@ -261,6 +264,40 @@ with a stamping action in the same call. Dry-run by default —
 review the plan, then re-run with `--write`. It touches only
 the targeted frontmatter lines; everything else is preserved
 byte-for-byte.
+
+`ingest_survey.py DIR` turns vault-ingest Phase 1 from "read all source
+material" into "read the manifest, then read only what it flags." Three of
+the nine taxonomy rows resolve with zero content read — Image/map and
+Spreadsheet/data by extension, Session wrap-up by existing `type:`
+frontmatter — and print `DECIDED`. The rest print `SCORED`, with
+per-indicator hit counts and line numbers (play, prep, research, Keeper-
+recollection, character-sheet phrases named in
+`classification-taxonomy.md`) plus a proposed classification and
+confidence — evidence for the model/GM to confirm or override, not a final
+verdict. A Word/PDF/VTT file prints `UNSCORED`: no stdlib text extractor
+exists for it, and it is never guessed at. `ingest_survey.py VAULT
+--archive FILE... [--write]` implements Gotcha 5: moves a processed
+`_inbox/` file to `_inbox/_processed/<date>/`, preserving its subpath,
+refusing to delete or silently overwrite (a name collision gets a numeric
+suffix). Dry-run by default, like every other mutating script here —
+`--write` applies the move.
+
+`ingest_images.py VAULT DIR [--execute]` is vault-ingest's image-handling
+procedure (`references/image-handling.md`) as a script rather than a
+file-by-file manual pass: slugify each image filename, match it against a
+vault entity's own slug (exact, then one suffix-strip), convert a
+non-web-safe format via `sips`/`magick` when available, file it under the
+right `_attachments/` subfolder, and decide portrait vs. body-embed — a
+lone match becomes the portrait, several matches for one entity give the
+unsuffixed one the portrait and embed the rest, all-suffixed with no
+default is left unset and reported `portrait-ambiguous` for the keeper
+interview, and an entity that already has a portrait never has it
+overwritten. A same-name file with different bytes at the destination, or
+two differently-named sources that slugify to the same destination, are
+both `DUP-FLAG`, never auto-resolved. Re-running `--execute` after a
+portrait is resolved by hand (`stamp_entities.py --set portrait=...`)
+picks up any outstanding body embeds for that entity. Dry-run by default;
+`--execute` writes.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
