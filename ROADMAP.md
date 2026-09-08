@@ -89,7 +89,7 @@ decision rather than pure score.
   (18.3 kB → ~5 kB, each script's `--help` verified to carry what the
   deleted paragraph said), and session-prep's opening routing scoped to
   the question asked so a status question no longer drifts into a wrap-up
-  audit. plugin v1.9.10
+  audit. PR #200, plugin v1.9.10
 - ~~Mechanization Slice C: ingest survey + image ingestion~~ — Two new
   scripts from the Tier 2 rows of `docs/mechanization-analysis.md` (#12–13),
   turning vault-ingest Phase 1 from "read all source material" into "read

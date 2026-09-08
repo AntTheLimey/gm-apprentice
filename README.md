@@ -145,10 +145,13 @@ whenever you want the graph view, backlinks, and a vault UI at the table;
 nothing requires it.
 
 The bundled utilities under `skills/shared/scripts/` give the skills
-ranked search, link-graph audits, schema validation, and more — Python 3
-standard library only, no packages to install. macOS and most Linux ship
-Python 3 already; on Windows, `winget install python`. Python 3 is a
-required dependency of this plugin.
+ranked search, link-graph audits, schema validation, and more — Python
+3.10 or later, standard library only, no packages to install. Python 3 is
+a required dependency of this plugin. The skills invoke it as `python3`
+from Claude Code's Bash tool, which on Windows is Git Bash: macOS and
+most Linux ship `python3` already; on Windows, install Python from the
+Microsoft Store, whose `python3` alias Git Bash finds on PATH (the
+python.org installer provides only `python` and `py`).
 
 ## License
 

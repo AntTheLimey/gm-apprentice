@@ -1175,7 +1175,7 @@ def check_pc_body(vault: Path, folder: str | None = None) -> list[str]:
 # --------------------------------------------------------------------------
 # Session Wrap-Up conformance
 #
-# Mechanises campaign-qa/references/checks/wrapup-conformance.md Steps 1–3
+# Mechanises campaign-qa/references/checks/wrapup-conformance.md Steps 1-3
 # and, as `--fix`, the structural half of the 1.9.4 → 1.9.5 migration. The
 # failure this exists to prevent is narrow and expensive: a Keeper-facing
 # `## Open Questions for Reconcile` sits beside `## Narrative Recap` rather

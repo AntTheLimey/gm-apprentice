@@ -30,7 +30,9 @@ reported, not fatal. A `Note:` line in the header means read before
 trusting: it appears for an ambiguous `last_session` pointer (one
 that resolves to nothing, to several sessions, or to a session
 number present in more than one chapter), when a later session
-index existed but was ignored as unplayed, and when the campaign
+index in the same chapter was ignored as unplayed, when a later
+session in the same chapter is already played (the selection may be
+stale), and when the campaign
 overview's `asOfSession` names a different chapter from the one the
 selected session sits in. Confirm a `Note:` with
 the GM — a wrong bundle reads exactly as authoritative as a right
@@ -376,12 +378,20 @@ def select_session(files, session_arg: int | None) -> tuple[dict | None, list[st
                 f"this bundle.")
 
     if chosen:
-        pending = sorted(s["n"] for s in sessions
-                         if s["n"] > current and s["chapter"] == chapter)
-        if pending:
+        later = [s for s in sessions
+                 if s["n"] > current and s["chapter"] == chapter]
+        unplayed = sorted(s["n"] for s in later if not s["played"])
+        played_later = sorted(s["n"] for s in later if s["played"])
+        if unplayed:
             warnings.append(
-                f"Note: session index(es) {pending} exist "
+                f"Note: session index(es) {unplayed} exist "
                 f"with unplayed status — ignored for 'just played'.")
+        if played_later:
+            warnings.append(
+                f"Note: session(s) {played_later} in this chapter are "
+                f"numbered after the selected one and carry a played "
+                f"status — the selection may be stale; verify before "
+                f"trusting this bundle.")
 
     return chosen, warnings
 
@@ -442,7 +452,8 @@ def main() -> int:
     mode.add_argument("--threads", action="store_true",
                       help="print the Session Context header and Threads "
                            "report only: each active PC's Open threads aged "
-                           "against the Wrap-Up's Unresolved Threads, "
+                           "against the Wrap-Ups' Unresolved Threads and "
+                           "PC Carry-Forward bullets, "
                            "age=N sessions since last touched, STALE at "
                            "age >= 3 (a candidate, not a verdict — resolve, "
                            "advance, or retire is the GM's call)")

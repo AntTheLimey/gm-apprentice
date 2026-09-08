@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the manifest tool shows drift and the exclude-versus-missing call is
   the GM's; run `explain` before `doctor --site` for a single-file
   question.
+- `session_context.py` reported every later session index in the
+  chapter as "unplayed", including ones already played. Later unplayed
+  indexes keep the existing `Note:`; a later session that is already
+  played now gets its own `Note:` saying the selection may be stale.
 - The benchmark fixture vault (`tests/benchmark-campaign/`) gains a
   `_meta/vault-config.md` and its three wrap-ups are migrated to the
   1.9.5 template, so the version gate returns OK and the wrap-up check
