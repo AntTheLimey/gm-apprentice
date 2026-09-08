@@ -216,19 +216,30 @@ def _within(root: Path, path: Path) -> bool:
     return target == root or str(target).startswith(str(root) + os.sep)
 
 
+CONVERT_TIMEOUT_S = 120
+
+
+def _run_converter(cmd: list[str], dest: Path) -> bool:
+    """One converter attempt. A tool that hangs on malformed input (or is
+    killed by the timeout) is a failed attempt, not a stalled batch —
+    every later image still gets processed."""
+    try:
+        r = subprocess.run(cmd, capture_output=True, timeout=CONVERT_TIMEOUT_S)
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    return r.returncode == 0 and dest.exists()
+
+
 def convert_to_jpeg(src: Path, dest: Path) -> bool:
     """Best-effort `sips` then `magick` conversion, per image-handling.md.
     Returns whether dest now holds converted bytes."""
-    if shutil.which("sips"):
-        r = subprocess.run(
+    if shutil.which("sips") and _run_converter(
             ["sips", "-s", "format", "jpeg", str(src), "--out", str(dest)],
-            capture_output=True)
-        if r.returncode == 0 and dest.exists():
-            return True
-    if shutil.which("magick"):
-        r = subprocess.run(["magick", str(src), str(dest)], capture_output=True)
-        if r.returncode == 0 and dest.exists():
-            return True
+            dest):
+        return True
+    if shutil.which("magick") and _run_converter(
+            ["magick", str(src), str(dest)], dest):
+        return True
     return False
 
 
@@ -520,7 +531,19 @@ def write_dest_bytes(vault: Path, plan: Plan, tmp_dir: Path) -> str | None:
     dest_path = vault / plan.dest_rel
     try:
         dest_path.parent.mkdir(parents=True, exist_ok=True)
-        dest_path.write_bytes(content)
+        # Exclusive create: the plan saw this path absent, but anything
+        # that appeared since (another run, Obsidian sync) must not be
+        # clobbered — that is the duplicate-handling contract.
+        fd = os.open(str(dest_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    except FileExistsError:
+        return (f"{dest_path.name} appeared at the destination after "
+                f"planning — not overwritten; re-run to get a duplicate "
+                f"verdict")
+    except OSError as e:
+        return f"write failed ({e.__class__.__name__})"
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(content)
     except OSError as e:
         return f"write failed ({e.__class__.__name__})"
     return None

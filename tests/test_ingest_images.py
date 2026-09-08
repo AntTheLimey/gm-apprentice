@@ -396,6 +396,46 @@ class AmbiguousEntityTests(ScriptCase):
         self.assertIn("AMBIGUOUS-ENTITY\tronnie-vint.jpg\tronnie-vint", out)
 
 
+class ConverterRobustnessTests(unittest.TestCase):
+    def test_converter_timeout_is_a_failed_attempt_not_a_hang(self):
+        import subprocess as sp
+
+        def hang(cmd, **kw):
+            raise sp.TimeoutExpired(cmd, kw.get("timeout", 0))
+
+        orig_run, orig_which = ii.subprocess.run, ii.shutil.which
+        ii.subprocess.run = hang
+        ii.shutil.which = lambda name: "/usr/bin/" + name
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                src = Path(tmp) / "photo.heic"
+                src.write_bytes(b"heic-bytes")
+                self.assertFalse(ii.convert_to_jpeg(src, Path(tmp) / "o.jpg"))
+                content, ext, reason = ii.read_content(src, Path(tmp))
+        finally:
+            ii.subprocess.run, ii.shutil.which = orig_run, orig_which
+        self.assertEqual(content, b"")
+        self.assertIn("conversion via sips/magick failed", reason)
+
+
+class NoClobberWriteTests(unittest.TestCase):
+    def test_file_appearing_after_planning_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            src = vault / "src.jpg"
+            src.write_bytes(b"\xff\xd8new")
+            plan = ii.Plan("FILE", "src.jpg", "src", "X.md",
+                           "_attachments/characters/src.jpg",
+                           src_path=src, final_ext=".jpg")
+            dest = vault / "_attachments" / "characters" / "src.jpg"
+            dest.parent.mkdir(parents=True)
+            dest.write_bytes(b"\xff\xd8existing")  # raced in after planning
+            err = ii.write_dest_bytes(vault, plan, vault)
+            self.assertIsNotNone(err)
+            self.assertIn("not overwritten", err or "")
+            self.assertEqual(dest.read_bytes(), b"\xff\xd8existing")
+
+
 class NoConverterTests(unittest.TestCase):
     def test_no_converter_available_reports_skip_reason(self):
         # Exercises the real shutil.which check — only meaningful on a

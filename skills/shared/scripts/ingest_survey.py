@@ -64,9 +64,11 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import os
 import re
 import shutil
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -329,6 +331,39 @@ def resolve_inbox_source(vault: Path, inbox: Path, given: str) -> Path:
     return (inbox / p).resolve()
 
 
+def _candidate_names(dest_dir: Path, name: str) -> Iterator[Path]:
+    """`name`, then `stem (2).ext`, `stem (3).ext`, ... — the numeric-suffix
+    rule for an archive collision."""
+    yield dest_dir / name
+    stem, suffix = Path(name).stem, Path(name).suffix
+    n = 2
+    while True:
+        yield dest_dir / f"{stem} ({n}){suffix}"
+        n += 1
+
+
+def _first_free_name(dest_dir: Path, name: str) -> Path:
+    """Dry-run only: the name the move *would* take right now."""
+    return next(p for p in _candidate_names(dest_dir, name) if not p.exists())
+
+
+def _reserve_name(dest_dir: Path, name: str) -> Path:
+    """Claim a destination atomically (O_EXCL), so two concurrent archivers
+    — or a sync client — can never both decide the same name is free and
+    have the second `shutil.move` replace the first's archived file.
+    Returns the reserved path, holding an empty placeholder to move onto.
+    """
+    for candidate in _candidate_names(dest_dir, name):
+        try:
+            fd = os.open(str(candidate), os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                         0o644)
+        except FileExistsError:
+            continue
+        os.close(fd)
+        return candidate
+    raise AssertionError("unreachable: _candidate_names is infinite")
+
+
 def run_archive(vault: Path, files: list[str], write: bool) -> int:
     if not vault.is_dir():
         print(f"ERROR: not a directory: {vault}", file=sys.stderr)
@@ -357,22 +392,26 @@ def run_archive(vault: Path, files: list[str], write: bool) -> int:
         # leading components into the destination.
         sub = src.relative_to(inbox)
         dest_dir = processed_root / stamp / sub.parent
-        dest = dest_dir / sub.name
-        if dest.exists():
-            stem, suffix = dest.stem, dest.suffix
-            n = 2
-            while dest.exists():
-                dest = dest_dir / f"{stem} ({n}){suffix}"
-                n += 1
-        new_rel = dest.relative_to(vault).as_posix()
         if not write:
-            print(f"WOULD-ARCHIVE\t{rel}\t-> {new_rel}")
+            dest = _first_free_name(dest_dir, sub.name)
+            print(f"WOULD-ARCHIVE\t{rel}\t-> "
+                  f"{dest.relative_to(vault).as_posix()}")
             archived += 1
             continue
         try:
             dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = _reserve_name(dest_dir, sub.name)
+        except OSError as e:
+            print(f"ERROR\t{rel}\treserve failed ({e.__class__.__name__})")
+            errors += 1
+            continue
+        new_rel = dest.relative_to(vault).as_posix()
+        try:
+            # Moving onto our own zero-byte placeholder is the one
+            # overwrite that is safe: we created it exclusively just now.
             shutil.move(str(src), str(dest))
         except OSError as e:
+            dest.unlink(missing_ok=True)
             print(f"ERROR\t{rel}\tmove failed ({e.__class__.__name__})")
             errors += 1
             continue

@@ -258,6 +258,22 @@ class ArchiveTests(ScriptCase):
         self.assertEqual(len(archived), 1)
         self.assertEqual(archived[0].parent.name, "notes")
 
+    def test_archive_reserves_destination_exclusively(self):
+        # Two names already taken → the reservation lands on the third and
+        # leaves the existing archived bytes untouched.
+        sys.path.insert(0, str(SCRIPT.parent))
+        import ingest_survey as isv
+        d = self.vault / "_inbox" / "_processed" / "2026-01-01"
+        d.mkdir(parents=True)
+        (d / "n.txt").write_text("one", encoding="utf-8")
+        (d / "n (2).txt").write_text("two", encoding="utf-8")
+        reserved = isv._reserve_name(d, "n.txt")
+        self.assertEqual(reserved.name, "n (3).txt")
+        self.assertTrue(reserved.exists())
+        self.assertEqual((d / "n.txt").read_text(encoding="utf-8"), "one")
+        self.assertEqual((d / "n (2).txt").read_text(encoding="utf-8"), "two")
+        self.assertEqual(isv._first_free_name(d, "n.txt").name, "n (4).txt")
+
     def test_archive_refuses_an_already_archived_file(self):
         old = self.vault / "_inbox" / "_processed" / "2020-01-01" / "a.txt"
         old.parent.mkdir(parents=True)
