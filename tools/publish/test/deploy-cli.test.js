@@ -174,11 +174,26 @@ describe('deploy: github-pages', () => {
     assert.deepStrictEqual(h.commands.map(c => c.args), [
       ['add', 'docs/'],
       ['status', '--porcelain', 'docs/'],
-      ['commit', '-m', 'Rebuild site'],
+      ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/'],
       ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
       ['push'],
     ]);
     assert.ok(h.commands.every(c => c.cwd === SITE), 'git runs in the site root');
+  });
+
+  // Unrelated staged content (e.g. the GM had something else `git add`ed
+  // before running deploy) must not ride along with the site rebuild commit.
+  // A bare `git commit` commits the whole index; `--only -- <outDir>` limits
+  // the commit to the named paths regardless of what else is staged.
+  it('commits only docs/, not other staged files', async () => {
+    const h = harness({
+      config: ghConfig,
+      command: (cmd, args) => (args[0] === 'status' ? { code: 0, stdout: ' M docs/index.html\n' } : { code: 0, stdout: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 0);
+    const commit = h.commands.find(c => c.args[0] === 'commit');
+    assert.deepStrictEqual(commit.args, ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/']);
   });
 
   // I3: `git add`'s exit code used to be discarded entirely, and a *failing*
@@ -254,7 +269,7 @@ describe('deploy: github-pages', () => {
     assert.deepStrictEqual(h.commands.map(c => c.args), [
       ['add', 'docs/'],
       ['status', '--porcelain', 'docs/'],
-      ['commit', '-m', 'Rebuild site'],
+      ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/'],
       ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
       ['push'],
     ]);
@@ -274,7 +289,7 @@ describe('deploy: github-pages', () => {
     assert.deepStrictEqual(h.commands.map(c => c.args), [
       ['add', 'docs/'],
       ['status', '--porcelain', 'docs/'],
-      ['commit', '-m', 'Rebuild site'],
+      ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/'],
       ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
       ['push', '-u', 'origin', 'HEAD'],
     ]);

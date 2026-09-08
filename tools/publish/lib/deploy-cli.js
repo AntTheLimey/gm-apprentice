@@ -108,7 +108,7 @@ async function runDeploy(options, deps) {
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
     } else {
-      commands.push(`git add ${outDir}`, 'git commit -m "Rebuild site"');
+      commands.push(`git add ${outDir}`, `git commit -m "Rebuild site" --only -- ${outDir}`);
       // Whether the push needs -u depends on the branch's upstream, which a dry run
       // can only learn by asking git — a read-only rev-parse, so running it here
       // doesn't violate "nothing will run".
@@ -189,7 +189,7 @@ async function runDeploy(options, deps) {
       // Still push: the build may be unchanged while an earlier commit is unpushed.
       say(`nothing to commit — ${outDir} unchanged`);
     } else {
-      const commit = git(['commit', '-m', 'Rebuild site']);
+      const commit = git(['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
       if (commit.code !== 0) {
         say(`Commit failed: ${failureDetail(commit)}`);
         return finish({}, 1);
