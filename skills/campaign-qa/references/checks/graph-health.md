@@ -14,9 +14,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
 ```
 
 It reports orphans, unresolved links, dead ends, and
-ambiguous bare links in one pass (see
-`shared/vault-access.md` for options such as `--folder`
-and `--exclude`).
+ambiguous bare links in one pass (`graph_check.py --help`
+for `--folder` and `--exclude`).
 
 ### Step 1: Enumerate Entities and Links
 

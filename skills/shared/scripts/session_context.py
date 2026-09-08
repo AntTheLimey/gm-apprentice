@@ -29,8 +29,10 @@ Each section is headed with its source path; missing pieces are
 reported, not fatal. A `Note:` line in the header means read before
 trusting: it appears for an ambiguous `last_session` pointer (one
 that resolves to nothing, to several sessions, or to a session
-number present in more than one chapter) and when a later session
-index existed but was ignored as unplayed. Confirm a `Note:` with
+number present in more than one chapter), when a later session
+index existed but was ignored as unplayed, and when the campaign
+overview's `asOfSession` names a different chapter from the one the
+selected session sits in. Confirm a `Note:` with
 the GM — a wrong bundle reads exactly as authoritative as a right
 one.
 """
