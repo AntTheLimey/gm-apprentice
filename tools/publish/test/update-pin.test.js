@@ -147,7 +147,7 @@ describe('update-pin', () => {
     assert.ok(h.writes[path.resolve('/site/package.json')].endsWith('}\n'));
     assert.match(h.writes[path.resolve('/site/package.json')], /\n {2}"dependencies"/);
 
-    assert.deepStrictEqual(h.runs, [{ cmd: 'npm', args: ['install'], cwd: '/site' }]);
+    assert.deepStrictEqual(h.runs, [{ cmd: 'npm', args: ['install'], cwd: path.resolve('/site') }]);
     assert.match(h.out.join('\n'), /Updated gm-apprentice-publish from 1\.11\.20 to 1\.11\.30/);
   });
 
