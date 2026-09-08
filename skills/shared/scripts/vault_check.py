@@ -30,6 +30,33 @@ line as `LEVEL<TAB>path<TAB>message`.
 Levels: ERROR (schema violation), WARNING (needs GM attention),
 INFO (context the auditing skill should triage, not a defect).
 
+`gm-leak` skips by frontmatter, not path: a `type:` of
+`session-plan`, `session-play-notes`, `plan`, or `meta` is never
+published and always skipped, even under `_meta/`; `publish: none`
+pages are skipped and `publish: stub` pages are scanned only over
+the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
+closer (everything above it publishes) or a bold-wrapped excluded
+heading like `### **GM Notes**`; WARNING is an unclosed opener or a
+published heading whose title contains an exclude-list entry or
+Keeper keyword; INFO is a Keeper-facing bold label or callout —
+prose the GM has to judge, not auto-movable.
+
+`pc-body` runs over every `type: pc` sheet except `*_Story.md`
+companions and `publish: none` pages. ERROR is `## Current Status`
+sitting inside a gm-only/spoiler fence; WARNING is `## Current
+Status` coming after `## Notes`/`## GM Notes`, not being an H2, or a
+duplicated H2; INFO is the block missing, having no labelled
+fields, or the first body H2 not being `## Stat Sheet`.
+
+`wrapup` checks conformance against `shared/templates/session-wrap.md`:
+frontmatter backfills, an ERROR on a Keeper-facing sibling H2 that
+would publish, the single `<!-- gm-only -->` fence around `## GM
+Notes`, recap-heading and template-heading variants, and the
+filename pattern. A gm-only fence that is unbalanced or crosses a
+player-facing section boundary gets its frontmatter backfilled and
+its body left alone, for the GM to fix by hand; filename renames
+are never automatic.
+
 `wrapup` is the one command that can write. It prints its findings
 first and then a repair row per action — `WOULD-FIX` on a dry run,
 `FIXED` when `--fix` applies them, `UNCHANGED` for a conformant
@@ -1148,7 +1175,7 @@ def check_pc_body(vault: Path, folder: str | None = None) -> list[str]:
 # --------------------------------------------------------------------------
 # Session Wrap-Up conformance
 #
-# Mechanises campaign-qa/references/checks/wrapup-conformance.md Steps 2–4
+# Mechanises campaign-qa/references/checks/wrapup-conformance.md Steps 1–3
 # and, as `--fix`, the structural half of the 1.9.4 → 1.9.5 migration. The
 # failure this exists to prevent is narrow and expensive: a Keeper-facing
 # `## Open Questions for Reconcile` sits beside `## Narrative Recap` rather

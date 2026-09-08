@@ -1,7 +1,7 @@
 # Vault Access Reference
 
 Read this file to determine how to access the campaign vault.
-Vault access is plain filesystem tools plus two bundled
+Vault access is plain filesystem tools plus bundled
 utilities. There is no server, no app dependency, and no
 separate "Obsidian mode" — the vault is a folder of markdown,
 and Obsidian is a viewer the user may or may not have open.
@@ -45,48 +45,9 @@ utility does it in one pass (benchmarked: under a second and
 a few hundred tokens, versus 50–125s and ~50k tokens for
 per-query approaches).
 
-`gm-publish sheet show --pc <name> --player-safe` is the
-player-safe data boundary for answering a player's question
-about their own sheet: it prints the sheet with everything the
-published site strips already gone (excluded sections,
-gm-only/spoiler blocks, HTML comments, excluded callouts,
-gm_only relationship edges, excluded frontmatter fields).
-Prefer it over reading the vault sheet directly whenever the
-audience is a player, not the GM.
-
-`gm-publish update-pin --site <dir>` repoints a published
-site's renderer dependency at the newest plugin-cache version
-and runs `npm install` — a plugin update never touches a
-site's pin on its own, so a site keeps building with the old
-renderer until this runs. `--check` reports the drift and
-exits 1 without changing anything; pair a real run with
-`deploy`. `gm-publish manifest diff` classifies every vault
-file with the same decision the build makes and lists what
-`_meta/publish-manifest.md` doesn't yet mention, with the
-bucket, code, and reason for each; `manifest apply --publish
-PATH / --exclude "PATH=reason" / --decide PATH [--prune]`
-moves entries between sections and rewrites the file — which
-files are correctly excluded versus missing is the GM's call,
-this only shows the drift. `gm-publish deploy --verify` builds
-the site and pushes it to the configured host, then fetches the
-live URL up to three times 20s apart; a site still propagating
-is reported, not failed. `gm-publish doctor --site` audits the
-vault instead of the machine — stale build-tool pin, folders
-missing from `folderMap`, files with no `type:`, portraits
-pointing at absent images, dead wikilinks, manifest entries
-whose file is gone, played sessions in no manifest section —
-and exits 1 only on an error, never a warning. `gm-publish
-explain PATH` prints the chain the build walks for one file
-(directory, type, publish mode, auto-exclusion, canon status,
-manifest section) and the verdict — where it publishes, or
-which rule stopped it — plus the H2 sections stripped and how
-many gm-only blocks it carries; run it before `doctor --site`
-when the question is about one specific file rather than the
-whole vault.
-
 ## Bundled Utilities
 
-Both live in `skills/shared/scripts/`, stdlib-only Python 3.
+All live in `skills/shared/scripts/`, stdlib-only Python 3.
 From a plugin install, invoke via the plugin root:
 
 ```bash
@@ -100,206 +61,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_search.py" \
   <vault-path> "what happened after the duel" --limit 5 --context
 ```
 
-`graph_check.py` commands: `orphans`, `unresolved`,
-`deadends`, `backlinks NAME`, `ambiguous`, `all`; options
-`--folder SUB` and repeatable `--exclude GLOB`. Output is a
-`# count: N` header then one vault-relative path per line.
-It handles aliases, `[[Name|alias]]`, `[[Name#heading]]`,
-embeds, quoted frontmatter links, and space/underscore/case
-variants.
-
-`vault_search.py` is index-free BM25 — no index to build or
-go stale. `--context` prints the best-matching line per hit.
-Use it for prose queries; plain Grep is cheaper for exact
-terms.
-
-`vault_check.py` commands: `frontmatter` (schema validation:
-required fields, enums, legacy fields, unquoted frontmatter
-links), `names` (duplicate and confusable entity names and
-aliases), `index` (`_meta/index.md` drift, both directions),
-`stale-drafts`, `changed --since N` (entities touched at or
-after session N — the incremental-audit scope),
-`relationships` (every `relationships[].type` checked against
-the sanctioned predicate vocabulary), `sessions` (each
-session index's plan/play-notes/wrap-up document chain,
-declared vs. derived status), `gm-leak [--folder SUB]`
-(publish-safety scan of every publishable file's body — the
-skip is by frontmatter, not by path: a `type:` of
-`session-plan`, `session-play-notes`, `plan` or `meta` is
-skipped as never-published, so an `_meta/` page carrying some
-other type is still scanned; `publish: none` pages are
-skipped and `publish: stub` pages are scanned only over the
-sections they ship: ERROR
-for an orphan `<!-- /gm-only -->` closer — everything above it
-publishes — or a bold-wrapped excluded heading like `###
-**GM Notes**`; WARNING for an unclosed opener or a published
-heading whose title contains an exclude-list entry or Keeper
-keyword; INFO for a Keeper-facing bold label or callout),
-`pc-body [--folder SUB]` (for every `type: pc` sheet except
-`*_Story.md` companions and `publish: none` pages;
-fence-balance rows are reported here too: ERROR when `##
-Current Status` sits inside a gm-only/spoiler fence; WARNING
-when it comes after `## Notes`/`## GM Notes`, is not an H2, or
-an H2 is duplicated; INFO when the block is missing, has no
-labelled fields, or the first H2 isn't `## Stat Sheet`),
-`wrapup [--file REL] [--fix]` (Wrap-Up conformance against
-`shared/templates/session-wrap.md`: frontmatter backfills,
-ERROR on a Keeper-facing sibling H2 that would publish, the
-single `<!-- gm-only -->` fence around `## GM Notes`, recap-
-heading and template-heading variants, filename pattern —
-`--fix` applies the mechanical set including the re-nest;
-dry-run rows print `WOULD-FIX`, `--fix` prints `FIXED`,
-`UNCHANGED` means the repaired text is byte-identical to what
-is on disk; a file whose gm-only fence is unbalanced or crosses
-a player-facing section boundary gets its frontmatter
-backfilled and its body left alone, for the GM to fix by hand;
-filename renames are never automatic), `all`. `all` runs
-`sessions`, `gm-leak`, `pc-body`, and `wrapup` (without
-`--fix`) alongside the rest — never `version` or `active-pcs`,
-which are gates, not reports, and sit outside it: `version`
-prints one row whose first column is a verdict token (OK /
-MISMATCH / AHEAD / SETUP / ERROR) and exits 1 on
-MISMATCH/AHEAD/ERROR — run it on the first invocation of any
-vault-aware skill; `active-pcs` emits the session skills'
-opening roster read.
-Findings are `LEVEL<TAB>path<TAB>message`; fix every ERROR,
-triage WARNINGs with the GM, treat INFO as context.
-
-`session_context.py <vault>` emits the session-prep read-set
-in one call: latest Wrap-Up, active PC `## Current Status`
-blocks, the upcoming session's Plan, deferred world flags,
-campaign overview — each section tagged with its source path.
-Drill into individual files only where the digest shows the
-need.
-
-Which session counts as "just played" comes from the campaign
-overview's `last_session`, falling back to the most recent
-`play_date` — not the highest `session_number`, which is not a
-campaign-wide ordinal in a vault whose numbering restarts each
-chapter. The session-anchored lookups — the wrap-up and the
-upcoming plan — are then scoped to that session's chapter. The
-rest of the bundle stays vault-wide, as it should: active PCs,
-deferred flags, and the campaign overview are not per-chapter.
-
-**A `Note:` line in the header means read before trusting.** It
-appears when the choice was ambiguous (a `last_session` pointer
-that resolves to nothing or to several files, a session number
-present in more than one chapter) and when later session
-indexes were ignored as unplayed. Confirm it with the GM: a
-wrong bundle reads exactly as authoritative as a right one.
-
-`--play` narrows the bundle to just the upcoming (or
-`--session N`) session's Plan — the at-table brief when the
-Current Status and deferred-flags digest isn't needed.
-`--threads` narrows it to the Session Context header plus a
-Threads report: each active PC's `Open threads` bullets aged
-against the Wrap-Up's Unresolved Threads, `age=N` sessions
-since the thread was last touched and `STALE` at age >= 3. A
-`STALE` row is a candidate, not a verdict — resolve, advance,
-or retire is the GM's call.
-
-`index_build.py <vault> [--write] [--date YYYY-MM-DD]` derives
-a fresh `_meta/index.md` from the vault's own frontmatter —
-chapters, every session and scene nested under its chapter,
-session-chain documents nested under their session, `*_Story.md`
-companions nested under their PC, and every `type: plan` entity
-in its own section. Default is a dry-run: a unified diff against
-the file on disk (or the whole rendered text if none exists yet)
-plus a `# entities: N narrative: M stubs: K` summary line;
-`--write` applies it, preserving the existing file's line
-endings. A document it can't place — an orphaned session-chain
-doc, a Story file with no matching PC — surfaces under `##
-Stubs (Needs Attention)` instead of being dropped. The dry-run
-diff is the confirmation prompt: review it before `--write`.
-
-`plan_check.py PLAN.md [--headless] [--inventory] [--state]
-[--json]` is the Session Plan conformance check for
-session-prep's rules and `shared/session-principles.md`, run
-against one file. Default output is finding rows as
-`LEVEL<TAB>locus<TAB>message` plus a `# errors: N warnings: N
-info: N` summary; `--inventory` lists template-H2 presence and
-word counts instead, `--state` prints the prep-state marker's
-tokens, `--json` emits all three as one object. Exit 1 on any
-ERROR. ERROR means fix it before the Plan ships; WARNING is the
-GM's call — fix it or knowingly carry it forward; INFO is
-context (a placeholder heading, a long scene) worth a glance,
-not a blocker.
-
-`plans_index.py <vault> [--chapter "Chapter N - Title"]
-[--against NAME ...] [--json]` bundles session-prep's Forward
-Design read into one call: every `type: plan` entity under a
-chapter's `Planning/` folder, and which `_midwife/` adventure
-directory an in-progress chapter continues. `--chapter` narrows
-both halves to one chapter; `--against NAME` (repeatable) adds
-an Overlap section for Planning/ entries naming that
-participant or location. Exit is always 0 — when the midwife
-manifest can't resolve to a single adventure, that's a report
-for the GM to settle, not an error to fix.
-
-`stamp_entities.py <vault> FILE... [--session SESSION]
-[--date YYYY-MM-DD] [--retag OLD=NEW]` batch-stamps
-`asOfSession`, `lastUpdated`, and a chapter-tag swap across
-files — `--session` and `--date` are now independent, so
-either can be given alone. SESSION is written verbatim — a
-label (`"Chapter 4, Session 9"`) or a bare number — and a file
-already using the other shape is refused unless
-`--force-shape`. It also takes `--set KEY=VALUE` (repeatable;
-any other top-level or one-level dotted field — the fields
-with their own flags below are refused, dotted forms
-included), `--increment
-KEY` (repeatable; +1 on an integer counter, and refused on
-those same fields), `--promote`
-(canon_status DRAFT/absent → AUTHORITATIVE; STUB and
-SUPERSEDED are refused), `--reconciled YYYY-MM-DD`, and
-`--supersede-by "[[Winner]]"` (canon_status → SUPERSEDED plus
-`superseded_by`, mutually exclusive with `--promote`).
-`--repair-canon [FILE...] [--write]` applies the legacy
-canon-key repair from `shared/canon-status.md`: renames a lone
-`source_confidence`/`confidence` to `canon_status`, deletes it
-when it agrees, and on disagreement keeps `canon_status`,
-drops the legacy line, and reports a CONFLICT for the GM to
-confirm; with no FILE it sweeps the whole vault, `_Templates/`
-and `_meta/` included, and runs on its own — never combined
-with a stamping action in the same call. Dry-run by default —
-review the plan, then re-run with `--write`. It touches only
-the targeted frontmatter lines; everything else is preserved
-byte-for-byte.
-
-`ingest_survey.py DIR` turns vault-ingest Phase 1 from "read all source
-material" into "read the manifest, then read only what it flags." Three of
-the nine taxonomy rows resolve with zero content read — Image/map and
-Spreadsheet/data by extension, Session wrap-up by existing `type:`
-frontmatter — and print `DECIDED`. The rest print `SCORED`, with
-per-indicator hit counts and line numbers (play, prep, research, Keeper-
-recollection, character-sheet phrases named in
-`classification-taxonomy.md`) plus a proposed classification and
-confidence — evidence for the model/GM to confirm or override, not a final
-verdict. A Word/PDF/VTT file prints `UNSCORED`: no stdlib text extractor
-exists for it, and it is never guessed at. `ingest_survey.py VAULT
---archive FILE... [--write]` implements Gotcha 5: moves a processed
-`_inbox/` file to `_inbox/_processed/<date>/`, preserving its subpath,
-refusing to delete or silently overwrite (a name collision gets a numeric
-suffix). FILE may be spelled vault-relative (`_inbox/notes/a.txt`),
-`_inbox/`-relative (`notes/a.txt`) or absolute; a path outside `_inbox/`
-or already under `_processed/` is refused. Dry-run by default, like every
-other mutating script here — `--write` applies the move.
-
-`ingest_images.py VAULT DIR [--execute]` is vault-ingest's image-handling
-procedure (`references/image-handling.md`) as a script rather than a
-file-by-file manual pass: slugify each image filename, match it against a
-vault entity's own slug (exact, then one suffix-strip), convert a
-non-web-safe format via `sips`/`magick` when available, file it under the
-right `_attachments/` subfolder, and decide portrait vs. body-embed — a
-lone match becomes the portrait, several matches for one entity give the
-unsuffixed one the portrait and embed the rest, all-suffixed with no
-default is left unset and reported `portrait-ambiguous` for the keeper
-interview, and an entity that already has a portrait never has it
-overwritten. A same-name file with different bytes at the destination, or
-two differently-named sources that slugify to the same destination, are
-both `DUP-FLAG`, never auto-resolved. Re-running `--execute` after a
-portrait is resolved by hand (`stamp_entities.py --set portrait=...`)
-picks up any outstanding body embeds for that entity. Dry-run by default;
-`--execute` writes.
+Every utility documents itself: run it with `--help` before its first
+use in a session — the flags, output rows, and exit codes live there,
+not in this file. Findings are `LEVEL<TAB>path<TAB>message`; fix every
+ERROR, triage WARNINGs with the GM, treat INFO as context. Mutating
+scripts are dry-run by default; `--write` / `--fix` / `--execute`
+applies. `gm-publish <subcommand> --help` does the same for the
+publish tool's subcommands.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
@@ -311,17 +79,6 @@ vault-ingest, campaign-organizer), run
 `vault_check.py frontmatter --folder <dir>` on what you
 touched and fix ERRORs before moving on — one deterministic
 call replaces re-reading files to self-check.
-
-If `python3` is not on PATH, try `python` (common on
-Windows; install from python.org or `winget install python`
-— the utilities are standard-library only). If neither
-exists, say so and fall back to Grep: literal search with
-synonyms for prose queries, `[[Name]]`-variant matching for
-backlinks, and manual schema checks. For the newer checks
-(`gm-leak`, `pc-body`, `wrapup`) the fallback is the prose
-procedure in the owning skill instead — read it and apply the
-same checks by eye. Flag the fallback in any audit results —
-Grep approximations can miscount.
 
 ## File Format
 

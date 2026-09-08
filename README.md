@@ -144,13 +144,11 @@ plugins, or app dependencies. Open it in [Obsidian](https://obsidian.md)
 whenever you want the graph view, backlinks, and a vault UI at the table;
 nothing requires it.
 
-Bundled vault utilities under `skills/shared/scripts/` (Python 3 standard
-library, no install) give the skills ranked search, link-graph audits, and
-schema validation — `vault_search.py`, `graph_check.py`, `vault_check.py`,
-`session_context.py`, and `stamp_entities.py`. Skills invoke them
-automatically when `python3` is on your PATH and fall back to plain search
-when it isn't (macOS and most Linux ship Python 3; on Windows,
-`winget install python`).
+The bundled utilities under `skills/shared/scripts/` give the skills
+ranked search, link-graph audits, schema validation, and more — Python 3
+standard library only, no packages to install. macOS and most Linux ship
+Python 3 already; on Windows, `winget install python`. Python 3 is a
+required dependency of this plugin.
 
 ## License
 

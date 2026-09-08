@@ -30,10 +30,17 @@ announce the row and tell the GM to update the plugin; do not
 proceed. `ERROR` → report the row; the plugin install is broken —
 do not proceed. No verdict row and a `not a directory` error on
 stderr means the vault path is wrong — ask the GM for it rather than
-proceeding. Fallback without python: read `gm_apprentice_version`
-from `_meta/vault-config.md` and `current_version` from
-`shared/migrations.md` (frontmatter only) and compare
-component-by-component as numbers — `1.8.9` is older than `1.8.15`.
+proceeding.
+
+**Scope to the question.** The version gate always runs; everything
+after it is scoped to what the GM asked. "Prep my session" walks the
+whole workflow below. A narrow question — a status check, "what
+changed", "did we skip anything", one conformance check — runs the
+single script that answers it and reports, then stops: document-chain
+status → `vault_check.py <vault> sessions`; thread ages →
+`session_context.py <vault> --threads`; a plan's conformance →
+`plan_check.py <plan>`. No read-set bundle, no Reconcile, no checks
+the GM didn't ask for. Offer the next step in one line — don't take it.
 
 **Document chain:** Read `shared/session-document-chain.md`.
 Session-prep writes Plan files and updates the session index.
@@ -61,7 +68,7 @@ section above.
 the Plan file before proceeding. The Plan file is the
 persistent artifact — conversation is ephemeral.
 
-## Context Source
+## Context Source — opening move of a prep invocation
 
 **Gather the standard read-set in ONE call** before any
 individual reads:
@@ -73,23 +80,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-
 It emits the last Wrap-Up, every active PC's `## Current
 Status` block, the upcoming session's existing Plan, deferred
 world flags, and the campaign overview — replacing a dozen-plus
-separate reads (see `shared/vault-access.md`). If Python is
-unavailable, fall back to the manual read pattern — it must
-cover the same set:
+separate reads.
 
-1. Last session's Wrap-Up file — primary context. Read its
-   `### Handoff to session-prep` (under `## GM Notes`) first —
-   it states where, when, and in what state the next session
-   opens — then What Carries Forward and World State
-2. PC roster — always, including each active PC's `## Current Status`
-   block (Location, Condition, Carrying, Open threads, Knows (exclusive))
-3. The upcoming session's Plan file, if one exists
-4. `_World/_flags.md` — Deferred section
-5. The campaign overview (current game date, campaign state)
-
-**After the bundle either way:** vault dives are targeted
-reads only, proportional to upcoming session complexity, not
-campaign size.
+**After the bundle:** vault dives are targeted reads only,
+proportional to upcoming session complexity, not campaign size.
 
 ### Personal Reference Files
 
@@ -101,9 +95,9 @@ faction rosters, NPC references, location atmosphere.
 
 ## Phase 1: Reconcile (conditional)
 
-Runs when the `Just played:` header line from `session_context.py`
-shows `status: wrap-up` (no separate index read). Skip for first
-sessions or when already `reviewed`.
+Runs in a prep invocation when the `Just played:` header line from
+`session_context.py` shows `status: wrap-up` (no separate index read).
+Skip for first sessions or when already `reviewed`.
 
 **Invoke `shared/reconcile.md`.** Reconcile walks the GM through
 reviewing the Wrap-Up, promotes canon status, and handles
@@ -236,10 +230,6 @@ plans found for this chapter" — and do not write it up as a
 vault gap. A Gap/Action asserting no plan entities exist is a
 claim about the vault, and it is false whenever the design is
 sitting in a directory this step failed to open.
-
-Fallback without python: read `Chapters/{chapter}/Planning/` directly
-(stamped plan entities), plus `_midwife/index.md` and each adventure's
-own `index.md` by hand.
 
 ## Phase 2: Prep Forward — Creative Planning (elicited)
 

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.10] — 2026-09-08
+
+### Changed
+
+- **Python 3 is now a required dependency.** The bundled utilities under
+  `skills/shared/scripts/` are standard-library only and need no
+  packages, but the skills no longer carry a by-hand alternative for
+  anything a script does. README updated accordingly.
+- `shared/vault-access.md` cut from 18.3 kB to ~5 kB: the routing table,
+  invocation examples and the post-write validation rule stay; the
+  per-script description paragraphs are replaced by "run it with
+  `--help`". Each script's `--help` was checked against the paragraph it
+  replaces and extended where a flag, row vocabulary, exit code, or
+  how-to-act rule was missing. The proof run
+  (`tests/proof-runs/mechanization/`, v1.9.9 vs v1.9.4 vs prose-stripped)
+  showed the one skill that reads this file ran 27% cheaper and 51%
+  faster without those paragraphs, opening a third fewer files.
+- session-prep now scopes its opening moves to the question asked: the
+  version gate always runs, but the read-set bundle, Reconcile and the
+  vault-wide checks run only for a full prep invocation. A narrow
+  question (document-chain status, thread ages, one plan's conformance)
+  runs the one script that answers it and offers the next step instead
+  of taking it. Fixes the drift the proof run measured on a status
+  question (on-question 2/2 → 1/2 in v1.9.9).
+
+### Removed
+
+- Every "Fallback without python" block across `campaign-organizer`,
+  `campaign-qa` (SKILL.md, `graph-health.md`, `wrapup-conformance.md`),
+  `publish-site`, `session-play`, `session-prep`, `session-wrapup`,
+  `the-midwife` and `vault-ingest`, the manual read-set list in
+  session-prep's Context Source, and the no-python paragraph in
+  `vault-access.md`.
+
+---
+
 ## [1.9.9] — 2026-09-07
 
 ### Added

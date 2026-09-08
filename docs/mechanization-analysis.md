@@ -228,9 +228,8 @@ What it would cost, concretely:
   run needs a bootstrap step the skill must perform before its first real
   call, a version-pairing scheme with the plugin version, and a trust story.
 - **The scripts are living documents.** They change every couple of weeks and
-  the model edits them in-session. A Go binary cannot be hot-patched, needs a
-  toolchain and a CI cross-compile stage per release, and has no "try `python`
-  if `python3` is missing" degradation.
+  the model edits them in-session. A Go binary cannot be hot-patched and needs
+  a toolchain and a CI cross-compile stage per release.
 - **Rewrite cost with no functional gain.** ~10k lines of Python and ~9.4k
   lines of tests to port before any new capability lands.
 - **The biggest mechanization target can't move.** Twenty of the candidates
@@ -253,10 +252,11 @@ nominally offer:
    PCs). This is where the "stdlib only" pain actually lives.
 2. **Type-check in CI.** `mypy --strict` on the shared scripts costs one CI
    step and buys most of what static typing would.
-3. **Keep the Python floor at 3.10** with `from __future__ import annotations`,
-   and keep the documented degradation path (no `python3` → prose fallback)
-   honest by making every prose site *invoke* the script rather than restate
-   it, so the fallback is the only place the restatement lives.
+3. **Keep the Python floor at 3.10** with `from __future__ import annotations`.
+   Python 3 is now a required dependency of the plugin (no-python prose
+   fallback removed); make every prose site *invoke* the script rather than
+   restate it, so the script's own `--help` is the only place that detail
+   lives.
 
 Revisit Go only if a roadmap item needs a long-running server binary that
 cannot be a Cloudflare Worker, or if the plugin's primary audience becomes

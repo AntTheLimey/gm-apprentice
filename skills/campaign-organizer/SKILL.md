@@ -102,10 +102,7 @@ row and tell the GM to update the plugin; do not proceed.
 `ERROR` → report the row; the plugin install is broken — do not
 proceed. No verdict row and a `not a directory` error on stderr
 means the vault path is wrong — ask the GM for it rather than
-proceeding. Fallback without python: read `gm_apprentice_version`
-from `_meta/vault-config.md` and `current_version` from
-`shared/migrations.md` (frontmatter only) and compare
-component-by-component as numbers — `1.8.9` is older than `1.8.15`.
+proceeding.
 
 This check runs once per session on first vault contact. It
 does not apply during first-time vault setup (when `_meta/` is
@@ -261,8 +258,7 @@ three-state responses (canon / ignore / defer).
    run hygiene checks.
 7. **Update index** — Full rebuild of `_meta/index.md`: run
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
-   show the diff summary, then re-run with `--write`. Fallback without
-   python: `references/index-template.md`.
+   show the diff summary, then re-run with `--write`.
 8. **Report** — Counts, stubs, relationships, graph health.
 
 ### Dissect
@@ -291,8 +287,7 @@ three-state responses (canon / ignore / defer).
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
    show the diff summary, then `--write`. It's the same command as
    Organize's full rebuild — the script is idempotent, so there is no
-   separate incremental mode. Fallback without python:
-   `references/index-template.md`.
+   separate incremental mode.
 7. **Report** — Extracted, stubbed, needs attention.
 
 ### Weave
@@ -314,8 +309,7 @@ Follow `references/world-validation.md`.
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
    show the diff summary, then `--write`. It's the same command as
    Organize's full rebuild — the script is idempotent, so there is no
-   separate incremental mode. Fallback without python:
-   `references/index-template.md`.
+   separate incremental mode.
 7. **Graph audit** — Read `references/graph-hygiene.md` and
    run full hygiene check.
 

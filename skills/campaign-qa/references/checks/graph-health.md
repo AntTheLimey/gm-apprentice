@@ -16,8 +16,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
 It reports orphans, unresolved links, dead ends, and
 ambiguous bare links in one pass (see
 `shared/vault-access.md` for options such as `--folder`
-and `--exclude`). Use the manual steps below only if Python
-is unavailable, and flag that fallback in results.
+and `--exclude`).
 
 ### Step 1: Enumerate Entities and Links
 
@@ -34,9 +33,7 @@ Read all entity files in scope. For each, extract:
 from the graph and probably forgotten.
 
 **Broken links:** what `graph_check.py unresolved` reports —
-wiki-links that point to files that don't exist. Fallback
-without python: search for `[[...]]` patterns across all
-files, then verify each linked target file exists.
+wiki-links that point to files that don't exist.
 
 **Ambiguous links:** what `graph_check.py ambiguous` reports —
 wiki-links using a bare basename that matches more than one
@@ -46,15 +43,12 @@ are added — so this is not a broken link, it's a wrong one
 waiting to happen. Most common cause: Session Wrap-Up files
 still on the pre-migration `Session_NN_Wrap_Up.md` pattern (no
 chapter number) after a second chapter reused a session
-number. Fallback without python: build a basename → file-list
-index across the whole vault, then flag every bare `[[...]]`
-target whose basename maps to more than one file.
+number.
 
 **Index drift:** what `vault_check.py index` reports — files
 not referenced from `_meta/index.md`, and index entries whose
 target file no longer exists. The fix is `index_build.py
 <vault> --write`, never a hand edit to `_meta/index.md`.
-Fallback without python: `campaign-organizer/references/index-template.md`.
 
 **Mirrored edges (duplicates, not gaps):** Storage is
 single-direction (`shared/entity-schema.md`, "Relationship
@@ -96,13 +90,6 @@ configured — draft entities), so this check only flags content
 that would actually reach the site.
 Severity: Critical if the vault has `publish.site_dir`
 configured (it's actually publishing); Warning otherwise.
-
-Fallback without python: search every file for headings (any
-level) and bold-paragraph lines (`**Text:**` with no `#`) whose
-text contains one of the keywords above — case-insensitive —
-and for each match, check whether it sits inside a
-`## GM Notes` section or a `<!-- gm-only -->`/`<!-- spoiler -->`
-fence.
 
 ### Step 3: Schema Compliance
 

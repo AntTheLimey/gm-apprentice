@@ -17,8 +17,7 @@ to the Play Notes file for note capture.
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
 --play` — the plan brief (intent, scene titles with type/objective/setup,
 NPC table, world state, contingency triggers, end objectives). Open the
-Plan file itself only when a scene needs its full text. Fallback: read
-the Plan (`type: session-plan`) directly.
+Plan file itself only when a scene needs its full text.
 
 **Version check:** On first invocation run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
@@ -30,10 +29,7 @@ proceeding with play support; resume after it completes. `AHEAD`
 proceed. `ERROR` → report the row; the plugin install is broken —
 do not proceed. No verdict row and a `not a directory` error on
 stderr means the vault path is wrong — ask the GM for it rather than
-proceeding. Fallback without python: read `gm_apprentice_version`
-from `_meta/vault-config.md` and `current_version` from
-`shared/migrations.md` (frontmatter only) and compare
-component-by-component as numbers — `1.8.9` is older than `1.8.15`.
+proceeding.
 
 **Trigger phrases:** "we're playing now", "quick question",
 "during the session", "I need a [NPC/location]", "give me

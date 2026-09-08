@@ -26,7 +26,13 @@ chapter — the bundle says so rather than choosing quietly: a wrong
 bundle is worse than no bundle, because it reads as authoritative.
 
 Each section is headed with its source path; missing pieces are
-reported, not fatal.
+reported, not fatal. A `Note:` line in the header means read before
+trusting: it appears for an ambiguous `last_session` pointer (one
+that resolves to nothing, to several sessions, or to a session
+number present in more than one chapter) and when a later session
+index existed but was ignored as unplayed. Confirm a `Note:` with
+the GM — a wrong bundle reads exactly as authoritative as a right
+one.
 """
 
 from __future__ import annotations
@@ -432,7 +438,12 @@ def main() -> int:
     mode.add_argument("--play", action="store_true",
                       help="print only the upcoming (or --session) Play Brief")
     mode.add_argument("--threads", action="store_true",
-                      help="print the Session Context header and Threads report only")
+                      help="print the Session Context header and Threads "
+                           "report only: each active PC's Open threads aged "
+                           "against the Wrap-Up's Unresolved Threads, "
+                           "age=N sessions since last touched, STALE at "
+                           "age >= 3 (a candidate, not a verdict — resolve, "
+                           "advance, or retire is the GM's call)")
     args = ap.parse_args()
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)

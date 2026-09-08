@@ -1,7 +1,7 @@
 # Index Template for `_meta/index.md`
 
 `index_build.py` generates this file; the structure below is its output
-contract and the no-python fallback.
+contract.
 
 ```markdown
 ---
