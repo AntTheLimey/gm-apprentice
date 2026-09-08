@@ -174,6 +174,35 @@ function warnUnreadOverrideKeys(overrides) {
   }
 }
 
+// Shared vault.config.json loading, so `manifest diff`, `deploy` and `explain` fail
+// the same way `doctor --site` already does: a friendly, exit-1 message naming the
+// problem, not a raw `require()` stack trace ("Cannot find module '/…/vault.config.json'")
+// dumped at whoever ran the command from the wrong directory. Models the try/catch
+// site-doctor.js has used from the start. Every caller here already reaches a
+// top-level `.catch((err) => { console.error(err.message); process.exit(1); })` in
+// bin/gm-publish.js, so throwing with a clean message is enough — nothing here needs
+// to print anything itself.
+//
+// `requireVaultPath` is on for callers that resolve a vault from the config
+// (manifest, explain); deploy has no vault of its own to find, so it leaves this off.
+function loadVaultConfig(configPath, deps = {}, { requireVaultPath = false } = {}) {
+  const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
+  let config;
+  try {
+    config = deps.config || JSON.parse(readFile(configPath));
+  } catch (err) {
+    const wrapped = new Error(`${configPath} could not be read as JSON: ${err.message}`);
+    wrapped.code = 'CONFIG_INVALID';
+    throw wrapped;
+  }
+  if (requireVaultPath && !config.vaultPath) {
+    const wrapped = new Error(`${configPath} has no "vaultPath"`);
+    wrapped.code = 'CONFIG_INVALID';
+    throw wrapped;
+  }
+  return config;
+}
+
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
@@ -285,4 +314,4 @@ function vaultRelPath(vaultPath, sourcePath) {
   return canonicalPath(path.relative(vaultPath, sourcePath).split(path.sep).join('/'));
 }
 
-module.exports = { loadPublishConfig, vaultRelPath, PUBLISH_DEFAULTS };
+module.exports = { loadPublishConfig, vaultRelPath, PUBLISH_DEFAULTS, loadVaultConfig };

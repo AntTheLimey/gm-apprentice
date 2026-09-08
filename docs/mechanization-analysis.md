@@ -136,6 +136,14 @@ to Slices D and C respectively. The sub-reports
 under `docs/mechanization-analysis/` are dated snapshots and keep
 their original line references.
 
+**Status (2026-09-07):** Slice B (Tier 2 rows 9–11 and 14–17 —
+`rules_lookup.py`, `index_build.py`, `plan_check.py`, `session_context.py
+--play`/`--threads`, `plans_index.py`, and the five `gm-publish`
+rebuild-path commands) shipped in 1.9.8. The section-extraction
+experiment referenced in the ROADMAP's "Build-time section extraction
+for routing" row is superseded by `rules_lookup.py`, which indexes at
+the record level rather than the section level.
+
 - **Four `systems/` files carry licensed mechanics with no attribution**:
   `fitd/rules-reference.md`, `fitd/mechanics.md`, `fitd/session-procedures.md`
   (CC-BY 3.0 requires it) and `gurps-4e/session-procedures.md` (the strictest

@@ -1068,7 +1068,12 @@ describe('build integration', () => {
       outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-autoexclude-full-'));
       configPath = path.join(outputDir, 'config.json');
 
-      const vaultDir = path.join(fixturesDir, 'auto-exclude');
+      // Copy the fixture rather than writing a `mode: full` vault-config.md into it:
+      // node --test runs test FILES in parallel, so mutating a shared fixture — even
+      // with an after() that cleans it up — makes every other file that reads
+      // auto-exclude during the window see full mode instead of player mode.
+      const vaultDir = path.join(outputDir, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'auto-exclude'), vaultDir, { recursive: true });
       const metaDir = path.join(vaultDir, '_meta');
       fs.mkdirSync(metaDir, { recursive: true });
       fs.writeFileSync(path.join(metaDir, 'vault-config.md'), '---\npublish:\n  mode: full\n---\n');
@@ -1092,9 +1097,6 @@ describe('build integration', () => {
     });
 
     after(() => {
-      const vaultDir = path.join(fixturesDir, 'auto-exclude');
-      const metaDir = path.join(vaultDir, '_meta');
-      fs.rmSync(metaDir, { recursive: true, force: true });
       fs.rmSync(outputDir, { recursive: true, force: true });
     });
 

@@ -598,39 +598,20 @@ error dump.
 
 ### Step 21a: Deploy to Cloudflare Pages (recommended)
 
-The Tier-1 scaffold ships a `wrangler.toml` with
-`pages_build_output_dir = "docs"`, so the deploy uses the **bare** form
-(no `docs/` argument — passing the directory positionally conflicts with
-the config and errors). The bare form deploys to whichever project is
-named in `wrangler.toml`'s `name` field, not to `cloudflarePagesProject`
-— so before deploying, make sure that field matches `<project_name>`
-(edit it if the GM chose a different Cloudflare project name than the
-one the scaffold started with). Skipping this fails the deploy with
-"The Pages project '<name>' does not exist." Create the project once,
-then deploy:
+Create the Cloudflare Pages project once, then deploy:
 
 ```bash
 npx wrangler@4 pages project create <project_name> --production-branch=main   # once per site
-npx wrangler@4 pages deploy                                                   # wrangler.toml present → no docs/ arg
+node "$TOOL" deploy --verify --config vault.config.json
 ```
 
-> **Confirm the deploy form before running it.** If a `wrangler.toml`
-> with `pages_build_output_dir` exists in the site root (the scaffold
-> ships one, so it should), use the **bare** `pages deploy` above. If
-> that file is somehow absent, use the explicit form instead:
->
-> ```bash
-> npx wrangler@4 pages deploy docs/ --project-name=<project_name> --branch=main --commit-dirty=true
-> ```
-
-The deploy prints two URLs: a per-deploy snapshot
-(`https://<hash>.<project>.pages.dev`) and the live site
-(`https://<project>.pages.dev`) — the live one is what you verify and
-share. If `project create` reports "a project with this name already
-exists," skip it and run `deploy` directly. If the deploy fails on
-authentication, re-check the token dance (Phase A, Step 5) — almost
-always the credentials need `node "$TOOL" doctor --set-cloudflare-creds`
-re-run. Then continue to Phase F.
+If `project create` reports "a project with this name already exists,"
+skip it and run `deploy` directly. `deploy --verify` builds, deploys, and
+probes the live URL in one step — relay its final line to the GM
+verbatim. If it fails on authentication, re-check the token dance
+(Phase A, Step 5): `node "$TOOL" doctor --set-cloudflare-creds`. A
+deploy failure otherwise routes to `troubleshooting.md` (and
+`cloudflare-pages.md` → "Troubleshooting"). Then continue to Phase F.
 
 ### Step 21b: Deploy to GitHub Pages
 
@@ -676,8 +657,14 @@ gh repo create <project_name> --public --source . --remote origin --push
 
    ```bash
    git remote add origin https://github.com/<github_username>/<project_name>.git
-   git push -u origin main
+   node "$TOOL" deploy --config vault.config.json
    ```
+
+   `deploy` builds, commits, and pushes, setting the upstream tracking
+   branch on this first push. Do **not** pass `--verify` here — Pages
+   isn't enabled yet, so a live-URL probe now would just report a
+   miss. Verification happens in Step 22, after Pages is turned on
+   below.
 
 **Enable GitHub Pages.** If `gh` was used, offer to enable it
 programmatically:
@@ -700,35 +687,33 @@ two-minute enablement steps. Then continue to Phase F.
 
 ### Step 22: Verify the site is live
 
-Do not declare victory blind. After the deploy reports success, confirm
-the site is actually reachable by probing the **root** URL with a bounded
-request that follows redirects and prints the final status code:
+Do not declare victory blind. **Cloudflare (Step 21a):** `deploy
+--verify` already probed the URL and its final line said whether it
+came back live — relay that line. **GitHub Pages (Step 21b), either
+path:** neither the manual `deploy` push nor the `gh repo create
+--push` push ran with `--verify` (Pages wasn't enabled yet at that
+point), so run the probe now:
 
 ```bash
-curl -sS -L --connect-timeout 5 --max-time 15 -o /dev/null -w '%{http_code}\n' "<siteUrl>"
-# expect a 2xx (normally 200) on the root URL
+node "$TOOL" deploy --verify --no-build --config vault.config.json
 ```
 
-- This is a bounded `GET` (`--max-time 15`), not a bare `HEAD` — some
-  hosts serve the root fine on `GET` but reject `HEAD`, and `--location`
-  (`-L`) follows any redirect to the canonical URL. Treat any 2xx
-  (200–299) as live.
-- Retry with a small bound — up to 3 attempts, roughly 20 seconds apart
-  — to allow for first-deploy propagation.
-- **On a 2xx:** tell the GM the site **is live** at `<siteUrl>`
-  and to share that URL with their players.
-- **If it never returns 2xx within the retries:** give the honest
-  status rather than claiming it's live —
+- **On a 2xx / "live at `<url>`":** tell the GM the site **is live** at
+  `<siteUrl>` and to share that URL with their players.
+- **If it reported not-yet-live:** give the honest status rather than
+  claiming it's live —
 
   > "The deploy uploaded successfully, but the host is still building
   > and propagating your site. Give it a minute, then open
   > `<siteUrl>` — it should come up shortly."
 
-  For a brand-new Cloudflare project the custom **404 route** can take a
-  few minutes to propagate, which is why we probe the root URL (a real
-  page that goes live first), not a missing path.
+  Retry the same `deploy --verify --no-build` command in a minute
+  rather than rebuilding again. For a brand-new Cloudflare project the
+  custom **404 route** can take a few minutes to propagate, which is
+  why the probe hits the root URL (a real page that goes live first),
+  not a missing path.
 
-Only after a confirmed 2xx — or the GM acknowledging the "still
+Only after a confirmed live result — or the GM acknowledging the "still
 building" state — set `tier1_complete: true` in
 `publish.setup_progress`. Keep the block.
 

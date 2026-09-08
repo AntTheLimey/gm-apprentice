@@ -92,6 +92,10 @@ Read the session's Play Notes file (`type: session-play-notes`).
 If no Play Notes file exists, ask the GM to provide play notes
 (paste, file path, or dictation). Read PC roster. Read the
 session's Plan file for planned-vs-actual comparison.
+`plan_check.py <plan> --inventory` reports each template section's
+status (`present`/`placeholder`/`absent`) and word count, including
+`Planned Scenes` as a whole — it does not list individual scene
+titles. Open the plan body directly for those.
 
 **gmassistant.app detection:** After reading the Play Notes,
 check whether the content contains a `## Memorable Moments`

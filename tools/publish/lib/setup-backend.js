@@ -39,15 +39,20 @@ function ensureKvNamespace({ runWrangler, tomlText }) {
 
 const INBOX_BLOCK = (kvId) => `[[kv_namespaces]]\nbinding = "INBOX"\nid = "${kvId}"`;
 
+const NAME_LINE = /^name\s*=\s*(?:"[^"]*"|'[^']*')\s*(?:#.*)?$/m;
+
+// Set wrangler.toml's project name and change nothing else. `deploy` needs this
+// on its own: a bare `wrangler pages deploy` publishes to whatever project the
+// toml names, so a toml left over from another site silently deploys this site's
+// pages over that one's.
+function alignProjectName(tomlText, name) {
+  const out = String(tomlText);
+  if (NAME_LINE.test(out)) return out.replace(NAME_LINE, `name = "${name}"`);
+  return `name = "${name}"\n${out}`;
+}
+
 function patchWranglerToml(tomlText, { name, kvId }) {
-  let out = String(tomlText);
-  // 1. name
-  const NAME_LINE = /^name\s*=\s*(?:"[^"]*"|'[^']*')\s*(?:#.*)?$/m;
-  if (NAME_LINE.test(out)) {
-    out = out.replace(NAME_LINE, `name = "${name}"`);
-  } else {
-    out = `name = "${name}"\n${out}`;
-  }
+  let out = alignProjectName(tomlText, name);
   // 2. INBOX kv block — replace the id in an existing INBOX block, else append.
   if (readNamespaceId(out) !== null) {
     // Replace the id line that follows `binding = "INBOX"`.
@@ -128,6 +133,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
 }
 
 module.exports = {
+  alignProjectName,
   checkKvPermission,
   ensureKvNamespace,
   patchWranglerToml,

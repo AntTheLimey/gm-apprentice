@@ -26,15 +26,15 @@ Read only the file(s) relevant to the current request.
 | Session procedures | `{system}/session-procedures.md` | — |
 | Character sheet | `{system}/character-sheet.md` | — |
 | Combat | GURPS: `combat.md`. CoC: `combat-reference.md`. Others: `{system}/rules-reference.md` | `{system}/mechanics.md` |
-| Traits / costs | GURPS: `traits-*.md`. Others: `{system}/rules-reference.md` | — |
-| Equipment / weapons | GURPS: `equipment-*.md`. CoC: `equipment-weapons.md`. FitD: `character-sheet.md`. D&D: `equipment.md`. PF2e: `equipment.md` | — |
+| Traits / costs | `rules_lookup.py {system} --kind trait` first. GURPS: `traits-*.md`. Others: `{system}/rules-reference.md` | — |
+| Equipment / weapons | `rules_lookup.py {system} --kind item` first. GURPS: `equipment-*.md`. CoC: `equipment-weapons.md`. FitD: `character-sheet.md`. D&D: `equipment.md`. PF2e: `equipment.md` | — |
 | Armour | CoC: `equipment-armor.md`. D&D: `equipment.md`. GURPS: `equipment-*.md`. PF2e: `equipment.md` | — |
 | Powers / magic | GURPS: `powers-rules.md` or `magic-rules.md`. CoC: `powers-magic.md`. FitD: `rituals-crafting.md`. D&D: `magic-items.md`. PF2e: `spells.md` (spells), `equipment.md` (magic items/runes) | — |
-| Spells | GURPS: `spells.md`. CoC: `powers-magic.md`. D&D: `spells.md`. PF2e: `spells.md` (index → rank shards) | — |
-| Skills | GURPS: `skills-*.md`. CoC: `skills.md`. Others: `{system}/rules-reference.md` | — |
-| Feats | D&D: `feats.md`. PF2e: `feats.md` (index → category shards) | — |
-| Conditions | D&D: `conditions-rules.md`. PF2e: `conditions-rules.md` | — |
-| Creatures / monsters | CoC: `creatures.md`. D&D: `monsters.md` / `animals.md`. PF2e: `monsters.md` (index → level bands) | — |
+| Spells | `rules_lookup.py {system} --kind spell` first. GURPS: `spells.md`. CoC: `powers-magic.md`. D&D: `spells.md`. PF2e: `spells.md` (index → rank shards) | — |
+| Skills | `rules_lookup.py {system} --kind skill` first. GURPS: `skills-*.md`. CoC: `skills.md`. Others: `{system}/rules-reference.md` | — |
+| Feats | `rules_lookup.py {system} --kind feat` first. D&D: `feats.md`. PF2e: `feats.md` (index → category shards) | — |
+| Conditions | `rules_lookup.py {system} --kind condition` first. D&D: `conditions-rules.md`. PF2e: `conditions-rules.md` | — |
+| Creatures / monsters | `rules_lookup.py {system} --kind monster` first. CoC: `creatures.md`. D&D: `monsters.md` / `animals.md`. PF2e: `monsters.md` (index → level bands) | — |
 | Ancestries / heritages / backgrounds | PF2e: `ancestries.md` | — |
 | Setting / lore | CoC: `setting-lovecraft.md`. FitD: check `personal/` | — |
 | Variant-specific rules | `{system}/variants/{variant}/*.md` | Base system file for same topic |

@@ -253,6 +253,10 @@ needs_decision: 2
 - [ ] Documents/Mysterious Letter.md
 ~~~
 
+`gm-publish manifest diff` classifies every vault file with these rules
+and `manifest apply` writes this format; edit by hand only when node is
+unavailable.
+
 ## Campaign Image
 
 The campaign image appears on the landing page hero and 404 page.

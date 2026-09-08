@@ -259,7 +259,10 @@ three-state responses (canon / ignore / defer).
 5. **Link pass** — Find missed cross-references.
 6. **Graph audit** — Read `references/graph-hygiene.md` and
    run hygiene checks.
-7. **Update index** — Full rebuild of `_meta/index.md`.
+7. **Update index** — Full rebuild of `_meta/index.md`: run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
+   show the diff summary, then re-run with `--write`. Fallback without
+   python: `references/index-template.md`.
 8. **Report** — Counts, stubs, relationships, graph health.
 
 ### Dissect
@@ -284,7 +287,12 @@ three-state responses (canon / ignore / defer).
 5. **Stub** — Read `_Templates/_Template_{Type}.md`, create with
    that structure, set `canon_status: STUB`. Leave template
    sections empty. Include `## Needs` section.
-6. **Update index** — Add new entries to `_meta/index.md`.
+6. **Update index** — Run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
+   show the diff summary, then `--write`. It's the same command as
+   Organize's full rebuild — the script is idempotent, so there is no
+   separate incremental mode. Fallback without python:
+   `references/index-template.md`.
 7. **Report** — Extracted, stubbed, needs attention.
 
 ### Weave
@@ -302,7 +310,12 @@ three-state responses (canon / ignore / defer).
 When adding relationships or updating entity fields, check
 new values against `_World/` rules (if `_World/` exists).
 Follow `references/world-validation.md`.
-6. **Update index** — Refresh `_meta/index.md`.
+6. **Update index** — Run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
+   show the diff summary, then `--write`. It's the same command as
+   Organize's full rebuild — the script is idempotent, so there is no
+   separate incremental mode. Fallback without python:
+   `references/index-template.md`.
 7. **Graph audit** — Read `references/graph-hygiene.md` and
    run full hygiene check.
 

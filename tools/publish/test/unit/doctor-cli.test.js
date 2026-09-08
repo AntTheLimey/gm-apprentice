@@ -83,3 +83,41 @@ describe('runDoctor --set-cloudflare-creds', () => {
     assert.ok(!lines.join('\n').includes(evil), 'malformed token NEVER echoed');
   });
 });
+
+describe('runDoctor --site', () => {
+  it('routes to the vault audit and never touches the host CLI', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-site-vault-'));
+    fs.mkdirSync(path.join(vault, 'Characters', 'NPCs'), { recursive: true });
+    fs.writeFileSync(path.join(vault, 'Characters', 'NPCs', 'Someone.md'), '---\ntype: npc\n---\n\nHi.\n');
+    const site = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-site-'));
+    const configPath = path.join(site, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      siteTitle: 'x', vaultPath: vault, outputDir: './docs',
+      excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
+    }));
+
+    const lines = [];
+    const ran = [];
+    const rc = await runDoctor(['--site', '--config', configPath], {
+      out: (s) => lines.push(String(s)),
+      runCommand: (cmd, args) => { ran.push(cmd); return { code: 0, stdout: '', stderr: '' }; },
+      detect: () => null,
+    });
+
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(ran, [], 'the vault audit spawns nothing');
+    assert.match(lines.join('\n'), /Site audit \(/);
+    assert.doesNotMatch(lines.join('\n'), /Publish preflight/);
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(site, { recursive: true, force: true });
+  });
+
+  it('without --site the preflight runs exactly as before', async () => {
+    const lines = [];
+    const rc = await runDoctor(['--host', 'cloudflare-pages'], {
+      out: (s) => lines.push(String(s)), runCommand: wranglerAllGood(), env: {}, nodeVersion: 'v22.5.0',
+    });
+    assert.strictEqual(rc, 0);
+    assert.match(lines.join('\n'), /Publish preflight \(host: cloudflare-pages\)/);
+  });
+});

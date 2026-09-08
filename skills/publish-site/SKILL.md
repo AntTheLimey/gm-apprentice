@@ -59,6 +59,12 @@ this skill's own cache path). You never replicate or rewrite its logic.
 ```bash
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
 node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
+node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site
+node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the manifest
+node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # edit the manifest
+node "$TOOL" deploy --verify --config <dir>/vault.config.json  # build, deploy, probe the URL
+node "$TOOL" doctor --site --config <dir>/vault.config.json    # audit the vault for publish defects
+node "$TOOL" explain "<vault-relative path>" --config <dir>/vault.config.json  # one file's publish chain
 node "$TOOL" --version
 node "$TOOL" --help
 ```
@@ -103,114 +109,34 @@ Workflow:
 1. Read `publish.site_dir` from `_meta/vault-config.md`. If not
    set, ask for the absolute path to the site repo directory and
    offer to save it to vault-config for future sessions.
-2. **Check publish tool version.** Make sure the site repo is
-   using the current version of the build tool. This matters
-   because a bare `/plugin` update drops a new version folder in
-   the plugin cache but never repoints existing sites, so builds
-   keep silently using the old renderer. (The build tool now also
-   prints a loud version-drift warning at the start of every
-   build as a backstop — but repoint it here so the GM never
-   sees that warning.)
-   a. Read the plugin version from `.claude-plugin/plugin.json`
-      in the gm-apprentice plugin directory (or infer it from the
-      skill's own cache path). This is the **expected version**.
-   b. Read the site repo's `package.json` and find the
-      `gm-apprentice-publish` dependency value. Also read
-      `node_modules/gm-apprentice-publish/package.json` in the
-      site repo to find the **installed version**.
-   c. The dependency should be a `file:` path pointing at:
-      `~/.claude/plugins/cache/gm-apprentice/gm-apprentice/{plugin-version}/tools/publish`
-      If the path contains an old version, or if the installed
-      version differs from the expected version:
-      - Update the `file:` dependency in the site repo's
-        `package.json` to point at the current cache path.
-      - Run `npm install` in the site repo directory. The build
-        tool ships its runtime dependencies vendored, so this
-        only needs to re-link the package — it does not download
-        anything and works offline.
-      - Confirm the repoint took effect: re-read
-        `node_modules/gm-apprentice-publish/package.json` and
-        verify the version now matches expected.
-      - Tell the GM: "Updated gm-apprentice-publish from
-        {old version} to {new version}."
-   d. If everything matches, continue silently.
-3. **Check manifest freshness.** Compare the vault's publishable
-   files against `_meta/publish-manifest.md`. Read
-   `references/content-filtering.md` § Manifest Format first — in
-   `mode: player`, a file publishes only as a **checked** entry under
-   `## Publishing`; checking the box under `## Excluded` or
-   `## Needs Decision` doesn't publish it. `mode: full` doesn't filter
-   by the manifest at all. Look for:
-   - **New files:** vault files not in the manifest. Apply the
-     same categorization rules as capability 6 (always-exclude
-     directories, prep files, etc.). Present new publishable
-     files to the GM and add them to the manifest after
-     confirmation.
-   - **Removed files:** manifest entries whose source files no
-     longer exist. Remove them from the manifest and note which
-     pages will disappear from the site.
-   - If no changes, say so and proceed.
-4. Run `npm run build` from that directory.
-5. Review the output for errors. If any appear, treat them as
-   troubleshooting triggers (see capability 3).
-6. **Deploy — branch on the `host` field** in `vault.config.json`
-   (absent means `github-pages`):
-
-   **`github-pages` (default):**
-   a. Stage the `docs/` folder: `git add docs/`.
-   b. Commit: `git commit -m "Rebuild site"`.
-   c. Push: `git push`.
-   d. Confirm: "Your site will update on GitHub Pages in a minute or
-      two. Check the Actions tab if it takes longer than five minutes."
-
-   **`cloudflare-pages`:**
-   a. Determine the project name: `cloudflarePagesProject` from
-      `vault.config.json` if set, otherwise the site directory's folder
-      name (lowercase, hyphenated).
-   b. **Check credentials first — degrade gracefully.** Run
-      `npx wrangler@4 whoami` (the `@4` pins the major version). If it
-      reports "not authenticated" (or
-      wrangler cannot run), **stop and do not attempt the deploy** —
-      the credentials aren't set up. Walk the GM through the token-only
-      dance: create a Cloudflare API token per
-      `references/cloudflare-pages.md` Step 1, then run
-      `node "$TOOL" doctor --set-cloudflare-creds` (it saves the token to
-      the right shell file and auto-derives the Account ID, never echoing
-      the token), then re-check with `npx wrangler@4 whoami` before
-      resuming. Never leave them staring at a raw wrangler error.
-   c. Deploy. The scaffold ships a `wrangler.toml` with
-      `pages_build_output_dir = "docs"`, so deploy with the **bare** form
-      (no `docs/` argument — passing it positionally conflicts with the
-      config and errors). First ensure `wrangler.toml`'s `name` matches
-      the project from step (a) — the bare deploy targets that field,
-      not `cloudflarePagesProject` — then:
-      `npx wrangler@4 pages deploy`
-      Only if the site has no `wrangler.toml` (an older scaffold) use the
-      explicit `npx wrangler@4 pages deploy docs/ --project-name=<name> --branch=main --commit-dirty=true`.
-   d. If the deploy command fails, treat it as a troubleshooting trigger
-      (see `references/cloudflare-pages.md` → Troubleshooting) rather
-      than surfacing the raw error.
-   e. **Verify it is actually live before saying so.** A successful
-      wrangler upload is not proof the URL serves — probe the root the
-      same way first-time setup does (see `references/setup-wizard.md`
-      Step 22):
-      `curl -sS -L --connect-timeout 5 --max-time 15 -o /dev/null -w '%{http_code}\n' "<siteUrl>"`
-      On a 2xx, confirm: "Your site is live at https://<name>.pages.dev —
-      the update is already served." If it doesn't return 2xx within a
-      couple of tries, give the honest status instead: the deploy
-      uploaded but the host is still propagating — check `<siteUrl>` in a
-      minute. (A brand-new project's custom 404 route can take a few
-      minutes; real pages go live first.)
+2. `node "$TOOL" update-pin --site <dir>` — repoints the site's
+   build-tool dependency at the current plugin cache version and
+   runs `npm install` if it was stale. Report its one line.
+3. `node "$TOOL" manifest diff --config <dir>/vault.config.json` —
+   present its New/Removed files to the GM. After confirmation,
+   `node "$TOOL" manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"... --prune`.
+   Skip this step entirely when the diff prints no New/Removed.
+4. `node "$TOOL" deploy --verify --config <dir>/vault.config.json` —
+   builds, deploys per the `host` field in `vault.config.json`, and
+   probes the URL. Relay its final line to the GM verbatim. On any
+   non-zero exit, run `node "$TOOL" doctor --site --config
+   <dir>/vault.config.json` and proceed as capability 3
+   (troubleshooting). A Cloudflare deploy failing for missing
+   credentials is the one case `deploy` diagnoses and explains
+   inline — if the GM would rather set them up directly, run
+   `node "$TOOL" doctor --set-cloudflare-creds`.
 
 ### 3. Troubleshooting
 
 **Trigger:** error messages, "build crashed", "portraits not showing",
 "page is missing", "links are broken", any build failure
 
-Read `references/troubleshooting.md` for the full diagnosis guide.
-Identify the failure mode, explain the cause in plain language,
-then guide the GM to the fix step by step. Always offer to apply
-the fix directly after explaining it.
+Run `node "$TOOL" doctor --site --config <dir>/vault.config.json` first;
+for a page that should be on the site and is not, `node "$TOOL" explain
+"<vault-relative path>"`. Then `references/troubleshooting.md` for the
+full diagnosis guide. Identify the failure mode, explain the cause in
+plain language, then guide the GM to the fix step by step. Always offer
+to apply the fix directly after explaining it.
 
 ### 4. Schema migrations
 

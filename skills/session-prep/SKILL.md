@@ -118,10 +118,12 @@ GM decisions. Steps 7-10 read this and only gather what's new.
 ## Phase 2: Prep Forward — Context Gathering
 
 **6. Existing prep review** — If a Plan file (`type: session-plan`)
-already exists for the upcoming session, read it and determine
-what's already covered. Flag what needs updating vs what can
-stand. Skip gathering for sections already present unless
-Reconcile invalidated them.
+already exists for the upcoming session, run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>
+--inventory`, then separately with `--state` (the script only ever prints
+one mode per invocation); sections marked `placeholder` are the ones to
+gather; read the plan body only for sections marked `present` that
+Reconcile may have invalidated.
 
 To find what the upcoming session should *cover*, follow the
 node graph: from the narrative-plan entity (`type: plan`) the
@@ -146,14 +148,13 @@ If no recap exists (GM skipped wrap-up):
 Skipping wrap-up means entity updates and creation don't
 happen. The vault stays frozen at pre-session state.
 
-**8. Threads** — Review carry-forward + unresolved questions,
-impressive NPCs, unfollowed clues, pending consequences.
-Fold in each active PC's `## Current Status` → `Open threads`:
-the always-current per-PC thread list (items carry forward even
-when they dropped out of the last session's carry-forward).
-Flag stale threads (3+ sessions without advancement).
-Reference `skills/ttrpg-expert/continuity-engine.md` for
-stale thread detection.
+**8. Threads** — `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
+--threads` prints every PC's Open threads with first/last-seen wrap-up
+session and age, `STALE` at 3+, plus wrap-up threads that fell off every
+sheet. You decide whether two wordings are the same thread and whether
+an old one is dormant by design. Reference
+`skills/ttrpg-expert/continuity-engine.md` for that judgment.
 → Write `## Active Threads` to Plan file.
 
 **9. Key NPCs** — NPCs likely to appear, with status,
@@ -197,67 +198,31 @@ plan entities. The `_midwife/` workspace holds whatever a
 midwife session produced — often the richer of the two, and
 frequently the only one populated.
 
-**A. `Chapters/{chapter}/Planning/`**, if it exists:
+Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plans_index.py"
+<vault> --chapter "<chapter>" --against <NPC/location names gathered in
+8-10>`. Present its Planning rows, the manifest table, the RESOLVED
+adventure's file summaries, and the Overlap section as the "Narrative
+plans available" summary below. `AMBIGUOUS` means two or more
+adventures could plausibly match — ask the GM which, never pick.
 
-1. Read all files and categorize by `plan_type` (arc, scene,
-   investigation, timeline)
-2. Surface scene plans whose `participants` or `locations`
-   overlap with the threads, NPCs, or locations already
-   gathered in steps 8-10
-
-**B. The midwife workspace**, if `_midwife/` exists.
-
-Directories under `_midwife/` are named per **adventure**, not
-per chapter. An adventure may be a chapter, span several, or
-be named nothing like one — so do not guess a slug. Use the
-manifest:
-
-1. Read `_midwife/index.md` — the master list of adventures
-   and their status (Active / Parked / Complete / Ingested).
-2. Identify the adventure covering the upcoming chapter.
-   **Exactly one, or none.** If two or more could plausibly
-   match, or the manifest is missing and several directories
-   exist, say so and ask the GM which — do not pick. Prepping
-   against another chapter's timeline is the failure this
-   step exists to prevent.
-3. Read that adventure's `_midwife/{adventure}/index.md`,
-   which carries a one-line summary per topic file. Use it to
-   choose what to open rather than reading the whole tree.
-
-`Ingested` in the manifest means the design was already
-promoted into `Planning/`; root A then covers it and this root
-is history. Anything not yet ingested is exactly the case
-where `Planning/` is empty and this step is the only way the
-design gets seen.
-
-Discover these files by **path, not frontmatter**. Midwife
-files are creative working documents and carry no `---` block
-at all, so a `plan_type` scan finds nothing however wide its
-root. Read each file's `#` H1 and `##` headings to summarise
-it.
-
-**Read `timeline.md` first if one exists.** A midwife
-day-by-day timeline is the highest-value prep artifact in the
-tree: it says which beats belong to the upcoming days and,
-just as importantly, which must not be pulled forward. Surface
-it *before* any scene design in Phase 2, not after — scene
-work invented against an unread timeline contradicts it, and
-the GM is the one who has to catch that.
-
-3. Present a brief summary of both roots:
+**Read `timeline.md` first if one exists** — the script lists it first
+among an adventure's file summaries for exactly this reason. A midwife
+day-by-day timeline is the highest-value prep artifact in the tree: it
+says which beats belong to the upcoming days and, just as importantly,
+which must not be pulled forward. Surface it *before* any scene design
+in Phase 2, not after — scene work invented against an unread timeline
+contradicts it, and the GM is the one who has to catch that.
 
 > **Narrative plans available for this chapter:**
 > - Arc: Arc_Shape.md — four-phase dramatic structure
 > - Scenes: Temple_Approach.md, Recognition_Scene.md,
 >   Escort_Betrayal.md — scene designs with decision trees
-> - Investigation: Investigation_Design.md — clue flow
-> - Midwife design (`_midwife/{adventure}/`, 55 files):
->   timeline.md — day-by-day skeleton, all 18 days;
->   chapter-shape.md, narrative-arc.md, social-events.md;
->   npcs/ profiles; handouts/ prose
+> - Midwife design (`_midwife/{adventure}/`): timeline.md —
+>   day-by-day skeleton; chapter-shape.md, narrative-arc.md;
+>   npcs/ profiles
 >
-> **Most relevant for next session:** [list based on thread
-> and NPC overlap, and on which days the timeline assigns]
+> **Most relevant for next session:** [from the Overlap section —
+> plans naming a thread or NPC already gathered in 8-10]
 
 Do not copy plan content into the session plan — link to
 it. Plans are reference documents the GM consults during
@@ -271,6 +236,10 @@ plans found for this chapter" — and do not write it up as a
 vault gap. A Gap/Action asserting no plan entities exist is a
 claim about the vault, and it is false whenever the design is
 sitting in a directory this step failed to open.
+
+Fallback without python: read `Chapters/{chapter}/Planning/` directly
+(stamped plan entities), plus `_midwife/index.md` and each adventure's
+own `index.md` by hand.
 
 ## Phase 2: Prep Forward — Creative Planning (elicited)
 
@@ -376,9 +345,16 @@ You run the deterministic checks as **chores** and act on them yourself. The
 GM never sees an ERROR/WARNING report. Silently fix objective breakage, offer
 to build artifacts, and raise only *genuine* craft issues conversationally.
 
-**15. Run the checks as chores** — Against the Plan file's vault
-(`vault_check.py` lives at
-`${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`):
+**15. Run the checks as chores** — Run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
+(and `--headless` when you were run without a GM). ERROR rows are fixed
+silently (`duration`, `table`, `type`); WARNING rows are fixed silently when
+mechanical (`preamble`, `recap`, `audit-trail`, `pc-state`, `scene-labels`,
+`scene-type`, `sections`) and raised as a question when they touch content;
+INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`). Also run
+against the vault as a whole (`vault_check.py` lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`) — these cover
+ground `plan_check.py` can't see from a single file:
 
 - **Tables** — `vault_check.py <vault> tables`. Aliased-wikilink pipes or
   escaped pipes inside a table break Obsidian's reflow. **Silently fix** them
@@ -388,21 +364,19 @@ to build artifacts, and raise only *genuine* craft issues conversationally.
   and same-day travel stay coherent — an offer, not a warning:
   > This one runs across three days — want me to lay out a quick hour-by-hour
   > clock so nothing double-books?
-- **Read-aloud** — `vault_check.py <vault> read-aloud`. Each hit is a
-  high-precision cue that a `> ` read-aloud line names a PC, dictates a feeling
-  ("you feel…"), or leans on a 3rd-person pronoun. Raise only the real ones as
+- **Read-aloud (vault-wide)** — `vault_check.py <vault> read-aloud`. Each hit
+  is a high-precision cue that a `> ` read-aloud line names a PC, dictates a
+  feeling ("you feel…"), or leans on a 3rd-person pronoun — checked against
+  every PC name in the vault, not just this plan. Raise only the real ones as
   a question:
   > Scene 2's boxed text says "Katherine steps into the lamplight" — want that
   > kept general so it reads to the whole table?
-- **Scene length** — a scene runs as long as its content earns (situation,
-  initiator, branches, NPC wants, mechanical notes). Flag **bloat** — restated
-  theses, repetition, self-documentation, unusable purple prose — regardless of
-  length, and offer to trim it. Over ~1,200 words, sanity-check with the GM
-  that the length is load-bearing. It is a nudge, not a cap.
+- **Scene length** — flag **bloat** regardless of length (restated theses,
+  repetition, self-documentation, unusable purple prose) and offer to trim it;
+  a scene runs as long as its content earns. It is a nudge, not a cap.
   (ref: `skills/ttrpg-expert/scenario-writing.md`)
-- **Preamble** — keep pre-scene context (Previously On, Active Threads, NPC
-  Quick Reference, World State) under ~1,000 words combined, recap ≤150 words,
-  so the Keeper reaches Scene 1 fast. Trim silently.
+- **Preamble** — a `preamble`/`recap` finding means the Keeper won't reach
+  Scene 1 fast. Trim silently.
 - **Canon** — NPC details, locations, or events not traceable to the vault are
   not stated as canon. Anything you cannot ground goes to `## Open Questions`,
   named — never invented as a "pipeline gap" fill.
@@ -438,6 +412,9 @@ answer):
   content. The Gather and Verify chores may run; the creative calls may not be
   silently resolved.
 
+`plan_check.py <plan> --headless` verifies this — a headless run that fails
+it must not be handed off.
+
 This is what makes the guided flow real rather than cosmetic.
 
 ## Resumable prep
@@ -452,6 +429,11 @@ decided vs open and where the conversation is:
 ```
 
 On resume, read it first and pick up from the first open item.
+`plan_check.py <plan> --state` prints the well-formed `key=value`
+tokens (or `# no prep-state marker` if none parse — including a fully
+malformed marker). The default `plan_check.py <plan>` run (no flags)
+is what actually reports a malformed marker, as a `prep-state`
+WARNING.
 
 ## Handoff
 

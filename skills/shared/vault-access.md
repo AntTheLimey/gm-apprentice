@@ -24,8 +24,15 @@ and Obsidian is a viewer the user may or may not have open.
 | Wrap-Up conformance (+ `--fix` re-nest) | `vault_check.py wrapup` |
 | Active PC roster | `vault_check.py active-pcs` |
 | Session-prep context bundle (one call) | `session_context.py` |
+| At-table plan brief | `session_context.py --play` |
+| Thread ages / decay | `session_context.py --threads` |
+| Rebuild `_meta/index.md` from a vault scan | `index_build.py` |
+| Session Plan conformance | `plan_check.py` |
+| Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
 | Frontmatter writes (set/increment/promote/supersede/reconciled) and legacy canon-key repair | `stamp_entities.py` |
 | Player-safe PC sheet view | `gm-publish sheet show --player-safe` |
+| Site rebuild (repoint, manifest, deploy+verify) | `gm-publish update-pin` / `manifest diff` / `deploy --verify` |
+| Site audit / why didn't this page publish | `gm-publish doctor --site` / `explain PATH` |
 
 Grep is the right tool when you know the term (an entity
 name, a date, a marker like `<!-- spoiler -->`). The
@@ -43,6 +50,36 @@ gm-only/spoiler blocks, HTML comments, excluded callouts,
 gm_only relationship edges, excluded frontmatter fields).
 Prefer it over reading the vault sheet directly whenever the
 audience is a player, not the GM.
+
+`gm-publish update-pin --site <dir>` repoints a published
+site's renderer dependency at the newest plugin-cache version
+and runs `npm install` — a plugin update never touches a
+site's pin on its own, so a site keeps building with the old
+renderer until this runs. `--check` reports the drift and
+exits 1 without changing anything; pair a real run with
+`deploy`. `gm-publish manifest diff` classifies every vault
+file with the same decision the build makes and lists what
+`_meta/publish-manifest.md` doesn't yet mention, with the
+bucket, code, and reason for each; `manifest apply --publish
+PATH / --exclude "PATH=reason" / --decide PATH [--prune]`
+moves entries between sections and rewrites the file — which
+files are correctly excluded versus missing is the GM's call,
+this only shows the drift. `gm-publish deploy --verify` builds
+the site and pushes it to the configured host, then fetches the
+live URL up to three times 20s apart; a site still propagating
+is reported, not failed. `gm-publish doctor --site` audits the
+vault instead of the machine — stale build-tool pin, folders
+missing from `folderMap`, files with no `type:`, portraits
+pointing at absent images, dead wikilinks, manifest entries
+whose file is gone, played sessions in no manifest section —
+and exits 1 only on an error, never a warning. `gm-publish
+explain PATH` prints the chain the build walks for one file
+(directory, type, publish mode, auto-exclusion, canon status,
+manifest section) and the verdict — where it publishes, or
+which rule stopped it — plus the H2 sections stripped and how
+many gm-only blocks it carries; run it before `doctor --site`
+when the question is about one specific file rather than the
+whole vault.
 
 ## Bundled Utilities
 
@@ -147,6 +184,54 @@ that resolves to nothing or to several files, a session number
 present in more than one chapter) and when later session
 indexes were ignored as unplayed. Confirm it with the GM: a
 wrong bundle reads exactly as authoritative as a right one.
+
+`--play` narrows the bundle to just the upcoming (or
+`--session N`) session's Plan — the at-table brief when the
+Current Status and deferred-flags digest isn't needed.
+`--threads` narrows it to the Session Context header plus a
+Threads report: each active PC's `Open threads` bullets aged
+against the Wrap-Up's Unresolved Threads, `age=N` sessions
+since the thread was last touched and `STALE` at age >= 3. A
+`STALE` row is a candidate, not a verdict — resolve, advance,
+or retire is the GM's call.
+
+`index_build.py <vault> [--write] [--date YYYY-MM-DD]` derives
+a fresh `_meta/index.md` from the vault's own frontmatter —
+chapters, every session and scene nested under its chapter,
+session-chain documents nested under their session, `*_Story.md`
+companions nested under their PC, and every `type: plan` entity
+in its own section. Default is a dry-run: a unified diff against
+the file on disk (or the whole rendered text if none exists yet)
+plus a `# entities: N narrative: M stubs: K` summary line;
+`--write` applies it, preserving the existing file's line
+endings. A document it can't place — an orphaned session-chain
+doc, a Story file with no matching PC — surfaces under `##
+Stubs (Needs Attention)` instead of being dropped. The dry-run
+diff is the confirmation prompt: review it before `--write`.
+
+`plan_check.py PLAN.md [--headless] [--inventory] [--state]
+[--json]` is the Session Plan conformance check for
+session-prep's rules and `shared/session-principles.md`, run
+against one file. Default output is finding rows as
+`LEVEL<TAB>locus<TAB>message` plus a `# errors: N warnings: N
+info: N` summary; `--inventory` lists template-H2 presence and
+word counts instead, `--state` prints the prep-state marker's
+tokens, `--json` emits all three as one object. Exit 1 on any
+ERROR. ERROR means fix it before the Plan ships; WARNING is the
+GM's call — fix it or knowingly carry it forward; INFO is
+context (a placeholder heading, a long scene) worth a glance,
+not a blocker.
+
+`plans_index.py <vault> [--chapter "Chapter N - Title"]
+[--against NAME ...] [--json]` bundles session-prep's Forward
+Design read into one call: every `type: plan` entity under a
+chapter's `Planning/` folder, and which `_midwife/` adventure
+directory an in-progress chapter continues. `--chapter` narrows
+both halves to one chapter; `--against NAME` (repeatable) adds
+an Overlap section for Planning/ entries naming that
+participant or location. Exit is always 0 — when the midwife
+manifest can't resolve to a single adventure, that's a report
+for the GM to settle, not an error to fix.
 
 `stamp_entities.py <vault> FILE... [--session SESSION]
 [--date YYYY-MM-DD] [--retag OLD=NEW]` batch-stamps

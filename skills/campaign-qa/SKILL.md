@@ -271,6 +271,10 @@ for the full procedure.
   non-existent chapter overviews, or scene plans with empty
   `participants` or `locations` (arc and timeline plans may
   legitimately have sparse relational data)
+- Index drift: files not referenced from `_meta/index.md`, or
+  index entries whose target file is gone — `vault_check.py
+  index`. The fix is `index_build.py <vault> --write`, never a
+  hand edit.
 
 ### World Consistency
 

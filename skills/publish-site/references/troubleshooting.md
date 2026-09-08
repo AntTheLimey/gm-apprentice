@@ -8,6 +8,13 @@ and how to fix it.
 Always run the build with a fresh terminal before diagnosing.
 Many "failures" are stale state from a previous aborted run.
 
+**Run `node "$TOOL" doctor --site --config <dir>/vault.config.json` first.**
+It audits the vault the way the build sees it and prints a fix for every
+finding. For one file that should be on the site and is not, `node "$TOOL"
+explain "<vault-relative path>"` prints the exact chain the build walked
+and its verdict. The failure modes below name which finding code each
+one is and give the deeper why.
+
 ---
 
 ## Failure 1: "Portraits not showing"
@@ -28,19 +35,10 @@ One of two things:
 
 ### Diagnosis steps
 
-1. Open `vault.config.json` and find the `attachmentsDir` value.
-   The default is `_attachments`.
-2. Open the vault folder and confirm a folder with that exact
-   name exists. Check capitalisation — `_Attachments` and
-   `_attachments` are different on Linux and macOS.
-3. Open the entity's markdown file (e.g. the character note).
-   Check the `portrait` frontmatter field. It should be a path
-   relative to the vault root, such as:
-   ```yaml
-   portrait: "_attachments/characters/alice-morgan.jpg"
-   ```
-4. Navigate to that path inside the vault folder and confirm the
-   image file exists with that exact filename.
+Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+`PORTRAIT_MISSING` row names the entity and the portrait filename it
+expected inside `attachmentsDir` (default `_attachments`) — the fix line
+says whether to add the file or correct the `portrait:` value.
 
 ### Fix
 
@@ -136,16 +134,13 @@ One of:
 
 ### Diagnosis steps
 
-1. Open `vault.config.json` and find `folderMap`. Check that
-   the folder your entity lives in appears as a key.
-2. Check `excludeDirs` — if the folder is listed there, it is
-   being intentionally skipped.
-3. Open the entity's markdown file and check its frontmatter
-   for a `type` field. If missing, the scanner skips it — not
-   silently: a build-time ``scanner: skipped N file(s) with no
-   `type:` in frontmatter`` warning names up to 5 of them, so
-   check the build log before hunting by hand.
-   Unknown `type` values still render via the smart wiki fallback.
+For one entity, run `node "$TOOL" explain "<vault-relative path>"` — it
+prints the folder's `folderMap` mapping (or lack of one), the file's
+`type:` status, and the build's verdict in one shot. Vault-wide, `node
+"$TOOL" doctor --site --config <dir>/vault.config.json` reports the same
+two causes: `FOLDER_UNMAPPED` (a folder with typed pages inside that will
+not publish) and `FILE_UNTYPED` (no `type:` in frontmatter, so the file
+never publishes).
 
 ### Fix
 
@@ -185,15 +180,10 @@ frontmatter exactly, the link will not resolve.
 
 ### Diagnosis steps
 
-1. Find the broken link in the built HTML — look at the URL it
-   points to and compare it to the expected page.
-2. Find the source file in the vault that contains the
-   `[[wiki-link]]`.
-3. Find the target file in the vault that the link is supposed
-   to point to.
-4. Compare the link text to the target file's filename (without
-   the `.md` extension) and its `aliases` frontmatter. They must
-   match exactly (including capitalisation).
+Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+`LINK_UNRESOLVED` row names the page and the `[[target]]` that matches no
+published page — its fix line already suggests the nearest real page
+name when one is close enough to be the likely typo.
 
 ### Fix
 
@@ -301,19 +291,10 @@ that warning, this is the failure — follow the fix below.
 
 ### Diagnosis steps
 
-1. Open the site repo's `package.json`. Find the
-   `gm-apprentice-publish` dependency. It should be a `file:` path
-   like:
-   ```json
-   "gm-apprentice-publish": "file:~/.claude/plugins/cache/gm-apprentice/gm-apprentice/1.4.21/tools/publish"
-   ```
-2. Check the version number in that path against the current plugin
-   version (readable from `.claude-plugin/plugin.json` in the
-   gm-apprentice plugin directory). If they differ, the dependency
-   is stale.
-3. Also check `node_modules/gm-apprentice-publish/package.json` in
-   the site repo — its `version` field shows what is actually
-   installed.
+Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+`VERSION_DRIFT` row names the version the site is pinned to, the newest
+version installed in the plugin cache, and the fix (`gm-publish
+update-pin`).
 
 ### Fix
 
@@ -340,26 +321,9 @@ To fix manually:
 - `Error: Cannot find module 'gray-matter'` (or `lunr`,
   `markdown-it`), or
 - `Error: gm-apprentice-publish is missing runtime dependencies:
-  ...` followed by reinstall guidance.
+  ...`
 
-### Cause
-
-The build tool resolves its own dependencies from wherever the
-plugin cache placed it (a site's `file:` pin symlinks the tool out
-of the cache). The tool ships those dependencies **vendored**
-(committed alongside its code) so they always travel with it. If
-they are missing, the plugin copy in the cache is incomplete —
-usually a broken or interrupted plugin install/update.
-
-### Fix
-
-1. Update or reinstall the gm-apprentice plugin with `/plugin`.
-2. Ask the publish-site skill to "update my site" — capability 2
-   repoints the `file:` dependency at the freshly-installed cache
-   version and re-runs `npm install` (which only re-links the
-   package; the vendored deps need no download).
-3. As a manual fallback, run `npm install` inside the cache's
-   `.../tools/publish` directory the site points at, then rebuild.
+The CLI already prints the diagnosis and the fix — run the printed fix.
 
 ---
 
@@ -388,12 +352,10 @@ a chapter page — are published too. Two common breakdowns:
 
 ### Diagnosis steps
 
-1. Run the build and check for `not in folderMap` scanner warnings.
-2. Confirm `folderMap` maps the folder holding chapters/sessions
-   (default vault layout: `"Chapters": "chapters"`).
-3. Confirm a `type: session` page for the played session and a
-   `type: chapter` page are in the published set (check the manifest
-   and canon status).
+Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
+`RECAP_INCOMPLETE` row names the wrap-up file and which of "a published
+session with status played/reviewed" or "a published chapter page" is
+missing — exactly the two breakdowns above.
 
 ### Fix
 

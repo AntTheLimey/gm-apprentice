@@ -16,7 +16,11 @@ Usage:
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
-  gm-apprentice-publish doctor [options]     Preflight: check tools/auth, save Cloudflare creds
+  gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
+  gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
+  gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
+  gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
+  gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
   gm-apprentice-publish --version            Show version
@@ -100,14 +104,88 @@ is the sheet a player can see, not a reminder to look away.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
+  manifest: `
+gm-apprentice-publish manifest <diff|apply> [options]
+
+Compares the publish manifest (_meta/publish-manifest.md) with what is actually
+in the vault, and edits it. "diff" classifies every vault file with the same
+decision the build makes, so a file it calls "publish" is a file the build
+publishes.
+
+  manifest diff [--config <path>] [--json]
+                     List files the manifest does not mention (with the bucket,
+                     code and reason for each), entries whose file is gone, and
+                     the per-section unchanged counts
+  manifest apply [--publish <path>]... [--exclude "<path>=<reason>"]...
+                 [--decide <path>]... [--prune] [--config <path>] [--json]
+                     Move paths between the three sections and rewrite the file.
+                     --prune drops entries with no file on disk. A path that
+                     matches no vault file is an error and nothing is written.
+  --help, -h         Show this help
+`,
+  explain: `
+gm-apprentice-publish explain <vault-relative path> [--config <path>] [--json]
+
+Prints the chain the build walks for one file — directory, type, publish mode,
+auto-exclusion, canon status, manifest section — and then the build's own
+verdict: where it publishes, or which rule stopped it. Follows with the H2
+sections stripped on publish and how many gm-only blocks the file carries.
+
+  gm-apprentice-publish explain "Sessions/Session 7.md"
+
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --json             Emit the whole chain as an object
+  --help, -h         Show this help
+`,
+  deploy: `
+gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
+
+Builds the site and publishes it to the host named in vault.config.json:
+"cloudflare-pages" runs wrangler (checking authentication first, and aligning
+wrangler.toml's project name), "github-pages" commits docs/ and pushes.
+
+  --verify           After deploying, fetch the site URL up to 3 times, 20s
+                     apart. A site still propagating is reported, not failed.
+  --no-build         Deploy whatever is already in the output directory
+  --dry-run, -n      Print the commands that would run; run none of them
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --json             Emit { host, built, deployed, url, verified, status,
+                     attempts, commands }
+  --help, -h         Show this help
+`,
+  'update-pin': `
+gm-apprentice-publish update-pin [--site <dir>] [--check] [--json]
+
+Repoints this site's gm-apprentice-publish dependency at the newest version in
+the plugin cache and runs npm install. A "/plugin update" installs a new version
+alongside the old one but never touches the site's pin, so the site keeps
+building with the old renderer until this runs. Pair it with "deploy".
+
+  --site <dir>       The site directory holding package.json (default: the
+                     directory of --config, i.e. the current directory)
+  --config <path>    Path to vault.config.json — names the site directory
+  --check            Report the drift and exit 1; change nothing
+  --json             Emit { pinnedBefore, pinnedAfter, installedBefore,
+                     installedAfter, desired, changed, ok }
+  --help, -h         Show this help
+`,
   doctor: `
 gm-apprentice-publish doctor [--host <host>] [--json] [--set-cloudflare-creds]
+gm-apprentice-publish doctor --site [--config <path>] [--json]
 
 Preflight for publishing: checks Node, git, and the host CLI (wrangler for
 Cloudflare Pages, gh for GitHub Pages) with its authentication, and prints a
 fix for each failing row.
 
+--site audits the vault instead of the machine: the stale build-tool pin,
+folders missing from folderMap, files with no type:, portraits pointing at
+absent images, wikilinks that match no published page, manifest entries whose
+file is gone, and played sessions in no manifest section. Each finding names
+the edit that fixes it. Exits 1 only on an error, not on a warning.
+
   --host <host>              cloudflare-pages (default) or github-pages
+  --site                     Audit the vault named by --config
+  --config <path>            Path to vault.config.json, with --site
   --json                     Machine-readable report instead of the checklist
   --set-cloudflare-creds     Read a Cloudflare API token from stdin, verify it,
                              and save it (plus the account id) to your shell env
@@ -147,14 +225,21 @@ function printSubcommandHelp(cmd) {
 // same way `allowedFlags` maps a bare switch. Value flags reject a following
 // option token for the same reason `--config` does: `--pc --json` is a typo,
 // not a PC called "--json".
-function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}) {
+// `repeatedFlags` are value flags a caller may give more than once
+// (`--publish A.md --publish B.md`); their key collects an array, empty when the
+// flag never appears.
+function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}, repeatedFlags = {}) {
   let configPath = './vault.config.json';
   const flags = {};
+  for (const key of Object.values(repeatedFlags)) flags[key] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === '--config') {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
       configPath = rest[i + 1]; i++;
+    } else if (Object.prototype.hasOwnProperty.call(repeatedFlags, a)) {
+      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
+      flags[repeatedFlags[a]].push(rest[i + 1]); i++;
     } else if (Object.prototype.hasOwnProperty.call(valueFlags, a)) {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
       flags[valueFlags[a]] = rest[i + 1]; i++;
@@ -367,6 +452,107 @@ if (command === 'sheet') {
     playerSafe: !!parsed.flags.playerSafe,
     json: !!parsed.flags.json,
   })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'explain') {
+  const target = args[1];
+  if (!target || target.startsWith('-')) {
+    console.error('Error: explain needs a vault-relative path');
+    printSubcommandHelp('explain');
+    process.exit(1);
+  }
+  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('explain');
+    process.exit(1);
+  }
+  const { runExplain } = require('../lib/explain-cli.js');
+  runExplain({ configPath: parsed.configPath, target, json: !!parsed.flags.json })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'deploy') {
+  const parsed = parseSubcommandArgs(args.slice(1), {
+    '--verify': 'verify',
+    '--no-build': 'noBuild',
+    '--dry-run': 'dryRun',
+    '-n': 'dryRun',
+    '--json': 'json',
+  });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('deploy');
+    process.exit(1);
+  }
+  const { runDeploy } = require('../lib/deploy-cli.js');
+  runDeploy({
+    configPath: parsed.configPath,
+    verify: !!parsed.flags.verify,
+    noBuild: !!parsed.flags.noBuild,
+    dryRun: !!parsed.flags.dryRun,
+    json: !!parsed.flags.json,
+  })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'manifest') {
+  const verb = args[1];
+  if (verb !== 'diff' && verb !== 'apply') {
+    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff or apply)');
+    printSubcommandHelp('manifest');
+    process.exit(1);
+  }
+  // --publish/--exclude/--decide move an entry between manifest sections, which
+  // only "apply" does — registering them for "diff" too meant `manifest diff
+  // --publish X` was accepted and silently did nothing (#M8).
+  const parsed = parseSubcommandArgs(
+    args.slice(2),
+    { '--prune': 'prune', '--json': 'json' },
+    {},
+    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' } : {},
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('manifest');
+    process.exit(1);
+  }
+  const { runManifest } = require('../lib/manifest-cli.js');
+  runManifest({
+    verb,
+    configPath: parsed.configPath,
+    publish: parsed.flags.publish,
+    exclude: parsed.flags.exclude,
+    decide: parsed.flags.decide,
+    prune: !!parsed.flags.prune,
+    json: !!parsed.flags.json,
+  })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'update-pin') {
+  const parsed = parseSubcommandArgs(
+    args.slice(1),
+    { '--check': 'check', '--json': 'json' },
+    { '--site': 'site' },
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('update-pin');
+    process.exit(1);
+  }
+  const siteDir = parsed.flags.site || path.dirname(path.resolve(parsed.configPath));
+  const { runUpdatePin } = require('../lib/update-pin.js');
+  runUpdatePin({ siteDir, check: !!parsed.flags.check, json: !!parsed.flags.json })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
