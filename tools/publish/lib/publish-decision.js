@@ -101,8 +101,8 @@ function indexOf(manifest) {
 // path to scanner page; without one there is nothing to resolve against and every
 // story file falls through to the normal chain.
 function storyCompanionPc(rel, pageIndex) {
-  if (!pageIndex || !/_Story\.md$/i.test(String(rel || ''))) return null;
-  const pc = pageIndex.get(String(rel).replace(/_Story\.md$/i, '.md'));
+  if (!pageIndex || !/_Story\.md$/.test(String(rel || ''))) return null;
+  const pc = pageIndex.get(String(rel).replace(/_Story\.md$/, '.md'));
   return pc && pc.frontmatter && pc.frontmatter.type === 'pc' ? pc : null;
 }
 

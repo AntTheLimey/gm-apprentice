@@ -337,6 +337,15 @@ describe('publish-decision: STORY_COMPANION', () => {
     assert.strictEqual(storyCompanionPc('Characters/PCs/Adrien_Story.md', null), null);
   });
 
+  // pairStoryFiles (scanner.js) builds the companion path as `pcBase + '_Story.md'`
+  // and compares it to the scanned sourcePath with exact string equality — so on
+  // a case-sensitive filesystem a differently-cased suffix never merges there.
+  // storyCompanionPc must mirror that exactly, or explain/manifest describe a
+  // file the real build treats as an ordinary page.
+  it('does not match a differently-cased _story.md suffix', () => {
+    assert.strictEqual(storyCompanionPc('Characters/PCs/Adrien_story.md', index), null);
+  });
+
   it('names the PC whose page carries the content', () => {
     const v = decidePage({ frontmatter: { type: 'character-story' }, outputPath: 'characters/pcs/adrien-story.html' }, {
       rel: 'Characters/PCs/Adrien_Story.md',
