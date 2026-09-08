@@ -120,7 +120,8 @@ GM decisions. Steps 7-10 read this and only gather what's new.
 **6. Existing prep review** — If a Plan file (`type: session-plan`)
 already exists for the upcoming session, run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>
---inventory` and `--state`; sections marked `placeholder` are the ones to
+--inventory`, then separately with `--state` (the script only ever prints
+one mode per invocation); sections marked `placeholder` are the ones to
 gather; read the plan body only for sections marked `present` that
 Reconcile may have invalidated.
 
@@ -236,8 +237,9 @@ vault gap. A Gap/Action asserting no plan entities exist is a
 claim about the vault, and it is false whenever the design is
 sitting in a directory this step failed to open.
 
-Fallback without python: read `_midwife/index.md` and each
-adventure's own `index.md` by hand.
+Fallback without python: read `Chapters/{chapter}/Planning/` directly
+(stamped plan entities), plus `_midwife/index.md` and each adventure's
+own `index.md` by hand.
 
 ## Phase 2: Prep Forward — Creative Planning (elicited)
 
@@ -427,8 +429,11 @@ decided vs open and where the conversation is:
 ```
 
 On resume, read it first and pick up from the first open item.
-`plan_check.py <plan> --state` prints the marker; a malformed one is
-reported as `prep-state`.
+`plan_check.py <plan> --state` prints the well-formed `key=value`
+tokens (or `# no prep-state marker` if none parse — including a fully
+malformed marker). The default `plan_check.py <plan>` run (no flags)
+is what actually reports a malformed marker, as a `prep-state`
+WARNING.
 
 ## Handoff
 

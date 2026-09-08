@@ -657,13 +657,14 @@ gh repo create <project_name> --public --source . --remote origin --push
 
    ```bash
    git remote add origin https://github.com/<github_username>/<project_name>.git
-   node "$TOOL" deploy --verify --config vault.config.json
+   node "$TOOL" deploy --config vault.config.json
    ```
 
-   `deploy --verify` builds, deploys, and probes the live URL in one
-   step — relay its final line to the GM verbatim. It sets the upstream
-   tracking branch on this first push; every push after this one
-   (routine updates, capability 2) runs through the same command.
+   `deploy` builds, commits, and pushes, setting the upstream tracking
+   branch on this first push. Do **not** pass `--verify` here — Pages
+   isn't enabled yet, so a live-URL probe now would just report a
+   miss. Verification happens in Step 22, after Pages is turned on
+   below.
 
 **Enable GitHub Pages.** If `gh` was used, offer to enable it
 programmatically:
@@ -688,11 +689,10 @@ two-minute enablement steps. Then continue to Phase F.
 
 Do not declare victory blind. **Cloudflare (Step 21a):** `deploy
 --verify` already probed the URL and its final line said whether it
-came back live — relay that line. **GitHub Pages (Step 21b), manual
-path:** `deploy --verify` in that step already probed it — relay its
-final line from Step 21b and skip the probe below. **GitHub Pages
-(Step 21b), `gh repo create --push` path:** that push was plain `git`,
-not `deploy`, so run the probe now:
+came back live — relay that line. **GitHub Pages (Step 21b), either
+path:** neither the manual `deploy` push nor the `gh repo create
+--push` push ran with `--verify` (Pages wasn't enabled yet at that
+point), so run the probe now:
 
 ```bash
 node "$TOOL" deploy --verify --no-build --config vault.config.json
