@@ -156,7 +156,7 @@ BRIEF_DROP_H3: tuple[str, ...] = (
 _H2_HEADING_RE = re.compile(r"^## (.+)$")
 _H3_HEADING_RE = re.compile(r"^### (.+)$")
 _ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
-_GM_CLOSE_RE = re.compile(r"^<!--\s*/gm-only\s*-->\s*$")
+_GM_MARKER_RE = re.compile(r"^<!--\s*/?gm-only\s*-->\s*$")
 
 
 def brief_wrapup(body: str) -> str:
@@ -165,7 +165,14 @@ def brief_wrapup(body: str) -> str:
     `(omitted in --brief: N words — read the Wrap-Up file for it)`.
     H3 titles match on prefix (the template's Name Conflicts heading has
     a parenthetical). A block ends at the next heading of the same or
-    higher level, at a line `<!-- /gm-only -->`, or EOF."""
+    higher level, at a `<!-- gm-only -->` or `<!-- /gm-only -->` line, or
+    EOF — either marker is a terminator, not just the closer, because the
+    template opens the fence right after ## Memorable Moments' own
+    content and a terminator that only recognised the closer would eat
+    the opening marker into the dropped block. The terminator line itself
+    is never consumed, so it survives in the output. A blank line follows
+    the stub, separating it from whatever comes next, unless that next
+    line is already blank."""
     lines = body.splitlines()
     out: list[str] = []
     i = 0
@@ -192,13 +199,15 @@ def brief_wrapup(body: str) -> str:
             hm = _ANY_HEADING_RE.match(lines[j])
             if hm and len(hm.group(1)) <= level:
                 break
-            if _GM_CLOSE_RE.match(lines[j].strip()):
+            if _GM_MARKER_RE.match(lines[j].strip()):
                 break
             collected.append(lines[j])
             j += 1
         wc = word_count("\n".join(collected))
         out.append(f"(omitted in --brief: {wc} words — read the Wrap-Up "
                    f"file for it)")
+        if j < n and lines[j].strip() != "":
+            out.append("")
         i = j
     result = "\n".join(out)
     return result + "\n" if body.endswith("\n") else result

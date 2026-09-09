@@ -91,6 +91,19 @@ class BriefCLITests(unittest.TestCase):
         self.assertIn("must NOT print in full", r.stdout)
         self.assertNotIn("(outline)", r.stdout)
 
+    def test_brief_preserves_gm_only_markers(self):
+        r = run_cli(FIXTURE, "--brief")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("<!-- gm-only -->\n\n## GM Notes", r.stdout)
+
+    def test_brief_rejects_play_and_threads(self):
+        for flag in ("--play", "--threads"):
+            r = run_cli(FIXTURE, "--brief", flag)
+            self.assertEqual(r.returncode, 2, r.stdout)
+            self.assertIn(
+                "error: --brief applies to the default bundle only",
+                r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
