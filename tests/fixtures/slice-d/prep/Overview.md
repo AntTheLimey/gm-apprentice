@@ -1,6 +1,6 @@
 ---
 type: campaign_overview
-last_session: 7
+last_session: "[[Chapters/Chapter 1 - Harbour/Sessions/Session 07]]"
 ---
 
 # Fixture Campaign — Overview
