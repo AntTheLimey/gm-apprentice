@@ -273,7 +273,7 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     """
     del files
     fm = extract_frontmatter(plan_text) or {}
-    n = parse_session_number(fm.get("session"))
+    n = session_ref_number(fm)
     parts = [f"===== Play Brief — Session {n if n is not None else '?'} =====\n"
              f"(source: {plan_rel})"]
 
@@ -331,7 +331,7 @@ def thread_report(files, current: int, chapter) -> str:
     for rel, text, fm in files:
         if entity_type(fm) not in WRAP_UP_TYPES or not in_scope(rel, fm):
             continue
-        n = parse_session_number(fm.get("session"))
+        n = session_ref_number(fm)
         if n is None:
             continue
         unresolved_block = _heading_block(text, 4, "Unresolved Threads")
@@ -472,21 +472,15 @@ def arcs_report(files, chapter, upcoming: int) -> str:
     "Sessions since" = upcoming - N."""
     lines = [f"===== PC Arcs — Sessions before {upcoming} ====="]
 
-    def plan_number(fm) -> int | None:
-        # A Plan's `session:` is commonly a wikilink ("[[Session 05]]"),
-        # which the frontmatter reader hands back as a one-item list of
-        # bracket-stripped text (see wikilink_target) rather than a
-        # plain string — resolve that before parsing the number out.
-        return parse_session_number(wikilink_target(fm.get("session")))
-
     plan_files = [(rel, text, fm) for rel, text, fm in files
                   if fm.get("type") == "session-plan"]
     numbers = sorted({n for rel, text, fm in plan_files
-                      if (n := plan_number(fm)) is not None and n < upcoming})
+                      if (n := session_ref_number(fm)) is not None
+                      and n < upcoming})
 
     plans: list[tuple[int, list[tuple[str, str, str]] | None]] = []
     for n in numbers:
-        candidates = [c for c in plan_files if plan_number(c[2]) == n]
+        candidates = [c for c in plan_files if session_ref_number(c[2]) == n]
         picked = prefer_chapter(candidates, chapter)
         if picked is None:
             continue
@@ -684,6 +678,23 @@ def prefer_chapter(candidates, chapter):
     return (loose[0][0], loose[0][1]) if loose else None
 
 
+def session_ref_number(fm: dict) -> int | None:
+    """The session number named by `fm["session"]`.
+
+    A `session:` value written as a wikilink ("[[Session 05]]") reaches
+    us as a one-item list of bracket-stripped text, not a string — the
+    frontmatter reader treats the quoted outer `[...]` as a YAML flow
+    sequence (see `wikilink_target`'s docstring), and `parse_session_number`
+    returns None outright for any list. `wikilink_target` unwraps that
+    case to plain text first; a bare int or string session value passes
+    through it unchanged. Since migration 1.9.5 the quoted wikilink is
+    the canonical `session:` form, so every `session:` lookup in this
+    file goes through here rather than calling `parse_session_number`
+    directly on the raw value.
+    """
+    return parse_session_number(wikilink_target(fm.get("session")))
+
+
 def _find_plan(files, chapter, target: int):
     """The Session Plan for session `target`: a `type: session-plan`
     file naming it directly, chapter-preferred, else the session index's
@@ -691,7 +702,7 @@ def _find_plan(files, chapter, target: int):
     plan = prefer_chapter(
         [(rel, text, fm) for rel, text, fm in files
          if fm.get("type") == "session-plan"
-         and parse_session_number(fm.get("session")) == target],
+         and session_ref_number(fm) == target],
         chapter)
     if plan is not None:
         return plan
@@ -833,7 +844,7 @@ def main() -> int:
     wrap = prefer_chapter(
         [(rel, text, fm) for rel, text, fm in files
          if entity_type(fm) in WRAP_UP_TYPES
-         and parse_session_number(fm.get("session")) == current],
+         and session_ref_number(fm) == current],
         chapter)
     if wrap is None:
         # Fallback: filename convention Chapter_CC_Session_NN_Wrap_Up.md
@@ -869,7 +880,7 @@ def main() -> int:
     plan = prefer_chapter(
         [(rel, text, fm) for rel, text, fm in files
          if fm.get("type") == "session-plan"
-         and parse_session_number(fm.get("session")) == upcoming],
+         and session_ref_number(fm) == upcoming],
         chapter)
     emit(f"Existing Plan — Session {upcoming}",
          plan[0] if plan else None,

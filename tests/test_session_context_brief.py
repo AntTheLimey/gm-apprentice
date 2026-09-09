@@ -105,6 +105,37 @@ class BriefCLITests(unittest.TestCase):
                 r.stderr)
 
 
+class SessionRefTests(unittest.TestCase):
+    def test_session_ref_number_parses_every_form(self):
+        forms = (
+            'session: "[[Session 08]]"',
+            'session: "[[Session_08]]"',
+            'session: "[[Session 08 - Title]]"',
+            "session: 8",
+            'session: "8"',
+        )
+        for raw in forms:
+            text = f"---\ntype: session-plan\n{raw}\n---\n\nbody\n"
+            fm = sc.extract_frontmatter(text)
+            with self.subTest(raw=raw):
+                self.assertEqual(sc.session_ref_number(fm), 8)
+
+    def test_default_bundle_finds_quoted_wikilink_plan(self):
+        r = run_cli(FIXTURE)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.splitlines()
+        idx = lines.index("===== Existing Plan — Session 8 =====")
+        self.assertIn(
+            "(source: Chapters/Chapter 1 - Harbour/Sessions/"
+            "Session_08_Plan.md)",
+            lines[idx + 1:idx + 3])
+
+    def test_play_finds_quoted_wikilink_plan(self):
+        r = run_cli(FIXTURE, "--play")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("===== Play Brief — Session 8 =====", r.stdout)
+
+
 class SpotlightUnitTests(unittest.TestCase):
     def test_rows_parse_bold_wikilink_and_roles(self):
         body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
