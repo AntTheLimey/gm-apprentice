@@ -90,12 +90,14 @@ Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_survey.py"
 <source-dir>` before reading anything. Rows settled by extension,
 existing frontmatter or a fixed heading signature (images,
 spreadsheets, wrap-ups, a table assistant's session export, a
-saved page's `_files/` folder) print `DECIDED`; the rest print
-`SCORED` with per-indicator hit counts, line numbers, a proposed
-classification and a confidence — read the file yourself only
-to confirm or override a `SCORED` row, not to classify from
+saved page's `_files/` folder) print `DECIDED`; readable text
+prints `SCORED` with per-indicator hit counts, line numbers, a
+proposed classification and a confidence — read the file yourself
+only to confirm or override a `SCORED` row, not to classify from
 scratch. An `UNSCORED` row (Word/PDF/VTT — no stdlib text
-extractor) still needs a manual read. Read
+extractor) still needs a manual read; an `ERROR` row is a file
+the script could not open — report it to the GM, never guess at
+it. Read
 `references/classification-taxonomy.md` for the full taxonomy
 and heuristics behind the proposal.
 
@@ -204,13 +206,8 @@ Read `references/synthesis-templates.md` for the output format.
    author only the fragment-derived text and the seams. Synthesis
    assembles fragments — it does not re-voice writing that is
    already written. (rationale: `shared/content-fidelity.md`)
-   A `Session export` item (a table assistant's summary) is
-   already a finished Play Notes file: copy it into place with its
-   `## Summary` / `## Memorable Moments` / `## Scenes` / `## NPCs`
-   headings intact and skip synthesis and the Keeper Interview for
-   it — session-wrapup detects that shape by its headings and
-   adopts the Summary verbatim; reformatting it here would
-   silently send it down the rewriting path instead.
+   A `Session export` row is copied into place, not synthesized —
+   `references/synthesis-templates.md` § Synthesis Rules, rule 7.
 3. Follow `session-wrapup` workflow to produce the Wrap-Up
    file and create/update entities
 4. For each PC active during the ingested period, write a

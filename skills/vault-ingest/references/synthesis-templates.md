@@ -109,6 +109,17 @@ content, not live capture.
    keeper interview reveals a scene structure, use it. If not,
    organize by topic or entity cluster.
 
+7. **A Session export is not synthesized.** A survey row
+   `DECIDED` as "Session export (assistant summary)" — a table
+   assistant's own write-up with `## Summary`, `## Memorable
+   Moments`, `## Scenes`, `## NPCs` headings — is already a
+   finished Play Notes file. Copy it into place with those
+   headings intact and skip synthesis and the Keeper Interview
+   for it. session-wrapup detects that shape by its
+   `## Memorable Moments` heading and adopts the Summary verbatim
+   (its gmassistant.app path); reformatting the export here would
+   silently send it down the rewriting path instead.
+
 ## Character Story Backstory Entries
 
 In addition to Play Notes, Phase 5 produces a consolidated
