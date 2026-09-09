@@ -148,6 +148,24 @@ class SpotlightUnitTests(unittest.TestCase):
     def test_rows_none_when_section_absent(self):
         self.assertIsNone(sc.spotlight_rows("## Planned Scenes\n\ntext\n"))
 
+    def test_only_first_table_read_when_section_has_two(self):
+        body = ("## Spotlight Forecast\n\n"
+                "| PC | Share | Notes |\n|---|---|---|\n"
+                "| **Hero** | ~30% | B-plot featured. |\n\n"
+                "A prose line separating two tables in the same section.\n\n"
+                "| PC | Share | Notes |\n|---|---|---|\n"
+                "| **Second** | ~15% | C-plot featured. |\n")
+        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B", "30%")])
+
+    def test_aliased_wikilink_first_cell_pins_current_split_behaviour(self):
+        # The naive `|`-split treats the alias pipe inside
+        # `[[Hero_Name|Hero Alias]]` as a cell boundary, so pc_cell ends
+        # up as the link target only. Documented, not (yet) fixed.
+        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
+                "| [[Hero_Name|Hero Alias]] (Alex) | ~10% | A-plot. |\n")
+        rows = sc.spotlight_rows(body)
+        self.assertEqual(rows[0][0], "Hero_Name")
+
     def test_pc_matches_stem_first_token_and_alias(self):
         fm = {"aliases": ["The Hero"]}
         self.assertTrue(sc.pc_matches("hero", "Characters/PCs/Hero.md", fm))

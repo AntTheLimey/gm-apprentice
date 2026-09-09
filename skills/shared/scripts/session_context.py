@@ -402,16 +402,26 @@ _SHARE_RE = re.compile(r"~?(\d+%)")
 
 def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
     """(pc_cell, role, share) per data row of the first table under
-    `## Spotlight Forecast`; None when the section is absent. pc_cell =
-    first cell with `**`, `[[`, `]]` removed and a trailing `(...)`
-    dropped, stripped. role = "B" if "b-plot" in the row (casefold) else
-    "C" if "c-plot" else "A" if "a-plot" else "-". share = first
-    `~?\\d+%` in the row without the tilde, else "?". Header and
-    separator rows skipped."""
+    `## Spotlight Forecast`; None when the section is absent. Only the
+    first `|`-delimited table is read: collection starts at the first
+    `|` line and stops at the first non-`|` line seen after that (a
+    blank line or prose ends the table), so a second table later in
+    the same section is never ingested. pc_cell = first cell with
+    `**`, `[[`, `]]` removed and a trailing `(...)` dropped, stripped.
+    role = "B" if "b-plot" in the row (casefold) else "C" if "c-plot"
+    else "A" if "a-plot" else "-". share = first `~?\\d+%` in the row
+    without the tilde, else "?". Header and separator rows skipped."""
     block = section(plan_body, SPOTLIGHT_TITLE)
     if block is None:
         return None
-    table_lines = [ln for ln in block.splitlines() if ln.strip().startswith("|")]
+    table_lines: list[str] = []
+    started = False
+    for ln in block.splitlines():
+        if ln.strip().startswith("|"):
+            table_lines.append(ln)
+            started = True
+        elif started:
+            break
     rows: list[tuple[str, str, str]] = []
     for line in table_lines[1:]:  # skip header row
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
@@ -443,6 +453,8 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
     stem = Path(rel).stem.replace("_", " ")
     tokens = stem.split()
     candidates = {stem.casefold()}
+    # First-token matching is intentional and can match two PCs who share a
+    # first name — the report lists the PC's file path so the reader can tell.
     if tokens:
         candidates.add(tokens[0].casefold())
     aliases = fm.get("aliases")
