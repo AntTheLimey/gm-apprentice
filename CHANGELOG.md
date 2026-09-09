@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.11] — 2026-09-08
+
+### Fixed
+
+- `ingest_survey.py` against a real vault's inbox (129 files, Canticle
+  field test): two published scenarios came out "Play fragment (mixed
+  content)" on a single dice mention and "Character sheet" on 84 NPC stat
+  lines; a gmassistant.app session export scored nothing and fell to
+  "Unclassified"; a saved web page was refused as an unrecognized
+  extension and its `_files/` folder produced a manual-read row per
+  stylesheet. Now: a lone play hit inside prep/research/recollection is
+  noise (two or more make a mixed document); three or more
+  characteristics rows (a line of primary attributes, one per NPC stat
+  block) are a cast list and propose Scenario prep, with `stat_blocks=N`
+  in the evidence, while a single sheet with stats spread over several
+  sections stays a Character sheet; a file with a `Date:` line,
+  `## Summary` and two of Memorable Moments / Scenes / NPCs / Locations /
+  Items, and no frontmatter, is `DECIDED` as "Session export (assistant
+  summary)"; `.html`/`.htm` is scored from its text with tags, scripts
+  and styles stripped (an unterminated `<script>`/`<style>` is reported
+  in the evidence rather than silently dropping the rest of the page); a
+  `<name>_files/` folder is one `DECIDED` row and its contents are never
+  listed. Eleven regression tests. Taxonomy gains the Session export and
+  Web page rows and the cast-list / single-hit rules; vault-ingest Phase
+  1 names the new `DECIDED` shapes and Phase 5 hands a Session export to
+  session-wrapup unchanged.
+
+---
+
 ## [1.9.10] — 2026-09-08
 
 ### Changed

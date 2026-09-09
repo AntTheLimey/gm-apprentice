@@ -200,6 +200,174 @@ class ScoredTests(ScriptCase):
         self.assertNotIn("Character sheet", out)
 
 
+class RealInboxShapeTests(ScriptCase):
+    """Shapes found in a real vault's `_inbox/_processed/` (Canticle field
+    test, 2026-09-08) that the scorer got wrong or could not place."""
+
+    def test_assistant_session_export_is_decided_by_heading_signature(self):
+        # A gmassistant.app export: no frontmatter, a Date: line, and the
+        # Summary / Memorable Moments / Scenes / NPCs headings. It is the
+        # source a wrap-up is adopted from, and it used to come out
+        # "Unclassified — read manually" because a narrative summary has
+        # no dice-roll phrasing to score.
+        self.write("session-Jul 2nd, 2026.md", (
+            "# Alexandria's Embrace\n\nDate: Jul 2nd, 2026\n\n"
+            "## Summary\nThe morning after their first night in Alexandria "
+            "the party gathered for breakfast.\n\n"
+            "## Memorable Moments\n- Rosa's lace.\n\n"
+            "## Scenes\n- The bathhouse.\n\n"
+            "## NPCs\n- Rosa, the widow from Trieste.\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("DECIDED\tsession-Jul 2nd, 2026.md\t"
+                      "Session export (assistant summary)\thigh\t"
+                      "headings: Summary, Memorable Moments, Scenes, NPCs",
+                      out)
+
+    def test_single_play_hit_does_not_make_prep_a_mixed_document(self):
+        # A published scenario with one line mentioning a roll used to be
+        # flagged "Play fragment (mixed content)" on that single hit, over
+        # three Keeper directives and a page of NPC stat blocks.
+        self.write("scenario.md", (
+            "## The Rectory\n\nKeeper Background\n\n"
+            "The Keeper should read this aloud. At this point the "
+            "investigators arrive.\nThe GM should note the weather.\n\n"
+            "#### Rev. Ashdown\nSTR 45 CON 50 SIZ 55 DEX 60 INT 50\n\n"
+            "#### Mrs. Pell\nSTR 45 CON 50 SIZ 55 DEX 60 INT 50\n\n"
+            "#### The Thing in the Crypt\nSTR 80 CON 65 SIZ 60 DEX 70 INT 40\n\n"
+            "#### Dunn the Ostler\nSTR 55 CON 60 SIZ 65 DEX 50 INT 55\n\n"
+            "If a player rolled a 96 on the chaise, the horse bolts.\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tscenario.md\tScenario prep\thigh", out)
+        self.assertNotIn("mixed content", out)
+        self.assertNotIn("Character sheet", out)
+
+    def test_npc_cast_list_under_many_headings_is_prep_not_a_sheet(self):
+        # Stat blocks under four different named headings are a scenario's
+        # cast list — the taxonomy's own "NPC stat blocks without play
+        # context" prep indicator — not one character's sheet, however
+        # many stat hits they add up to.
+        self.write("cast.md", (
+            "## Dramatis Personae\n\n"
+            "#### Captain Marlow\nSTR 70 CON 60 SIZ 65 DEX 55 INT 60\n\n"
+            "#### The Veiled Lady\nSTR 40 CON 50 SIZ 45 DEX 75 INT 80\n\n"
+            "#### Dr. Penrose\nSTR 50 CON 55 SIZ 60 DEX 50 INT 85\n\n"
+            "#### The Engine\nSTR 90 CON 90 SIZ 90 DEX 10 INT 30\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tcast.md\tScenario prep\thigh", out)
+        self.assertIn("stat_blocks=4", out)
+        self.assertNotIn("Character sheet", out)
+
+    def test_cast_list_with_real_play_hits_is_mixed_not_a_transcript(self):
+        # A cast list is prep evidence. Add genuine play hits (two or more)
+        # and the document is mixed — the cast-list signal must not be
+        # dropped just because no "If the investigators" phrase is present.
+        self.write("notes.md", (
+            "#### Captain Marlow\nSTR 70 CON 60 SIZ 65 DEX 55 INT 60\n\n"
+            "#### The Veiled Lady\nSTR 40 CON 50 SIZ 45 DEX 75 INT 80\n\n"
+            "#### Dr. Penrose\nSTR 50 CON 55 SIZ 60 DEX 50 INT 85\n\n"
+            "Georgiana rolled a 12 and failed her Spot Hidden at the "
+            "door.\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("Play fragment (mixed content", out)
+        self.assertNotIn("Play transcript", out)
+
+    def test_stats_under_one_or_two_headings_are_still_a_sheet(self):
+        self.write("pc.md", (
+            "# Dr. Helena Voss\n\n## Characteristics\n"
+            "STR 45 CON 50 SIZ 55 DEX 60 INT 70 POW 65\n\n"
+            "## Derived Stats\nHP 10 MP 13 SAN 65\n\n"
+            "## Skills\nLibrary Use 70%, Spot Hidden 55%\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tpc.md\tCharacter sheet\thigh", out)
+
+    def test_one_pc_sheet_with_three_stat_sections_is_still_a_sheet(self):
+        # A single sheet routinely spreads stats over three sections
+        # (characteristics, combat, magic). Counting headings called that a
+        # cast list. Only a characteristics row per entry — three or more
+        # primary attributes on one line — marks a separate stat block.
+        self.write("pc3.md", (
+            "## Characteristics\nSTR 45 CON 50 SIZ 55 DEX 60 INT 70 POW 65\n\n"
+            "## Combat\nHP 12 DB +1\n\n"
+            "## Magic\nMP 13 SAN 65\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tpc3.md\tCharacter sheet\thigh", out)
+        self.assertIn("stat_blocks=1", out)
+
+    def test_gurps_sheet_with_attr_column_skills_table_is_still_a_sheet(self):
+        # The repo's own GURPS template shape: a primary-attribute line,
+        # a secondary line, and a skills table whose Attr column repeats
+        # DX/IQ/HT once per row. Three sections with stat hits, one sheet.
+        self.write("gurps-pc.md", (
+            "### Primary Attributes\nST 11 DX 12 IQ 13 HT 12\n\n"
+            "### Secondary Characteristics\nHP 11 FP 12\n\n"
+            "## Skills\n| Skill | Attr | Level |\n|---|---|---|\n"
+            "| Fast-Draw | DX | 12 |\n| Research | IQ | 13 |\n"
+            "| Hiking | HT | 12 |\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tgurps-pc.md\tCharacter sheet\thigh", out)
+        self.assertIn("stat_blocks=1", out)
+
+    def test_export_signature_requires_a_date_line(self):
+        # GM-written prep can use Summary / Scenes / NPCs as headings too.
+        # Without the export's Date: line it is scored like any other
+        # document, never DECIDED past review.
+        self.write("prep.md", (
+            "# The Rectory Job\n\n## Summary\nThe party is hired to look "
+            "into the rectory.\n\n## Scenes\n- Arrival\n- The cellar\n\n"
+            "## NPCs\n- The rector\n"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tprep.md\t", out)
+        self.assertNotIn("Session export", out)
+
+    def test_unterminated_script_is_reported_not_silently_dropped(self):
+        self.write("broken.html", (
+            "<html><body><script>var a = 1;\n"
+            "<p>STR 50 CON 60 SIZ 55 DEX 65 INT 70 POW 60</p></body></html>"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tbroken.html\t", out)
+        self.assertIn("unterminated <script>/<style>", out)
+
+    def test_saved_web_page_is_scored_from_its_text(self):
+        # A page saved from the browser (an NPC record from a campaign
+        # site) used to be UNSCORED "unrecognized extension '.html'" — its
+        # text is right there once the tags are stripped.
+        self.write("npc.html", (
+            "<html><head><title>Dr. Hargreaves</title>"
+            "<style>.x{color:red}</style><script>var a=1;</script></head>"
+            "<body><h1>Dr. Ambrose Hargreaves</h1>"
+            "<p>STR 50 CON 60 SIZ 55 DEX 65 INT 70 POW 60</p>"
+            "<p>HP 12 MP 12 SAN 60</p></body></html>"
+        ))
+        out = self.run_script(str(self.tmp))
+        self.assertIn("SCORED\tnpc.html\tCharacter sheet\thigh", out)
+        self.assertIn("html text extracted", out)
+
+    def test_saved_page_companion_folder_is_one_row_not_one_per_asset(self):
+        # "Webpage, Complete" saves drop a `<name>_files/` folder of
+        # scripts and stylesheets beside the page. Those are not source
+        # material and nobody should be told to read a stylesheet.
+        self.write("npc.html", "<html><body><p>nothing</p></body></html>")
+        self.write("Dr Hargreaves _ mobRPG_files/main.css", ".x{}")
+        self.write("Dr Hargreaves _ mobRPG_files/main.js", "var a;")
+        self.write("Dr Hargreaves _ mobRPG_files/js", "var b;")
+        out = self.run_script(str(self.tmp))
+        self.assertIn("DECIDED\tDr Hargreaves _ mobRPG_files/\t"
+                      "Web page assets (companion folder)\thigh\t"
+                      "3 files — not source material", out)
+        self.assertNotIn("main.css", out)
+        self.assertIn("# 2 files: 1 decided, 1 scored, 0 unscored, 0 errors",
+                      out)
+
+
 class BenchmarkInboxTests(unittest.TestCase):
     """Regression pins for the three real vault-ingest benchmark fixtures —
     see tests/proof-runs/mechanization/ground-truth/q5-expected.md for the

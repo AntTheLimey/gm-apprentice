@@ -16,6 +16,8 @@ distinct section within a document gets one classification.
 | Image/map | Visual reference material — portraits, scene art, location shots, maps | Attachment — no canon status | Binary file (jpg, png, webp, gif, svg, heic, raw, tiff, bmp); classify then process per `image-handling.md` |
 | Spreadsheet/data | Tracking sheets, encounter tables | DRAFT — classify by content | Tabular data, formulas, tracking columns |
 | Session wrap-up | Existing Wrap-Up file from a prior session | AUTHORITATIVE | Contains Narrative Recap, PC Carry-Forward, World State sections; `type: session_wrap` frontmatter |
+| Session export | A table assistant's summary of a played session (gmassistant.app and the like) — the source a Wrap-Up is adopted from | AUTHORITATIVE once the GM confirms it; hand to session-wrapup | No frontmatter; a `Date:` line near the top; `## Summary` plus at least two of `## Memorable Moments` / `## Scenes` / `## NPCs` / `## Locations` / `## Items` |
+| Web page (saved) | A page saved from the browser — a campaign-site NPC record, a wiki article | Classify by content, as the text it carries | `.html` / `.htm`; scored from its text with tags, scripts and styles stripped. Its `<name>_files/` companion folder (scripts, stylesheets) is not source material — one row, never read |
 
 ## Key Heuristics
 
@@ -30,9 +32,16 @@ distinct section within a document gets one classification.
 **Prep indicators** (without play indicators = prep):
 - "If the investigators..." (conditional)
 - Multiple alternative outcomes listed
-- NPC stat blocks without play context
+- NPC stat blocks without play context — three or more characteristics
+  rows (a line of primary attributes, one per stat block) are a cast
+  list (a published scenario's Dramatis Personae), not one character's
+  sheet, however many sections a single sheet spreads its stats over
 - "The GM should..." or "At this point..."
 - Handout text not confirmed as found by players
+
+A single play indicator inside a document that otherwise reads as prep
+(one "rolled a 96" in a scenario's chase rules) is noise, not a play
+fragment. Two or more make it a mixed document.
 
 **Research indicators:**
 - Q&A format about historical facts or worldbuilding
