@@ -10,6 +10,7 @@ it needs to.
 
 Usage:
   session_context.py VAULT [--session N]
+  session_context.py VAULT --brief
 
 --session N treats N as the just-played session. Otherwise the
 campaign overview's `last_session` decides, and failing that the
@@ -37,6 +38,11 @@ overview's `asOfSession` names a different chapter from the one the
 selected session sits in. Confirm a `Note:` with
 the GM — a wrong bundle reads exactly as authoritative as a right
 one.
+
+`--brief` shrinks the default bundle's two biggest sections: the
+Wrap-Up's reconcile-provenance GM Notes blocks are stubbed to a
+one-line word count each, and the Campaign Overview prints as
+frontmatter plus a heading outline instead of its full body.
 """
 
 from __future__ import annotations
@@ -51,7 +57,7 @@ from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
 from vaultlib import (PC_INACTIVE_STATUS, SKIP_DIRS,  # noqa: F401
                       WRAP_UP_TYPES, body_of, entity_type, h3_blocks,
-                      nested_mapping, section)
+                      nested_mapping, raw_frontmatter, section, word_count)
 from vaultlib import vault_files as _vault_files
 
 
@@ -133,6 +139,99 @@ def _heading_block(text: str, level: int, title: str) -> str | None:
         re.MULTILINE | re.DOTALL)
     m = pattern.search(text)
     return m.group(1).strip() if m else None
+
+
+# --------------------------------------------------------------------------
+# --brief helpers
+# --------------------------------------------------------------------------
+
+# H2 blocks --brief stubs outright, and H3 blocks it stubs by title prefix
+# (the template's Name Conflicts heading carries a parenthetical, so an
+# exact match would miss it).
+BRIEF_DROP_H2: tuple[str, ...] = ("Memorable Moments",)
+BRIEF_DROP_H3: tuple[str, ...] = (
+    "Name Conflicts", "Cross-Entity Claims", "World Fact Findings",
+    "Quality Notes", "Reconciliation Context")
+
+_H2_HEADING_RE = re.compile(r"^## (.+)$")
+_H3_HEADING_RE = re.compile(r"^### (.+)$")
+_ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
+_GM_CLOSE_RE = re.compile(r"^<!--\s*/gm-only\s*-->\s*$")
+
+
+def brief_wrapup(body: str) -> str:
+    """`body` with each BRIEF_DROP_H2 `## ` block and each BRIEF_DROP_H3
+    `### ` block replaced by its heading line plus one stub line:
+    `(omitted in --brief: N words — read the Wrap-Up file for it)`.
+    H3 titles match on prefix (the template's Name Conflicts heading has
+    a parenthetical). A block ends at the next heading of the same or
+    higher level, at a line `<!-- /gm-only -->`, or EOF."""
+    lines = body.splitlines()
+    out: list[str] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        line = lines[i]
+        level: int | None = None
+        m2 = _H2_HEADING_RE.match(line)
+        if m2 and m2.group(1).strip() in BRIEF_DROP_H2:
+            level = 2
+        else:
+            m3 = _H3_HEADING_RE.match(line)
+            if m3 and any(m3.group(1).strip().startswith(p)
+                          for p in BRIEF_DROP_H3):
+                level = 3
+        if level is None:
+            out.append(line)
+            i += 1
+            continue
+        out.append(line)
+        j = i + 1
+        collected: list[str] = []
+        while j < n:
+            hm = _ANY_HEADING_RE.match(lines[j])
+            if hm and len(hm.group(1)) <= level:
+                break
+            if _GM_CLOSE_RE.match(lines[j].strip()):
+                break
+            collected.append(lines[j])
+            j += 1
+        wc = word_count("\n".join(collected))
+        out.append(f"(omitted in --brief: {wc} words — read the Wrap-Up "
+                   f"file for it)")
+        i = j
+    result = "\n".join(out)
+    return result + "\n" if body.endswith("\n") else result
+
+
+_OUTLINE_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+
+def outline(body: str) -> str:
+    """One line per heading (`#`, `##`, `###`) in document order:
+    `{heading line}  ({N} words)` — N = word count of the text between
+    this heading and the next heading of any level. Headings inside
+    fenced code are skipped (toggle on a line starting with ```)."""
+    lines = body.splitlines()
+    in_fence = False
+    heads: list[tuple[int, int, str]] = []
+    for i, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = _OUTLINE_HEADING_RE.match(line)
+        if m:
+            heads.append((i, len(m.group(1)), line.rstrip()))
+    out_lines: list[str] = []
+    for idx, (line_i, level, heading_line) in enumerate(heads):
+        if level > 3:
+            continue
+        end = heads[idx + 1][0] if idx + 1 < len(heads) else len(lines)
+        wc = word_count("\n".join(lines[line_i + 1:end]))
+        out_lines.append(f"{heading_line}  ({wc} words)")
+    return "\n".join(out_lines)
 
 
 def _norm_thread(text: str) -> str:
@@ -457,7 +556,21 @@ def main() -> int:
                            "age=N sessions since last touched, STALE at "
                            "age >= 3 (a candidate, not a verdict — resolve, "
                            "advance, or retire is the GM's call)")
+    ap.add_argument(
+        "--brief", action="store_true",
+        help="default mode only: Wrap-Up with the reconcile-provenance "
+             "blocks stubbed (Memorable Moments; Name Conflicts, "
+             "Cross-Entity Claims, World Fact Findings, Quality Notes, "
+             "Reconciliation Context — heading kept, body replaced by a "
+             "one-line stub with its word count) and the Campaign Overview "
+             "as frontmatter plus a heading outline with word counts. "
+             "Everything else unchanged. Drill into a file only where a "
+             "stub or outline shows the need.")
     args = ap.parse_args()
+    if args.brief and (args.play or args.threads):
+        print("error: --brief applies to the default bundle only",
+              file=sys.stderr)
+        return 2
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
@@ -515,6 +628,10 @@ def main() -> int:
               f"{f'; using --session {current}' if args.session is not None else ''}. "
               f"Preparing session {upcoming}.")
 
+    if args.brief:
+        print("(brief: Wrap-Up provenance blocks stubbed, Campaign Overview "
+              "outlined — see --help)")
+
     if args.threads:
         print(f"\n{thread_report(files, current, chapter)}")
         return 0
@@ -536,9 +653,12 @@ def main() -> int:
                          re.IGNORECASE)
         wrap = prefer_chapter([(rel, text, fm) for rel, text, fm in files
                                if pat.search(rel)], chapter)
+    wrap_content = body_of(wrap[1]) if wrap else None
+    if args.brief and wrap_content is not None:
+        wrap_content = brief_wrapup(wrap_content)
     emit(f"Wrap-Up — Session {current}",
          wrap[0] if wrap else None,
-         body_of(wrap[1]) if wrap else None)
+         wrap_content)
 
     # --- active PCs: frontmatter line + Current Status block ---
     print("\n===== Active PCs =====")
@@ -577,9 +697,14 @@ def main() -> int:
     # --- campaign overview ---
     overview = next(((rel, text) for rel, text, fm in files
                      if fm.get("type") == "campaign_overview"), None)
-    emit("Campaign Overview",
-         overview[0] if overview else None,
-         body_of(overview[1]) if overview else None)
+    if args.brief and overview:
+        rel, text = overview
+        emit("Campaign Overview (outline)", rel,
+             raw_frontmatter(text) + "\n\n" + outline(body_of(text)))
+    else:
+        emit("Campaign Overview",
+             overview[0] if overview else None,
+             body_of(overview[1]) if overview else None)
     return 0
 
 
