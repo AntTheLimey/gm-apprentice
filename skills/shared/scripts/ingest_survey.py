@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 """Classify vault-ingest source material without reading everything blind.
 
-Backs vault-ingest Phase 1 (`references/classification-taxonomy.md`). Three
-of the taxonomy's nine rows are decidable with zero content read (extension
-or existing frontmatter alone): Image/map, Spreadsheet/data, Session wrap-up.
-The other six — play transcript, play fragment, scenario prep,
+Backs vault-ingest Phase 1 (`references/classification-taxonomy.md`). Five
+of the taxonomy's rows are decidable without judgment — by extension,
+existing frontmatter, or a fixed heading signature: Image/map,
+Spreadsheet/data, Session wrap-up, Session export (a table assistant's
+summary: `## Summary` plus at least two of `## Memorable Moments` /
+`## Scenes` / `## NPCs` / `## Locations` / `## Items`, and no
+frontmatter), and a saved web page's `<name>_files/`
+companion folder (reported as one row, its scripts and stylesheets never
+listed). The other six — play transcript, play fragment, scenario prep,
 research/brainstorm, Keeper recollection, character sheet — are scored
 against the literal indicator phrases the taxonomy already names, with
-per-indicator hit counts and line numbers as evidence. Word/PDF files carry
-no stdlib text extraction here and are reported UNSCORED rather than guessed
-at.
+per-indicator hit counts and line numbers as evidence. A saved `.html`
+page is scored from its text with tags, scripts and styles stripped.
+Word/PDF files carry no stdlib text extraction here and are reported
+UNSCORED rather than guessed at.
+
+Two guards learned from a real inbox (2026-09-08): a single play hit in a
+document that otherwise reads as prep does not make it a mixed document
+(two or more do), and three or more characteristics rows — a line
+carrying three or more primary attributes, one per NPC stat block — are a
+scenario's cast list, a prep indicator, not one character's sheet (a
+sheet has one such row, however many sections its other stats sit in).
 
 This turns "read all source material" into "read the manifest, then read
 only the files the manifest flags as ambiguous."
@@ -31,11 +44,12 @@ and `.git` skipped) and prints one row per file:
 
   VERDICT<TAB>path<TAB>proposal<TAB>confidence<TAB>evidence
 
-VERDICT is DECIDED (extension or frontmatter alone settles it — zero
-content read), SCORED (content read, indicators counted, GM/model
+VERDICT is DECIDED (extension, frontmatter or heading signature settles it
+without judgment), SCORED (content read, indicators counted, GM/model
 confirmation still wanted), UNSCORED (binary/unsupported format — Word,
-PDF, VTT — needs a manual read), or ERROR (unreadable). A trailer line
-follows:
+PDF, VTT — needs a manual read), or ERROR (unreadable). A `<name>_files/`
+folder prints one DECIDED row with a trailing `/` and counts as one entry
+in the trailer. A trailer line follows:
 
   # N files: D decided, S scored, U unscored, E errors
 
@@ -69,6 +83,7 @@ import re
 import shutil
 import sys
 from collections.abc import Iterator
+from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -87,29 +102,129 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".heic",
               ".tiff", ".tif", ".bmp", ".raw", ".cr2", ".nef", ".arw", ".dng"}
 SPREADSHEET_EXTS = {".csv", ".xls", ".xlsx"}
 TEXT_EXTS = {".md", ".markdown", ".txt"}
+# A page saved from the browser: scored from its text once tags, scripts
+# and styles are stripped (stdlib html.parser).
+HTML_EXTS = {".html", ".htm"}
 # Formats the "Supported formats" list names but stdlib cannot extract text
 # from — reported UNSCORED rather than guessed at.
 UNSCORED_EXTS = {".doc", ".docx", ".pdf", ".vtt"}
 
 SKIP_DIR_NAMES = {"_processed", "__pycache__", ".git"}
+# "Webpage, Complete" saves drop `<title>_files/` beside the page — scripts,
+# stylesheets, images the page pulled in. Not source material.
+ASSET_DIR_SUFFIX = "_files"
+
+# A table assistant's session export (gmassistant.app and the like): no
+# frontmatter, a `Date:` line in the first few lines, and these H2s.
+# `Summary` is required plus at least two of the others. GM-written prep
+# can use the same headings, so the Date: line is not optional.
+EXPORT_HEADINGS = ("Summary", "Memorable Moments", "Scenes", "NPCs",
+                   "Locations", "Items")
+H2_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+DATE_LINE_RE = re.compile(r"^Date:\s*\S")
+DATE_LINE_WINDOW = 10  # non-empty lines from the top to look in
+
+
+def _is_asset_dir(name: str) -> bool:
+    return name.endswith(ASSET_DIR_SUFFIX) and name != ASSET_DIR_SUFFIX
+
+
+def _hidden_or_skipped(rel_parts: tuple[str, ...]) -> bool:
+    if any(p.startswith(".") for p in rel_parts):
+        return True
+    return any(p in SKIP_DIR_NAMES for p in rel_parts[:-1])
 
 
 def walk(root: Path) -> list[Path]:
     """Every file under root, sorted, skipping hidden files/dirs (matching
     vaultlib.vault_files's own convention — a hidden file's own name, not
-    just a hidden parent dir, is skipped) and archive/junk dirs. Not
+    just a hidden parent dir, is skipped), archive/junk dirs, and anything
+    inside a `<name>_files/` companion folder (see `asset_dirs`). Not
     vault-scoped — DIR may be an external folder or `_inbox/`."""
     out = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         rel_parts = path.relative_to(root).parts
-        if any(p.startswith(".") for p in rel_parts):
+        if _hidden_or_skipped(rel_parts):
             continue
-        if any(p in SKIP_DIR_NAMES for p in rel_parts[:-1]):
+        if any(_is_asset_dir(p) for p in rel_parts[:-1]):
             continue
         out.append(path)
     return out
+
+
+def asset_dirs(root: Path) -> list[tuple[Path, int]]:
+    """Every `<name>_files/` companion folder under root with its file
+    count, sorted — one survey row each instead of one per asset."""
+    out = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_dir() or not _is_asset_dir(path.name):
+            continue
+        rel_parts = path.relative_to(root).parts
+        if _hidden_or_skipped(rel_parts + ("",)):
+            continue
+        if any(_is_asset_dir(p) for p in rel_parts[:-1]):
+            continue  # nested inside another asset folder
+        n = sum(1 for p in path.rglob("*") if p.is_file())
+        out.append((path, n))
+    return out
+
+
+class _TextOnly(HTMLParser):
+    """Collect a page's visible text, one line per block, dropping the
+    contents of <script> and <style>. `unterminated` is set when the
+    document ends inside one of those — everything after the open tag was
+    dropped, and the caller says so rather than scoring the remnant as if
+    it were the whole page."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.parts: list[str] = []
+        self._skip = 0
+        self.unterminated = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self._skip += 1
+        elif tag in ("p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4",
+                     "h5", "h6", "table", "section", "article"):
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self._skip:
+            self._skip -= 1
+
+    def handle_data(self, data):
+        if not self._skip:
+            self.parts.append(data)
+
+    def close(self) -> None:
+        super().close()
+        self.unterminated = self._skip > 0
+
+
+def html_text(raw: str) -> tuple[str, bool]:
+    """(visible text, unterminated-script-or-style flag)."""
+    p = _TextOnly()
+    p.feed(raw)
+    p.close()
+    lines = [ln.strip() for ln in "".join(p.parts).splitlines()]
+    return "\n".join(ln for ln in lines if ln), p.unterminated
+
+
+def export_signature(text: str) -> list[str]:
+    """The EXPORT_HEADINGS present as H2s, in canonical order, if the file
+    has a `Date:` line near the top, `Summary`, and at least two of the
+    other headings; else []."""
+    head = [ln for ln in text.splitlines() if ln.strip()][:DATE_LINE_WINDOW]
+    if not any(DATE_LINE_RE.match(ln) for ln in head):
+        return []
+    found = {m.group(1).strip() for m in H2_RE.finditer(text)}
+    hits = [h for h in EXPORT_HEADINGS if h in found]
+    if "Summary" in hits and len(hits) >= 3:
+        return hits
+    return []
 
 
 # --------------------------------------------------------------------------
@@ -183,19 +298,42 @@ CONDITIONAL_RE = re.compile(
     r"\bwould\b|\bshould\b|\bcould\b|\bmight\b|\bif\b", re.IGNORECASE)
 
 
+# A characteristics row: one line carrying this many distinct primary
+# attributes ("STR 45 CON 50 SIZ 55 ..." / "ST 11 DX 12 IQ 13 HT 12"). A
+# sheet has one per character; a scenario's cast list has one per NPC.
+# Derived stats (HP/MP/SAN) and a skills table's Attr column never make
+# a row, so a sheet with stats spread over several sections still counts
+# as one block.
+PRIMARY_ATTR_RE = re.compile(
+    r"\b(STR|CON|SIZ|DEX|INT|POW|APP|EDU|ST|DX|IQ|HT|"
+    r"Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)"
+    r"[\s*:=|]*\d{1,3}\b")
+CHAR_ROW_MIN_ATTRS = 3
+# This many characteristics rows are a cast list, not one character.
+CAST_LIST_BLOCKS = 3
+# Play hits below this, in a document that otherwise reads as prep,
+# research or recollection, are noise (one "rolled a 96" in a published
+# scenario's chase rules), not a play fragment.
+MIXED_MIN_PLAY = 2
+
+
 def score(text: str) -> tuple[dict[str, int], dict[str, list[int]],
-                              tuple[int, int]]:
-    """(counts, evidence-lines, (past, conditional) tense tally).
+                              tuple[int, int], int]:
+    """(counts, evidence-lines, (past, conditional) tense tally,
+    stat-block count).
 
     `counts` is the true per-indicator hit total, uncovered by any cap —
     `propose` decides on this. `evidence` is the same indicators' line
     numbers capped at 3 each, for the report only; a file with forty stat
     lines and one with three both show "(L6,7,8)", but their counts (40 vs
-    3) still differ and drive different confidence.
+    3) still differ and drive different confidence. The stat-block count
+    is how many characteristics rows the file has (see PRIMARY_ATTR_RE) —
+    the cast-list signal.
     """
     lines = text.splitlines()
     counts: dict[str, int] = {name: 0 for name, _ in INDICATORS}
     evidence: dict[str, list[int]] = {name: [] for name, _ in INDICATORS}
+    stat_blocks = 0
     for lineno, line in enumerate(lines, start=1):
         for name, pattern in INDICATORS:
             # findall, not search: a stat block routinely packs several
@@ -207,19 +345,27 @@ def score(text: str) -> tuple[dict[str, int], dict[str, list[int]],
                 counts[name] += n
                 if len(evidence[name]) < 3:
                     evidence[name].append(lineno)
+        if len(set(PRIMARY_ATTR_RE.findall(line))) >= CHAR_ROW_MIN_ATTRS:
+            stat_blocks += 1
     past = sum(len(PAST_TENSE_RE.findall(line)) for line in lines)
     conditional = sum(len(CONDITIONAL_RE.findall(line)) for line in lines)
-    return counts, evidence, (past, conditional)
+    return counts, evidence, (past, conditional), stat_blocks
 
 
-def propose(counts: dict[str, int]) -> tuple[str, str]:
-    """(classification, confidence) from true indicator counts."""
+def propose(counts: dict[str, int], stat_blocks: int = 0) -> tuple[str, str]:
+    """(classification, confidence) from true indicator counts and the
+    number of characteristics rows (stat blocks) in the file."""
     play = sum(counts[k] for k in
                ("play_dice", "play_dialogue", "play_vitals", "play_combat"))
     prep = sum(counts[k] for k in ("prep_conditional", "prep_directive"))
     research = counts["research_qa"]
     keeper = counts["keeper_recollection"]
     charsheet = counts["charsheet_stats"]
+    cast_list = stat_blocks >= CAST_LIST_BLOCKS
+    non_play = prep or research or keeper or cast_list
+    # A lone play hit inside prep/research/recollection is noise, not a
+    # fragment — it neither makes the document mixed nor a transcript.
+    play_signal = play >= MIXED_MIN_PLAY or (play and not non_play)
 
     # Tested first, ahead of both the charsheet-dominance rule and the
     # plain play-transcript rule: a stat block embedded in prep notes (an
@@ -227,21 +373,26 @@ def propose(counts: dict[str, int]) -> tuple[str, str]:
     # charsheet_stats hits than the document has play hits, but that does
     # not make the whole file a character sheet — it makes it a mixed
     # document that also happens to contain a stat block. Any document
-    # with play indicators AND at least one of prep/research/keeper wins
-    # the mixed-content verdict outright, regardless of how the charsheet
-    # count compares to play.
-    if play and (prep or research or keeper):
+    # with a play signal AND at least one of prep/research/keeper/cast
+    # list wins the mixed-content verdict outright, regardless of how the
+    # charsheet count compares to play.
+    if play_signal and non_play:
         return ("Play fragment (mixed content — consider a section "
                 "split)", "medium")
+    # A cast list — one characteristics row per NPC — is the taxonomy's
+    # "NPC stat blocks without play context" prep indicator, and outranks
+    # the sheet rule however many stat hits it totals.
+    if cast_list:
+        return "Scenario prep", "high"
     # A character sheet's attribute block routinely trips a handful of
     # play-shaped patterns (a stray "HP 12", a "round" in prose) without
     # being one — structured stats dominating the line count is the
     # stronger signal, so this is tested before the plain play rule.
-    if charsheet >= 3 and charsheet > play:
+    if charsheet >= 3 and charsheet > play and not cast_list:
         return "Character sheet", "high" if charsheet >= 6 else "medium"
-    if play:
+    if play_signal:
         return "Play transcript", "high" if play >= 3 else "medium"
-    if charsheet >= 3:
+    if charsheet >= 3 and not cast_list:
         return "Character sheet", "high" if charsheet >= 6 else "medium"
     if prep:
         return "Scenario prep", "high" if prep >= 2 else "medium"
@@ -253,10 +404,12 @@ def propose(counts: dict[str, int]) -> tuple[str, str]:
 
 
 def evidence_text(counts: dict[str, int], evidence: dict[str, list[int]],
-                  tense: tuple[int, int]) -> str:
+                  tense: tuple[int, int], stat_blocks: int = 0) -> str:
     parts = [f"{name}={counts[name]}" + (f"(L{','.join(map(str, lines))})"
                                           if lines else "")
              for name, lines in evidence.items() if counts[name]]
+    if counts["charsheet_stats"]:
+        parts.append(f"stat_blocks={stat_blocks}")
     parts.append(f"tense: past={tense[0]} conditional={tense[1]}")
     return "; ".join(parts)
 
@@ -276,7 +429,7 @@ def survey_row(root: Path, path: Path) -> tuple[str, str, str, str, str]:
     if ext in SPREADSHEET_EXTS:
         return "DECIDED", rel, "Spreadsheet/data", "high", f"ext={ext}"
 
-    if ext not in TEXT_EXTS:
+    if ext not in TEXT_EXTS and ext not in HTML_EXTS:
         if ext in UNSCORED_EXTS:
             return ("UNSCORED", rel, "-", "-",
                     f"{ext} requires a manual read (no stdlib extractor)")
@@ -288,15 +441,28 @@ def survey_row(root: Path, path: Path) -> tuple[str, str, str, str, str]:
     except OSError as e:
         return "ERROR", rel, "-", "-", f"unreadable ({e.__class__.__name__})"
 
-    fm = extract_frontmatter(text)
-    if fm is not None and entity_type(fm) in WRAP_UP_TYPES:
-        return ("DECIDED", rel, "Session wrap-up", "high",
-                f"frontmatter type: {entity_type(fm)}")
+    prefix = ""
+    if ext in HTML_EXTS:
+        text, unterminated = html_text(text)
+        prefix = "html text extracted; "
+        if unterminated:
+            prefix += ("unterminated <script>/<style> — content after it "
+                       "not read; ")
+    else:
+        fm = extract_frontmatter(text)
+        if fm is not None and entity_type(fm) in WRAP_UP_TYPES:
+            return ("DECIDED", rel, "Session wrap-up", "high",
+                    f"frontmatter type: {entity_type(fm)}")
+        if fm is None:
+            headings = export_signature(text)
+            if headings:
+                return ("DECIDED", rel, "Session export (assistant summary)",
+                        "high", "headings: " + ", ".join(headings))
 
-    counts, evidence, tense = score(text)
-    proposal, confidence = propose(counts)
+    counts, evidence, tense, stat_blocks = score(text)
+    proposal, confidence = propose(counts, stat_blocks)
     return ("SCORED", rel, proposal, confidence,
-            evidence_text(counts, evidence, tense))
+            prefix + evidence_text(counts, evidence, tense, stat_blocks))
 
 
 def run_survey(root: Path) -> int:
@@ -304,6 +470,11 @@ def run_survey(root: Path) -> int:
         print(f"ERROR: not a directory: {root}", file=sys.stderr)
         return 2
     decided = scored = unscored = errors = 0
+    for d, n in asset_dirs(root):
+        rel = d.relative_to(root).as_posix() + "/"
+        print(f"DECIDED\t{rel}\tWeb page assets (companion folder)\thigh\t"
+              f"{n} files — not source material")
+        decided += 1
     for path in walk(root):
         verdict, rel, proposal, confidence, evidence = survey_row(root, path)
         print(f"{verdict}\t{rel}\t{proposal}\t{confidence}\t{evidence}")
