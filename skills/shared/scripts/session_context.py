@@ -11,6 +11,7 @@ it needs to.
 Usage:
   session_context.py VAULT [--session N]
   session_context.py VAULT --brief
+  session_context.py VAULT --arcs
 
 --session N treats N as the just-played session. Otherwise the
 campaign overview's `last_session` decides, and failing that the
@@ -43,6 +44,13 @@ one.
 Wrap-Up's reconcile-provenance GM Notes blocks are stubbed to a
 one-line word count each, and the Campaign Overview prints as
 frontmatter plus a heading outline instead of its full body.
+
+`--arcs` replaces the default bundle with each active PC's durable
+arc material instead: `## Background` and `## GM Notes` (the
+bundle's `## Current Status` block is not repeated), plus a
+chapter-scoped spotlight history built from every earlier Plan's
+`## Spotlight Forecast` table, with sessions since the PC last
+carried the B- and C-plot.
 """
 
 from __future__ import annotations
@@ -381,6 +389,161 @@ def thread_report(files, current: int, chapter) -> str:
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------
+# --arcs helpers
+# --------------------------------------------------------------------------
+
+SPOTLIGHT_TITLE = "Spotlight Forecast"
+
+_SEPARATOR_CELL_RE = re.compile(r"^[-:]+$")
+_TRAILING_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*$")
+_SHARE_RE = re.compile(r"~?(\d+%)")
+
+
+def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
+    """(pc_cell, role, share) per data row of the first table under
+    `## Spotlight Forecast`; None when the section is absent. pc_cell =
+    first cell with `**`, `[[`, `]]` removed and a trailing `(...)`
+    dropped, stripped. role = "B" if "b-plot" in the row (casefold) else
+    "C" if "c-plot" else "A" if "a-plot" else "-". share = first
+    `~?\\d+%` in the row without the tilde, else "?". Header and
+    separator rows skipped."""
+    block = section(plan_body, SPOTLIGHT_TITLE)
+    if block is None:
+        return None
+    table_lines = [ln for ln in block.splitlines() if ln.strip().startswith("|")]
+    rows: list[tuple[str, str, str]] = []
+    for line in table_lines[1:]:  # skip header row
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if cells and all(_SEPARATOR_CELL_RE.match(c) for c in cells if c):
+            continue  # separator row
+        if not cells or not cells[0]:
+            continue
+        first = cells[0].replace("**", "").replace("[[", "").replace("]]", "")
+        first = _TRAILING_PAREN_RE.sub("", first).strip()
+        low = line.casefold()
+        if "b-plot" in low:
+            role = "B"
+        elif "c-plot" in low:
+            role = "C"
+        elif "a-plot" in low:
+            role = "A"
+        else:
+            role = "-"
+        m = _SHARE_RE.search(line)
+        share = m.group(1) if m else "?"
+        rows.append((first, role, share))
+    return rows
+
+
+def pc_matches(cell: str, rel: str, fm: dict) -> bool:
+    """cell.casefold() equals the file stem with `_`→space, or the stem's
+    first token, or any entry of fm["aliases"] (list, or a single
+    string), all casefolded."""
+    stem = Path(rel).stem.replace("_", " ")
+    tokens = stem.split()
+    candidates = {stem.casefold()}
+    if tokens:
+        candidates.add(tokens[0].casefold())
+    aliases = fm.get("aliases")
+    if isinstance(aliases, str):
+        aliases = [aliases]
+    if isinstance(aliases, list):
+        candidates.update(str(a).casefold() for a in aliases)
+    return cell.casefold() in candidates
+
+
+def arcs_report(files, chapter, upcoming: int) -> str:
+    """For each active PC (type pc, not *_Story.md, status not in
+    PC_INACTIVE_STATUS):
+      --- {stem} ({rel}, player: {player_name or ?}) ---
+      ## Background
+      {section or "(no ## Background section)"}
+      ## GM Notes
+      {section or "(no ## GM Notes section)"}
+      Spotlight history (chapter-scoped, from ## Spotlight Forecast tables):
+        Session 6: B (30%)
+        Session 7: (no row for this PC)
+      Sessions since last B-plot: 2 (Session 6)     or  never (in N plans read)
+      Sessions since last C-plot: never (in 2 plans read)
+    Then once: `Plans without a ## Spotlight Forecast: Session 5` (or
+    `(none)`). Plans = every type: session-plan with a parsable session
+    number < upcoming, prefer_chapter semantics, sorted by number.
+    "Sessions since" = upcoming - N."""
+    lines = [f"===== PC Arcs — Sessions before {upcoming} ====="]
+
+    def plan_number(fm) -> int | None:
+        # A Plan's `session:` is commonly a wikilink ("[[Session 05]]"),
+        # which the frontmatter reader hands back as a one-item list of
+        # bracket-stripped text (see wikilink_target) rather than a
+        # plain string — resolve that before parsing the number out.
+        return parse_session_number(wikilink_target(fm.get("session")))
+
+    plan_files = [(rel, text, fm) for rel, text, fm in files
+                  if fm.get("type") == "session-plan"]
+    numbers = sorted({n for rel, text, fm in plan_files
+                      if (n := plan_number(fm)) is not None and n < upcoming})
+
+    plans: list[tuple[int, list[tuple[str, str, str]] | None]] = []
+    for n in numbers:
+        candidates = [c for c in plan_files if plan_number(c[2]) == n]
+        picked = prefer_chapter(candidates, chapter)
+        if picked is None:
+            continue
+        plans.append((n, spotlight_rows(picked[1])))
+
+    tables = [(n, rows) for n, rows in plans if rows is not None]
+    no_table = [n for n, rows in plans if rows is None]
+
+    pcs = [(rel, text, fm) for rel, text, fm in files
+           if fm.get("type") == "pc" and not rel.endswith("_Story.md")
+           and str(fm.get("status", "")).casefold() not in PC_INACTIVE_STATUS]
+
+    def since(last: int | None, label: str) -> str:
+        if last is None:
+            return (f"Sessions since last {label}-plot: never "
+                     f"(in {len(tables)} plans read)")
+        return (f"Sessions since last {label}-plot: {upcoming - last} "
+                f"(Session {last})")
+
+    for rel, text, fm in pcs:
+        stem = Path(rel).stem
+        player = fm.get("player_name") or "?"
+        lines.append(f"\n--- {stem} ({rel}, player: {player}) ---")
+        bg = section(text, "Background")
+        lines.append("## Background")
+        lines.append(bg if bg else "(no ## Background section)")
+        gm = section(text, "GM Notes")
+        lines.append("## GM Notes")
+        lines.append(gm if gm else "(no ## GM Notes section)")
+        lines.append("Spotlight history (chapter-scoped, from "
+                     "## Spotlight Forecast tables):")
+        last_b: int | None = None
+        last_c: int | None = None
+        for n, rows in tables:
+            match = next((r for r in rows if pc_matches(r[0], rel, fm)), None)
+            if match is None:
+                lines.append(f"  Session {n}: (no row for this PC)")
+                continue
+            role, share = match[1], match[2]
+            lines.append(f"  Session {n}: {role} ({share})")
+            if role == "B":
+                last_b = n
+            elif role == "C":
+                last_c = n
+        lines.append(since(last_b, "B"))
+        lines.append(since(last_c, "C"))
+
+    lines.append("")
+    if no_table:
+        lines.append("Plans without a ## Spotlight Forecast: "
+                     + ", ".join(f"Session {n}" for n in no_table))
+    else:
+        lines.append("Plans without a ## Spotlight Forecast: (none)")
+
+    return "\n".join(lines)
+
+
 def select_session(files, session_arg: int | None) -> tuple[dict | None, list[str]]:
     """Which session is "just played", and the warnings that go with it.
 
@@ -565,6 +728,18 @@ def main() -> int:
                            "age=N sessions since last touched, STALE at "
                            "age >= 3 (a candidate, not a verdict — resolve, "
                            "advance, or retire is the GM's call)")
+    mode.add_argument(
+        "--arcs", action="store_true",
+        help="print the Session Context header and the PC Arcs report "
+             "only: each active PC's ## Background and ## GM Notes "
+             "sections (the durable arc material the bundle does not "
+             "carry — ## Current Status is already in the bundle and is "
+             "not repeated) plus a chapter-scoped spotlight history "
+             "parsed from every earlier Plan's ## Spotlight Forecast "
+             "table (role A/B/C from the row text, share from the first "
+             "percentage) with sessions since the PC last carried the "
+             "B- and C-plot. Arc stage is not a field: judge it against "
+             "the five-stage model from this evidence.")
     ap.add_argument(
         "--brief", action="store_true",
         help="default mode only: Wrap-Up with the reconcile-provenance "
@@ -576,7 +751,7 @@ def main() -> int:
              "Everything else unchanged. Drill into a file only where a "
              "stub or outline shows the need.")
     args = ap.parse_args()
-    if args.brief and (args.play or args.threads):
+    if args.brief and (args.play or args.threads or args.arcs):
         print("error: --brief applies to the default bundle only",
               file=sys.stderr)
         return 2
@@ -643,6 +818,10 @@ def main() -> int:
 
     if args.threads:
         print(f"\n{thread_report(files, current, chapter)}")
+        return 0
+
+    if args.arcs:
+        print(f"\n{arcs_report(files, chapter, upcoming)}")
         return 0
 
     # --- latest wrap-up ---

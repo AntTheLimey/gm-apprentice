@@ -105,5 +105,54 @@ class BriefCLITests(unittest.TestCase):
                 r.stderr)
 
 
+class SpotlightUnitTests(unittest.TestCase):
+    def test_rows_parse_bold_wikilink_and_roles(self):
+        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
+                "| **Hero** (Alex) | ~30% | **B-plot featured.** |\n"
+                "| [[Second Name]] | 15% | C-plot featured. |\n"
+                "| **Third** | — | A-plot participant. |\n\n## Next\n\n| x | y |\n")
+        self.assertEqual(sc.spotlight_rows(body), [
+            ("Hero", "B", "30%"), ("Second Name", "C", "15%"), ("Third", "A", "?")])
+
+    def test_rows_none_when_section_absent(self):
+        self.assertIsNone(sc.spotlight_rows("## Planned Scenes\n\ntext\n"))
+
+    def test_pc_matches_stem_first_token_and_alias(self):
+        fm = {"aliases": ["The Hero"]}
+        self.assertTrue(sc.pc_matches("hero", "Characters/PCs/Hero.md", fm))
+        self.assertTrue(sc.pc_matches("The Hero", "Characters/PCs/Hero.md", fm))
+        self.assertTrue(sc.pc_matches("Second Name", "Characters/PCs/Second_Name.md", {}))
+        self.assertTrue(sc.pc_matches("Second", "Characters/PCs/Second_Name.md", {}))
+        self.assertFalse(sc.pc_matches("Nobody", "Characters/PCs/Hero.md", fm))
+
+
+class ArcsCLITests(unittest.TestCase):
+    def test_arcs_report(self):
+        r = run_cli(FIXTURE, "--arcs")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = r.stdout
+        self.assertIn("===== PC Arcs", out)
+        self.assertIn("--- Hero (Characters/PCs/Hero.md, player: Alex) ---", out)
+        self.assertIn("Keep in --arcs", out)
+        self.assertIn("Arc stage note the Keeper wrote", out)
+        self.assertNotIn("STR 60", out)
+        self.assertNotIn("Open threads: the Dredger's debt", out)
+        self.assertIn("Session 6: B (30%)", out)
+        self.assertIn("Session 7: A (20%)", out)
+        self.assertIn("Sessions since last B-plot: 2 (Session 6)", out)
+        self.assertIn("Sessions since last C-plot: never", out)
+        self.assertIn("--- Second_Name (", out)
+        self.assertIn("(no ## Background section)", out)
+        self.assertIn("Session 7: (no row for this PC)", out)
+        self.assertIn("Session 6: C (15%)", out)
+        self.assertIn("Plans without a ## Spotlight Forecast: Session 5", out)
+        self.assertNotIn("Retired", out)
+        self.assertNotIn("===== Wrap-Up", out)
+
+    def test_arcs_excludes_brief(self):
+        r = run_cli(FIXTURE, "--arcs", "--brief")
+        self.assertEqual(r.returncode, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
