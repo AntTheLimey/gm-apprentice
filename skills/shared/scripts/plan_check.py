@@ -26,7 +26,8 @@ Checks, by id, level, and the rule they mechanise:
                          (session-templates.md, Session Plan)
   frontmatter   WARNING  `session`/`chapter` present and a wikilink
                          (session-templates.md, Session Plan)
-  sections      WARNING  every template H2 present
+  sections      ERROR/   ERROR for a missing '## GM Notes', WARNING for
+                WARNING  any other template H2
                          (session-templates.md, Session Plan)
   order         INFO     present template H2s stay in template order
                          (session-templates.md, Session Plan)
@@ -50,12 +51,13 @@ Checks, by id, level, and the rule they mechanise:
                          (session-templates.md, Planned/Contingency Scenes)
   scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
                          (session-templates.md, Planned Scenes)
-  shape         WARNING  a scene paragraph is dense prose, not a bullet,
-                         a Do | Then table, or a short read-aloud quote;
-                         exempt in Session Intent, Session Overview, and
-                         Previously On... (prose by design — the GM's
-                         stated purpose, a synopsis, and the recap,
-                         already bounded by the `recap` budget)
+  shape         WARNING  a bullet, label line, or plain paragraph over
+                         SHAPE_MAX_WORDS, judged item by item, in every
+                         session-running section except Session Intent,
+                         Session Overview, and Previously On... (prose
+                         by design — the GM's stated purpose, a
+                         synopsis, and the recap, already bounded by
+                         the `recap` word budget)
                          (session-templates.md, enumerated Plan skeleton)
   clarity       INFO     a vague referent ("the letter") names no
                          document or person — the plan is read cold
@@ -395,7 +397,7 @@ def check_sections(rel: str, by_norm: dict[str, tuple[int, str, str]]
             findings.append(Finding(
                 "sections", "ERROR", f"{rel}:§{title}",
                 f"sections: missing '## {title}' — required; every "
-                f"Keeper-facing section lives under it"))
+                "Keeper-facing section lives under it"))
         else:
             findings.append(Finding(
                 "sections", "WARNING", f"{rel}:§{title}",
@@ -492,12 +494,18 @@ def _is_inline_label(label: str) -> bool:
 def _label_present(body: str, label: str) -> bool:
     if label == "If the players...":
         return bool(re.search(
-            r"^\*\*If the players\.{1,3}(?:[^\n*]*)\*\*", body, re.MULTILINE))
+            r"^\*\*If the players(?:\.{1,3}|…)\*\*", body, re.MULTILINE))
     if _is_inline_label(label):
         return bool(re.search(
             rf"^\*\*{re.escape(label)}:\*\*", body, re.MULTILINE))
+    # Block label: the bare label, or the label plus an optional
+    # parenthetical (`**Complications (drop when the scene sags)**`).
+    # Anything else after the label — a colon, a period, free text with
+    # no parens — is a near miss, not a match, so `_label_near_miss`
+    # stays reachable instead of this pattern swallowing it first.
     return bool(re.search(
-        rf"^\*\*{re.escape(label)}(?:[^\n*]*)\*\*", body, re.MULTILINE))
+        rf"^\*\*{re.escape(label)}(?:\s*\([^*\n]*\))?\*\*", body,
+        re.MULTILINE))
 
 
 def _label_near_miss(body: str, label: str) -> str | None:
@@ -540,12 +548,12 @@ def _scene_findings(rel: str, body: str, scene_title: str,
     locus = f"{rel}:§{scene_title}"
     legacy_found = _legacy_scene(body)
     if legacy_found:
+        rewrite_as = " / ".join(labels)
         findings.append(Finding(
             "scene-labels", "ERROR", locus,
             f"scene-labels: '{scene_title}' uses the pre-1.9.12 prose "
-            f"skeleton ({', '.join(legacy_found)}) — rewrite as Situation "
-            f"/ Starts it / Entities / NPCs / Points to land / If the "
-            f"players... / Complications"))
+            f"skeleton ({', '.join(legacy_found)}) — rewrite as "
+            f"{rewrite_as}"))
     else:
         for label in labels:
             if _label_present(body, label):
@@ -602,28 +610,30 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
     return findings
 
 
-def _para_kind(line: str) -> str:
-    stripped = line.lstrip()
-    if LIST_MARKER_RE.match(stripped):
-        return "bullet"
-    if stripped.startswith("|"):
-        return "table"
-    if stripped.startswith(">"):
-        return "quote"
-    if stripped.startswith("**"):
-        return "label"
-    return "plain"
-
-
 _SHAPE_EXEMPT_NORM: frozenset[str] = frozenset(
     _norm_title(t) for t in SHAPE_EXEMPT_TITLES)
 
 
 def _is_shape_exempt(section_title: str | None) -> bool:
-    return section_title is not None and _norm_title(section_title) in _SHAPE_EXEMPT_NORM
+    return (section_title is not None
+            and _norm_title(section_title) in _SHAPE_EXEMPT_NORM)
 
 
 def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
+    """WARNING, in every session-running section except
+    `SHAPE_EXEMPT_TITLES`: a bullet or `**Label` item, or a plain-prose
+    paragraph, over `SHAPE_MAX_WORDS` words.
+
+    Bullets and label lines are judged item by item, not as a merged
+    run: an item is its own marker/label line plus any hard-wrapped
+    continuation lines, ending at the next line that opens a new bullet
+    marker, a new `**Label` line, a blank line, a table row, a quote,
+    or a heading. So a list of short bullets never sums into one long
+    "paragraph," and the skeleton's opening label run (`**Type:**` /
+    `**Situation:**` / `**Starts it:**` / `**Entities:**` / ...) is
+    judged one label at a time. Plain paragraphs still group by run —
+    consecutive non-blank lines carrying no marker at all.
+    """
     findings: list[Finding] = []
     current: list[str] = []
     current_kind: str | None = None
@@ -638,8 +648,8 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
                 findings.append(Finding(
                     "shape", "WARNING", f"{rel}:{current_start}",
                     f"shape: {wc}-word label line — one line for "
-                    f"Situation/Starts it, bullets under the block "
-                    f"labels"))
+                    "Situation/Starts it, bullets under the block "
+                    "labels"))
             elif current_kind == "bullet" and wc > SHAPE_MAX_WORDS:
                 findings.append(Finding(
                     "shape", "WARNING", f"{rel}:{current_start}",
@@ -648,7 +658,7 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
                 findings.append(Finding(
                     "shape", "WARNING", f"{rel}:{current_start}",
                     f"shape: {wc}-word paragraph outside a blockquote — "
-                    f"bullets, a Do | Then table, or a read-aloud quote"))
+                    "bullets, a Do | Then table, or a read-aloud quote"))
         current = []
         current_kind = None
 
@@ -658,31 +668,83 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
             flush()
             continue
         stripped = line.strip()
-        if not stripped:
+        if (not stripped or stripped.startswith("|")
+                or stripped.startswith(">")):
             flush()
             continue
-        kind = _para_kind(line)
-        if current and kind != current_kind:
+        is_bullet_marker = bool(LIST_MARKER_RE.match(stripped))
+        is_label_marker = stripped.startswith("**")
+        if is_bullet_marker or is_label_marker:
             flush()
-        if not current:
             current_start = lineno
-            current_kind = kind
-        current.append(line)
+            current_kind = "bullet" if is_bullet_marker else "label"
+            current.append(line)
+        elif current_kind in ("bullet", "label"):
+            # A hard-wrapped continuation line of the current item —
+            # stays part of it, whatever this line's own shape.
+            current.append(line)
+        else:
+            # No marker at all: plain-prose run grouping.
+            if not current:
+                current_start = lineno
+                current_kind = "plain"
+            current.append(line)
     flush()
     return findings
 
 
 def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
+    """INFO, in every session-running section outside code, blockquotes,
+    and table rows: a sentence containing a vague referent
+    (`\\bthe (VAGUE_REFERENTS)\\b`, casefolded) with no `[[link]]` and no
+    capitalised token after its own first word — meaning the sentence
+    never names the document or person "the letter" etc. refers to.
+
+    Two caveats, both a consequence of the naive `[.!?]` sentence split
+    and both accepted by design since this check is INFO, a nudge:
+    an abbreviation ("Mr. Smith") fragments into two "sentences" at its
+    period; and a sentence that simply *opens* with a proper noun (its
+    own first token, excluded from the "capitalised token" scan) does
+    not count as having named anyone — the scan only credits a name
+    appearing after the sentence is already under way.
+
+    Locus is the line the sentence's own first token sits on, not the
+    run's first line — a run spanning several lines (a hard-wrapped
+    paragraph, or several bullets with no marker of their own) can
+    contain sentences that start well after its first line.
+    """
     findings: list[Finding] = []
-    current: list[str] = []
-    current_start = 0
+    current: list[tuple[int, str]] = []
 
     def flush() -> None:
         nonlocal current
         if current:
-            text = " ".join(current)
-            for sentence in re.split(r"[.!?]", text):
-                sentence = sentence.strip()
+            parts: list[str] = []
+            offsets: list[tuple[int, int]] = []
+            pos = 0
+            for lineno, text in current:
+                offsets.append((pos, lineno))
+                parts.append(text)
+                pos += len(text) + 1
+            joined = " ".join(parts)
+
+            def lineno_at(offset: int) -> int:
+                result = current[0][0]
+                for start, ln in offsets:
+                    if start > offset:
+                        break
+                    result = ln
+                return result
+
+            last_end = 0
+            boundaries = [m.start() for m in re.finditer(r"[.!?]", joined)]
+            boundaries.append(len(joined))
+            for end in boundaries:
+                fragment = joined[last_end:end]
+                lead_ws = len(fragment) - len(fragment.lstrip())
+                first_token_offset = last_end + lead_ws
+                last_end = end + 1
+                sentence = fragment.strip()
                 if not sentence or "[[" in sentence:
                     continue
                 m = _VAGUE_REFERENT_RE.search(sentence)
@@ -692,10 +754,11 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
                 if any(t[:1].isupper() for t in tokens[1:]):
                     continue
                 findings.append(Finding(
-                    "clarity", "INFO", f"{rel}:{current_start}",
+                    "clarity", "INFO",
+                    f"{rel}:{lineno_at(first_token_offset)}",
                     f'clarity: "the {m.group(1).casefold()}" — name the '
-                    f"document or person in this sentence; the plan is "
-                    f"read cold (#195)"))
+                    "document or person in this sentence; the plan is "
+                    "read cold (#195)"))
         current = []
 
     for lineno, line, section, in_code, is_heading in _walk_body(states):
@@ -705,9 +768,7 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
         if skip or not stripped:
             flush()
             continue
-        if not current:
-            current_start = lineno
-        current.append(LIST_MARKER_RE.sub("", stripped, count=1))
+        current.append((lineno, LIST_MARKER_RE.sub("", stripped, count=1)))
     flush()
     return findings
 
@@ -721,8 +782,8 @@ def check_question_weight(rel: str, states: list[vl.LineState]
             findings.append(Finding(
                 "question-weight", "WARNING", f"{rel}:{start}",
                 f"question-weight: {m.group(0)!r} is craft or "
-                f"bookkeeping, not a plot question — decide it or default "
-                f"it and note the default (#197)"))
+                "bookkeeping, not a plot question — decide it or "
+                "default it and note the default (#197)"))
     return findings
 
 

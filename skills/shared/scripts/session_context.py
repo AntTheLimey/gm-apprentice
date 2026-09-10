@@ -126,6 +126,30 @@ def _labelled_block(text: str, label: str) -> str | None:
     return "\n".join(collected).strip()
 
 
+def _remove_labelled_block(text: str, label: str) -> str:
+    """`text` with the `_labelled_block(text, label)` block deleted
+    outright — its own line(s) removed, not just blanked — so no empty
+    line is left standing where a single-line block (`**Entities:**
+    ...`) used to sit between two other label lines with no blank line
+    of its own to begin with. `text` unchanged if `label` is absent."""
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        m = _LABEL_RE.match(line.strip())
+        if m and m.group(1).strip().casefold() == label.casefold():
+            start = i
+            break
+    if start is None:
+        return text
+    end = start + 1
+    for line in lines[start + 1:]:
+        if _ANY_LABEL_LINE_RE.match(line.strip()):
+            break
+        end += 1
+    del lines[start:end]
+    return "\n".join(lines)
+
+
 def _bullets(text: str) -> list[str]:
     """`- item` / `* item` line text, in document order, any indentation."""
     out = []
@@ -299,10 +323,8 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
         for title, scene_body in blocks:
             reduced = scene_body
             if strip_entities:
-                entities_block = _labelled_block(scene_body, "Entities")
-                if entities_block:
-                    reduced = scene_body.replace(entities_block, "", 1)
-                    reduced = re.sub(r"\n{3,}", "\n\n", reduced).strip()
+                reduced = _remove_labelled_block(
+                    scene_body, "Entities").strip()
             piece = f"### {title}\n{reduced}" if reduced else f"### {title}"
             rendered.append(piece)
         return f"## {section_title}\n" + "\n\n".join(rendered)

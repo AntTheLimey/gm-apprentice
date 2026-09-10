@@ -257,20 +257,29 @@ class NewSkeletonTests(unittest.TestCase):
         self.assertTrue(any(ln.startswith("INFO\t") and 'clarity: "the papers"' in ln for ln in r.stdout.splitlines()))
         self.assertTrue(any(ln.startswith("WARNING\t") and "question-weight:" in ln and "font" in ln for ln in r.stdout.splitlines()))
 
-    def test_shape_exempt_sections_allow_long_prose(self):
+    def _shape_rows_with_long_paragraph_under(self, heading: str) -> list[str]:
         # Session Intent, Session Overview, and Previously On... are
         # prose by design (#196 follow-up) — a long paragraph dropped
-        # into one must not trip `shape`.
+        # into any of the three must not trip `shape`.
         long_para = " ".join(["word"] * 60) + "."
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "P.md"
             p.write_text(GOOD.read_text().replace(
-                "## Session Intent\n\n",
-                f"## Session Intent\n\n{long_para}\n\n", 1))
+                f"{heading}\n\n", f"{heading}\n\n{long_para}\n\n", 1))
             r = run_cli(p)
-            self.assertFalse(
-                [ln for ln in r.stdout.splitlines() if "shape:" in ln],
-                r.stdout)
+        return [ln for ln in r.stdout.splitlines() if "shape:" in ln]
+
+    def test_shape_exempt_session_intent(self):
+        self.assertFalse(
+            self._shape_rows_with_long_paragraph_under("## Session Intent"))
+
+    def test_shape_exempt_session_overview(self):
+        self.assertFalse(
+            self._shape_rows_with_long_paragraph_under("## Session Overview"))
+
+    def test_shape_exempt_previously_on(self):
+        self.assertFalse(
+            self._shape_rows_with_long_paragraph_under("## Previously On..."))
 
     def test_shape_flags_an_overlong_label_line(self):
         long_situation = ("**Situation:** " + " ".join(["word"] * 60) + ".")
@@ -285,6 +294,91 @@ class NewSkeletonTests(unittest.TestCase):
                    if ln.startswith("WARNING\t") and "shape:" in ln]
             self.assertEqual(len(rows), 1, rows)
             self.assertIn("label line", rows[0])
+
+    def test_shape_multi_bullet_points_to_land_produces_no_row(self):
+        # #196 fix round 1, ruling 3: bullets are judged item by item,
+        # not merged into one run — five short items must not sum past
+        # SHAPE_MAX_WORDS the way one merged "paragraph" of them would.
+        items = "\n".join((
+            "- [ ] Bram meets the contact at the dock before dawn and "
+            "confirms the load.",
+            "- [ ] The manifest names a buyer nobody in the party has "
+            "met yet.",
+            "- [ ] A rival crew is already asking questions at the "
+            "harbourmaster's office.",
+            "- [ ] The harbourmaster stalls unless someone pays him "
+            "before the noon bell.",
+            "- [ ] Word of the sale reaches Sternberg within a day if "
+            "nobody moves first.",
+        ))
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "P.md"
+            p.write_text(GOOD.read_text().replace(
+                "**Points to land**\n"
+                "- [ ] Bruyère knew the courier personally.\n",
+                f"**Points to land**\n{items}\n", 1))
+            r = run_cli(p)
+            self.assertFalse(
+                [ln for ln in r.stdout.splitlines() if "shape:" in ln],
+                r.stdout)
+
+
+class LabelHelperUnitTests(unittest.TestCase):
+    """#196 fix round 1: direct coverage of `_label_present` /
+    `_label_near_miss` / `_legacy_scene`, independent of any fixture."""
+
+    def test_block_label_accepts_bare_form(self):
+        self.assertTrue(pc._label_present("**NPCs**\n- x", "NPCs"))
+
+    def test_block_label_accepts_parenthetical(self):
+        body = "**Complications (drop when the scene sags)**\n- x"
+        self.assertTrue(pc._label_present(body, "Complications"))
+
+    def test_block_label_rejects_colon_suffixed_form(self):
+        # Ruling 2: the block regex must not swallow `**NPCs:**` — that
+        # near-miss form has to fall through to `_label_near_miss`.
+        self.assertFalse(pc._label_present("**NPCs:**\n- x", "NPCs"))
+
+    def test_block_label_near_miss_reports_colon_suffixed_form(self):
+        near = pc._label_near_miss("**NPCs:**\n- x", "NPCs")
+        self.assertEqual(near, "**NPCs:**")
+
+    def test_inline_label_near_miss_semicolon(self):
+        near = pc._label_near_miss("**Setup;** foo", "Setup")
+        self.assertEqual(near, "**Setup;**")
+
+    def test_inline_label_near_miss_unbolded(self):
+        near = pc._label_near_miss("Situation: foo", "Situation")
+        self.assertEqual(near, "Situation:")
+
+    def test_if_the_players_accepts_unicode_ellipsis(self):
+        body = "**If the players…**\n| Do | Then |\n|---|---|"
+        self.assertTrue(pc._label_present(body, "If the players..."))
+
+    def test_if_the_players_still_accepts_ascii_dots(self):
+        body = "**If the players...**\n| Do | Then |\n|---|---|"
+        self.assertTrue(pc._label_present(body, "If the players..."))
+
+    def test_legacy_scene_detected_even_with_entities_present(self):
+        # Task 4 defect 2: `Entities` is common furniture to both
+        # skeletons, so its presence must not defeat legacy detection.
+        body = ("**Objective:** foo\n**Entities:** [[X]]\n"
+                "**Setup:** bar\n**Behaviours:** baz\n"
+                "**Branching:** qux")
+        found = pc._legacy_scene(body)
+        self.assertEqual(found, ["Objective", "Setup", "Behaviours",
+                                 "Branching"])
+
+    def test_legacy_message_uses_the_passed_labels(self):
+        # Ruling 8: a Contingency scene's legacy message names
+        # Trigger/Then, not the Planned-scene label list.
+        findings = pc._scene_findings(
+            "P.md", "**Objective:** foo\n**Setup:** bar",
+            "If confronted", pc.CONTINGENCY_LABELS)
+        legacy = [f for f in findings if "pre-1.9.12" in f.message]
+        self.assertEqual(len(legacy), 1)
+        self.assertIn("rewrite as Trigger / Then", legacy[0].message)
+        self.assertNotIn("Situation", legacy[0].message)
 
 
 class SectionsOrderTests(unittest.TestCase):
