@@ -17,6 +17,25 @@ question the GM hasn't: unresolved calls go to `## Open Questions`, named and
 un-invented, never silently filled. The apprentice does the chores (gather,
 draft prose from the GM's decisions, run checks); the GM makes the calls.
 
+**Ask only plot questions.** Before any question reaches the GM, sort
+it: a plot question (changes what an NPC wants, knows or does, a scene's
+shape, or what the players can discover) is asked with 2–3 seeds; a
+player decision (which way, who with, what they say) is written as a
+`Do | Then` branch and never asked; bookkeeping (a die result, a sheet
+number, a date no scene turns on) is defaulted and the default noted in
+one line; craft and cosmetics (fonts, prop layout, filenames,
+formatting) are decided silently. The test is "would a different answer
+change a scene this session?" When the GM asks what an item on your list
+is or why you need it, answer from what is already in context — no tool
+calls, no re-reading — and act only after they reply.
+
+**Two voices.** The seeds you speak to the GM may be evocative ("the
+anklet debt is owed"). The text you write to the Plan file may not: it
+is read cold, days later, mid-session, by a Keeper who has forgotten
+this conversation. Name the document, the person and the reason in the
+line that uses them, and write bullets, tables and checklists, never
+paragraphs (the read-aloud blockquote is the one exception).
+
 **Shared references:** Read `shared/session-principles.md` on
 first invocation.
 
@@ -74,13 +93,19 @@ persistent artifact — conversation is ephemeral.
 individual reads:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path>
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path> --brief
 ```
 
-It emits the last Wrap-Up, every active PC's `## Current
-Status` block, the upcoming session's existing Plan, deferred
-world flags, and the campaign overview — replacing a dozen-plus
-separate reads.
+It emits the last Wrap-Up with its reconcile-provenance blocks stubbed
+to one line each (Memorable Moments; Name Conflicts, Cross-Entity
+Claims, World Fact Findings, Quality Notes, Reconciliation Context —
+each stub carries the word count), every active PC's `## Current
+Status` block, the upcoming session's existing Plan, deferred world
+flags, and the campaign overview as frontmatter plus a heading outline
+with word counts. Read a stubbed or outlined section from its file only
+when a step below needs it. The full bundle was 85 KB on a real vault
+and drove one prep past 800k tokens; the brief one is what prep
+consumes.
 
 **After the bundle:** vault dives are targeted reads only,
 proportional to upcoming session complexity, not campaign size.
@@ -256,15 +281,23 @@ spotlight until intent is set or explicitly deferred to `## Open Questions`.
 **12. PC Roster + Arc Check (grounding)** — Ground the conversation in the
 active PCs. Each PC's `## Current Status` block is already in context from the
 Step 5 bundle (`session_context.py`) — do **not** re-read that block. The
-durable arc data below (backstory, arc stage/theme, spotlight history,
-relationships) lives in *other* sheet sections the bundle does not carry, so do
-a targeted read of each PC's `## Background` and arc frontmatter for it. Per-PC:
+durable arc data below lives in other sheet sections the bundle does
+not carry, so run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
+--arcs` once: it prints every active PC's `## Background` and `## GM
+Notes` sections plus a spotlight history parsed from earlier Plans'
+`## Spotlight Forecast` tables (role, share, sessions since the last
+B-plot and C-plot). Do not open PC sheets in full — a six-PC roster is
+over 100 KB of sheet against ~30 KB of arc material. Arc stage is not a
+field on the sheet: judge it against the five-stage model from that
+evidence. Per-PC:
 - Backstory hooks, stated goals, current arc stage (five-stage model), arc
   theme, relationships with other PCs and NPCs
 - `## Current Status` read: `Open threads` → decisions needing consequences /
   next arc beat; `Knows (exclusive)` → personalized touchpoint fuel
 - Mechanical highlights (signature abilities, resources)
-- Last spotlight level, sessions since last B-plot feature; next arc beat
+- Last spotlight role and share, sessions since last B-plot feature (from
+  --arcs); next arc beat
 
 This is chore-work that *feeds* the GM's spotlight decision — it is evidence,
 not a decision.
@@ -304,23 +337,29 @@ the **premise**, not the finished scene. For each scene:
    > A dinner where the viscount's charm is the trap, or a back-room where
    > the ledger is the trap? Either way it's Emma's want that opens the door.
 2. The GM shapes it — yes / no / tweak / their own premise.
-3. *Then* you write it up, applying the kept craft rules:
-   - **Objective** = the *situation* the scene puts in front of the players,
-     not a lesson to land (name the pressure, not the theme).
-   - **Named initiator** — who brings this PC here in the first sixty seconds,
-     and what they want from *this* PC (ensemble scenes: the household
-     schedule is a valid initiator). A scene that cannot answer this is not
-     finished.
-   - **Behaviours** — what the situation and its NPCs do on their own,
-     independent of the players, and how it escalates if the PCs do nothing
-     ("what happens here if they never show up?"). The initiator opens the
-     door; the behaviours keep it moving. This is the engine that lets a scene
-     survive any player choice — the durable form of the "runs on NPC
-     behaviour, not a predicted PC response" fix. (Sly Flourish's situation
-     "Behaviours"; ref: `skills/ttrpg-expert/scene-encounter-patterns.md`.)
-   - **Read-aloud** as a `> ` blockquote: objective sensory description,
-     2–4 sentences, addressed to the table — never naming one PC or dictating
-     a feeling ("you feel…").
+3. *Then* you write it up in the enumerated skeleton from
+   `references/session-templates.md` — every line a bullet, a table row
+   or a one-line label; prose only inside the read-aloud blockquote:
+   - **Situation** — one line: the thing in motion when the scene opens
+     (name the pressure, not the theme).
+   - **Starts it** — one line: the named NPC or household schedule that
+     brings this PC here in the first sixty seconds, and what they want.
+     A scene that cannot answer this is not finished.
+   - **NPCs** — `- **Name:** wants X. Does Y if left alone.` Two lines
+     each. This is what the situation does without the players (Sly
+     Flourish's "Behaviours"; ref:
+     `skills/ttrpg-expert/scene-encounter-patterns.md`).
+   - **Points to land** — a `- [ ]` checklist of the facts the GM must
+     convey however the improv runs. The scene is done when they tick.
+   - **If the players...** — a `Do | Then` table: the choices the table
+     may make and what the situation does in reply, including the row
+     for "nobody engages".
+   - **Complications** — 2–3 bullets to drop when the scene sags.
+   - **Read-aloud** as a `> ` blockquote: 2–4 sentences, objective and
+     sensory, addressed to the table — never naming one PC or dictating a
+     feeling.
+   Every referent is named in the line that uses it: the document, the
+   person, the reason. The plan is read cold; it never teases the GM.
 
 Prefer embedding personal content in group scenes over splitting the party.
 Include open windows where PC initiative can emerge. The GM may propose their
@@ -337,12 +376,18 @@ to build artifacts, and raise only *genuine* craft issues conversationally.
 
 **15. Run the checks as chores** — Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
-(and `--headless` when you were run without a GM). ERROR rows are fixed
-silently (`duration`, `table`, `type`); WARNING rows are fixed silently when
-mechanical (`preamble`, `recap`, `audit-trail`, `pc-state`, `scene-labels`,
-`scene-type`, `sections`) and raised as a question when they touch content;
-INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`). Also run
-against the vault as a whole (`vault_check.py` lives at
+(and `--headless` when you were run without a GM). ERROR rows are fixed and
+the check re-run until it exits 0 (`duration`, `table`, `type`,
+`scene-labels` — every scene carries the full enumerated skeleton, labels
+with the exact punctuation the row names — and a missing `## GM Notes`);
+WARNING rows are fixed silently when mechanical (`preamble`, `recap`,
+`audit-trail`, `pc-state`, `scene-type`, the other `sections`, `shape` —
+turn the paragraph into bullets or a `Do | Then` table, `question-weight` —
+decide or default the item and delete the question) and raised as a
+question when they touch content; INFO rows are cues (`read-aloud`,
+`scene-length`, `placeholder`, `clarity` — name the referent if the
+sentence really is vague). Also run against the vault as a whole
+(`vault_check.py` lives at
 `${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`) — these cover
 ground `plan_check.py` can't see from a single file:
 
@@ -382,9 +427,13 @@ ground `plan_check.py` can't see from a single file:
   file
 - Stale entity files: flag for update vs retire —
   `vault_check.py stale-drafts`
-- **Unresolved calls** — anything the GM deferred, or you could not ground in
-  canon, goes to `## Open Questions`, explicit and un-invented. This is where
-  "Georgiana's post-Vienna SAN is unrecorded" lives — named, not guessed.
+- **Unresolved calls** — plot questions the GM deferred, or you could not
+  ground in canon, go to `## Open Questions`, explicit and un-invented,
+  each with 2–3 seeds. Sort first (Stance): player decisions become
+  `Do | Then` rows, bookkeeping is defaulted with the default noted in
+  one line, cosmetics are decided. "Georgiana's post-Vienna SAN is
+  unrecorded" is bookkeeping — default it and note the default; "Does
+  Sophia know what her husband has become?" is the plot question.
 
 → Write actionable gaps to `## Gaps & Actions` and unresolved calls to
 `## Open Questions` in Plan file.

@@ -105,7 +105,8 @@ the length is load-bearing. `plan_check.py` measures these budgets
 ## Active Threads
 
 [Carry-forward, stale threads, unfollowed clues, pending
-consequences. Includes stale thread detection (3+ sessions).]
+consequences. Includes stale thread detection (3+ sessions). As
+bullets, two lines each.]
 
 ## NPC Quick Reference
 
@@ -116,51 +117,56 @@ consequences. Includes stale thread detection (3+ sessions).]
 ## World State
 
 [In-game date, location, active threats, faction postures,
-ticking clocks.]
+ticking clocks. As bullets, two lines each.]
 
 ## Planned Scenes
 
+Scenes are checklists for improvisation, not prose to be read. Every
+line is a bullet, a table row, or a one-line label. The only prose is
+the read-aloud blockquote. Write for a Keeper who has forgotten the prep
+conversation: name the document, the person, and the reason in the line
+that uses them. Never "three papers on the tray"; always "Pargeter's
+letter to Sir Nathaniel, Ashworth's chit to Adrien, and Harriet's note
+to Meg arrive at breakfast". The GM teases the players; the plan never
+teases the GM.
+
 ### Scene 1: [Title]
 **Type:** investigation | social | combat | chase | transition | horror | downtime | other
-**Objective:** The *situation* this scene puts in front of the
-players — a thing that is happening, not a lesson to land or a
-feeling to produce. Name the pressure, not the theme. (Not "hand
-a spy the perfect operational condition"; yes "Bruyère corners
-the viscount to reminisce about a France neither has seen since
-1801.")
+**Situation:** One line. What is happening when the scene opens — a
+thing in motion, not a theme or a lesson.
+**Starts it:** One line. The named NPC or household schedule that brings
+the PCs here in the first sixty seconds, and what they want from *this*
+PC. A scene that cannot answer this is not finished.
 **Entities:** [[NPC]], [[Location]], [[Item]]
-**Setup:** Who brings this PC here in the first sixty seconds?
-Name the NPC who initiates and what they want from *this* PC, or
-the errand/schedule that sends them. Ensemble scenes: the
-household schedule (a shared meal, a departure) is a valid
-initiator. A scene that cannot answer this is not finished.
-**Behaviours:** What the situation and its NPCs do on their own —
-independent of the players, and how it escalates if the PCs do
-nothing. Ask "what happens here if the characters never show up?"
-The initiator opens the door; the behaviours keep it moving. This
-is the engine that lets the scene survive any player choice — a
-scene that only moves when a PC acts is fragile. (Sly Flourish's
-"Behaviours"; a Front-style clock for anything on a timer.)
-**Branching:** What choices do players face? Where do different
-choices lead?
-**Complications:** 2–3 curveballs held ready to spike tension when
-the scene sags — a rival arrives, a PC is recognised, the contact
-is being watched, the timer is discovered. Distinct from Behaviours
-(the situation's default motion) and Branching (the players' own
-choices): these are the GM's escalation toolkit, dropped when
-needed, not scripted to a beat. (Sly Flourish's "Complications.")
+**NPCs**
+- **[[Name]]:** wants X. Does Y if left alone. Two lines maximum.
+**Points to land**
+- [ ] A fact the GM must convey however the improv goes.
+- [ ] Another. The scene is done when these are ticked.
+**If the players...**
+| Do | Then |
+|---|---|
+| A choice the table may make | What the situation does in reply |
+| Nobody engages by [time] | What the NPCs do on their own |
+**Complications**
+- A curveball to drop when the scene sags. Two or three.
+
+> Read-aloud: 2–4 sentences of objective sensory description addressed
+> to the table. Never names one PC or dictates a feeling.
 
 ### Scene 2: [Title]
 [Same structure]
 
 ## Contingency Scenes
 
-Scenes that trigger based on player choices or timing rather
-than being part of the default sequence.
+Scenes that trigger on a player choice or a clock rather than by
+default. Trigger and consequences only — bullets, not paragraphs.
 
 ### [Contingency Title]
-**Trigger:** What causes this scene to activate?
-[Same structure as planned scenes]
+**Trigger:** One line. What activates this scene.
+**Then**
+- What happens, as bullets. Promote to a full scene above only if it
+  needs its own NPCs and Points to land.
 
 ## Session End Objectives
 
@@ -188,11 +194,18 @@ during step 13.]
 
 ## Open Questions
 
-Calls the GM deferred, and anything the apprentice could not ground in
-canon. Kept explicit and un-invented — never auto-filled. If the
-apprentice had to guess (e.g. a headless run), the guess lives here,
-labelled **(apprentice guess — confirm)**, never promoted into settled
-plan content.
+Plot questions only — the calls that change what an NPC wants, knows or
+does, a scene's shape, or what the players can discover ("Does Sophia
+know what her husband has become?"). Each carries 2–3 seeds. Anything
+else does not belong here: a player decision (which way they go, who
+they take) is a `Do | Then` row in a scene; bookkeeping (a die result,
+a sheet number, a date no scene turns on) is defaulted with the default
+noted in one line; craft and cosmetics (fonts, prop layout, filenames)
+are decided, never asked. Test: would a different answer change a scene
+this session? If not, it is not a question for the GM. Kept explicit
+and un-invented — never auto-filled. If the apprentice had to guess
+(e.g. a headless run), the guess lives here, labelled **(apprentice
+guess — confirm)**, never promoted into settled plan content.
 
 - [ ] [Unresolved question — who owns it, what's blocked until it's answered]
 
