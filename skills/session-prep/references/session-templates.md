@@ -93,7 +93,7 @@ Threads, NPC Quick Reference, World State) under ~1,000 words
 combined; recap ≤150 words; NPC Quick Reference one line per NPC.
 Thousands of words of preamble is a defect, not thoroughness.
 Scenes themselves are not word-capped — a scene runs as long as
-its situation, initiator, branches, and mechanical notes earn;
+its situation, Starts it, the Do | Then table, and mechanical notes earn;
 cut bloat, not substance. Over ~1,200 words, sanity-check that
 the length is load-bearing. `plan_check.py` measures these budgets
 (`preamble`, `recap`, `scene-length`). -->
@@ -180,17 +180,18 @@ Not a railroad — a set of possible good stopping points.
 ## PC Roster & Arcs
 
 [Per-PC: arc stage, arc theme, next beat, A/B/C plot assignment.
-Written during creative planning step 12.]
+As bullets, two lines each. Written during creative planning step 12.]
 
 ## Touchpoint Plan
 
 [Per-PC touchpoint assignments with type, description, timing.
-Coverage checklist. Written during step 13.]
+Coverage checklist. As bullets, two lines each. Written during
+step 13.]
 
 ## Spotlight Forecast
 
-[Per-PC estimated spotlight share. Imbalance flags. Written
-during step 13.]
+[Per-PC estimated spotlight share. Imbalance flags. As a table or
+bullets. Written during step 13.]
 
 ## Open Questions
 

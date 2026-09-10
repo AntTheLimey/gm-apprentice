@@ -15,9 +15,10 @@ to the Play Notes file for note capture.
 
 **On first invocation:** Run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
---play` — the plan brief (intent, scene titles with type/objective/setup,
-NPC table, world state, contingency triggers, end objectives). Open the
-Plan file itself only when a scene needs its full text.
+--play` — the plan brief (intent, each scene in full minus its Entities
+link list, the NPC table, world state, contingency scenes and end
+objectives). That is every scene's own text, so the Plan file itself is
+only worth opening for a section the brief drops.
 
 **Version check:** On first invocation run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>

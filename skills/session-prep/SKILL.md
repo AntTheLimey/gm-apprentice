@@ -13,8 +13,8 @@ You draw the session out of the GM — spark, shape, refine, never decide for
 them. Every creative call (intent, spotlight, scenes) is offered as 2–3 seeds
 to react to, not a finished answer. Lead harder when the GM is low on energy —
 offer more concrete options — but they always choose. Never resolve a creative
-question the GM hasn't: unresolved calls go to `## Open Questions`, named and
-un-invented, never silently filled. The apprentice does the chores (gather,
+question the GM hasn't: unresolved plot calls go to `## Open Questions`, named
+and un-invented, never silently filled. The apprentice does the chores (gather,
 draft prose from the GM's decisions, run checks); the GM makes the calls.
 
 **Ask only plot questions.** Before any question reaches the GM, sort
@@ -87,7 +87,7 @@ section above.
 the Plan file before proceeding. The Plan file is the
 persistent artifact — conversation is ephemeral.
 
-## Context Source — opening move of a prep invocation
+## Context Source — Step 5, opening move of a prep invocation
 
 **Gather the standard read-set in ONE call** before any
 individual reads:
@@ -102,10 +102,12 @@ Claims, World Fact Findings, Quality Notes, Reconciliation Context —
 each stub carries the word count), every active PC's `## Current
 Status` block, the upcoming session's existing Plan, deferred world
 flags, and the campaign overview as frontmatter plus a heading outline
-with word counts. Read a stubbed or outlined section from its file only
-when a step below needs it. The full bundle was 85 KB on a real vault
-and drove one prep past 800k tokens; the brief one is what prep
-consumes.
+with word counts. The existing Plan is outlined the same way — Step 6
+reads it properly through `plan_check.py --inventory/--state`, so the
+bundle only has to say it exists and what shape it is in. Read a
+stubbed or outlined section from its file only when a step below needs
+it. On a real vault the full bundle is 109 KB and drove one prep past
+800k tokens; the brief one is 45 KB and is what prep consumes.
 
 **After the bundle:** vault dives are targeted reads only,
 proportional to upcoming session complexity, not campaign size.
@@ -260,8 +262,8 @@ sitting in a directory this step failed to open.
 
 The whole creative spine — intent, spotlight, scenes — is drawn out of the
 GM (see Stance). Offer seeds; the GM chooses. One question at a time, light
-touch — don't interrogate. Anything the GM defers goes to `## Open Questions`,
-never invented.
+touch — don't interrogate. Any plot call the GM defers goes to
+`## Open Questions`, never invented.
 
 **11. Session Intent — "what's this session for?"** Before any scene work,
 surface the vault-mined material as seeds and ask the GM to set the dramatic
@@ -345,6 +347,8 @@ the **premise**, not the finished scene. For each scene:
    - **Starts it** — one line: the named NPC or household schedule that
      brings this PC here in the first sixty seconds, and what they want.
      A scene that cannot answer this is not finished.
+   - **Entities** — `[[NPC]], [[Location]], [[Item]]`: the wikilinks this
+     scene touches.
    - **NPCs** — `- **Name:** wants X. Does Y if left alone.` Two lines
      each. This is what the situation does without the players (Sly
      Flourish's "Behaviours"; ref:
@@ -382,7 +386,8 @@ the check re-run until it exits 0 (`duration`, `table`, `type`,
 with the exact punctuation the row names — and a missing `## GM Notes`);
 WARNING rows are fixed silently when mechanical (`preamble`, `recap`,
 `audit-trail`, `pc-state`, `scene-type`, the other `sections`, `shape` —
-turn the paragraph into bullets or a `Do | Then` table, `question-weight` —
+turn the paragraph into bullets or a `Do | Then` table; split an over-long
+bullet; keep Situation and Starts it to one line, `question-weight` —
 decide or default the item and delete the question) and raised as a
 question when they touch content; INFO rows are cues (`read-aloud`,
 `scene-length`, `placeholder`, `clarity` — name the referent if the

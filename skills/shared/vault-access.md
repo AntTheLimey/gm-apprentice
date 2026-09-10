@@ -26,8 +26,8 @@ and Obsidian is a viewer the user may or may not have open.
 | Session-prep context bundle (one call) | `session_context.py` |
 | At-table plan brief | `session_context.py --play` |
 | Thread ages / decay | `session_context.py --threads` |
-| the prep bundle with provenance blocks stubbed and the overview outlined; session-prep Step 5's default | `session_context.py VAULT --brief` |
-| every active PC's Background + GM Notes and spotlight history from prior Plans; replaces per-PC sheet reads in Step 12 | `session_context.py VAULT --arcs` |
+| Prep bundle, brief form (Step 5 default) — provenance blocks stubbed, overview and existing Plan outlined | `session_context.py --brief` |
+| PC arc slice (Step 12) — every active PC's Background + GM Notes and spotlight history from prior Plans; replaces per-PC sheet reads | `session_context.py --arcs` |
 | Rebuild `_meta/index.md` from a vault scan | `index_build.py` |
 | Session Plan conformance | `plan_check.py` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
