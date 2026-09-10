@@ -64,7 +64,8 @@ Checks, by id, level, and the rule they mechanise:
                          (#195)
   question-weight
                 WARNING  an Open Questions item is craft or bookkeeping,
-                         not a plot question (#197)
+                         not a plot question, or is a player decision
+                         that belongs in a scene, not the Plan (#197)
   duration      ERROR/   never estimate scene durations
                 WARNING  (shared/session-principles.md, Absolute Rules)
   audit-trail   WARNING  the Plan is an instrument, not an audit trail
@@ -232,10 +233,28 @@ COSMETIC_QUESTION_RE = re.compile(
     r"\bfont\b|\btypeface\b|\bfilename\b|\bfile name\b|\bformatting\b"
     r"|\bcolou?r scheme\b"
     r"|\b(?:prop|page|handout|card|sheet)\s+layout\b"
+    r"|\b(?:session|scene|chapter) title\b"
     r"|\brolled\s+(?:an?\b|\d|the\s+(?:die|dice)\b)"
     r"|\bdie result\b|\bdice result\b"
-    r"|\bwhat (?:did|does) \w+ roll\b",
+    r"|\bwhat (?:did|does) \w+ roll\b"
+    r"|\b(?:not|never|un)recorded\b"
+    r"|\bneeds? confirming\b"
+    r"|\bstill needs? (?:confirming|recording)\b",
     re.I)
+
+# `question-weight` (player-decision branch): a "whether" item whose
+# subject is a PC choosing to do something, rather than a fact the
+# Keeper needs to settle — it belongs in a scene as a Do | Then row,
+# not as an Open Questions line waiting on a ruling (#197). A wikilinked
+# subject (`Whether [[Elizabeth_Ashby]] goes...`) is stripped to its
+# target name before this is tried, so the brackets don't put more than
+# 60 characters between "whether" and the verb.
+PLAYER_DECISION_QUESTION_RE = re.compile(
+    r"\bwhether\b[^.\n]{0,60}?\b(?:goes|go|accompan(?:y|ies)|comes|"
+    r"joins|takes|brings|travels|stays)\b",
+    re.I)
+TABLE_DECISION_RE = re.compile(
+    r"\ba table decision\b|\bthe table['’]s decision\b", re.I)
 
 DURATION_RANGE_RE = re.compile(
     r"\b\d+\s*[-–—]\s*\d+\s*(?:min|mins|minutes|hours?|hrs?)\b",
@@ -875,17 +894,36 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
     return findings
 
 
+def _strip_wikilink_markup(text: str) -> str:
+    """`text` with `[[Target]]` / `[[Target|Alias]]` reduced to `Target`.
+
+    A wikilinked subject shouldn't dodge a question-weight pattern just
+    because it sits inside `[[...]]` brackets rather than plain text.
+    """
+    return re.sub(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]", r"\1", text)
+
+
 def check_question_weight(rel: str, states: list[vl.LineState]
                           ) -> list[Finding]:
     findings: list[Finding] = []
     for start, joined in _open_questions_items(states):
-        m = COSMETIC_QUESTION_RE.search(joined)
+        text = _strip_wikilink_markup(joined)
+        m = COSMETIC_QUESTION_RE.search(text)
         if m:
             findings.append(Finding(
                 "question-weight", "WARNING", f"{rel}:{start}",
                 f"question-weight: {m.group(0)!r} is craft or "
                 "bookkeeping, not a plot question — decide it or "
                 "default it and note the default (#197)"))
+            continue
+        m = (PLAYER_DECISION_QUESTION_RE.search(text)
+             or TABLE_DECISION_RE.search(text))
+        if m:
+            findings.append(Finding(
+                "question-weight", "WARNING", f"{rel}:{start}",
+                f"question-weight: {m.group(0)!r} reads as a player "
+                "decision — write it as a Do | Then row in the scene "
+                "unless it is an NPC's own choice (#197)"))
     return findings
 
 

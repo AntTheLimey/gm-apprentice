@@ -454,6 +454,49 @@ class QuestionWeightTests(unittest.TestCase):
         rows = question_rows("Has Emma rolled a Luck roll for this yet?")
         self.assertEqual(len(rows), 1, rows)
 
+    def test_session_title_placeholder_fires(self):
+        rows = question_rows(
+            '**Session title.** "By Command of His Excellency" is a '
+            "placeholder on the index file …")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("craft or bookkeeping", rows[0].message)
+        self.assertIn("session title", rows[0].message.lower())
+
+    def test_unrecorded_amount_and_needs_confirming_fires_once(self):
+        rows = question_rows(
+            "**Georgiana's Reputation loss at the carriages** "
+            "(Session 10) — amount not recorded; the die still needs "
+            "confirming on her sheet.")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("craft or bookkeeping", rows[0].message)
+
+    def test_player_decision_whether_goes_fires(self):
+        rows = question_rows(
+            "**Whether [[Elizabeth_Ashby]] goes upriver with Adrien** "
+            "to Chandernagore Thursday — a table decision …")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("reads as a player decision", rows[0].message)
+        self.assertNotIn("[[", rows[0].message)
+
+    def test_a_table_decision_phrase_fires(self):
+        rows = question_rows(
+            "Should the party split up at the crossroads — a table "
+            "decision the players need to make themselves.")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("reads as a player decision", rows[0].message)
+
+    def test_whether_knows_is_not_a_player_decision(self):
+        self.assertEqual(
+            question_rows("Whether Kaunitz knows Surlish is a cult "
+                          "member"),
+            [])
+
+    def test_whether_knows_writing_is_not_a_player_decision(self):
+        self.assertEqual(
+            question_rows("Whether Surlish knows Cartwright is writing "
+                          "his proposal"),
+            [])
+
 
 def clarity_rows(body: str) -> list[pc.Finding]:
     text = f"---\ntype: session-plan\n---\n\n## Active Threads\n\n{body}"
