@@ -726,3 +726,20 @@ normalized to it.
 - Otherwise none. The publish tool already reads both `session:` (link)
   and `session_number:` (scalar) forms and keeps its type-synonym
   compatibility set — unmigrated vaults keep working.
+
+## Migration: 1.9.11 → 1.9.12
+
+Session Plan scene skeleton. No structural changes; no frontmatter
+changes.
+
+### Content
+
+- **Plan scene shape** (`session-prep/references/session-templates.md`
+  → `_Templates/`): scenes are enumerated — `**Situation:**`,
+  `**Starts it:**`, `**Entities:**`, `**NPCs**` bullets, `**Points to
+  land**` checklist, `**If the players...**` `Do | Then` table,
+  `**Complications**` bullets; Contingency scenes are `**Trigger:**` +
+  `**Then**`. Existing Plan files are not rewritten: `plan_check.py`
+  reports a legacy Objective/Setup/Behaviours/Branching scene as one
+  `scene-labels` row, and session-prep converts a plan the next time it
+  preps that session. Archived plans for played sessions stay as they are.

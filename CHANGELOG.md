@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.12] — 2026-09-08
+
+### Added
+
+- `session_context.py --brief`: the prep bundle with the Wrap-Up's
+  reconcile-provenance blocks (Memorable Moments; Name Conflicts,
+  Cross-Entity Claims, World Fact Findings, Quality Notes, Reconciliation
+  Context) each replaced by a one-line stub carrying its word count, and
+  the campaign overview reduced to frontmatter plus a heading outline
+  with word counts. On the Canticle copy the bundle drops from 85 KB to
+  45 KB. session-prep Step 5 calls it.
+- `session_context.py --arcs`: every active PC's `## Background` and
+  `## GM Notes` plus a spotlight history parsed from earlier Plans'
+  `## Spotlight Forecast` tables (role, share, sessions since the last
+  B-plot and C-plot), chapter-scoped. Replaces the per-PC sheet reads in
+  session-prep Step 12 that read six sheets in full during the field test.
+- `plan_check.py` `shape` (WARNING: a paragraph or bullet over 40 words
+  outside a blockquote in a session-running section), `clarity` (INFO: a
+  sentence leaning on "the letter", "the papers", "the regrets" with no
+  link or name in it — #195) and `question-weight` (WARNING: an Open
+  Questions item about fonts, layout, filenames or last session's die
+  rolls — #197).
+
+### Changed
+
+- Session Plan scenes are enumerated, not prose (#196): `**Situation:**`,
+  `**Starts it:**`, `**Entities:**`, then `**NPCs**` bullets,
+  `**Points to land**` checklist, an `**If the players...**` `Do | Then`
+  table and `**Complications**` bullets; the read-aloud blockquote is the
+  only prose. Contingency scenes are `**Trigger:**` plus `**Then**`
+  bullets. `**Type:**` is optional and checked when present. Existing
+  plans in the Objective/Setup/Behaviours/Branching skeleton are reported
+  by `plan_check.py` as one `scene-labels` row per scene and rewritten on
+  their next prep; nothing is migrated automatically.
+- `plan_check.py`: `scene-labels` and a missing `## GM Notes` are ERRORs
+  (exit 1), not warnings — the field-test plan shipped with
+  `**Behaviours.**` four times, a paragraph-only Contingency scene and no
+  `## GM Notes` because warnings were left standing. A near-miss label is
+  named in the row with the exact text to write.
+- session-prep asks only plot questions (#197): player decisions become
+  `Do | Then` rows, bookkeeping is defaulted with the default noted,
+  cosmetics are decided; the Plan file is written in plain English for a
+  cold read (#195), with the elicitation voice kept out of it.
+- `session_context.py --play` prints each scene minus its `**Entities:**`
+  line instead of Type/Objective/Setup — the enumerated skeleton is
+  already table-shaped.
+
+### Fixed
+
+- `session_context.py` never matched the canonical quoted-wikilink
+  `session:` field (`"[[Session 14]]"`, `"[[Session_14]]"`), so the
+  default bundle reported an existing plan as "(none found)" and
+  `--play` printed "Session ?"; every session lookup now resolves the
+  wikilink first.
+
+---
+
 ## [1.9.11] — 2026-09-08
 
 ### Fixed
