@@ -15,14 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reconcile-provenance blocks (Memorable Moments; Name Conflicts,
   Cross-Entity Claims, World Fact Findings, Quality Notes, Reconciliation
   Context) each replaced by a one-line stub carrying its word count, and
-  the campaign overview reduced to frontmatter plus a heading outline
-  with word counts. On the Canticle copy the bundle drops from 85 KB to
-  45 KB. session-prep Step 5 calls it.
+  the campaign overview and the upcoming session's existing Plan each
+  reduced to frontmatter plus a heading outline with word counts. On the
+  Canticle copy the bundle drops from 109 KB to 45 KB, with the existing
+  Plan outlined as well. session-prep Step 5 calls it, and Step 6 reads
+  the Plan through `plan_check.py --inventory/--state`.
 - `session_context.py --arcs`: every active PC's `## Background` and
   `## GM Notes` plus a spotlight history parsed from earlier Plans'
   `## Spotlight Forecast` tables (role, share, sessions since the last
-  B-plot and C-plot), chapter-scoped. Replaces the per-PC sheet reads in
-  session-prep Step 12 that read six sheets in full during the field test.
+  B-plot and C-plot), chapter-scoped. Plans whose forecast is prose are
+  listed for direct reading, not counted — neither as a missing row for
+  a PC nor in the "plans read" denominator. Replaces the per-PC sheet
+  reads in session-prep Step 12 that read six sheets in full during the
+  field test.
 - `plan_check.py` `shape` (WARNING: a paragraph or bullet over 40 words
   outside a blockquote in a session-running section), `clarity` (INFO: a
   sentence leaning on "the letter", "the papers", "the regrets" with no
@@ -60,7 +65,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `session:` field (`"[[Session 14]]"`, `"[[Session_14]]"`), so the
   default bundle reported an existing plan as "(none found)" and
   `--play` printed "Session ?"; every session lookup now resolves the
-  wikilink first.
+  wikilink first. `vault_check.py sessions` and `index_build.py` shared
+  the bug behind their own fallbacks and now share the fix.
+- `session_context.py --play`: a scene whose `**Entities:**` line was its
+  last label lost its read-aloud blockquote and any trailing text from
+  the Play Brief — the strip ran to the next bold label instead of to the
+  end of the Entities line.
 
 ---
 
