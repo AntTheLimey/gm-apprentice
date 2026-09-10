@@ -51,7 +51,11 @@ Checks, by id, level, and the rule they mechanise:
   scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
                          (session-templates.md, Planned Scenes)
   shape         WARNING  a scene paragraph is dense prose, not a bullet,
-                         a Do | Then table, or a short read-aloud quote
+                         a Do | Then table, or a short read-aloud quote;
+                         exempt in Session Intent, Session Overview, and
+                         Previously On... (prose by design — the GM's
+                         stated purpose, a synopsis, and the recap,
+                         already bounded by the `recap` budget)
                          (session-templates.md, enumerated Plan skeleton)
   clarity       INFO     a vague referent ("the letter") names no
                          document or person — the plan is read cold
@@ -196,6 +200,13 @@ SECTION_ERROR_TITLES: frozenset[str] = frozenset({"GM Notes"})
 # this many words is dense prose the enumerated skeleton is meant to
 # prevent — see `check_shape`.
 SHAPE_MAX_WORDS = 40
+
+# `shape` is exempt in these sections — they are prose by design: the
+# GM's stated purpose, a one-paragraph synopsis, and the narrative recap
+# (already bounded by the `recap` word budget). Compared via
+# `_norm_title`, same as `SESSION_RUNNING_EXCLUDE`.
+SHAPE_EXEMPT_TITLES: tuple[str, ...] = (
+    "Session Intent", "Session Overview", "Previously On...")
 
 # `clarity`: a generic noun that names no document or person by the time
 # the sentence ends — the plan is read cold days later, and "the letter"
@@ -604,6 +615,14 @@ def _para_kind(line: str) -> str:
     return "plain"
 
 
+_SHAPE_EXEMPT_NORM: frozenset[str] = frozenset(
+    _norm_title(t) for t in SHAPE_EXEMPT_TITLES)
+
+
+def _is_shape_exempt(section_title: str | None) -> bool:
+    return section_title is not None and _norm_title(section_title) in _SHAPE_EXEMPT_NORM
+
+
 def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
     findings: list[Finding] = []
     current: list[str] = []
@@ -615,7 +634,13 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
         if current:
             text = "\n".join(current)
             wc = vl.word_count(text)
-            if current_kind in ("bullet", "label") and wc > SHAPE_MAX_WORDS:
+            if current_kind == "label" and wc > SHAPE_MAX_WORDS:
+                findings.append(Finding(
+                    "shape", "WARNING", f"{rel}:{current_start}",
+                    f"shape: {wc}-word label line — one line for "
+                    f"Situation/Starts it, bullets under the block "
+                    f"labels"))
+            elif current_kind == "bullet" and wc > SHAPE_MAX_WORDS:
                 findings.append(Finding(
                     "shape", "WARNING", f"{rel}:{current_start}",
                     f"shape: {wc}-word bullet — two lines maximum"))
@@ -628,7 +653,8 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
         current_kind = None
 
     for lineno, line, section, in_code, is_heading in _walk_body(states):
-        if in_code or is_heading or not _is_session_running(section):
+        if (in_code or is_heading or not _is_session_running(section)
+                or _is_shape_exempt(section)):
             flush()
             continue
         stripped = line.strip()

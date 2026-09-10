@@ -257,6 +257,35 @@ class NewSkeletonTests(unittest.TestCase):
         self.assertTrue(any(ln.startswith("INFO\t") and 'clarity: "the papers"' in ln for ln in r.stdout.splitlines()))
         self.assertTrue(any(ln.startswith("WARNING\t") and "question-weight:" in ln and "font" in ln for ln in r.stdout.splitlines()))
 
+    def test_shape_exempt_sections_allow_long_prose(self):
+        # Session Intent, Session Overview, and Previously On... are
+        # prose by design (#196 follow-up) — a long paragraph dropped
+        # into one must not trip `shape`.
+        long_para = " ".join(["word"] * 60) + "."
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "P.md"
+            p.write_text(GOOD.read_text().replace(
+                "## Session Intent\n\n",
+                f"## Session Intent\n\n{long_para}\n\n", 1))
+            r = run_cli(p)
+            self.assertFalse(
+                [ln for ln in r.stdout.splitlines() if "shape:" in ln],
+                r.stdout)
+
+    def test_shape_flags_an_overlong_label_line(self):
+        long_situation = ("**Situation:** " + " ".join(["word"] * 60) + ".")
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "P.md"
+            p.write_text(GOOD.read_text().replace(
+                "**Situation:** Bruyère has Ada briefly alone by the "
+                "antechamber door with champagne in hand.",
+                long_situation, 1))
+            r = run_cli(p)
+            rows = [ln for ln in r.stdout.splitlines()
+                   if ln.startswith("WARNING\t") and "shape:" in ln]
+            self.assertEqual(len(rows), 1, rows)
+            self.assertIn("label line", rows[0])
+
 
 class SectionsOrderTests(unittest.TestCase):
     def test_good_plan_is_in_order(self):
