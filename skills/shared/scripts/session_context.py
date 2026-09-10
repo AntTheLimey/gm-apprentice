@@ -93,16 +93,22 @@ def emit(title: str, source: str | None, content: str | None):
 # --------------------------------------------------------------------------
 
 _LABEL_RE = re.compile(r"^\*\*([^*:]+):\*\*")
+# Any bold label line at all, inline (`**Label:**`) or block
+# (`**Label**` / `**Label (a parenthetical)**`) — used only to find where
+# an extracted block *ends*, since the enumerated skeleton's block labels
+# (`**NPCs**`, `**Points to land**`, ...) carry no colon and must stop a
+# block just as an inline label does.
+_ANY_LABEL_LINE_RE = re.compile(r"^\*\*[^*]+\*\*")
 _BULLET_RE = re.compile(r"^\s*[-*]\s+(.+)$")
 
 
 def _labelled_block(text: str, label: str) -> str | None:
     """The `**label:** ...` line and any following lines, up to the next
-    `**Other:**` label line or the end of `text`. None if `label` is
-    absent. Used for both a Session Plan scene's `**Type:**` /
-    `**Objective:**` / `**Setup:**` / `**Trigger:**` fields and a PC's
-    `**Open threads:**` block — both are "a bold label, then prose or
-    bullets, until the next bold label" in shape."""
+    bold label line (inline or block) or the end of `text`. None if
+    `label` is absent. Used for both a Session Plan scene's
+    `**Situation:**` / `**Starts it:**` / `**Entities:**` / `**Trigger:**`
+    fields and a PC's `**Open threads:**` block — both are "a bold
+    label, then prose or bullets, until the next bold label" in shape."""
     lines = text.splitlines()
     start = None
     for i, line in enumerate(lines):
@@ -114,7 +120,7 @@ def _labelled_block(text: str, label: str) -> str | None:
         return None
     collected = [lines[start]]
     for line in lines[start + 1:]:
-        if _LABEL_RE.match(line.strip()):
+        if _ANY_LABEL_LINE_RE.match(line.strip()):
             break
         collected.append(line)
     return "\n".join(collected).strip()
@@ -260,12 +266,13 @@ def _norm_thread(text: str) -> str:
 
 
 def play_brief(files, plan_rel: str, plan_text: str) -> str:
-    """The Play Brief for one Session Plan: scene titles, their
-    Type/Objective/Setup, the NPC table, World State, Contingency
-    triggers, and End Objectives — everything else (Active Threads,
-    GM Notes, Behaviours/Branching/Complications) dropped, because the
-    table doesn't need it and the Keeper is already holding the full
-    Plan if they do.
+    """The Play Brief for one Session Plan: scene titles, their full
+    bodies minus the Entities link list — the enumerated skeleton is
+    already table-shaped, so nothing else needs trimming — the NPC
+    table, World State, Contingency scenes in full, and End Objectives.
+    Active Threads and GM Notes are dropped, because the table doesn't
+    need them and the Keeper is already holding the full Plan if they
+    do.
 
     `files` is accepted for interface symmetry with `thread_report` but
     unused: a Session Plan's own `session:` frontmatter is always enough
@@ -283,25 +290,27 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
 
     parts.append(verbatim("Session Intent"))
 
-    def reduced_scenes(section_title: str, labels: tuple[str, ...]) -> str:
+    def scenes(section_title: str, *, strip_entities: bool) -> str:
         body = section(plan_text, section_title)
         blocks = h3_blocks(body) if body is not None else []
         if not blocks:
             return f"## {section_title}\n(no ## {section_title})"
         rendered = []
         for title, scene_body in blocks:
-            piece = [f"### {title}"]
-            for label in labels:
-                block = _labelled_block(scene_body, label)
-                if block:
-                    piece.append(block)
-            rendered.append("\n".join(piece))
+            reduced = scene_body
+            if strip_entities:
+                entities_block = _labelled_block(scene_body, "Entities")
+                if entities_block:
+                    reduced = scene_body.replace(entities_block, "", 1)
+                    reduced = re.sub(r"\n{3,}", "\n\n", reduced).strip()
+            piece = f"### {title}\n{reduced}" if reduced else f"### {title}"
+            rendered.append(piece)
         return f"## {section_title}\n" + "\n\n".join(rendered)
 
-    parts.append(reduced_scenes("Planned Scenes", ("Type", "Objective", "Setup")))
+    parts.append(scenes("Planned Scenes", strip_entities=True))
     parts.append(verbatim("NPC Quick Reference"))
     parts.append(verbatim("World State"))
-    parts.append(reduced_scenes("Contingency Scenes", ("Trigger",)))
+    parts.append(scenes("Contingency Scenes", strip_entities=False))
     parts.append(verbatim("Session End Objectives"))
 
     return "\n\n".join(parts)

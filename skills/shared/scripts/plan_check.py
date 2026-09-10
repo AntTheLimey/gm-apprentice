@@ -41,11 +41,24 @@ Checks, by id, level, and the rule they mechanise:
                          (SKILL.md preamble discipline comment)
   scene-length  INFO     a scene over ~1200 words — sanity-check it
                          (SKILL.md preamble discipline comment)
-  scene-labels  WARNING  a scene names all seven Sly Flourish labels
-                         (Contingency Scenes also require **Trigger:**)
+  scene-labels  ERROR    every Planned scene carries Situation/Starts it/
+                         Entities (inline, colon) and NPCs/Points to
+                         land/If the players.../Complications (block);
+                         Contingency scenes carry Trigger/Then; a legacy
+                         Objective/Setup/Behaviours/Branching scene is
+                         one row
                          (session-templates.md, Planned/Contingency Scenes)
   scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
                          (session-templates.md, Planned Scenes)
+  shape         WARNING  a scene paragraph is dense prose, not a bullet,
+                         a Do | Then table, or a short read-aloud quote
+                         (session-templates.md, enumerated Plan skeleton)
+  clarity       INFO     a vague referent ("the letter") names no
+                         document or person — the plan is read cold
+                         (#195)
+  question-weight
+                WARNING  an Open Questions item is craft or bookkeeping,
+                         not a plot question (#197)
   duration      ERROR/   never estimate scene durations
                 WARNING  (shared/session-principles.md, Absolute Rules)
   audit-trail   WARNING  the Plan is an instrument, not an audit trail
@@ -158,11 +171,48 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
 )
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
 
-SCENE_LABELS: tuple[str, ...] = (
-    "Type", "Objective", "Entities", "Setup", "Behaviours", "Branching",
-    "Complications",
-)
-CONTINGENCY_EXTRA_LABEL = "Trigger"
+# The enumerated Plan skeleton (#196): inline labels are `**Label:**` on
+# their own line; block labels are `**Label**` (optional trailing text
+# before the closing `**`) followed by bullets, a checklist, or a table.
+# `Type` is optional and lives outside SCENE_LABELS — checked only when
+# present, by the existing scene-type/placeholder logic.
+SCENE_LABELS_INLINE: tuple[str, ...] = ("Situation", "Starts it", "Entities")
+SCENE_LABELS_BLOCK: tuple[str, ...] = (
+    "NPCs", "Points to land", "If the players...", "Complications")
+SCENE_LABELS: tuple[str, ...] = SCENE_LABELS_INLINE + SCENE_LABELS_BLOCK
+CONTINGENCY_LABELS: tuple[str, ...] = ("Trigger", "Then")
+# `Trigger` is inline (colon); `Then` is block (bullets, no colon).
+_INLINE_LABELS: frozenset[str] = frozenset(SCENE_LABELS_INLINE) | {"Trigger"}
+
+# A scene written in the pre-1.9.12 prose skeleton — detected only when
+# none of SCENE_LABELS_INLINE is present, so a modern scene that happens
+# to mention one of these words in passing is never misidentified.
+LEGACY_SCENE_LABELS: frozenset[str] = frozenset(
+    {"Objective", "Setup", "Behaviours", "Behaviors", "Branching"})
+
+SECTION_ERROR_TITLES: frozenset[str] = frozenset({"GM Notes"})
+
+# `shape`: a paragraph (bullet, label-line, or plain prose) longer than
+# this many words is dense prose the enumerated skeleton is meant to
+# prevent — see `check_shape`.
+SHAPE_MAX_WORDS = 40
+
+# `clarity`: a generic noun that names no document or person by the time
+# the sentence ends — the plan is read cold days later, and "the letter"
+# means nothing without a link or a name (#195).
+VAGUE_REFERENTS: tuple[str, ...] = (
+    "letter", "letters", "note", "notes", "paper", "papers", "card",
+    "message", "package", "parcel", "ledger", "book", "document", "detail",
+    "ladder", "debt", "deal", "regrets", "warning", "arrangement")
+_VAGUE_REFERENT_RE = re.compile(
+    rf"\bthe ({'|'.join(VAGUE_REFERENTS)})\b", re.IGNORECASE)
+
+# `question-weight`: an Open Questions item that is craft or bookkeeping,
+# not a plot question that needs a Keeper decision (#197).
+COSMETIC_QUESTION_RE = re.compile(
+    r"\b(font|typeface|filename|file name|layout|formatting|colou?r "
+    r"scheme|rolled|die result|dice result|what (?:did|does) \w+ roll)\b",
+    re.I)
 
 DURATION_RANGE_RE = re.compile(
     r"\b\d+\s*[-–—]\s*\d+\s*(?:min|mins|minutes|hours?|hrs?)\b",
@@ -328,7 +378,14 @@ def check_sections(rel: str, by_norm: dict[str, tuple[int, str, str]]
                    ) -> list[Finding]:
     findings = []
     for title in TEMPLATE_SECTIONS:
-        if _norm_title(title) not in by_norm:
+        if _norm_title(title) in by_norm:
+            continue
+        if title in SECTION_ERROR_TITLES:
+            findings.append(Finding(
+                "sections", "ERROR", f"{rel}:§{title}",
+                f"sections: missing '## {title}' — required; every "
+                f"Keeper-facing section lives under it"))
+        else:
             findings.append(Finding(
                 "sections", "WARNING", f"{rel}:§{title}",
                 f"sections: missing '## {title}'"))
@@ -417,21 +474,83 @@ def check_npc_table(rel: str, by_norm: dict[str, tuple[int, str, str]]
     return []
 
 
+def _is_inline_label(label: str) -> bool:
+    return label in _INLINE_LABELS
+
+
 def _label_present(body: str, label: str) -> bool:
-    if label == "Behaviours":
-        return bool(re.search(r"\*\*Behaviou?rs:\*\*", body))
-    return f"**{label}:**" in body
+    if label == "If the players...":
+        return bool(re.search(
+            r"^\*\*If the players\.{1,3}(?:[^\n*]*)\*\*", body, re.MULTILINE))
+    if _is_inline_label(label):
+        return bool(re.search(
+            rf"^\*\*{re.escape(label)}:\*\*", body, re.MULTILINE))
+    return bool(re.search(
+        rf"^\*\*{re.escape(label)}(?:[^\n*]*)\*\*", body, re.MULTILINE))
+
+
+def _label_near_miss(body: str, label: str) -> str | None:
+    esc = re.escape(label)
+    patterns = [rf"^\*\*{esc}\.\*\*", rf"^\*\*{esc};\*\*"]
+    if _is_inline_label(label):
+        patterns.append(rf"^\*\*{esc}\*\*")
+    else:
+        patterns.append(rf"^\*\*{esc}:\*\*")
+    patterns.append(rf"^{esc}:")
+    for pattern in patterns:
+        m = re.search(pattern, body, re.MULTILINE)
+        if m:
+            return m.group(0)
+    return None
+
+
+_LEGACY_LABEL_RE = re.compile(r"^\*\*(\w+):\*\*")
+
+# `Entities` is common furniture to both the pre-1.9.12 prose skeleton and
+# the enumerated one, so its presence alone must not disqualify legacy
+# detection — only the two labels unique to the new skeleton's opening do.
+_MODERN_GATE_LABELS: tuple[str, ...] = ("Situation", "Starts it")
+
+
+def _legacy_scene(body: str) -> list[str]:
+    if any(_label_present(body, label) for label in _MODERN_GATE_LABELS):
+        return []
+    found: list[str] = []
+    for line in body.splitlines():
+        m = _LEGACY_LABEL_RE.match(line.strip())
+        if m and m.group(1) in LEGACY_SCENE_LABELS and m.group(1) not in found:
+            found.append(m.group(1))
+    return found
 
 
 def _scene_findings(rel: str, body: str, scene_title: str,
-                    extra_labels: tuple[str, ...] = ()) -> list[Finding]:
+                    labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
     locus = f"{rel}:§{scene_title}"
-    for label in SCENE_LABELS + extra_labels:
-        if not _label_present(body, label):
-            findings.append(Finding(
-                "scene-labels", "WARNING", locus,
-                f"scene-labels: '{scene_title}' is missing **{label}:**"))
+    legacy_found = _legacy_scene(body)
+    if legacy_found:
+        findings.append(Finding(
+            "scene-labels", "ERROR", locus,
+            f"scene-labels: '{scene_title}' uses the pre-1.9.12 prose "
+            f"skeleton ({', '.join(legacy_found)}) — rewrite as Situation "
+            f"/ Starts it / Entities / NPCs / Points to land / If the "
+            f"players... / Complications"))
+    else:
+        for label in labels:
+            if _label_present(body, label):
+                continue
+            block = not _is_inline_label(label)
+            shown = f"**{label}**" if block else f"**{label}:**"
+            near = _label_near_miss(body, label)
+            if near is not None:
+                findings.append(Finding(
+                    "scene-labels", "ERROR", locus,
+                    f"scene-labels: '{scene_title}' has {near!r} — write "
+                    f"'{shown}'"))
+            else:
+                findings.append(Finding(
+                    "scene-labels", "ERROR", locus,
+                    f"scene-labels: '{scene_title}' is missing {shown}"))
     type_match = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
     if type_match:
         raw = type_match.group(1).strip()
@@ -462,13 +581,122 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
     planned = by_norm.get(_norm_title(PLANNED_SCENES_TITLE))
     if planned is not None:
         for scene_title, scene_body in vl.h3_blocks(planned[2]):
-            findings.extend(_scene_findings(rel, scene_body, scene_title))
+            findings.extend(
+                _scene_findings(rel, scene_body, scene_title, SCENE_LABELS))
     contingency = by_norm.get(_norm_title(CONTINGENCY_SCENES_TITLE))
     if contingency is not None:
         for scene_title, scene_body in vl.h3_blocks(contingency[2]):
             findings.extend(_scene_findings(
-                rel, scene_body, scene_title,
-                extra_labels=(CONTINGENCY_EXTRA_LABEL,)))
+                rel, scene_body, scene_title, CONTINGENCY_LABELS))
+    return findings
+
+
+def _para_kind(line: str) -> str:
+    stripped = line.lstrip()
+    if LIST_MARKER_RE.match(stripped):
+        return "bullet"
+    if stripped.startswith("|"):
+        return "table"
+    if stripped.startswith(">"):
+        return "quote"
+    if stripped.startswith("**"):
+        return "label"
+    return "plain"
+
+
+def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
+    findings: list[Finding] = []
+    current: list[str] = []
+    current_kind: str | None = None
+    current_start = 0
+
+    def flush() -> None:
+        nonlocal current, current_kind
+        if current:
+            text = "\n".join(current)
+            wc = vl.word_count(text)
+            if current_kind in ("bullet", "label") and wc > SHAPE_MAX_WORDS:
+                findings.append(Finding(
+                    "shape", "WARNING", f"{rel}:{current_start}",
+                    f"shape: {wc}-word bullet — two lines maximum"))
+            elif current_kind == "plain" and wc > SHAPE_MAX_WORDS:
+                findings.append(Finding(
+                    "shape", "WARNING", f"{rel}:{current_start}",
+                    f"shape: {wc}-word paragraph outside a blockquote — "
+                    f"bullets, a Do | Then table, or a read-aloud quote"))
+        current = []
+        current_kind = None
+
+    for lineno, line, section, in_code, is_heading in _walk_body(states):
+        if in_code or is_heading or not _is_session_running(section):
+            flush()
+            continue
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            continue
+        kind = _para_kind(line)
+        if current and kind != current_kind:
+            flush()
+        if not current:
+            current_start = lineno
+            current_kind = kind
+        current.append(line)
+    flush()
+    return findings
+
+
+def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
+    findings: list[Finding] = []
+    current: list[str] = []
+    current_start = 0
+
+    def flush() -> None:
+        nonlocal current
+        if current:
+            text = " ".join(current)
+            for sentence in re.split(r"[.!?]", text):
+                sentence = sentence.strip()
+                if not sentence or "[[" in sentence:
+                    continue
+                m = _VAGUE_REFERENT_RE.search(sentence)
+                if not m:
+                    continue
+                tokens = sentence.split()
+                if any(t[:1].isupper() for t in tokens[1:]):
+                    continue
+                findings.append(Finding(
+                    "clarity", "INFO", f"{rel}:{current_start}",
+                    f'clarity: "the {m.group(1).casefold()}" — name the '
+                    f"document or person in this sentence; the plan is "
+                    f"read cold (#195)"))
+        current = []
+
+    for lineno, line, section, in_code, is_heading in _walk_body(states):
+        stripped = line.strip()
+        skip = (in_code or is_heading or not _is_session_running(section)
+                or stripped.startswith(">") or stripped.startswith("|"))
+        if skip or not stripped:
+            flush()
+            continue
+        if not current:
+            current_start = lineno
+        current.append(LIST_MARKER_RE.sub("", stripped, count=1))
+    flush()
+    return findings
+
+
+def check_question_weight(rel: str, states: list[vl.LineState]
+                          ) -> list[Finding]:
+    findings: list[Finding] = []
+    for start, joined in _open_questions_items(states):
+        m = COSMETIC_QUESTION_RE.search(joined)
+        if m:
+            findings.append(Finding(
+                "question-weight", "WARNING", f"{rel}:{start}",
+                f"question-weight: {m.group(0)!r} is craft or "
+                f"bookkeeping, not a plot question — decide it or default "
+                f"it and note the default (#197)"))
     return findings
 
 
@@ -704,6 +932,9 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
     findings.extend(check_recap(rel, by_norm))
     findings.extend(check_npc_table(rel, by_norm))
     findings.extend(check_scenes(rel, by_norm))
+    findings.extend(check_shape(rel, states))
+    findings.extend(check_clarity(rel, states))
+    findings.extend(check_question_weight(rel, states))
     findings.extend(check_duration(rel, states))
     findings.extend(check_audit_trail(rel, states))
     findings.extend(check_pc_state(rel, states))

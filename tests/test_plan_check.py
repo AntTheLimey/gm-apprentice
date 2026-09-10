@@ -73,7 +73,10 @@ class GoodPlanTests(unittest.TestCase):
 
 class BadPlanRowsTests(unittest.TestCase):
     """One assertion per check id (hard-guard excluded — it only fires
-    under --headless, covered separately)."""
+    under --headless, covered separately; scene-labels excluded from the
+    `self.one` shape — the enumerated skeleton (#196) makes several
+    scene-labels rows fire at once, covered by its own method below and
+    by NewSkeletonTests)."""
 
     @classmethod
     def setUpClass(cls):
@@ -114,7 +117,7 @@ class BadPlanRowsTests(unittest.TestCase):
     def test_preamble_carries_the_word_count(self):
         f = self.one("preamble")
         self.assertEqual(f.level, "WARNING")
-        self.assertIn("1040 words", f.message)
+        self.assertIn("1100 words", f.message)
 
     def test_recap_carries_the_word_count(self):
         f = self.one("recap")
@@ -131,12 +134,13 @@ class BadPlanRowsTests(unittest.TestCase):
         self.assertEqual(f.level, "INFO")
         self.assertIn("Scene 2", f.message)
 
-    def test_scene_labels_missing_behaviours(self):
+    def test_scene_labels_legacy_scene_is_flagged(self):
         rows = rows_for(self.findings, "scene-labels")
-        self.assertEqual(len(rows), 1, rows)
-        self.assertEqual(rows[0].level, "WARNING")
-        self.assertIn("**Behaviours:**", rows[0].message)
-        self.assertIn("Scene 1", rows[0].locus)
+        legacy = [f for f in rows if "pre-1.9.12" in f.message]
+        self.assertEqual(len(legacy), 1, rows)
+        self.assertEqual(legacy[0].level, "ERROR")
+        self.assertIn("Objective", legacy[0].message)
+        self.assertIn("Scene 2", legacy[0].locus)
 
     def test_scene_type(self):
         f = self.one("scene-type")
@@ -211,6 +215,47 @@ class BadPlanRowsTests(unittest.TestCase):
         for f in self.findings:
             with self.subTest(id=f.id, message=f.message):
                 self.assertTrue(f.message.startswith(f.id + ":"), f)
+
+
+class NewSkeletonTests(unittest.TestCase):
+    def _rows(self, plan: Path, check_id: str) -> list[str]:
+        r = run_cli(plan)
+        return [ln for ln in r.stdout.splitlines() if f"\t{check_id}:" in ln or f"{check_id}:" in ln.split("\t", 2)[-1]]
+
+    def test_good_plan_clean_on_new_checks(self):
+        r = run_cli(GOOD)
+        for cid in ("scene-labels", "shape", "clarity", "question-weight", "sections"):
+            self.assertFalse([ln for ln in r.stdout.splitlines() if f"{cid}:" in ln], cid)
+
+    def test_near_miss_and_missing_block_are_errors(self):
+        rows = self._rows(BAD, "scene-labels")
+        self.assertTrue(any("has '**Situation.**' — write '**Situation:**'" in ln for ln in rows))
+        self.assertTrue(any("is missing **Points to land**" in ln for ln in rows))
+        self.assertTrue(all(ln.startswith("ERROR\t") for ln in rows))
+
+    def test_legacy_scene_is_one_row(self):
+        rows = [ln for ln in self._rows(BAD, "scene-labels") if "pre-1.9.12" in ln]
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Objective", rows[0])
+
+    def test_contingency_then_required(self):
+        rows = self._rows(BAD, "scene-labels")
+        self.assertTrue(any("is missing **Then**" in ln for ln in rows))
+
+    def test_missing_gm_notes_is_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "P.md"
+            p.write_text(GOOD.read_text().replace("## GM Notes", "## Keeper Notes", 1))
+            r = run_cli(p)
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("ERROR\t", r.stdout)
+            self.assertIn("sections: missing '## GM Notes'", r.stdout)
+
+    def test_shape_clarity_question_weight(self):
+        r = run_cli(BAD)
+        self.assertTrue(any(ln.startswith("WARNING\t") and "shape:" in ln and "paragraph outside a blockquote" in ln for ln in r.stdout.splitlines()))
+        self.assertTrue(any(ln.startswith("INFO\t") and 'clarity: "the papers"' in ln for ln in r.stdout.splitlines()))
+        self.assertTrue(any(ln.startswith("WARNING\t") and "question-weight:" in ln and "font" in ln for ln in r.stdout.splitlines()))
 
 
 class SectionsOrderTests(unittest.TestCase):

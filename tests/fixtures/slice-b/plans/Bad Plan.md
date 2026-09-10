@@ -80,6 +80,12 @@ the courier thread, which has quietly outlasted every other lead the
 party picked up since arriving in Vienna and shows no sign of resolving
 itself without someone finally choosing to act on it directly.
 
+Nobody has yet raised the matter with the household steward, who
+manages every schedule in the compound and would notice at once if a
+routine changed, and the party has not decided whether that is a risk
+worth taking before the ball or a conversation better left for the
+morning after, once tonight's business is settled one way or another.
+
 ## NPC Quick Reference
 
 | NPC | Role This Session | Key Detail | Location |
@@ -116,15 +122,19 @@ The weather has turned cold enough that most of the delegation carriages are que
 ### Scene 1: The Kitchens
 
 **Type:** dance
-**Objective:** Bram tries to warn Ada about the missing courier without
-saying so directly, in front of people who should not overhear it.
+**Situation.** Bram catches Ada near the servants' stair and asks after "an old friend from Prague."
+**Starts it:** Bram. Wants to warn Ada about the missing courier without saying so directly, in front of people who should not overhear it.
 **Entities:** [[Bram]], [[Ada]], Hofburg Kitchens
-**Setup:** Bram catches Ada near the servants' stair and asks after "an
-old friend from Prague."
-**Branching:** Ada can press him for the friend's name, brush him off,
-or report the exchange to Winslow before the night is over.
-**Complications:** A Brotherhood aide passes close enough to overhear
-part of the exchange and lingers afterward.
+**NPCs**
+- **Bram:** presses gently, hoping Ada names the courier herself rather than making him ask outright.
+- Tuesday morning puts the papers on the tray and the regrets in two of them.
+**If the players...**
+| Do | Then |
+|---|---|
+| Ada presses for the friend's name | Bram flinches and changes the subject |
+| Ada brushes him off | He tries again later, more directly |
+**Complications**
+- A Brotherhood aide passes close enough to overhear part of the exchange and lingers afterward.
 
 > You feel a chill as the Spot Hidden reveals a shape in the corner.
 
@@ -155,17 +165,11 @@ The orchestra shifts into a new set, and half the room drifts toward the dance f
 
 **Trigger:** A PC asks Bram outright whether he knows the missing
 courier.
-**Type:** social
-**Objective:** Bram has to decide, on the spot, how much to admit.
 **Entities:** [[Bram]], the confronting PC
-**Setup:** The PC catches Bram alone in the kitchen corridor and asks
-him plainly.
-**Behaviours:** Bram stalls for time rather than lie outright, hoping
-someone else interrupts before he has to answer.
-**Branching:** Bram can tell the truth, deflect with a half-truth, or
-ask for something in return first.
-**Complications:** A second kitchen hand walks in partway through and
-Bram has to decide whether to keep talking in front of them.
+- Bram stalls for time rather than lie outright, hoping someone else
+  interrupts before he has to answer.
+- A second kitchen hand walks in partway through and Bram has to decide
+  whether to keep talking in front of them.
 
 ## Session End Objectives
 
@@ -184,6 +188,7 @@ service corridors in reserve for later.
 
 - [ ] Whether Sternberg reports to the Brotherhood directly or only to
   Metternich.
+- [ ] Which Google font for the invitation card?
 
 ## Spotlight Forecast
 

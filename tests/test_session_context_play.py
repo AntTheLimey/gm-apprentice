@@ -51,12 +51,12 @@ class PlayBriefCLITests(unittest.TestCase):
         self.assertIn("===== Play Brief — Session 8 =====", out)
         self.assertIn("### Scene 1: The Dredger's Manifest", out)
         self.assertIn("**Type:** investigation", out)
-        self.assertIn("**Objective:**", out)
-        self.assertIn("**Setup:**", out)
+        self.assertIn("**Situation:**", out)
+        self.assertIn("**Starts it:**", out)
+        self.assertIn("**Points to land**", out)
+        self.assertIn("| Do | Then |", out)
+        self.assertNotIn("**Entities:**", out)
         self.assertIn("### Scene 2: Bram's Reckoning", out)
-        self.assertNotIn("**Behaviours:**", out)
-        self.assertNotIn("**Branching:**", out)
-        self.assertNotIn("**Complications:**", out)
         self.assertNotIn("Active Threads", out)
 
     def test_play_session_flag_picks_named_plan(self):

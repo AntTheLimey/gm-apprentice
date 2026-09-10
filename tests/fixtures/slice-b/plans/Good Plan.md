@@ -38,18 +38,21 @@ forward or update this week.
 
 Two weeks ago the party arrived in Vienna and secured lodgings near the
 Hofburg. Ada recognised a face from Prague among the delegation staff,
-though she said nothing to the others. Winslow charmed an invitation to
-tonight's ball from a minor clerk, and Marlowe spent the week mapping the
-palace's service corridors in case a quiet exit is ever needed.
+though she said nothing to the others.
+
+Winslow charmed an invitation to tonight's ball from a minor clerk, and
+Marlowe spent the week mapping the palace's service corridors in case a
+quiet exit is ever needed.
 
 ## Active Threads
 
 The courier Ada recognised in Prague has not been seen since the
-delegation arrived — Winslow wants to ask around discreetly. The
-Brotherhood's letter of introduction, promised three sessions ago, still
-hasn't arrived; if it doesn't turn up tonight, Marlowe will need another
-way into the inner circle. No threads have gone three sessions without
-attention yet.
+delegation arrived — Winslow wants to ask around discreetly.
+
+The Brotherhood's letter of introduction, promised three sessions ago,
+still hasn't arrived; if it doesn't turn up tonight, Marlowe will need
+another way into the inner circle. No threads have gone three sessions
+without attention yet.
 
 ## NPC Quick Reference
 
@@ -62,6 +65,7 @@ attention yet.
 
 It is the 9th of November, 1814. The Congress recesses for the ball
 tonight at the Hofburg; guards are doubled at every gate through Sunday.
+
 The Brotherhood publicly backs Metternich's faction while quietly
 courting the Prussian delegation, a split none of the investigators have
 confirmed yet. No faction currently considers the party a threat.
@@ -71,56 +75,52 @@ confirmed yet. No faction currently considers the party a threat.
 ### Scene 1: The Antechamber
 
 **Type:** social
-**Objective:** Bruyère corners Ada near the antechamber to test whether
-she remembers the courier, without ever naming him directly.
+**Situation:** Bruyère has Ada briefly alone by the antechamber door with champagne in hand.
+**Starts it:** Bruyère. Wants to learn whether Ada remembers the courier without naming him.
 **Entities:** [[Bruyère]], [[Ada]], Hofburg Antechamber
-**Setup:** Bruyère intercepts Ada the moment she's briefly alone,
-offering champagne and idle talk about Prague.
-**Behaviours:** Bruyère steers every exchange back toward Prague and
-watches Ada's reactions closely; if Ada gives nothing away, he grows more
-direct by the scene's end. If the PCs never engage him, he corners a
-different party member instead before midnight.
-**Branching:** Ada can play along, deflect entirely, or ask a pointed
-question of her own — each changes how much the Brotherhood trusts her
-by night's end.
-**Complications:** Winslow spots the exchange and starts asking questions
-of his own; a Brotherhood aide interrupts to summon Bruyère elsewhere at
-the worst moment.
+**NPCs**
+- **Bruyère:** steers every exchange back to Prague. If nobody engages him, corners another PC before midnight.
+**Points to land**
+- [ ] Bruyère knew the courier personally.
+**If the players...**
+| Do | Then |
+|---|---|
+| Ada plays along | Bruyère grows direct by the scene's end |
+| Ada deflects | He moves to Winslow and asks about her instead |
+**Complications**
+- Winslow spots the exchange and starts asking his own questions.
+- A Brotherhood aide summons Bruyère at the worst moment.
+
+> The antechamber is cooler than the ballroom and half-lit. Somewhere behind the panelling a clock is being wound.
 
 ### Scene 2: The Service Corridor
 
 **Type:** investigation
-**Objective:** Marlowe's earlier mapping pays off — the service corridor
-holds a locked room the staff avoid discussing.
-**Entities:** [[Marlowe]], Hofburg Service Corridor, Locked Store Room
-**Setup:** A tired footman waves Marlowe through a side door rather than
-argue about the delivery he's supposedly making.
-**Behaviours:** Staff traffic thins after eleven; if the PCs wait too
-long, a supervisor starts a headcount and the window closes.
-**Branching:** The locked room can be picked, talked past a guard, or
-left for another night if the timing feels wrong.
-**Complications:** The lock is stiffer than expected and takes real
-effort; a delegation aide takes the same corridor as a shortcut partway
-through.
+**Situation:** A footman waves Marlowe through a side door — the storeroom past it is off-limits to guests.
+**Starts it:** Marlowe. Wants to know what the staff won't discuss.
+**Entities:** [[Marlowe]], Service Corridor, Locked Store Room
+**NPCs**
+- **Footman:** waves Marlowe through without argument, glad to be rid of the delivery.
+**Points to land**
+- [ ] The storeroom holds whatever the staff won't discuss.
+**If the players...**
+| Do | Then |
+|---|---|
+| Pick the lock | The lock is stiffer than expected, and takes real effort |
+| Wait for the corridor to clear | Traffic thins after eleven, but a supervisor starts a headcount |
+**Complications**
+- A delegation aide takes the same corridor as a shortcut partway through.
+
+> The corridor smells of tallow and old stone. A single lamp gutters near the locked door.
 
 ## Contingency Scenes
 
 ### If Ada is recognised outright
 
-**Trigger:** Bruyère names the courier directly and watches for Ada's
-reaction.
-**Type:** social
-**Objective:** Ada has to decide, in the moment, whether to admit what
-she knows or bury it.
-**Entities:** [[Bruyère]], [[Ada]]
-**Setup:** Bruyère drops the courier's name mid-sentence, as if by
-accident, and watches Ada's face.
-**Behaviours:** Bruyère presses only once — if Ada holds her composure he
-moves on rather than force the issue in public.
-**Branching:** Ada can admit she remembers, deny it outright, or turn the
-question back on Bruyère.
-**Complications:** Winslow is close enough to overhear and may ask Ada
-about it later, whatever she said.
+**Trigger:** Bruyère names the courier directly and watches Ada's face.
+**Then**
+- Ada admits she remembers — Bruyère grows warmer, testing how far her honesty goes.
+- Ada denies it outright — Bruyère lets it go for tonight, but Winslow noticed the tension.
 
 ## Session End Objectives
 
@@ -135,16 +135,21 @@ about it later, whatever she said.
 
 Ada is at the Confronting the Past stage: tonight tests whether she can
 face Prague without flinching, and her next beat is the Brotherhood
-extending an invitation of their own. Winslow is Climbing, working
-Sternberg's confidence as this session's A-plot. Marlowe is Digging In,
-with the locked store room as her B-plot.
+extending an invitation of their own.
+
+Winslow is Climbing, working Sternberg's confidence as this session's
+A-plot.
+
+Marlowe is Digging In, with the locked store room as her B-plot.
 
 ## Touchpoint Plan
 
 Ada gets the major touchpoint: Bruyère's confrontation, mid-session.
 Winslow gets a minor touchpoint working Sternberg at the door throughout
-the evening. Marlowe gets a major touchpoint in the service corridor
-during the back half of the session. All three PCs are covered.
+the evening.
+
+Marlowe gets a major touchpoint in the service corridor during the back
+half of the session. All three PCs are covered.
 
 ## Spotlight Forecast
 
