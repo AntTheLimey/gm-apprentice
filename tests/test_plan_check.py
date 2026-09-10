@@ -365,9 +365,32 @@ class LabelHelperUnitTests(unittest.TestCase):
         body = ("**Objective:** foo\n**Entities:** [[X]]\n"
                 "**Setup:** bar\n**Behaviours:** baz\n"
                 "**Branching:** qux")
-        found = pc._legacy_scene(body)
+        found = pc._legacy_scene(body, pc.SCENE_LABELS)
         self.assertEqual(found, ["Objective", "Setup", "Behaviours",
                                  "Branching"])
+
+    def test_contingency_scene_with_stray_legacy_label_is_not_legacy(self):
+        # A well-formed Contingency scene carrying a stray `**Setup:**`
+        # is not legacy — the gate is the scene's own expected labels,
+        # and Trigger/Then are both present, so the Setup line is
+        # simply ignored.
+        body = "**Trigger:** x\n**Then**\n- a\n**Setup:** b\n"
+        self.assertEqual(pc._legacy_scene(body, pc.CONTINGENCY_LABELS), [])
+        findings = pc._scene_findings("P.md", body, "If X",
+                                      pc.CONTINGENCY_LABELS)
+        self.assertEqual(findings, [], findings)
+
+    def test_legacy_planned_scene_yields_no_per_label_rows(self):
+        # B6: the legacy row replaces the per-label roll call, it does
+        # not accompany it.
+        body = ("**Objective:** foo\n**Setup:** bar\n"
+                "**Behaviours:** baz\n**Branching:** qux")
+        findings = pc._scene_findings("P.md", body, "Scene 2",
+                                      pc.SCENE_LABELS)
+        rows = [f for f in findings if f.id == "scene-labels"]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("pre-1.9.12", rows[0].message)
+        self.assertFalse([f for f in rows if "is missing" in f.message], rows)
 
     def test_legacy_message_uses_the_passed_labels(self):
         # Ruling 8: a Contingency scene's legacy message names
@@ -380,6 +403,116 @@ class LabelHelperUnitTests(unittest.TestCase):
         self.assertIn("rewrite as Trigger / Then", legacy[0].message)
         self.assertNotIn("Situation", legacy[0].message)
 
+    def test_if_the_players_colon_form_is_a_near_miss(self):
+        body = "**If the players:**\n| Do | Then |\n|---|---|"
+        self.assertFalse(pc._label_present(body, "If the players..."))
+        self.assertEqual(pc._label_near_miss(body, "If the players..."),
+                         "**If the players:**")
+        findings = pc._scene_findings("P.md", body, "Scene 1",
+                                      ("If the players...",))
+        rows = [f for f in findings if f.id == "scene-labels"]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("has '**If the players:**' — write "
+                      "'**If the players...**'", rows[0].message)
+
+
+def question_rows(item: str) -> list[pc.Finding]:
+    text = ("---\ntype: session-plan\n---\n\n## Open Questions\n\n"
+            f"- [ ] {item}\n")
+    states, _problems = pc.vl.scan_body(text)
+    return pc.check_question_weight("P.md", states)
+
+
+class QuestionWeightTests(unittest.TestCase):
+    """B1: `question-weight` fires on craft and bookkeeping only. Step 15
+    tells the model to delete what it flags, so a plot question caught by
+    a bare `layout` or `rolled` is a deleted plot question."""
+
+    def test_plot_question_about_a_layout_is_not_cosmetic(self):
+        self.assertEqual(
+            question_rows("Does Sophia know the layout of the undercroft?"),
+            [])
+
+    def test_rolled_in_its_ordinary_sense_is_not_cosmetic(self):
+        self.assertEqual(
+            question_rows("Who rolled the barrel into the river?"), [])
+
+    def test_craft_layout_still_fires(self):
+        rows = question_rows("Is the handout layout finished?")
+        self.assertEqual(len(rows), 1, rows)
+
+    def test_font_still_fires(self):
+        rows = question_rows("Which Google font for the invitation card?")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("font", rows[0].message)
+
+    def test_die_roll_question_still_fires(self):
+        rows = question_rows("What did Emma roll for Reputation?")
+        self.assertEqual(len(rows), 1, rows)
+
+    def test_rolled_a_die_still_fires(self):
+        rows = question_rows("Has Emma rolled a Luck roll for this yet?")
+        self.assertEqual(len(rows), 1, rows)
+
+
+def clarity_rows(body: str) -> list[pc.Finding]:
+    text = f"---\ntype: session-plan\n---\n\n## Active Threads\n\n{body}"
+    states, _problems = pc.vl.scan_body(text)
+    return pc.check_clarity("P.md", states)
+
+
+class ClarityTests(unittest.TestCase):
+    """B3: the referent scan credits what a cold reader would actually
+    read as a name."""
+
+    def test_quoted_name_counts_as_named(self):
+        self.assertEqual(
+            clarity_rows('Bring the letter to "Renwick" before dawn.\n'), [])
+
+    def test_bold_label_lead_names_the_bullets_referent(self):
+        self.assertEqual(
+            clarity_rows("- **Renwick:** he still has the letter he was "
+                         "told to burn.\n"), [])
+
+    def test_checkbox_is_not_the_items_first_token(self):
+        # The checkbox used to occupy the excluded first-token slot,
+        # which silently credited whatever name followed it. Judgement
+        # must not depend on whether the bullet carries one.
+        plain = clarity_rows("- Someone should burn the letter.\n")
+        boxed = clarity_rows("- [ ] Someone should burn the letter.\n")
+        self.assertEqual(len(plain), 1, plain)
+        self.assertEqual(len(boxed), 1, boxed)
+
+    def test_a_genuinely_nameless_sentence_still_fires(self):
+        rows = clarity_rows("- someone left the letter on the step.\n")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn('"the letter"', rows[0].message)
+
+    def test_rows_are_deduplicated_per_line_and_referent(self):
+        rows = clarity_rows(
+            "- read the letter, then burn the letter, then forget it.\n")
+        self.assertEqual(len(rows), 1, rows)
+
+
+class ShapeMarkerTests(unittest.TestCase):
+    """B4: list and checkbox markers are scaffolding, not content — a
+    40-word checklist item is at budget, not one over it."""
+
+    def test_forty_content_words_under_a_checkbox_is_clean(self):
+        item = "- [ ] " + " ".join(["word"] * 40)
+        text = (f"---\ntype: session-plan\n---\n\n## Planned Scenes\n\n"
+                f"### Scene 1\n\n**Points to land**\n{item}\n")
+        states, _problems = pc.vl.scan_body(text)
+        self.assertEqual(pc.check_shape("P.md", states), [])
+
+    def test_forty_one_content_words_still_fires(self):
+        item = "- [ ] " + " ".join(["word"] * 41)
+        text = (f"---\ntype: session-plan\n---\n\n## Planned Scenes\n\n"
+                f"### Scene 1\n\n**Points to land**\n{item}\n")
+        states, _problems = pc.vl.scan_body(text)
+        rows = pc.check_shape("P.md", states)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("41-word bullet", rows[0].message)
 
 class SectionsOrderTests(unittest.TestCase):
     def test_good_plan_is_in_order(self):

@@ -29,7 +29,7 @@ The bay was sterile. Keep this recap line.
 
 - Open threads: the Dredger's debt
 
-#### [[Second]] (Sam)
+#### [[Second_Name]] (Sam)
 
 - Open threads: the missing sister
 

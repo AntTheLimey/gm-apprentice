@@ -46,13 +46,11 @@ quiet exit is ever needed.
 
 ## Active Threads
 
-The courier Ada recognised in Prague has not been seen since the
-delegation arrived — Winslow wants to ask around discreetly.
-
-The Brotherhood's letter of introduction, promised three sessions ago,
-still hasn't arrived; if it doesn't turn up tonight, Marlowe will need
-another way into the inner circle. No threads have gone three sessions
-without attention yet.
+- The courier Ada recognised in Prague has not been seen since the
+  delegation arrived — Winslow wants to ask around discreetly.
+- The Brotherhood's letter of introduction, promised three sessions ago,
+  still hasn't arrived; Marlowe needs another way into the inner circle.
+- No threads have gone three sessions without attention yet.
 
 ## NPC Quick Reference
 
@@ -63,12 +61,11 @@ without attention yet.
 
 ## World State
 
-It is the 9th of November, 1814. The Congress recesses for the ball
-tonight at the Hofburg; guards are doubled at every gate through Sunday.
-
-The Brotherhood publicly backs Metternich's faction while quietly
-courting the Prussian delegation, a split none of the investigators have
-confirmed yet. No faction currently considers the party a threat.
+- It is the 9th of November, 1814. The Congress recesses for the ball
+  tonight at the Hofburg; guards are doubled at every gate until Sunday.
+- The Brotherhood publicly backs Metternich's faction while quietly
+  courting the Prussian delegation — a split nobody has confirmed yet.
+- No faction currently considers the party a threat.
 
 ## Planned Scenes
 
@@ -133,29 +130,25 @@ confirmed yet. No faction currently considers the party a threat.
 
 ## PC Roster & Arcs
 
-Ada is at the Confronting the Past stage: tonight tests whether she can
-face Prague without flinching, and her next beat is the Brotherhood
-extending an invitation of their own.
-
-Winslow is Climbing, working Sternberg's confidence as this session's
-A-plot.
-
-Marlowe is Digging In, with the locked store room as her B-plot.
+- Ada — Confronting the Past. Tonight tests whether she can face Prague
+  without flinching; her next beat is the Brotherhood's own invitation.
+- Winslow — Climbing. Working Sternberg's confidence as this session's
+  A-plot.
+- Marlowe — Digging In. The locked store room is her B-plot.
 
 ## Touchpoint Plan
 
-Ada gets the major touchpoint: Bruyère's confrontation, mid-session.
-Winslow gets a minor touchpoint working Sternberg at the door throughout
-the evening.
-
-Marlowe gets a major touchpoint in the service corridor during the back
-half of the session. All three PCs are covered.
+- Ada — major touchpoint: Bruyère's confrontation, mid-session.
+- Winslow — minor touchpoint: working Sternberg at the door throughout
+  the evening.
+- Marlowe — major touchpoint: the service corridor, back half of the
+  session. All three PCs are covered.
 
 ## Spotlight Forecast
 
-Ada carries roughly half of tonight's session given the stated intent.
-Winslow and Marlowe split the remainder close to evenly. No imbalance
-flagged — the Ada-heavy split is intentional this week.
+- Ada carries roughly half of tonight's session, given the stated intent.
+- Winslow and Marlowe split the remainder close to evenly.
+- No imbalance flagged — the Ada-heavy split is intentional this week.
 
 ## Open Questions
 

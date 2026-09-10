@@ -12,10 +12,8 @@ Run: python3 tests/test_session_context_brief.py
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -58,6 +56,41 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertEqual(sc.brief_wrapup(body), body)
 
 
+    def test_fenced_heading_is_not_stubbed(self):
+        body = ("## GM Notes\n\n### Quick Bullets\n\n"
+                "```markdown\n### Quality Notes\n\nA fenced example.\n```\n\n"
+                "- Keep this bullet.\n")
+        out = sc.brief_wrapup(body)
+        self.assertNotIn("omitted in --brief", out)
+        self.assertIn("### Quality Notes", out)
+        self.assertIn("A fenced example.", out)
+        self.assertIn("Keep this bullet.", out)
+
+
+class RemoveEntitiesUnitTests(unittest.TestCase):
+    def test_entities_removal_is_line_bounded(self):
+        body = ("**Situation:** A thing.\n"
+                "**Entities:** [[A]], [[B]]\n"
+                "\n"
+                "> Read-aloud sentence that must survive.\n"
+                "\n"
+                "Trailing note.\n")
+        out = sc._remove_inline_label_line(body, "Entities")
+        self.assertNotIn("[[A]]", out)
+        self.assertIn("**Situation:** A thing.", out)
+        self.assertIn("> Read-aloud sentence that must survive.", out)
+        self.assertIn("Trailing note.", out)
+
+    def test_wrapped_entities_continuation_is_removed(self):
+        body = ("**Entities:** [[A]],\n"
+                "[[B]], [[C]]\n"
+                "\n"
+                "Kept prose.\n")
+        out = sc._remove_inline_label_line(body, "Entities")
+        self.assertNotIn("[[B]]", out)
+        self.assertIn("Kept prose.", out)
+
+
 class OutlineUnitTests(unittest.TestCase):
     def test_outline_lines_and_counts(self):
         body = ("# T\n\nfour words are here\n\n## A\n\none two\n\n"
@@ -67,6 +100,13 @@ class OutlineUnitTests(unittest.TestCase):
         self.assertEqual(out[1], "## A  (2 words)")
         self.assertTrue(out[2].startswith("### B  ("))
         self.assertEqual(len(out), 3)
+
+    def test_outline_keeps_h4_to_h6(self):
+        body = ("## A\n\none two\n\n#### D\n\nthree words here now\n\n"
+                "##### E\n\nsix\n\n###### F\n\nseven\n")
+        out = sc.outline(body).splitlines()
+        self.assertEqual(out, ["## A  (2 words)", "#### D  (4 words)",
+                               "##### E  (1 words)", "###### F  (1 words)"])
 
 
 class BriefCLITests(unittest.TestCase):
@@ -85,11 +125,21 @@ class BriefCLITests(unittest.TestCase):
         self.assertIn("===== World Flags — Deferred =====", out)
         self.assertIn("(brief: ", out)
 
+    def test_brief_outlines_the_existing_plan(self):
+        r = run_cli(FIXTURE, "--brief")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = r.stdout
+        self.assertIn("===== Existing Plan — Session 8 (outline) =====", out)
+        self.assertIn("## Session Intent  (", out)
+        self.assertIn("type: session-plan", out)
+        self.assertNotIn("Find the sister.", out)
+
     def test_default_is_unchanged(self):
         r = run_cli(FIXTURE)
         self.assertIn("reconcile provenance", r.stdout)
         self.assertIn("must NOT print in full", r.stdout)
         self.assertNotIn("(outline)", r.stdout)
+        self.assertIn("Find the sister.", r.stdout)
 
     def test_brief_preserves_gm_only_markers(self):
         r = run_cli(FIXTURE, "--brief")
@@ -197,6 +247,20 @@ class ArcsCLITests(unittest.TestCase):
         self.assertIn("Plans without a ## Spotlight Forecast: Session 5", out)
         self.assertNotIn("Retired", out)
         self.assertNotIn("===== Wrap-Up", out)
+
+    def test_prose_forecast_is_its_own_bucket(self):
+        r = run_cli(FIXTURE, "--arcs")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = r.stdout
+        self.assertIn(
+            "Plans whose ## Spotlight Forecast has no table "
+            "(read those sections directly): Session 4", out)
+        self.assertIn("Plans without a ## Spotlight Forecast: Session 5", out)
+        # No per-PC row is emitted for a prose forecast, under any PC...
+        self.assertNotIn("Session 4:", out)
+        # ...and Session 4 is not counted in the "plans read" denominator.
+        self.assertIn("Sessions since last C-plot: never (in 2 plans read)",
+                      out)
 
     def test_arcs_excludes_brief(self):
         r = run_cli(FIXTURE, "--arcs", "--brief")

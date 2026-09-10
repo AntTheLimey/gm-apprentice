@@ -222,9 +222,19 @@ _VAGUE_REFERENT_RE = re.compile(
 
 # `question-weight`: an Open Questions item that is craft or bookkeeping,
 # not a plot question that needs a Keeper decision (#197).
+#
+# Step 15 tells the model to delete what this flags, so every term has to
+# earn its place: bare `layout` deleted "Does Sophia know the layout of
+# the undercroft?" and bare `rolled` deleted "Who rolled the barrel into
+# the river?". `layout` therefore needs a craft qualifier in front of it,
+# and `rolled` has to be the die sense.
 COSMETIC_QUESTION_RE = re.compile(
-    r"\b(font|typeface|filename|file name|layout|formatting|colou?r "
-    r"scheme|rolled|die result|dice result|what (?:did|does) \w+ roll)\b",
+    r"\bfont\b|\btypeface\b|\bfilename\b|\bfile name\b|\bformatting\b"
+    r"|\bcolou?r scheme\b"
+    r"|\b(?:prop|page|handout|card|sheet)\s+layout\b"
+    r"|\brolled\s+(?:an?\b|\d|the\s+(?:die|dice)\b)"
+    r"|\bdie result\b|\bdice result\b"
+    r"|\bwhat (?:did|does) \w+ roll\b",
     re.I)
 
 DURATION_RANGE_RE = re.compile(
@@ -260,6 +270,21 @@ GUARD_SECTIONS: tuple[str, ...] = (
 # A list item opener: `- `, `* `, or `1. `. A hard-wrapped continuation
 # line carries none of these and belongs to the item above it.
 LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
+# A task-list checkbox, which follows the marker and is scaffolding too.
+CHECKBOX_RE = re.compile(r"^\[[ xX]\]\s*")
+
+
+def _strip_item_marker(text: str) -> str:
+    """`text` with a leading list marker and task checkbox removed.
+
+    `- [ ] ` is Obsidian scaffolding, not something the Keeper reads at
+    the table: counting it toward the `shape` word budget made a 40-word
+    checklist item read as 43, and leaving it in place made `[` the
+    `clarity` scan's "first token" instead of the name that follows it.
+    """
+    stripped = text.lstrip()
+    stripped = LIST_MARKER_RE.sub("", stripped, count=1)
+    return CHECKBOX_RE.sub("", stripped, count=1)
 
 PREP_STATE_RE = re.compile(r"<!--\s*prep-state:\s*(.*?)-->", re.DOTALL)
 # key=value, where a value may be a `[...]`/`(...)` group carrying
@@ -509,6 +534,18 @@ def _label_present(body: str, label: str) -> bool:
 
 
 def _label_near_miss(body: str, label: str) -> str | None:
+    if label == "If the players...":
+        # The ellipsis is part of the label, so `re.escape(label)` below
+        # would only ever find `**If the players...:**`. The form the GM
+        # actually writes is `**If the players:**` — a near miss with a
+        # fix, not a missing label (#M16).
+        for pattern in (r"^\*\*If the players(?:\.{1,3}|…)?\s*:\*\*",
+                        r"^\*\*If the players(?:\.{1,3}|…)?\s*;\*\*",
+                        r"^If the players(?:\.{1,3}|…)?\s*:"):
+            m = re.search(pattern, body, re.MULTILINE)
+            if m:
+                return m.group(0)
+        return None
     esc = re.escape(label)
     patterns = [rf"^\*\*{esc}\.\*\*", rf"^\*\*{esc};\*\*"]
     if _is_inline_label(label):
@@ -526,13 +563,23 @@ def _label_near_miss(body: str, label: str) -> str | None:
 _LEGACY_LABEL_RE = re.compile(r"^\*\*(\w+):\*\*")
 
 # `Entities` is common furniture to both the pre-1.9.12 prose skeleton and
-# the enumerated one, so its presence alone must not disqualify legacy
-# detection — only the two labels unique to the new skeleton's opening do.
-_MODERN_GATE_LABELS: tuple[str, ...] = ("Situation", "Starts it")
+# the enumerated one, so its presence alone is no evidence of the modern
+# skeleton and never gates legacy detection off.
+_COMMON_FURNITURE_LABELS: frozenset[str] = frozenset({"Entities"})
 
 
-def _legacy_scene(body: str) -> list[str]:
-    if any(_label_present(body, label) for label in _MODERN_GATE_LABELS):
+def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
+    """The pre-1.9.12 prose labels a scene carries, or `[]` if it is not
+    a legacy scene at all.
+
+    The gate is the scene's *own* expected label set — planned or
+    contingency, as passed. Gating on the planned skeleton's opening pair
+    alone reported a well-formed Contingency scene as legacy the moment
+    it carried a stray `**Setup:**` line, and skipped its Trigger/Then
+    roll call to say so.
+    """
+    gate = [lb for lb in labels if lb not in _COMMON_FURNITURE_LABELS]
+    if any(_label_present(body, label) for label in gate):
         return []
     found: list[str] = []
     for line in body.splitlines():
@@ -546,7 +593,7 @@ def _scene_findings(rel: str, body: str, scene_title: str,
                     labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
     locus = f"{rel}:§{scene_title}"
-    legacy_found = _legacy_scene(body)
+    legacy_found = _legacy_scene(body, labels)
     if legacy_found:
         rewrite_as = " / ".join(labels)
         findings.append(Finding(
@@ -624,6 +671,9 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
     `SHAPE_EXEMPT_TITLES`: a bullet or `**Label` item, or a plain-prose
     paragraph, over `SHAPE_MAX_WORDS` words.
 
+    A list marker and its task checkbox (`- [ ] `) are scaffolding and
+    are not counted toward the budget.
+
     Bullets and label lines are judged item by item, not as a merged
     run: an item is its own marker/label line plus any hard-wrapped
     continuation lines, ending at the next line that opens a new bullet
@@ -642,7 +692,7 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
     def flush() -> None:
         nonlocal current, current_kind
         if current:
-            text = "\n".join(current)
+            text = _strip_item_marker("\n".join(current))
             wc = vl.word_count(text)
             if current_kind == "label" and wc > SHAPE_MAX_WORDS:
                 findings.append(Finding(
@@ -693,12 +743,39 @@ def check_shape(rel: str, states: list[vl.LineState]) -> list[Finding]:
     return findings
 
 
+# Punctuation a name can be wrapped in and still be a name: quotes,
+# emphasis, brackets, and trailing sentence punctuation.
+_TOKEN_EDGE_CHARS = "\"'*()[],:;.!?"
+# A bullet whose lead is a bold label — `- **Renwick:** ...` — names its
+# referent in the label, not in the sentence that follows it.
+_BOLD_LEAD_RE = re.compile(r"^\*\*([^*]+?):?\*\*")
+
+
+def _names_something(token: str) -> bool:
+    """A token that reads as a proper name once its wrapping punctuation
+    is stripped. `"Renwick"` and `**Renwick**` name a person; `the` does
+    not."""
+    return token.strip(_TOKEN_EDGE_CHARS)[:1].isupper()
+
+
 def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
     """INFO, in every session-running section outside code, blockquotes,
     and table rows: a sentence containing a vague referent
     (`\\bthe (VAGUE_REFERENTS)\\b`, casefolded) with no `[[link]]` and no
     capitalised token after its own first word — meaning the sentence
     never names the document or person "the letter" etc. refers to.
+
+    A token is tested with its wrapping punctuation stripped, so
+    `"Renwick"` and `**Renwick**` count as names; and a list item's
+    marker and task checkbox (`- [ ] `) are removed first, so the
+    checkbox never occupies the "first token" slot the scan excludes.
+
+    The unit of judgement is the list item, not the run of lines: a
+    `[[link]]`, a capitalised token, or a bold label lead
+    (`- **Renwick:** ...`) anywhere in the item credits every sentence
+    in it, because a cold reader has the whole bullet in front of them.
+    Plain prose with no list marker is still grouped as one run.
+    Duplicate rows for the same (line, referent) are emitted once.
 
     Two caveats, both a consequence of the naive `[.!?]` sentence split
     and both accepted by design since this check is INFO, a nudge:
@@ -714,10 +791,12 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
     contain sentences that start well after its first line.
     """
     findings: list[Finding] = []
+    seen: set[tuple[int, str]] = set()
     current: list[tuple[int, str]] = []
+    current_is_item = False
 
     def flush() -> None:
-        nonlocal current
+        nonlocal current, current_is_item
         if current:
             parts: list[str] = []
             offsets: list[tuple[int, int]] = []
@@ -736,6 +815,16 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
                     result = ln
                 return result
 
+            item_named = False
+            if current_is_item:
+                lead = _BOLD_LEAD_RE.match(joined)
+                item_named = (
+                    "[[" in joined
+                    or (lead is not None
+                        and lead.group(1)[:1].isupper())
+                    or any(_names_something(tok)
+                           for tok in joined.split()[1:]))
+
             last_end = 0
             boundaries = [m.start() for m in re.finditer(r"[.!?]", joined)]
             boundaries.append(len(joined))
@@ -745,21 +834,26 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
                 first_token_offset = last_end + lead_ws
                 last_end = end + 1
                 sentence = fragment.strip()
-                if not sentence or "[[" in sentence:
+                if not sentence or item_named or "[[" in sentence:
                     continue
                 m = _VAGUE_REFERENT_RE.search(sentence)
                 if not m:
                     continue
                 tokens = sentence.split()
-                if any(t[:1].isupper() for t in tokens[1:]):
+                if any(_names_something(tok) for tok in tokens[1:]):
                     continue
+                referent = m.group(1).casefold()
+                line_no = lineno_at(first_token_offset)
+                if (line_no, referent) in seen:
+                    continue
+                seen.add((line_no, referent))
                 findings.append(Finding(
-                    "clarity", "INFO",
-                    f"{rel}:{lineno_at(first_token_offset)}",
-                    f'clarity: "the {m.group(1).casefold()}" — name the '
+                    "clarity", "INFO", f"{rel}:{line_no}",
+                    f'clarity: "the {referent}" — name the '
                     "document or person in this sentence; the plan is "
                     "read cold (#195)"))
         current = []
+        current_is_item = False
 
     for lineno, line, section, in_code, is_heading in _walk_body(states):
         stripped = line.strip()
@@ -768,7 +862,15 @@ def check_clarity(rel: str, states: list[vl.LineState]) -> list[Finding]:
         if skip or not stripped:
             flush()
             continue
-        current.append((lineno, LIST_MARKER_RE.sub("", stripped, count=1)))
+        if LIST_MARKER_RE.match(stripped):
+            flush()
+            current_is_item = True
+        elif stripped.startswith("**"):
+            # A bold label line opens a field of its own, the same way
+            # `check_shape` treats it — it is not a continuation of the
+            # bullet above it, and must not lend that bullet its name.
+            flush()
+        current.append((lineno, _strip_item_marker(stripped)))
     flush()
     return findings
 

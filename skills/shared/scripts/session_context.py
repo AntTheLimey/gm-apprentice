@@ -40,17 +40,22 @@ selected session sits in. Confirm a `Note:` with
 the GM — a wrong bundle reads exactly as authoritative as a right
 one.
 
-`--brief` shrinks the default bundle's two biggest sections: the
+`--brief` shrinks the default bundle's three biggest sections: the
 Wrap-Up's reconcile-provenance GM Notes blocks are stubbed to a
-one-line word count each, and the Campaign Overview prints as
-frontmatter plus a heading outline instead of its full body.
+one-line word count each, and the Campaign Overview and the existing
+Session Plan each print as frontmatter plus a heading outline instead
+of their full bodies. Step 6 reads that Plan properly through
+`plan_check.py --inventory/--state` when it needs to.
 
 `--arcs` replaces the default bundle with each active PC's durable
 arc material instead: `## Background` and `## GM Notes` (the
 bundle's `## Current Status` block is not repeated), plus a
 chapter-scoped spotlight history built from every earlier Plan's
 `## Spotlight Forecast` table, with sessions since the PC last
-carried the B- and C-plot.
+carried the B- and C-plot. A forecast section has three states, kept
+apart because they mean different things: absent, present but written
+as prose (listed for direct reading, never counted as evidence of a
+spotlight drought), and a real table.
 """
 
 from __future__ import annotations
@@ -65,7 +70,8 @@ from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
 from vaultlib import (PC_INACTIVE_STATUS, SKIP_DIRS,  # noqa: F401
                       WRAP_UP_TYPES, body_of, entity_type, h3_blocks,
-                      nested_mapping, raw_frontmatter, section, word_count)
+                      nested_mapping, raw_frontmatter, section,
+                      session_ref_number, word_count)
 from vaultlib import vault_files as _vault_files
 
 
@@ -126,12 +132,27 @@ def _labelled_block(text: str, label: str) -> str | None:
     return "\n".join(collected).strip()
 
 
-def _remove_labelled_block(text: str, label: str) -> str:
-    """`text` with the `_labelled_block(text, label)` block deleted
-    outright — its own line(s) removed, not just blanked — so no empty
-    line is left standing where a single-line block (`**Entities:**
-    ...`) used to sit between two other label lines with no blank line
-    of its own to begin with. `text` unchanged if `label` is absent."""
+# A line that opens something of its own rather than continuing the
+# label line above it: a blockquote, a table row, a bullet or bold label
+# (both open with `-`/`*`), an ordered-list item, or a heading. Used to
+# bound the `**Entities:**` strip below.
+_CONTINUATION_STOP_RE = re.compile(r"^(?:>|\||[-*#]|\d+\.)")
+
+
+def _remove_inline_label_line(text: str, label: str) -> str:
+    """`text` with the `**label:** ...` line deleted outright — its own
+    line removed, not just blanked — so no empty line is left standing
+    where a single-line label (`**Entities:** ...`) used to sit between
+    two other label lines with no blank line of its own to begin with.
+    `text` unchanged if `label` is absent.
+
+    Removal is line-bounded, not block-bounded: only the label line
+    itself plus any hard-wrapped continuation of it (a following
+    non-blank line that opens nothing of its own — no `>`, `|`, `-`,
+    `*`, `**`, `N.` or `#`). Deleting to the next bold label instead
+    swallowed a scene's read-aloud quote and any trailing prose whenever
+    `**Entities:**` was the last label in the scene (#M15).
+    """
     lines = text.splitlines()
     start = None
     for i, line in enumerate(lines):
@@ -143,7 +164,8 @@ def _remove_labelled_block(text: str, label: str) -> str:
         return text
     end = start + 1
     for line in lines[start + 1:]:
-        if _ANY_LABEL_LINE_RE.match(line.strip()):
+        stripped = line.strip()
+        if not stripped or _CONTINUATION_STOP_RE.match(stripped):
             break
         end += 1
     del lines[start:end]
@@ -210,13 +232,27 @@ def brief_wrapup(body: str) -> str:
     the opening marker into the dropped block. The terminator line itself
     is never consumed, so it survives in the output. A blank line follows
     the stub, separating it from whatever comes next, unless that next
-    line is already blank."""
+    line is already blank.
+
+    Headings inside a fenced code block are inert, the same as in
+    `outline`: a wrap-up that shows `### Quality Notes` as a markdown
+    example must not have its example stubbed out from under it."""
     lines = body.splitlines()
     out: list[str] = []
     i = 0
     n = len(lines)
+    in_fence = False
     while i < n:
         line = lines[i]
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            out.append(line)
+            i += 1
+            continue
+        if in_fence:
+            out.append(line)
+            i += 1
+            continue
         level: int | None = None
         m2 = _H2_HEADING_RE.match(line)
         if m2 and m2.group(1).strip() in BRIEF_DROP_H2:
@@ -233,7 +269,17 @@ def brief_wrapup(body: str) -> str:
         out.append(line)
         j = i + 1
         collected: list[str] = []
+        inner_fence = False
         while j < n:
+            if lines[j].strip().startswith("```"):
+                inner_fence = not inner_fence
+                collected.append(lines[j])
+                j += 1
+                continue
+            if inner_fence:
+                collected.append(lines[j])
+                j += 1
+                continue
             hm = _ANY_HEADING_RE.match(lines[j])
             if hm and len(hm.group(1)) <= level:
                 break
@@ -255,10 +301,15 @@ _OUTLINE_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
 def outline(body: str) -> str:
-    """One line per heading (`#`, `##`, `###`) in document order:
-    `{heading line}  ({N} words)` — N = word count of the text between
-    this heading and the next heading of any level. Headings inside
-    fenced code are skipped (toggle on a line starting with ```)."""
+    """One line per heading, any level `#` to `######`, in document
+    order: `{heading line}  ({N} words)` — N = word count of the text
+    between this heading and the next heading of any level. Headings
+    inside fenced code are skipped (toggle on a line starting with ```).
+
+    Every level is emitted, H4-H6 included: an outline that silently
+    dropped the deeper headings hid whole sections (a wrap-up's
+    `#### Unresolved Threads`, a plan's per-PC `#### [[Name]]`) from the
+    reader deciding whether to open the file."""
     lines = body.splitlines()
     in_fence = False
     heads: list[tuple[int, int, str]] = []
@@ -272,9 +323,7 @@ def outline(body: str) -> str:
         if m:
             heads.append((i, len(m.group(1)), line.rstrip()))
     out_lines: list[str] = []
-    for idx, (line_i, level, heading_line) in enumerate(heads):
-        if level > 3:
-            continue
+    for idx, (line_i, _level, heading_line) in enumerate(heads):
         end = heads[idx + 1][0] if idx + 1 < len(heads) else len(lines)
         wc = word_count("\n".join(lines[line_i + 1:end]))
         out_lines.append(f"{heading_line}  ({wc} words)")
@@ -323,7 +372,7 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
         for title, scene_body in blocks:
             reduced = scene_body
             if strip_entities:
-                reduced = _remove_labelled_block(
+                reduced = _remove_inline_label_line(
                     scene_body, "Entities").strip()
             piece = f"### {title}\n{reduced}" if reduced else f"### {title}"
             rendered.append(piece)
@@ -509,9 +558,25 @@ def arcs_report(files, chapter, upcoming: int) -> str:
         Session 7: (no row for this PC)
       Sessions since last B-plot: 2 (Session 6)     or  never (in N plans read)
       Sessions since last C-plot: never (in 2 plans read)
-    Then once: `Plans without a ## Spotlight Forecast: Session 5` (or
-    `(none)`). Plans = every type: session-plan with a parsable session
-    number < upcoming, prefer_chapter semantics, sorted by number.
+
+    A Plan's `## Spotlight Forecast` has three states, and they are not
+    interchangeable — 6 of 9 chapter plans on the campaign this was
+    measured against write the forecast as prose, and folding those into
+    "no row for this PC" reported a spotlight drought that did not exist:
+      - section absent      -> named under `Plans without a
+                               ## Spotlight Forecast: ...`;
+      - section present but carrying no table rows -> named under `Plans
+                               whose ## Spotlight Forecast has no table
+                               (read those sections directly): ...`, with
+                               no per-PC line and no place in the
+                               `(in N plans read)` denominator;
+      - table with rows     -> one `Session N: role (share)` line per PC,
+                               `(no row for this PC)` where the PC is
+                               genuinely absent from a table that exists.
+    Both buckets print once, after the PCs (`(none)` when empty).
+
+    Plans = every type: session-plan with a parsable session number <
+    upcoming, prefer_chapter semantics, sorted by number.
     "Sessions since" = upcoming - N."""
     lines = [f"===== PC Arcs — Sessions before {upcoming} ====="]
 
@@ -529,8 +594,9 @@ def arcs_report(files, chapter, upcoming: int) -> str:
             continue
         plans.append((n, spotlight_rows(picked[1])))
 
-    tables = [(n, rows) for n, rows in plans if rows is not None]
-    no_table = [n for n, rows in plans if rows is None]
+    tables = [(n, rows) for n, rows in plans if rows]
+    prose_forecast = [n for n, rows in plans if rows == []]
+    no_section = [n for n, rows in plans if rows is None]
 
     pcs = [(rel, text, fm) for rel, text, fm in files
            if fm.get("type") == "pc" and not rel.endswith("_Story.md")
@@ -572,11 +638,13 @@ def arcs_report(files, chapter, upcoming: int) -> str:
         lines.append(since(last_c, "C"))
 
     lines.append("")
-    if no_table:
-        lines.append("Plans without a ## Spotlight Forecast: "
-                     + ", ".join(f"Session {n}" for n in no_table))
-    else:
-        lines.append("Plans without a ## Spotlight Forecast: (none)")
+    lines.append("Plans without a ## Spotlight Forecast: "
+                 + (", ".join(f"Session {n}" for n in no_section)
+                    if no_section else "(none)"))
+    lines.append("Plans whose ## Spotlight Forecast has no table (read "
+                 "those sections directly): "
+                 + (", ".join(f"Session {n}" for n in prose_forecast)
+                    if prose_forecast else "(none)"))
 
     return "\n".join(lines)
 
@@ -721,23 +789,6 @@ def prefer_chapter(candidates, chapter):
     return (loose[0][0], loose[0][1]) if loose else None
 
 
-def session_ref_number(fm: dict) -> int | None:
-    """The session number named by `fm["session"]`.
-
-    A `session:` value written as a wikilink ("[[Session 05]]") reaches
-    us as a one-item list of bracket-stripped text, not a string — the
-    frontmatter reader treats the quoted outer `[...]` as a YAML flow
-    sequence (see `wikilink_target`'s docstring), and `parse_session_number`
-    returns None outright for any list. `wikilink_target` unwraps that
-    case to plain text first; a bare int or string session value passes
-    through it unchanged. Since migration 1.9.5 the quoted wikilink is
-    the canonical `session:` form, so every `session:` lookup in this
-    file goes through here rather than calling `parse_session_number`
-    directly on the raw value.
-    """
-    return parse_session_number(wikilink_target(fm.get("session")))
-
-
 def _find_plan(files, chapter, target: int):
     """The Session Plan for session `target`: a `type: session-plan`
     file naming it directly, chapter-preferred, else the session index's
@@ -792,18 +843,23 @@ def main() -> int:
              "parsed from every earlier Plan's ## Spotlight Forecast "
              "table (role A/B/C from the row text, share from the first "
              "percentage) with sessions since the PC last carried the "
-             "B- and C-plot. Arc stage is not a field: judge it against "
-             "the five-stage model from this evidence.")
+             "B- and C-plot. A forecast section is one of three states: "
+             "absent, present but prose (listed once for direct reading "
+             "— no per-PC row, and not counted in the 'plans read' "
+             "denominator), or a table. Arc stage is not a field: judge "
+             "it against the five-stage model from this evidence.")
     ap.add_argument(
         "--brief", action="store_true",
         help="default mode only: Wrap-Up with the reconcile-provenance "
              "blocks stubbed (Memorable Moments; Name Conflicts, "
              "Cross-Entity Claims, World Fact Findings, Quality Notes, "
              "Reconciliation Context — heading kept, body replaced by a "
-             "one-line stub with its word count) and the Campaign Overview "
-             "as frontmatter plus a heading outline with word counts. "
-             "Everything else unchanged. Drill into a file only where a "
-             "stub or outline shows the need.")
+             "one-line stub with its word count), and the Campaign "
+             "Overview and the existing Session Plan each as frontmatter "
+             "plus a heading outline with word counts. Everything else "
+             "unchanged. Drill into a file only where a stub or outline "
+             "shows the need — for the Plan that means "
+             "`plan_check.py --inventory/--state`, not a full read.")
     args = ap.parse_args()
     if args.brief and (args.play or args.threads or args.arcs):
         print("error: --brief applies to the default bundle only",
@@ -868,7 +924,7 @@ def main() -> int:
 
     if args.brief:
         print("(brief: Wrap-Up provenance blocks stubbed, Campaign Overview "
-              "outlined — see --help)")
+              "and existing Plan outlined — see --help)")
 
     if args.threads:
         print(f"\n{thread_report(files, current, chapter)}")
@@ -925,9 +981,17 @@ def main() -> int:
          if fm.get("type") == "session-plan"
          and session_ref_number(fm) == upcoming],
         chapter)
-    emit(f"Existing Plan — Session {upcoming}",
-         plan[0] if plan else None,
-         body_of(plan[1]) if plan else None)
+    if args.brief and plan:
+        # Step 6 inspects the existing Plan through
+        # `plan_check.py --inventory/--state`, so the bundle only has to
+        # say the Plan exists and what shape it is in — printing it whole
+        # made it the third-biggest section of the read-set.
+        emit(f"Existing Plan — Session {upcoming} (outline)", plan[0],
+             raw_frontmatter(plan[1]) + "\n\n" + outline(body_of(plan[1])))
+    else:
+        emit(f"Existing Plan — Session {upcoming}",
+             plan[0] if plan else None,
+             body_of(plan[1]) if plan else None)
 
     # --- deferred world flags ---
     flags = next(((rel, text) for rel, text, fm in files

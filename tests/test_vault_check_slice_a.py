@@ -327,6 +327,23 @@ class SessionsCommandTests(unittest.TestCase):
         rows = vc.check_sessions(vault)
         self.assertTrue(rows_for(rows, "derived=wrap-up"), rows)
 
+    def test_quoted_wikilink_session_matches_by_number(self):
+        # `session: "[[Session 08]]"` reaches the frontmatter reader as a
+        # one-item list; reading it raw parsed as no number at all, so a
+        # plan naming its session by link — but not by the index's exact
+        # stem — fell through the number fallback and vanished from the
+        # chain. vaultlib.session_ref_number unwraps it.
+        vault = make_vault(self)
+        (vault / "Session 08 - The Quay.md").write_text(
+            "---\ntype: session\nsession_number: 8\nstatus: planned\n---\n",
+            encoding="utf-8")
+        (vault / "Session_08_Plan.md").write_text(
+            "---\ntype: session-plan\nsession: \"[[Session 08]]\"\n---\n",
+            encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        self.assertTrue(
+            rows_for(rows, "session 8: plan=\u2713"), rows)
+
     def test_chapters_own_document_outranks_an_unfiled_copy(self):
         # An archived copy at the vault root sorts before any Chapters/
         # path; taking the first number match handed it to the chapter

@@ -53,6 +53,7 @@ from vaultlib import (
     normalize,
     parse_session_number,
     section,
+    session_ref_number,
     vault_files,
     wikilink_target,
 )
@@ -350,7 +351,7 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
         if sf.number is not None}
 
     for rel, stem, fm, ftype, text in chain_docs:
-        num = parse_session_number(fm.get("session"))
+        num = session_ref_number(fm)
         matched: _SessionFile | None = None
         if num is not None:
             chain_key = chapter_key(rel, fm)

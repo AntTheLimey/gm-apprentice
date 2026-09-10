@@ -367,6 +367,36 @@ class DocumentsTargetsFallbackTests(unittest.TestCase):
         self.assertEqual(chain_orphan, 0)
 
 
+class QuotedSessionWikilinkTests(unittest.TestCase):
+    """A chain doc whose `session:` is the canonical quoted wikilink
+    (`"[[Session 08]]"`) reaches the frontmatter reader as a one-item
+    list; `vaultlib.session_ref_number` unwraps it. Reading the raw value
+    matched nothing and left the doc orphaned unless the session's own
+    `documents:` block happened to name it."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-wikilink-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Chapters/Chapter 1/Chapter 1.md",
+              "---\ntype: chapter\n---\n\n# Chapter 1\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 08.md",
+              "---\ntype: session\nsession_number: 8\n"
+              "chapter: \"[[Chapter 1]]\"\ndocuments: {}\n"
+              "---\n\n# Session 08\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session_08_Plan.md",
+              "---\ntype: session-plan\nsession: \"[[Session 08]]\"\n"
+              "chapter: \"[[Chapter 1]]\"\n---\n\n# Session 08 Plan\n")
+
+    def test_quoted_wikilink_session_nests_the_plan(self):
+        entries, chapters = ib.collect(self.vault)
+        session_08 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 08")
+        self.assertEqual(session_08["chain"],
+                         [("plan", "Session_08_Plan")])
+        self.assertFalse([e for e in entries
+                          if e.stub_needs == "session link"], entries)
+
+
 class DryRunTests(unittest.TestCase):
     def test_dry_run_writes_nothing(self):
         before = (FIX / "_meta" / "index.md").read_bytes()
