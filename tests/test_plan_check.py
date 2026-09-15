@@ -227,20 +227,31 @@ class NewSkeletonTests(unittest.TestCase):
         for cid in ("scene-labels", "sections"):
             self.assertFalse([ln for ln in r.stdout.splitlines() if f"{cid}:" in ln], cid)
 
-    def test_near_miss_and_missing_block_are_errors(self):
+    def test_near_miss_is_an_error(self):
+        # Missing-required-label rows are unit-tested directly in
+        # MinimumSceneTests; the fixture's scene carries both required
+        # labels, one of them mistyped.
         rows = self._rows(BAD, "scene-labels")
         self.assertTrue(any("has '**Situation.**' — write '**Situation:**'" in ln for ln in rows))
-        self.assertTrue(any("is missing **Points to land**" in ln for ln in rows))
         self.assertTrue(all(ln.startswith("ERROR\t") for ln in rows))
+
+    def test_optional_labels_are_not_reported_missing(self):
+        # One minimum for all types: an absent optional label is a
+        # finished scene, not an incomplete one.
+        rows = self._rows(BAD, "scene-labels")
+        for label in ("**Points to land**", "**NPCs**", "**Complications**",
+                      "**Entities:**", "**If the players...**"):
+            self.assertFalse(
+                [ln for ln in rows if f"is missing {label}" in ln], label)
 
     def test_legacy_scene_is_one_row(self):
         rows = [ln for ln in self._rows(BAD, "scene-labels") if "pre-1.9.12" in ln]
         self.assertEqual(len(rows), 1)
         self.assertIn("Objective", rows[0])
 
-    def test_contingency_then_required(self):
+    def test_contingency_then_is_not_required(self):
         rows = self._rows(BAD, "scene-labels")
-        self.assertTrue(any("is missing **Then**" in ln for ln in rows))
+        self.assertFalse([ln for ln in rows if "is missing **Then**" in ln])
 
     def test_missing_gm_notes_is_error(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -330,7 +341,7 @@ class LabelHelperUnitTests(unittest.TestCase):
             "If confronted", pc.CONTINGENCY_LABELS)
         legacy = [f for f in findings if "pre-1.9.12" in f.message]
         self.assertEqual(len(legacy), 1)
-        self.assertIn("rewrite as Trigger / Then", legacy[0].message)
+        self.assertIn("rewrite as Trigger", legacy[0].message)
         self.assertNotIn("Situation", legacy[0].message)
 
     def test_if_the_players_colon_form_is_a_near_miss(self):
@@ -605,3 +616,82 @@ class PcStateSceneScopingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+def scene_rows(scene_body: str, title: str = "Scene 1: T") -> list[pc.Finding]:
+    """`scene-labels` rows for one Planned scene body."""
+    return [f for f in pc._scene_findings("P.md", scene_body, title,
+                                          pc.SCENE_LABELS) if f.id == "scene-labels"]
+
+
+class MinimumSceneTests(unittest.TestCase):
+    """One minimum for all types (2026-09-14, docs/scene-design-research.md):
+    only `**Situation:**` and `**Starts it:**` are required. Every other
+    label is available and may simply be absent — no "N/A" placeholder, no
+    missing-label row. A label that IS attempted but mistyped is still an
+    error, because that is a typo, not an omission."""
+
+    MINIMUM = ("**Situation:** The tide is coming in over the causeway.\n"
+               "**Starts it:** Mrs Orme waves them down from the seawall.\n")
+
+    def test_situation_and_starts_it_alone_is_clean(self):
+        self.assertEqual(scene_rows(self.MINIMUM), [])
+
+    def test_routing_scene_needs_nothing_else(self):
+        # The shape that produced 7 of 9 errors on the GM's own plan.
+        body = ("**Type:** transition\n"
+                "**Situation:** Midday breaks up the crowd on the Maidan.\n"
+                "**Starts it:** The household's own clock; Hugh expects "
+                "everyone dressed before the first carriage.\n")
+        self.assertEqual(scene_rows(body), [])
+
+    def test_missing_situation_is_an_error(self):
+        body = "**Starts it:** Mrs Orme waves them down.\n"
+        rows = scene_rows(body)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0].level, "ERROR")
+        self.assertIn("**Situation:**", rows[0].message)
+
+    def test_missing_starts_it_is_an_error(self):
+        body = "**Situation:** The tide is coming in.\n"
+        rows = scene_rows(body)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("**Starts it:**", rows[0].message)
+
+    def test_optional_labels_are_never_reported_missing(self):
+        rows = scene_rows(self.MINIMUM)
+        for label in ("Entities", "NPCs", "Points to land",
+                      "If the players...", "Complications"):
+            self.assertFalse([r for r in rows if label in r.message], label)
+
+    def test_a_mistyped_optional_label_is_still_an_error(self):
+        # Attempted, not omitted: the author meant `**Complications**`.
+        body = self.MINIMUM + "**Complications.**\n- A curveball.\n"
+        rows = scene_rows(body)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("**Complications**", rows[0].message)
+
+    def test_a_mistyped_required_label_is_still_an_error(self):
+        body = ("**Situation.** The tide is coming in.\n"
+                "**Starts it:** Mrs Orme waves them down.\n")
+        rows = scene_rows(body)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("**Situation:**", rows[0].message)
+
+
+class MinimumContingencyTests(unittest.TestCase):
+    """Contingency scenes require `**Trigger:**` only; `**Then**` is
+    available but not demanded."""
+
+    def rows(self, body: str) -> list[pc.Finding]:
+        return [f for f in pc._scene_findings(
+            "P.md", body, "If it goes wrong", pc.CONTINGENCY_LABELS)
+            if f.id == "scene-labels"]
+
+    def test_trigger_alone_is_clean(self):
+        self.assertEqual(self.rows("**Trigger:** The note goes unread.\n"), [])
+
+    def test_missing_trigger_is_an_error(self):
+        rows = self.rows("**Then**\n- Sophia waits alone and rides home.\n")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("**Trigger:**", rows[0].message)

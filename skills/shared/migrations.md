@@ -734,12 +734,18 @@ changes.
 
 ### Content
 
-- **Plan scene shape** (`session-prep/references/session-templates.md`
-  → `_Templates/`): scenes are enumerated — `**Situation:**`,
-  `**Starts it:**`, `**Entities:**`, `**NPCs**` bullets, `**Points to
-  land**` checklist, `**If the players...**` `Do | Then` table,
-  `**Complications**` bullets; Contingency scenes are `**Trigger:**` +
-  `**Then**`. Existing Plan files are not rewritten: `plan_check.py`
-  reports a legacy Objective/Setup/Behaviours/Branching scene as one
-  `scene-labels` row, and session-prep converts a plan the next time it
-  preps that session. Archived plans for played sessions stay as they are.
+- **Plan scene shape** (`session-prep/references/session-templates.md`):
+  a scene requires `**Situation:**` and `**Starts it:**` and nothing
+  else. `**Entities:**`, `**NPCs**`, `**Points to land**`, `**If the
+  players...**` and `**Complications**` are available and used where they
+  earn their place; an absent one is never reported. Contingency scenes
+  require `**Trigger:**`; `**Then**` is optional. Do not write "N/A"
+  under a heading to fill it — omit the heading. Reasoning and sources:
+  `docs/scene-design-research.md`.
+- **No vault files change.** Existing Plan files are not rewritten:
+  `plan_check.py` reports a legacy Objective/Setup/Behaviours/Branching
+  scene as one `scene-labels` row, and session-prep converts a plan the
+  next time it preps that session. Archived plans for played sessions
+  stay as they are. This entry is documentation-only; nothing copies into
+  `_Templates/` (no Session Plan template ships — see the note in
+  `docs/scene-design-research.md`).

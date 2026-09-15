@@ -163,16 +163,30 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
 )
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
 
-# The enumerated Plan skeleton (#196): inline labels are `**Label:**` on
-# their own line; block labels are `**Label**` (optional trailing text
-# before the closing `**`) followed by bullets, a checklist, or a table.
+# The Plan scene skeleton: inline labels are `**Label:**` on their own
+# line; block labels are `**Label**` (optional trailing text before the
+# closing `**`) followed by bullets, a checklist, or a table.
 # `Type` is optional and lives outside SCENE_LABELS — checked only when
 # present, by the existing scene-type/placeholder logic.
+#
+# One minimum for all types (2026-09-14, docs/scene-design-research.md):
+# only SCENE_LABELS_REQUIRED is demanded. Six prep traditions across five
+# systems were surveyed and none prescribes a uniform mandatory scene
+# shape — a routing scene, a GUMSHOE Sub-Plot and an Angry GM "no-fail
+# scene" are all legitimately near-empty. The rest of the labels are
+# tools, offered and not demanded, and a scene that omits one is finished,
+# not incomplete. A label that is *attempted* and mistyped is still an
+# error: that is a typo, not an omission.
 SCENE_LABELS_INLINE: tuple[str, ...] = ("Situation", "Starts it", "Entities")
 SCENE_LABELS_BLOCK: tuple[str, ...] = (
     "NPCs", "Points to land", "If the players...", "Complications")
 SCENE_LABELS: tuple[str, ...] = SCENE_LABELS_INLINE + SCENE_LABELS_BLOCK
+SCENE_LABELS_REQUIRED: frozenset[str] = frozenset({"Situation", "Starts it"})
 CONTINGENCY_LABELS: tuple[str, ...] = ("Trigger", "Then")
+CONTINGENCY_LABELS_REQUIRED: frozenset[str] = frozenset({"Trigger"})
+# Every required label, whichever skeleton a scene is being judged against.
+_REQUIRED_LABELS: frozenset[str] = (
+    SCENE_LABELS_REQUIRED | CONTINGENCY_LABELS_REQUIRED)
 # `Trigger` is inline (colon); `Then` is block (bullets, no colon).
 _INLINE_LABELS: frozenset[str] = frozenset(SCENE_LABELS_INLINE) | {"Trigger"}
 
@@ -526,7 +540,8 @@ def _scene_findings(rel: str, body: str, scene_title: str,
     locus = f"{rel}:§{scene_title}"
     legacy_found = _legacy_scene(body, labels)
     if legacy_found:
-        rewrite_as = " / ".join(labels)
+        rewrite_as = " / ".join(
+            lbl for lbl in labels if lbl in _REQUIRED_LABELS)
         findings.append(Finding(
             "scene-labels", "ERROR", locus,
             f"scene-labels: '{scene_title}' uses the pre-1.9.12 prose "
@@ -540,11 +555,13 @@ def _scene_findings(rel: str, body: str, scene_title: str,
             shown = f"**{label}**" if block else f"**{label}:**"
             near = _label_near_miss(body, label)
             if near is not None:
+                # Attempted but mistyped — a typo in any label, required
+                # or not, is worth naming.
                 findings.append(Finding(
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' has {near!r} — write "
                     f"'{shown}'"))
-            else:
+            elif label in _REQUIRED_LABELS:
                 findings.append(Finding(
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' is missing {shown}"))

@@ -130,13 +130,20 @@ letter to Sir Nathaniel, Ashworth's chit to Adrien, and Harriet's note
 to Meg arrive at breakfast". The GM teases the players; the plan never
 teases the GM.
 
+Only two labels are required: **Situation:** and **Starts it:**.
+Everything below them is a tool, offered and never demanded — use the
+ones that earn their place in *this* scene and leave the rest out
+entirely. A routing scene that is two lines is finished, not incomplete;
+do not write "N/A" under a heading to fill it. See
+`docs/scene-design-research.md` for why.
+
 ### Scene 1: [Title]
 **Type:** investigation | social | combat | chase | transition | horror | downtime | other
-**Situation:** One line. What is happening when the scene opens — a
-thing in motion, not a theme or a lesson.
-**Starts it:** One line. The named NPC or household schedule that brings
-the PCs here in the first sixty seconds, and what they want from *this*
-PC. A scene that cannot answer this is not finished.
+**Situation:** *(required)* One line. What is happening when the scene
+opens — a thing in motion, not a theme or a lesson.
+**Starts it:** *(required)* One line. The named NPC or household schedule
+that brings the PCs here in the first sixty seconds, and what they want
+from *this* PC. A scene that cannot answer this is not finished.
 **Entities:** [[NPC]], [[Location]], [[Item]]
 **NPCs**
 - **[[Name]]:** wants X. Does Y if left alone. Two lines maximum.
