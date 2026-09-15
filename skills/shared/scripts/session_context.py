@@ -478,6 +478,41 @@ SPOTLIGHT_TITLE = "Spotlight Forecast"
 _SEPARATOR_CELL_RE = re.compile(r"^[-:]+$")
 _TRAILING_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*$")
 _SHARE_RE = re.compile(r"~?(\d+%)")
+_WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
+
+
+def _row_cells(line: str) -> list[str]:
+    """Cells of a `|`-delimited table row. Splits only on pipes that are
+    a real cell boundary: an escaped `\|` and the alias pipe inside
+    `[[Target|Alias]]` stay inside their cell. The table contract forbids
+    both forms, but a plan reaches `--arcs` before `vault_check` has ever
+    seen it, and a mis-split PC cell silently reports the wrong drought."""
+    inner = line.strip().strip("|")
+    cells: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    i = 0
+    while i < len(inner):
+        if inner.startswith("\\|", i):
+            buf.append("\\|")
+            i += 2
+        elif inner.startswith("[[", i):
+            depth += 1
+            buf.append("[[")
+            i += 2
+        elif inner.startswith("]]", i):
+            depth = max(0, depth - 1)
+            buf.append("]]")
+            i += 2
+        elif inner[i] == "|" and depth == 0:
+            cells.append("".join(buf).strip())
+            buf = []
+            i += 1
+        else:
+            buf.append(inner[i])
+            i += 1
+    cells.append("".join(buf).strip())
+    return cells
 
 
 def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
@@ -487,7 +522,8 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
     `|` line and stops at the first non-`|` line seen after that (a
     blank line or prose ends the table), so a second table later in
     the same section is never ingested. pc_cell = first cell with
-    `**`, `[[`, `]]` removed and a trailing `(...)` dropped, stripped.
+    `[[Target|Alias]]` reduced to its target, `**`, `[[`, `]]` removed
+    and a trailing `(...)` dropped, stripped.
     role = "B" if "b-plot" in the row (casefold) else "C" if "c-plot"
     else "A" if "a-plot" else "-". share = first `~?\\d+%` in the row
     without the tilde, else "?". Header and separator rows skipped."""
@@ -504,12 +540,14 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
             break
     rows: list[tuple[str, str, str]] = []
     for line in table_lines[1:]:  # skip header row
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        cells = _row_cells(line)
         if cells and all(_SEPARATOR_CELL_RE.match(c) for c in cells if c):
             continue  # separator row
         if not cells or not cells[0]:
             continue
-        first = cells[0].replace("**", "").replace("[[", "").replace("]]", "")
+        first = _WIKILINK_RE.sub(lambda m: m.group(1), cells[0])
+        first = (first.replace("**", "").replace("[[", "")
+                 .replace("]]", "").replace("\\|", "|"))
         first = _TRAILING_PAREN_RE.sub("", first).strip()
         low = line.casefold()
         if "b-plot" in low:
@@ -529,7 +567,9 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
 def pc_matches(cell: str, rel: str, fm: dict) -> bool:
     """cell.casefold() equals the file stem with `_`→space, or the stem's
     first token, or any entry of fm["aliases"] (list, or a single
-    string), all casefolded."""
+    string), all casefolded. The cell is tried both as written and with
+    `_`→space, so a PC named by wikilink target (`[[Hero_Name]]`)
+    matches the file its link points at."""
     stem = Path(rel).stem.replace("_", " ")
     tokens = stem.split()
     candidates = {stem.casefold()}
@@ -542,7 +582,8 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
         aliases = [aliases]
     if isinstance(aliases, list):
         candidates.update(str(a).casefold() for a in aliases)
-    return cell.casefold() in candidates
+    return (cell.casefold() in candidates
+            or cell.replace("_", " ").casefold() in candidates)
 
 
 def arcs_report(files, chapter, upcoming: int) -> str:

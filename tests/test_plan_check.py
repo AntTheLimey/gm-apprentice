@@ -300,6 +300,21 @@ class LabelHelperUnitTests(unittest.TestCase):
         body = "**If the players...**\n| Do | Then |\n|---|---|"
         self.assertTrue(pc._label_present(body, "If the players..."))
 
+    def test_if_the_players_rejects_a_short_ellipsis(self):
+        # One or two dots is a typo, not the label: it must reach the
+        # near-miss ERROR rather than count as the label being present.
+        for body in ("**If the players.**\n| Do | Then |\n|---|---|",
+                     "**If the players..**\n| Do | Then |\n|---|---|"):
+            with self.subTest(body=body):
+                self.assertFalse(
+                    pc._label_present(body, "If the players..."))
+                findings = pc._scene_findings("P.md", body, "Scene 1",
+                                              ("If the players...",))
+                rows = [f for f in findings if f.id == "scene-labels"]
+                self.assertEqual(len(rows), 1, rows)
+                self.assertIn("write '**If the players...**'",
+                              rows[0].message)
+
     def test_legacy_scene_detected_even_with_entities_present(self):
         # Task 4 defect 2: `Entities` is common furniture to both
         # skeletons, so its presence must not defeat legacy detection.

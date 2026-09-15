@@ -61,6 +61,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--play` printed "Session ?"; every session lookup now resolves the
   wikilink first. `vault_check.py sessions` and `index_build.py` shared
   the bug behind their own fallbacks and now share the fix.
+  `index_build.py` keeps its fallback: a chain doc whose session number
+  now resolves, but which sits outside any chapter, is still placed by
+  the session index's own `documents:` list.
+- `session_context.py --arcs`: a Spotlight Forecast row naming its PC by
+  an aliased wikilink (`[[Hero_Name|Hero Alias]]`) or containing an
+  escaped pipe was split at that pipe, so the PC never matched and the
+  sessions-since-last-B/C-plot count was silently wrong.
+- `plan_check.py`: `**If the players.**` and `**If the players..**`
+  counted as the full `**If the players...**` label instead of being
+  reported as the near miss they are.
 - `session_context.py --play`: a scene whose `**Entities:**` line was its
   last label lost its read-aloud blockquote and any trailing text from
   the Play Brief — the strip ran to the next bold label instead of to the

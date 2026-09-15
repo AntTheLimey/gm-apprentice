@@ -357,7 +357,11 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
             chain_key = chapter_key(rel, fm)
             if chain_key is not None:
                 matched = by_key_number.get((chain_key, num))
-        else:
+        if matched is None:
+            # A readable `session:` number is not enough on its own: the
+            # doc may sit outside any chapter, or name a session number
+            # that no file in its chapter carries. The session index
+            # listing it under `documents:` still places it.
             target = normalize(stem)
             for sf in session_files:
                 if target in sf.documents_targets:

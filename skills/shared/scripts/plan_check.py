@@ -464,7 +464,7 @@ def _is_inline_label(label: str) -> bool:
 def _label_present(body: str, label: str) -> bool:
     if label == "If the players...":
         return bool(re.search(
-            r"^\*\*If the players(?:\.{1,3}|…)\*\*", body, re.MULTILINE))
+            r"^\*\*If the players(?:\.{3}|…)\*\*", body, re.MULTILINE))
     if _is_inline_label(label):
         return bool(re.search(
             rf"^\*\*{re.escape(label)}:\*\*", body, re.MULTILINE))
@@ -484,8 +484,12 @@ def _label_near_miss(body: str, label: str) -> str | None:
         # would only ever find `**If the players...:**`. The form the GM
         # actually writes is `**If the players:**` — a near miss with a
         # fix, not a missing label (#M16).
+        # A short ellipsis (`**If the players.**`) is a typo, not the
+        # label: `_label_present` requires all three dots, so without a
+        # near miss here an optional label would go unreported.
         for pattern in (r"^\*\*If the players(?:\.{1,3}|…)?\s*:\*\*",
                         r"^\*\*If the players(?:\.{1,3}|…)?\s*;\*\*",
+                        r"^\*\*If the players\.{1,2}\*\*",
                         r"^If the players(?:\.{1,3}|…)?\s*:"):
             m = re.search(pattern, body, re.MULTILINE)
             if m:

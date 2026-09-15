@@ -397,6 +397,36 @@ class QuotedSessionWikilinkTests(unittest.TestCase):
                           if e.stub_needs == "session link"], entries)
 
 
+class UnfiledChainDocTests(unittest.TestCase):
+    """A chain doc can carry a readable `session:` number and still have
+    no chapter — it sits outside `Chapters/` and names none. The number
+    branch cannot match without a chapter key, so the documents-target
+    fallback has to run for it, not only for docs whose `session:` field
+    is unparseable."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-unfiled-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Chapters/Chapter 1/Chapter 1.md",
+              "---\ntype: chapter\n---\n\n# Chapter 1\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 08.md",
+              "---\ntype: session\nsession_number: 8\n"
+              "chapter: \"[[Chapter 1]]\"\n"
+              "documents:\n  plan: \"[[Session_08_Plan]]\"\n"
+              "---\n\n# Session 08\n")
+        write(self.vault, "Inbox/Session_08_Plan.md",
+              "---\ntype: session-plan\nsession: \"[[Session 08]]\"\n"
+              "---\n\n# Session 08 Plan\n")
+
+    def test_documents_target_places_a_chapterless_chain_doc(self):
+        entries, chapters = ib.collect(self.vault)
+        session_08 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 08")
+        self.assertEqual(session_08["chain"], [("plan", "Session_08_Plan")])
+        self.assertFalse([e for e in entries
+                          if e.stub_needs == "session link"], entries)
+
+
 class DryRunTests(unittest.TestCase):
     def test_dry_run_writes_nothing(self):
         before = (FIX / "_meta" / "index.md").read_bytes()

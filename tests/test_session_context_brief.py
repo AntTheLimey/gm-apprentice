@@ -207,14 +207,21 @@ class SpotlightUnitTests(unittest.TestCase):
                 "| **Second** | ~15% | C-plot featured. |\n")
         self.assertEqual(sc.spotlight_rows(body), [("Hero", "B", "30%")])
 
-    def test_aliased_wikilink_first_cell_pins_current_split_behaviour(self):
-        # The naive `|`-split treats the alias pipe inside
-        # `[[Hero_Name|Hero Alias]]` as a cell boundary, so pc_cell ends
-        # up as the link target only. Documented, not (yet) fixed.
+    def test_aliased_wikilink_first_cell_resolves_to_its_target(self):
+        # The alias pipe inside `[[Hero_Name|Hero Alias]]` is not a cell
+        # boundary. Split there and the share and role came from a row
+        # whose PC never matched, so the drought count was silently wrong.
         body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
                 "| [[Hero_Name|Hero Alias]] (Alex) | ~10% | A-plot. |\n")
-        rows = sc.spotlight_rows(body)
-        self.assertEqual(rows[0][0], "Hero_Name")
+        self.assertEqual(sc.spotlight_rows(body), [("Hero_Name", "A", "10%")])
+        self.assertTrue(sc.pc_matches(
+            "Hero_Name", "Characters/PCs/Hero_Name.md", {}))
+
+    def test_escaped_pipe_in_pc_cell_is_not_a_cell_boundary(self):
+        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
+                "| Hero \\| Sidekick | ~20% | B-plot. |\n")
+        self.assertEqual(sc.spotlight_rows(body),
+                         [("Hero | Sidekick", "B", "20%")])
 
     def test_pc_matches_stem_first_token_and_alias(self):
         fm = {"aliases": ["The Hero"]}
