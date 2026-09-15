@@ -28,12 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a PC nor in the "plans read" denominator. Replaces the per-PC sheet
   reads in session-prep Step 12 that read six sheets in full during the
   field test.
-- `plan_check.py` `shape` (WARNING: a paragraph or bullet over 40 words
-  outside a blockquote in a session-running section), `clarity` (INFO: a
-  sentence leaning on "the letter", "the papers", "the regrets" with no
-  link or name in it — #195) and `question-weight` (WARNING: an Open
-  Questions item about fonts, layout, filenames or last session's die
-  rolls — #197).
 
 ### Changed
 

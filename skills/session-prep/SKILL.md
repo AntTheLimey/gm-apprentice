@@ -385,13 +385,11 @@ the check re-run until it exits 0 (`duration`, `table`, `type`,
 `scene-labels` — every scene carries the full enumerated skeleton, labels
 with the exact punctuation the row names — and a missing `## GM Notes`);
 WARNING rows are fixed silently when mechanical (`preamble`, `recap`,
-`audit-trail`, `pc-state`, `scene-type`, the other `sections`, `shape` —
-turn the paragraph into bullets or a `Do | Then` table; split an over-long
-bullet; keep Situation and Starts it to one line, `question-weight` —
-decide or default the item and delete the question) and raised as a
-question when they touch content; INFO rows are cues (`read-aloud`,
-`scene-length`, `placeholder`, `clarity` — name the referent if the
-sentence really is vague). Also run against the vault as a whole
+`audit-trail`, `pc-state`, `scene-type`, the other `sections`) and raised
+as a question when they touch content; INFO rows are cues (`read-aloud`,
+`scene-length`, `placeholder`). Nothing in the report ever deletes a line
+of the GM's own writing — if a check's remedy would remove content, raise
+it as a question instead. Also run against the vault as a whole
 (`vault_check.py` lives at
 `${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`) — these cover
 ground `plan_check.py` can't see from a single file:
