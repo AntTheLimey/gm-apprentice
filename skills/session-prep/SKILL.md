@@ -341,12 +341,16 @@ the **premise**, not the finished scene. For each scene:
 2. The GM shapes it — yes / no / tweak / their own premise.
 3. *Then* you write it up in the enumerated skeleton from
    `references/session-templates.md` — every line a bullet, a table row
-   or a one-line label; prose only inside the read-aloud blockquote:
-   - **Situation** — one line: the thing in motion when the scene opens
-     (name the pressure, not the theme).
-   - **Starts it** — one line: the named NPC or household schedule that
-     brings this PC here in the first sixty seconds, and what they want.
-     A scene that cannot answer this is not finished.
+   or a one-line label; prose only inside the read-aloud blockquote.
+   **Situation** and **Starts it** are the only two required labels; use
+   the rest where they earn their place and omit them where they don't.
+   A routing scene that is two lines is finished. Never write "N/A" or an
+   empty label to fill the skeleton out:
+   - **Situation** (required) — one line: the thing in motion when the
+     scene opens (name the pressure, not the theme).
+   - **Starts it** (required) — one line: the named NPC or household
+     schedule that brings this PC here in the first sixty seconds, and
+     what they want. A scene that cannot answer this is not finished.
    - **Entities** — `[[NPC]], [[Location]], [[Item]]`: the wikilinks this
      scene touches.
    - **NPCs** — `- **Name:** wants X. Does Y if left alone.` Two lines
@@ -382,8 +386,10 @@ to build artifacts, and raise only *genuine* craft issues conversationally.
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
 (and `--headless` when you were run without a GM). ERROR rows are fixed and
 the check re-run until it exits 0 (`duration`, `table`, `type`,
-`scene-labels` — every scene carries the full enumerated skeleton, labels
-with the exact punctuation the row names — and a missing `## GM Notes`);
+`scene-labels` — every scene carries **Situation** and **Starts it**
+(a Contingency scene, **Trigger**), and any label that is attempted
+carries the exact punctuation the row names — and a missing
+`## GM Notes`);
 WARNING rows are fixed silently when mechanical (`preamble`, `recap`,
 `audit-trail`, `pc-state`, `scene-type`, the other `sections`) and raised
 as a question when they touch content; INFO rows are cues (`read-aloud`,

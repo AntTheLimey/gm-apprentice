@@ -217,6 +217,17 @@ class SpotlightUnitTests(unittest.TestCase):
         self.assertTrue(sc.pc_matches(
             "Hero_Name", "Characters/PCs/Hero_Name.md", {}))
 
+    def test_unclosed_wikilink_falls_back_to_the_naive_split(self):
+        # Bracket tracking must not swallow the rest of the row: a row
+        # that opens `[[` and never closes it would otherwise put the
+        # whole line in the PC cell and report a false drought.
+        body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
+                "| [[Hero | ~30% | B-plot. |\n")
+        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B", "30%")])
+
+    def test_row_ending_in_an_escaped_pipe_keeps_it(self):
+        self.assertEqual(sc._row_cells(r"| Hero \|"), [r"Hero \|"])
+
     def test_escaped_pipe_in_pc_cell_is_not_a_cell_boundary(self):
         body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
                 "| Hero \\| Sidekick | ~20% | B-plot. |\n")

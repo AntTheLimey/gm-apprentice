@@ -222,8 +222,8 @@ def _chain_label(ftype: str) -> str:
 
 def _documents_targets(text: str) -> set[str]:
     """Normalized wikilink targets named in a session's own `documents:`
-    block — the fallback a session-chain doc is matched against when its
-    own `session:` field doesn't resolve to a number."""
+    block — the fallback a session-chain doc is matched against whenever
+    matching on chapter and session number found nothing."""
     targets = set()
     for value in nested_mapping(text, "documents").values():
         target = wikilink_target(value)

@@ -482,12 +482,20 @@ _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
 
 
 def _row_cells(line: str) -> list[str]:
-    """Cells of a `|`-delimited table row. Splits only on pipes that are
+    r"""Cells of a `|`-delimited table row. Splits only on pipes that are
     a real cell boundary: an escaped `\|` and the alias pipe inside
     `[[Target|Alias]]` stay inside their cell. The table contract forbids
     both forms, but a plan reaches `--arcs` before `vault_check` has ever
-    seen it, and a mis-split PC cell silently reports the wrong drought."""
-    inner = line.strip().strip("|")
+    seen it, and a mis-split PC cell silently reports the wrong drought.
+
+    An unbalanced `[[` would otherwise swallow the rest of the row, which
+    is the same silent mis-read from the other side, so a row that ends
+    mid-wikilink falls back to the naive split."""
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|") and not inner.endswith("\\|"):
+        inner = inner[:-1]
     cells: list[str] = []
     buf: list[str] = []
     depth = 0
@@ -512,6 +520,8 @@ def _row_cells(line: str) -> list[str]:
             buf.append(inner[i])
             i += 1
     cells.append("".join(buf).strip())
+    if depth != 0:
+        return [c.strip() for c in inner.split("|")]
     return cells
 
 

@@ -372,7 +372,6 @@ class LabelHelperUnitTests(unittest.TestCase):
                       "'**If the players...**'", rows[0].message)
 
 
-
 class SectionsOrderTests(unittest.TestCase):
     def test_good_plan_is_in_order(self):
         self.assertEqual(rows_for(findings_for(GOOD), "order"), [])
@@ -629,9 +628,6 @@ class PcStateSceneScopingTests(unittest.TestCase):
         self.assertEqual(loci, {"plan.md:5", "plan.md:19"})
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
 
 def scene_rows(scene_body: str, title: str = "Scene 1: T") -> list[pc.Finding]:
     """`scene-labels` rows for one Planned scene body."""
@@ -710,3 +706,7 @@ class MinimumContingencyTests(unittest.TestCase):
         rows = self.rows("**Then**\n- Sophia waits alone and rides home.\n")
         self.assertEqual(len(rows), 1, rows)
         self.assertIn("**Trigger:**", rows[0].message)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

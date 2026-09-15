@@ -42,12 +42,13 @@ Checks, by id, level, and the rule they mechanise:
                          (SKILL.md preamble discipline comment)
   scene-length  INFO     a scene over ~1200 words — sanity-check it
                          (SKILL.md preamble discipline comment)
-  scene-labels  ERROR    every Planned scene carries Situation/Starts it/
-                         Entities (inline, colon) and NPCs/Points to
-                         land/If the players.../Complications (block);
-                         Contingency scenes carry Trigger/Then; a legacy
-                         Objective/Setup/Behaviours/Branching scene is
-                         one row
+  scene-labels  ERROR    every Planned scene carries Situation and
+                         Starts it, every Contingency scene carries
+                         Trigger; the other labels are optional and an
+                         absent one is never reported, but any label
+                         that is attempted must be spelled exactly; a
+                         legacy Objective/Setup/Behaviours/Branching
+                         scene is one row
                          (session-templates.md, Planned/Contingency Scenes)
   scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
                          (session-templates.md, Planned Scenes)

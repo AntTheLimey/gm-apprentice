@@ -418,6 +418,24 @@ class UnfiledChainDocTests(unittest.TestCase):
               "---\ntype: session-plan\nsession: \"[[Session 08]]\"\n"
               "---\n\n# Session 08 Plan\n")
 
+    def test_documents_target_places_a_wrong_numbered_chain_doc(self):
+        # Second half of the same condition: the doc has a chapter, but
+        # names a session number no file in that chapter carries.
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session_09_Notes.md",
+              "---\ntype: session-play-notes\nsession: \"[[Session 09]]\"\n"
+              "chapter: \"[[Chapter 1]]\"\n---\n\n# Session 09 Notes\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 08.md",
+              "---\ntype: session\nsession_number: 8\n"
+              "chapter: \"[[Chapter 1]]\"\n"
+              "documents:\n  plan: \"[[Session_08_Plan]]\"\n"
+              "  notes: \"[[Session_09_Notes]]\"\n"
+              "---\n\n# Session 08\n")
+        entries, chapters = ib.collect(self.vault)
+        session_08 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 08")
+        self.assertIn(("play notes", "Session_09_Notes"),
+                      session_08["chain"])
+
     def test_documents_target_places_a_chapterless_chain_doc(self):
         entries, chapters = ib.collect(self.vault)
         session_08 = next(s for c in chapters for s in c["all_sessions"]

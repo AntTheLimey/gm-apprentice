@@ -36,9 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `**Points to land**` checklist, an `**If the players...**` `Do | Then`
   table and `**Complications**` bullets; the read-aloud blockquote is the
   only prose. Contingency scenes are `**Trigger:**` plus `**Then**`
-  bullets. `**Type:**` is optional and checked when present. Existing
-  plans in the Objective/Setup/Behaviours/Branching skeleton are reported
-  by `plan_check.py` as one `scene-labels` row per scene and rewritten on
+  bullets. Only `**Situation:**` and `**Starts it:**` are required
+  (`**Trigger:**` for a Contingency scene): the rest are used where they
+  earn their place, an absent one is never reported, and a routing scene
+  that is two lines is finished. Any label that *is* attempted must be
+  spelled exactly, so a mistyped one is still an ERROR. `**Type:**` is
+  optional and checked when present. Existing plans in the
+  Objective/Setup/Behaviours/Branching skeleton are reported by
+  `plan_check.py` as one `scene-labels` row per scene and rewritten on
   their next prep; nothing is migrated automatically.
 - `plan_check.py`: `scene-labels` and a missing `## GM Notes` are ERRORs
   (exit 1), not warnings — the field-test plan shipped with
@@ -61,13 +66,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--play` printed "Session ?"; every session lookup now resolves the
   wikilink first. `vault_check.py sessions` and `index_build.py` shared
   the bug behind their own fallbacks and now share the fix.
-  `index_build.py` keeps its fallback: a chain doc whose session number
-  now resolves, but which sits outside any chapter, is still placed by
-  the session index's own `documents:` list.
+  `index_build.py` now runs its `documents:` fallback whenever nothing
+  else matched, not only when the session reference is unreadable: a
+  chain doc whose number resolves but which sits outside any chapter, or
+  names a number no session in its chapter carries, is placed by the
+  session index that lists it instead of being reported as orphaned.
 - `session_context.py --arcs`: a Spotlight Forecast row naming its PC by
-  an aliased wikilink (`[[Hero_Name|Hero Alias]]`) or containing an
-  escaped pipe was split at that pipe, so the PC never matched and the
-  sessions-since-last-B/C-plot count was silently wrong.
+  wikilink went unmatched, so the sessions-since-last-B/C-plot count was
+  silently wrong. `[[Hero_Name]]` now matches `Hero_Name.md`, an aliased
+  `[[Hero_Name|Hero Alias]]` resolves to its target instead of splitting
+  the row at the alias pipe, and an escaped `\|` stays in its cell.
 - `plan_check.py`: `**If the players.**` and `**If the players..**`
   counted as the full `**If the players...**` label instead of being
   reported as the near miss they are.
