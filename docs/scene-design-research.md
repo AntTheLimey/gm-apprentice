@@ -136,8 +136,12 @@ structure guidance is beginning/middle/end, not per-scene fields
 
 **One minimum for all types.**
 
-- Every scene requires `**Situation:**` and `**Starts it:**`. Nothing
-  else is ever required.
+- Every Planned scene requires `**Situation:**` and `**Starts it:**`.
+  Nothing else is ever required.
+- A Contingency scene is a different shape, not a thin Planned one: it
+  is `**Trigger:**` plus `**Then**`, and `**Trigger:**` is its one
+  required label. A contingency with no trigger is a scene with no way
+  in, which is the same defect `Starts it` guards against.
 - Every other label — `Entities`, `NPCs`, `Points to land`, `If the
   players...`, `Complications` — is available and encouraged where it
   earns its place, and may simply be absent. No "N/A" placeholder.
