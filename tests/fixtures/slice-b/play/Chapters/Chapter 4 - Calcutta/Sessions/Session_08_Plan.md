@@ -17,21 +17,37 @@ in coin or in blood.
 
 ### Scene 1: The Dredger's Manifest
 **Type:** investigation
-**Objective:** The party finds the dredger's manifest names a buyer for the missing ledger.
+**Situation:** The dredger's manifest surfaces in the harbourmaster's office overnight, naming a buyer for the missing ledger.
+**Starts it:** Bram. Wants the party to move before anyone else does.
 **Entities:** [[Bram]], [[Docks]]
-**Setup:** Bram sends word that the manifest surfaced in the harbourmaster's office overnight.
-**Behaviours:** The harbourmaster stalls for a bribe if the party arrives before noon.
-**Branching:** Paying the bribe versus forcing the issue with the Sterile Bay contacts.
-**Complications:** A rival crew is also asking after the manifest.
+**NPCs**
+- **Harbourmaster:** stalls for a bribe if the party arrives before noon.
+**Points to land**
+- [ ] The manifest names a buyer.
+**If the players...**
+| Do | Then |
+|---|---|
+| Pay the bribe | The harbourmaster hands it over quietly |
+| Force the issue | Word spreads faster than the party can act on it |
+**Complications**
+- A rival crew is also asking after the manifest.
 
 ### Scene 2: Bram's Reckoning
 **Type:** social
-**Objective:** Bram demands repayment of the debt now that the ledger is in play.
+**Situation:** Bram corners Hero at the dredger's gate before the party can leave, demanding repayment now the ledger is in play.
+**Starts it:** Bram. Wants the debt settled tonight.
 **Entities:** [[Bram]]
-**Setup:** Bram corners Hero at the dredger's gate before the party can leave.
-**Behaviours:** Bram's patience runs out if stalled twice.
-**Branching:** Repay in coin, in favours, or refuse outright.
-**Complications:** Bram's crew is watching from the shadows.
+**NPCs**
+- **Bram:** patience runs out if stalled twice.
+**Points to land**
+- [ ] The debt is real and overdue.
+**If the players...**
+| Do | Then |
+|---|---|
+| Repay in coin | Bram lets the matter drop |
+| Refuse outright | Bram's crew steps out of the shadows |
+**Complications**
+- Bram's crew is watching from the shadows.
 
 ## NPC Quick Reference
 
@@ -47,7 +63,8 @@ Calcutta's monsoon season is closing the harbour early each evening. The dredger
 
 ### If the party stalls Bram twice
 **Trigger:** Hero avoids Bram's demand in both Scene 1 and Scene 2.
-**Objective:** Bram escalates to a public confrontation at the docks.
+**Then**
+- Bram escalates to a public confrontation at the docks.
 
 ## Session End Objectives
 

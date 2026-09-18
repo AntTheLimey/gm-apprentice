@@ -53,6 +53,7 @@ from vaultlib import (
     normalize,
     parse_session_number,
     section,
+    session_ref_number,
     vault_files,
     wikilink_target,
 )
@@ -221,8 +222,8 @@ def _chain_label(ftype: str) -> str:
 
 def _documents_targets(text: str) -> set[str]:
     """Normalized wikilink targets named in a session's own `documents:`
-    block — the fallback a session-chain doc is matched against when its
-    own `session:` field doesn't resolve to a number."""
+    block — the fallback a session-chain doc is matched against whenever
+    matching on chapter and session number found nothing."""
     targets = set()
     for value in nested_mapping(text, "documents").values():
         target = wikilink_target(value)
@@ -350,13 +351,17 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
         if sf.number is not None}
 
     for rel, stem, fm, ftype, text in chain_docs:
-        num = parse_session_number(fm.get("session"))
+        num = session_ref_number(fm)
         matched: _SessionFile | None = None
         if num is not None:
             chain_key = chapter_key(rel, fm)
             if chain_key is not None:
                 matched = by_key_number.get((chain_key, num))
-        else:
+        if matched is None:
+            # A readable `session:` number is not enough on its own: the
+            # doc may sit outside any chapter, or name a session number
+            # that no file in its chapter carries. The session index
+            # listing it under `documents:` still places it.
             target = normalize(stem)
             for sf in session_files:
                 if target in sf.documents_targets:

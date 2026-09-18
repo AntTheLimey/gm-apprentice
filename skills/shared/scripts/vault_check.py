@@ -124,6 +124,7 @@ from vaultlib import (  # noqa: F401
     raw_frontmatter,
     scalar_value,
     scan_body,
+    session_ref_number,
     set_key,
     vault_files,
     wikilink_target,
@@ -747,7 +748,7 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
             continue
         if number is None:
             continue
-        n = parse_session_number(fm.get("session"))
+        n = session_ref_number(fm)
         if n is None:
             n = parse_session_number(fm.get("session_number"))
         if n == number:

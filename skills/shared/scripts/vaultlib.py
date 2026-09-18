@@ -535,6 +535,23 @@ def parse_session_number(value: Any) -> int | None:
     return n if n <= MAX_PLAUSIBLE_SESSION else None
 
 
+def session_ref_number(fm: dict[str, Any]) -> int | None:
+    """The session number named by `fm["session"]`.
+
+    A `session:` value written as a wikilink ("[[Session 05]]") reaches
+    us as a one-item list of bracket-stripped text, not a string — the
+    frontmatter reader treats the quoted outer `[...]` as a YAML flow
+    sequence (see `wikilink_target`'s docstring), and
+    `parse_session_number` returns None outright for any list.
+    `wikilink_target` unwraps that case to plain text first; a bare int
+    or string session value passes through it unchanged. Since migration
+    1.9.5 the quoted wikilink is the canonical `session:` form, so every
+    `session:` lookup should come through here rather than calling
+    `parse_session_number` on the raw value.
+    """
+    return parse_session_number(wikilink_target(fm.get("session")))
+
+
 def chapter_of(rel: str, fm: dict[str, Any]) -> str | None:
     """Which chapter a note belongs to, or None if it cannot be told.
 

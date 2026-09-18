@@ -367,6 +367,84 @@ class DocumentsTargetsFallbackTests(unittest.TestCase):
         self.assertEqual(chain_orphan, 0)
 
 
+class QuotedSessionWikilinkTests(unittest.TestCase):
+    """A chain doc whose `session:` is the canonical quoted wikilink
+    (`"[[Session 08]]"`) reaches the frontmatter reader as a one-item
+    list; `vaultlib.session_ref_number` unwraps it. Reading the raw value
+    matched nothing and left the doc orphaned unless the session's own
+    `documents:` block happened to name it."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-wikilink-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Chapters/Chapter 1/Chapter 1.md",
+              "---\ntype: chapter\n---\n\n# Chapter 1\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 08.md",
+              "---\ntype: session\nsession_number: 8\n"
+              "chapter: \"[[Chapter 1]]\"\ndocuments: {}\n"
+              "---\n\n# Session 08\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session_08_Plan.md",
+              "---\ntype: session-plan\nsession: \"[[Session 08]]\"\n"
+              "chapter: \"[[Chapter 1]]\"\n---\n\n# Session 08 Plan\n")
+
+    def test_quoted_wikilink_session_nests_the_plan(self):
+        entries, chapters = ib.collect(self.vault)
+        session_08 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 08")
+        self.assertEqual(session_08["chain"],
+                         [("plan", "Session_08_Plan")])
+        self.assertFalse([e for e in entries
+                          if e.stub_needs == "session link"], entries)
+
+
+class UnfiledChainDocTests(unittest.TestCase):
+    """A chain doc can carry a readable `session:` number and still have
+    no chapter — it sits outside `Chapters/` and names none. The number
+    branch cannot match without a chapter key, so the documents-target
+    fallback has to run for it, not only for docs whose `session:` field
+    is unparseable."""
+
+    def setUp(self):
+        self.vault = Path(tempfile.mkdtemp(prefix="index-build-unfiled-"))
+        self.addCleanup(shutil.rmtree, self.vault, ignore_errors=True)
+        write(self.vault, "Chapters/Chapter 1/Chapter 1.md",
+              "---\ntype: chapter\n---\n\n# Chapter 1\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 08.md",
+              "---\ntype: session\nsession_number: 8\n"
+              "chapter: \"[[Chapter 1]]\"\n"
+              "documents:\n  plan: \"[[Session_08_Plan]]\"\n"
+              "---\n\n# Session 08\n")
+        write(self.vault, "Inbox/Session_08_Plan.md",
+              "---\ntype: session-plan\nsession: \"[[Session 08]]\"\n"
+              "---\n\n# Session 08 Plan\n")
+
+    def test_documents_target_places_a_wrong_numbered_chain_doc(self):
+        # Second half of the same condition: the doc has a chapter, but
+        # names a session number no file in that chapter carries.
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session_09_Notes.md",
+              "---\ntype: session-play-notes\nsession: \"[[Session 09]]\"\n"
+              "chapter: \"[[Chapter 1]]\"\n---\n\n# Session 09 Notes\n")
+        write(self.vault, "Chapters/Chapter 1/Sessions/Session 08.md",
+              "---\ntype: session\nsession_number: 8\n"
+              "chapter: \"[[Chapter 1]]\"\n"
+              "documents:\n  plan: \"[[Session_08_Plan]]\"\n"
+              "  notes: \"[[Session_09_Notes]]\"\n"
+              "---\n\n# Session 08\n")
+        entries, chapters = ib.collect(self.vault)
+        session_08 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 08")
+        self.assertIn(("play notes", "Session_09_Notes"),
+                      session_08["chain"])
+
+    def test_documents_target_places_a_chapterless_chain_doc(self):
+        entries, chapters = ib.collect(self.vault)
+        session_08 = next(s for c in chapters for s in c["all_sessions"]
+                          if s["stem"] == "Session 08")
+        self.assertEqual(session_08["chain"], [("plan", "Session_08_Plan")])
+        self.assertFalse([e for e in entries
+                          if e.stub_needs == "session link"], entries)
+
+
 class DryRunTests(unittest.TestCase):
     def test_dry_run_writes_nothing(self):
         before = (FIX / "_meta" / "index.md").read_bytes()
