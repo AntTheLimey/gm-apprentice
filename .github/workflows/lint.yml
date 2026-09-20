@@ -167,6 +167,26 @@ jobs:
       - name: ingest_images tests
         run: python tests/test_ingest_images.py
 
+      - name: Attribution check tests
+        run: python tests/test_attribution_check.py
+
+      - name: Attribution notices on every distributed systems/ file
+        run: python scripts/attribution_check.py
+
+      - name: License check tests
+        run: python tests/test_license_check.py
+
+      # GURPS tables are benchmarked against the GCS master library. Pinned
+      # to the commit the thresholds were measured against; bump deliberately.
+      - name: GURPS content within GCS columns and notes
+        run: |
+          GCS_SHA=e3adf6dc204c106842107e20a80d2f7a8024a4b0
+          git init -q "$RUNNER_TEMP/gcs"
+          git -C "$RUNNER_TEMP/gcs" fetch -q --depth 1 \
+            https://github.com/richardwilkes/gcs_master_library "$GCS_SHA"
+          git -C "$RUNNER_TEMP/gcs" checkout -q FETCH_HEAD
+          python scripts/license_check.py --gcs "$RUNNER_TEMP/gcs" --require-gcs
+
       # Last: a type error must never mask a failing test.
       - name: Type-check shared scripts
         run: |
@@ -180,6 +200,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Licensed files added with ATTRIBUTION.md update
+        run: |
+          git fetch origin main --quiet
+          python3 scripts/attribution_check.py --base origin/main
 
       - name: Check version bump
         continue-on-error: true
