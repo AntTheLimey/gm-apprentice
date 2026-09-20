@@ -72,7 +72,9 @@ section when the Play Notes already carry a scene list.}
 #### Skipped Prep
 
 {Bold-lead bullets. Note spotlight debt with staleness counters:
-"…now four sessions stale." Omit any empty subsection.}
+"…now four sessions stale." Omit any empty subsection. Name every
+referent in the bullet that uses it — the document, the person, the
+reason — these bullets are read cold by session-prep.}
 
 ### World State
 

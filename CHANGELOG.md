@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.12] — 2026-09-08
+
+### Added
+
+- `session_context.py --brief`: the prep bundle with the Wrap-Up's
+  reconcile-provenance blocks (Memorable Moments; Name Conflicts,
+  Cross-Entity Claims, World Fact Findings, Quality Notes, Reconciliation
+  Context) each replaced by a one-line stub carrying its word count, and
+  the campaign overview and the upcoming session's existing Plan each
+  reduced to frontmatter plus a heading outline with word counts. On the
+  Canticle copy the bundle drops from 109 KB to 45 KB, with the existing
+  Plan outlined as well. session-prep Step 5 calls it, and Step 6 reads
+  the Plan through `plan_check.py --inventory/--state`.
+- `session_context.py --arcs`: every active PC's `## Background` and
+  `## GM Notes` plus a spotlight history parsed from earlier Plans'
+  `## Spotlight Forecast` tables (role, share, sessions since the last
+  B-plot and C-plot), chapter-scoped. Plans whose forecast is prose are
+  listed for direct reading, not counted — neither as a missing row for
+  a PC nor in the "plans read" denominator. Replaces the per-PC sheet
+  reads in session-prep Step 12 that read six sheets in full during the
+  field test.
+
+### Changed
+
+- Session Plan scenes are enumerated, not prose (#196): `**Situation:**`,
+  `**Starts it:**`, `**Entities:**`, then `**NPCs**` bullets,
+  `**Points to land**` checklist, an `**If the players...**` `Do | Then`
+  table and `**Complications**` bullets; the read-aloud blockquote is the
+  only prose. Contingency scenes are `**Trigger:**` plus `**Then**`
+  bullets. Only `**Situation:**` and `**Starts it:**` are required
+  (`**Trigger:**` for a Contingency scene): the rest are used where they
+  earn their place, an absent one is never reported, and a routing scene
+  that is two lines is finished. Any label that *is* attempted must be
+  spelled exactly, so a mistyped one is still an ERROR. `**Type:**` is
+  optional and checked when present. Existing plans in the
+  Objective/Setup/Behaviours/Branching skeleton are reported by
+  `plan_check.py` as one `scene-labels` row per scene and rewritten on
+  their next prep; nothing is migrated automatically.
+- `plan_check.py`: `scene-labels` and a missing `## GM Notes` are ERRORs
+  (exit 1), not warnings — the field-test plan shipped with
+  `**Behaviours.**` four times, a paragraph-only Contingency scene and no
+  `## GM Notes` because warnings were left standing. A near-miss label is
+  named in the row with the exact text to write.
+- session-prep asks only plot questions (#197): player decisions become
+  `Do | Then` rows, bookkeeping is defaulted with the default noted,
+  cosmetics are decided; the Plan file is written in plain English for a
+  cold read (#195), with the elicitation voice kept out of it.
+- `session_context.py --play` prints each scene minus its `**Entities:**`
+  line instead of Type/Objective/Setup — the enumerated skeleton is
+  already table-shaped.
+
+### Fixed
+
+- `session_context.py` never matched the canonical quoted-wikilink
+  `session:` field (`"[[Session 14]]"`, `"[[Session_14]]"`), so the
+  default bundle reported an existing plan as "(none found)" and
+  `--play` printed "Session ?"; every session lookup now resolves the
+  wikilink first. `vault_check.py sessions` and `index_build.py` shared
+  the bug behind their own fallbacks and now share the fix.
+  `index_build.py` now runs its `documents:` fallback whenever nothing
+  else matched, not only when the session reference is unreadable: a
+  chain doc whose number resolves but which sits outside any chapter, or
+  names a number no session in its chapter carries, is placed by the
+  session index that lists it instead of being reported as orphaned.
+- `session_context.py --arcs`: a Spotlight Forecast row naming its PC by
+  wikilink went unmatched, so the sessions-since-last-B/C-plot count was
+  silently wrong. `[[Hero_Name]]` now matches `Hero_Name.md`, an aliased
+  `[[Hero_Name|Hero Alias]]` resolves to its target instead of splitting
+  the row at the alias pipe, and an escaped `\|` stays in its cell.
+- `plan_check.py`: `**If the players.**` and `**If the players..**`
+  counted as the full `**If the players...**` label instead of being
+  reported as the near miss they are.
+- `session_context.py --play`: a scene whose `**Entities:**` line was its
+  last label lost its read-aloud blockquote and any trailing text from
+  the Play Brief — the strip ran to the next bold label instead of to the
+  end of the Entities line.
+
+---
+
 ## [1.9.11] — 2026-09-08
 
 ### Fixed

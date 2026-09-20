@@ -26,7 +26,8 @@ Checks, by id, level, and the rule they mechanise:
                          (session-templates.md, Session Plan)
   frontmatter   WARNING  `session`/`chapter` present and a wikilink
                          (session-templates.md, Session Plan)
-  sections      WARNING  every template H2 present
+  sections      ERROR/   ERROR for a missing '## GM Notes', WARNING for
+                WARNING  any other template H2
                          (session-templates.md, Session Plan)
   order         INFO     present template H2s stay in template order
                          (session-templates.md, Session Plan)
@@ -41,8 +42,13 @@ Checks, by id, level, and the rule they mechanise:
                          (SKILL.md preamble discipline comment)
   scene-length  INFO     a scene over ~1200 words — sanity-check it
                          (SKILL.md preamble discipline comment)
-  scene-labels  WARNING  a scene names all seven Sly Flourish labels
-                         (Contingency Scenes also require **Trigger:**)
+  scene-labels  ERROR    every Planned scene carries Situation and
+                         Starts it, every Contingency scene carries
+                         Trigger; the other labels are optional and an
+                         absent one is never reported, but any label
+                         that is attempted must be spelled exactly; a
+                         legacy Objective/Setup/Behaviours/Branching
+                         scene is one row
                          (session-templates.md, Planned/Contingency Scenes)
   scene-type    WARNING  **Type:** is one of schema_rules.SCENE_TYPES
                          (session-templates.md, Planned Scenes)
@@ -158,11 +164,40 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
 )
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
 
-SCENE_LABELS: tuple[str, ...] = (
-    "Type", "Objective", "Entities", "Setup", "Behaviours", "Branching",
-    "Complications",
-)
-CONTINGENCY_EXTRA_LABEL = "Trigger"
+# The Plan scene skeleton: inline labels are `**Label:**` on their own
+# line; block labels are `**Label**` (optional trailing text before the
+# closing `**`) followed by bullets, a checklist, or a table.
+# `Type` is optional and lives outside SCENE_LABELS — checked only when
+# present, by the existing scene-type/placeholder logic.
+#
+# One minimum for all types (2026-09-14, docs/scene-design-research.md):
+# only SCENE_LABELS_REQUIRED is demanded. Six prep traditions across five
+# systems were surveyed and none prescribes a uniform mandatory scene
+# shape — a routing scene, a GUMSHOE Sub-Plot and an Angry GM "no-fail
+# scene" are all legitimately near-empty. The rest of the labels are
+# tools, offered and not demanded, and a scene that omits one is finished,
+# not incomplete. A label that is *attempted* and mistyped is still an
+# error: that is a typo, not an omission.
+SCENE_LABELS_INLINE: tuple[str, ...] = ("Situation", "Starts it", "Entities")
+SCENE_LABELS_BLOCK: tuple[str, ...] = (
+    "NPCs", "Points to land", "If the players...", "Complications")
+SCENE_LABELS: tuple[str, ...] = SCENE_LABELS_INLINE + SCENE_LABELS_BLOCK
+SCENE_LABELS_REQUIRED: frozenset[str] = frozenset({"Situation", "Starts it"})
+CONTINGENCY_LABELS: tuple[str, ...] = ("Trigger", "Then")
+CONTINGENCY_LABELS_REQUIRED: frozenset[str] = frozenset({"Trigger"})
+# Every required label, whichever skeleton a scene is being judged against.
+_REQUIRED_LABELS: frozenset[str] = (
+    SCENE_LABELS_REQUIRED | CONTINGENCY_LABELS_REQUIRED)
+# `Trigger` is inline (colon); `Then` is block (bullets, no colon).
+_INLINE_LABELS: frozenset[str] = frozenset(SCENE_LABELS_INLINE) | {"Trigger"}
+
+# A scene written in the pre-1.9.12 prose skeleton — detected only when
+# none of SCENE_LABELS_INLINE is present, so a modern scene that happens
+# to mention one of these words in passing is never misidentified.
+LEGACY_SCENE_LABELS: frozenset[str] = frozenset(
+    {"Objective", "Setup", "Behaviours", "Behaviors", "Branching"})
+
+SECTION_ERROR_TITLES: frozenset[str] = frozenset({"GM Notes"})
 
 DURATION_RANGE_RE = re.compile(
     r"\b\d+\s*[-–—]\s*\d+\s*(?:min|mins|minutes|hours?|hrs?)\b",
@@ -197,7 +232,6 @@ GUARD_SECTIONS: tuple[str, ...] = (
 # A list item opener: `- `, `* `, or `1. `. A hard-wrapped continuation
 # line carries none of these and belongs to the item above it.
 LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
-
 PREP_STATE_RE = re.compile(r"<!--\s*prep-state:\s*(.*?)-->", re.DOTALL)
 # key=value, where a value may be a `[...]`/`(...)` group carrying
 # internal spaces (SKILL.md's own worked example:
@@ -328,7 +362,14 @@ def check_sections(rel: str, by_norm: dict[str, tuple[int, str, str]]
                    ) -> list[Finding]:
     findings = []
     for title in TEMPLATE_SECTIONS:
-        if _norm_title(title) not in by_norm:
+        if _norm_title(title) in by_norm:
+            continue
+        if title in SECTION_ERROR_TITLES:
+            findings.append(Finding(
+                "sections", "ERROR", f"{rel}:§{title}",
+                f"sections: missing '## {title}' — required; every "
+                "Keeper-facing section lives under it"))
+        else:
             findings.append(Finding(
                 "sections", "WARNING", f"{rel}:§{title}",
                 f"sections: missing '## {title}'"))
@@ -417,21 +458,118 @@ def check_npc_table(rel: str, by_norm: dict[str, tuple[int, str, str]]
     return []
 
 
+def _is_inline_label(label: str) -> bool:
+    return label in _INLINE_LABELS
+
+
 def _label_present(body: str, label: str) -> bool:
-    if label == "Behaviours":
-        return bool(re.search(r"\*\*Behaviou?rs:\*\*", body))
-    return f"**{label}:**" in body
+    if label == "If the players...":
+        return bool(re.search(
+            r"^\*\*If the players(?:\.{3}|…)\*\*", body, re.MULTILINE))
+    if _is_inline_label(label):
+        return bool(re.search(
+            rf"^\*\*{re.escape(label)}:\*\*", body, re.MULTILINE))
+    # Block label: the bare label, or the label plus an optional
+    # parenthetical (`**Complications (drop when the scene sags)**`).
+    # Anything else after the label — a colon, a period, free text with
+    # no parens — is a near miss, not a match, so `_label_near_miss`
+    # stays reachable instead of this pattern swallowing it first.
+    return bool(re.search(
+        rf"^\*\*{re.escape(label)}(?:\s*\([^*\n]*\))?\*\*", body,
+        re.MULTILINE))
+
+
+def _label_near_miss(body: str, label: str) -> str | None:
+    if label == "If the players...":
+        # The ellipsis is part of the label, so `re.escape(label)` below
+        # would only ever find `**If the players...:**`. The form the GM
+        # actually writes is `**If the players:**` — a near miss with a
+        # fix, not a missing label (#M16).
+        # A short ellipsis (`**If the players.**`) is a typo, not the
+        # label: `_label_present` requires all three dots, so without a
+        # near miss here an optional label would go unreported.
+        for pattern in (r"^\*\*If the players(?:\.{1,3}|…)?\s*:\*\*",
+                        r"^\*\*If the players(?:\.{1,3}|…)?\s*;\*\*",
+                        r"^\*\*If the players\.{1,2}\*\*",
+                        r"^If the players(?:\.{1,3}|…)?\s*:"):
+            m = re.search(pattern, body, re.MULTILINE)
+            if m:
+                return m.group(0)
+        return None
+    esc = re.escape(label)
+    patterns = [rf"^\*\*{esc}\.\*\*", rf"^\*\*{esc};\*\*"]
+    if _is_inline_label(label):
+        patterns.append(rf"^\*\*{esc}\*\*")
+    else:
+        patterns.append(rf"^\*\*{esc}:\*\*")
+    patterns.append(rf"^{esc}:")
+    for pattern in patterns:
+        m = re.search(pattern, body, re.MULTILINE)
+        if m:
+            return m.group(0)
+    return None
+
+
+_LEGACY_LABEL_RE = re.compile(r"^\*\*(\w+):\*\*")
+
+# `Entities` is common furniture to both the pre-1.9.12 prose skeleton and
+# the enumerated one, so its presence alone is no evidence of the modern
+# skeleton and never gates legacy detection off.
+_COMMON_FURNITURE_LABELS: frozenset[str] = frozenset({"Entities"})
+
+
+def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
+    """The pre-1.9.12 prose labels a scene carries, or `[]` if it is not
+    a legacy scene at all.
+
+    The gate is the scene's *own* expected label set — planned or
+    contingency, as passed. Gating on the planned skeleton's opening pair
+    alone reported a well-formed Contingency scene as legacy the moment
+    it carried a stray `**Setup:**` line, and skipped its Trigger/Then
+    roll call to say so.
+    """
+    gate = [lb for lb in labels if lb not in _COMMON_FURNITURE_LABELS]
+    if any(_label_present(body, label) for label in gate):
+        return []
+    found: list[str] = []
+    for line in body.splitlines():
+        m = _LEGACY_LABEL_RE.match(line.strip())
+        if m and m.group(1) in LEGACY_SCENE_LABELS and m.group(1) not in found:
+            found.append(m.group(1))
+    return found
 
 
 def _scene_findings(rel: str, body: str, scene_title: str,
-                    extra_labels: tuple[str, ...] = ()) -> list[Finding]:
+                    labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
     locus = f"{rel}:§{scene_title}"
-    for label in SCENE_LABELS + extra_labels:
-        if not _label_present(body, label):
-            findings.append(Finding(
-                "scene-labels", "WARNING", locus,
-                f"scene-labels: '{scene_title}' is missing **{label}:**"))
+    legacy_found = _legacy_scene(body, labels)
+    if legacy_found:
+        rewrite_as = " / ".join(
+            lbl for lbl in labels if lbl in _REQUIRED_LABELS)
+        findings.append(Finding(
+            "scene-labels", "ERROR", locus,
+            f"scene-labels: '{scene_title}' uses the pre-1.9.12 prose "
+            f"skeleton ({', '.join(legacy_found)}) — rewrite as "
+            f"{rewrite_as}"))
+    else:
+        for label in labels:
+            if _label_present(body, label):
+                continue
+            block = not _is_inline_label(label)
+            shown = f"**{label}**" if block else f"**{label}:**"
+            near = _label_near_miss(body, label)
+            if near is not None:
+                # Attempted but mistyped — a typo in any label, required
+                # or not, is worth naming.
+                findings.append(Finding(
+                    "scene-labels", "ERROR", locus,
+                    f"scene-labels: '{scene_title}' has {near!r} — write "
+                    f"'{shown}'"))
+            elif label in _REQUIRED_LABELS:
+                findings.append(Finding(
+                    "scene-labels", "ERROR", locus,
+                    f"scene-labels: '{scene_title}' is missing {shown}"))
     type_match = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
     if type_match:
         raw = type_match.group(1).strip()
@@ -462,13 +600,13 @@ def check_scenes(rel: str, by_norm: dict[str, tuple[int, str, str]]
     planned = by_norm.get(_norm_title(PLANNED_SCENES_TITLE))
     if planned is not None:
         for scene_title, scene_body in vl.h3_blocks(planned[2]):
-            findings.extend(_scene_findings(rel, scene_body, scene_title))
+            findings.extend(
+                _scene_findings(rel, scene_body, scene_title, SCENE_LABELS))
     contingency = by_norm.get(_norm_title(CONTINGENCY_SCENES_TITLE))
     if contingency is not None:
         for scene_title, scene_body in vl.h3_blocks(contingency[2]):
             findings.extend(_scene_findings(
-                rel, scene_body, scene_title,
-                extra_labels=(CONTINGENCY_EXTRA_LABEL,)))
+                rel, scene_body, scene_title, CONTINGENCY_LABELS))
     return findings
 
 

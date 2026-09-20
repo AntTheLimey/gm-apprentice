@@ -155,6 +155,9 @@ jobs:
       - name: session_context --play/--threads tests
         run: python tests/test_session_context_play.py
 
+      - name: session_context --brief/--arcs tests
+        run: python tests/test_session_context_brief.py
+
       - name: plans_index tests
         run: python tests/test_plans_index.py
 
