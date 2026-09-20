@@ -1,3 +1,7 @@
+> Original GM guidance for Regency (1811-1820) play. Regency Cthulhu
+> is a Chaosium (2022) product; no Chaosium text is reproduced here.
+> Game mechanics referenced are uncopyrightable (Baker v. Selden, 1879).
+
 # Regency Cthulhu — GM Guidance
 
 How running Regency (1811-1820) sessions differs from standard
