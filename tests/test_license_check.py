@@ -88,12 +88,16 @@ class GcsBenchmarkTests(unittest.TestCase):
         self.addCleanup(self.r.close)
 
     def test_columns_gcs_carries_pass_at_any_row_count(self) -> None:
-        rows = WEAPON_TABLE + WEAPON_TABLE.splitlines()[2] * 500 + "\n"
+        rows = WEAPON_TABLE + "".join([WEAPON_TABLE.splitlines()[2] + "\n"] * 500)
         msgs, review = self.r.gurps("a.md", rows)
         self.assertEqual((msgs, review), ([], []))
 
     def test_column_gcs_lacks_is_flagged_with_its_line(self) -> None:
-        text = WEAPON_TABLE.replace("| Page |", "| Page | Full Rules Text |", 1)
+        text = (
+            WEAPON_TABLE.replace("| Page |", "| Page | Full Rules Text |", 1)
+            .replace("|---|\n", "|---|---|\n", 1)
+            .replace("| B271 |", "| B271 | text |")
+        )
         msgs, _ = self.r.gurps("a.md", "# T\n\n" + text)
         self.assertEqual(len(msgs), 1)
         self.assertIn("a.md:3:", msgs[0])
@@ -165,6 +169,55 @@ class GcsBenchmarkTests(unittest.TestCase):
         msgs, review = self.r.gurps("a.md", text)
         self.assertEqual(msgs, [])
         self.assertEqual(len(review), 1)
+
+    def test_table_without_outer_pipes_is_still_checked(self) -> None:
+        text = "Weapon | TL | Dmg | Full Rules Text\n---|---|---|---\nSword | 1 | sw+1 | verbatim text\n"
+        msgs, _ = self.r.gurps("a.md", text)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('"Full Rules Text"', msgs[0])
+
+    def test_indented_table_is_still_checked(self) -> None:
+        text = "  | Weapon | TL | Dmg | Bad |\n  |---|---|---|---|\n  | Sword | 1 | sw+1 | x |\n"
+        msgs, _ = self.r.gurps("a.md", text)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('"Bad"', msgs[0])
+
+    def test_table_inside_a_blockquote_is_still_checked(self) -> None:
+        text = "> | Weapon | TL | Dmg | Bad |\n> |---|---|---|---|\n> | Sword | 1 | sw+1 | x |\n"
+        msgs, _ = self.r.gurps("a.md", text)
+        self.assertEqual(len(msgs), 1)
+
+    def test_escaped_pipes_do_not_split_a_note(self) -> None:
+        note = " \\| ".join([" ".join(["w"] * 30)] * 3)  # 90 words + escaped pipes, one cell
+        text = f"| Item | TL | Cost | Wt | Page | Notes |\n|---|---|---|---|---|---|\n| A | 1 | $1 | 1 | B1 | {note} |\n"
+        msgs, _ = self.r.gurps("a.md", text)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("words; the longest GCS eqp note is 40", msgs[0])
+
+    def test_ragged_row_is_a_finding(self) -> None:
+        text = "| Item | TL | Cost | Wt | Page | Notes |\n|---|---|---|---|---|---|\n| A | 1 | $1 |\n"
+        msgs, _ = self.r.gurps("a.md", text)
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("row has 3 cells but the header has 6", msgs[0])
+
+    def test_every_notes_column_is_measured(self) -> None:
+        long = " ".join(["w"] * 60)
+        text = f"| Item | TL | Notes | Notes |\n|---|---|---|---|\n| A | 1 | ok | {long} |\n"
+        msgs, _ = self.r.gurps("a.md", text)
+        self.assertEqual(len(msgs), 1)
+
+    def test_british_armour_is_an_item_table(self) -> None:
+        text = "| Armour | TL | DR | Cost | Wt | Full Rules Text |\n|---|---|---|---|---|---|\n| A | 1 | 2 | $1 | 1 | x |\n"
+        msgs, review = self.r.gurps("a.md", text)
+        self.assertEqual(review, [])
+        self.assertTrue(any('"Full Rules Text"' in m for m in msgs))
+
+    def test_unrecognised_first_column_with_item_columns_is_an_error(self) -> None:
+        text = "| Gizmo | TL | Dmg | Reach | Notes |\n|---|---|---|---|---|\n| A | 1 | 2 | 1 | x |\n"
+        msgs, review = self.r.gurps("a.md", text)
+        self.assertEqual(review, [])
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('first column "Gizmo" is not recognised', msgs[0])
 
     def test_tables_in_code_fences_are_ignored(self) -> None:
         text = "```\n" + WEAPON_TABLE.replace("| Page |", "| Page | Bad |") + "```\n"
@@ -271,6 +324,12 @@ class CliTests(unittest.TestCase):
         ci = self.run_cli("--gcs", nowhere, "--require-gcs")
         self.assertEqual(ci.returncode, 1)
         self.assertIn("GCS master library not found", ci.stdout)
+
+    def test_require_gcs_fails_even_when_no_gurps_files_are_selected(self) -> None:
+        self.r.write(f"{SYSTEMS}/fitd/x.md", "# x\n")  # no gurps-4e directory at all
+        out = self.run_cli("--gcs", str(self.r.root / "nowhere"), "--require-gcs")
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("GCS master library not found", out.stdout)
 
     def test_personal_directory_and_sources_are_never_scanned(self) -> None:
         bad = WEAPON_TABLE.replace("| Page |", "| Page | Bad |")

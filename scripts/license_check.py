@@ -75,7 +75,7 @@ _WEAPON_COLUMNS = {
 COLUMN_MAP: dict[str, dict[str, str]] = {
     "eqp": {
         **dict.fromkeys(
-            ("weapon", "item", "armor", "suit", "shield", "grenade", "ammo", "kit"),
+            ("weapon", "item", "armor", "armour", "suit", "shield", "grenade", "ammo", "kit"),
             "description",
         ),
         "tl": "tech_level",
@@ -132,7 +132,7 @@ COLUMN_MAP: dict[str, dict[str, str]] = {
 LIB_BY_FIRST_COLUMN = {
     col: lib for lib, cols in COLUMN_MAP.items() for col in cols
     if col in (
-        "weapon", "item", "armor", "suit", "shield", "grenade", "ammo", "kit",
+        "weapon", "item", "armor", "armour", "suit", "shield", "grenade", "ammo", "kit",
         "skill", "technique", "path", "specialization", "spell", "trait",
         "quirk", "perk", "enhancement", "limitation",
     )
@@ -144,6 +144,11 @@ GCS_GLOBS = {
     "adq": "**/*.adq",
     "adm": "**/*.adm",
 }
+# A table with two or more of these looks like item data even when its first
+# column is not one we recognise; that is an error, never a silent skip.
+ITEM_LIKE_COLUMNS = frozenset(
+    "dmg damage reach parry acc rof shots bulk rcl defaults prereq dur wt tl".split()
+)
 # Columns this repo authors — derived numbers or play guidance, not book
 # data — so no GCS field can exist for them.
 OWN_COLUMNS = frozenset(
@@ -235,31 +240,54 @@ def load_gcs(root: Path) -> Gcs | None:
     return gcs
 
 
+_UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+_QUOTE_PREFIX = re.compile(r"^\s*(?:>\s?)*")
+
+
 def _cells(row: str) -> list[str]:
-    return [c.strip() for c in row.strip().strip("|").split("|")]
+    """Split a pipe-table row; leading/trailing pipes optional, \\| is not a split."""
+    body = _QUOTE_PREFIX.sub("", row).strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|") and not body.endswith("\\|"):
+        body = body[:-1]
+    return [c.strip() for c in _UNESCAPED_PIPE.split(body)]
 
 
 def _is_separator(row: str) -> bool:
-    return bool(re.fullmatch(r"\|[\s:|-]+\|?", row.strip())) and "-" in row
+    if "|" not in row:
+        return False
+    cells = _cells(row)
+    return bool(cells) and all(re.fullmatch(r":?-+:?", c) for c in cells)
 
 
 def _tables(lines: list[str]) -> list[tuple[int, list[str], list[list[str]]]]:
-    """(first line number, header cells, data rows) for each pipe table."""
+    """(header line number, header cells, data rows) for every pipe table.
+
+    A table is a header line containing a pipe followed by a separator row, so
+    tables without outer pipes, indented tables and tables inside blockquotes
+    are all found.
+    """
     found = []
     in_fence = False
     i = 0
     while i < len(lines):
         if lines[i].lstrip().startswith("```"):
             in_fence = not in_fence
-        if in_fence or not lines[i].startswith("|"):
             i += 1
             continue
-        j = i
-        while j < len(lines) and lines[j].startswith("|"):
+        if (
+            in_fence
+            or i + 1 >= len(lines)
+            or "|" not in lines[i]
+            or not _is_separator(lines[i + 1])
+        ):
+            i += 1
+            continue
+        j = i + 2
+        while j < len(lines) and "|" in lines[j] and _QUOTE_PREFIX.sub("", lines[j]).strip():
             j += 1
-        block = lines[i:j]
-        if len(block) >= 3 and _is_separator(block[1]):
-            found.append((i + 1, _cells(block[0]), [_cells(r) for r in block[2:]]))
+        found.append((i + 1, _cells(lines[i]), [_cells(r) for r in lines[i + 2 : j]]))
         i = j
     return found
 
@@ -281,7 +309,20 @@ def check_gurps_file(
         cols = [h.lower() for h in header]
         lib = LIB_BY_FIRST_COLUMN.get(cols[0])
         if lib is None:
-            if not _is_blank_form(header, rows):
+            if _is_blank_form(header, rows):
+                continue
+            like = [c for c in cols if c in ITEM_LIKE_COLUMNS]
+            if len(like) >= 2:
+                findings.append(
+                    Finding(
+                        rel,
+                        line_no,
+                        f"table looks like item data (columns {', '.join(like)}) "
+                        f'but its first column "{header[0]}" is not recognised — '
+                        f"rename it or add it to LIB_BY_FIRST_COLUMN",
+                    )
+                )
+            else:
                 review.append(RulesTable(rel, line_no, tuple(header), len(rows)))
             continue
         for col, name in zip(cols, header):
@@ -297,10 +338,20 @@ def check_gurps_file(
                         f"not carry this for {lib} data",
                     )
                 )
-        if "notes" in cols:
-            ni = cols.index("notes")
-            for offset, row in enumerate(rows):
-                w = _words(row[ni]) if ni < len(row) else 0
+        note_cols = [i for i, c in enumerate(cols) if c == "notes"]
+        for offset, row in enumerate(rows):
+            if len(row) != len(header):
+                findings.append(
+                    Finding(
+                        rel,
+                        line_no + 2 + offset,
+                        f"row has {len(row)} cells but the header has "
+                        f"{len(header)} — cells cannot be benchmarked",
+                    )
+                )
+                continue
+            for ni in note_cols:
+                w = _words(row[ni])
                 if w > gcs.max_notes[lib]:
                     findings.append(
                         Finding(
@@ -471,7 +522,7 @@ def main(argv: list[str] | None = None) -> int:
         f for f in targets
         if _system_of(f, repo) == "gurps-4e" and f.name not in EXEMPT_FILES
     ]
-    if gurps:
+    if gurps or args.require_gcs:
         gcs = load_gcs(args.gcs)
         if gcs is None:
             msg = f"GCS master library not found at {args.gcs}"

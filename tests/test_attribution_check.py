@@ -154,6 +154,28 @@ class AttributionCheckTests(unittest.TestCase):
         self.fx.write(f"{SYSTEMS}/gurps-4e/personal/full-book.md", "# No notice\n")
         self.assertEqual(self.fx.messages(), [])
 
+    def test_non_markdown_file_in_a_system_dir_is_reported(self) -> None:
+        self.fx.write(f"{SYSTEMS}/gurps-4e/weapons.csv", "name,dmg\nsword,1d\n")
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("weapons.csv", msgs[0])
+        self.assertIn("non-markdown", msgs[0])
+
+    def test_dotfiles_are_ignored(self) -> None:
+        self.fx.write(f"{SYSTEMS}/gurps-4e/.DS_Store", "x")
+        self.fx.write(f"{SYSTEMS}/.DS_Store", "x")
+        self.assertEqual(self.fx.messages(), [])
+
+    def test_unclassified_file_directly_under_systems_is_reported(self) -> None:
+        self.fx.write(f"{SYSTEMS}/gurps-quickref.md", "| Dmg | 1d |\n")
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("directly under systems/", msgs[0])
+
+    def test_shared_patterns_at_the_root_is_exempt(self) -> None:
+        self.fx.write(f"{SYSTEMS}/shared-patterns.md", "# Shared\n")
+        self.assertEqual(self.fx.messages(), [])
+
     def test_unknown_system_directory_is_reported(self) -> None:
         self.fx.write(f"{SYSTEMS}/newsys/core.md", "# Core\n")
         msgs = self.fx.messages()

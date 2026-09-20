@@ -12,6 +12,9 @@ its own system's notice. This check fails when:
   * a distributed file under systems/<system>/ is missing that system's
     notice, or carries it in the wrong place (GURPS opens with it, FitD
     closes with it, as ATTRIBUTION.md promises);
+  * a non-markdown file ships under a system directory (the zips include
+    every file, and only .md files are checked for a notice), or a file
+    sits directly under systems/ without being on ROOT_EXEMPT;
   * a systems/<dir>/ exists with no rule here (a new licensed source needs a
     notice rule and an ATTRIBUTION.md section before any content lands);
   * ATTRIBUTION.md has no section for a system that has a rule;
@@ -40,6 +43,8 @@ REPO = Path(__file__).resolve().parent.parent
 SYSTEMS_REL = Path("skills/ttrpg-expert/systems")
 ATTRIBUTION_REL = Path("ATTRIBUTION.md")
 EXEMPT = {"generic"}
+# Files directly under systems/ that carry no licensed content.
+ROOT_EXEMPT = {"shared-patterns.md"}
 HEAD_LINES = 20  # "opens with the notice"
 TAIL_LINES = 12  # "closing paragraph"
 
@@ -124,6 +129,38 @@ def distributed_files(system_dir: Path) -> list[Path]:
     )
 
 
+def unexpected_files(base: Path, repo: Path, *, root: bool) -> list[Finding]:
+    """Shipped files the notice check cannot see.
+
+    Under a system dir: anything that is not markdown. Directly under
+    systems/: anything not on ROOT_EXEMPT. Dotfiles (.DS_Store) are ignored.
+    """
+    out: list[Finding] = []
+    for p in sorted(base.rglob("*") if not root else base.iterdir()):
+        rel = p.relative_to(base)
+        if not p.is_file() or "personal" in rel.parts or p.name.startswith("."):
+            continue
+        if root:
+            if p.name not in ROOT_EXEMPT:
+                out.append(
+                    Finding(
+                        str(p.relative_to(repo)),
+                        "file sits directly under systems/ with no notice rule — "
+                        "move it into a system directory or add it to ROOT_EXEMPT "
+                        "if it carries no licensed content",
+                    )
+                )
+        elif p.suffix != ".md":
+            out.append(
+                Finding(
+                    str(p.relative_to(repo)),
+                    "non-markdown file ships in the skill zip but is not covered "
+                    "by the notice check — convert it to markdown with the notice",
+                )
+            )
+    return out
+
+
 def _region(text: str, where: str) -> str:
     lines = text.splitlines()
     if where == "head":
@@ -159,6 +196,7 @@ def check_systems(repo: Path) -> list[Finding]:
     findings: list[Finding] = []
     systems = repo / SYSTEMS_REL
     attribution = (repo / ATTRIBUTION_REL).read_text(encoding="utf-8")
+    findings += unexpected_files(systems, repo, root=True)
     for system_dir in sorted(p for p in systems.iterdir() if p.is_dir()):
         name = system_dir.name
         if name in EXEMPT:
@@ -183,6 +221,7 @@ def check_systems(repo: Path) -> list[Finding]:
                     f"{rule.attribution_marker!r})",
                 )
             )
+        findings += unexpected_files(system_dir, repo, root=False)
         for f in distributed_files(system_dir):
             findings += check_file(f, rule, str(f.relative_to(repo)))
     return findings
