@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.13] — 2026-09-20
+
+### Added
+
+- `scripts/attribution_check.py`, run in CI: every distributed file under
+  `skills/ttrpg-expert/systems/` must carry its own system's notice — the
+  SRD 5.2 CC-BY line, the Blades in the Dark CC-BY line as the closing
+  paragraph, the Paizo ORC notice, the SJG Online Policy blockquote
+  opening each GURPS file, or a BRP/ORC, public-domain or
+  own-description notice for Call of Cthulhu. It also fails on a
+  `systems/` directory with no notice rule, an `ATTRIBUTION.md` with no
+  section for a system, a tracked or un-gitignored `personal/`
+  directory, and, on pull requests, licensed files added without an
+  `ATTRIBUTION.md` change.
+- `scripts/license_check.py`: GURPS tables are benchmarked against the
+  public GCS master library, pinned in CI to one commit. A table column
+  with no GCS field behind it, or a note longer than the longest GCS note
+  for that kind of data, fails; row counts are not limited. Rules charts
+  with no GCS counterpart are never failed and are listed by `--review`.
+  `--shingles` scans PF2e prose against the local ORC dataset for
+  verbatim runs of 15 or more words; it needs the corpus, so it is local
+  only.
+
+### Changed
+
+- `ATTRIBUTION.md` records the GURPS rules charts reproduced in the
+  reference files, with source pages taken from the GURPS rules index.
+
+### Fixed
+
+- `coc-7e/variants/regency/gm-guidance.md` carried no license notice, the
+  only distributed `systems/` file without one.
+
+---
+
 ## [1.9.12] — 2026-09-08
 
 ### Added
