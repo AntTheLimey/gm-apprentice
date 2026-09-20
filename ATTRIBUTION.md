@@ -103,7 +103,7 @@ where noted.
 License: SJG Online Policy
 (https://www.sjgames.com/general/online_policy.html).
 Transformation: compact markdown tables of values and short notes; the
-surrounding explanation is our own wording. Item tables (weapons, armor,
+surrounding explanation is original wording. Item tables (weapons, armor,
 gear, skills, spells, traits, modifiers) are benchmarked in CI against
 the columns and note lengths of the public GCS master library
 (`scripts/license_check.py`). The rules charts below have no GCS

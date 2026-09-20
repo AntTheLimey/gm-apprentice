@@ -20,11 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `systems/` directory with no notice rule, an `ATTRIBUTION.md` with no
   section for a system, a tracked or un-gitignored `personal/`
   directory, and, on pull requests, licensed files added without an
-  `ATTRIBUTION.md` change.
+  `ATTRIBUTION.md` change. A non-markdown file under a system directory,
+  or an unclassified file directly under `systems/`, also fails: the zips
+  ship both, and neither would otherwise be checked.
 - `scripts/license_check.py`: GURPS tables are benchmarked against the
   public GCS master library, pinned in CI to one commit. A table column
   with no GCS field behind it, or a note longer than the longest GCS note
-  for that kind of data, fails; row counts are not limited. Rules charts
+  for that kind of data, fails; row counts are not limited. Tables are
+  found with or without outer pipes, indented or quoted, with `\|`
+  respected inside cells, and a row whose cell count differs from its
+  header fails rather than being skipped. Rules charts
   with no GCS counterpart are never failed and are listed by `--review`.
   `--shingles` scans PF2e prose against the local ORC dataset for
   verbatim runs of 15 or more words; it needs the corpus, so it is local
