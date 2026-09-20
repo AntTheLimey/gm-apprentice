@@ -136,6 +136,42 @@ class AttributionCheckTests(unittest.TestCase):
             self.fx.write(f"{SYSTEMS}/coc-7e/f{i}.md", f"> {phrase}.\n\n# T\n")
         self.assertEqual(self.fx.messages(), [])
 
+    def test_coc_incidental_phrase_is_not_a_notice(self) -> None:
+        self.fx.write(
+            f"{SYSTEMS}/coc-7e/incidental.md",
+            "# Scenario\n\nThe investigators discuss a public domain manuscript.\n",
+        )
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("incidental.md", msgs[0])
+
+    def test_coc_notice_as_plain_prose_is_not_a_notice(self) -> None:
+        self.fx.write(
+            f"{SYSTEMS}/coc-7e/prose.md",
+            "Content is in the public domain.\n\n# Heading\n",
+        )
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("as a blockquote", msgs[0])
+
+    def test_coc_blockquote_notice_below_the_opening_lines_fails(self) -> None:
+        self.fx.write(
+            f"{SYSTEMS}/coc-7e/late.md",
+            "# Heading\n" + "filler\n" * 30 + "> Content is in the public domain.\n",
+        )
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("present but not in the first 20 lines", msgs[0])
+
+    def test_gurps_notice_as_plain_prose_is_not_a_notice(self) -> None:
+        self.fx.write(
+            f"{SYSTEMS}/gurps-4e/prose.md",
+            "Steve Jackson Games, https://www.sjgames.com/general/online_policy.html\n\n# T\n",
+        )
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("as a blockquote", msgs[0])
+
     def test_coc_file_with_no_notice_fails(self) -> None:
         self.fx.write(f"{SYSTEMS}/coc-7e/bare.md", "# Bare\n")
         self.assertEqual(len(self.fx.messages()), 1)

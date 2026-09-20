@@ -271,6 +271,49 @@ class ShingleTests(unittest.TestCase):
         self.assertIn("conditions.md:5:", msgs[0])
         self.assertIn("pf2e-orc-dataset/data/rules/sleep.md", msgs[0])
 
+    # A 19-word passage has 10 windows. Halves of 14 words give 5 windows
+    # each, i.e. a 14-word run apiece — under the 15-word threshold alone,
+    # but 19 words if the two runs were (wrongly) merged.
+    PASSAGE = [f"w{i}" for i in range(19)]
+
+    def test_adjacent_windows_from_different_sources_do_not_join(self) -> None:
+        w = self.PASSAGE
+        a = self.r.write("corpus/pf2e-orc-dataset/data/a.md", " ".join(w[:14]) + "\n")
+        b = self.r.write("corpus/pf2e-orc-dataset/data/b.md", " ".join(w[5:]) + "\n")
+        f = self.r.write(f"{SYSTEMS}/pf2e/x.md", "# T\n\n" + " ".join(w) + "\n")
+        found = lc.shingle_scan([f], [a, b], self.r.root, self.corpus_root)
+        self.assertEqual([str(x) for x in found], [])
+
+    def test_noncontiguous_offsets_in_one_source_do_not_join(self) -> None:
+        w = self.PASSAGE
+        corpus = self.r.write(
+            "corpus/pf2e-orc-dataset/data/c.md",
+            " ".join(w[:14]) + " filler filler filler " + " ".join(w[5:]) + "\n",
+        )
+        f = self.r.write(f"{SYSTEMS}/pf2e/x.md", "# T\n\n" + " ".join(w) + "\n")
+        found = lc.shingle_scan([f], [corpus], self.r.root, self.corpus_root)
+        self.assertEqual([str(x) for x in found], [])
+
+    def test_the_same_passage_contiguous_in_one_source_is_flagged(self) -> None:
+        w = self.PASSAGE
+        corpus = self.r.write("corpus/pf2e-orc-dataset/data/c.md", " ".join(w) + "\n")
+        f = self.r.write(f"{SYSTEMS}/pf2e/x.md", "# T\n\n" + " ".join(w) + "\n")
+        found = lc.shingle_scan([f], [corpus], self.r.root, self.corpus_root)
+        self.assertEqual(len(found), 1)
+        self.assertIn("19 consecutive words", str(found[0]))
+
+    def test_reported_source_is_the_one_that_holds_the_run(self) -> None:
+        run = " ".join(f"r{i}" for i in range(20))
+        decoy = self.r.write(
+            "corpus/pf2e-orc-dataset/data/decoy.md", " ".join(f"r{i}" for i in range(10)) + "\n"
+        )
+        real = self.r.write("corpus/pf2e-orc-dataset/data/real.md", run + "\n")
+        f = self.r.write(f"{SYSTEMS}/pf2e/x.md", "# T\n\n" + run + "\n")
+        found = lc.shingle_scan([f], [decoy, real], self.r.root, self.corpus_root)
+        self.assertEqual(len(found), 1)
+        self.assertIn("real.md", str(found[0]))
+        self.assertIn("20 consecutive words", str(found[0]))
+
     def test_paraphrase_is_clean(self) -> None:
         body = (
             "# Conditions\n\nA sleeping creature is helpless: it lets go of "

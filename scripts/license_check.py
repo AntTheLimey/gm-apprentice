@@ -422,36 +422,45 @@ def shingle_scan(
         for i in range(len(toks) - SHINGLE + 1):
             index.setdefault(hash(" ".join(toks[i : i + SHINGLE])), []).append((d, i))
 
-    hits: dict[int, dict[int, str]] = {}
+    # hits[doc][(source, delta)] -> repo positions matched at that alignment,
+    # where delta = repo position - corpus position. Two windows are part of
+    # one copied passage only if they come from the same source at the same
+    # offset; adjacent repo windows matching unrelated places do not join.
+    hits: dict[int, dict[tuple[str, int], list[int]]] = {}
     for cf in corpus_files:
         toks, _ = _tokens_with_lines(cf.read_text(encoding="utf-8", errors="replace"))
         src = str(cf.relative_to(corpus_root))
-        for i in range(len(toks) - SHINGLE + 1):
-            found = index.get(hash(" ".join(toks[i : i + SHINGLE])))
+        for cpos in range(len(toks) - SHINGLE + 1):
+            found = index.get(hash(" ".join(toks[cpos : cpos + SHINGLE])))
             if found:
                 for d, pos in found:
-                    hits.setdefault(d, {}).setdefault(pos, src)
+                    hits.setdefault(d, {}).setdefault((src, pos - cpos), []).append(pos)
 
     findings: list[Finding] = []
-    for d, by_pos in sorted(hits.items()):
+    for d, by_alignment in sorted(hits.items()):
         rel, nums = docs[d]
-        positions = sorted(by_pos)
-        run_start = prev = positions[0]
-        for pos in positions[1:] + [-2]:
-            if pos == prev + 1:
-                prev = pos
-                continue
-            words = prev - run_start + SHINGLE
-            if words >= MIN_RUN_WORDS:
+        reported: set[int] = set()
+        runs: list[tuple[int, int, str]] = []  # (start, words, source)
+        for (src, _delta), positions in by_alignment.items():
+            positions.sort()
+            start = prev = positions[0]
+            for pos in positions[1:] + [-2]:
+                if pos == prev + 1:
+                    prev = pos
+                    continue
+                runs.append((start, prev - start + SHINGLE, src))
+                start = prev = pos
+        for start, words, src in sorted(runs):
+            if words >= MIN_RUN_WORDS and start not in reported:
+                reported.add(start)
                 findings.append(
                     Finding(
                         rel,
-                        nums[run_start],
+                        nums[start],
                         f"{words} consecutive words match the reference corpus "
-                        f"({by_pos[run_start]}) — paraphrase it",
+                        f"({src}) — paraphrase it",
                     )
                 )
-            run_start = prev = pos
     return findings
 
 

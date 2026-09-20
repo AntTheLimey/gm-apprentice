@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SRD 5.2 CC-BY line, the Blades in the Dark CC-BY line as the closing
   paragraph, the Paizo ORC notice, the SJG Online Policy blockquote
   opening each GURPS file, or a BRP/ORC, public-domain or
-  own-description notice for Call of Cthulhu. It also fails on a
+  own-description notice for Call of Cthulhu. GURPS and CoC notices must
+  be an opening blockquote, so a phrase in ordinary prose is not taken
+  for one. It also fails on a
   `systems/` directory with no notice rule, an `ATTRIBUTION.md` with no
   section for a system, a tracked or un-gitignored `personal/`
   directory, and, on pull requests, licensed files added without an
@@ -32,8 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header fails rather than being skipped. Rules charts
   with no GCS counterpart are never failed and are listed by `--review`.
   `--shingles` scans PF2e prose against the local ORC dataset for
-  verbatim runs of 15 or more words; it needs the corpus, so it is local
-  only.
+  verbatim runs of 15 or more words, counted only along one corpus file
+  at one offset; it needs the corpus, so it is local only.
 
 ### Changed
 

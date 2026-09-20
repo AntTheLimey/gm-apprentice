@@ -10,8 +10,10 @@ and the ORC License attach per work, so every distributed file has to carry
 its own system's notice. This check fails when:
 
   * a distributed file under systems/<system>/ is missing that system's
-    notice, or carries it in the wrong place (GURPS opens with it, FitD
-    closes with it, as ATTRIBUTION.md promises);
+    notice, or carries it in the wrong place (GURPS and CoC open with it as
+    a blockquote, FitD closes with it, as ATTRIBUTION.md promises). The
+    phrase must sit in the notice itself: "a public domain manuscript" in
+    ordinary prose is not a notice;
   * a non-markdown file ships under a system directory (the zips include
     every file, and only .md files are checked for a notice), or a file
     sits directly under systems/ without being on ROOT_EXEMPT;
@@ -55,6 +57,9 @@ class Rule:
     all_of: tuple[str, ...] = ()
     any_of: tuple[str, ...] = ()
     where: str = "any"  # any | head | tail
+    # Match only inside blockquote lines, so ordinary prose that happens to
+    # contain a phrase ("a public domain manuscript") is not taken for a notice.
+    quote_only: bool = False
     # Text that must appear in ATTRIBUTION.md for this system.
     attribution_marker: str = ""
     # Human summary for error messages.
@@ -92,13 +97,17 @@ RULES: dict[str, Rule] = {
             r"sjgames\.com/general/online_policy",
         ),
         where="head",
+        quote_only=True,
         attribution_marker="## GURPS",
         describe="the SJG Online Policy notice as an opening blockquote",
     ),
     # CoC files carry one of several notice forms depending on what they
     # contain: BRP/ORC (mechanics), public domain (Lovecraft), or the
-    # own-description note (character sheet, Regency Cthulhu overlays).
+    # own-description note (character sheet, Regency Cthulhu overlays). All
+    # of them open the file as a blockquote.
     "coc-7e": Rule(
+        where="head",
+        quote_only=True,
         any_of=(
             r"ORC License",
             r"public domain",
@@ -106,7 +115,7 @@ RULES: dict[str, Rule] = {
             r"uncopyrightable",
         ),
         attribution_marker="Basic Roleplaying",
-        describe="a BRP/ORC, public-domain, or own-description notice",
+        describe="a BRP/ORC, public-domain, or own-description notice as an opening blockquote",
     ),
 }
 
@@ -162,33 +171,37 @@ def unexpected_files(base: Path, repo: Path, *, root: bool) -> list[Finding]:
     return out
 
 
-def _region(text: str, where: str) -> str:
+def _region(text: str, rule: Rule) -> str:
     lines = text.splitlines()
-    if where == "head":
-        return "\n".join(lines[:HEAD_LINES])
-    if where == "tail":
-        body = [ln for ln in lines if ln.strip()]
-        return "\n".join(body[-TAIL_LINES:])
-    return text
+    if rule.where == "head":
+        lines = lines[:HEAD_LINES]
+    elif rule.where == "tail":
+        lines = [ln for ln in lines if ln.strip()][-TAIL_LINES:]
+    if rule.quote_only:
+        lines = [ln.lstrip()[1:] for ln in lines if ln.lstrip().startswith(">")]
+    return "\n".join(lines)
+
+
+def _matches(rule: Rule, text: str) -> bool:
+    ok = all(re.search(p, text, re.I) for p in rule.all_of)
+    if rule.any_of:
+        ok = ok and any(re.search(p, text, re.I) for p in rule.any_of)
+    return ok
 
 
 def check_file(path: Path, rule: Rule, rel: str) -> list[Finding]:
     text = path.read_text(encoding="utf-8", errors="replace")
-    region = _region(text, rule.where)
-    ok = all(re.search(p, region, re.I) for p in rule.all_of) if rule.all_of else True
-    if rule.any_of:
-        ok = ok and any(re.search(p, region, re.I) for p in rule.any_of)
-    if ok:
+    if _matches(rule, _region(text, rule)):
         return []
     place = {
         "head": f" in the first {HEAD_LINES} lines",
         "tail": f" in the last {TAIL_LINES} non-empty lines",
     }.get(rule.where, "")
+    if rule.quote_only:
+        place += ", as a blockquote"
     # Distinguish "absent" from "present but misplaced" — different fixes.
-    anywhere = all(re.search(p, text, re.I) for p in rule.all_of) and (
-        not rule.any_of or any(re.search(p, text, re.I) for p in rule.any_of)
-    )
-    if rule.where != "any" and anywhere:
+    anywhere = Rule(all_of=rule.all_of, any_of=rule.any_of)
+    if (rule.where != "any" or rule.quote_only) and _matches(anywhere, text):
         return [Finding(rel, f"notice is present but not{place}; expected {rule.describe}")]
     return [Finding(rel, f"missing {rule.describe}")]
 
