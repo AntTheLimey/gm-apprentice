@@ -133,12 +133,13 @@ def unexpected_files(base: Path, repo: Path, *, root: bool) -> list[Finding]:
     """Shipped files the notice check cannot see.
 
     Under a system dir: anything that is not markdown. Directly under
-    systems/: anything not on ROOT_EXEMPT. Dotfiles (.DS_Store) are ignored.
+    systems/: anything not on ROOT_EXEMPT. Only .DS_Store is ignored, because
+    build-skill-zips.sh is the only other thing that excludes files.
     """
     out: list[Finding] = []
     for p in sorted(base.rglob("*") if not root else base.iterdir()):
         rel = p.relative_to(base)
-        if not p.is_file() or "personal" in rel.parts or p.name.startswith("."):
+        if not p.is_file() or "personal" in rel.parts or p.name == ".DS_Store":
             continue
         if root:
             if p.name not in ROOT_EXEMPT:
@@ -199,6 +200,8 @@ def check_systems(repo: Path) -> list[Finding]:
     findings += unexpected_files(systems, repo, root=True)
     for system_dir in sorted(p for p in systems.iterdir() if p.is_dir()):
         name = system_dir.name
+        # generic/ carries no licensed content, so there is no notice for a
+        # stray file there to be missing.
         if name in EXEMPT:
             continue
         rule = RULES.get(name)

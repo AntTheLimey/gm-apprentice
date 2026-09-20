@@ -161,10 +161,14 @@ class AttributionCheckTests(unittest.TestCase):
         self.assertIn("weapons.csv", msgs[0])
         self.assertIn("non-markdown", msgs[0])
 
-    def test_dotfiles_are_ignored(self) -> None:
+    def test_ds_store_is_ignored_but_other_dotfiles_are_not(self) -> None:
         self.fx.write(f"{SYSTEMS}/gurps-4e/.DS_Store", "x")
         self.fx.write(f"{SYSTEMS}/.DS_Store", "x")
         self.assertEqual(self.fx.messages(), [])
+        self.fx.write(f"{SYSTEMS}/gurps-4e/.notes.csv", "a,b\n")
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn(".notes.csv", msgs[0])
 
     def test_unclassified_file_directly_under_systems_is_reported(self) -> None:
         self.fx.write(f"{SYSTEMS}/gurps-quickref.md", "| Dmg | 1d |\n")

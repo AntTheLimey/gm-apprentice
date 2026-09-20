@@ -219,6 +219,23 @@ class GcsBenchmarkTests(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
         self.assertIn('first column "Gizmo" is not recognised', msgs[0])
 
+    def test_bold_column_names_are_normalised(self) -> None:
+        text = "| **Weapon** | **TL** | **Dmg** | `Bad` |\n|---|---|---|---|\n| Sword | 1 | sw+1 | x |\n"
+        msgs, review = self.r.gurps("a.md", text)
+        self.assertEqual(review, [])
+        self.assertEqual(len(msgs), 1)
+        self.assertIn('"`Bad`"', msgs[0])
+
+    def test_bold_unrecognised_first_column_is_still_an_error(self) -> None:
+        text = "| **Gizmo** | **Dmg** | **Reach** |\n|---|---|---|\n| A | 1 | 2 |\n"
+        msgs, review = self.r.gurps("a.md", text)
+        self.assertEqual(review, [])
+        self.assertEqual(len(msgs), 1)
+
+    def test_tilde_fences_are_ignored(self) -> None:
+        text = "~~~\n" + WEAPON_TABLE.replace("| Page |", "| Page | Bad |") + "~~~\n"
+        self.assertEqual(self.r.gurps("a.md", text), ([], []))
+
     def test_tables_in_code_fences_are_ignored(self) -> None:
         text = "```\n" + WEAPON_TABLE.replace("| Page |", "| Page | Bad |") + "```\n"
         self.assertEqual(self.r.gurps("a.md", text), ([], []))

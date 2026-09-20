@@ -272,7 +272,7 @@ def _tables(lines: list[str]) -> list[tuple[int, list[str], list[list[str]]]]:
     in_fence = False
     i = 0
     while i < len(lines):
-        if lines[i].lstrip().startswith("```"):
+        if lines[i].lstrip().startswith(("```", "~~~")):
             in_fence = not in_fence
             i += 1
             continue
@@ -306,7 +306,7 @@ def check_gurps_file(
     review: list[RulesTable] = []
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     for line_no, header, rows in _tables(lines):
-        cols = [h.lower() for h in header]
+        cols = [re.sub(r"[*_`]", "", h).strip().lower() for h in header]
         lib = LIB_BY_FIRST_COLUMN.get(cols[0])
         if lib is None:
             if _is_blank_form(header, rows):
