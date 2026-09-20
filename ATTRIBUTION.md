@@ -97,6 +97,52 @@ book coverage status. Every distributed file under
 as a blockquote. (The gitignored `personal/` working copies are
 excluded from the repo and from the zips.)
 
+**GURPS rules charts in `skills/ttrpg-expert/systems/gurps-4e/`**
+Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games), except
+where noted.
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: compact markdown tables of values and short notes; the
+surrounding explanation is our own wording. Item tables (weapons, armor,
+gear, skills, spells, traits, modifiers) are benchmarked in CI against
+the columns and note lengths of the public GCS master library
+(`scripts/license_check.py`). The rules charts below have no GCS
+equivalent and are recorded here instead. Page numbers come from the
+GURPS rules index and were not checked against a physical copy; where
+two pages are given, the first is the chart and the second is where it
+is discussed.
+
+- Damage by ST, thrust and swing — `mechanics.md`, "Damage Table":
+  B16.
+- Attribute and characteristic costs — `mechanics.md`,
+  `character-generation.md`: B14–B16.
+- Skill cost by difficulty and level — `mechanics.md`, "Skills": B170.
+- Active defenses — `mechanics.md`, `combat.md`,
+  `character-sheet.md`: B373; quick reference B556.
+- Combat maneuvers — `combat.md`, `session-procedures.md`: B363.
+- Hit locations, with penalty and DR modifier — `combat.md`: B552,
+  discussed at B399.
+- Damage types and abbreviations — `combat.md`: B268.
+- Size, speed and range modifiers — `combat.md`: B550.
+- Encumbrance levels and Basic Lift — `equipment-armor.md`,
+  `chargen-kit-combat.md`, `chargen-kit-outdoor.md`,
+  `character-sheet.md`: B17.
+- Hiking and daily march — `chargen-kit-outdoor.md`: B351.
+- Reaction table and modifiers — `social-rules.md`,
+  `chargen-kit-social.md`: B559–B561.
+- Self-control numbers and frequency of appearance — `social-rules.md`,
+  `character-generation.md`: B120.
+- Reputation and recognition — `social-rules.md`: B27.
+- Language comprehension — `chargen-kit-social.md`: B24.
+- Starting wealth by tech level — `character-generation.md`: B27.
+- Character point totals by power level — `character-generation.md`:
+  B487.
+- Mana levels — `magic-rules.md`, `chargen-kit-magic.md`: B235.
+- Energy cost reduction at high skill — `chargen-kit-magic.md`: B238.
+- Power source modifiers, talents, anti-powers and psionic abilities —
+  `powers-rules.md`, `chargen-kit-powers.md`: sourced from the GURPS
+  Powers line; page numbers are not recorded in the files.
+
 **`tools/publish/lib/templates/gurps/blocks/reference.js`**
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
 Tables reproduced: Humanoid Hit Location (p. B552) and
