@@ -42,9 +42,10 @@ Items are force-ranked by score. Higher score = do first.
 >
 > So for cost and speed, work the replacers: **Slice F** (relink, renest,
 > `migrate`, `vault_scaffold` — `migration-procedure.md` is a 247-line
-> program in English) is the only remaining pure replacer, and **Slice G**
-> (attribution + license CI) is a checker that runs in CI rather than in
-> the model's context, so it costs the model nothing. The remaining prep
+> program in English) is the only remaining pure replacer. **Slice G**
+> (attribution + license CI, shipped in 1.9.13) showed the other safe
+> shape: a checker that runs in CI rather than in the model's context
+> costs the model nothing. The remaining prep
 > bundle bulk after `--brief` — Wrap-Up 27 KB, Active PCs 14 KB — is a
 > replacer target and belongs with F.
 >

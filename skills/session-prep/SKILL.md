@@ -384,10 +384,12 @@ to build artifacts, and raise only *genuine* craft issues conversationally.
 
 **15. Run the checks as chores** — Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
-(and `--headless` when you were run without a GM). ERROR rows are fixed and
-the check re-run until it exits 0 (`duration`, `table`, `type`,
+(and `--headless` when you were run without a GM; add `--gm-input` when the
+GM supplied the intent, scenes and spotlight up front). ERROR rows are fixed
+and the check re-run until it exits 0 (`duration`, `table`, `type`,
 `scene-labels` — every scene carries **Situation** and **Starts it**
-(a Contingency scene, **Trigger**), and any label that is attempted
+(a Contingency scene, **Trigger**; a routing or hub scene, neither), and any
+label that is attempted
 carries the exact punctuation the row names — and a missing
 `## GM Notes`);
 WARNING rows are fixed silently when mechanical (`preamble`, `recap`,

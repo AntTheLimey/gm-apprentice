@@ -417,6 +417,20 @@ class ShippedTemplateTests(unittest.TestCase):
         errors = [f.row for f in found if f.level == "ERROR"]
         self.assertEqual(errors, [])
 
+    def test_template_scene_shape_matches_the_reference(self):
+        # The scene skeleton is the part most likely to drift: compare
+        # the inline and block labels each file carries.
+        label = pc.re.compile(r"^\*\*([^*:\n]+?)(?::)?\*\*", pc.re.M)
+        ref = self.REFERENCE.read_text(encoding="utf-8").split(
+            "## Session Plan", 1)[1].split("## Play Notes", 1)[0]
+        tpl = self.TEMPLATE.read_text(encoding="utf-8")
+        keep = set(pc.SCENE_LABELS) | set(pc.CONTINGENCY_LABELS) | {"Type"}
+        norm = lambda text: {  # noqa: E731
+            m.split(" (")[0].replace("\u2026", "...")
+            for m in label.findall(text)} & keep
+        self.assertEqual(norm(tpl), norm(ref))
+        self.assertEqual(norm(tpl), keep)
+
     def test_template_marks_only_the_two_required_labels(self):
         text = self.TEMPLATE.read_text(encoding="utf-8")
         self.assertEqual(text.count("*(required)*"), 2)
@@ -512,13 +526,23 @@ class HeadlessTests(unittest.TestCase):
         self.assertIn("--gm-input", rows[0])
         self.assertEqual(proc.returncode, 0, proc.stdout)
 
-    def test_gm_input_does_not_touch_the_other_checks(self):
+    def test_gm_input_drops_only_the_hard_guard_errors(self):
         findings = pc.run_checks(
             str(HEADLESS), HEADLESS.read_text(encoding="utf-8"),
             pc.vl.extract_frontmatter(HEADLESS.read_text(encoding="utf-8"))
             or {}, True, True)
         bad = [f for f in findings if f.level == "ERROR"]
         self.assertFalse([f for f in bad if f.id == "hard-guard"], bad)
+        # ...and it is only the guard that went quiet: the same plan
+        # without --gm-input reports it, with the same other findings.
+        plain = pc.run_checks(
+            str(HEADLESS), HEADLESS.read_text(encoding="utf-8"),
+            pc.vl.extract_frontmatter(HEADLESS.read_text(encoding="utf-8"))
+            or {}, True, False)
+        self.assertTrue([f for f in plain if f.id == "hard-guard"])
+        rest = lambda fs: sorted(f.row for f in fs  # noqa: E731
+                                 if f.id != "hard-guard")
+        self.assertEqual(rest(findings), rest(plain))
 
     def test_good_plan_headless_flags_exactly_the_creative_spine(self):
         # Good Plan's own Open Questions bullet is hard-wrapped across
