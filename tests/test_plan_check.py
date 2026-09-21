@@ -468,6 +468,15 @@ class RoutingSceneTests(unittest.TestCase):
                                           self.HUB_BODY)), 2)
         self.assertEqual(len(self.missing("Scene 10: Chubby hubbub",
                                           self.HUB_BODY)), 2)
+        # A place or topic named "hub"/"routing" is still an ordinary scene:
+        # only the documented "(routing)" / "(hub)" marker exempts it.
+        for title in ("Scene 3: The Hub", "Scene 5: Hub Station airlock",
+                      "Scene 4: Meeting at the hub",
+                      "Scene 2: Routing the refugees", "Prologue: Scene 0"):
+            self.assertEqual(len(self.missing(title, self.HUB_BODY)), 2,
+                             title)
+        self.assertEqual(len(self.missing("Scene 01: Monday",
+                                          self.HUB_BODY)), 2)
 
     def test_routing_scene_still_flags_a_mistyped_label(self):
         found = pc._scene_findings(
@@ -514,6 +523,11 @@ class HeadlessTests(unittest.TestCase):
         self.assertFalse(
             any("Confirm the guard fires here too" in f.message
                 for f in guard_rows), guard_rows)
+
+    def test_gm_input_without_headless_is_refused(self):
+        proc = run_cli(GOOD, "--gm-input")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("--headless", proc.stderr)
 
     def test_gm_input_skips_the_guard_and_says_so(self):
         # #207: a scripted prep hands the agent the intent, scenes and

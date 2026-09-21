@@ -767,7 +767,8 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
 
 
 def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
-                           by_rel: dict[str, dict], chapter: str | None
+                           by_rel: dict[str, dict], chapter: str | None,
+                           index_rel: str
                            ) -> tuple[str | None, str | None]:
     """(note, other_chapter_note) a `documents:` link names.
 
@@ -775,15 +776,29 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
     every chapter that restarts numbering), so name alone is ambiguous.
     The session's own chapter wins; a note whose chapter is unknown
     still matches, as everywhere else, keeping flat vaults working.
-    When the only notes with that name sit in a *different* chapter, the
-    link is not this session's document — the second value returns one
-    of them so the caller can say so (#206).
+    A note filed beside the index, or one whose own `session:` link names
+    the index, is this session's whatever chapter spelling either side
+    uses — `chapter_of` documents that one chapter is written two ways
+    in the wild. When the only notes with that name sit in a *different*
+    chapter, the link is not this session's document — the second value
+    returns one of them so the caller can say so (#206).
     """
     hits = by_stem.get(link_target(target), [])
     if not hits or chapter is None:
         return (hits[0] if hits else None), None
-    own = [rel for rel in hits
-           if chapter_key(rel, by_rel[rel]) in (chapter, None)]
+    index_key = normalize(Path(index_rel).stem)
+    index_dir = Path(index_rel).parent
+
+    def belongs(rel: str) -> bool:
+        fm = by_rel[rel]
+        if chapter_key(rel, fm) in (chapter, None):
+            return True
+        if Path(rel).parent == index_dir:
+            return True
+        said = wikilink_target(fm.get("session"))
+        return bool(said) and link_target(said) == index_key
+
+    own = [rel for rel in hits if belongs(rel)]
     if own:
         return own[0], None
     return None, hits[0]
@@ -831,7 +846,8 @@ def check_sessions(vault: Path) -> list[str]:
                 # link would fire on nearly every index in a live vault.
                 target = ""
             linked, elsewhere = (
-                _resolve_document_link(target, by_stem, by_rel, chapter)
+                _resolve_document_link(
+                    target, by_stem, by_rel, chapter, rel)
                 if target else (None, None))
             if elsewhere:
                 broken.append(

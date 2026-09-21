@@ -17,9 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vault as `_Templates/_Template_Session_Plan.md`; a migration entry
   provisions it into existing vaults. A test keeps its sections in step
   with `plan_check.py` and the reference (#204).
-- `plan_check.py --gm-input`: with `--headless`, says the GM supplied the
-  intent, scenes and spotlight, so a scripted or batch prep is not
-  reported as an apprentice inventing them (#207).
+- `plan_check.py --gm-input`: with `--headless` (it is refused without
+  it), says the GM supplied the intent, scenes and spotlight, so a
+  scripted or batch prep is not reported as an apprentice inventing them
+  (#207).
 
 ### Changed
 
@@ -31,7 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `vault_check.py sessions`: a `documents:` link resolves within the
   session's own chapter. Chapter 4 Session 11 no longer derives `played`
-  from Chapter 3's same-named play notes (#206).
+  from Chapter 3's same-named play notes. A note filed beside the index,
+  or naming it in `session:`, always counts as its own, so a chapter
+  written two ways (`[[Chapter 4]]` and the folder `Chapter 4 - Calcutta`)
+  is not mistaken for two chapters (#206).
 
 ---
 

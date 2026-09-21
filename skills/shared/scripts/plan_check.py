@@ -551,7 +551,10 @@ def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
 # Situation to state and nobody to start it (#205; the Alexandrian's
 # "Tools, Not Contingencies"). Recognised by its own words, never by
 # being short: `**Type:** transition`, a title naming it, or Scene 0.
-_ROUTING_TITLE_RE = re.compile(r"\b(?:routing|hub)\b|^Scene\s+0\b", re.I)
+# The marker is the parenthesised word — "(routing)" or "(hub)" — because a
+# bare "hub" or "routing" is as likely a place or a topic ("The Hub",
+# "Routing the refugees") as a menu.
+_ROUTING_TITLE_RE = re.compile(r"\((?:routing|hub)\)|^Scene\s+0\b", re.I)
 
 
 def _is_routing_scene(body: str, scene_title: str) -> bool:
@@ -565,7 +568,7 @@ def _is_routing_scene(body: str, scene_title: str) -> bool:
 def _scene_findings(rel: str, body: str, scene_title: str,
                     labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
-    routing = labels is SCENE_LABELS and _is_routing_scene(body, scene_title)
+    routing = labels == SCENE_LABELS and _is_routing_scene(body, scene_title)
     locus = f"{rel}:§{scene_title}"
     legacy_found = _legacy_scene(body, labels)
     if legacy_found:
@@ -917,6 +920,9 @@ def main() -> int:
     mode.add_argument("--state", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
+    if args.gm_input and not args.headless:
+        ap.error("--gm-input only changes what --headless reports; "
+                 "pass --headless too")
 
     try:
         text = args.plan.read_text(encoding="utf-8", errors="replace")
