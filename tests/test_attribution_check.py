@@ -10,6 +10,7 @@ Run: python3 tests/test_attribution_check.py
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,8 @@ NOTICES = {
     ),
     "coc-7e": (
         "# CoC — Notice\n\n> BRP: ORC License.\n> Lovecraft: public domain.\n"
-        "> Own words: uncopyrightable mechanics (Baker v. Selden, 1879).\n"
+        "> Own words: uncopyrightable mechanics (Baker v. Selden, 1879).\n\n"
+        "## Sources by file\n\n### `mechanics.md`\n\n> BRP mechanics.\n"
     ),
     "dnd-5e-2024": (
         "# D&D — Notice\n\nSRD 5.2 (https://www.dndbeyond.com/srd), "
@@ -108,7 +110,8 @@ class NoticeTests(unittest.TestCase):
     def test_content_files_need_no_notice_of_their_own(self) -> None:
         # The point of one notice per system: files carry none.
         for system in NOTICES:
-            self.fx.write(f"{SYSTEMS}/{system}/rules.md", "# Rules\n\nJust mechanics.\n")
+            if system != "coc-7e":  # CoC lists each file; see the index tests
+                self.fx.write(f"{SYSTEMS}/{system}/rules.md", "# Rules\n\nJust mechanics.\n")
         self.assertEqual(self.fx.messages(), [])
 
     def test_missing_notice_file_is_reported(self) -> None:
@@ -141,8 +144,76 @@ class NoticeTests(unittest.TestCase):
         self.fx.write(f"{SYSTEMS}/pf2e/NOTICE.md", NOTICES["pf2e"].upper())
         self.assertEqual(self.fx.messages(), [])
 
-    def test_nested_variant_files_do_not_need_notices(self) -> None:
+    def test_nested_variant_files_do_not_need_notices_of_their_own(self) -> None:
+        self.fx.write(f"{SYSTEMS}/fitd/variants/x/y.md", "# Y\n")
+        self.assertEqual(self.fx.messages(), [])
+
+    # --- a notice must be text a reader sees ---------------------------------
+
+    def gurps_notice_messages(self, text: str) -> list[str]:
+        self.fx.write(f"{SYSTEMS}/gurps-4e/NOTICE.md", text)
+        return self.fx.messages()
+
+    def test_notice_inside_an_html_comment_does_not_count(self) -> None:
+        msgs = self.gurps_notice_messages(
+            "# GURPS\n\n<!-- Steve Jackson Games sjgames.com/general/online_policy -->\n"
+        )
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("outside comments, code fences and headings", msgs[0])
+
+    def test_notice_inside_a_code_fence_does_not_count(self) -> None:
+        for fence in ("```", "~~~"):
+            with self.subTest(fence=fence):
+                msgs = self.gurps_notice_messages(
+                    f"# GURPS\n\n{fence}\nSteve Jackson Games "
+                    f"sjgames.com/general/online_policy\n{fence}\n"
+                )
+                self.assertEqual(len(msgs), 1)
+
+    def test_notice_that_is_only_a_heading_does_not_count(self) -> None:
+        msgs = self.gurps_notice_messages(
+            "# Steve Jackson Games sjgames.com/general/online_policy\n"
+        )
+        self.assertEqual(len(msgs), 1)
+
+    def test_text_after_a_closed_fence_counts(self) -> None:
+        msgs = self.gurps_notice_messages(
+            "# GURPS\n\n```\ncode\n```\n\n" + NOTICES["gurps-4e"].split("\n\n", 1)[1]
+        )
+        self.assertEqual(msgs, [])
+
+    # --- Call of Cthulhu's per-file provenance index -------------------------
+
+    def test_coc_file_missing_from_the_index_is_reported(self) -> None:
+        self.fx.write(f"{SYSTEMS}/coc-7e/skills.md", "# Skills\n")
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("no provenance entry for skills.md", msgs[0])
+
+    def test_coc_index_entry_for_a_missing_file_is_reported(self) -> None:
+        self.fx.write(
+            f"{SYSTEMS}/coc-7e/NOTICE.md",
+            NOTICES["coc-7e"] + "\n### `ghost.md`\n\n> gone.\n",
+        )
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("lists ghost.md, which does not exist", msgs[0])
+
+    def test_coc_nested_file_is_indexed_by_its_relative_path(self) -> None:
         self.fx.write(f"{SYSTEMS}/coc-7e/variants/regency/x.md", "# X\n")
+        self.assertEqual(len(self.fx.messages()), 1)  # unlisted
+        self.fx.write(
+            f"{SYSTEMS}/coc-7e/NOTICE.md",
+            NOTICES["coc-7e"] + "\n### `variants/regency/x.md`\n\n> Regency.\n",
+        )
+        self.assertEqual(self.fx.messages(), [])
+
+    def test_coc_personal_files_are_not_indexed(self) -> None:
+        self.fx.write(f"{SYSTEMS}/coc-7e/personal/book.md", "# Book\n")
+        self.assertEqual(self.fx.messages(), [])
+
+    def test_other_systems_need_no_file_index(self) -> None:
+        self.fx.write(f"{SYSTEMS}/pf2e/new.md", "# New\n")
         self.assertEqual(self.fx.messages(), [])
 
     def test_generic_is_exempt(self) -> None:
@@ -292,6 +363,64 @@ class ZipTests(unittest.TestCase):
         found = [str(f) for f in ac.check_zips(self.dir)]
         self.assertEqual(len(found), 1)
         self.assertIn("zip not found", found[0])
+
+
+@unittest.skipUnless(shutil.which("zip") and shutil.which("jq"), "needs zip and jq")
+class RealBuildScriptTests(unittest.TestCase):
+    """Run the real scripts/build-skill-zips.sh, so the zip entry names are
+    the ones it really emits and not ones this file assumes."""
+
+    def build(self, tmp: Path, personal: bool) -> Path:
+        (tmp / "scripts").mkdir()
+        shutil.copy(REPO / "scripts" / "build-skill-zips.sh", tmp / "scripts")
+        (tmp / ".claude-plugin").mkdir()
+        (tmp / ".claude-plugin" / "plugin.json").write_text('{"version": "9.9.9"}')
+        skill = tmp / "skills" / "ttrpg-expert"
+        (skill / "SKILL.md").parent.mkdir(parents=True)
+        (skill / "SKILL.md").write_text("# skill\n")
+        for system, notice in NOTICES.items():
+            d = skill / "systems" / system
+            d.mkdir(parents=True)
+            (d / "NOTICE.md").write_text(notice)
+            (d / "mechanics.md").write_text("# m\n")
+        if personal:
+            p = skill / "systems" / "gurps-4e" / "personal"
+            p.mkdir()
+            (p / "book.md").write_text("private\n")
+        shared = tmp / "skills" / "shared"
+        shared.mkdir()
+        (shared / "migrations.md").write_text('current_version: "1.0.0"\n')
+        out = tmp / "dist"
+        subprocess.run(
+            ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
+            check=True,
+            capture_output=True,
+        )
+        return out
+
+    def test_real_build_ships_every_notice_and_no_personal_file(self) -> None:
+        with tempfile.TemporaryDirectory() as t:
+            out = self.build(Path(t), personal=True)
+            with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
+                names = z.namelist()
+            self.assertIn("systems/gurps-4e/NOTICE.md", names)
+            self.assertFalse([n for n in names if "personal" in n], names)
+            self.assertEqual(ac.check_zips(out), [])
+
+    def test_check_fails_when_the_real_build_lacks_a_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            (tmp / "skills").mkdir()
+            out = self.build(tmp, personal=False)
+            (tmp / "skills/ttrpg-expert/systems/fitd/NOTICE.md").unlink()
+            subprocess.run(
+                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
+                check=True,
+                capture_output=True,
+            )
+            found = [str(f) for f in ac.check_zips(out)]
+            self.assertEqual(len(found), 1)
+            self.assertIn("systems/fitd/NOTICE.md", found[0])
 
 
 class RealRepoTests(unittest.TestCase):

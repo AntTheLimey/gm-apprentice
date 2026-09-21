@@ -3,17 +3,22 @@
 ## Where the notices live
 
 Each system directory under `skills/ttrpg-expert/systems/` ships one
-`NOTICE.md` with the licence notice for the files in it. The skill
-zips include it; they do not include this document. The individual
-reference files carry no notice of their own. CC-BY 3.0 and the ORC
-License both ask for attribution in a manner reasonable to the medium
-and neither says it must repeat on every file, so one notice per
-system saves the model reading the same text with every file it opens. `scripts/attribution_check.py` runs in CI
-and fails if a system has no `NOTICE.md`, if the notice lacks its
-required text, or if the built zip does not ship it. The Call of
-Cthulhu notice also records, file by file, which files derive from
-BRP, which from Lovecraft's public-domain fiction, and which are our
-own descriptions of mechanics.
+`NOTICE.md` with the licence notice for the files in it. The skill zips
+include it; they do not include this document. The individual reference
+files carry no notice of their own.
+
+CC-BY 3.0 (section 4(b)) asks for attribution "reasonable to the medium
+or means" being used, and the ORC License asks for notices in a
+"reasonable manner based on the medium, means, and context" without
+specifying where they appear. Neither text says the notice must repeat
+on every file, so one per system is used, which also avoids repeating
+the same text in every file that is read.
+
+`scripts/attribution_check.py` runs in CI and fails if a system has no
+`NOTICE.md`, if the notice lacks its required text, or if the built zip
+does not ship it. The Call of Cthulhu notice also records, file by file,
+which files derive from BRP, which from Lovecraft's public-domain
+fiction, and which are our own descriptions of mechanics.
 
 ## Open Game Content
 

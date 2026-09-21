@@ -170,7 +170,7 @@ jobs:
       - name: Attribution check tests
         run: python tests/test_attribution_check.py
 
-      - name: Attribution notices on every distributed systems/ file
+      - name: Every system ships its NOTICE.md with the required text
         run: python scripts/attribution_check.py
 
       - name: License check tests
@@ -192,6 +192,25 @@ jobs:
         run: |
           pip install 'mypy<3'
           mypy --config-file mypy.ini
+
+  # Direct pushes to main skip pr-discipline, so the "licensed files were added
+  # with an ATTRIBUTION.md update" gate would otherwise not run for them.
+  attribution-on-push:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Licensed files added with ATTRIBUTION.md update
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "${BEFORE//0/}" ]; then
+            echo "No previous commit to compare against; skipping"
+            exit 0
+          fi
+          python3 scripts/attribution_check.py --base "$BEFORE"
 
   pr-discipline:
     if: github.event_name == 'pull_request'

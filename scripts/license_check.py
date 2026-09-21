@@ -1,6 +1,6 @@
 """License-scope check for skills/ttrpg-expert/systems/.
 
-attribution_check.py proves each file carries its notice. This proves the
+attribution_check.py proves each system ships its notice. This proves the
 content stays inside what the notice licenses. Two independent checks:
 
 GURPS: benchmark against the GCS master library
@@ -161,8 +161,8 @@ OWN_COLUMNS = frozenset(
         "attribute",  # our grouping
     }
 )
-# Book-coverage tracker, not rules content.
-EXEMPT_FILES = frozenset({"sources.md"})
+# Book-coverage tracker and the licence notice: neither is rules content.
+EXEMPT_FILES = frozenset({"sources.md", "NOTICE.md"})
 # A table whose cells are almost all empty is a blank form, not data.
 BLANK_FORM_FILL = 0.10
 

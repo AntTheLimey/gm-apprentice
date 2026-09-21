@@ -15,7 +15,12 @@ This check fails when:
 
   * a system directory has no NOTICE.md, or its NOTICE.md lacks what that
     system's licence requires (the CC-BY attribution with its URIs, the ORC
-    notice, the SJG Online Policy notice, ...);
+    notice, the SJG Online Policy notice, ...). Text inside an HTML comment,
+    a code fence or a heading does not count: it is not a notice a reader
+    sees;
+  * Call of Cthulhu's NOTICE.md does not list every file in the directory
+    (it records what each file derives from, and is the only place that
+    provenance lives) or lists one that does not exist;
   * a systems/<dir>/ exists with no rule here (a new licensed source needs a
     rule and an ATTRIBUTION.md section before any content lands);
   * ATTRIBUTION.md has no section for a system that has a rule;
@@ -64,6 +69,8 @@ class Rule:
     attribution_marker: str
     # Human summary for error messages.
     describe: str
+    # NOTICE.md must carry a "### `path`" entry for every file in the system.
+    per_file_index: bool = False
 
 
 RULES: dict[str, Rule] = {
@@ -109,6 +116,7 @@ RULES: dict[str, Rule] = {
         ),
         attribution_marker="Basic Roleplaying",
         describe="the BRP/ORC, public-domain and own-description notices",
+        per_file_index=True,
     ),
 }
 
@@ -155,22 +163,62 @@ def unexpected_files(base: Path, repo: Path, *, root: bool) -> list[Finding]:
     return out
 
 
+def _visible_text(text: str) -> str:
+    """Notice text a reader actually sees: no HTML comments, code fences or headings."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    out: list[str] = []
+    fence = ""
+    for line in text.splitlines():
+        marker = line.lstrip()[:3]
+        if fence:
+            if marker == fence:
+                fence = ""
+            continue
+        if marker in ("```", "~~~"):
+            fence = marker
+            continue
+        if re.match(r"\s{0,3}#{1,6}\s", line):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def _indexed_files(system_dir: Path) -> set[str]:
+    return {
+        p.relative_to(system_dir).as_posix()
+        for p in system_dir.rglob("*.md")
+        if p.name != NOTICE_NAME and "personal" not in p.relative_to(system_dir).parts
+    }
+
+
 def check_notice(system_dir: Path, rule: Rule, repo: Path) -> list[Finding]:
     notice = system_dir / NOTICE_NAME
     rel = str(notice.relative_to(repo))
     if not notice.is_file():
         return [Finding(rel, f"missing — every system ships a notice ({rule.describe})")]
-    text = notice.read_text(encoding="utf-8", errors="replace")
-    missing = [p for p in rule.all_of if not re.search(p, text, re.I)]
+    raw = notice.read_text(encoding="utf-8", errors="replace")
+    findings: list[Finding] = []
+    visible = _visible_text(raw)
+    missing = [p for p in rule.all_of if not re.search(p, visible, re.I)]
     if missing:
-        return [
+        findings.append(
             Finding(
                 rel,
-                f"does not contain {rule.describe} (no match for "
-                f"{', '.join(missing)})",
+                f"does not contain {rule.describe} outside comments, code fences "
+                f"and headings (no match for {', '.join(missing)})",
             )
-        ]
-    return []
+        )
+    if rule.per_file_index:
+        listed = set(re.findall(r"^###\s+`([^`]+)`", raw, re.M))
+        actual = _indexed_files(system_dir)
+        for name in sorted(actual - listed):
+            findings.append(
+                Finding(rel, f"has no provenance entry for {name} — add a "
+                        f"### `{name}` section saying what it derives from")
+            )
+        for name in sorted(listed - actual):
+            findings.append(Finding(rel, f"lists {name}, which does not exist"))
+    return findings
 
 
 def check_systems(repo: Path) -> list[Finding]:

@@ -391,10 +391,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(out.returncode, 1)
         self.assertIn("GCS master library not found", out.stdout)
 
-    def test_personal_directory_and_sources_are_never_scanned(self) -> None:
+    def test_personal_sources_and_notice_files_are_never_scanned(self) -> None:
         bad = WEAPON_TABLE.replace("| Page |", "| Page | Bad |")
         self.r.write(f"{SYSTEMS}/gurps-4e/personal/book.md", bad)
         self.r.write(f"{SYSTEMS}/gurps-4e/sources.md", bad)
+        self.r.write(f"{SYSTEMS}/gurps-4e/NOTICE.md", bad)
         self.r.write(f"{SYSTEMS}/gurps-4e/ok.md", "# ok\n")
         out = self.run_cli("--gcs", str(self.r.gcs_root))
         self.assertEqual(out.returncode, 0, out.stdout)
