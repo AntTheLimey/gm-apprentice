@@ -1,6 +1,3 @@
-> Regency Cthulhu (Chaosium, 2022). Names, costs, and short
-> mechanical notes per Baker v. Selden (1879). Not Chaosium text.
-
 # Regency Cthulhu — Occupations
 
 Regency (1811–1820) overlay for CoC 7e. Use alongside base
@@ -72,8 +69,3 @@ raise CR to 70% with Keeper permission.
 See `../../occupations.md` for the skill point formula table and base occupation
 skill lists. Regency occupations not listed above use the nearest base
 equivalent with period-appropriate skill substitutions (Keeper approval).
-
----
-
-> Regency Cthulhu (Chaosium, 2022). Names, costs, and short
-> mechanical notes per Baker v. Selden (1879). Not Chaosium text.

@@ -1,7 +1,3 @@
-> All content in this file is drawn from the published fiction
-> of H.P. Lovecraft (pre-1929, public domain). No Chaosium
-> game content is used.
-
 # Call of Cthulhu 7e — Lovecraftian Setting Reference
 
 Locations, entities, and themes from H.P. Lovecraft's own
@@ -238,11 +234,3 @@ the inability of the human mind to correlate all its
 contents. The horror is not in what is known, but in the
 implication that there are things fundamentally beyond human
 comprehension — and that some of those things are aware of us.
-
----
-
-> **Attribution:** All content in this file is drawn from the
-> published fiction of H.P. Lovecraft (died 1937), which is
-> in the public domain. No Chaosium Inc. game content is used.
-> Entity names and location names as used by Lovecraft are not
-> trademarked in this context.

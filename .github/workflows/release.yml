@@ -37,6 +37,10 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         run: ./scripts/build-skill-zips.sh
 
+      - name: Check the zips ship every system notice
+        if: steps.check_tag.outputs.exists == 'false'
+        run: python3 scripts/attribution_check.py --zips dist
+
       - name: Create release
         if: steps.check_tag.outputs.exists == 'false'
         env:

@@ -1,7 +1,3 @@
-> BRP profession framework: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
-
 # Call of Cthulhu 7e -- Occupations
 
 Occupation templates with skill allocations, formulas, and
@@ -183,12 +179,3 @@ Survival, Swim.
 Adapt existing occupations for era/setting: 1920s Bootlegger =
 Criminal + Drive Auto. Modern Hacker = Engineer + Computer Use
 replacing Operate Heavy Machinery.
-
----
-
-> **Attribution:** Occupation framework adapted from *Basic
-> Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. CoC 7e-specific occupation names,
-> skill point formulas, Credit Rating ranges, and skill
-> assignments are our own descriptions of uncopyrightable game
-> mechanics. See ATTRIBUTION.md for full license details.

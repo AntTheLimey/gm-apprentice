@@ -7,45 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.9.13] — 2026-09-20
+## [1.9.13] — 2026-09-21
 
 ### Added
 
-- `scripts/attribution_check.py`, run in CI: every distributed file under
-  `skills/ttrpg-expert/systems/` must carry its own system's notice — the
-  SRD 5.2 CC-BY line, the Blades in the Dark CC-BY line as the closing
-  paragraph, the Paizo ORC notice, the SJG Online Policy blockquote
-  opening each GURPS file, or a BRP/ORC, public-domain or
-  own-description notice for Call of Cthulhu. GURPS and CoC notices must
-  be an opening blockquote, so a phrase in ordinary prose is not taken
-  for one. It also fails on a
-  `systems/` directory with no notice rule, an `ATTRIBUTION.md` with no
-  section for a system, a tracked or un-gitignored `personal/`
-  directory, and, on pull requests, licensed files added without an
-  `ATTRIBUTION.md` change. A non-markdown file under a system directory,
-  or an unclassified file directly under `systems/`, also fails: the zips
-  ship both, and neither would otherwise be checked.
+- `scripts/attribution_check.py`, run in CI: every system directory under
+  `skills/ttrpg-expert/systems/` must ship a `NOTICE.md` carrying what that
+  system's licence requires — the SRD 5.2 CC-BY 4.0 line with both URIs,
+  the Blades in the Dark CC-BY 3.0 attribution, the Paizo ORC notice, the
+  SJG Online Policy notice, or for Call of Cthulhu the BRP/ORC,
+  public-domain and own-description notices. It also fails on a `systems/`
+  directory with no rule, an `ATTRIBUTION.md` with no section for a system,
+  a tracked or un-gitignored `personal/` directory, a non-markdown file
+  under a system directory, an unclassified file directly under `systems/`,
+  and, on pull requests, licensed files added without an `ATTRIBUTION.md`
+  change. `--zips` checks the built `ttrpg-expert.zip` ships every
+  `NOTICE.md` and nothing from a `personal/` directory; the pull-request
+  and release workflows both run it.
 - `scripts/license_check.py`: GURPS tables are benchmarked against the
   public GCS master library, pinned in CI to one commit. A table column
   with no GCS field behind it, or a note longer than the longest GCS note
   for that kind of data, fails; row counts are not limited. Tables are
   found with or without outer pipes, indented or quoted, with `\|`
   respected inside cells, and a row whose cell count differs from its
-  header fails rather than being skipped. Rules charts
-  with no GCS counterpart are never failed and are listed by `--review`.
-  `--shingles` scans PF2e prose against the local ORC dataset for
-  verbatim runs of 15 or more words, counted only along one corpus file
-  at one offset; it needs the corpus, so it is local only.
+  header fails rather than being skipped. Rules charts with no GCS
+  counterpart are never failed and are listed by `--review`. `--shingles`
+  scans PF2e prose against the local ORC dataset for verbatim runs of 15
+  or more words, counted only along one corpus file at one offset; it
+  needs the corpus, so it is local only.
 
 ### Changed
 
-- `ATTRIBUTION.md` records the GURPS rules charts reproduced in the
-  reference files, with source pages taken from the GURPS rules index.
-
-### Fixed
-
-- `coc-7e/variants/regency/gm-guidance.md` carried no license notice, the
-  only distributed `systems/` file without one.
+- One licence notice per system, not one per file. Each system directory
+  ships a `NOTICE.md` (Call of Cthulhu's also records, file by file, what
+  each file derives from), and the 133 reference files no longer carry
+  their own header or footer. Every removed line is in a `NOTICE.md`; the
+  files otherwise change by nothing. This removes about 12,000 tokens of
+  repeated notice text from the reference corpus, roughly 90 per file
+  read, counted from the files and not yet measured in a run.
+  `rules_lookup.py` skips `NOTICE.md`, and the D&D monster enricher no
+  longer appends a notice to the files it generates.
+- `docs/file-format-standards.md` no longer tells authors to add an
+  attribution header or footer; it points to `NOTICE.md`.
+- `ATTRIBUTION.md` says where the notices live and records the GURPS rules
+  charts reproduced in the reference files, with source pages taken from
+  the GURPS rules index.
 
 ---
 

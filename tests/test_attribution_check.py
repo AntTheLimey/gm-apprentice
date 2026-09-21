@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -23,15 +24,29 @@ import attribution_check as ac  # noqa: E402
 
 SYSTEMS = "skills/ttrpg-expert/systems"
 
-GURPS_NOTICE = (
-    "> GURPS is a trademark of Steve Jackson Games.\n"
-    "> See https://www.sjgames.com/general/online_policy.html\n\n"
-)
-FITD_NOTICE = (
-    "\nThis work is based on Blades in the Dark "
-    "(https://www.bladesinthedark.com/), authored by John Harper, licensed "
-    "under CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/).\n"
-)
+NOTICES = {
+    "gurps-4e": (
+        "# GURPS — Notice\n\n> GURPS is a trademark of Steve Jackson Games.\n"
+        "> See https://www.sjgames.com/general/online_policy.html\n"
+    ),
+    "fitd": (
+        "# FitD — Notice\n\nThis work is based on Blades in the Dark "
+        "(https://www.bladesinthedark.com/), authored by John Harper, licensed "
+        "under CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/).\n"
+    ),
+    "coc-7e": (
+        "# CoC — Notice\n\n> BRP: ORC License.\n> Lovecraft: public domain.\n"
+        "> Own words: uncopyrightable mechanics (Baker v. Selden, 1879).\n"
+    ),
+    "dnd-5e-2024": (
+        "# D&D — Notice\n\nSRD 5.2 (https://www.dndbeyond.com/srd), "
+        "https://creativecommons.org/licenses/by/4.0/legalcode.\n"
+    ),
+    "pf2e": (
+        "# PF2e — Notice\n\nORC License https://paizo.com/orclicense, "
+        "© Paizo Inc.\n"
+    ),
+}
 ATTRIBUTION = (
     "## Open Game Content\n"
     "### Dungeons & Dragons System Reference Document 5.2\n"
@@ -40,10 +55,7 @@ ATTRIBUTION = (
     "### Pathfinder Second Edition (Remaster)\n"
     "## GURPS\n"
 )
-GITIGNORE = "".join(
-    f"{SYSTEMS}/{s}/personal/\n"
-    for s in ("gurps-4e", "fitd", "coc-7e", "dnd-5e-2024", "pf2e")
-)
+GITIGNORE = "".join(f"{SYSTEMS}/{s}/personal/\n" for s in NOTICES)
 
 
 def git(repo: Path, *args: str) -> None:
@@ -56,7 +68,7 @@ def git(repo: Path, *args: str) -> None:
 
 
 class Fixture:
-    """A minimal valid repo: one GURPS file, one FitD file, one CoC file."""
+    """A valid repo: every system has its NOTICE.md and one content file."""
 
     def __init__(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -64,12 +76,9 @@ class Fixture:
         git(self.root, "init", "-q", "-b", "main")
         self.write("ATTRIBUTION.md", ATTRIBUTION)
         self.write(".gitignore", GITIGNORE)
-        self.write(f"{SYSTEMS}/gurps-4e/mechanics.md", GURPS_NOTICE + "# Mechanics\n")
-        self.write(f"{SYSTEMS}/fitd/mechanics.md", "# Mechanics\n" + FITD_NOTICE)
-        self.write(
-            f"{SYSTEMS}/coc-7e/setting.md",
-            "> Content is in the public domain.\n\n# Setting\n",
-        )
+        for system, notice in NOTICES.items():
+            self.write(f"{SYSTEMS}/{system}/NOTICE.md", notice)
+            self.write(f"{SYSTEMS}/{system}/mechanics.md", "# Mechanics\n")
         self.write(f"{SYSTEMS}/generic/mechanics.md", "# Generic\n")
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "base")
@@ -88,7 +97,7 @@ class Fixture:
         self.tmp.cleanup()
 
 
-class AttributionCheckTests(unittest.TestCase):
+class NoticeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fx = Fixture()
         self.addCleanup(self.fx.close)
@@ -96,91 +105,45 @@ class AttributionCheckTests(unittest.TestCase):
     def test_valid_fixture_is_clean(self) -> None:
         self.assertEqual(self.fx.messages(), [])
 
-    def test_missing_notice_is_reported_with_path(self) -> None:
-        self.fx.write(f"{SYSTEMS}/fitd/rules.md", "# Rules\n\nSome mechanics.\n")
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("fitd/rules.md", msgs[0])
-        self.assertIn("missing", msgs[0])
-
-    def test_gurps_notice_at_the_bottom_is_misplaced(self) -> None:
-        self.fx.write(
-            f"{SYSTEMS}/gurps-4e/traits.md",
-            "# Traits\n" + "filler line\n" * 30 + GURPS_NOTICE,
-        )
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("present but not in the first 20 lines", msgs[0])
-
-    def test_fitd_notice_at_the_top_is_misplaced(self) -> None:
-        self.fx.write(
-            f"{SYSTEMS}/fitd/top.md",
-            FITD_NOTICE + "\n# Heading\n" + "body line\n\n" * 30,
-        )
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("present but not in the last 12", msgs[0])
-
-    def test_notice_needs_every_marker_not_just_one(self) -> None:
-        # Names the licence but omits the required URI.
-        self.fx.write(
-            f"{SYSTEMS}/gurps-4e/half.md",
-            "> Steve Jackson Games owns GURPS.\n\n# Half\n",
-        )
-        self.assertEqual(len(self.fx.messages()), 1)
-
-    def test_coc_accepts_each_notice_family(self) -> None:
-        for i, phrase in enumerate(
-            ("ORC License", "public domain", "Baker v. Selden", "uncopyrightable")
-        ):
-            self.fx.write(f"{SYSTEMS}/coc-7e/f{i}.md", f"> {phrase}.\n\n# T\n")
+    def test_content_files_need_no_notice_of_their_own(self) -> None:
+        # The point of one notice per system: files carry none.
+        for system in NOTICES:
+            self.fx.write(f"{SYSTEMS}/{system}/rules.md", "# Rules\n\nJust mechanics.\n")
         self.assertEqual(self.fx.messages(), [])
 
-    def test_coc_incidental_phrase_is_not_a_notice(self) -> None:
+    def test_missing_notice_file_is_reported(self) -> None:
+        (self.fx.root / SYSTEMS / "fitd" / "NOTICE.md").unlink()
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("fitd/NOTICE.md", msgs[0])
+        self.assertIn("missing", msgs[0])
+
+    def test_notice_missing_a_required_uri_is_reported(self) -> None:
         self.fx.write(
-            f"{SYSTEMS}/coc-7e/incidental.md",
-            "# Scenario\n\nThe investigators discuss a public domain manuscript.\n",
+            f"{SYSTEMS}/gurps-4e/NOTICE.md",
+            "# GURPS\n\n> Steve Jackson Games owns GURPS.\n",
         )
         msgs = self.fx.messages()
         self.assertEqual(len(msgs), 1)
-        self.assertIn("incidental.md", msgs[0])
+        self.assertIn("gurps-4e/NOTICE.md", msgs[0])
+        self.assertIn("online_policy", msgs[0])
 
-    def test_coc_notice_as_plain_prose_is_not_a_notice(self) -> None:
-        self.fx.write(
-            f"{SYSTEMS}/coc-7e/prose.md",
-            "Content is in the public domain.\n\n# Heading\n",
-        )
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("as a blockquote", msgs[0])
+    def test_coc_notice_needs_every_notice_family(self) -> None:
+        for phrase in ("ORC License", "public domain", "Baker v. Selden", "uncopyrightable"):
+            with self.subTest(dropped=phrase):
+                text = NOTICES["coc-7e"].replace(phrase, "REDACTED")
+                self.fx.write(f"{SYSTEMS}/coc-7e/NOTICE.md", text)
+                self.assertEqual(len(self.fx.messages()), 1)
+        self.fx.write(f"{SYSTEMS}/coc-7e/NOTICE.md", NOTICES["coc-7e"])
+        self.assertEqual(self.fx.messages(), [])
 
-    def test_coc_blockquote_notice_below_the_opening_lines_fails(self) -> None:
-        self.fx.write(
-            f"{SYSTEMS}/coc-7e/late.md",
-            "# Heading\n" + "filler\n" * 30 + "> Content is in the public domain.\n",
-        )
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("present but not in the first 20 lines", msgs[0])
+    def test_notice_match_is_case_insensitive(self) -> None:
+        self.fx.write(f"{SYSTEMS}/pf2e/NOTICE.md", NOTICES["pf2e"].upper())
+        self.assertEqual(self.fx.messages(), [])
 
-    def test_gurps_notice_as_plain_prose_is_not_a_notice(self) -> None:
-        self.fx.write(
-            f"{SYSTEMS}/gurps-4e/prose.md",
-            "Steve Jackson Games, https://www.sjgames.com/general/online_policy.html\n\n# T\n",
-        )
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("as a blockquote", msgs[0])
-
-    def test_coc_file_with_no_notice_fails(self) -> None:
-        self.fx.write(f"{SYSTEMS}/coc-7e/bare.md", "# Bare\n")
-        self.assertEqual(len(self.fx.messages()), 1)
-
-    def test_nested_variant_files_are_checked(self) -> None:
+    def test_nested_variant_files_do_not_need_notices(self) -> None:
         self.fx.write(f"{SYSTEMS}/coc-7e/variants/regency/x.md", "# X\n")
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("variants/regency/x.md", msgs[0])
+        self.assertEqual(self.fx.messages(), [])
 
     def test_generic_is_exempt(self) -> None:
         self.fx.write(f"{SYSTEMS}/generic/more.md", "# No notice, none needed\n")
@@ -188,7 +151,22 @@ class AttributionCheckTests(unittest.TestCase):
 
     def test_personal_directory_is_never_scanned(self) -> None:
         self.fx.write(f"{SYSTEMS}/gurps-4e/personal/full-book.md", "# No notice\n")
+        self.fx.write(f"{SYSTEMS}/gurps-4e/personal/data.csv", "a,b\n")
         self.assertEqual(self.fx.messages(), [])
+
+    def test_unknown_system_directory_is_reported(self) -> None:
+        self.fx.write(f"{SYSTEMS}/newsys/core.md", "# Core\n")
+        msgs = self.fx.messages()
+        # Also not gitignored: a new system has no personal/ entry yet.
+        self.assertEqual(len(msgs), 2)
+        self.assertTrue(any("no notice rule" in m for m in msgs))
+        self.assertTrue(any("not gitignored" in m for m in msgs))
+
+    def test_missing_attribution_section_is_reported(self) -> None:
+        self.fx.write("ATTRIBUTION.md", ATTRIBUTION.replace("## GURPS\n", ""))
+        msgs = self.fx.messages()
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("no section for gurps-4e", msgs[0])
 
     def test_non_markdown_file_in_a_system_dir_is_reported(self) -> None:
         self.fx.write(f"{SYSTEMS}/gurps-4e/weapons.csv", "name,dmg\nsword,1d\n")
@@ -216,20 +194,6 @@ class AttributionCheckTests(unittest.TestCase):
         self.fx.write(f"{SYSTEMS}/shared-patterns.md", "# Shared\n")
         self.assertEqual(self.fx.messages(), [])
 
-    def test_unknown_system_directory_is_reported(self) -> None:
-        self.fx.write(f"{SYSTEMS}/newsys/core.md", "# Core\n")
-        msgs = self.fx.messages()
-        # Also not gitignored: a new system has no personal/ entry yet.
-        self.assertEqual(len(msgs), 2)
-        self.assertTrue(any("no notice rule" in m for m in msgs))
-        self.assertTrue(any("not gitignored" in m for m in msgs))
-
-    def test_missing_attribution_section_is_reported(self) -> None:
-        self.fx.write("ATTRIBUTION.md", ATTRIBUTION.replace("## GURPS\n", ""))
-        msgs = self.fx.messages()
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("no section for gurps-4e", msgs[0])
-
     def test_tracked_personal_file_is_reported(self) -> None:
         p = self.fx.write(f"{SYSTEMS}/gurps-4e/personal/book.md", "secret\n")
         git(self.fx.root, "add", "-f", str(p))
@@ -241,7 +205,6 @@ class AttributionCheckTests(unittest.TestCase):
         self.fx.write(
             ".gitignore", GITIGNORE.replace(f"{SYSTEMS}/pf2e/personal/\n", "")
         )
-        self.fx.write(f"{SYSTEMS}/pf2e/core.md", "> ORC License paizo.com/orclicense Paizo Inc\n")
         msgs = self.fx.messages()
         self.assertEqual(len(msgs), 1)
         self.assertIn("pf2e/personal/", msgs[0])
@@ -259,24 +222,30 @@ class AddedFilesTests(unittest.TestCase):
         git(self.fx.root, "commit", "-q", "-m", msg)
 
     def test_new_licensed_file_without_attribution_update_fails(self) -> None:
-        self.fx.write(f"{SYSTEMS}/gurps-4e/new.md", GURPS_NOTICE + "# New\n")
+        self.fx.write(f"{SYSTEMS}/gurps-4e/new.md", "# New\n")
         self.commit()
         found = ac.check_added_files(self.fx.root, "main")
         self.assertEqual(len(found), 1)
         self.assertIn("gurps-4e/new.md", str(found[0]))
 
     def test_new_licensed_file_with_attribution_update_passes(self) -> None:
-        self.fx.write(f"{SYSTEMS}/gurps-4e/new.md", GURPS_NOTICE + "# New\n")
+        self.fx.write(f"{SYSTEMS}/gurps-4e/new.md", "# New\n")
         self.fx.write("ATTRIBUTION.md", ATTRIBUTION + "\nnew.md sourced from B.\n")
         self.commit()
         self.assertEqual(ac.check_added_files(self.fx.root, "main"), [])
 
     def test_edit_to_existing_file_needs_no_attribution_update(self) -> None:
-        self.fx.write(
-            f"{SYSTEMS}/gurps-4e/mechanics.md", GURPS_NOTICE + "# Mechanics\nedit\n"
-        )
+        self.fx.write(f"{SYSTEMS}/gurps-4e/mechanics.md", "# Mechanics\nedit\n")
         self.commit()
         self.assertEqual(ac.check_added_files(self.fx.root, "main"), [])
+
+    def test_adding_only_a_notice_file_needs_no_attribution_update(self) -> None:
+        (self.fx.root / SYSTEMS / "fitd" / "NOTICE.md").unlink()
+        self.commit("remove")
+        git(self.fx.root, "checkout", "-q", "-b", "readd")
+        self.fx.write(f"{SYSTEMS}/fitd/NOTICE.md", NOTICES["fitd"])
+        self.commit("readd")
+        self.assertEqual(ac.check_added_files(self.fx.root, "feature"), [])
 
     def test_new_generic_file_needs_no_attribution_update(self) -> None:
         self.fx.write(f"{SYSTEMS}/generic/new.md", "# Original\n")
@@ -289,10 +258,52 @@ class AddedFilesTests(unittest.TestCase):
         self.assertIn("failed", str(found[0]))
 
 
+class ZipTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+
+    def make_zip(self, entries: list[str]) -> None:
+        with zipfile.ZipFile(self.dir / "ttrpg-expert.zip", "w") as z:
+            for e in entries:
+                z.writestr(e, "x")
+
+    def all_notices(self) -> list[str]:
+        return [f"systems/{s}/NOTICE.md" for s in NOTICES]
+
+    def test_zip_with_every_notice_is_clean(self) -> None:
+        self.make_zip(self.all_notices() + ["systems/gurps-4e/mechanics.md", "SKILL.md"])
+        self.assertEqual(ac.check_zips(self.dir), [])
+
+    def test_zip_missing_a_notice_is_reported(self) -> None:
+        self.make_zip([e for e in self.all_notices() if "pf2e" not in e])
+        found = [str(f) for f in ac.check_zips(self.dir)]
+        self.assertEqual(len(found), 1)
+        self.assertIn("systems/pf2e/NOTICE.md", found[0])
+
+    def test_zip_shipping_a_personal_file_is_reported(self) -> None:
+        self.make_zip(self.all_notices() + ["systems/gurps-4e/personal/book.md"])
+        found = [str(f) for f in ac.check_zips(self.dir)]
+        self.assertEqual(len(found), 1)
+        self.assertIn("personal/book.md", found[0])
+
+    def test_missing_zip_is_an_error_not_a_silent_pass(self) -> None:
+        found = [str(f) for f in ac.check_zips(self.dir)]
+        self.assertEqual(len(found), 1)
+        self.assertIn("zip not found", found[0])
+
+
 class RealRepoTests(unittest.TestCase):
     def test_repository_is_clean(self) -> None:
         found = ac.check_systems(REPO) + ac.check_personal(REPO)
         self.assertEqual([str(f) for f in found], [])
+
+    def test_every_rule_system_has_a_notice_file(self) -> None:
+        for system in ac.RULES:
+            self.assertTrue(
+                (REPO / SYSTEMS / system / "NOTICE.md").is_file(), system
+            )
 
     def test_cli_exit_codes(self) -> None:
         fx = Fixture()
@@ -304,14 +315,34 @@ class RealRepoTests(unittest.TestCase):
             text=True,
         )
         self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
-        fx.write(f"{SYSTEMS}/fitd/bad.md", "# Bad\n")
+        (fx.root / SYSTEMS / "fitd" / "NOTICE.md").unlink()
         bad = subprocess.run(
             [sys.executable, script, "--repo", str(fx.root)],
             capture_output=True,
             text=True,
         )
         self.assertEqual(bad.returncode, 1)
-        self.assertIn("fitd/bad.md", bad.stdout)
+        self.assertIn("fitd/NOTICE.md", bad.stdout)
+
+    def test_cli_zips_flag(self) -> None:
+        fx = Fixture()
+        self.addCleanup(fx.close)
+        zdir = fx.root / "dist"
+        zdir.mkdir()
+        script = str(REPO / "scripts" / "attribution_check.py")
+
+        def run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, script, "--repo", str(fx.root), "--zips", str(zdir)],
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(run().returncode, 1)  # no zip yet
+        with zipfile.ZipFile(zdir / "ttrpg-expert.zip", "w") as z:
+            for s in NOTICES:
+                z.writestr(f"systems/{s}/NOTICE.md", "x")
+        self.assertEqual(run().returncode, 0)
 
 
 if __name__ == "__main__":

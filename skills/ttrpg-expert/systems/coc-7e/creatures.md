@@ -1,8 +1,3 @@
-> BRP creature stats: BRP ORC License. See ATTRIBUTION.md.
-> Lovecraft creature descriptions: Public domain fiction by
-> H.P. Lovecraft (composed pre-1932; all works listed by
-> composition date, which precedes any US publication date).
-
 # Call of Cthulhu 7e -- Creatures Reference
 
 ORC creatures with stat blocks + Lovecraft entities with
@@ -325,12 +320,3 @@ the impossibility of understanding alien life.
 | Demon, Greater | 1D3 / 2D6 |
 | Elemental | 0 / 1D4 |
 | Dragon | 0 / 1D8+ |
-
----
-
-> **Attribution:** ORC creature stats from *Basic Roleplaying:
-> Universal Game Engine* by Chaosium Inc., used under the ORC
-> License. Lovecraft entity descriptions drawn from the fiction
-> of H.P. Lovecraft, cited by composition date. No Chaosium
-> game-mechanical content is used for the Lovecraft entries.
-> See ATTRIBUTION.md for full license details.

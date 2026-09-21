@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Archetype Feats
 
 Archetypes let any character branch outside their class by spending
@@ -176,7 +172,3 @@ follow-ups. The remaining archetypes (standalone concepts like Assassin,
 Blessed One, Beastmaster, Aldori Duelist, and every higher-tier
 spellcasting and combat feat) live in the ORC dataset under
 `data/feats/archetype/`.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Monsters Level 17+
 
 A curated selection of 25 apex threats from Pathfinder Monster Core (with a
@@ -158,7 +154,3 @@ Pyroclastic Breath: 60-ft cone, 20d6 fire, DC 46 basic Ref. Slashing Claws hits 
 Per +46 (darkvision, truesight); AC 54, Fort +42, Ref +40, Will +43; HP 550, regeneration 50 (off by holy); immune death, disease, mental, poison; resist acid 20, cold 15, fire 15, physical 20; weak holy 20
 Speed 60 ft, fly 60, swim 40; blackaxe +47 (reach 15, sweep) 5d12+18 S plus 1d6 acid; jaws +45 (agile, reach 15) 5d10+20 S
 Aura of Corruption (120 ft) warps plants and poisons the living. Defoliation withers all plants in 30 ft. Dispelling Strike counteracts magic on a hit; Staggering Strike stuns 2 on a crit. Wields the artifact axe Blackaxe; Reactive Strike.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

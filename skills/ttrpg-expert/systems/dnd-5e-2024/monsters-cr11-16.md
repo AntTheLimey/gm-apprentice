@@ -343,6 +343,3 @@ Multiattack: 3× Radiant Sword or uses Holy Burst twice
 - Radiant Sword: +12, reach 10 ft., 2d6+7 slashing + 4d8 radiant
 - Holy Burst: each enemy in a 20-ft-radius Sphere [Area of Effect]|XPHB|Sphere centered on a point the planetar can see within 120 feet, DC 20 DEX, 7d6 radiant (half)
 Spellcasting (CHA, DC 20): At Will — Detect Evil and Good
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

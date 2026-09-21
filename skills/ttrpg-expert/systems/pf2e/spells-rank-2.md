@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 2 Spells
 
 68 spells from Player Core and Player Core 2 (ORC-licensed).
@@ -78,7 +74,3 @@
 - **Water Breathing** | Arc/Div/Pri | concentrate, manipulate, water | 2a | 30 ft, up to 5 creatures | Targets can breathe underwater. Heightened 3rd/4th: 8 hours / until daily prep.
 - **Water Walk** | Arc/Div/Pri | concentrate, manipulate, water | 2a | touch, 1 creature | Walk on the surface of water and other liquids. Heightened 4th: 30 ft, 1 hour, up to 10.
 - **Web** | Arc/Pri | concentrate, manipulate | 2a | 30 ft, 10-ft burst | Sticky webbing is difficult terrain; Athletics/Reflex each move or take a Speed penalty (Immobilized on crit fail). Heightened 4th: 20-ft burst, 60-ft range.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

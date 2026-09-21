@@ -48,6 +48,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 SYSTEMS_DIR = Path(__file__).resolve().parents[2] / "ttrpg-expert" / "systems"
+# Each system directory ships a licence notice; it is not rules content.
+NOTICE_FILE = "NOTICE.md"
 
 # Prefix of a file stem -> the kind of record that file holds. Longest
 # prefix wins; a stem with no mapped prefix is its own kind.
@@ -276,6 +278,8 @@ def iter_records(systems_dir: Path = SYSTEMS_DIR, *, personal: bool = False,
         rel_parts = path.relative_to(systems_dir).parts
         if len(rel_parts) < 2:
             continue  # a loose file such as shared-patterns.md
+        if rel_parts[-1] == NOTICE_FILE:
+            continue
         if wanted is not None and rel_parts[0] not in wanted:
             continue
         if not personal and "personal" in rel_parts[:-1]:

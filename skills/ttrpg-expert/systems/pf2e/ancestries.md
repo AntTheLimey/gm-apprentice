@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Ancestries, Heritages & Backgrounds
 
 Character origin in PF2e comes from three choices made at level 1: an **ancestry** (the lineage your character is born into), a **heritage** (a sub-lineage refining that ancestry), and a **background** (life experience before adventuring). This reference covers all 31 ancestries in the ORC dataset, detailed heritage options for the Player Core and Player Core 2 ancestries, and a curated set of Player Core backgrounds.
@@ -362,7 +358,3 @@ Backgrounds carry no attribute flaw and no HP. The table below curates 25 common
 **Table-only here:** the 15 uncommon and rare ancestries from *Howl of the Wild*, *Guns & Gears*, *Battlecry!*, *Lost Omens Draconic Codex*, and the *Lost Omens Tian Xia Character Guide*. Their full stat blocks are not carried in this ORC ancestry dataset; use the cited sourcebook for HP, Size, Speed, boosts, and flaw.
 
 **In the dataset:** the source repository holds all 31 ancestry entries (`data/ancestries/`, flavor text), all 203 heritages organized per ancestry (`data/heritages/<ancestry>/`, including versatile heritages like Nephilim, Dhampir, and Changeling that any ancestry can take), and all 202 backgrounds (`data/backgrounds/`, including 40 Player Core backgrounds plus Adventure Path–specific options). Everything paraphrased above is drawn from those files.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

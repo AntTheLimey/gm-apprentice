@@ -244,3 +244,6 @@ jobs:
             fi
           done
           echo "All $ZIP_COUNT skill zips valid"
+
+      - name: Every system notice ships in the zip, and no personal file
+        run: python3 scripts/attribution_check.py --zips dist

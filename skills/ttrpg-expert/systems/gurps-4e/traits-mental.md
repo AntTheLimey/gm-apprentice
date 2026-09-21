@@ -1,11 +1,3 @@
-> GURPS is a trademark of Steve Jackson Games, and its rules
-> and art are copyrighted by Steve Jackson Games. All rights
-> are reserved by Steve Jackson Games. This game aid is the
-> original creation of AntTheLimey and is released for free
-> distribution, and not for resale, under the permissions
-> granted in the
-> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
-
 # GURPS 4e Mental Traits
 
 Mundane mental advantages and disadvantages for PC builds. For exotic, psionic, or paranormal mental traits, see traits-supernatural.md.

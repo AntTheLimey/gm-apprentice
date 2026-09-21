@@ -305,6 +305,23 @@ class Cli(unittest.TestCase):
         self.assertTrue(body[0].startswith("  **Commoner**"), body[:2])
 
 
+class NoticeFile(unittest.TestCase):
+    """A system's NOTICE.md is licence text, never a rules record."""
+
+    def test_notice_md_is_not_indexed(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            sysdir = Path(tmp) / "gurps-4e"
+            sysdir.mkdir()
+            table = "| Trait | Cost | Page |\n|---|---|---|\n| Alpha | 5 | B1 |\n"
+            (sysdir / "traits.md").write_text("# Traits\n\n" + table)
+            (sysdir / "NOTICE.md").write_text("# Notice\n\n" + table.replace("Alpha", "Beta"))
+            names = {r.name for r in rl.iter_records(Path(tmp))}
+            self.assertEqual(names, {"Alpha"})
+            mode, _, _total = rl.lookup("Beta", systems_dir=Path(tmp))
+            self.assertNotEqual(mode, "exact")
+
+
 class RealCorpus(unittest.TestCase):
     """Presence-and-provenance only — never the text of a record."""
 
@@ -330,6 +347,10 @@ class RealCorpus(unittest.TestCase):
 
     def test_real_corpus_record_count(self):
         self.assertGreater(len(list(rl.iter_records())), 5000)
+
+    def test_real_corpus_skips_notice_files(self):
+        self.assertFalse([r for r in rl.iter_records()
+                          if r.file.endswith("NOTICE.md")])
 
     def test_real_corpus_skips_personal(self):
         self.assertFalse([r for r in rl.iter_records()

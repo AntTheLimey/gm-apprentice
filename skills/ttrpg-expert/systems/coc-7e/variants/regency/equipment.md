@@ -1,6 +1,3 @@
-> Regency Cthulhu (Chaosium, 2022). Names, costs, and short
-> mechanical notes per Baker v. Selden (1879). Not Chaosium text.
-
 # Regency Cthulhu — Equipment & Weapons
 
 Regency (1811-1820) overlay for CoC 7e. Replaces base weapon
@@ -146,10 +143,3 @@ Period terms for narration. Use these when describing what characters wear.
 | Stockings | Silk or wool hose, held up with garters |
 | Turban, draped | Fashionable women's headgear, could be decorated with feathers and jewels |
 | Waistcoat | Single or double-breasted male garment; silk, satin, or wool |
-
----
-
-> **Attribution:** Regency weapon stats, equipment costs, and
-> carriage data from *Regency Cthulhu* (Chaosium, 2022).
-> Presented as short mechanical notes per Baker v. Selden (1879).
-> See ATTRIBUTION.md.

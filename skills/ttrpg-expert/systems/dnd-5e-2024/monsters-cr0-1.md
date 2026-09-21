@@ -492,6 +492,3 @@ STR 10 DEX 15 CON 10 INT 12 WIS 14 CHA 16
 Senses: Passive Perception 16
 - Shortsword: +4, 1d6+2 piercing + 2d6 poison
 - Hand Crossbow: +4, 1d6+2 piercing + 2d6 poison
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

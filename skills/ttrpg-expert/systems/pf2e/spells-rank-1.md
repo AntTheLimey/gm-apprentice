@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 1 Spells
 
 72 spells from Player Core and Player Core 2 (ORC-licensed).
@@ -82,7 +78,3 @@
 - **Thunderstrike** | Arc/Pri | concentrate, electricity, manipulate, sonic | 2a | 120 ft, 1 creature | 1d12 electricity + 1d4 sonic, basic Reflex; metal-clad targets save at −1 and become Clumsy 1 if damaged. Heightened +1: +1d12 electricity, +1d4 sonic.
 - **Vanishing Tracks** | Pri | concentrate, manipulate | 2a | self | Adds +4 status (or your spell DC) to the DC to Track you. Heightened extends duration and targets.
 - **Ventriloquism** | Arc/Div/Occ/Pri | auditory, concentrate, illusion, manipulate | 2a | self | Throw your voice up to 60 ft; listeners can attempt to disbelieve. Heightened 2nd: 1-hour, alter your voice.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

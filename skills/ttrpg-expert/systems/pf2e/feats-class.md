@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Class Feats
 
 Signature class feats for the sixteen Player Core / Player Core 2 classes,
@@ -202,7 +198,3 @@ Feats a martial or spellcaster shares across several classes.
 | **Convincing Illusion** | 6 | — | Reaction: use your spellcasting proficiency to shore up a doubted illusion. |
 | **Split Slot** | 6 | — | Prepare two spells in one slot and choose which to cast when you cast it. |
 | **Bond Conservation** | 8 | — | One action: after Drain Bonded Item, hold the charge to cast a second spell. |
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

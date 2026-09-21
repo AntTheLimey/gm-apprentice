@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 4 Spells
 
 44 spells from Pathfinder Player Core and Player Core 2 (ORC-licensed).
@@ -54,7 +50,3 @@
 - **Wall of Fire** | Arc, Pri | fire | 2 | 60-ft line or 10-ft-radius ring within 120 ft, 1 min | Crossing or starting a turn in the wall deals 4d6 fire; heightened +1 adds 1d6.
 - **Weapon Storm** | Arc, Pri | — | 2 | 30-ft cone or 10-ft emanation | Your held weapon multiplies to strike everyone in the area for four weapon dice (basic Reflex), with critical specialization on a crit failure; heightened +1 adds a die.
 - **Whispers of the Void** | Div, Occ | auditory, void | 2 | enemies within 30 ft | Fort save inflicting scaling persistent void damage plus drained and doomed on worse results; heightened +2 adds persistent damage.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 8 Spells
 
 Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text is paraphrased.
@@ -26,7 +22,3 @@ Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text i
 - **Spiritual Epidemic** | Divine/Occult | concentrate, curse, manipulate, spirit | 2 | 30 ft, 1 creature | Will save; a contagious curse that also afflicts anyone who later casts a divine or occult spell on the target, spreading onward.
 - **Uncontrollable Dance** | Arcane/Occult | concentrate, incapacitation, manipulate, mental | 2 | 30 ft, 1 creature | The target is compelled to dance: Off-Guard, unable to use reactions, and limited to Striding at half Speed. Duration scales with the save.
 - **Unrelenting Observation** | Arcane/Occult | concentrate, manipulate, scrying | 2 | 30 ft; 20-ft burst | Up to five allies perfectly track one chosen creature or object through most barriers, ignoring concealment and invisibility; unwilling targets get a Will save, willing ones last 1 hour.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

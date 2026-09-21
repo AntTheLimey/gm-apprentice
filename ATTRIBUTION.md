@@ -1,5 +1,20 @@
 # Attribution and Licensing
 
+## Where the notices live
+
+Each system directory under `skills/ttrpg-expert/systems/` ships one
+`NOTICE.md` with the licence notice for the files in it. The skill
+zips include it; they do not include this document. The individual
+reference files carry no notice of their own. CC-BY 3.0 and the ORC
+License both ask for attribution in a manner reasonable to the medium
+and neither says it must repeat on every file, so one notice per
+system saves the model reading the same text with every file it opens. `scripts/attribution_check.py` runs in CI
+and fails if a system has no `NOTICE.md`, if the notice lacks its
+required text, or if the built zip does not ship it. The Call of
+Cthulhu notice also records, file by file, which files derive from
+BRP, which from Lovecraft's public-domain fiction, and which are our
+own descriptions of mechanics.
+
 ## Open Game Content
 
 ### Dungeons & Dragons System Reference Document 5.2
@@ -34,12 +49,12 @@ score procedures. All content is paraphrased; setting IP
 (Doskvol, named factions, named NPCs) is excluded from
 distributed files.
 
-Every distributed file under `skills/ttrpg-expert/systems/fitd/`
-carries the attribution line above, with both URIs, as its closing
-paragraph — the skill zips ship those files without this document,
-and the CC-BY 3.0 condition is per-work, not per-repository. (The
-gitignored `personal/` working copies are excluded from the repo
-and from the zips.)
+The `skills/ttrpg-expert/systems/fitd/` directory ships a
+`NOTICE.md` carrying the attribution line above, with both URIs. The
+skill zips ship those files without this document, and CC-BY 3.0 asks
+for attribution "reasonable to the medium or means", so the notice
+travels with the directory. (The gitignored `personal/` working
+copies are excluded from the repo and from the zips.)
 
 ### Basic Roleplaying Universal Game Engine
 
@@ -92,10 +107,10 @@ Martial Arts (perk names and page references only), and
 organized into topic-based reference files and archetype
 chargen kits.
 See `skills/ttrpg-expert/systems/gurps-4e/sources.md` for
-book coverage status. Every distributed file under
-`skills/ttrpg-expert/systems/gurps-4e/` opens with the notice above
-as a blockquote. (The gitignored `personal/` working copies are
-excluded from the repo and from the zips.)
+book coverage status. The `skills/ttrpg-expert/systems/gurps-4e/`
+directory ships a `NOTICE.md` carrying the notice above. (The
+gitignored `personal/` working copies are excluded from the repo and
+from the zips.)
 
 **GURPS rules charts in `skills/ttrpg-expert/systems/gurps-4e/`**
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games), except

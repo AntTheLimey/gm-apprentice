@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Session Procedures
 
 How to run a Pathfinder 2e session: modes of play, initiative, DCs, encounter building, treasure, rest, and session flow. This is the GM math home.
@@ -229,7 +225,3 @@ Set the DCs for obstacles in advance using the normal DC rules; improvise the re
 
 - Paizo Inc., Pathfinder GM Core (ORC License) — encounter building, DCs, treasure, rewards, subsystems
 - Paizo Inc., Pathfinder Player Core (ORC License) — modes of play, action economy, resting
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

@@ -1,13 +1,5 @@
 # GURPS 4e Powers Framework
 
-> GURPS is a trademark of Steve Jackson Games, and its rules
-> and art are copyrighted by Steve Jackson Games. All rights
-> are reserved by Steve Jackson Games. This game aid is the
-> original creation of AntTheLimey and is released for free
-> distribution, and not for resale, under the permissions
-> granted in the
-> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
-
 In-play procedural reference for the GURPS 4e Powers framework.
 Covers enhancements and limitations, power sources, building
 powers, power talents, anti-powers, and psionic powers.

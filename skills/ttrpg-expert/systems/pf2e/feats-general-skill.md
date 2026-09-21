@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — General & Skill Feats
 
 General and skill feats drawn from Pathfinder Player Core and Player Core 2.
@@ -257,7 +253,3 @@ narrowest corner cases. The rest live in the dataset. Grouped by governing skill
 | **Skill Training** | 1 | — | Become trained in a skill of your choice. |
 | **Trick Magic Item** | 1 | trained (a magic skill) | Attempt to activate a magic item you couldn't normally use. |
 | **Automatic Knowledge** | 2 | expert + Assurance | Recall Knowledge as a free action once/round with a chosen skill, using Assurance. |
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

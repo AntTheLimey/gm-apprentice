@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) -- Core Mechanics
 
 ## System Overview
@@ -145,7 +141,3 @@ The GM grants roughly 1 per session, more for heroic deeds; cap 3, lost at sessi
 
 - **Reroll** -- spend 1 to reroll a check and take the second result (a fortune effect; one per check).
 - **Cheat death** -- spend all your Hero Points when your dying value would rise: lose the dying condition and stabilize at 0 HP without gaining wounded.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

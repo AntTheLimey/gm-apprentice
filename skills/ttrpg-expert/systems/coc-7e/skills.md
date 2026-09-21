@@ -1,7 +1,3 @@
-> BRP skill framework: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
-
 # Call of Cthulhu 7e -- Skills Reference
 
 Complete CoC 7e skill list with base chances and usage notes.
@@ -262,13 +258,3 @@ Skill succeeds under stress → mark experience check. Between
 adventures, roll D100 per checked skill: if roll > current
 rating, skill increases by 1D10. Cthulhu Mythos never gets
 experience checks.
-
----
-
-> **Attribution:** Skill framework adapted from *Basic
-> Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. CoC 7e-specific skill names, base
-> values, and mechanics (bonus/penalty dice, pushing, Luck
-> spending, Cthulhu Mythos rules) are our own descriptions of
-> uncopyrightable game mechanics. See ATTRIBUTION.md for full
-> license details.

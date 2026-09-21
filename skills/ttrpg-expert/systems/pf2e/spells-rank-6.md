@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 6 Spells
 
 29 spells from Pathfinder Player Core and Player Core 2 (ORC-licensed).
@@ -39,7 +35,3 @@
 - **Vibrant Pattern** | Arc, Occ | illusion, incapacitation, subtle, visual | 2 | 10-ft burst within 500 ft | Creatures inside are dazzled and must Will save on entering, ending a turn, or interacting or be blinded (1 min on crit failure).
 - **Wall of Force** | Arc, Occ | force | 2 | wall up to 50 ft within 120 ft | An invisible force wall (Hardness 30, 60 HP) blocks physical, incorporeal, and ethereal things; only Disintegrate destroys it outright; heightened +2 adds 20 HP.
 - **Zealous Conviction** | Div, Occ | emotion, mental | 2 | up to 5 creatures within 30 ft | Targets gain 12 temp HP and +2 status to Will vs mental, but must obey your requests (Will save each round if repugnant); heightened 9th 18 temp HP and +3.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

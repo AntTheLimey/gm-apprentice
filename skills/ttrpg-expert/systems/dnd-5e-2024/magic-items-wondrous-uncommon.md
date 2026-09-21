@@ -51,6 +51,3 @@
 - **Stone of Good Luck (Luckstone)** | Uncommon (A) | While this polished agate is on your person, you gain a +1 bonus to ability checks and saving throws
 - **Wind Fan** | Uncommon | While holding this fan, you can cast *Gust of Wind* (save DC 13) from it. Each subsequent time the fan is used before the next daw...
 - **Winged Boots** | Uncommon (A) | These boots have 4 charges and regain 1d4 expended charges daily at dawn. While wearing the boots, you can take a Magic action to ...
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

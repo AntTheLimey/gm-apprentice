@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 10 Spells
 
 Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text is paraphrased.
@@ -19,7 +15,3 @@ Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text i
 - **Primal Herd** | Primal | concentrate, manipulate, polymorph | 2 | 30 ft, willing creatures | Transform targets into Huge mammoths (AC 22+level, 20 temp HP, Speed 40 ft) with tusk, trunk, and foot Strikes and the Trample action.
 - **Remake** | Arcane/Divine/Occult/Primal | concentrate, manipulate | 1 hr | 1 remnant | Uncommon. Fully re-create a non-artifact object of level 20 or lower from even a speck of its remnant, restoring constant (not temporary) magical properties.
 - **Revival** | Divine/Primal | concentrate, healing, manipulate, vitality | 3 | 30-ft emanation | Heal every living target 10d8+40 HP and temporarily return the recently dead to life (as Raise Dead) with temp HP that vanish when the spell ends; no effect on the Disintegrated or death-slain.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

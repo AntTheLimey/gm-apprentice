@@ -5,30 +5,34 @@ CLAUDE.md names copyright compliance the repo's highest-priority rule. Until
 this script, nothing enforced it mechanically: four files carrying licensed
 mechanics shipped with no notice at all (fixed in Slice 0, PR #193).
 
-The skill zips ship the systems/ files without ATTRIBUTION.md, and CC-BY 3.0
-and the ORC License attach per work, so every distributed file has to carry
-its own system's notice. This check fails when:
+The skill zips ship the systems/ files without ATTRIBUTION.md, so each system
+directory carries its own notice in a NOTICE.md that ships with it. One notice
+per system, not one per file: CC-BY 3.0 asks for attribution "reasonable to
+the medium or means", and the ORC License says the same, neither per file.
+Repeating the notice in every file cost about 90 tokens per file read.
 
-  * a distributed file under systems/<system>/ is missing that system's
-    notice, or carries it in the wrong place (GURPS and CoC open with it as
-    a blockquote, FitD closes with it, as ATTRIBUTION.md promises). The
-    phrase must sit in the notice itself: "a public domain manuscript" in
-    ordinary prose is not a notice;
-  * a non-markdown file ships under a system directory (the zips include
-    every file, and only .md files are checked for a notice), or a file
-    sits directly under systems/ without being on ROOT_EXEMPT;
+This check fails when:
+
+  * a system directory has no NOTICE.md, or its NOTICE.md lacks what that
+    system's licence requires (the CC-BY attribution with its URIs, the ORC
+    notice, the SJG Online Policy notice, ...);
   * a systems/<dir>/ exists with no rule here (a new licensed source needs a
-    notice rule and an ATTRIBUTION.md section before any content lands);
+    rule and an ATTRIBUTION.md section before any content lands);
   * ATTRIBUTION.md has no section for a system that has a rule;
+  * a non-markdown file ships under a system directory (the zips include
+    every file, and the other checks only read markdown), or a file sits
+    directly under systems/ without being on ROOT_EXEMPT;
   * a file under a personal/ directory is tracked by git, or a system's
     personal/ directory is not gitignored (CLAUDE.md hard rule 5);
   * with --base REF: a PR adds a licensed file without touching
-    ATTRIBUTION.md (CLAUDE.md hard rule 3).
+    ATTRIBUTION.md (CLAUDE.md hard rule 3);
+  * with --zips DIR: the ttrpg-expert zip lacks a system's NOTICE.md, or
+    contains anything from a personal/ directory.
 
 `generic/` carries no licensed content and is exempt. personal/ working
 copies are never distributed and are never scanned.
 
-Run: python3 scripts/attribution_check.py [--base origin/main]
+Run: python3 scripts/attribution_check.py [--base origin/main] [--zips dist]
 Exit 0 clean, 1 on any finding.
 """
 
@@ -38,32 +42,28 @@ import argparse
 import re
 import subprocess
 import sys
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SYSTEMS_REL = Path("skills/ttrpg-expert/systems")
 ATTRIBUTION_REL = Path("ATTRIBUTION.md")
+NOTICE_NAME = "NOTICE.md"
+ZIP_NAME = "ttrpg-expert.zip"
 EXEMPT = {"generic"}
 # Files directly under systems/ that carry no licensed content.
 ROOT_EXEMPT = {"shared-patterns.md"}
-HEAD_LINES = 20  # "opens with the notice"
-TAIL_LINES = 12  # "closing paragraph"
 
 
 @dataclass(frozen=True)
 class Rule:
-    # Every pattern must match (all_of), or at least one (any_of).
-    all_of: tuple[str, ...] = ()
-    any_of: tuple[str, ...] = ()
-    where: str = "any"  # any | head | tail
-    # Match only inside blockquote lines, so ordinary prose that happens to
-    # contain a phrase ("a public domain manuscript") is not taken for a notice.
-    quote_only: bool = False
+    # Every pattern must appear in the system's NOTICE.md.
+    all_of: tuple[str, ...]
     # Text that must appear in ATTRIBUTION.md for this system.
-    attribution_marker: str = ""
+    attribution_marker: str
     # Human summary for error messages.
-    describe: str = ""
+    describe: str
 
 
 RULES: dict[str, Rule] = {
@@ -82,9 +82,8 @@ RULES: dict[str, Rule] = {
             r"creativecommons\.org/licenses/by/3\.0",
             r"John Harper",
         ),
-        where="tail",
         attribution_marker="Blades in the Dark",
-        describe="the Blades in the Dark CC-BY 3.0 line as the closing paragraph",
+        describe="the Blades in the Dark CC-BY 3.0 attribution",
     ),
     "pf2e": Rule(
         all_of=(r"ORC License", r"paizo\.com/orclicense", r"Paizo Inc"),
@@ -96,26 +95,20 @@ RULES: dict[str, Rule] = {
             r"Steve Jackson Games",
             r"sjgames\.com/general/online_policy",
         ),
-        where="head",
-        quote_only=True,
         attribution_marker="## GURPS",
-        describe="the SJG Online Policy notice as an opening blockquote",
+        describe="the SJG Online Policy notice",
     ),
-    # CoC files carry one of several notice forms depending on what they
-    # contain: BRP/ORC (mechanics), public domain (Lovecraft), or the
-    # own-description note (character sheet, Regency Cthulhu overlays). All
-    # of them open the file as a blockquote.
+    # CoC files derive from BRP (ORC), Lovecraft (public domain) or are our
+    # own descriptions of mechanics; the notice records which is which.
     "coc-7e": Rule(
-        where="head",
-        quote_only=True,
-        any_of=(
+        all_of=(
             r"ORC License",
             r"public domain",
             r"Baker v\. Selden",
             r"uncopyrightable",
         ),
         attribution_marker="Basic Roleplaying",
-        describe="a BRP/ORC, public-domain, or own-description notice as an opening blockquote",
+        describe="the BRP/ORC, public-domain and own-description notices",
     ),
 }
 
@@ -129,21 +122,12 @@ class Finding:
         return f"ERROR {self.path}: {self.message}"
 
 
-def distributed_files(system_dir: Path) -> list[Path]:
-    """Every .md under a system dir except personal/ working copies."""
-    return sorted(
-        p
-        for p in system_dir.rglob("*.md")
-        if "personal" not in p.relative_to(system_dir).parts
-    )
-
-
 def unexpected_files(base: Path, repo: Path, *, root: bool) -> list[Finding]:
-    """Shipped files the notice check cannot see.
+    """Shipped files the other checks cannot see.
 
     Under a system dir: anything that is not markdown. Directly under
-    systems/: anything not on ROOT_EXEMPT. Only .DS_Store is ignored, because
-    build-skill-zips.sh is the only other thing that excludes files.
+    systems/: anything not on ROOT_EXEMPT. Only .DS_Store is ignored,
+    because build-skill-zips.sh is the only other thing that excludes files.
     """
     out: list[Finding] = []
     for p in sorted(base.rglob("*") if not root else base.iterdir()):
@@ -165,45 +149,28 @@ def unexpected_files(base: Path, repo: Path, *, root: bool) -> list[Finding]:
                 Finding(
                     str(p.relative_to(repo)),
                     "non-markdown file ships in the skill zip but is not covered "
-                    "by the notice check — convert it to markdown with the notice",
+                    "by the content checks — convert it to markdown",
                 )
             )
     return out
 
 
-def _region(text: str, rule: Rule) -> str:
-    lines = text.splitlines()
-    if rule.where == "head":
-        lines = lines[:HEAD_LINES]
-    elif rule.where == "tail":
-        lines = [ln for ln in lines if ln.strip()][-TAIL_LINES:]
-    if rule.quote_only:
-        lines = [ln.lstrip()[1:] for ln in lines if ln.lstrip().startswith(">")]
-    return "\n".join(lines)
-
-
-def _matches(rule: Rule, text: str) -> bool:
-    ok = all(re.search(p, text, re.I) for p in rule.all_of)
-    if rule.any_of:
-        ok = ok and any(re.search(p, text, re.I) for p in rule.any_of)
-    return ok
-
-
-def check_file(path: Path, rule: Rule, rel: str) -> list[Finding]:
-    text = path.read_text(encoding="utf-8", errors="replace")
-    if _matches(rule, _region(text, rule)):
-        return []
-    place = {
-        "head": f" in the first {HEAD_LINES} lines",
-        "tail": f" in the last {TAIL_LINES} non-empty lines",
-    }.get(rule.where, "")
-    if rule.quote_only:
-        place += ", as a blockquote"
-    # Distinguish "absent" from "present but misplaced" — different fixes.
-    anywhere = Rule(all_of=rule.all_of, any_of=rule.any_of)
-    if (rule.where != "any" or rule.quote_only) and _matches(anywhere, text):
-        return [Finding(rel, f"notice is present but not{place}; expected {rule.describe}")]
-    return [Finding(rel, f"missing {rule.describe}")]
+def check_notice(system_dir: Path, rule: Rule, repo: Path) -> list[Finding]:
+    notice = system_dir / NOTICE_NAME
+    rel = str(notice.relative_to(repo))
+    if not notice.is_file():
+        return [Finding(rel, f"missing — every system ships a notice ({rule.describe})")]
+    text = notice.read_text(encoding="utf-8", errors="replace")
+    missing = [p for p in rule.all_of if not re.search(p, text, re.I)]
+    if missing:
+        return [
+            Finding(
+                rel,
+                f"does not contain {rule.describe} (no match for "
+                f"{', '.join(missing)})",
+            )
+        ]
+    return []
 
 
 def check_systems(repo: Path) -> list[Finding]:
@@ -213,8 +180,7 @@ def check_systems(repo: Path) -> list[Finding]:
     findings += unexpected_files(systems, repo, root=True)
     for system_dir in sorted(p for p in systems.iterdir() if p.is_dir()):
         name = system_dir.name
-        # generic/ carries no licensed content, so there is no notice for a
-        # stray file there to be missing.
+        # generic/ carries no licensed content, so there is nothing to notice.
         if name in EXEMPT:
             continue
         rule = RULES.get(name)
@@ -237,9 +203,8 @@ def check_systems(repo: Path) -> list[Finding]:
                     f"{rule.attribution_marker!r})",
                 )
             )
+        findings += check_notice(system_dir, rule, repo)
         findings += unexpected_files(system_dir, repo, root=False)
-        for f in distributed_files(system_dir):
-            findings += check_file(f, rule, str(f.relative_to(repo)))
     return findings
 
 
@@ -292,6 +257,7 @@ def check_added_files(repo: Path, base: str) -> list[Finding]:
                 and len(parts) > len(sys_parts) + 1
                 and parts[len(sys_parts)] not in EXEMPT
                 and "personal" not in parts
+                and parts[-1] != NOTICE_NAME
                 and path.endswith(".md")
             ):
                 added.append(path)
@@ -307,6 +273,24 @@ def check_added_files(repo: Path, base: str) -> list[Finding]:
     return []
 
 
+def check_zips(zips: Path) -> list[Finding]:
+    """The built ttrpg-expert zip must ship every NOTICE.md and no personal/ file."""
+    zpath = zips / ZIP_NAME
+    if not zpath.is_file():
+        return [Finding(str(zpath), "zip not found — run scripts/build-skill-zips.sh first")]
+    with zipfile.ZipFile(zpath) as z:
+        names = set(z.namelist())
+    findings: list[Finding] = []
+    for system in sorted(RULES):
+        entry = f"systems/{system}/{NOTICE_NAME}"
+        if entry not in names:
+            findings.append(Finding(str(zpath), f"does not contain {entry}"))
+    for name in sorted(names):
+        if "/personal/" in name or name.startswith("personal/"):
+            findings.append(Finding(str(zpath), f"ships a personal/ file: {name}"))
+    return findings
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--repo", type=Path, default=REPO, help="repository root")
@@ -315,11 +299,19 @@ def main(argv: list[str] | None = None) -> int:
         help="git ref to diff against (e.g. origin/main); enables the "
         "ATTRIBUTION.md-updated-with-new-files check",
     )
+    ap.add_argument(
+        "--zips",
+        type=Path,
+        help="directory of built skill zips; checks the ttrpg-expert zip ships "
+        "every NOTICE.md and nothing from personal/",
+    )
     args = ap.parse_args(argv)
 
     findings = check_systems(args.repo) + check_personal(args.repo)
     if args.base:
         findings += check_added_files(args.repo, args.base)
+    if args.zips:
+        findings += check_zips(args.zips)
 
     for f in findings:
         print(f)

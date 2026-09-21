@@ -42,6 +42,3 @@ All require level 19+. Each grants +1 to one ability score (max 30) plus a signa
 | **Boon of Spell Recall** | Level 19+, Spellcasting | +1 INT/WIS/CHA. Free Casting: when casting with 1st-4th slot, roll 1d4; if result matches slot level, slot not expended. |
 | **Boon of the Night Spirit** | Level 19+ | +1 ability. Merge with Shadows: Invisible (BA) in Dim/Dark; ends on action/BA/reaction. Resistance to all damage except Psychic/Radiant in Dim/Dark. |
 | **Boon of Truesight** | Level 19+ | +1 ability. Truesight 60 ft. |
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*
