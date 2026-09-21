@@ -383,6 +383,51 @@ class SectionsOrderTests(unittest.TestCase):
         self.assertEqual(rows[0].level, "INFO")
 
 
+class RoutingSceneTests(unittest.TestCase):
+    """#205: a routing/hub scene is a menu, so it owes neither required
+    label — but only when it says it is one."""
+
+    HUB_BODY = ("**Where the party is when the session opens**\n"
+                "- Gentlemen: [[The_Maidan]], brandy open.\n"
+                "**Available on trigger**\n- Library, open till four.\n")
+
+    def missing(self, title: str, body: str) -> list[str]:
+        found = pc._scene_findings("p.md", body, title, pc.SCENE_LABELS)
+        return [f.message for f in found if "missing" in f.message]
+
+    def test_routing_title_needs_no_required_labels(self):
+        self.assertEqual(
+            self.missing("Scene 0: Monday afternoon (routing)", self.HUB_BODY),
+            [])
+
+    def test_hub_title_and_scene_zero_and_transition_type(self):
+        self.assertEqual(self.missing("The Bazaar (hub)", self.HUB_BODY), [])
+        self.assertEqual(self.missing("Scene 0: Monday", self.HUB_BODY), [])
+        self.assertEqual(
+            self.missing("Between acts",
+                         "**Type:** transition\n" + self.HUB_BODY), [])
+
+    def test_ordinary_scene_still_needs_both(self):
+        # A short scene is not a routing scene; only saying so makes it one.
+        self.assertEqual(len(self.missing("Scene 1: Breakfast",
+                                          self.HUB_BODY)), 2)
+        self.assertEqual(len(self.missing("Scene 10: Chubby hubbub",
+                                          self.HUB_BODY)), 2)
+
+    def test_routing_scene_still_flags_a_mistyped_label(self):
+        found = pc._scene_findings(
+            "p.md", "**Situation** no colon\n", "Scene 0: Monday (routing)",
+            pc.SCENE_LABELS)
+        self.assertTrue([f for f in found if "Situation" in f.message and "write" in f.message],
+                        found)
+
+    def test_contingency_scene_is_not_exempt(self):
+        found = pc._scene_findings(
+            "p.md", "**Then**\n- x\n", "Hub (routing)",
+            pc.CONTINGENCY_LABELS)
+        self.assertTrue([f for f in found if "Trigger" in f.message], found)
+
+
 class HeadlessTests(unittest.TestCase):
     """Regression coverage for the wrapped-bullet grouping fix: a
     hard-wrapped Open Questions bullet is one logical item, so it earns

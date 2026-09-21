@@ -44,7 +44,10 @@ Checks, by id, level, and the rule they mechanise:
                          (SKILL.md preamble discipline comment)
   scene-labels  ERROR    every Planned scene carries Situation and
                          Starts it, every Contingency scene carries
-                         Trigger; the other labels are optional and an
+                         Trigger — except a routing/hub scene (a menu,
+                         not a scene: `**Type:** transition`, a title
+                         with (routing) or (hub), or `Scene 0`), which
+                         needs neither; the other labels are optional and an
                          absent one is never reported, but any label
                          that is attempted must be spelled exactly; a
                          legacy Objective/Setup/Behaviours/Branching
@@ -543,9 +546,26 @@ def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
     return found
 
 
+# A routing or hub scene is standing state, available tools and what the
+# world does regardless of the PCs — a menu, not a scene, so it has no
+# Situation to state and nobody to start it (#205; the Alexandrian's
+# "Tools, Not Contingencies"). Recognised by its own words, never by
+# being short: `**Type:** transition`, a title naming it, or Scene 0.
+_ROUTING_TITLE_RE = re.compile(r"\b(?:routing|hub)\b|^Scene\s+0\b", re.I)
+
+
+def _is_routing_scene(body: str, scene_title: str) -> bool:
+    if _ROUTING_TITLE_RE.search(scene_title):
+        return True
+    m = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
+    return bool(m) and re.split(
+        r"[.\n]", m.group(1).strip())[0].strip().casefold() == "transition"
+
+
 def _scene_findings(rel: str, body: str, scene_title: str,
                     labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
+    routing = labels is SCENE_LABELS and _is_routing_scene(body, scene_title)
     locus = f"{rel}:§{scene_title}"
     legacy_found = _legacy_scene(body, labels)
     if legacy_found:
@@ -570,7 +590,7 @@ def _scene_findings(rel: str, body: str, scene_title: str,
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' has {near!r} — write "
                     f"'{shown}'"))
-            elif label in _REQUIRED_LABELS:
+            elif label in _REQUIRED_LABELS and not routing:
                 findings.append(Finding(
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' is missing {shown}"))
