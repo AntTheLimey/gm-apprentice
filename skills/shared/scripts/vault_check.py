@@ -766,6 +766,29 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
     return loose[0] if loose else None
 
 
+def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
+                           by_rel: dict[str, dict], chapter: str | None
+                           ) -> tuple[str | None, str | None]:
+    """(note, other_chapter_note) a `documents:` link names.
+
+    Notes share stems across chapters ("session_11_play_notes" exists in
+    every chapter that restarts numbering), so name alone is ambiguous.
+    The session's own chapter wins; a note whose chapter is unknown
+    still matches, as everywhere else, keeping flat vaults working.
+    When the only notes with that name sit in a *different* chapter, the
+    link is not this session's document — the second value returns one
+    of them so the caller can say so (#206).
+    """
+    hits = by_stem.get(link_target(target), [])
+    if not hits or chapter is None:
+        return (hits[0] if hits else None), None
+    own = [rel for rel in hits
+           if chapter_key(rel, by_rel[rel]) in (chapter, None)]
+    if own:
+        return own[0], None
+    return None, hits[0]
+
+
 def check_sessions(vault: Path) -> list[str]:
     """Derive each session's status from the documents that exist.
 
@@ -779,6 +802,9 @@ def check_sessions(vault: Path) -> list[str]:
     files = [(rel, text, extract_frontmatter(text) or {})
              for rel, text in vault_files(vault)]
     stems = {normalize(Path(rel).stem): rel for rel, _t, _f in files}
+    by_stem: dict[str, list[str]] = {}
+    for rel, _t, _f in files:
+        by_stem.setdefault(normalize(Path(rel).stem), []).append(rel)
     by_rel = {rel: fm for rel, _t, fm in files}
     indexes = [(rel, text, fm) for rel, text, fm in files
                if fm.get("type") == "session"]
@@ -804,8 +830,15 @@ def check_sessions(vault: Path) -> list[str]:
                 # document does not exist yet" — reporting it as a broken
                 # link would fire on nearly every index in a live vault.
                 target = ""
-            linked = stems.get(link_target(target)) if target else None
-            if target and linked is None:
+            linked, elsewhere = (
+                _resolve_document_link(target, by_stem, by_rel, chapter)
+                if target else (None, None))
+            if elsewhere:
+                broken.append(
+                    f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]' "
+                    f"but the only note by that name is in another chapter "
+                    f"({elsewhere}) — not counted for this session")
+            elif target and linked is None:
                 broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
                               f"'[[{target}]]' but no such note exists")
             found = _chain_document(files, stems, types, stem, number, chapter)

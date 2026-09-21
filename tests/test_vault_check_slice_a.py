@@ -362,6 +362,39 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(vienna, "Archive_Session_07_Wrap_Up.md"),
                         vienna)
 
+    def test_link_to_another_chapters_same_named_note_is_not_this_sessions(
+            self):
+        # #206: Chapter 4's index pre-filled `play_notes: [[session_11_Play_Notes]]`
+        # for notes not yet written, and Chapter 3 owns a note with that very
+        # stem. Resolving the link by name alone claimed Chapter 3's play
+        # notes and derived `played` for a session nothing had happened in.
+        vault = make_vault(self)
+        c3 = vault / "Chapters" / "Chapter 3 - Vienna" / "Session 11"
+        c4 = vault / "Chapters" / "Chapter 4 - Calcutta" / "Sessions" / "Session 11"
+        c3.mkdir(parents=True)
+        c4.mkdir(parents=True)
+        (c3 / "Session_11.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: reviewed\n"
+            "chapter: \"[[Chapter 3 - Vienna]]\"\n---\n", encoding="utf-8")
+        (c3 / "session_11_play_notes.md").write_text(
+            "---\ntype: session-play-notes\nsession: \"[[Session_11]]\"\n"
+            "---\n", encoding="utf-8")
+        (c4 / "Session 11 - By Command.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: planned\n"
+            "chapter: \"[[Chapter 4 - Calcutta]]\"\n"
+            "documents:\n  plan: null\n"
+            "  play_notes: \"[[session_11_Play_Notes]]\"\n  wrap_up: null\n"
+            "---\n", encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        ch4 = rows_for(rows, "Chapter 4 - Calcutta")
+        self.assertTrue(rows_for(ch4, "derived=planned"), ch4)
+        self.assertFalse(rows_for(ch4, "derived=played"), ch4)
+        # The stray link is still worth telling the GM about.
+        self.assertTrue(rows_for(ch4, "another chapter"), ch4)
+        # And Chapter 3 keeps its own play notes.
+        ch3 = rows_for(rows, "Chapter 3 - Vienna")
+        self.assertTrue(rows_for(ch3, "derived=played"), ch3)
+
     def test_null_document_placeholder_is_not_a_broken_link(self):
         # `plan: null` is the schema's own "not yet" placeholder — the
         # shape most indexes in a live vault are actually in.
