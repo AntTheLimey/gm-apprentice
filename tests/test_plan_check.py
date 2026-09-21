@@ -383,6 +383,47 @@ class SectionsOrderTests(unittest.TestCase):
         self.assertEqual(rows[0].level, "INFO")
 
 
+class ShippedTemplateTests(unittest.TestCase):
+    """#204: the Session Plan template a GM can open must be the shape
+    plan_check enforces, and must not drift from the reference."""
+
+    ROOT = Path(__file__).resolve().parent.parent / "skills"
+    TEMPLATE = ROOT / "shared" / "templates" / "session-plan.md"
+    REFERENCE = ROOT / "session-prep" / "references" / "session-templates.md"
+
+    @staticmethod
+    def h2s(text: str) -> list[str]:
+        return [t for _l, lvl, t, _b in pc.vl.sections(text) if lvl == 2]
+
+    def test_template_sections_match_plan_check_in_order(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        self.assertEqual(self.h2s(text), list(pc.TEMPLATE_SECTIONS))
+
+    def test_template_sections_match_the_reference(self):
+        ref = self.REFERENCE.read_text(encoding="utf-8")
+        block = ref.split("## Session Plan", 1)[1].split(
+            "## Play Notes", 1)[0]
+        # The reference shows the plan inside a code fence; unfence it.
+        block = "\n".join(ln for ln in block.splitlines()
+                          if not ln.startswith("```"))
+        self.assertEqual(
+            self.h2s(self.TEMPLATE.read_text(encoding="utf-8")),
+            self.h2s(block))
+
+    def test_template_passes_plan_check_with_no_errors(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        found = pc.run_checks(str(self.TEMPLATE), text,
+                              pc.vl.extract_frontmatter(text) or {}, False)
+        errors = [f.row for f in found if f.level == "ERROR"]
+        self.assertEqual(errors, [])
+
+    def test_template_marks_only_the_two_required_labels(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        self.assertEqual(text.count("*(required)*"), 2)
+        for label in ("**Situation:**", "**Starts it:**", "**Trigger:**"):
+            self.assertIn(label, text)
+
+
 class RoutingSceneTests(unittest.TestCase):
     """#205: a routing/hub scene is a menu, so it owes neither required
     label — but only when it says it is one."""

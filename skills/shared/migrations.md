@@ -749,3 +749,34 @@ changes.
   stay as they are. This entry is documentation-only; nothing copies into
   `_Templates/` (no Session Plan template ships — see the note in
   `docs/scene-design-research.md`).
+
+## Migration: 1.9.12 → 1.9.14
+
+A Session Plan template, and two fixes to what `plan_check.py` and
+`vault_check.py sessions` report. No frontmatter changes.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Copy `_Templates/_Template_Session_Plan.md` from
+  `shared/templates/session-plan.md`. It carries the section list and the
+  scene shape (only `**Situation:**` and `**Starts it:**` required),
+  which until now existed only in a skill reference. Before 1.9.14 no
+  vault got a Session Plan template. Existing Plan files are not touched.
+
+### Tooling
+
+- `plan_check.py`: a routing or hub scene — `(routing)` or `(hub)` in its
+  title, `Scene 0`, or `**Type:** transition` — no longer needs
+  `**Situation:**` or `**Starts it:**`. `--headless --gm-input` skips the
+  headless guard when the GM supplied the intent, scenes and spotlight.
+- `vault_check.py sessions`: a `documents:` link now resolves within the
+  session's own chapter. A link whose only same-named note sits in a
+  different chapter is reported as such and no longer counts, so a
+  planned session in a chapter that restarts numbering stops deriving
+  `played` from an earlier chapter's play notes. A vault that earlier
+  runs told to set `status: played` on such a session should be re-run
+  before applying the stamp.

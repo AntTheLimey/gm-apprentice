@@ -35,7 +35,10 @@ tags: []
 Created by session-prep. Contains all the preparatory material
 for an upcoming session — scenes, NPCs, threads, hooks,
 decision points. Archived after play (not deleted, not updated
-except to append Planned vs Played).
+except to append Planned vs Played). The blank a GM can open is
+`shared/templates/session-plan.md`, provisioned into vaults as
+`_Templates/_Template_Session_Plan.md`; a test keeps its sections in step
+with this one.
 
 ```markdown
 ---
@@ -133,8 +136,10 @@ teases the GM.
 Only two labels are required: **Situation:** and **Starts it:**.
 Everything below them is a tool, offered and never demanded — use the
 ones that earn their place in *this* scene and leave the rest out
-entirely. A routing scene that is two lines is finished, not incomplete;
-do not write "N/A" under a heading to fill it. See
+entirely. A routing or hub scene — a menu of where the party is and what
+is available, not a scene — owes neither required label: mark it with
+"(routing)" or "(hub)" in its title, `Scene 0`, or `**Type:** transition`.
+Do not write "N/A" under a heading to fill it. See
 `docs/scene-design-research.md` for why.
 
 ### Scene 1: [Title]

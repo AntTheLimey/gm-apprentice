@@ -169,6 +169,12 @@ sync from the reference file to `_Templates/` that nothing performs.
 Whatever minimum is agreed has to land in the shipped template, not only
 in the checker.
 
+**Resolved in 1.9.14 (#204).** `skills/shared/templates/session-plan.md`
+now carries the skeleton and `campaign-organizer` copies it in as
+`_Templates/_Template_Session_Plan.md`. A routing or hub scene, which the
+research names as a legitimately near-empty shape, now owes neither
+required label (#205).
+
 ## Sources
 
 - Justin Alexander, [Don't Prep Plots](https://thealexandrian.net/wordpress/4147/roleplaying-games/dont-prep-plots)

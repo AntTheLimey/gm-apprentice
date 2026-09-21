@@ -68,3 +68,9 @@ MD052: false
 
 # Single trailing newline — some generated/large files lack final newline
 MD047: false
+
+# Trailing punctuation in headings — the Session Plan's required section
+# is titled "Previously On..." (plan_check.TEMPLATE_SECTIONS); a period is
+# no longer flagged, the other marks still are
+MD026:
+  punctuation: ",;:!"
