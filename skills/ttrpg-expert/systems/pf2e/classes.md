@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Classes
 
 24 ORC-remastered classes. Each entry: key attribute, HP/level (add Con
@@ -358,7 +354,3 @@ identity at later levels.
 
 **Subclass — Ikons/Epithets:** choose ikons (immortal, weapon, worn, and
 more) shaped by Root, Dominion, and Sovereignty epithets.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

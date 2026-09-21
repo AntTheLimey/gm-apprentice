@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Equipment
 
 Currency, weapons, armor, shields, gear, and fundamental runes from
@@ -252,7 +248,3 @@ with lesser bombs (acid flask, alchemist's fire; 3 gp each), lesser elixirs
 (antidote, antiplague, minor elixir of life; 3 gp each), and simple tools
 (glow rod, smoke ball; 3 gp each). Full entries live in GM Core, not Player
 Core; look them up by name in the equipment data for exact effects and DCs.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

@@ -1,7 +1,3 @@
-> BRP combat foundation: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
-
 # Call of Cthulhu 7e -- Combat and Spot Rules Reference
 
 Quick-reference for combat flow, defensive reactions, fighting
@@ -193,12 +189,3 @@ success, roll appropriate die for number of rounds hitting.
 Only the first round can achieve special or critical. Against
 spread targets: no skill bonus; roll separately per target.
 Narrow field of fire (corridor): +20% additional.
-
----
-
-> **Attribution:** Combat framework adapted from *Basic
-> Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. CoC 7e-specific combat mechanics
-> (fight back, bonus/penalty dice, success level comparison)
-> are our own descriptions of uncopyrightable game mechanics.
-> See ATTRIBUTION.md for full license details.

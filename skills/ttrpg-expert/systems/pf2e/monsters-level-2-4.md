@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Monsters Level 2-4
 
 A curated Monster Core selection of 60 creatures for building low-tier
@@ -443,7 +439,3 @@ Speed 25 ft; shortsword +12 agile (1d6+4 P), crossbow +14 (1d8+2 P)
 Crossbow Precision: +1d8 on the first crossbow hit each round. Perfect Aim:
 ignores concealment and reduces cover bonuses. Running Reload. Formation: +1
 AC and saves near two allies.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

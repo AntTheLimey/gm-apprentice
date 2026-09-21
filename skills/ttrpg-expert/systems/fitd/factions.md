@@ -123,6 +123,3 @@ During crew creation, establish faction relationships:
   faction (spend coin to soften)
 - Favorite contact: +1 with a friendly faction, -1 with an
   unfriendly faction
-
----
-*This work is based on Blades in the Dark (found at https://www.bladesinthedark.com/), product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (https://creativecommons.org/licenses/by/3.0/).*

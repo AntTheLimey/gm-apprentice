@@ -1,7 +1,3 @@
-> BRP mechanical foundation: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Chaosium text.
-
 # Call of Cthulhu 7e -- Core Mechanics
 
 ## Overview

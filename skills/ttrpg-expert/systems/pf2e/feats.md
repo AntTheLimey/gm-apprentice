@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Feats (Index)
 
 Routing index for the feat category shards. Read the shard that
@@ -59,7 +55,3 @@ skill, general, or archetype).
 
 Omit the Note line on pure lookups; add it (one sentence) only
 when the user asks for advice.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

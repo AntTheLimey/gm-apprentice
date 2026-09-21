@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Monsters Level 5-7
 
 A curated Monster Core selection of 32 mid-tier threats: drakes, trolls
@@ -186,7 +182,3 @@ Destiny Breath (20-ft cone, 6d6 mental, DC 25 Will, slowed); reactive Challenge 
 Per +15 darkvision; AC 23, Fort +15, Ref +14, Will +17; HP 100 (weak cold-iron 5, holy 5)
 Speed 25, fly 35; claw +16 (agile, finesse), 2d8+8 slashing; divine innate spells
 Telepathy 100; Seductive Presence aura; Change Shape; Embrace uses Diplomacy to grapple; Passionate Kiss drains a held victim; Profane Gift.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

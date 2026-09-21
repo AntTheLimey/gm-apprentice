@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Monsters Level 8-10
 
 A curated Monster Core selection of 31 upper-mid-tier threats: young dragons,
@@ -181,7 +177,3 @@ Change Shape with a terrifying Cruel Majesty reveal; reactive Reassert Fate puni
 Per +19 low-light, scent; AC 29, Fort +21, Ref +15, Will +19; HP 180
 Speed 40; jaws +22 (deadly d12, reach 20), 2d12+12 piercing; foot +22 (reach 15), 2d10+12 bludgeoning
 Fling hurls a grabbed foe; Swallow Whole (Medium); Trample (Huge or smaller, DC 29 Ref); Pin Prey on a crit; Grab.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

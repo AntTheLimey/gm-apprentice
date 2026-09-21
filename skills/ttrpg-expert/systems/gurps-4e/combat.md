@@ -1,13 +1,5 @@
 # GURPS 4e Combat Mechanics
 
-> GURPS is a trademark of Steve Jackson Games, and its rules
-> and art are copyrighted by Steve Jackson Games. All rights
-> are reserved by Steve Jackson Games. This game aid is the
-> original creation of AntTheLimey and is released for free
-> distribution, and not for resale, under the permissions
-> granted in the
-> [Steve Jackson Games Online Policy](https://www.sjgames.com/general/online_policy.html).
-
 In-play procedural reference for GURPS 4e combat. Covers the
 full turn sequence, maneuvers, attack resolution, defenses,
 hit locations, damage types, ranged modifiers, shock/knockdown,

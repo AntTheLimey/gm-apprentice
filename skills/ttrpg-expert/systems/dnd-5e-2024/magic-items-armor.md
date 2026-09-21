@@ -21,6 +21,3 @@
 - **Armor of Invulnerability** | Legendary (A) | You have Resistance to Bludgeoning, Piercing, and Slashing damage while you wear this armor
 - **Armor, +1, +2, or +3** | Legendary | You have a bonus to Armor Class while wearing this armor. The bonus is determined by its rarity
 - **Plate Armor of Etherealness** | Legendary (A) | While you're wearing this armor, you can take a Magic action and use a command word to gain the effect of the *Etherealness* spell...
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

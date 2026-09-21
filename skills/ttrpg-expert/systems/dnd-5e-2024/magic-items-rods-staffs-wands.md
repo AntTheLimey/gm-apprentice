@@ -47,6 +47,3 @@
 - **Wand of Wonder** | Rare (A) | This wand has 7 charges. While holding it, you can take a Magic action to expend 1 charge while choosing a point within 120 feet o...
 - **Wand of Polymorph** | Very Rare (A) | This wand has 7 charges. While holding it, you can expend 1 charge to cast *Polymorph* (save DC 15) from it
 - **Wand of the War Mage, +1, +2, or +3** | Very Rare (A) | While holding this wand, you gain a bonus to spell attack rolls determined by the wand's rarity. In addition, you ignore Half Cove...
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

@@ -1,6 +1,3 @@
-> BRP equipment data: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e uses the same basic armour tables as BRP.
-
 # Call of Cthulhu 7e -- Armour and Shields
 
 Armour types with protection values, skill penalties, and
@@ -123,10 +120,3 @@ determine if a bullet penetrates an obstacle:
 | Mild Steel | 8 per 2cm |
 | Hardened Steel | 12 per 2cm |
 | Sandbags | 4 per bag layer |
-
----
-
-> **Attribution:** Armour and shield data from *Basic
-> Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. See ATTRIBUTION.md for full license
-> details.

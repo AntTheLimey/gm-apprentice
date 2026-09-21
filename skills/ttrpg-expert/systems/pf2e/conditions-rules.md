@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Conditions & Core Rules
 
 All 43 conditions from Player Core and Player Core 2, grouped by function,
@@ -204,7 +200,3 @@ the whole track. Wounded and doomed both make each future drop deadlier.
   apply to one roll (e.g. a +1 status bonus and a –2 status penalty net to –1).
 - **Redundant valued conditions don't add** — gaining a condition you already have uses
   the higher value, not the sum.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

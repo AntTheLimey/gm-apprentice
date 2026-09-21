@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 5 Spells
 
 50 spells from Pathfinder Player Core and Player Core 2 (ORC-licensed).
@@ -60,7 +56,3 @@
 - **Wall of Ice** | Arc, Pri | cold, water | 2 | 60-ft line or 10-ft-radius hemisphere | Opaque ice wall (40 HP, weakness 15 fire); a shattered non-fire section leaves difficult terrain dealing 2d6 cold; heightened +2.
 - **Wall of Stone** | Arc, Pri | earth | 2 | up to 120-ft wall within range | Shape solid stone (Hardness 14, 50 HP per section) into a wall, bridge, or stairs; heightened +2 adds 15 HP.
 - **Wave of Despair** | Arc, Occ | emotion, mental | 2 | 15-ft cone | Will save; despair blocks reactions and can slow sobbing creatures (1 round / 1 min, auto-slowed on crit failure); heightened 7th a 60-ft cone.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

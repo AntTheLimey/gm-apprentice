@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 3 Spells
 
 45 spells from Player Core and Player Core 2 (ORC-licensed).
@@ -55,7 +51,3 @@
 - **Wall of Thorns** | Arc/Pri | concentrate, manipulate, plant, wood | 2a | 60 ft | A 5-ft-thick, up-to-60-ft-long, 10-ft-high bramble wall; entering a square deals 3d4 piercing, and it gives cover and difficult terrain. Heightened +1: +5 HP/section, +1d4.
 - **Wall of Wind** | Arc/Pri | air, concentrate, manipulate | 2a | 120 ft | A 5-ft-thick, 60-ft-long, 30-ft-high wind wall; blocks small ranged ammo, is difficult terrain, and forces a Fortitude save to fly through.
 - **Wanderer's Guide** | Div/Occ | concentrate, manipulate | 2a | — | Reveals an inspired route that halves the movement penalty from difficult terrain during overland travel.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

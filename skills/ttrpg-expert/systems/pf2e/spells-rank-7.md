@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 7 Spells
 
 Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text is paraphrased.
@@ -31,7 +27,3 @@ Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text i
 - **Visions of Danger** | Occult | auditory, concentrate, illusion, manipulate, visual | 2 | 500 ft, 30-ft burst | Player Core 2. An illusory swarm deals 8d8 mental, basic Will, to creatures inside; a critical success or successful disbelief negates it thereafter. Heighten +1: +2d8.
 - **Volcanic Eruption** | Primal | concentrate, fire, manipulate | 2 | 500 ft; 5-ft-radius, 80-ft cylinder | 14d6 fire, basic Ref; failures are encased in cooling rock (Clumsy 1, -10-ft Speed) and everything nearby takes automatic heat damage. Heighten +1: +2d6.
 - **Warp Mind** | Arcane/Occult | concentrate, emotion, incapacitation, manipulate, mental | 2 | 30 ft, 1 creature | Will save scrambles a target's senses and thoughts; the effect resolves instantly and resists most counteracting magic.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

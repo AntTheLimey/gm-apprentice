@@ -4,19 +4,24 @@ Standards for all files under `skills/ttrpg-expert/systems/`.
 
 ---
 
-## 1. Attribution Header
+## 1. Licence Notice
 
-**Required** for files referencing copyrighted game content. First lines,
-before the H1:
+**One notice per system, not one per file.** Each system directory ships a
+`NOTICE.md` with the licence notice for the files in it, and the skill zips
+include it. Reference files carry no attribution header or footer; the H1 is
+the first line.
 
-```text
-> [Source] attribution: [License]. See ATTRIBUTION.md.
-> [System] adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not [Publisher] text.
-```
+When you add a file that references copyrighted game content:
 
-GURPS files use the full SJG Online Policy notice block (see
-`gurps-4e/skills-combat.md`). **Omit** for original-content-only files.
+- Add it to that system's `NOTICE.md` if the system's notice records sources
+  per file (Call of Cthulhu does: which files derive from BRP, which from
+  Lovecraft's public-domain fiction, which are our own descriptions).
+- Update `ATTRIBUTION.md` in the same commit with the source, licence and
+  what was done to it. CI fails if a PR adds licensed files without it.
+- GURPS content stays within names, point costs and short notes. CI benchmarks
+  GURPS tables against the public GCS library (`scripts/license_check.py`).
+
+Original-content-only files need nothing.
 
 ---
 
@@ -96,15 +101,8 @@ relevant section.
 
 ## 6. Attribution Footer
 
-**Required** for licensed content files. Last lines, after all content:
-
-```text
----
-*[System] content: [brief license statement]. See ATTRIBUTION.md.*
-```
-
-GURPS files use the full SJG notice block. Original-content files need
-no footer.
+Removed. Reference files no longer end with a licence footer; the system's
+`NOTICE.md` carries it (see section 1). Do not add one.
 
 ---
 
@@ -180,10 +178,9 @@ schema-change-procedure and no entity-template change.
 
 ## Quick Checklist
 
-- [ ] Attribution header present (licensed content)
+- [ ] Licensed content: system `NOTICE.md` and `ATTRIBUTION.md` updated; no per-file notice
 - [ ] H1 + priming paragraph ≤ 4 lines, states scope and exclusions
 - [ ] One-line format or tables — no prose padding
 - [ ] All numbers exact (dice, %, formulas, page refs)
 - [ ] Cross-references use correct relative paths
-- [ ] Attribution footer present (licensed content)
 - [ ] No verbatim rulebook prose

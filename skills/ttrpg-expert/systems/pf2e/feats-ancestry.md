@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Ancestry Feats
 
 Curated ancestry feats from *Player Core* and *Player Core 2*, the core Remaster
@@ -244,7 +240,3 @@ can take. The "Prereq" column notes the required lineage or heritage.
 | **Deliberate Death** | 1 | Duskwalker | *Reaction:* make a melee Strike just before falling to Dying (1st level only). |
 | **Blessed Blood (Nephilim)** | 5 | Nephilim | Your blood deals holy damage to fiends/undead that bite or drink it. |
 | **Bloodletting Fangs** | 9 | Dhampir | Fangs crits deal 1d4 persistent bleed damage. |
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

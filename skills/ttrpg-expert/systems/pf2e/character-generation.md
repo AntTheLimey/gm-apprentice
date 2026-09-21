@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Character Generation
 
 The Ancestry–Background–Class (ABC) build, from the Player Core Remaster
@@ -180,7 +176,3 @@ Advancement follows the class table. Typical cadences:
 Each set of attribute boosts raises four **different** modifiers by +1; a
 modifier already +4 or higher increases by only +1 as well but obeys the
 per-level caps in the advancement rules.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

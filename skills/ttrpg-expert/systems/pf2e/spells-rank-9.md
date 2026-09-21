@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Rank 9 Spells
 
 Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text is paraphrased.
@@ -24,7 +20,3 @@ Player Core + Player Core 2 spells (ORC). Mechanics are facts; all effect text i
 - **Wails of the Damned** | Divine/Occult | auditory, concentrate, death, manipulate, void | 2 | 40-ft emanation | 8d10 void to living enemies, basic Fort. Heighten +1: +1d10.
 - **Weapon of Judgment** | Divine | concentrate, manipulate, sanctified, spirit | 2 | 120 ft, 1 creature | A spectral weapon strikes the target for 4d10 (using your spell attack) whenever it breaks a named "war" edict (fails to attack a chosen foe) or "peace" edict (harms chosen allies). Heighten 10th: +1d10.
 - **Wrathful Storm** | Primal | air, cold, concentrate, electricity, manipulate | 2 | 500 ft, 60-ft burst | A storm cloud you Sustain, choosing each round: Blizzard (4d8 cold, no save), Hail (4d10 bludgeoning, basic Fort), Lightning (7d6 electricity to 10 creatures, basic Ref), or Tornado (throw creatures 40 ft up). Heighten 10th: larger area and range.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

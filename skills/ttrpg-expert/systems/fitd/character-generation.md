@@ -266,6 +266,3 @@ Optionally, increase intensity to +2 and -2 status instead.
 
 See `systems/fitd/cohorts.md` for full cohort rules (gang
 types, experts, edges/flaws, cohort harm, using cohorts).
-
----
-*This work is based on Blades in the Dark (found at https://www.bladesinthedark.com/), product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (https://creativecommons.org/licenses/by/3.0/).*

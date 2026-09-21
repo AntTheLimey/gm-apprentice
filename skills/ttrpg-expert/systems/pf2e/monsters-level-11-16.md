@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Monsters Level 11-16
 
 A curated Monster Core selection (40 creatures) for high-tier PF2e
@@ -228,7 +224,3 @@ Frightful Presence 100 ft (DC 35 Will); Absorb [free] engulfs a dying creature i
 Per +29; AC 38, Fort +27, Ref +28, Will +29; HP 280 (imm confused, doomed, paralyzed, sleep); +2 status to saves vs occult
 Speed 60, fly 180, occult innate caster; jaws +30 (reach 15) 3d8+14 P plus 1d8 mental; claw +30 (reach 10) 3d6+14 S plus 1d8 mental
 Challenge Fate [r] the attacker rolls twice and takes the worse; Destiny Breath [2] 40-ft cone 15d6 mental (DC 39 Will, slowed; recharge); Impending Fate (a crit or crit-failed breath dooms the target); Draconic Frenzy [2]
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

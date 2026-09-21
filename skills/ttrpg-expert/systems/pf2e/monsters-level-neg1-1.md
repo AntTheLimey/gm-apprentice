@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Monsters Level -1 to 1
 
 A curated selection of 55 common creatures from Pathfinder Monster Core,
@@ -298,7 +294,3 @@ Divine innate spells; +1 status to saves vs magic. Electrical Burst: 3d6 electri
 Per +3 (darkvision); AC 17, Fort +3, Ref +9, Will +7; HP 16 (imm bleed, paralyzed, poison, sleep, fire; weak cold 3)
 Speed 20 ft, fly 25 ft; Melee jaws +9 (finesse) 1d4 fire plus 1d6 P
 Arcane innate spells; ignores smoke concealment. Fast Healing 2 while touching fire. Flame Breath: 15-ft cone, 2d4 fire plus persistent fire (DC 17 Ref).
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

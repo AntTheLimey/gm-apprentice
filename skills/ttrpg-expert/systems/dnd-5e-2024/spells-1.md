@@ -64,6 +64,3 @@
 - **Speak with Animals** | Divination | A/Rit | Self | 10 minutes [R] | Brd,Drd,Rgr,Wlk | For the duration, you can comprehend and verbally communicate with Beasts, and you can use any of the Influence action's skill options with them
 - **Thunderwave** | Evocation | A | Self | Inst | Brd,Drd,Sor,Wiz | You unleash a wave of thunderous energy. Each creature in a 15-foot Cube originating from you makes a Constitution saving throw. On a failed save, a c...
 - **Unseen Servant** | Conjuration | A/Rit | 60 feet | 1 hour [R] | Brd,Wlk,Wiz | This spell creates an Invisible, mindless, shapeless, Medium force that performs simple tasks at your command until the spell ends. The servant spring...
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

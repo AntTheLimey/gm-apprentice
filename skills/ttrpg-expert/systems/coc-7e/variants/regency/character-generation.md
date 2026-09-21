@@ -1,6 +1,3 @@
-> Regency Cthulhu (Chaosium, 2022). Names, costs, and short
-> mechanical notes per Baker v. Selden (1879). Not Chaosium text.
-
 # Regency Cthulhu — Character Generation
 
 Regency (1811-1820) overlay for CoC 7e. Use alongside base
@@ -88,9 +85,3 @@ Optional rule for gentry and those in high society.
 See `../../character-generation.md` for core attribute generation (STR, CON,
 SIZ, DEX, APP, INT, POW, EDU), derived values (HP, SAN, MOV, damage
 modifier), age modifiers, and personal interest points.
-
----
-
-> **Attribution:** Regency social economics from *Regency
-> Cthulhu* (Chaosium, 2022). Presented as short mechanical
-> notes per Baker v. Selden (1879). See ATTRIBUTION.md.

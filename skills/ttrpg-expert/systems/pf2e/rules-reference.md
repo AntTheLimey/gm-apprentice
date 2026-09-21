@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) -- Rules Reference
 
 In-play quick lookup: basic actions, skill actions, exploration and downtime activities, cover, movement, and the death rules. For the resolution engine (degrees of success, proficiency, MAP, saves) see `mechanics.md`; for conditions see `conditions-rules.md`.
@@ -162,7 +158,3 @@ At 0 HP a PC is knocked out and gains **dying 1** (dying 2 if from a crit or you
 - **Heroic recovery:** spend all Hero Points when dying would increase to shed dying and stabilize at 0 HP without gaining wounded.
 
 Undead and constructs are destroyed at 0 HP rather than dying. Nonlethal attacks knock out instead of killing.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

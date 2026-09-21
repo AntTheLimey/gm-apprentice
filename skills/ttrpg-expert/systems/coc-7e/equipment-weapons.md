@@ -1,7 +1,3 @@
-> BRP equipment data: BRP ORC License. See ATTRIBUTION.md.
-> CoC 7e uses the same basic weapon tables as BRP. Skill names
-> below use CoC 7e conventions (Fighting, Firearms).
-
 # Call of Cthulhu 7e -- Weapons Reference
 
 Melee, missile, and firearm tables with damage, special
@@ -200,9 +196,3 @@ or Repair roll to clear.
 
 **No damage modifier**: Firearms never apply the attacker's
 damage modifier.
-
----
-
-> **Attribution:** Weapon data from *Basic Roleplaying: Universal
-> Game Engine* by Chaosium Inc., used under the ORC License.
-> See ATTRIBUTION.md for full license details.

@@ -1,5 +1,3 @@
-> BRP powers data: BRP ORC License. See ATTRIBUTION.md.
-
 # Call of Cthulhu 7e — Powers and Magic Overview
 
 BRP ORC magic, sorcery, and psychic systems overview. Used
@@ -158,10 +156,3 @@ When powers from different sets conflict:
 All power sets draw from the same power point pool. A
 character using magic and psychic abilities does not maintain
 separate reserves.
-
----
-
-> **Attribution:** Powers and magic system data from *Basic
-> Roleplaying: Universal Game Engine* by Chaosium Inc., used
-> under the ORC License. See ATTRIBUTION.md for full license
-> details.

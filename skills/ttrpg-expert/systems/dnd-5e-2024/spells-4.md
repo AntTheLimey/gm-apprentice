@@ -41,6 +41,3 @@
 - **Stoneskin** | Transmutation | A | Touch | Concentration, up to 1 hour [C] | Drd,Rgr,Sor,Wiz | Until the spell ends, one willing creature you touch has Resistance to Bludgeoning, Piercing, and Slashing damage
 - **Vitriolic Sphere** | Evocation | A | 150 feet | Inst | Sor,Wiz | You point at a location within range, and a glowing, 1-foot-diameter ball of acid streaks there and explodes in a 20-foot-radius Sphere. Each creature...
 - **Wall of Fire** | Evocation | A | 120 feet | Concentration, up to 1 minute [C] | Drd,Sor,Wiz | You create a wall of fire on a solid surface within range. You can make the wall up to 60 feet long, 20 feet high, and 1 foot thick, or a ringed wall ...
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

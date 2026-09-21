@@ -1,7 +1,3 @@
-> Pathfinder 2e (Remaster) attribution: ORC License. See ATTRIBUTION.md.
-> PF2e adaptation: Our own descriptions of uncopyrightable
-> game mechanics (Baker v. Selden, 1879). Not Paizo text.
-
 # Pathfinder 2e (Remaster) — Cantrips
 
 32 cantrips (rank-0 spells) from Player Core + Player Core 2. Cantrips are always
@@ -44,7 +40,3 @@ cast at your highest spell rank and are never expended.
 - **Telekinetic Projectile** | Arcane, Occult | attack, concentrate, manipulate | 2 actions | 30 ft | Hurl an unattended object (spell attack) for 2d6 bludgeoning, piercing, or slashing. Heightened +1: +1d6.
 - **Vitality Lash** | Divine, Primal | concentrate, manipulate, vitality | 2 actions | 30 ft | 2d6 vitality, basic Fortitude; crit fail also Enfeebled 1. Heightened +1: +1d6.
 - **Void Warp** | Arcane, Divine, Occult | concentrate, manipulate, void | 2 actions | 30 ft | 2d4 void, basic Fortitude; crit fail also Enfeebled 1. Heightened +1: +1d4.
-
----
-
-*This work includes Licensed Material from Pathfinder Player Core, Player Core 2, GM Core, Monster Core, and Monster Core 2 © Paizo Inc., used under the ORC License (Library of Congress TX 9-307-067, https://paizo.com/orclicense).*

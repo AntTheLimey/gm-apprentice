@@ -288,6 +288,3 @@ Multiattack: one Bite + 3× other, using Claw or Tail in any combination
 - Tail: +19, reach 30 ft., 3d8+10 bludgeoning
 - Thunderous Bellow (Recharge 5-6): each creature and each object that isn't being worn or carried in a 150-ft cone, DC 27 CON, 12d12 thunder (half)
 - [B] Swallow: DC 27 STR, The target is swallowed, and the Grappled condition ends.
-
----
-*This work includes material from the System Reference Document 5.2 ("SRD 5.2") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode.*

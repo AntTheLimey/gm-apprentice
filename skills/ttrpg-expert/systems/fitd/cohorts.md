@@ -116,6 +116,3 @@ with greater scale has a significant advantage — the smaller
 group needs potency, special abilities, or clever tactics to
 even the odds. A single PC facing a gang is at severe
 disadvantage without abilities like "Not to be Trifled With."
-
----
-*This work is based on Blades in the Dark (found at https://www.bladesinthedark.com/), product of One Seven Design, developed and authored by John Harper, and licensed for our use under the Creative Commons Attribution 3.0 Unported license (https://creativecommons.org/licenses/by/3.0/).*

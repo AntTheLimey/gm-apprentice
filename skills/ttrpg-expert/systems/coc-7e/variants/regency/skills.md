@@ -1,6 +1,3 @@
-> Regency Cthulhu (Chaosium, 2022). Names, costs, and short
-> mechanical notes per Baker v. Selden (1879). Not Chaosium text.
-
 # Regency Cthulhu — Skills
 
 Regency (1811-1820) overlay for CoC 7e. Use alongside base
@@ -97,10 +94,3 @@ Skills available by Keeper permission or in specific circumstances:
 | Library Use | 20 | Listen | 20 |
 | Locksmith | 01 | Lore | 01 |
 | Mechanical Repair | 10 | Medicine | 01 |
-
----
-
-> **Attribution:** Regency skill names, base values, and
-> replacement mappings from *Regency Cthulhu* (Chaosium, 2022).
-> Presented as short mechanical notes per Baker v. Selden (1879).
-> See ATTRIBUTION.md.
