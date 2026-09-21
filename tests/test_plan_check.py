@@ -415,6 +415,25 @@ class HeadlessTests(unittest.TestCase):
             any("Confirm the guard fires here too" in f.message
                 for f in guard_rows), guard_rows)
 
+    def test_gm_input_skips_the_guard_and_says_so(self):
+        # #207: a scripted prep hands the agent the intent, scenes and
+        # spotlight, so a settled spine is the GM's, not an invention.
+        proc = run_cli(GOOD, "--headless", "--gm-input")
+        rows = [line for line in proc.stdout.splitlines()
+                if "hard-guard" in line]
+        self.assertEqual(len(rows), 1, proc.stdout)
+        self.assertTrue(rows[0].startswith("INFO\t"), rows)
+        self.assertIn("--gm-input", rows[0])
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+
+    def test_gm_input_does_not_touch_the_other_checks(self):
+        findings = pc.run_checks(
+            str(HEADLESS), HEADLESS.read_text(encoding="utf-8"),
+            pc.vl.extract_frontmatter(HEADLESS.read_text(encoding="utf-8"))
+            or {}, True, True)
+        bad = [f for f in findings if f.level == "ERROR"]
+        self.assertFalse([f for f in bad if f.id == "hard-guard"], bad)
+
     def test_good_plan_headless_flags_exactly_the_creative_spine(self):
         # Good Plan's own Open Questions bullet is hard-wrapped across
         # three physical lines and carries the apprentice-guess marker,

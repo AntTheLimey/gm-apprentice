@@ -461,7 +461,9 @@ answer):
   silently resolved.
 
 `plan_check.py <plan> --headless` verifies this — a headless run that fails
-it must not be handed off.
+it must not be handed off. When the GM supplied the intent, scenes and
+spotlight up front (a scripted or batch prep), add `--gm-input`: the spine is
+theirs, not invented, so the guard is skipped.
 
 This is what makes the guided flow real rather than cosmetic.
 

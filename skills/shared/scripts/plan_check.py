@@ -7,7 +7,7 @@ Read-only companion to vault_check.py for a single Session Plan
 markdown file. Stdlib only.
 
 Usage:
-  plan_check.py PLAN.md [--headless] [--inventory] [--state] [--json]
+  plan_check.py PLAN.md [--headless [--gm-input]] [--inventory] [--state] [--json]
 
 Default output: finding rows as `LEVEL<TAB>locus<TAB>message`, then a
 `# errors: N  warnings: N  info: N` summary line. `--inventory` prints
@@ -67,7 +67,11 @@ Checks, by id, level, and the rule they mechanise:
   guess         WARNING  "(apprentice guess" only appears in Open Questions
                          (SKILL.md, Hard Guard)
   hard-guard    ERROR    --headless only: no settled creative spine, every
-                         Open Questions line carries the guess marker
+                         Open Questions line carries the guess marker.
+                         `--gm-input` says the GM supplied the spine (a
+                         scripted or batch prep): the guard's job is to
+                         stop an apprentice inventing it, so it is skipped
+                         and one INFO row says so
                          (SKILL.md, Hard Guard)
   prep-state    INFO/    a resumable prep-state marker exists and parses
                 WARNING  (SKILL.md, Resumable prep)
@@ -828,8 +832,8 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
 # --------------------------------------------------------------------------
 
 
-def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
-              ) -> list[Finding]:
+def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
+               gm_input: bool = False) -> list[Finding]:
     by_norm = _by_norm_title(text)
     states, _problems = vl.scan_body(text)
     findings: list[Finding] = []
@@ -849,7 +853,12 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
     findings.extend(check_table(rel, text))
     findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
-    if headless:
+    if headless and gm_input:
+        findings.append(Finding(
+            "hard-guard", "INFO", f"{rel}:1",
+            "hard-guard: skipped — --gm-input says the GM supplied the "
+            "creative spine"))
+    elif headless:
         findings.extend(check_hard_guard(rel, states, by_norm))
     return findings
 
@@ -880,6 +889,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("plan", type=Path)
     ap.add_argument("--headless", action="store_true")
+    ap.add_argument("--gm-input", action="store_true",
+                    help="with --headless: the GM supplied the settled "
+                         "sections and Open Questions, so skip the guard")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--inventory", action="store_true")
     mode.add_argument("--state", action="store_true")
@@ -894,7 +906,7 @@ def main() -> int:
 
     rel = str(args.plan)
     fm = vl.extract_frontmatter(text) or {}
-    findings = run_checks(rel, text, fm, args.headless)
+    findings = run_checks(rel, text, fm, args.headless, args.gm_input)
     has_error = any(f.level == "ERROR" for f in findings)
 
     if args.json:
