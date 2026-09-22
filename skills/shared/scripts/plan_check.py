@@ -561,7 +561,9 @@ def _is_routing_scene(body: str, scene_title: str) -> bool:
     if _ROUTING_TITLE_RE.search(scene_title):
         return True
     m = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
-    return bool(m) and re.split(
+    if m is None:
+        return False
+    return re.split(
         r"[.\n]", m.group(1).strip())[0].strip().casefold() == "transition"
 
 

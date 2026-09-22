@@ -725,12 +725,16 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
                     chapter: str | None) -> str | None:
     """The note of one chain type belonging to a session index, or None.
 
-    A `session:` link naming the index wins outright. Otherwise the
-    session number has to agree AND the chapter has to be compatible —
-    numbering restarts per chapter, so number alone pairs Chapter 2's
-    session 1 with Chapter 1's plan (#162's shape). An unresolvable
-    chapter on either side still matches, mirroring
-    `session_context.prefer_chapter`, which keeps flat vaults working.
+    A `session:` link naming the index wins outright when the chapter is
+    compatible. Otherwise the session number has to agree AND the
+    chapter has to be compatible — numbering restarts per chapter, so
+    number alone pairs Chapter 2's session 1 with Chapter 1's plan
+    (#162's shape), and a bare stem in a `session:` link is exactly as
+    ambiguous when two chapters both name their index the same way
+    (#206's shape too — a stem match cannot be trusted over a known,
+    different chapter). An unresolvable chapter on either side still
+    matches, mirroring `session_context.prefer_chapter`, which keeps
+    flat vaults working.
 
     A document that names a *different* index is never claimed by the
     number fallback: it already said where it belongs.
@@ -743,7 +747,9 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
         link = wikilink_target(fm.get("session"))
         target = link_target(link) if link else ""
         if target and target == key:
-            return rel
+            if chapter is None or chapter_key(rel, fm) in (chapter, None):
+                return rel
+            continue
         if target and target in stems:
             continue
         if number is None:
@@ -774,33 +780,42 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
 
     Notes share stems across chapters ("session_11_play_notes" exists in
     every chapter that restarts numbering), so name alone is ambiguous.
-    The session's own chapter wins; a note whose chapter is unknown
-    still matches, as everywhere else, keeping flat vaults working.
-    A note filed beside the index, or one whose own `session:` link names
-    the index, is this session's whatever chapter spelling either side
-    uses — `chapter_of` documents that one chapter is written two ways
-    in the wild. When the only notes with that name sit in a *different*
-    chapter, the link is not this session's document — the second value
-    returns one of them so the caller can say so (#206).
+    A note filed beside the index, one whose `chapter:` resolves to the
+    same chapter, or one whose own `session:` link names the index, is
+    this session's — but a note whose chapter resolves to a *different*,
+    known chapter is never claimed by directory or session-link alone;
+    a bare stem is exactly as ambiguous in a `session:` link as it is
+    here, so it cannot override an explicit chapter mismatch. Only when
+    none of the hits is positively this session's does an unresolvable-
+    chapter hit get taken as a last resort, mirroring `_chain_document`'s
+    own "loose" fallback for flat vaults. If the index's own chapter is
+    unresolvable, every hit is equally ambiguous and the first is taken,
+    the same as everywhere else in this file.
     """
     hits = by_stem.get(link_target(target), [])
-    if not hits or chapter is None:
-        return (hits[0] if hits else None), None
+    if not hits:
+        return None, None
+    if chapter is None:
+        return hits[0], None
     index_key = normalize(Path(index_rel).stem)
     index_dir = Path(index_rel).parent
 
-    def belongs(rel: str) -> bool:
+    def is_own(rel: str) -> bool:
         fm = by_rel[rel]
-        if chapter_key(rel, fm) in (chapter, None):
-            return True
         if Path(rel).parent == index_dir:
             return True
+        key = chapter_key(rel, fm)
+        if key is not None:
+            return key == chapter
         said = wikilink_target(fm.get("session"))
         return bool(said) and link_target(said) == index_key
 
-    own = [rel for rel in hits if belongs(rel)]
+    own = [rel for rel in hits if is_own(rel)]
     if own:
         return own[0], None
+    loose = [rel for rel in hits if chapter_key(rel, by_rel[rel]) is None]
+    if loose:
+        return loose[0], None
     return None, hits[0]
 
 
