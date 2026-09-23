@@ -7,7 +7,7 @@ Read-only companion to vault_check.py for a single Session Plan
 markdown file. Stdlib only.
 
 Usage:
-  plan_check.py PLAN.md [--headless] [--inventory] [--state] [--json]
+  plan_check.py PLAN.md [--headless [--gm-input]] [--inventory] [--state] [--json]
 
 Default output: finding rows as `LEVEL<TAB>locus<TAB>message`, then a
 `# errors: N  warnings: N  info: N` summary line. `--inventory` prints
@@ -44,7 +44,10 @@ Checks, by id, level, and the rule they mechanise:
                          (SKILL.md preamble discipline comment)
   scene-labels  ERROR    every Planned scene carries Situation and
                          Starts it, every Contingency scene carries
-                         Trigger; the other labels are optional and an
+                         Trigger — except a routing/hub scene (a menu,
+                         not a scene: `**Type:** transition`, a title
+                         with (routing) or (hub), or `Scene 0`), which
+                         needs neither; the other labels are optional and an
                          absent one is never reported, but any label
                          that is attempted must be spelled exactly; a
                          legacy Objective/Setup/Behaviours/Branching
@@ -67,7 +70,11 @@ Checks, by id, level, and the rule they mechanise:
   guess         WARNING  "(apprentice guess" only appears in Open Questions
                          (SKILL.md, Hard Guard)
   hard-guard    ERROR    --headless only: no settled creative spine, every
-                         Open Questions line carries the guess marker
+                         Open Questions line carries the guess marker.
+                         `--gm-input` says the GM supplied the spine (a
+                         scripted or batch prep): the guard's job is to
+                         stop an apprentice inventing it, so it is skipped
+                         and one INFO row says so
                          (SKILL.md, Hard Guard)
   prep-state    INFO/    a resumable prep-state marker exists and parses
                 WARNING  (SKILL.md, Resumable prep)
@@ -539,9 +546,31 @@ def _legacy_scene(body: str, labels: tuple[str, ...]) -> list[str]:
     return found
 
 
+# A routing or hub scene is standing state, available tools and what the
+# world does regardless of the PCs — a menu, not a scene, so it has no
+# Situation to state and nobody to start it (#205; the Alexandrian's
+# "Tools, Not Contingencies"). Recognised by its own words, never by
+# being short: `**Type:** transition`, a title naming it, or Scene 0.
+# The marker is the parenthesised word — "(routing)" or "(hub)" — because a
+# bare "hub" or "routing" is as likely a place or a topic ("The Hub",
+# "Routing the refugees") as a menu.
+_ROUTING_TITLE_RE = re.compile(r"\((?:routing|hub)\)|^Scene\s+0\b", re.I)
+
+
+def _is_routing_scene(body: str, scene_title: str) -> bool:
+    if _ROUTING_TITLE_RE.search(scene_title):
+        return True
+    m = re.search(r"\*\*Type:\*\*\s*([^\n]+)", body)
+    if m is None:
+        return False
+    return re.split(
+        r"[.\n]", m.group(1).strip())[0].strip().casefold() == "transition"
+
+
 def _scene_findings(rel: str, body: str, scene_title: str,
                     labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
+    routing = labels == SCENE_LABELS and _is_routing_scene(body, scene_title)
     locus = f"{rel}:§{scene_title}"
     legacy_found = _legacy_scene(body, labels)
     if legacy_found:
@@ -566,7 +595,7 @@ def _scene_findings(rel: str, body: str, scene_title: str,
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' has {near!r} — write "
                     f"'{shown}'"))
-            elif label in _REQUIRED_LABELS:
+            elif label in _REQUIRED_LABELS and not routing:
                 findings.append(Finding(
                     "scene-labels", "ERROR", locus,
                     f"scene-labels: '{scene_title}' is missing {shown}"))
@@ -828,8 +857,8 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
 # --------------------------------------------------------------------------
 
 
-def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
-              ) -> list[Finding]:
+def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
+               gm_input: bool = False) -> list[Finding]:
     by_norm = _by_norm_title(text)
     states, _problems = vl.scan_body(text)
     findings: list[Finding] = []
@@ -849,7 +878,12 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool
     findings.extend(check_table(rel, text))
     findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
-    if headless:
+    if headless and gm_input:
+        findings.append(Finding(
+            "hard-guard", "INFO", f"{rel}:1",
+            "hard-guard: skipped — --gm-input says the GM supplied the "
+            "creative spine"))
+    elif headless:
         findings.extend(check_hard_guard(rel, states, by_norm))
     return findings
 
@@ -880,11 +914,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("plan", type=Path)
     ap.add_argument("--headless", action="store_true")
+    ap.add_argument("--gm-input", action="store_true",
+                    help="with --headless: the GM supplied the settled "
+                         "sections and Open Questions, so skip the guard")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--inventory", action="store_true")
     mode.add_argument("--state", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
+    if args.gm_input and not args.headless:
+        ap.error("--gm-input only changes what --headless reports; "
+                 "pass --headless too")
 
     try:
         text = args.plan.read_text(encoding="utf-8", errors="replace")
@@ -894,7 +934,7 @@ def main() -> int:
 
     rel = str(args.plan)
     fm = vl.extract_frontmatter(text) or {}
-    findings = run_checks(rel, text, fm, args.headless)
+    findings = run_checks(rel, text, fm, args.headless, args.gm_input)
     has_error = any(f.level == "ERROR" for f in findings)
 
     if args.json:

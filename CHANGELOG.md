@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.14] — 2026-09-21
+
+### Added
+
+- `skills/shared/templates/session-plan.md`: the Session Plan a GM can
+  open, with the section list and the scene shape (only `**Situation:**`
+  and `**Starts it:**` required). `campaign-organizer` copies it into a
+  vault as `_Templates/_Template_Session_Plan.md`; a migration entry
+  provisions it into existing vaults. A test keeps its sections in step
+  with `plan_check.py` and the reference (#204).
+- `plan_check.py --gm-input`: with `--headless` (it is refused without
+  it), says the GM supplied the intent, scenes and spotlight, so a
+  scripted or batch prep is not reported as an apprentice inventing them
+  (#207).
+
+### Changed
+
+- `plan_check.py`: a routing or hub scene (`(routing)` or `(hub)` in the
+  title, `Scene 0`, or `**Type:** transition`) needs neither required
+  label. A mistyped label on one is still reported (#205).
+
+### Fixed
+
+- `vault_check.py sessions`: a `documents:` link resolves within the
+  session's own chapter. Chapter 4 Session 11 no longer derives `played`
+  from Chapter 3's same-named play notes. A note filed beside the index,
+  or naming it in `session:`, always counts as its own, so a chapter
+  written two ways (`[[Chapter 4]]` and the folder `Chapter 4 - Calcutta`)
+  is not mistaken for two chapters (#206).
+
+---
+
 ## [1.9.13] — 2026-09-21
 
 ### Added

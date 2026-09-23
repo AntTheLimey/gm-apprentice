@@ -383,6 +383,115 @@ class SectionsOrderTests(unittest.TestCase):
         self.assertEqual(rows[0].level, "INFO")
 
 
+class ShippedTemplateTests(unittest.TestCase):
+    """#204: the Session Plan template a GM can open must be the shape
+    plan_check enforces, and must not drift from the reference."""
+
+    ROOT = Path(__file__).resolve().parent.parent / "skills"
+    TEMPLATE = ROOT / "shared" / "templates" / "session-plan.md"
+    REFERENCE = ROOT / "session-prep" / "references" / "session-templates.md"
+
+    @staticmethod
+    def h2s(text: str) -> list[str]:
+        return [t for _l, lvl, t, _b in pc.vl.sections(text) if lvl == 2]
+
+    def test_template_sections_match_plan_check_in_order(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        self.assertEqual(self.h2s(text), list(pc.TEMPLATE_SECTIONS))
+
+    def test_template_sections_match_the_reference(self):
+        ref = self.REFERENCE.read_text(encoding="utf-8")
+        block = ref.split("## Session Plan", 1)[1].split(
+            "## Play Notes", 1)[0]
+        # The reference shows the plan inside a code fence; unfence it.
+        block = "\n".join(ln for ln in block.splitlines()
+                          if not ln.startswith("```"))
+        self.assertEqual(
+            self.h2s(self.TEMPLATE.read_text(encoding="utf-8")),
+            self.h2s(block))
+
+    def test_template_passes_plan_check_with_no_errors(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        found = pc.run_checks(str(self.TEMPLATE), text,
+                              pc.vl.extract_frontmatter(text) or {}, False)
+        errors = [f.row for f in found if f.level == "ERROR"]
+        self.assertEqual(errors, [])
+
+    def test_template_scene_shape_matches_the_reference(self):
+        # The scene skeleton is the part most likely to drift: compare
+        # the inline and block labels each file carries.
+        label = pc.re.compile(r"^\*\*([^*:\n]+?)(?::)?\*\*", pc.re.M)
+        ref = self.REFERENCE.read_text(encoding="utf-8").split(
+            "## Session Plan", 1)[1].split("## Play Notes", 1)[0]
+        tpl = self.TEMPLATE.read_text(encoding="utf-8")
+        keep = set(pc.SCENE_LABELS) | set(pc.CONTINGENCY_LABELS) | {"Type"}
+        norm = lambda text: {  # noqa: E731
+            m.split(" (")[0].replace("\u2026", "...")
+            for m in label.findall(text)} & keep
+        self.assertEqual(norm(tpl), norm(ref))
+        self.assertEqual(norm(tpl), keep)
+
+    def test_template_marks_only_the_two_required_labels(self):
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        self.assertEqual(text.count("*(required)*"), 2)
+        for label in ("**Situation:**", "**Starts it:**", "**Trigger:**"):
+            self.assertIn(label, text)
+
+
+class RoutingSceneTests(unittest.TestCase):
+    """#205: a routing/hub scene is a menu, so it owes neither required
+    label — but only when it says it is one."""
+
+    HUB_BODY = ("**Where the party is when the session opens**\n"
+                "- Gentlemen: [[The_Maidan]], brandy open.\n"
+                "**Available on trigger**\n- Library, open till four.\n")
+
+    def missing(self, title: str, body: str) -> list[str]:
+        found = pc._scene_findings("p.md", body, title, pc.SCENE_LABELS)
+        return [f.message for f in found if "missing" in f.message]
+
+    def test_routing_title_needs_no_required_labels(self):
+        self.assertEqual(
+            self.missing("Scene 0: Monday afternoon (routing)", self.HUB_BODY),
+            [])
+
+    def test_hub_title_and_scene_zero_and_transition_type(self):
+        self.assertEqual(self.missing("The Bazaar (hub)", self.HUB_BODY), [])
+        self.assertEqual(self.missing("Scene 0: Monday", self.HUB_BODY), [])
+        self.assertEqual(
+            self.missing("Between acts",
+                         "**Type:** transition\n" + self.HUB_BODY), [])
+
+    def test_ordinary_scene_still_needs_both(self):
+        # A short scene is not a routing scene; only saying so makes it one.
+        self.assertEqual(len(self.missing("Scene 1: Breakfast",
+                                          self.HUB_BODY)), 2)
+        self.assertEqual(len(self.missing("Scene 10: Chubby hubbub",
+                                          self.HUB_BODY)), 2)
+        # A place or topic named "hub"/"routing" is still an ordinary scene:
+        # only the documented "(routing)" / "(hub)" marker exempts it.
+        for title in ("Scene 3: The Hub", "Scene 5: Hub Station airlock",
+                      "Scene 4: Meeting at the hub",
+                      "Scene 2: Routing the refugees", "Prologue: Scene 0"):
+            self.assertEqual(len(self.missing(title, self.HUB_BODY)), 2,
+                             title)
+        self.assertEqual(len(self.missing("Scene 01: Monday",
+                                          self.HUB_BODY)), 2)
+
+    def test_routing_scene_still_flags_a_mistyped_label(self):
+        found = pc._scene_findings(
+            "p.md", "**Situation** no colon\n", "Scene 0: Monday (routing)",
+            pc.SCENE_LABELS)
+        self.assertTrue([f for f in found if "Situation" in f.message and "write" in f.message],
+                        found)
+
+    def test_contingency_scene_is_not_exempt(self):
+        found = pc._scene_findings(
+            "p.md", "**Then**\n- x\n", "Hub (routing)",
+            pc.CONTINGENCY_LABELS)
+        self.assertTrue([f for f in found if "Trigger" in f.message], found)
+
+
 class HeadlessTests(unittest.TestCase):
     """Regression coverage for the wrapped-bullet grouping fix: a
     hard-wrapped Open Questions bullet is one logical item, so it earns
@@ -414,6 +523,40 @@ class HeadlessTests(unittest.TestCase):
         self.assertFalse(
             any("Confirm the guard fires here too" in f.message
                 for f in guard_rows), guard_rows)
+
+    def test_gm_input_without_headless_is_refused(self):
+        proc = run_cli(GOOD, "--gm-input")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("--headless", proc.stderr)
+
+    def test_gm_input_skips_the_guard_and_says_so(self):
+        # #207: a scripted prep hands the agent the intent, scenes and
+        # spotlight, so a settled spine is the GM's, not an invention.
+        proc = run_cli(GOOD, "--headless", "--gm-input")
+        rows = [line for line in proc.stdout.splitlines()
+                if "hard-guard" in line]
+        self.assertEqual(len(rows), 1, proc.stdout)
+        self.assertTrue(rows[0].startswith("INFO\t"), rows)
+        self.assertIn("--gm-input", rows[0])
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+
+    def test_gm_input_drops_only_the_hard_guard_errors(self):
+        findings = pc.run_checks(
+            str(HEADLESS), HEADLESS.read_text(encoding="utf-8"),
+            pc.vl.extract_frontmatter(HEADLESS.read_text(encoding="utf-8"))
+            or {}, True, True)
+        bad = [f for f in findings if f.level == "ERROR"]
+        self.assertFalse([f for f in bad if f.id == "hard-guard"], bad)
+        # ...and it is only the guard that went quiet: the same plan
+        # without --gm-input reports it, with the same other findings.
+        plain = pc.run_checks(
+            str(HEADLESS), HEADLESS.read_text(encoding="utf-8"),
+            pc.vl.extract_frontmatter(HEADLESS.read_text(encoding="utf-8"))
+            or {}, True, False)
+        self.assertTrue([f for f in plain if f.id == "hard-guard"])
+        rest = lambda fs: sorted(f.row for f in fs  # noqa: E731
+                                 if f.id != "hard-guard")
+        self.assertEqual(rest(findings), rest(plain))
 
     def test_good_plan_headless_flags_exactly_the_creative_spine(self):
         # Good Plan's own Open Questions bullet is hard-wrapped across

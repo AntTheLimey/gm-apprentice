@@ -362,6 +362,111 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(vienna, "Archive_Session_07_Wrap_Up.md"),
                         vienna)
 
+    def test_link_to_another_chapters_same_named_note_is_not_this_sessions(
+            self):
+        # #206: Chapter 4's index pre-filled `play_notes: [[session_11_Play_Notes]]`
+        # for notes not yet written, and Chapter 3 owns a note with that very
+        # stem. Resolving the link by name alone claimed Chapter 3's play
+        # notes and derived `played` for a session nothing had happened in.
+        vault = make_vault(self)
+        c3 = vault / "Chapters" / "Chapter 3 - Vienna" / "Session 11"
+        c4 = vault / "Chapters" / "Chapter 4 - Calcutta" / "Sessions" / "Session 11"
+        c3.mkdir(parents=True)
+        c4.mkdir(parents=True)
+        (c3 / "Session_11.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: reviewed\n"
+            "chapter: \"[[Chapter 3 - Vienna]]\"\n---\n", encoding="utf-8")
+        (c3 / "session_11_play_notes.md").write_text(
+            "---\ntype: session-play-notes\nsession: \"[[Session_11]]\"\n"
+            "---\n", encoding="utf-8")
+        (c4 / "Session 11 - By Command.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: planned\n"
+            "chapter: \"[[Chapter 4 - Calcutta]]\"\n"
+            "documents:\n  plan: null\n"
+            "  play_notes: \"[[session_11_Play_Notes]]\"\n  wrap_up: null\n"
+            "---\n", encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        ch4 = rows_for(rows, "Chapter 4 - Calcutta")
+        self.assertTrue(rows_for(ch4, "derived=planned"), ch4)
+        self.assertFalse(rows_for(ch4, "derived=played"), ch4)
+        # The stray link is still worth telling the GM about.
+        self.assertTrue(rows_for(ch4, "another chapter"), ch4)
+        # And Chapter 3 keeps its own play notes.
+        ch3 = rows_for(rows, "Chapter 3 - Vienna")
+        self.assertTrue(rows_for(ch3, "derived=played"), ch3)
+
+    def test_link_to_a_note_beside_the_index_survives_a_chapter_name_mismatch(
+            self):
+        # The index writes `chapter: [[Chapter 4]]`; its folder is
+        # "Chapter 4 - Calcutta". One chapter, two spellings (vaultlib's own
+        # comment documents it). A play-notes note sitting in the index's own
+        # folder is this session's whatever the spellings say.
+        vault = make_vault(self)
+        d = vault / "Chapters" / "Chapter 4 - Calcutta" / "Session 11"
+        d.mkdir(parents=True)
+        (d / "Session_11.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: played\n"
+            "chapter: \"[[Chapter 4]]\"\n"
+            "documents:\n  plan: null\n  play_notes: \"[[session_11_play_notes]]\"\n"
+            "  wrap_up: null\n---\n", encoding="utf-8")
+        (d / "session_11_play_notes.md").write_text(
+            "---\ntype: session-play-notes\n---\n", encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        self.assertTrue(rows_for(rows, "derived=played"), rows)
+        self.assertFalse(rows_for(rows, "another chapter"), rows)
+
+    def test_unfiled_note_naming_this_index_by_session_link_is_claimed(self):
+        # A note with no resolvable chapter (filed loose, outside
+        # Chapters/) is exactly as ambiguous by name as a same-chapter
+        # one — but its own `session:` link names this index directly,
+        # which is stronger evidence than the bare stem match alone.
+        vault = make_vault(self)
+        idx = vault / "Chapters" / "Chapter 4 - Calcutta" / "Session 11"
+        idx.mkdir(parents=True)
+        (idx / "Session_11.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: played\n"
+            "chapter: \"[[Chapter 4]]\"\n"
+            "documents:\n  play_notes: \"[[session_11_play_notes]]\"\n---\n",
+            encoding="utf-8")
+        (vault / "session_11_play_notes.md").write_text(
+            "---\ntype: session-play-notes\nsession: \"[[Session_11]]\"\n"
+            "---\n", encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        self.assertTrue(rows_for(rows, "derived=played"), rows)
+        self.assertFalse(rows_for(rows, "another chapter"), rows)
+        # The link is already in the frontmatter; do not tell the GM to add it.
+        self.assertFalse(rows_for(rows, "does not link it"), rows)
+
+    def test_session_link_does_not_override_a_known_different_chapter(self):
+        # Two chapters that both restart numbering can each name their
+        # index "Session_11" (the Canticle vault's own shape). A play
+        # notes file that is genuinely Chapter 3's, filed in Chapter 3's
+        # own tree, must not be claimed by Chapter 4's index just
+        # because its `session:` link uses the same bare stem — that is
+        # exactly as ambiguous as the stem match #206 already guards.
+        vault = make_vault(self)
+        c3 = vault / "Chapters" / "Chapter 3 - Vienna" / "Session 11"
+        c4 = vault / "Chapters" / "Chapter 4 - Calcutta" / "Session 11"
+        c3.mkdir(parents=True)
+        c4.mkdir(parents=True)
+        (c3 / "Session_11.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: reviewed\n"
+            "chapter: \"[[Chapter 3 - Vienna]]\"\n---\n", encoding="utf-8")
+        (c3 / "session_11_play_notes.md").write_text(
+            "---\ntype: session-play-notes\nchapter: \"[[Chapter 3 - Vienna]]\"\n"
+            "session: \"[[Session_11]]\"\n---\n", encoding="utf-8")
+        (c4 / "Session_11.md").write_text(
+            "---\ntype: session\nsession_number: 11\nstatus: planned\n"
+            "chapter: \"[[Chapter 4 - Calcutta]]\"\n"
+            "documents:\n  play_notes: \"[[session_11_play_notes]]\"\n---\n",
+            encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        ch4 = rows_for(rows, "Chapter 4 - Calcutta")
+        self.assertTrue(rows_for(ch4, "derived=planned"), ch4)
+        self.assertTrue(rows_for(ch4, "another chapter"), ch4)
+        ch3 = rows_for(rows, "Chapter 3 - Vienna")
+        self.assertTrue(rows_for(ch3, "derived=played"), ch3)
+
     def test_null_document_placeholder_is_not_a_broken_link(self):
         # `plan: null` is the schema's own "not yet" placeholder — the
         # shape most indexes in a live vault are actually in.

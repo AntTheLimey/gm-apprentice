@@ -725,12 +725,16 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
                     chapter: str | None) -> str | None:
     """The note of one chain type belonging to a session index, or None.
 
-    A `session:` link naming the index wins outright. Otherwise the
-    session number has to agree AND the chapter has to be compatible —
-    numbering restarts per chapter, so number alone pairs Chapter 2's
-    session 1 with Chapter 1's plan (#162's shape). An unresolvable
-    chapter on either side still matches, mirroring
-    `session_context.prefer_chapter`, which keeps flat vaults working.
+    A `session:` link naming the index wins outright when the chapter is
+    compatible. Otherwise the session number has to agree AND the
+    chapter has to be compatible — numbering restarts per chapter, so
+    number alone pairs Chapter 2's session 1 with Chapter 1's plan
+    (#162's shape), and a bare stem in a `session:` link is exactly as
+    ambiguous when two chapters both name their index the same way
+    (#206's shape too — a stem match cannot be trusted over a known,
+    different chapter). An unresolvable chapter on either side still
+    matches, mirroring `session_context.prefer_chapter`, which keeps
+    flat vaults working.
 
     A document that names a *different* index is never claimed by the
     number fallback: it already said where it belongs.
@@ -743,7 +747,9 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
         link = wikilink_target(fm.get("session"))
         target = link_target(link) if link else ""
         if target and target == key:
-            return rel
+            if chapter is None or chapter_key(rel, fm) in (chapter, None):
+                return rel
+            continue
         if target and target in stems:
             continue
         if number is None:
@@ -766,6 +772,53 @@ def _chain_document(files: list[tuple[str, str, dict]], stems: dict[str, str],
     return loose[0] if loose else None
 
 
+def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
+                           by_rel: dict[str, dict], chapter: str | None,
+                           index_rel: str
+                           ) -> tuple[str | None, str | None]:
+    """(note, other_chapter_note) a `documents:` link names.
+
+    Notes share stems across chapters ("session_11_play_notes" exists in
+    every chapter that restarts numbering), so name alone is ambiguous.
+    A note filed beside the index, one whose `chapter:` resolves to the
+    same chapter, or one whose own `session:` link names the index, is
+    this session's — but a note whose chapter resolves to a *different*,
+    known chapter is never claimed by directory or session-link alone;
+    a bare stem is exactly as ambiguous in a `session:` link as it is
+    here, so it cannot override an explicit chapter mismatch. Only when
+    none of the hits is positively this session's does an unresolvable-
+    chapter hit get taken as a last resort, mirroring `_chain_document`'s
+    own "loose" fallback for flat vaults. If the index's own chapter is
+    unresolvable, every hit is equally ambiguous and the first is taken,
+    the same as everywhere else in this file.
+    """
+    hits = by_stem.get(link_target(target), [])
+    if not hits:
+        return None, None
+    if chapter is None:
+        return hits[0], None
+    index_key = normalize(Path(index_rel).stem)
+    index_dir = Path(index_rel).parent
+
+    def is_own(rel: str) -> bool:
+        fm = by_rel[rel]
+        if Path(rel).parent == index_dir:
+            return True
+        key = chapter_key(rel, fm)
+        if key is not None:
+            return key == chapter
+        said = wikilink_target(fm.get("session"))
+        return bool(said) and link_target(said) == index_key
+
+    own = [rel for rel in hits if is_own(rel)]
+    if own:
+        return own[0], None
+    loose = [rel for rel in hits if chapter_key(rel, by_rel[rel]) is None]
+    if loose:
+        return loose[0], None
+    return None, hits[0]
+
+
 def check_sessions(vault: Path) -> list[str]:
     """Derive each session's status from the documents that exist.
 
@@ -779,6 +832,9 @@ def check_sessions(vault: Path) -> list[str]:
     files = [(rel, text, extract_frontmatter(text) or {})
              for rel, text in vault_files(vault)]
     stems = {normalize(Path(rel).stem): rel for rel, _t, _f in files}
+    by_stem: dict[str, list[str]] = {}
+    for rel, _t, _f in files:
+        by_stem.setdefault(normalize(Path(rel).stem), []).append(rel)
     by_rel = {rel: fm for rel, _t, fm in files}
     indexes = [(rel, text, fm) for rel, text, fm in files
                if fm.get("type") == "session"]
@@ -804,8 +860,16 @@ def check_sessions(vault: Path) -> list[str]:
                 # document does not exist yet" — reporting it as a broken
                 # link would fire on nearly every index in a live vault.
                 target = ""
-            linked = stems.get(link_target(target)) if target else None
-            if target and linked is None:
+            linked, elsewhere = (
+                _resolve_document_link(
+                    target, by_stem, by_rel, chapter, rel)
+                if target else (None, None))
+            if elsewhere:
+                broken.append(
+                    f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]' "
+                    f"but the only note by that name is in another chapter "
+                    f"({elsewhere}) — not counted for this session")
+            elif target and linked is None:
                 broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
                               f"'[[{target}]]' but no such note exists")
             found = _chain_document(files, stems, types, stem, number, chapter)
