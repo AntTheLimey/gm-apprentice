@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.0"
+current_version: "1.10.1"
 ---
 
 # Vault Migration Registry
@@ -21,17 +21,18 @@ fails when the two differ.
 
 Each entry lists changes in three categories:
 
-- **Structural** — applied automatically after user confirms the
-  preview (fields, folders, scaffolding)
+- **Structural** — applied together as one batch, on the GM's single
+  yes for it (fields, folders, scaffolding)
 - **Content** — opt-in per item (templates, story files, anything
   in the user's content space)
 - **Tooling** — opt-in (npm package updates, external tool
   changes)
 
 The migration procedure diff-checks each step against the vault's
-current state. Steps already satisfied are skipped. See
-`campaign-organizer/references/migration-procedure.md` for the
-full workflow.
+current state. Steps already satisfied are skipped. Consent — what
+counts as the GM's yes, and what happens with no GM reachable — is
+`campaign-organizer/references/migration-procedure.md` Step 5's rule;
+this file doesn't restate it. See that file for the full workflow.
 
 ### Schema Mirror Sync (runs on every pass)
 

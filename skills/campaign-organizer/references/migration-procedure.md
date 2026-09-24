@@ -118,12 +118,18 @@ Step 7.
 >
 > [preview]
 >
-> "The structural changes will be applied automatically. For
-> the items marked with checkboxes, let me know which you'd
-> like to include."
+> "May I apply the structural changes? For the items marked with
+> checkboxes, let me know which you'd like to include."
 
-Wait for confirmation of the structural batch and the
-content/tooling selection.
+**Consent (issue #220).** Structural changes need one GM yes for the
+whole batch — an instruction already in the request, such as "apply
+the structural changes," counts as that yes. Content and tooling
+items are chosen one at a time, by checkbox. Nothing in Step 6 runs
+and nothing in Step 7 stamps without that yes.
+
+No GM reachable — a scripted or headless run carrying no instruction
+about the migration — is not a yes: show the preview, apply nothing,
+stamp nothing, and report the pending migration in Step 8.
 
 ## Step 6: Execute
 
@@ -145,16 +151,16 @@ In this order:
    containing file's chapter/session context; a link you can't
    resolve that way goes in the Step 8 report for the GM — never
    guess.
-6. Re-nest each mechanically matched heading as a `###`
-   subsection under `## GM Notes` in its file (create `## GM
-   Notes` if absent), demoting it and its sub-headings to sit one
-   level below. For Session Wrap-Up files use
-   `vault_check.py <vault> wrapup --fix` instead (re-nest, the
-   `<!-- gm-only -->` fence, and the 1.9.5 frontmatter and heading
-   fixes); run it without `--fix` first and put every `WOULD-FIX`
-   row in the preview. Once every entry with a match is re-nested,
-   collapse the vault's `exclude_sections` to `["GM Notes"]`
-   (structural)
+6. Re-nest GM-only headings: run `vault_check.py <vault> gm-leak --fix`
+   (Step 3 already ran it without `--fix` to build the preview's
+   `WOULD-FIX` rows). It moves each mechanically matched heading as a
+   `###` subsection under `## GM Notes` in its file (creating `## GM
+   Notes` if absent), demoting it and its sub-headings one level. For
+   Session Wrap-Up files use `vault_check.py <vault> wrapup --fix`
+   instead (re-nest, the `<!-- gm-only -->` fence, and the 1.9.5
+   frontmatter and heading fixes). Once every entry with a match is
+   re-nested, collapse the vault's `exclude_sections` to
+   `["GM Notes"]` (structural)
 7. Copy selected templates to `_Templates/` (content)
 8. Overwrite selected templates in `_Templates/` (content)
 9. Update or add selected `_meta/entity-types.md` Type-Specific
@@ -172,16 +178,39 @@ In this order:
 
 ## Step 7: Stamp version
 
-Set `gm_apprentice_version` in `_meta/vault-config.md` to the
-plugin version from Step 1, whatever opt-in items were declined.
-Declined items do not re-prompt next session.
+Stamp `gm_apprentice_version` in `_meta/vault-config.md` at the
+plugin version from Step 1 only when every structural item in the
+preview was applied (issue #228). Declined *content* and *tooling*
+items never block the stamp and do not re-prompt next session.
+
+If a structural item was skipped, refused, or failed, stamp the
+highest version whose own structural items are all done instead
+(Baseline if none of the pending entries qualify), and name the
+outstanding item in the Step 8 report — the next MISMATCH still
+offers it, rather than the vault reading current with a structural
+change never applied. If Step 5 found no GM to consent, stamp
+nothing at all.
 
 ## Step 8: Report and return
 
+Every structural item applied:
 > "Vault upgraded to version {new}. Changes applied:
 > - [structural changes]
 > - [accepted content changes]
 > - [accepted tooling changes]"
+
+A structural item was skipped, refused, or failed (Step 7's partial
+stamp):
+> "Vault upgraded to version {stamped}, not the full {new} — [the
+> outstanding item] is still pending and will be offered again next
+> migration. Changes applied: ..."
+
+No GM reachable (Step 5's no-consent case — nothing applied, nothing
+stamped):
+> "Vault is at version {old}; the plugin is now {new}. Here's what's
+> pending:"
+>
+> [preview]
 
 List each field-sweep value conflict (file, both values) and
 each unresolved Wrap-Up link, and ask the GM to confirm or
