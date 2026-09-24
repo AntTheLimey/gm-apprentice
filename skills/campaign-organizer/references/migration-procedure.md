@@ -12,8 +12,7 @@ campaign-organizer found it or another skill handed off.
   `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`; only if that
   file is absent (skill-zip install), `current_version` in
   `shared/migrations.md` frontmatter. Never prefer the
-  migrations.md value when plugin.json exists — it is stamped at
-  build time and is stale in a git install.
+  migrations.md value when plugin.json exists.
 - Which of the four `_meta/` schema files exist; if
   `_meta/entity-types.md` exists, its `## Type-Specific Fields`
   section.

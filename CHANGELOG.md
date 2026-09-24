@@ -30,18 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `shared/migrations.md` `current_version` was only stamped by the zip
   build, so git installs stamped migrated vaults with a stale version and
   the next check asked to migrate again. The source now carries the real
-  version and CI fails when it differs from `plugin.json`.
-- The PC roster is `_Campaign/Player Characters.md`; three places named a
-  `player_characters.md` that no vault has.
+  version and CI fails when it differs from `plugin.json`; the contributor
+  docs that said "do not edit it by hand" now say to bump it with
+  `plugin.json`.
+- The PC roster is `_Campaign/Player Characters.md` and the timeline is
+  `_Campaign/Timeline.md`; four places named files no vault has.
 - `stale-draft-detection.md` described the old vault-wide algorithm the
   script replaced in #162; it now defers to `vault_check.py stale-drafts`.
 
 ### Removed
 
 - `ttrpg-expert/INDEX.md` (its routing rows that were not already in
-  SKILL.md moved there), `ttrpg-expert/rpg-terminology.md`, the
-  blog-credit footers on ten ttrpg-expert references,
-  `campaign-qa/references/check-procedures.md` (never read), and the
+  SKILL.md moved there), `ttrpg-expert/rpg-terminology.md`,
+  `campaign-qa/references/check-procedures.md` (its check index now
+  lives in SKILL.md's Modes, with a path per check), and the
   superseded "Keeper Notes (Structured)" recap format.
 
 ## [1.9.14] — 2026-09-21

@@ -150,6 +150,15 @@ checks, also:
   (`references/checks/wrapup-conformance.md`), not part of Graph
   Health
 
+### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`
+
+DRAFT entities left unreviewed for 3+ sessions.
+
+### Open Spoilers — `references/checks/open-spoilers.md`
+
+Every `<!-- spoiler -->` marker still in the vault, listed for
+the GM to keep, unwrap (revealed in play) or delete (dropped).
+
 ### World Consistency — `references/world-audit-criteria.md`
 
 Only if `_World/` exists; only domains with `status: active` and

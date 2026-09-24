@@ -93,9 +93,8 @@ adding a new field, renaming a field, changing a field's type
 
 - [ ] Bump the version in `.claude-plugin/plugin.json`
   (patch for field additions, minor for breaking changes)
-- [ ] The `current_version` in `shared/migrations.md` is
-  stamped automatically by `build-skill-zips.sh` from
-  `plugin.json` — do not edit it manually
+- [ ] Set `current_version` in `shared/migrations.md` to the
+  same version in the same commit — CI fails when they differ
 - [ ] Add a CHANGELOG entry describing the schema change
 
 ## Field design guidelines

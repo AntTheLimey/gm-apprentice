@@ -135,7 +135,9 @@ Every non-trivial change follows this sequence:
 1. **Branch** — create a feature branch from main
 2. **Implement** — write code and tests for any scripts or tooling
 3. **Version bump** — bump `version` in `.claude-plugin/plugin.json`
-   (patch by default unless the user specifies otherwise)
+   (patch by default unless the user specifies otherwise) and set
+   `current_version` in `skills/shared/migrations.md` to match — CI fails
+   when they differ
 4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
    under the new version in `CHANGELOG.md`, following the existing format
 5. **Local review** — dispatch the code-reviewer agent against the branch

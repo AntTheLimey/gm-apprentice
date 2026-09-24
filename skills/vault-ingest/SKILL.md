@@ -86,10 +86,10 @@ Each bucket gets a working label, its items and a certainty
 ### Phase 3: Extract Play Events
 
 Per bucket, read all AUTHORITATIVE material. Source priority:
-1. `Timeline.md`
+1. `_Campaign/Timeline.md`
 2. Existing session wrap-ups
 3. Play transcripts and fragments
-4. `Player_Characters.md` — deaths, transitions, rosters
+4. `_Campaign/Player Characters.md` — deaths, transitions, rosters
 5. Existing entity files — current canon
 
 **Output:** confirmed events (with source citations) and gaps
