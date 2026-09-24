@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.6"
+current_version: "1.10.7"
 ---
 
 # Vault Migration Registry
@@ -25,7 +25,7 @@ Each entry lists changes in three categories:
   yes for it (fields, folders, scaffolding)
 - **Content** — opt-in per item (templates, story files, anything
   in the user's content space)
-- **Tooling** — opt-in (npm package updates, external tool
+- **Tooling** — opt-in (repinning the publish tool, external tool
   changes)
 
 The migration procedure diff-checks each step against the vault's
@@ -102,7 +102,8 @@ vaults created before the versioning system existed.
   installed `gm-apprentice-publish` version in
   `{site_dir}/node_modules/gm-apprentice-publish/package.json`.
   If lower than 1.1.1, offer to run
-  `npm update gm-apprentice-publish` in the site directory.
+  `update-pin --site <site-dir>` (publish-site's build tool; a `file:` pin
+  never moves under `npm update`).
 
 ## Migration: 1.4.10
 
@@ -320,7 +321,8 @@ require `canon_status` exclusively.
   `canon_status` as canonical (legacy names still honored at
   read time, so an unmigrated vault publishes correctly). If
   `publish.site_dir` is set in vault-config, offer to run
-  `npm update gm-apprentice-publish` in the site directory.
+  `update-pin --site <site-dir>` (publish-site's build tool; a `file:` pin
+  never moves under `npm update`).
 
 ## Migration: 1.8.0 → 1.8.2
 
@@ -418,8 +420,8 @@ hidden until revealed in play, not permanently secret.
 - **Publish tool:** `gm-apprentice-publish` gains `<!-- spoiler -->`
   support and the `exclude_fields` union-merge fix (previously
   `exclude_sections`/`exclude_dirs` only). If `publish.site_dir` is
-  set in vault-config, offer to run `npm update gm-apprentice-publish`
-  in the site directory.
+  set in vault-config, offer to run `update-pin --site <site-dir>` (publish-site's build tool; a `file:` pin
+  never moves under `npm update`).
 
 ## Migration: 1.8.3 → 1.8.9
 
@@ -466,7 +468,8 @@ hidden until revealed in play, not permanently secret.
   as the displayed skill level with `base N` alongside when they
   differ, and renders old-format sheets unchanged. If
   `publish.site_dir` is set in vault-config, offer to run
-  `npm update gm-apprentice-publish` in the site directory.
+  `update-pin --site <site-dir>` (publish-site's build tool; a `file:` pin
+  never moves under `npm update`).
 
 ## Migration: 1.8.12 → 1.8.38
 
@@ -514,8 +517,8 @@ these are flags-and-conversions the GM confirms, not automatic rewrites.
   load-out-name parser (bold inside a load-out table cell can no longer
   be mistaken for a load-out name) and emits a build-time warning for a
   CoC PC that parses no characteristics. If `publish.site_dir` is set in
-  vault-config, offer to run `npm update gm-apprentice-publish` in the
-  site directory.
+  vault-config, offer to run `update-pin --site <site-dir>` (publish-site's build tool; a `file:` pin
+  never moves under `npm update`).
 
 ## Migration: 1.8.38 → 1.8.39
 

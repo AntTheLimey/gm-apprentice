@@ -1,7 +1,5 @@
 # gm-apprentice
 
-[![npm: gm-apprentice-publish](https://img.shields.io/npm/v/gm-apprentice-publish)](https://www.npmjs.com/package/gm-apprentice-publish)
-
 TTRPG Game Master skills for Claude. An apprentice that helps GMs
 run tabletop role-playing games -- from a first spark of an idea
 through content generation, live play, and campaign management.
@@ -134,8 +132,8 @@ Tell Claude which system you're running when you start — it won't assume.
   [publish-site](docs/publish-tool.md)
 - [Personal reference files](docs/personal-reference-files.md) — add your
   own rulebook content for deeper system support
-- [gm-apprentice-publish](tools/publish/README.md) — npm package reference
-  for the publish tool
+- [gm-apprentice-publish](tools/publish/README.md) — reference for the
+  publish tool that ships with the plugin
 
 ## Vaults
 

@@ -1,7 +1,5 @@
 # gm-apprentice-publish
 
-[![npm version](https://img.shields.io/npm/v/gm-apprentice-publish)](https://www.npmjs.com/package/gm-apprentice-publish)
-
 Static site generator for [gm-apprentice](https://github.com/AntTheLimey/gm-apprentice)
 campaign vaults. Reads structured markdown files produced by the
 campaign-organizer skill and outputs a self-contained HTML site suitable
@@ -59,9 +57,9 @@ pins the tool with a `file:` path into that cache, so every build uses the
 exact version that matches your installed plugin. There is nothing to
 `npm install` globally.
 
-> The published npm package exists for standalone CLI use but **lags the
-> plugin** and is not the supported path for plugin users. Prefer the
-> plugin. To run the in-cache copy directly without the skill:
+> The `gm-apprentice-publish` package on npm is **deprecated**. It stopped
+> at 1.2.1, and that version leaks GM-only content onto the player site.
+> Don't install it. To run the in-cache copy directly without the skill:
 >
 > ```bash
 > node "<plugin-cache>/gm-apprentice/<version>/tools/publish/bin/gm-publish.js" <command>

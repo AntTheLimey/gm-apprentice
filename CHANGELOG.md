@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.7] — 2026-09-24
+
+### Removed
+
+- **npm badges and the "npm package reference" link (#208).** The
+  `gm-apprentice-publish` package on npm stopped at 1.2.1, which still has
+  the #166 GM-content leak, and it is now deprecated on the registry. The
+  publish tool ships only with the plugin. The tool's README now says the
+  npm package is deprecated and shouldn't be installed.
+
+### Fixed
+
+- **Migrations repin the publish tool with `update-pin`, not
+  `npm update`.** A site pins the tool with a `file:` path, so
+  `npm update gm-apprentice-publish` only re-linked the same old version.
+  Five migration entries and the migration procedure's Tooling step
+  now use `update-pin --site <site-dir>`, which moves the pin to the
+  newest version in the plugin cache.
+
+### Changed
+
+- **The publish tool's `package.json` is marked `private`**, so the leaky
+  npm line can't be republished by accident. A site's `file:` pin still
+  installs it as before.
+
+---
+
 ## [1.10.6] — 2026-09-24
 
 ### Fixed

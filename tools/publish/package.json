@@ -1,6 +1,7 @@
 {
   "name": "gm-apprentice-publish",
   "version": "1.11.32",
+  "private": true,
   "description": "Static site generator for gm-apprentice campaign vaults",
   "main": "lib/index.js",
   "bin": {
