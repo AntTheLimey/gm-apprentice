@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { scanVault, scanAllNotes, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
@@ -366,10 +366,13 @@ function build(options = {}) {
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
   // A GM alias must never reach the site (#212): rewrite every one to the
-  // title of the page that owns it, in every scanned page's body and
-  // frontmatter, before anything renders or derives from them. The corpus,
-  // not just `pages`, because the landing page also reads unpublished pages.
-  const gmAliases = gmAliasRewriter(corpus);
+  // title of the note that owns it, in every scanned page's body and
+  // frontmatter, before anything renders or derives from them. Owners come
+  // from the whole vault; the rewrite runs over the corpus, not just `pages`,
+  // because the landing page also reads unpublished pages.
+  const scannedPaths = new Set(corpus.map(p => p.sourcePath));
+  const gmAliases = gmAliasRewriter(corpus.concat(
+    scanAllNotes(config.vaultPath).filter(n => !scannedPaths.has(n.sourcePath))));
   if (gmAliases) {
     for (const page of corpus) {
       page.markdown = gmAliases.markdown(page.markdown || '');

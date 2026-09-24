@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
-const { scanVault, slugify } = require('./scanner');
+const { scanVault, scanAllNotes, slugify } = require('./scanner');
 const { loadPublishConfig, vaultRelPath } = require('./config');
 const {
   playerSafeMarkdown,
@@ -115,7 +115,11 @@ async function runSheetShow(deps) {
   // The player-safe view is what the site shows, so GM aliases (#212) are
   // rewritten to their owners' names exactly as build.js does. The raw view
   // below keeps the file as written.
-  const gmAliases = playerSafe ? gmAliasRewriter(scanned) : null;
+  const allNotes = deps.scanAllNotes || scanAllNotes;
+  const scannedPaths = new Set(scanned.map((p) => p.sourcePath));
+  const gmAliases = playerSafe
+    ? gmAliasRewriter(scanned.concat(allNotes(vaultPath).filter((n) => !scannedPaths.has(n.sourcePath))))
+    : null;
   const page = found && gmAliases
     ? Object.assign({}, found, {
       markdown: gmAliases.markdown(found.markdown || ''),

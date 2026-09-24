@@ -15,10 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#212).** A disguised NPC's true name can go in `gm_aliases`, so notes
   can link `[[Elias Crowe]]` to Lord Vane's page. Before anything
   renders, the publish build rewrites every GM alias to the title of
-  the page that owns it, in every page's body and frontmatter. That
-  covers wikilinks in any spelling Obsidian resolves (other case,
-  underscores, a `#heading` anchor, an embed) and a bare frontmatter
-  value such as `target: Elias Crowe`. It keeps any `|label`. So the
+  the note that owns it, in every page's body and frontmatter. The
+  owner can be any note in the vault, including one in a folder the site
+  never scans. That covers wikilinks in any spelling Obsidian resolves
+  (other case, underscores, a `#heading` anchor, an embed) and a bare
+  value in a field that names a page, such as a relationship `target:`
+  or `location:`. It keeps any `|label`. Other fields change only
+  inside `[[...]]`, so a GM alias that is an ordinary word never
+  rewrites `status:` or `occupation:`. So the
   name never reaches the site: not the search index, the portrait alt
   text, the frontmatter, relationships, the location card,
   Connections, the graph or the sidebar. When the owner page isn't
@@ -30,9 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `vault_check` (names, index, PC roster), `graph_check` and
   `session_context` resolve through it too. Publish tool 1.11.33.
 - **mobrpg never pushes a GM alias upstream.** `sync`, `pull-canon`'s
-  edit guard and `suggest` rewrite a GM alias to its owner's name before
-  building a description, a link or a relationship event, so the link
-  reaches the owner's element under its public name.
+  edit guard and `suggest` rewrite a GM alias to its owner's name (the
+  owner can be a note in any folder) before building a description, a
+  classifier, a link or a relationship event and its description. The
+  link reaches the owner's element under its public name.
 
 ### Fixed
 

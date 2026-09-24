@@ -27,7 +27,7 @@ function writeVault(root) {
     '---', '', 'A courtly patron of the arts.', '',
   ].join('\n'));
   f('Characters/NPCs/Ada Marsh.md', [
-    '---', 'type: npc', 'status: alive', `location: "[[${SECRET}]]"`,
+    '---', 'type: npc', 'status: alive', 'occupation: Red', `location: "[[${SECRET}]]"`,
     'relationships:',
     `  - target: "[[${SECRET}]]"`, '    type: fears',
     // Bare, with no brackets: renderers look this up in the link map too.
@@ -46,7 +46,15 @@ function writeVault(root) {
   f('Characters/NPCs/Kit Lowe.md', [
     '---', 'type: npc', 'status: alive',
     'relationships:', '  fears: The Weaver',
-    '---', '', 'Kit dreams of [[The Weaver]]. ![[The Weaver]]', '',
+    '---', '', 'Kit dreams of [[The Weaver]]. ![[The Weaver]] She fears [[The Veiled One]].', '',
+  ].join('\n'));
+  // An owner the site never scans (an excluded GM folder) still owns its secret.
+  f('_GM/Villains/Lord Crane.md', [
+    '---', 'type: npc', 'gm_aliases: ["The Veiled One"]', '---', '', 'Hidden.', '',
+  ].join('\n'));
+  // GM aliases that are ordinary words must not rewrite ordinary fields.
+  f('Characters/NPCs/Wren.md', [
+    '---', 'type: npc', 'gm_aliases: ["Alive", "Red"]', '---', '', 'A quiet one.', '',
   ].join('\n'));
   // A GM alias that collides with a real page title must not steal that page's links.
   f('Characters/NPCs/Tomas Reed.md', [
@@ -106,13 +114,20 @@ describe('gm_aliases (#212)', () => {
     for (const [rel, text] of tree) {
       assert.ok(!text.includes(SECRET), `${rel} contains "${SECRET}"`);
       assert.ok(!text.includes(OBSIDIAN_SECRET), `${rel} contains "${OBSIDIAN_SECRET}"`);
-      assert.ok(!/crowe|weaver/i.test(text), `${rel} contains a spelling of a GM alias`);
+      assert.ok(!/crowe|weaver|veiled/i.test(text), `${rel} contains a spelling of a GM alias`);
     }
   });
 
   it('shows an unpublished owner by its public name, unlinked', () => {
     const kit = pageFor('Kit Lowe');
     assert.match(kit, /Kit dreams of Mother Grey\./);
+    assert.match(kit, /She fears Lord Crane\./);
+  });
+
+  it('leaves an ordinary field alone when its value is also a GM alias', () => {
+    const ada = pageFor('Ada Marsh');
+    assert.match(ada, /<span class="label">Status<\/span> alive/);
+    assert.doesNotMatch(ada, /Wren/);
   });
 
   it('resolves a GM-alias link to its page, shown under the public name', () => {

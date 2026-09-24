@@ -67,16 +67,25 @@ def _aliases(fm: str) -> list[str]:
 
 def gm_alias_owners(vault) -> dict[str, str]:
     """{name key of a GM alias: display name of the note that owns it} (#212).
-    A GM alias that is also some note's own name or public alias is left out,
+    Every note in the vault counts, in any folder: Obsidian resolves a link to
+    any of them, and a GM-only folder is the likeliest home for a secret. A GM
+    alias that is also some note's own name or public alias is left out,
     because that name belongs to the other note."""
     owned: dict[str, str] = {}
     public: set[str] = set()
     vault = os.path.expanduser(vault)
-    for folder in map_cmd.FOLDERS:
-        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
-            fm, _ = _read(p)
+    for root, dirs, files in os.walk(vault):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules")
+        for f in sorted(files):
+            if not f.lower().endswith(".md"):
+                continue
+            p = os.path.join(root, f)
             name = _display_name(p)
             public.add(_key(name))
+            try:
+                fm, _ = _read(p)
+            except (OSError, UnicodeDecodeError):
+                continue
             public.update(_key(a) for a in _aliases(fm))
             for a in _gm_aliases(fm):
                 owned.setdefault(_key(a), name)
@@ -190,6 +199,9 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
             if only and only.lower() not in name.lower():
                 continue
             fm, body = _read(p)
+            # No GM alias reaches anything built from this note (#212): its
+            # classifiers, relationship descriptions and body are all pushed.
+            fm, body = unmask_gm_aliases(fm, owners), unmask_gm_aliases(body, owners)
             # An entity folder can hold non-entity sidecars (e.g. a `character-story`
             # note living beside its `pc`). Its `type` won't match the folder's kind,
             # and it isn't a world element — skip it so it never becomes a bogus
@@ -205,7 +217,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
             out.append({
                 "path": p, "kind": vkind, "name": name, "provenance": prov,
                 "aliases": _aliases(fm),
-                "description": _description(unmask_gm_aliases(body, owners), vault_only),
+                "description": _description(body, vault_only),
                 "location_type": map_cmd._scalar(fm, "location_type"),
                 "occupation": map_cmd._scalar(fm, "occupation"),
                 "gender": map_cmd._scalar(fm, "gender"),

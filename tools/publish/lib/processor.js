@@ -691,11 +691,19 @@ function gmAliasKey(name) {
   return canonicalNfc(String(name)).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+// Frontmatter fields the renderers resolve as a page name, bare or bracketed.
+const GM_ALIAS_NAME_FIELDS = new Set([
+  'location', 'parent_location', 'parent', 'part_of', 'leadership', 'territory',
+  'current_holder', 'origin', 'first_appearance', 'participants', 'superseded_by',
+  'chapter', 'about', 'practitioner',
+]);
+
 // A rewriter that replaces every GM alias with the name of the page that owns
-// it (#212), or null when the vault has none. `pages` is every scanned page,
-// published or not: a withheld villain's page is the likeliest owner of a
-// secret name, and the rewrite must still happen when that page has no URL
-// (the link then renders as its public title in plain text).
+// it (#212), or null when the vault has none. `pages` is every note in the
+// vault, published or not (`scanAllNotes` plus the scanned pages): a withheld
+// villain's page is the likeliest owner of a secret name, and the rewrite must
+// still happen when that page has no URL (the link then renders as its public
+// title in plain text).
 //
 // A GM alias that is also another page's title or public alias is skipped:
 // that name belongs to the other page, and its links stay as they are.
@@ -729,20 +737,40 @@ function gmAliasRewriter(pages) {
       return `${bang}[[${owner.title}${anchor || ''}${label || shown}]]`;
     });
   }
-  function value(v) {
-    if (typeof v === 'string') {
-      // A bare name (no brackets) is looked up in the link map by some
-      // renderers, e.g. a relationship `target: Elias Crowe`.
-      const owner = owners.get(gmAliasKey(v));
-      return owner ? owner.title : links(v, false);
-    }
-    if (Array.isArray(v)) return v.map(value);
+  // `[[...]]` inside any value, at any depth.
+  function linksIn(v) {
+    if (typeof v === 'string') return links(v, false);
+    if (Array.isArray(v)) return v.map(linksIn);
     if (v && typeof v === 'object' && !(v instanceof Date)) {
       const out = {};
-      for (const [k, x] of Object.entries(v)) out[k] = value(x);
+      for (const [k, x] of Object.entries(v)) out[k] = linksIn(x);
       return out;
     }
     return v;
+  }
+  // A field the renderers resolve as a page name also takes a bare name
+  // (`location: Elias Crowe`). Only those fields: a GM alias that happens to
+  // be an ordinary word must not rewrite `status:` or `occupation:`.
+  function nameIn(v) {
+    if (typeof v === 'string') {
+      const owner = owners.get(gmAliasKey(v));
+      return owner ? owner.title : links(v, false);
+    }
+    if (Array.isArray(v)) return v.map(nameIn);
+    return linksIn(v);
+  }
+  function relationships(v) {
+    if (Array.isArray(v)) {
+      return v.map(r => (r && typeof r === 'object' && !Array.isArray(r))
+        ? Object.assign(linksIn(r), 'target' in r ? { target: nameIn(r.target) } : {})
+        : nameIn(r));
+    }
+    if (v && typeof v === 'object' && !(v instanceof Date)) {
+      const out = {};
+      for (const [k, x] of Object.entries(v)) out[k] = nameIn(x);
+      return out;
+    }
+    return nameIn(v);
   }
   return {
     markdown: text => links(text, true),
@@ -751,7 +779,10 @@ function gmAliasRewriter(pages) {
     frontmatter(fm) {
       const out = {};
       for (const [k, v] of Object.entries(fm || {})) {
-        out[k] = (k === 'aliases' || k === 'gm_aliases') ? v : value(v);
+        if (k === 'aliases' || k === 'gm_aliases') out[k] = v;
+        else if (k === 'relationships') out[k] = relationships(v);
+        else if (GM_ALIAS_NAME_FIELDS.has(k)) out[k] = nameIn(v);
+        else out[k] = linksIn(v);
       }
       return out;
     },

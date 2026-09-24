@@ -1090,14 +1090,20 @@ def _gm_vault(tmp_path):
     w("Characters/NPCs/Lord_Vane.md",
       'type: npc\naliases: [Vane]\ngm_aliases: ["Elias Crowe", "Ada Marsh"]')
     w("Characters/NPCs/Ada_Marsh.md",
-      'type: npc\nrelationships:\n  - target: "[[Elias Crowe]]"\n    type: fears',
+      'type: npc\noccupation: "Valet to [[Elias Crowe]]"\nrelationships:\n'
+      '  - target: "[[Elias Crowe]]"\n    type: fears\n'
+      '    description: "Knows he is [[Elias Crowe]]"\n'
+      '  - target: "[[The Veiled One]]"\n    type: serves',
       body="Ada saw [[Elias Crowe]] and [[elias crowe#Past|a shadow]].")
+    # An owner outside the entity folders still owns its secret.
+    w("_GM/Villains/Mara.md", 'type: npc\ngm_aliases: ["The Veiled One"]')
     return str(tmp_path)
 
 
 def test_gm_alias_owners_skips_a_name_another_note_owns(tmp_path):
     owners = suggest.gm_alias_owners(_gm_vault(tmp_path))
-    assert owners == {suggest._key("Elias Crowe"): "Lord Vane"}
+    assert owners == {suggest._key("Elias Crowe"): "Lord Vane",
+                      suggest._key("The Veiled One"): "Mara"}
 
 
 def test_unmask_keeps_anchor_and_label():
@@ -1111,5 +1117,7 @@ def test_collected_entity_carries_no_gm_alias(tmp_path):
     ada = ents["Ada Marsh"]
     assert "Crowe" not in ada["description"]
     assert "Lord Vane" in ada["description"]
-    assert [r["target"] for r in ada["relationships"]] == ["Lord Vane"]
+    assert [r["target"] for r in ada["relationships"]] == ["Lord Vane", "Mara"]
+    assert "Crowe" not in str(ada)
+    assert "Veiled" not in str(ada)
     assert "Crowe" not in str(ents["Lord Vane"])
