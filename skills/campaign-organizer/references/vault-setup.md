@@ -13,13 +13,9 @@ runs here — the vault starts at the current version.
      `shared/templates/world-index.md` and
      `shared/templates/world-flags.md`. No domain files — those
      are created when content exists.
-   - `Heritages/`, plus `_Templates/_Template_Heritage.md` from
-     `shared/templates/heritage.md`.
-   - These templates from `shared/templates/`, where not already
-     present: `faction.md` → `_Template_Faction.md`, `plan.md` →
-     `_Template_Plan.md`, `session-wrap.md` →
-     `_Template_Session_WrapUp.md`, `session-plan.md` →
-     `_Template_Session_Plan.md`.
+   - `Heritages/`.
+   - The templates in the table below, from `shared/templates/`
+     into `_Templates/`, where not already present.
    - A `Planning/` subfolder in each chapter directory, where
      missing — home of narrative plan entities (scene designs, arc
      structures, investigation flows).
@@ -32,3 +28,45 @@ runs here — the vault starts at the current version.
    `shared/migrations.md` frontmatter. Stamping last means an
    interrupted setup never leaves a vault that looks current
    while scaffolding is still missing.
+
+## Templates
+
+Every entity type gets its template, so any skill writing an entity
+can read `_Templates/_Template_{Type}.md`.
+
+| `shared/templates/` | `_Templates/` |
+|---|---|
+| `npc.md` | `_Template_NPC.md` |
+| `location.md` | `_Template_Location.md` |
+| `item.md` | `_Template_Item.md` |
+| `creature.md` | `_Template_Creature.md` |
+| `organization.md` | `_Template_Organization.md` |
+| `faction.md` | `_Template_Faction.md` |
+| `event.md` | `_Template_Event.md` |
+| `clue.md` | `_Template_Clue.md` |
+| `document.md` | `_Template_Document.md` |
+| `heritage.md` | `_Template_Heritage.md` |
+| `world-domain.md` | `_Template_World_Domain.md` |
+| `plan.md` | `_Template_Plan.md` |
+| `campaign-overview.md` | `_Template_Campaign_Overview.md` |
+| `session-plan.md` | `_Template_Session_Plan.md` |
+| `session-wrap.md` | `_Template_Session_WrapUp.md` |
+| `pc-{system}.md` for the vault's system, else `pc-generic.md` | same name |
+| `character-story.md` | same name |
+| `crew-fitd.md` (FitD vaults only) | same name |
+
+**Stat blocks.** `npc.md` and `creature.md` hold a `{STAT BLOCK: …}`
+paragraph under `## GM Notes`. Replace it with the vault's block,
+chosen by `publish.system`:
+
+- NPC: `npc-stats/{system}.md`.
+- Creature: `creature-stats/{system}.md` if it exists, else
+  `npc-stats/{system}.md`.
+- `coc-7e-regency` uses the `coc-7e` files and keeps the
+  **Reputation** line (drop its HTML comment); plain `coc-7e` drops
+  that line.
+- No system, or one without a file: replace the paragraph with
+  `### Stats` and `{System stat block.}`.
+
+A template compares equal to `shared/templates/` after this
+substitution (the migration diff relies on that).

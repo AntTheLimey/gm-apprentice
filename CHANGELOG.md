@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.12] — 2026-09-24
+
+### Added
+
+- **A template for every entity type (#230).** Vault setup now seeds
+  NPC, Location, Item, Creature, Organization, Event, Clue and Document
+  templates, and it now also seeds World Domain and Campaign Overview.
+  Each template is written for running a game. The public half is what
+  the PCs know, and it includes a `## Campaign Log` of what happened
+  with the party each session. The GM half sits behind a closed
+  `<!-- gm-only -->` fence: how to play them, what they want and hide,
+  checks and hazards, `### Behind the Scenes` for what really happened.
+- **A readable `## Related` list on every entity.** It groups the
+  `relationships` frontmatter into People, Places, Groups and Things,
+  one line per tie; `gm_only` edges go in `### Hidden Ties`.
+  session-wrapup and campaign-organizer write both together, and
+  session-wrapup adds a Campaign Log bullet for every entity that
+  appears in a session.
+- **An NPC stat block for each supported system,** modelled on how the
+  system presents an NPC to the GM: CoC 7e (Regency adds Reputation),
+  GURPS 4e, D&D 5e 2024, PF2e and a FitD GM card. CoC also gets a
+  creature block. Vault setup puts the vault's block first under the
+  NPC and Creature templates' GM Notes.
+
+### Changed
+
+- **Entity schema:** NPC gains `location`, Faction/Organization
+  `status`, Clue `discoveryState`, Document `current_holder` (the text
+  moves to `## The Text`), and Creature `threat_level`. Creature
+  `abilities` and `weaknesses` publish, so the template keeps them in
+  GM Notes.
+
+### Removed
+
+- `campaign-organizer/references/event-template.md`, replaced by the
+  shared Event template.
+
+---
+
 ## [1.10.11] — 2026-09-24
 
 ### Added

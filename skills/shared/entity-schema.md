@@ -194,6 +194,11 @@ relationships:
                           # site (page, relationship graph, search index)
 ```
 
+Every relationship also appears in the body, readable: under
+`## Related` (grouped People, Places, Groups, Things, one line per
+tie), or under `### Hidden Ties` in GM Notes when `gm_only: true`.
+Write, change or remove both together.
+
 Extraction defaults: `tone: neutral` and `strength: 5` when the
 source is ambiguous; `bidirectional: false` unless inherently
 symmetric; a `description` traceable to source text; `gm_only`
@@ -352,7 +357,8 @@ Mirrored into each vault's `_meta/entity-types.md`; migrations diff
 the mirror against these entries.
 
 **NPC:** `occupation`, `age`, `gender`, `nationality`, `status`
-(alive/dead/missing/unknown), `portrait` (optional)
+(alive/dead/missing/unknown), `location` (wiki-link: where they're
+usually found), `portrait` (optional)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/unknown), `key_traits`, `portrait` (optional),
@@ -376,6 +382,7 @@ published Locations listing (fallback: `location_type`).
 
 **Faction/Organization:** `faction_type` (cult, guild, military,
 etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
+`status` (active/weakened/destroyed/dormant),
 `part_of` (wiki-link to the parent body, optional), `portrait`
 (optional). `faction_type` groups the published Factions listing.
 
@@ -386,10 +393,13 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 `location` (wiki-link), `participants` (wiki-links), `outcome`
 
 **Clue:** `clue_type` (physical, testimonial, documentary),
-`found_at` (wiki-link), `found_by`, `leads_to`, `reliability`
+`found_at` (wiki-link), `found_by`, `leads_to`, `reliability`,
+`discoveryState` (per PC)
 
 **Document:** `doc_type` (letter, journal, map, etc.), `author`,
-`date` (when written), `content`, `condition`
+`date` (when written), `condition`, `current_holder` (wiki-link).
+The text itself goes in the body under `## The Text`; an older
+`content` field moves there
 
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),
@@ -406,7 +416,9 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 `current_chapter`, `chapters_planned`, `portrait` (optional)
 
 **Creature:** `creature_type` (beast, undead, aberration, etc.),
-`location` (wiki-link), `abilities`, `weaknesses`, `portrait` (optional)
+`threat_level` (as the PCs judge it), `location` (wiki-link),
+`portrait` (optional). `abilities` and `weaknesses` are optional and
+publish; keep them in the body's GM Notes to hide them
 
 **Heritage:** `lifespan_range` (min/max age array), `maturity_age`,
 `average_height`, `notable_traits`, `portrait` (optional)

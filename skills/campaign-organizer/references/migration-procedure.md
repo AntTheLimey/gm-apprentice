@@ -47,8 +47,10 @@ in the preview.
   story file exists for the PC, npm package at the expected
   version → skip.
 - Template in `_Templates/` identical in content to
-  `shared/templates/` → skip; differs → "updated — offer
-  overwrite".
+  `shared/templates/` (after the stat-block substitution in
+  `references/vault-setup.md` → Templates; names per its table) →
+  skip; differs → "updated — offer overwrite"; missing → "new —
+  offer copy".
 - Frontmatter field rename/sweep → grep the vault for the legacy
   key(s); none → skip, else pending with the matching file count.
 

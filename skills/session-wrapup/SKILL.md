@@ -168,6 +168,13 @@ creating entities.
   sanctioned predicate, store the base direction (`owned_by A→B` →
   `owns B→A`), and drop non-edges (`appears_in <session>`). Table:
   `shared/relationship-normalization.md`. Never invent a `type:`.
+  Mirror each edge in the body's `## Related` (a `gm_only` edge in
+  `### Hidden Ties`), per `shared/entity-schema.md` § Relationships.
+- **Campaign logs:** each entity that appeared this session gets one
+  bullet in its `## Campaign Log` (a Creature's is `## Encounters`),
+  as the party saw it: `- **[[Session link]]** — {what happened}`.
+  Where the truth differs, add the matching bullet to its GM Notes
+  `### Behind the Scenes`. Add either section if the file lacks it.
 - **New container entities** (a district between a station and its
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per
@@ -175,11 +182,8 @@ creating entities.
   container.
 - **Timeline:** linked `- **{in_game_date}** — [[Event_Name]] —
   {summary}`; inline `- **{in_game_date}** — {description}`.
-- **Events:** create an Event file (from
-  `campaign-organizer/references/event-template.md`, dated with
-  `in_game_date:`) when a moment meets ≥2 of: changes entity state,
-  multiple named participants, forward consequences, referenced from
-  multiple entities.
+- **Events:** create an Event file from `_Templates/_Template_Event.md`
+  (dated with `in_game_date:`) when a moment meets its threshold.
 
 **Validate** with one call each, then fix every ERROR before
 presenting receipts: `vault_check.py frontmatter --folder <dir>`
