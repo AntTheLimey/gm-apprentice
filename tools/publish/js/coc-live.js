@@ -90,6 +90,13 @@
     function skillButtons() {
       return Array.prototype.slice.call(document.querySelectorAll('.skill[data-skill] .exp'));
     }
+    // The stylesheet draws a tick from the row's `.checked` class; aria-pressed
+    // alone left a saved tick invisible after a reload.
+    function setTick(btn, on) {
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var row = btn.closest('.skill');
+      if (row) row.classList.toggle('checked', on);
+    }
     function skillName(btn) {
       var row = btn.closest('.skill');
       return row ? row.getAttribute('data-skill') : null;
@@ -158,7 +165,7 @@
       var ticks = reassocTicks(blob.ticks, data.skills || []);
       skillButtons().forEach(function (btn) {
         var n = skillName(btn);
-        btn.setAttribute('aria-pressed', n && ticks[n] ? 'true' : 'false');
+        setTick(btn, !!(n && ticks[n]));
       });
       renderNotes();
     }
@@ -212,8 +219,7 @@
     });
     skillButtons().forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var on = btn.getAttribute('aria-pressed') !== 'true';
-        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        setTick(btn, btn.getAttribute('aria-pressed') !== 'true');
         change();
       });
     });

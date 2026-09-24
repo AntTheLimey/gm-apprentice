@@ -150,7 +150,7 @@ the inbox", "watch for sheet changes")
 
 Follow `references/change-request-loop.md` — an unattended,
 self-paced loop that applies clean player sheet edits (GURPS 4e
-only) and flags edge cases.
+and CoC 7e) and flags edge cases.
 
 ### 8. Live status bar setup (Tier 2a) / 9. At-table inbox setup (Tier 2b)
 ("turn on the status bar", "let players update HP/FP live" / "set

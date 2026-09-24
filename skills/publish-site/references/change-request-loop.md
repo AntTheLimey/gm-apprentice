@@ -10,8 +10,8 @@ does the waiting, and you only wake when a request actually arrives.
 
 - The inbox is set up (KV namespace + `wrangler.toml` id + deployed Function).
   See `references/cloudflare-pages.md` → "Change-request inbox".
-- The system is GURPS 4e (v1). For other systems, stop and tell the GM this
-  isn't supported yet.
+- The system is GURPS 4e or CoC 7e (including Regency Cthulhu). For any
+  other system, stop and tell the GM this isn't supported yet.
 
 ## Start
 
@@ -118,8 +118,9 @@ does the waiting, and you only wake when a request actually arrives.
 The watcher hands you a JSON array of pending entries
 `{id, character, text, timestamp, status}` (re-run `npx gm-apprentice-publish
 inbox pull` if you want the freshest state). For each, in per-character
-submission order (`timestamp` ascending), tracking **running unspent points**
-(read the current value from the PC's `.md`):
+submission order (`timestamp` ascending), tracking the **running value** each
+request changes (GURPS: unspent points; CoC: the stat being changed), read
+first from the PC's `.md`:
 
 0. **Resolve the `character` against the PC roster first.** `character` and
    `text` are whatever the player's browser posted — the endpoint checks the
@@ -143,7 +144,9 @@ submission order (`timestamp` ascending), tracking **running unspent points**
    raise/remove/note) or a **question** (interrogative / advice-seeking). If
    genuinely unsure, treat it as a question — never edit the sheet on a guess.
 2. **Change → apply, or refuse only when you must.** Default to trusting the
-   player. Validate spends against GURPS costs using `ttrpg-expert`'s references
+   player. **CoC 7e:** follow "CoC 7e changes" below instead of the GURPS
+   cost checks; the grant, override and ambiguity rules in this step still
+   apply. **GURPS 4e:** validate spends against GURPS costs using `ttrpg-expert`'s references
    (`systems/gurps-4e/character-generation.md`, `character-sheet.md`,
    `skills-*.md`, `traits-*.md`). Attributes: ST/HT 10/level, DX/IQ 20/level;
    skills/traits per those references. Then:
@@ -243,6 +246,69 @@ same answer twice. Finalized entries linger for 7 days, so a
 player who put the phone down still gets the answer; a request the server has
 lost reports `status: gone` to the widget, which tells the player to resend.
 
+## CoC 7e changes
+
+CoC has no points pool to spend from, so a change is checked against the
+sheet's own limits instead. Everything else (roster match, questions, the
+override and ambiguity rules, the one deploy per batch, replies) is the same
+as for GURPS. A change that doesn't say which stat ("lost 4") is ambiguous:
+ask which.
+
+- **Notes and Current Status — always apply.** The player's own words, edited
+  at their request, are trusted self-service: apply, never flag, log a `✓`.
+- **SAN, HP, MP, Luck, Reputation (Regency) and conditions** ("lost 4 SAN",
+  "HP is 7 now", "spent 10 Luck", "I'm unconscious"). First check whether the
+  sheet is live-tracked. Look at what the site actually built, not the config:
+  the build can switch live tracking on by itself when neither config file
+  sets it. The PC's built page in the site's output folder contains
+  `id="coc-live-data"` when it is live.
+  - **Live-tracked:** these values, and the skill improvement ticks, live on
+    the player's sheet and save the moment they tap them. The live value wins
+    over the vault, so an edit here would be silently ignored. Apply nothing
+    and finalize with **`advice`**:
+
+    ```bash
+    npx gm-apprentice-publish inbox reply <id> advice "That's live on your sheet: tap the status bar or the skill tick and it saves straight away."
+    ```
+
+  - **Not live-tracked:** the published sheet doesn't show these values at
+    all, so there is nothing to deploy. Record the change in the vault for
+    the GM: the `### Derived` table's **Current** column, the `### Status`
+    checklist for a condition, or the `Current Reputation` row of
+    `### Reputation`. Finalize with **`advice`**, not `applied`: an
+    `applied` reply reloads the player's page and says the change is live,
+    which it isn't. Keep it out of the applied batch, so it never triggers
+    a rebuild on its own:
+
+    ```bash
+    npx gm-apprentice-publish inbox reply <id> advice "✓ SAN 55→51 — recorded for your Keeper (this site doesn't show SAN)."
+    ```
+
+  In both cases, accept a change ("lost 4") or a new value ("SAN is 42"); for
+  a change, work from the running value. Keep the result between 0 and the
+  row's **Max** (Luck has no Max column; its ceiling is 99). A result above
+  Max is refused like an unaffordable GURPS spend: explain it and invite an
+  override. A player override applies it and logs **`⚠ OVERRIDE`**. A result
+  below 0 is set to 0. A Luck spend larger than the current Luck is refused;
+  there is nothing to override, because Luck can't go below 0. The table has
+  already made the ruling, so don't re-litigate it: you only record the
+  number.
+- **Thresholds are the Keeper's call, not yours.** Record the number, but
+  never tick a condition the player didn't ask for, and log **`⚠ NEEDS YOU`**
+  when a change crosses one: HP reaching 0, a single HP loss of half the Max
+  or more (a Major Wound), SAN reaching 0, 5+ SAN lost at once (possible
+  temporary insanity), or a fifth of the session's starting SAN lost across
+  the session (possible indefinite insanity).
+- **Improvement checks** ("tick Spot Hidden"). On a live-tracked sheet they
+  are one of the ticks the player taps: reply with the same `advice`.
+  Otherwise nothing stores them (the sheet's tick is a local toggle and the
+  vault has no column for it). Apply nothing and reply **`advice`**: note it
+  on paper for the end-of-session improvement rolls.
+- **Skill, characteristic or occupation-point changes** ("raise Library Use to
+  60"). The loop doesn't handle these: skill increases come from the
+  end-of-session improvement rolls, which the GM runs. Apply nothing,
+  finalize with **`rejected`** saying so, and log a `⚠` line.
+
 ## When the watcher reports failure
 
 Either mode can wake you with a failure signal instead of a batch — the
@@ -279,6 +345,8 @@ One line per request so a glance tells the whole story:
 ✓ 14:32  Ana — Streetwise +1 (1 pt)      applied · live
 ✓ 14:32  Bo  — added TL11 stun baton      applied · live
 ⚠ 14:33  Cy  — spend 20 pts on DX         needs 40, has 15 · NEEDS YOU
+✓ 21:05  Iris — SAN 55→49                 recorded (sheet not live)
+⚠ 21:05  Iris — lost 6 SAN at once        possible temporary insanity · NEEDS YOU
 ```
 
 ## Stop
@@ -335,11 +403,17 @@ so re-running it when nothing changed is a harmless no-op.
 Edit the vault file in place — it is the source of truth; the deploy reflects
 it. Locate unspent/earned points and the relevant section by reading the file
 (GURPS sheets carry an Identity block with Point Total / Unspent Points / Total
-Points Earned, plus Attributes, Skills, and an equipment list). A crash between
+Points Earned, plus Attributes, Skills, and an equipment list; CoC sheets
+carry `## Stat Sheet` with `### Derived` (Max and Current columns) and
+`### Status` checkboxes, which the site shows only when live-tracked). A crash between
 editing a `.md` and the deploy leaves the entry `pending`, so the next watcher
 cycle pulls it again. Before applying any request, first check whether its
 change is already present in the `.md` (the attribute is already at the target
-level and the unspent points already reflect the cost); if so, treat the apply
-as a no-op and let it ride to the next deploy. This makes re-processing safe.
+level and the unspent points already reflect the cost; for CoC, the Current
+cell already holds the target value); if so, treat the apply as a no-op and
+let it ride to the next deploy. A relative CoC change ("lost 4 SAN") can't be
+recognised that way. If you applied its id earlier in this session, it's a
+no-op. If you have no record of it (the session restarted), ask the GM before
+applying it again. This makes re-processing safe.
 Copyright: this only writes the GM's own campaign data — no licensed text is
 introduced.
