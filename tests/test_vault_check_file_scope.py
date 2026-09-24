@@ -354,6 +354,22 @@ class PathNormalizationTests(unittest.TestCase):
         self.assertEqual(proc.stdout, "")
 
 
+    def test_a_symlink_to_a_note_outside_the_vault_is_rejected(self):
+        parent, vault = make_scoped_vault(self)
+        (parent / "Outside.md").write_text(DIRTY_TABLE, encoding="utf-8")
+        (vault / "Inside.md").symlink_to(parent / "Outside.md")
+        proc = run_cli(vault, "tables", "--file", "Inside.md")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("Inside.md", proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
+    def test_an_empty_file_scope_scans_nothing(self):
+        parent, vault = make_scoped_vault(self)
+        (vault / "Dirty.md").write_text(DIRTY_TABLE, encoding="utf-8")
+        from vaultlib import vault_files
+        self.assertEqual(list(vault_files(vault, files=[])), [])
+        self.assertTrue(list(vault_files(vault, files=None)))
+
 class NewerThanScopeTests(unittest.TestCase):
     """`--newer-than <path>` — a backstop scope (or completeness
     cross-check) that keeps files with an mtime at or after a named

@@ -99,7 +99,7 @@ def vault_files(vault: Path, folder: str | None = None,
     and combined with `folder`/`files` by AND like everything else here.
     """
     wanted = ({normalize_file_arg(f) for f in files}
-              if files else None)
+              if files is not None else None)
     for path in sorted(vault.rglob("*.md")):
         rel = path.relative_to(vault).as_posix()
         if is_skipped_path(rel, skip_dirs):
@@ -108,9 +108,9 @@ def vault_files(vault: Path, folder: str | None = None,
             continue
         if wanted is not None and rel not in wanted:
             continue
-        if newer_than is not None and path.stat().st_mtime < newer_than:
-            continue
         try:
+            if newer_than is not None and path.stat().st_mtime < newer_than:
+                continue
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as e:
             print(f"warning: unreadable {rel}: {e}", file=sys.stderr)

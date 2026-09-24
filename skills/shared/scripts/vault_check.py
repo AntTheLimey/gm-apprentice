@@ -2908,7 +2908,8 @@ def _resolve_vault_paths(vault: Path, raw_paths: list[str]
     vault file and both get the same validation — see
     `_vault_relative_key` for what "resolve" means here.
     """
-    vault_root_abs = str(vault.resolve())
+    vault_root = vault.resolve()
+    vault_root_abs = str(vault_root)
     # One rglob, no reads: the exact set of real vault-relative `.md`
     # paths, on-disk casing and all. A value's derived key must be an
     # exact member of this set — a wrong-case or NFC/NFD-mismatched name
@@ -2923,6 +2924,11 @@ def _resolve_vault_paths(vault: Path, raw_paths: list[str]
     for raw in raw_paths:
         rel = _vault_relative_key(vault_root_abs, raw)
         if rel is None or is_skipped_path(rel) or rel not in real_files:
+            invalid.append(raw)
+            continue
+        # A symlinked note whose target sits outside the vault is outside
+        # the vault, whatever its own path says.
+        if not (vault / rel).resolve().is_relative_to(vault_root):
             invalid.append(raw)
             continue
         valid.append(rel)

@@ -192,8 +192,9 @@ PC refreshed in 3c, `vault_check.py wrapup --file <wrap-up>`. If
 Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and
 never touched again) as a completeness cross-check on the `--file`
-list — a row naming a path not already in that list means a
-sub-agent under-reported. Don't re-read files to self-check.
+list — a row naming a path that isn't in that list, isn't a 3b/3c
+PC or Story file and isn't the Wrap-Up means a sub-agent
+under-reported. Don't re-read files to self-check.
 
 **Receipts:** show new/updated entity content in the conversation
 as `## New Entity Files` and `## Updated Entities`, never in the
