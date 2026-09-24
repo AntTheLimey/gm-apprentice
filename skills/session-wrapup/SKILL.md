@@ -35,6 +35,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 ```
 
 Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
+The script sets scalars only: edit the index's `scenes:` list by hand
+to the scenes actually played; unplayed ones go under Skipped Prep.
 
 **Authoring vs. preserving:** four outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -42,8 +44,12 @@ shorthand and no prose exists yet — the Step 2 recap, Step 3b
 story entries, Step 3c `## Current Status`, and timeline summary
 lines. Write them faithful to the notes (or recap and
 carry-forward): no embellishment, invent nothing the session
-didn't produce. Everything else that moves existing text keeps it
-verbatim.
+didn't produce. The synthesized GM Notes sections (What Carries
+Forward, World State, Keeper Checklist, Quality Notes) are
+grounded too: each claim traces to the Play Notes, the plan or a
+named vault file; mark anything uncertain `<!-- UNVERIFIED: … -->`
+for reconcile. Everything
+else that moves existing text keeps it verbatim.
 
 ## Workflow
 
@@ -126,6 +132,9 @@ the narrative.
    it if absent. Field spec, placement and protected sections:
    `shared/pc-body-structure.md`. Leave `## Notes`, `## GM Notes`
    and all gm-only/spoiler content untouched.
+3. Write an advancement change (XP, points) to a sheet only when
+   the Play Notes or the GM give the amount; a missing award goes
+   in the Keeper Checklist.
 
 Show each PC's refreshed block and frontmatter changes in the
 conversation with the Step 4 receipt; write no receipt into the
@@ -143,7 +152,9 @@ creating entities.
   not replacement prose. Never pattern-match off existing entity
   files.
 - **Updated entities:** edit the entity's own file — one file per
-  entity, no separate update files.
+  entity, no separate update files. A GM ruling that replaces an
+  earlier one: strike the old one through and append
+  `superseded YYYY-MM-DD` in the same edit.
 - **Cross-entity claims:** when a note asserts something about a
   *different* existing entity (e.g. an aside in a NEW-NPC line
   placing an established NPC somewhere new), never fold it silently
@@ -213,16 +224,13 @@ presents the three-state prompts.
 
 ### 5. Remaining GM Notes
 
-What Carries Forward, per subsection: Unresolved Threads
-(cliffhangers, live threads), Player-Stated Intentions, Pending
-Consequences (decisions whose effects haven't landed), NPCs Needing
-Follow-Up, Skipped Prep (unplayed prep — scenes that didn't fire —
-with clues the players still need).
-
-Then fill World State, Keeper Checklist (next-prep
-tasks: scenes to write, GM decisions, rules to review, handouts),
-Quality Notes, and Handoff to session-prep — the section
-session-prep reads first — per the template.
+Fill What Carries Forward, World State, Keeper Checklist, Quality
+Notes and Handoff to session-prep (the section session-prep reads
+first) per the template. Whatever an older vault template copy says:
+Skipped Prep lists every planned scene and clue that didn't fire,
+with what the players still need; Pending Consequences are decisions
+whose effects haven't landed; Advancement records what the sheet or
+notes show, never awards.
 
 ### 6. Review (Reconcile)
 

@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.2] — 2026-09-24
+
+### Added
+
+- Session Plan template: a `## Handouts & Props` table (document, scene,
+  status, notes) listing every handout the session delivers ("No
+  handouts or props." when there are none), and an optional
+  `**Handouts:**` scene label. `plan_check.py` knows both, and reports
+  the section as placeholder only while the example row is its sole
+  data row.
+  Gaps & Actions no longer collects handouts (#223).
+- Superseded GM rulings: the replaced ruling is struck through and
+  marked `superseded YYYY-MM-DD` in the same edit
+  (`shared/entity-schema.md`, session-wrapup, reconcile's "Correct
+  it"); session-prep cites only the latest ruling (#226).
+
+### Changed
+
+- The Wrap-Up template carries its own section guidance: each What
+  Carries Forward subsection and the Keeper Checklist define what goes
+  in them. session-wrapup keeps one line for Skipped Prep, Pending
+  Consequences and Advancement, for vaults whose template copy predates
+  this (#218).
+- session-wrapup's grounding rule covers every synthesized GM Notes
+  section: each claim traces to the Play Notes, the plan or a named
+  vault file, and anything uncertain gets an `<!-- UNVERIFIED: … -->`
+  marker, which reconcile already queues (#222).
+- Session index ownership: on an existing index session-prep sets only
+  `status`, `documents.plan` and the plan link, adds new scenes to
+  `scenes:` and never removes entries; session-wrapup sets `scenes:` to
+  the scenes played and lists the rest under Skipped Prep
+  (`shared/session-document-chain.md`) (#224).
+- A bookkeeping default goes where it applies in the Plan's content and
+  is listed in the reply to the GM; the Plan carries no "defaulted"
+  note. Run notes (migration applied, phases skipped, checks run) go in
+  the reply, never in the Plan. A value missing from an entity or PC
+  sheet is never defaulted onto it: it becomes a `**Missing:**` Open
+  Question for the GM, which `plan_check.py --headless` accepts without
+  the guess marker (#225).
+- Migration 1.10.1 → 1.10.2 re-copies both templates into `_Templates/`.
+
+### Fixed
+
+- The Wrap-Up Advancement label invited awarding XP. It now records
+  what the sheet shows, and session-wrapup writes an advancement change
+  only when the Play Notes or the GM give the amount; a missing award
+  goes in the Keeper Checklist (#227).
+
 ## [1.10.1] — 2026-09-24
 
 ### Added

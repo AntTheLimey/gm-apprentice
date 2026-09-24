@@ -136,9 +136,9 @@ A reconstructed session (vault-ingest) opens with a
 
 | Skill | Reads | Writes | Status Transition |
 |---|---|---|---|
-| session-prep | Previous wrap-ups, vault | Plan file, session index | planned → prepped |
+| session-prep | Previous wrap-ups, vault | Plan file; index `status`, `documents.plan`, plan link; adds new scenes to `scenes:`, never removes | planned → prepped |
 | session-play | Plan file | Play Notes file, session index | prepped → played |
-| session-wrapup | Play Notes file | Wrap-Up file, entities, session index | played → wrap-up |
+| session-wrapup | Play Notes file | Wrap-Up file, entities, session index (`scenes:` set to the scenes played) | played → wrap-up |
 | reconcile | Wrap-Up file | Promotes canon status, session index | wrap-up → reviewed |
 | vault-ingest | Old source material | Play Notes (reconstructed), session index | Then chains to wrapup → reconcile |
 

@@ -171,6 +171,12 @@ courier.
 - A second kitchen hand walks in partway through and Bram has to decide
   whether to keep talking in front of them.
 
+## Handouts & Props
+
+| Document | Scene | Status | Notes |
+|----------|-------|--------|-------|
+| [[Kitchen Ledger]] | Scene 1 | to build | Pages torn from the steward's book |
+
 ## Session End Objectives
 
 - Ada decides, one way or another, what to do about the courier.

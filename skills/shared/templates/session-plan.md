@@ -86,6 +86,7 @@ opens — a thing in motion, not a theme.
 that brings the PCs here in the first sixty seconds, and what they want
 from *this* PC.
 **Entities:** [[NPC]], [[Location]], [[Item]]
+**Handouts:** [[Document]] — what this scene hands over, and how
 **NPCs**
 - **[[Name]]:** wants X. Does Y if left alone.
 **Points to land**
@@ -115,6 +116,16 @@ Scenes that fire on a player choice or a clock, not by default.
 **Then**
 - What happens, as bullets.
 
+## Handouts & Props
+
+[Every handout and prop this session delivers, built or not — one row
+each, in scene order. Status is built, print or to build. If there are
+none, write "No handouts or props."]
+
+| Document | Scene | Status | Notes |
+|----------|-------|--------|-------|
+| [[Document]] | Scene 1 | to build | What it says, who hands it over |
+
 ## Session End Objectives
 
 - [Dramatic beat that makes a strong stopping point]
@@ -137,16 +148,21 @@ Scenes that fire on a player choice or a clock, not by default.
 
 Plot questions only — calls that change what an NPC wants, knows or does,
 a scene's shape, or what the players can discover. Each carries 2–3
-seeds. A player decision belongs in a scene's `Do | Then` table;
-bookkeeping is defaulted, with the default noted in one line. If a run
-without the GM had to guess, the guess lives here, labelled
-**(apprentice guess — confirm)**, never in settled plan content.
+seeds. A player decision belongs in a scene's `Do | Then` table.
+Bookkeeping is never a question: put its default where it applies (a
+placeholder title in frontmatter), with no note that it was defaulted.
+A value an entity or PC sheet doesn't record is the exception: list it
+here for the GM as `- [ ] **Missing:** {value, whose sheet}`, never
+guessed; it needs no guess marker. If a run without the GM had to
+guess, the guess lives here, labelled **(apprentice guess — confirm)**,
+never in settled plan content.
 
 - [ ] [Unresolved question — who owns it, what is blocked until answered]
 
 ## Gaps & Actions
 
-[Missing entities, stale files, structural issues.]
+[Missing entities, stale files, structural issues. Handouts go in
+Handouts & Props.]
 
 ## Planned vs Played
 

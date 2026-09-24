@@ -240,7 +240,8 @@ class NewSkeletonTests(unittest.TestCase):
         # finished scene, not an incomplete one.
         rows = self._rows(BAD, "scene-labels")
         for label in ("**Points to land**", "**NPCs**", "**Complications**",
-                      "**Entities:**", "**If the players...**"):
+                      "**Entities:**", "**Handouts:**",
+                      "**If the players...**"):
             self.assertFalse(
                 [ln for ln in rows if f"is missing {label}" in ln], label)
 
@@ -431,6 +432,30 @@ class ShippedTemplateTests(unittest.TestCase):
         self.assertEqual(norm(tpl), norm(ref))
         self.assertEqual(norm(tpl), keep)
 
+    def _handouts_body(self) -> str:
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        return pc._by_norm_title(text)["handouts & props"][2]
+
+    def test_untouched_handouts_section_is_placeholder(self):
+        self.assertTrue(pc._is_placeholder_body(self._handouts_body()))
+
+    def test_handouts_guidance_kept_with_filled_table_is_not_placeholder(self):
+        guidance = self._handouts_body().split("|", 1)[0]
+        body = (guidance + "| Document | Scene | Status | Notes |\n"
+                "|---|---|---|---|\n"
+                "| [[Ledger Page]] | Scene 2 | print | Torn at the fold |\n")
+        self.assertFalse(pc._is_placeholder_body(body))
+
+    def test_example_row_left_beside_real_rows_is_not_placeholder(self):
+        body = self._handouts_body().rstrip("\n") + (
+            "\n| [[Ledger Page]] | Scene 2 | print | Torn at the fold |\n")
+        self.assertFalse(pc._is_placeholder_body(body))
+
+    def test_handouts_none_is_not_placeholder(self):
+        guidance = self._handouts_body().split("|", 1)[0]
+        self.assertFalse(
+            pc._is_placeholder_body(guidance + "No handouts or props.\n"))
+
     def test_template_marks_only_the_two_required_labels(self):
         text = self.TEMPLATE.read_text(encoding="utf-8")
         self.assertEqual(text.count("*(required)*"), 2)
@@ -523,6 +548,30 @@ class HeadlessTests(unittest.TestCase):
         self.assertFalse(
             any("Confirm the guard fires here too" in f.message
                 for f in guard_rows), guard_rows)
+
+    def _guard_rows(self, open_questions: str) -> list[pc.Finding]:
+        text = ("---\ntype: session-plan\n---\n\n## Open Questions\n\n"
+                + open_questions)
+        found = pc.run_checks("p.md", text, {"type": "session-plan"},
+                              True, False)
+        return [f for f in found if f.id == "hard-guard"]
+
+    def test_missing_item_needs_no_guess_marker(self):
+        rows = self._guard_rows(
+            "- [ ] **Missing:** Georgiana's SAN after Vienna is not on "
+            "her sheet\n")
+        self.assertEqual(rows, [])
+
+    def test_plot_question_still_needs_the_guess_marker(self):
+        rows = self._guard_rows(
+            "- [ ] Does Sophia know what her husband has become?\n")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0].level, "ERROR")
+
+    def test_missing_label_mid_item_is_not_the_missing_form(self):
+        rows = self._guard_rows(
+            "- [ ] Sophia's motive (**Missing:** from the notes)\n")
+        self.assertEqual(len(rows), 1, rows)
 
     def test_gm_input_without_headless_is_refused(self):
         proc = run_cli(GOOD, "--gm-input")
@@ -814,7 +863,7 @@ class MinimumSceneTests(unittest.TestCase):
 
     def test_optional_labels_are_never_reported_missing(self):
         rows = scene_rows(self.MINIMUM)
-        for label in ("Entities", "NPCs", "Points to land",
+        for label in ("Entities", "Handouts", "NPCs", "Points to land",
                       "If the players...", "Complications"):
             self.assertFalse([r for r in rows if label in r.message], label)
 

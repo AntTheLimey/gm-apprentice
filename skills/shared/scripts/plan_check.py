@@ -70,7 +70,9 @@ Checks, by id, level, and the rule they mechanise:
   guess         WARNING  "(apprentice guess" only appears in Open Questions
                          (SKILL.md, Hard Guard)
   hard-guard    ERROR    --headless only: no settled creative spine, every
-                         Open Questions line carries the guess marker.
+                         Open Questions line carries the guess marker —
+                         except a `**Missing:**` item, a value the vault
+                         doesn't record (a fact to ask, not a guess).
                          `--gm-input` says the GM supplied the spine (a
                          scripted or batch prep): the guard's job is to
                          stop an apprentice inventing it, so it is skipped
@@ -126,6 +128,7 @@ TEMPLATE_SECTIONS: tuple[str, ...] = (
     "World State",
     "Planned Scenes",
     "Contingency Scenes",
+    "Handouts & Props",
     "Session End Objectives",
     "PC Roster & Arcs",
     "Touchpoint Plan",
@@ -170,6 +173,12 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Same structure",
 )
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
+# A template table's example row. The section is placeholder only while
+# that row is the table's sole data row and nothing but `[...]` guidance
+# sits beside it — a GM keeps the guidance and adds rows, and may leave
+# the example row behind.
+EXAMPLE_ROW_PHRASES: tuple[str, ...] = ("What it says, who hands it over",)
+_TABLE_SEPARATOR_RE = re.compile(r"\|?[\s:|-]+\|?")
 
 # The Plan scene skeleton: inline labels are `**Label:**` on their own
 # line; block labels are `**Label**` (optional trailing text before the
@@ -185,7 +194,8 @@ PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
 # tools, offered and not demanded, and a scene that omits one is finished,
 # not incomplete. A label that is *attempted* and mistyped is still an
 # error: that is a typo, not an omission.
-SCENE_LABELS_INLINE: tuple[str, ...] = ("Situation", "Starts it", "Entities")
+SCENE_LABELS_INLINE: tuple[str, ...] = (
+    "Situation", "Starts it", "Entities", "Handouts")
 SCENE_LABELS_BLOCK: tuple[str, ...] = (
     "NPCs", "Points to land", "If the players...", "Complications")
 SCENE_LABELS: tuple[str, ...] = SCENE_LABELS_INLINE + SCENE_LABELS_BLOCK
@@ -233,6 +243,11 @@ MECHANICAL_RE = re.compile(
 GUESS_RE = re.compile(r"\(apprentice guess", re.IGNORECASE)
 GUARD_MARKER_RE = re.compile(
     r"\(apprentice guess\s*[-–—]\s*confirm\)", re.IGNORECASE)
+# An Open Questions item naming a value the vault doesn't record
+# (`- [ ] **Missing:** Georgiana's SAN after Vienna`): a fact for the GM
+# to supply, not an invented plot call, so it needs no guess marker.
+MISSING_ITEM_RE = re.compile(
+    r"^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?\*\*Missing:\*\*")
 GUARD_SECTIONS: tuple[str, ...] = (
     "Session Intent", PLANNED_SCENES_TITLE, "Spotlight Forecast",
 )
@@ -267,6 +282,14 @@ def _is_placeholder_body(body: str) -> bool:
     if not stripped:
         return True
     lines = [ln for ln in stripped.splitlines() if ln.strip()]
+    rows = [ln.strip() for ln in lines if ln.lstrip().startswith("|")]
+    if any(p in row for row in rows for p in EXAMPLE_ROW_PHRASES):
+        data = [r for r in rows if not _TABLE_SEPARATOR_RE.fullmatch(r)][1:]
+        prose = "\n".join(ln for ln in lines
+                          if not ln.lstrip().startswith("|"))
+        prose = re.sub(r"\[[^\[\]]*\]", "", prose).strip()
+        return not prose and all(
+            any(p in r for p in EXAMPLE_ROW_PHRASES) for r in data)
     if lines and all(_bracket_only_line(ln) for ln in lines):
         return True
     low = stripped.casefold()
@@ -827,7 +850,7 @@ def check_hard_guard(rel: str, states: list[vl.LineState],
                 f"hard-guard: '## {raw_title}' has non-placeholder "
                 f"content while running headless — GM input required"))
     for start, joined in _open_questions_items(states):
-        if GUARD_MARKER_RE.search(joined):
+        if GUARD_MARKER_RE.search(joined) or MISSING_ITEM_RE.match(joined):
             continue
         findings.append(Finding(
             "hard-guard", "ERROR", f"{rel}:{start}",

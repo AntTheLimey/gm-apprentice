@@ -56,25 +56,37 @@ section when the Play Notes already carry a scene list.}
 - **Intent:** {stated plans, unfinished actions}
 - **Knows:** {exclusive information gained this session}
 - **Relationships:** {shifted NPC ties}
-- **Advancement:** {XP/points awarded this session (unspent total)}
+- **Advancement:** {XP/points recorded on the sheet this session
+  (unspent total); if none is recorded, say so and leave it for the GM}
 - **Resources:** {money, gear, condition changes}
 
 ### What Carries Forward
 
+{Bold-lead bullets in every subsection. Omit any empty subsection.
+Name every referent in the bullet that uses it — the document, the
+person, the reason — these bullets are read cold by session-prep.}
+
 #### Unresolved Threads
+
+{Cliffhangers and live threads. Note spotlight debt with a staleness
+counter: "…now four sessions stale."}
 
 #### Player-Stated Intentions
 
+{What the players said they will do next, in their terms.}
+
 #### Pending Consequences
+
+{Decisions made this session whose effects haven't landed yet.}
 
 #### NPCs Needing Follow-Up
 
+{NPCs whose next move or state the GM must decide or track.}
+
 #### Skipped Prep
 
-{Bold-lead bullets. Note spotlight debt with staleness counters:
-"…now four sessions stale." Omit any empty subsection. Name every
-referent in the bullet that uses it — the document, the person, the
-reason — these bullets are read cold by session-prep.}
+{Every planned scene that didn't fire, and the clues in it the
+players still need.}
 
 ### World State
 
@@ -88,7 +100,9 @@ reason — these bullets are read cold by session-prep.}
 
 ### Keeper Checklist
 
-- [ ] {forward-looking GM decisions and prep tasks only}
+- [ ] {forward-looking GM decisions and prep tasks only: scenes to
+  write, GM decisions, rules to review, handouts to build, and any
+  advancement the notes don't record}
 
 {Resolve items as `- [x] ~~item~~ — resolution`; never delete them.}
 
@@ -104,7 +118,7 @@ otherwise.}
 
 {Only if any. One line per claim: claim → CONFIRMED / REJECTED /
 HELD, by whom, written where. Held claims carry an inline
-`UNVERIFIED` HTML-comment marker for reconcile.}
+`<!-- UNVERIFIED: {claim} -->` marker for reconcile.}
 
 ### World Fact Findings
 
@@ -115,8 +129,9 @@ HELD, by whom, written where. Held claims carry an inline
 
 {What worked / what was missing / what to adjust — plus provenance:
 name canonicalisations applied, entities deliberately folded rather
-than created, `(flag)` markers for ambiguities reconcile should
-queue.}
+than created. Mark any claim in these GM Notes that the Play Notes,
+the plan or a named vault file don't support with
+`<!-- UNVERIFIED: {claim} -->`; reconcile queues them.}
 
 ### Handoff to session-prep
 

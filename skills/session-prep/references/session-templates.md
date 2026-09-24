@@ -132,6 +132,7 @@ opens — a thing in motion, not a theme or a lesson.
 that brings the PCs here in the first sixty seconds, and what they want
 from *this* PC. A scene that cannot answer this is not finished.
 **Entities:** [[NPC]], [[Location]], [[Item]]
+**Handouts:** [[Document]] — what this scene hands over, and how
 **NPCs**
 - **[[Name]]:** wants X. Does Y if left alone. Two lines maximum.
 **Points to land**
@@ -162,6 +163,16 @@ consequences only.
 - What happens, as bullets. Promote to a full scene above only if it
   needs its own NPCs and Points to land.
 
+## Handouts & Props
+
+[Every handout and prop this session delivers, built or not — one row
+each, in scene order. Status is built, print or to build. If there are
+none, write "No handouts or props."]
+
+| Document | Scene | Status | Notes |
+|----------|-------|--------|-------|
+| [[Document]] | Scene 1 | to build | What it says, who hands it over |
+
 ## Session End Objectives
 
 Possible good stopping points, not a railroad.
@@ -189,15 +200,20 @@ bullets. Step 13.]
 
 Plot questions only ("Does Sophia know what her husband has
 become?"), each with 2–3 seeds, sorted as in the skill's Stance. Kept
-explicit and un-invented. A guess from a run without the GM lives
-here, labelled **(apprentice guess — confirm)**, never in settled plan
-content.
+explicit and un-invented. Bookkeeping takes its default where it
+applies, with no note that it was defaulted; a value an entity or PC
+sheet doesn't record is listed here for the GM as
+`- [ ] **Missing:** {value, whose sheet}`, never guessed (no guess
+marker needed). A guess
+from a run without the GM lives here, labelled
+**(apprentice guess — confirm)**, never in settled plan content.
 
 - [ ] [Unresolved question — who owns it, what's blocked until it's answered]
 
 ## Gaps & Actions
 
-[Missing entities, stale files, structural issues. Step 16.]
+[Missing entities, stale files, structural issues. Step 16.
+Handouts go in Handouts & Props.]
 
 ## Planned vs Played
 
