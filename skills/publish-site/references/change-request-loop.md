@@ -275,10 +275,14 @@ ask which.
     all, so there is nothing to deploy. Record the change in the vault for
     the GM: the `### Derived` table's **Current** column, the `### Status`
     checklist for a condition, or the `Current Reputation` row of
-    `### Reputation`. Finalize with **`applied`**, saying it's recorded
-    rather than live (`✓ SAN 55→51 — recorded for your Keeper`). A change
-    only in these fields doesn't need a rebuild; let it ride with the next
-    deploy.
+    `### Reputation`. Finalize with **`advice`**, not `applied`: an
+    `applied` reply reloads the player's page and says the change is live,
+    which it isn't. Keep it out of the applied batch, so it never triggers
+    a rebuild on its own:
+
+    ```bash
+    npx gm-apprentice-publish inbox reply <id> advice "✓ SAN 55→51 — recorded for your Keeper (this site doesn't show SAN)."
+    ```
 
   In both cases, accept a change ("lost 4") or a new value ("SAN is 42"); for
   a change, work from the running value. Keep the result between 0 and the
