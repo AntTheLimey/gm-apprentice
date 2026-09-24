@@ -86,3 +86,69 @@ def test_push_malformed_multiline_embed_does_not_eat_prose():
     # `[^\]]+` spanning newlines could delete unrelated prose up to the next ]]
     out = links.rewrite_md_for_push("keep ![[foo\nbar]] this line too", IDX, "w1", FMT)
     assert "keep" in out and "this line too" in out
+
+
+# ---------------------------------------------------------------------------
+# normalize_element_links_for_compare (#190) — an mobRPG element-link anchor
+# reduces to an id-keyed marker regardless of its exact HTML shape, so
+# `sync`'s content compare isn't sensitive to display-text (alias) differences
+# or to how the anchor's OTHER attributes happen to be ordered/quoted.
+# ---------------------------------------------------------------------------
+
+EL_URL = FMT.format(world="w1", eid="e-77")
+
+
+def test_normalize_reduces_a_plain_anchor_to_an_id_marker():
+    html = f'<p>See <a href="{EL_URL}">the crone</a>.</p>'
+    out = links.normalize_element_links_for_compare(html, FMT)
+    assert out == "<p>See [[e-77]].</p>"
+
+
+def test_normalize_matches_regardless_of_display_text():
+    # Two different alias/display texts over the SAME target must reduce to
+    # the identical marker.
+    a = links.normalize_element_links_for_compare(
+        f'<a href="{EL_URL}">the crone</a>', FMT)
+    b = links.normalize_element_links_for_compare(
+        f'<a href="{EL_URL}">Marsh Hag</a>', FMT)
+    assert a == b == "[[e-77]]"
+
+
+def test_normalize_handles_attributes_before_href():
+    # An anchor whose href isn't the first attribute (a shape our own
+    # md_to_html never produces, but a server-side re-render could) must
+    # still reduce to the SAME marker as the equivalent href-first anchor —
+    # otherwise the two sides of a compare drift apart instead of together.
+    plain = links.normalize_element_links_for_compare(
+        f'<a href="{EL_URL}">Name</a>', FMT)
+    reordered = links.normalize_element_links_for_compare(
+        f'<a rel="noopener" target="_blank" href="{EL_URL}">Name</a>', FMT)
+    assert plain == reordered == "[[e-77]]"
+
+
+def test_normalize_handles_single_quoted_href():
+    single = links.normalize_element_links_for_compare(
+        f"<a href='{EL_URL}'>Name</a>", FMT)
+    double = links.normalize_element_links_for_compare(
+        f'<a href="{EL_URL}">Name</a>', FMT)
+    assert single == double == "[[e-77]]"
+
+
+def test_normalize_tolerates_a_trailing_slash_on_the_href():
+    out = links.normalize_element_links_for_compare(f'<a href="{EL_URL}/">Name</a>', FMT)
+    assert out == "[[e-77]]"
+
+
+def test_normalize_leaves_external_links_untouched():
+    html = '<p>See the <a href="https://example.com/rules">official rules</a>.</p>'
+    out = links.normalize_element_links_for_compare(html, FMT)
+    assert out == html                          # untouched — text can carry real meaning
+
+
+def test_normalize_a_link_to_a_different_element_still_differs():
+    # The marker is keyed on eid, so retargeting a link to a DIFFERENT
+    # element is still a real, detectable difference.
+    other_url = FMT.format(world="w1", eid="e-88")
+    a = links.normalize_element_links_for_compare(f'<a href="{EL_URL}">Name</a>', FMT)
+    b = links.normalize_element_links_for_compare(f'<a href="{other_url}">Name</a>', FMT)
+    assert a != b

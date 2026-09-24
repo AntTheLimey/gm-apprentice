@@ -3,6 +3,7 @@ import os
 import pytest
 
 from mobrpg.commands import pull_canon
+from mobrpg.commands import sync_cmd
 from mobrpg import client
 from mobrpg import lww
 from mobrpg import node
@@ -487,6 +488,95 @@ def test_run_scaffolds_a_known_root_with_the_canon_name(monkeypatch, tmp_path):
     assert "# Stolen Transport" not in text     # not the mangled-ref fallback
 
 
+# ---------------------------------------------------------------------------
+# #202 — pull-canon must not scaffold a stub at a renamed/relinked note's OLD
+# ref path. `relink` records the old path as `previous_ref`; pull-canon must
+# read it before minting a duplicate note that forks the element in two.
+# ---------------------------------------------------------------------------
+
+def test_run_does_not_scaffold_over_a_relinked_notes_previous_ref(monkeypatch, tmp_path, capsys):
+    """Repro from #202: Characters/NPCs/Monroe.md renamed to
+    Characters/NPCs/Roselyn_Monroe.md via `relink`, filed upstream as an
+    UpdateElement, and accepted. An OLDER Accepted suggestion whose externalRef
+    is still the pre-rename path must be recognised as already reconciled by
+    the renamed note's `previous_ref`, not scaffolded as a second note."""
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Roselyn_Monroe",
+          "previous_ref": "space_game:Characters/NPCs/Monroe",
+          "element_id": "el-monroe", "element_kind": "Person",
+          "review_state": "accepted", "last_synced": "", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    (vault / "Characters" / "NPCs" / "Roselyn_Monroe.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(nd) + "---\n# Roselyn Monroe\n",
+        encoding="utf-8")
+    old_ref = "space_game:Characters/NPCs/Monroe"
+    live = {old_ref: {"state": "accepted", "element_id": "el-monroe",
+                       "element_kind": "Person", "name": "Monroe",
+                       "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert not (vault / "Characters" / "NPCs" / "Monroe.md").exists()
+    out = capsys.readouterr().out
+    assert "1 accepted ref(s) RECONCILED" in out
+    assert "0 node(s) updated" in out
+
+
+def test_run_does_not_scaffold_when_element_id_already_claimed(monkeypatch, tmp_path, capsys):
+    """Symmetric case: an Accepted row already carries the linked note's
+    element_id under a ref the note itself doesn't (yet) record as
+    `previous_ref` or `external_ref` — still reconciled, not scaffolded."""
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Roselyn_Monroe",
+          "element_id": "el-monroe", "element_kind": "Person",
+          "review_state": "accepted", "last_synced": "", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    (vault / "Characters" / "NPCs" / "Roselyn_Monroe.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(nd) + "---\n# Roselyn Monroe\n",
+        encoding="utf-8")
+    stray_ref = "space_game:Characters/NPCs/Some_Other_Path"
+    live = {stray_ref: {"state": "accepted", "element_id": "el-monroe",
+                        "element_kind": "Person", "name": "Monroe",
+                        "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert not (vault / "Characters" / "NPCs" / "Some_Other_Path.md").exists()
+    out = capsys.readouterr().out
+    assert "RECONCILED" in out
+    assert "0 node(s) updated" in out
+
+
+def test_run_scaffolds_a_different_element_accepted_at_a_renamed_notes_previous_ref(
+        monkeypatch, tmp_path, capsys):
+    """A ref match alone must not reconcile: ref REUSE is not identity. If a
+    genuinely DIFFERENT element (a different element_id) was separately
+    accepted at the OLD path a renamed note's `previous_ref` happens to
+    record, that element has no note of its own yet and must be scaffolded
+    (or at minimum reported by name) — never silently folded into the
+    renamed note's count."""
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Roselyn_Monroe",
+          "previous_ref": "space_game:Characters/NPCs/Monroe",
+          "element_id": "el-monroe", "element_kind": "Person",
+          "review_state": "accepted", "last_synced": "", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    (vault / "Characters" / "NPCs" / "Roselyn_Monroe.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(nd) + "---\n# Roselyn Monroe\n",
+        encoding="utf-8")
+    old_ref = "space_game:Characters/NPCs/Monroe"
+    # A DIFFERENT element (el-someone-else, not el-monroe) is what's Accepted
+    # at that old ref this time.
+    live = {old_ref: {"state": "accepted", "element_id": "el-someone-else",
+                       "element_kind": "Person", "name": "Someone Else",
+                       "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    out = capsys.readouterr().out
+    assert "RECONCILED" not in out
+    p = vault / "Characters" / "NPCs" / "Monroe.md"
+    assert p.exists()                                   # scaffolded, not swallowed
+    assert node.read_node(p.read_text(encoding="utf-8"))["element_id"] == "el-someone-else"
+
+
 def test_fetch_live_carries_element_kind_and_name_into_the_summary(monkeypatch):
     """`_fetch_live` never populated kind or name, so every scaffolded note fell
     through `scaffold_note`'s defaults to Person/npc and an underscore-mangled
@@ -815,6 +905,14 @@ def test_note_ref_strips_upd_namespace():
 
 REF_A = "ns:upd/Creatures/marsh-hag#aaaaaaaaaaaa"
 REF_B = "ns:upd/Creatures/marsh-hag#bbbbbbbbbbbb"
+# The REAL digest `sync._build_suggestion` would compute for
+# `_pending_push_vault`'s default body ("Body\n" -> push candidate "Body") —
+# sha256("Body").hexdigest()[:12]. Needed wherever a test wants the
+# accepted-branch edit-guard (CodeRabbit #4093604375) to see the body as
+# UNCHANGED since the push, so mtime pinning proceeds; REF_A/REF_B are
+# opaque placeholders everywhere else, since most tests here don't touch
+# that guard at all.
+REF_A_MATCH = "ns:upd/Creatures/marsh-hag#6ccaa6415b5e"
 
 
 def _pending_push_vault(tmp_path, pending_ref=REF_A, name="marsh-hag"):
@@ -842,16 +940,212 @@ def _queue(monkeypatch, by_state, elements=None):
 
 
 def test_accepted_upd_suggestion_adjudicates_pending_note(tmp_path, monkeypatch):
-    vault, p = _pending_push_vault(tmp_path)
+    # Uses REF_A_MATCH (not REF_A) so the accepted-branch edit-guard sees the
+    # body as unchanged since the push and actually pins mtime, which is
+    # part of what this test verifies.
+    vault, p = _pending_push_vault(tmp_path, pending_ref=REF_A_MATCH)
+    _queue(monkeypatch, {"Accepted": [_sug(REF_A_MATCH, "e-77", etype="Creature")]},
+           elements={"e-77": {"type": "creature", "relations": []}})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out.get("pending_ref", "") == ""            # claim released
+    stamp = lww.parse_ts(out["last_synced"])
+    assert stamp is not None and os.path.getmtime(p) == stamp   # mtime pinned
+
+
+def test_upd_accept_does_not_advance_last_synced(tmp_path, monkeypatch):
+    """#190/#193: an accept must NOT stamp last_synced to "now" (or to the
+    element's CURRENT lastModified at pull-canon time) — either one can trail
+    the accept by any amount, and if the owner edits again in that window a
+    fresh-looking stamp would mark that later edit as already-synced and
+    swallow it forever. last_synced stays at its pre-push value; a fixed
+    fake `lastModified` on the element proves the stamp isn't derived from
+    it either. Uses REF_A_MATCH so the edit-guard sees the body unchanged
+    and mtime pinning proceeds — that pin is what this test checks."""
+    vault, p = _pending_push_vault(tmp_path, pending_ref=REF_A_MATCH)
+    _queue(monkeypatch, {"Accepted": [_sug(REF_A_MATCH, "e-77", etype="Creature")]},
+           elements={"e-77": {"type": "creature", "relations": [],
+                              "lastModified": "2020-03-15T09:30:00Z"}})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    # Unchanged from _pending_push_vault's fixture value — not "now", not the
+    # element's lastModified.
+    assert out["last_synced"] == "2020-01-01T00:00:00Z"
+    stamp = lww.parse_ts(out["last_synced"])
+    assert os.path.getmtime(p) == stamp                # mtime pinned to it too
+
+
+# ---------------------------------------------------------------------------
+# CodeRabbit #4093604375 — a note sits EDITABLE the whole time it's `pending`
+# (`sync` holds a pending note; nothing stops the GM editing its body before
+# pull-canon ever runs). Pinning mtime to the stale pre-push last_synced
+# regardless would mask that edit as clean: the next `sync decide` would read
+# vault-clean + server-dirty (a bare `pull`), and the strict compare —
+# correctly seeing the edited body differ from the server's pre-edit copy —
+# would have `_pull_body` silently overwrite the GM's edit. The accepted
+# branch now rebuilds the push candidate from the CURRENT body and only pins
+# mtime when its digest still matches the one `pending_ref` recorded.
+# ---------------------------------------------------------------------------
+
+def test_upd_accept_skips_the_mtime_pin_when_the_body_moved_since_the_push(
+        tmp_path, monkeypatch):
+    # REF_A (not REF_A_MATCH) never matches ANY real digest, which is
+    # equivalent to "the body has moved since the push" from the edit
+    # guard's point of view — it must not pin mtime.
+    vault, p = _pending_push_vault(tmp_path, pending_ref=REF_A)
+    before_mtime = os.path.getmtime(p)
     _queue(monkeypatch, {"Accepted": [_sug(REF_A, "e-77", etype="Creature")]},
            elements={"e-77": {"type": "creature", "relations": []}})
     assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
     out = node.read_node(p.read_text(encoding="utf-8"))
     assert out["review_state"] == "accepted"
-    assert out["last_synced"] not in ("", "2020-01-01T00:00:00Z")
-    assert out.get("pending_ref", "") == ""            # claim released
-    stamp = lww.parse_ts(out["last_synced"])
-    assert stamp is not None and os.path.getmtime(p) == stamp   # mtime pinned
+    # last_synced is untouched (per #190/#193) but mtime is NOT pinned to
+    # it — the file's real mtime survives, later than the stamp, so the
+    # note still reads vault-dirty.
+    assert out["last_synced"] == "2020-01-01T00:00:00Z"
+    assert os.path.getmtime(p) != lww.parse_ts(out["last_synced"])
+    assert os.path.getmtime(p) >= before_mtime
+
+
+def test_edit_made_while_pending_survives_accept_and_the_next_sync(
+        tmp_path, monkeypatch):
+    """Full pipeline repro for CodeRabbit #4093604375: sync files a push,
+    the GM edits the note's body while it sits `pending` (nothing prevents
+    this), mobRPG accepts the ORIGINAL (pre-edit) push, pull-canon
+    adjudicates it, and the NEXT sync run must not silently discard the
+    edit — it has to surface it (push/conflict), never a quiet pull."""
+    vault = tmp_path / "vault"
+    (vault / "Creatures").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "ns:Creatures/marsh-hag",
+          "element_id": "e-77", "element_kind": "Creature",
+          "review_state": "accepted", "last_synced": "2020-01-01T00:00:00Z",
+          "review_note": "", "determined": {}, "relationships": [],
+          "languages": []}
+    p = vault / "Creatures" / "marsh-hag.md"
+    p.write_text("---\ntype: creature\n" + node.emit_node(nd) +
+                 "---\n\nOriginal prose.\n", encoding="utf-8")
+    ls = lww.parse_ts("2020-01-01T00:00:00Z")
+    os.utime(p, (ls, ls))
+
+    # Phase 1: sync files a push for "Original prose." — the note goes
+    # `pending`, carrying the REAL digest of what was actually sent.
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    stale_detail = {"description": "<p>irrelevant — server not dirty yet</p>",
+                    "lastModified": "2020-01-01T00:00:00Z"}
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: stale_detail if m == "GET" else {})
+    submitted: list = []
+    monkeypatch.setattr(
+        sync_cmd.submit_batch, "submit",
+        lambda world, req, execute, index=None: submitted.append(req) or {})
+    os.utime(p, None)                          # vault-dirty relative to last_synced
+    assert sync_cmd.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    assert len(submitted) == 1
+    pushed_ref = submitted[0]["suggestions"][0]["externalRef"]
+    pending = node.read_node(p.read_text(encoding="utf-8"))
+    assert pending["review_state"] == "pending"
+    assert pending["pending_ref"] == pushed_ref
+
+    # Phase 2: the GM edits the body WHILE it's pending — `sync` holds a
+    # pending note (Behavior 1), so nothing stops this.
+    txt = p.read_text(encoding="utf-8")
+    edited = txt.replace("Original prose.", "Original prose, now with a twist.")
+    assert edited != txt
+    p.write_text(edited, encoding="utf-8")
+
+    # Phase 3: mobRPG accepts the ORIGINAL push (the edit above never
+    # reached it) — pull-canon adjudicates.
+    fake = _FakeApi(by_state={"Accepted": [_sug(pushed_ref, "e-77", etype="Creature")]},
+                    elements={"e-77": {"type": "creature", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    assert out.get("pending_ref", "") == ""
+    # The edit-guard must NOT have pinned mtime backward to the stale
+    # last_synced, or the edit below would never even be visible to sync.
+    assert os.path.getmtime(p) > lww.parse_ts(out["last_synced"])
+
+    # Phase 4: sync runs again. The server holds the ORIGINAL (pre-edit)
+    # description with `lastModified` at accept time — well past
+    # last_synced. Both sides are now dirty; the edit must survive.
+    accepted_detail = {"description": "Original prose.", "descriptionType": "Markdown",
+                       "lastModified": "2026-08-01T00:00:00Z"}
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: accepted_detail if m == "GET" else {})
+    submitted2: list = []
+    monkeypatch.setattr(
+        sync_cmd.submit_batch, "submit",
+        lambda world, req, execute, index=None: submitted2.append(req) or {})
+    assert sync_cmd.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    after = p.read_text(encoding="utf-8")
+    assert "now with a twist" in after          # the edit was NOT overwritten
+
+
+def test_unedited_note_still_reads_in_sync_after_accept_and_the_next_sync(
+        tmp_path, monkeypatch):
+    """The counterpart to the edit-preservation test above: with NO edit
+    during the pending window, the edit guard's digest check matches, mtime
+    pins normally, and the next sync still reads the accepted push as a
+    harmless echo (in-sync, re-stamp only) — not a pull, not a push."""
+    vault = tmp_path / "vault"
+    (vault / "Creatures").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "ns:Creatures/marsh-hag",
+          "element_id": "e-77", "element_kind": "Creature",
+          "review_state": "accepted", "last_synced": "2020-01-01T00:00:00Z",
+          "review_note": "", "determined": {}, "relationships": [],
+          "languages": []}
+    p = vault / "Creatures" / "marsh-hag.md"
+    p.write_text("---\ntype: creature\n" + node.emit_node(nd) +
+                 "---\n\nOriginal prose.\n", encoding="utf-8")
+    ls = lww.parse_ts("2020-01-01T00:00:00Z")
+    os.utime(p, (ls, ls))
+
+    # Phase 1: sync files a push for "Original prose." — no edit follows.
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    stale_detail = {"description": "<p>irrelevant — server not dirty yet</p>",
+                    "lastModified": "2020-01-01T00:00:00Z"}
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: stale_detail if m == "GET" else {})
+    submitted: list = []
+    monkeypatch.setattr(
+        sync_cmd.submit_batch, "submit",
+        lambda world, req, execute, index=None: submitted.append(req) or {})
+    os.utime(p, None)
+    assert sync_cmd.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    assert len(submitted) == 1
+    pushed_ref = submitted[0]["suggestions"][0]["externalRef"]
+
+    # Phase 2: mobRPG accepts it — pull-canon adjudicates. No local edit.
+    fake = _FakeApi(by_state={"Accepted": [_sug(pushed_ref, "e-77", etype="Creature")]},
+                    elements={"e-77": {"type": "creature", "relations": []}})
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.client, "_request", fake)
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    # Digest matched (body unchanged) — mtime IS pinned to last_synced.
+    assert os.path.getmtime(p) == lww.parse_ts(out["last_synced"])
+
+    # Phase 3: sync runs again. Server holds exactly the pushed content,
+    # `lastModified` at accept time. Must read in-sync — no overwrite, no
+    # suggestion, just a re-stamp.
+    accepted_detail = {"description": "Original prose.", "descriptionType": "Markdown",
+                       "lastModified": "2026-08-01T00:00:00Z"}
+    monkeypatch.setattr(client, "_request",
+                        lambda m, path, **k: accepted_detail if m == "GET" else {})
+    submitted2: list = []
+    monkeypatch.setattr(
+        sync_cmd.submit_batch, "submit",
+        lambda world, req, execute, index=None: submitted2.append(req) or {})
+    before = p.read_text(encoding="utf-8")
+    assert sync_cmd.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    after = p.read_text(encoding="utf-8")
+    assert not submitted2                       # no suggestion filed
+    assert "Original prose." in after and "Original prose." in before
 
 
 def test_dismissed_upd_suggestion_clears_pending(tmp_path, monkeypatch):

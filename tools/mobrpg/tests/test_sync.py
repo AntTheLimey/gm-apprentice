@@ -1,9 +1,9 @@
 import json
 import os
 
-from mobrpg import client, node as _node, section
+from mobrpg import client, lww, node as _node, section
 from mobrpg.commands import sync_cmd, submit_batch
-from mobrpg.vault import vault_only_sections
+from mobrpg.vault import body_of, vault_only_sections
 
 
 NOTE = """---
@@ -587,6 +587,297 @@ def test_markdown_server_description_compares_in_html_space(tmp_path, monkeypatc
     _wire(monkeypatch, detail, submitted)
     sync_cmd.run(["w1", "--vault", str(v), "--execute"])
     assert not submitted                               # in-sync, nothing filed
+
+
+# ---------------------------------------------------------------------------
+# #190 — an accepted push must not read back as a degrading pull. A `pull`
+# verdict fires the instant the GM accepts THIS note's own earlier push (the
+# element's lastModified jumps to accept time, zero new content); comparing
+# first — same as the push/tie branch — is what tells that apart from a real
+# upstream edit, and the compare has to be insensitive to how a wikilink got
+# rendered on push (alias, PC/non-element plain text, bold split around a
+# link, an empty template heading) or it never recognises the match.
+# ---------------------------------------------------------------------------
+
+_190_BODY = (
+    "The [[Electromagnetic Diffuser|EM diffusers]] hum near the "
+    "[[Royale Hotel|Room 2002]].\n\n"
+    "[[Marlo Petrak|technician]] fixed it.\n\n"
+    "[[Six]] and [[Shackleton Magellan]] were there, along with "
+    "[[Section 102]] and [[Mysterious Relay]].\n\n"
+    "**He is one of [[Daniela Akkermans]]'s people.**\n\n"
+    "## Motivations & Secrets\n"
+)
+
+
+def _linked_stub(vault, folder, name, eid):
+    nd = {"element_id": eid}
+    p = vault / folder / f"{name}.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("---\n" + _node.emit_node(nd) + f"---\n# {name}\n", encoding="utf-8")
+
+
+def _190_vault(vault, *, last_synced="2026-07-20T00:00:00Z", body=_190_BODY):
+    """A note using every link-degradation class from #190, plus the linked
+    target notes its wikilinks resolve against (so the push rewrite actually
+    produces element links, not just flattened text)."""
+    nd = {"world_id": "w1", "external_ref": "ns:Creatures/marsh-hag",
+          "element_id": "e-77", "element_kind": "Creature",
+          "review_state": "accepted", "last_synced": last_synced}
+    text = ("---\n" + _node.emit_node(nd) + "---\n\n" + body +
+            "\n## GM Notes\n\nSecret plans.\n")
+    p = vault / "Creatures" / "marsh-hag.md"
+    p.parent.mkdir(parents=True)
+    p.write_text(text, encoding="utf-8")
+    ls = lww.parse_ts(last_synced)
+    os.utime(p, (ls, ls))
+    _linked_stub(vault, "Items & Artifacts", "Electromagnetic Diffuser", "e-diffuser")
+    _linked_stub(vault, "Locations", "Royale Hotel", "e-hotel")
+    _linked_stub(vault, "Characters/NPCs", "Marlo Petrak", "e-marlo")
+    _linked_stub(vault, "Characters/NPCs", "Daniela Akkermans", "e-daniela")
+    return p
+
+
+def test_accepted_push_reads_in_sync_not_a_degrading_pull(tmp_path, monkeypatch, capsys):
+    v = tmp_path / "vault"
+    p = _190_vault(v)
+    os.utime(p, None)                          # vault-dirty relative to the pre-push baseline
+    stale_detail = {"description": "<p>irrelevant — before last_synced</p>",
+                    "lastModified": "2026-07-01T00:00:00Z"}
+    submitted: list = []
+    _wire(monkeypatch, stale_detail, submitted)
+    rc = sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    assert rc == 0 and len(submitted) == 1
+    # The exact markdown sync itself built and filed for review — this IS what
+    # an acceptance stores upstream, covering every degradation class in one
+    # push: aliased links, a PC link (plain text), links to vault entities with
+    # no upstream element (plain text), bold split around a link, and the
+    # empty `## Motivations & Secrets` heading (dropped before push).
+    pushed_md = submitted[0]["suggestions"][0]["payload"]["description"]
+    assert "EM diffusers" in pushed_md
+    assert "Six" in pushed_md and "[[Six]]" not in pushed_md
+
+    # Simulate the GM accepting that suggestion in mobRPG WITHOUT anyone
+    # running pull-canon: review_state back to accepted, last_synced back to
+    # the pre-push baseline (nothing has stamped it to the accept time), the
+    # note pinned not-vault-dirty, body untouched — and the server now holds
+    # exactly the pushed markdown, with `lastModified` at accept time, well
+    # past last_synced.
+    nd = _node.read_node(p.read_text(encoding="utf-8"))
+    nd["review_state"] = "accepted"
+    nd["pending_ref"] = ""
+    nd["last_synced"] = "2026-07-20T00:00:00Z"
+    p.write_text(_node.write_node(p.read_text(encoding="utf-8"), nd), encoding="utf-8")
+    ls = lww.parse_ts("2026-07-20T00:00:00Z")
+    os.utime(p, (ls, ls))
+    before = p.read_text(encoding="utf-8")
+
+    accepted_detail = {"description": pushed_md, "descriptionType": "Markdown",
+                       "lastModified": "2026-08-01T00:00:00Z"}
+    submitted2: list = []
+    _wire(monkeypatch, accepted_detail, submitted2)
+    rc = sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert not submitted2                      # no new suggestion — nothing to review
+    assert "  pull " not in out and "in-sync" in out
+    after = p.read_text(encoding="utf-8")
+    # Untouched BODY — no lossy round-trip through _pull_body. (last_synced is
+    # expected to move; only the body is asserted byte-identical.)
+    assert body_of(after) == body_of(before)
+    assert "EM diffusers" in after and "Room 2002" in after and "technician" in after
+    assert "[[Six]]" in after and "[[Section 102]]" in after
+    assert "**He is one of [[Daniela Akkermans]]'s people.**" in after
+    nd_after = _node.read_node(after)
+    assert nd_after["last_synced"] not in ("", "2026-07-20T00:00:00Z")   # re-stamped
+
+
+# ---------------------------------------------------------------------------
+# #193 — the pull branch's compare must be STRICT, not the push/tie branch's
+# deliberately loose one. A false 'differs' in push/tie just files an extra
+# suggestion; a false 'matches' in pull silently discards a real owner edit
+# forever. Each of these simulates one such edit landing on the server side
+# of an otherwise-already-accepted push and asserts it is NOT swallowed as
+# 'in-sync'.
+# ---------------------------------------------------------------------------
+
+def _accept_pushed_note(v, monkeypatch, *, last_synced="2026-07-20T00:00:00Z"):
+    """Push the note once (capturing the exact markdown sync files), then
+    simulate the GM accepting it in mobRPG without anyone running
+    pull-canon: review_state back to accepted, last_synced back to the
+    pre-push baseline, the note pinned not-vault-dirty. Returns (path,
+    pushed_md) so the caller can build a server `detail` that's the pushed
+    markdown plus exactly one perturbation."""
+    p = v / "Creatures" / "marsh-hag.md"
+    os.utime(p, None)                          # vault-dirty relative to the pre-push baseline
+    stale_detail = {"description": "<p>irrelevant</p>", "lastModified": "2026-07-01T00:00:00Z"}
+    submitted: list = []
+    _wire(monkeypatch, stale_detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    pushed_md = submitted[0]["suggestions"][0]["payload"]["description"]
+
+    nd = _node.read_node(p.read_text(encoding="utf-8"))
+    nd["review_state"] = "accepted"
+    nd["pending_ref"] = ""
+    nd["last_synced"] = last_synced
+    p.write_text(_node.write_node(p.read_text(encoding="utf-8"), nd), encoding="utf-8")
+    ls = lww.parse_ts(last_synced)
+    os.utime(p, (ls, ls))
+    return p, pushed_md
+
+
+def _assert_not_swallowed_in_sync(v, monkeypatch, p, before, edited_md, capsys):
+    """Run sync against a server description of exactly `edited_md`
+    (Markdown) and assert the edit was NOT silently read as in-sync: either
+    it pulls (the body changes) or, at minimum, no suggestion is filed
+    claiming false agreement while last_synced quietly advances over lost
+    content."""
+    detail = {"description": edited_md, "descriptionType": "Markdown",
+              "lastModified": "2026-08-01T00:00:00Z"}
+    submitted: list = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    out = capsys.readouterr().out
+    after = p.read_text(encoding="utf-8")
+    assert "in-sync" not in out, "owner edit was silently swallowed as in-sync"
+    assert body_of(after) != body_of(before), "owner edit did not reach the vault"
+
+
+def test_owner_link_display_text_change_is_not_swallowed(tmp_path, monkeypatch, capsys):
+    # "the traitor" -> "the hero" on the SAME element (E1) — same target,
+    # different caption. The loose compare (id-keyed link markers) can't see
+    # this at all; it must not read in-sync.
+    v = tmp_path / "vault"
+    _190_vault(v)
+    p, pushed_md = _accept_pushed_note(v, monkeypatch)
+    before = p.read_text(encoding="utf-8")
+    assert "EM diffusers" in pushed_md
+    edited = pushed_md.replace(
+        "[EM diffusers](https://www.mobrpg.com/world/w1/link/e-diffuser)",
+        "[the hero](https://www.mobrpg.com/world/w1/link/e-diffuser)")
+    assert edited != pushed_md                            # sanity: a real edit
+    _assert_not_swallowed_in_sync(v, monkeypatch, p, before, edited, capsys)
+
+
+def test_owner_case_fix_is_not_swallowed(tmp_path, monkeypatch, capsys):
+    # A pure case correction — the loose compare lowercases both sides.
+    v = tmp_path / "vault"
+    _190_vault(v)
+    p, pushed_md = _accept_pushed_note(v, monkeypatch)
+    before = p.read_text(encoding="utf-8")
+    assert "Six and Shackleton Magellan" in pushed_md
+    edited = pushed_md.replace(
+        "Six and Shackleton Magellan", "six and shackleton magellan")
+    assert edited != pushed_md
+    _assert_not_swallowed_in_sync(v, monkeypatch, p, before, edited, capsys)
+
+
+def test_owner_added_heading_is_not_swallowed(tmp_path, monkeypatch, capsys):
+    # A genuinely NEW heading with real content — the loose compare drops
+    # every heading's text entirely (not just the vault's own leading
+    # "## Overview"), so a new section is invisible to it.
+    v = tmp_path / "vault"
+    _190_vault(v)
+    p, pushed_md = _accept_pushed_note(v, monkeypatch)
+    before = p.read_text(encoding="utf-8")
+    edited = pushed_md + "\n\n## Secretly a cultist\n\nHe answers to the Choir."
+    _assert_not_swallowed_in_sync(v, monkeypatch, p, before, edited, capsys)
+
+
+def test_owner_heading_rename_is_not_swallowed(tmp_path, monkeypatch, capsys):
+    # Same body text, renamed heading — "Allies" -> "Enemies" flips the
+    # meaning entirely, but the loose compare drops heading text, so a
+    # rename with identical body prose would read unchanged.
+    v = tmp_path / "vault"
+    body = ("The [[Electromagnetic Diffuser|EM diffusers]] hum quietly.\n\n"
+            "## Allies\n\nThe Concord backs them.\n")
+    _190_vault(v, body=body)
+    p, pushed_md = _accept_pushed_note(v, monkeypatch)
+    before = p.read_text(encoding="utf-8")
+    assert "## Allies" in pushed_md
+    edited = pushed_md.replace("## Allies", "## Enemies")
+    assert edited != pushed_md
+    _assert_not_swallowed_in_sync(v, monkeypatch, p, before, edited, capsys)
+
+
+def test_owner_removed_bold_is_not_swallowed(tmp_path, monkeypatch, capsys):
+    # Bold stripped from a single word — a pure tag-strip compare (unlike
+    # one that reduces to markdown-ish text) can't see this: the visible
+    # WORD "not" is identical either way, only its emphasis changed.
+    v = tmp_path / "vault"
+    body = "This is **not** a trap. Six agrees.\n"
+    _190_vault(v, body=body)
+    p, pushed_md = _accept_pushed_note(v, monkeypatch)
+    before = p.read_text(encoding="utf-8")
+    assert "**not**" in pushed_md
+    edited = pushed_md.replace("**not**", "not")
+    assert edited != pushed_md
+    _assert_not_swallowed_in_sync(v, monkeypatch, p, before, edited, capsys)
+
+
+def test_pull_still_overwrites_when_upstream_has_a_genuinely_new_sentence(
+        tmp_path, monkeypatch):
+    v = tmp_path / "vault"
+    p = _190_vault(v)
+    os.utime(p, None)
+    stale_detail = {"description": "<p>irrelevant</p>", "lastModified": "2026-07-01T00:00:00Z"}
+    submitted: list = []
+    _wire(monkeypatch, stale_detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    pushed_md = submitted[0]["suggestions"][0]["payload"]["description"]
+
+    nd = _node.read_node(p.read_text(encoding="utf-8"))
+    nd["review_state"] = "accepted"
+    nd["pending_ref"] = ""
+    nd["last_synced"] = "2026-07-20T00:00:00Z"
+    p.write_text(_node.write_node(p.read_text(encoding="utf-8"), nd), encoding="utf-8")
+    ls = lww.parse_ts("2026-07-20T00:00:00Z")
+    os.utime(p, (ls, ls))
+
+    edited_md = pushed_md + "\n\nThe Keeper added a hidden panel behind the console."
+    detail = {"description": edited_md, "descriptionType": "Markdown",
+              "lastModified": "2026-08-01T00:00:00Z"}
+    submitted2: list = []
+    _wire(monkeypatch, detail, submitted2)
+    sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    after = p.read_text(encoding="utf-8")
+    assert "hidden panel" in after              # a real edit still pulls
+
+
+def test_accepted_push_reads_in_sync_against_html_stored_server_anchors(
+        tmp_path, monkeypatch):
+    """The server side isn't guaranteed to store `descriptionType: Markdown`
+    (legacy Html-typed elements, or a description created directly in
+    mobRPG's own editor) — and isn't guaranteed to put `href` first the way
+    our own `md_to_html` does. An HTML description whose anchors carry
+    `rel`/`target` before `href` must still read in-sync against the
+    candidate's aliased markdown."""
+    v = tmp_path / "vault"
+    p = _190_vault(v)
+    ls = lww.parse_ts("2026-07-20T00:00:00Z")
+    os.utime(p, (ls, ls))
+    html = (
+        '<p>The <a rel="noopener" target="_blank" '
+        'href="https://www.mobrpg.com/world/w1/link/e-diffuser">EM diffusers</a> '
+        'hum near the <a href="https://www.mobrpg.com/world/w1/link/e-hotel">'
+        'Room 2002</a>.</p>'
+        '<p><a href="https://www.mobrpg.com/world/w1/link/e-marlo">technician</a>'
+        ' fixed it.</p>'
+        '<p>Six and Shackleton Magellan were there, along with Section 102 and '
+        'Mysterious Relay.</p>'
+        '<p><strong>He is one of <a '
+        'href="https://www.mobrpg.com/world/w1/link/e-daniela">Daniela '
+        "Akkermans</a>'s people.</strong></p>"
+    )
+    detail = {"description": html, "descriptionType": "Html",
+              "lastModified": "2026-08-01T00:00:00Z"}
+    submitted: list = []
+    _wire(monkeypatch, detail, submitted)
+    before = p.read_text(encoding="utf-8")
+    sync_cmd.run(["w1", "--vault", str(v), "--only", "marsh-hag", "--execute"])
+    assert not submitted
+    after = p.read_text(encoding="utf-8")
+    assert body_of(after) == body_of(before)
 
 
 def test_failed_submit_leaves_the_note_unmarked(tmp_path, monkeypatch):

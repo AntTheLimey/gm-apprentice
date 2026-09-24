@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.6] — 2026-09-24
+
+### Fixed
+
+- **`mobrpg pull-canon` no longer forks a renamed note into two (#202).** A
+  rename filed and accepted upstream leaves the OLD Accepted suggestion row
+  in the review queue forever, with its externalRef still pointing at the
+  path the note used to live at; with no file left at that path, pull-canon
+  scaffolded a duplicate stub there — same `element_id`, two vault notes
+  claiming one element. Before scaffolding, it now checks whether any linked
+  note already claims the row: when the row carries an `element_id`, only a
+  matching `element_id` on an existing note counts (a ref match alone can't
+  rule out a genuinely different element separately accepted at the same old
+  path — ref reuse is not identity); ref-only matching (`external_ref` or a
+  `relink`-recorded `previous_ref`) is the fallback for a row with no
+  `element_id` to check. A reconciled row reports as a count instead of
+  minting a file (a count, like the existing orphan-update report, since an
+  already-terminal row repeats every run).
+- **`mobrpg sync` no longer proposes a degrading pull the instant the GM
+  accepts the vault's own push (#190), and no longer silently discards a real
+  owner edit that lands while a note reads server-dirty (#193).** The
+  element's `lastModified` jumps to accept time with zero new content, and a
+  `pull` verdict used to overwrite the note unconditionally — losing aliased
+  wikilinks, flattening PC/non-element links, and dropping the empty template
+  heading a push already strips. `sync`'s pull branch now runs a content
+  compare before it overwrites anything — but a STRICT one, not the loose
+  compare the push/tie branch uses (where a false "differs" only costs an
+  unreviewed suggestion): case, every heading's text, bold/emphasis markers
+  and a link's display text (and target) all count as real content, so a
+  changed link caption, a case fix, a new or renamed heading, or bold
+  quietly stripped from a word still pulls rather than reading falsely
+  in-sync. Only whitespace, HTML shape (tag/attribute order, quoting), and
+  the vault's own leading `## Overview` heading (an organizational artifact
+  mobRPG's element description never carries) are tolerated. A strict match
+  re-stamps `last_synced` as a harmless echo of the vault's own push;
+  anything else genuinely pulls. `pull-canon`'s accepted branch also stops
+  advancing a note's `last_synced` on accept — it previously stamped either
+  "now" or the element's CURRENT `lastModified` at pull-canon time, either of
+  which can silently mark a LATER owner edit (one landing between the accept
+  and whenever pull-canon happens to run) as already-synced and swallow it
+  forever. `last_synced` now stays at its pre-push value, so the very next
+  `sync decide` reliably reads the server as dirty (a clean `pull`) and the
+  strict compare above takes it from there — re-stamping an echo, or pulling
+  a real edit, but never silently. A note sits editable the whole time it's
+  `pending`, though — `sync` holds a pending note, so nothing stops a GM
+  editing its body before pull-canon ever runs — so the file's mtime is only
+  pinned to that pre-push `last_synced` when a push candidate rebuilt from
+  the CURRENT body still hashes to the digest `pending_ref` recorded for
+  what was actually pushed; a body that moved since the push keeps its real,
+  current mtime, so the note reads vault-dirty and the next sync takes the
+  push/conflict path instead of a `pull` that would have overwritten the
+  edit.
+
 ## [1.10.5] — 2026-09-24
 
 gm-publish 1.11.32.
