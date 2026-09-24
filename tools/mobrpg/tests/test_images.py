@@ -121,3 +121,107 @@ def test_safe_ext_rejects_junk_carved_off_a_url():
     assert images._safe_ext('.pn"g') == ".png"   # would have broken portrait: "..."
     assert images._safe_ext("") == ".png"
     assert images._safe_ext("./../x") == ".png"
+
+
+# --- #185: images --push ---
+
+def _push_vault(tmp_path, portrait='portrait: "Vela.png"', body="Body.\n![[map.png]]\n"):
+    note = tmp_path / "Characters" / "NPCs" / "vela.md"
+    note.parent.mkdir(parents=True)
+    note.write_text(
+        "---\nname: Vela\n" + portrait + "\nmobrpg:\n  element_id: \"e-1\"\n"
+        "  element_kind: \"Person\"\n---\n" + body, encoding="utf-8")
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "Vela.png").write_bytes(b"portrait-bytes")
+    (att / "map.png").write_bytes(b"map-bytes")
+    return tmp_path
+
+
+def _wire_push(monkeypatch, files, calls, fail=None):
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+
+    def req(m, p, **k):
+        calls.append((m, p, k.get("body")))
+        if fail and (m, p) == fail[0]:
+            raise client.ApiError(fail[1], "", p)
+        if m == "GET" and p == "/world/w1/person/e-1":
+            return {"files": files}
+        if m == "POST" and p.endswith("/file/url"):
+            return {"key": "k-" + k["body"]["fileName"], "signedUrl": "https://s3/put",
+                    "contentType": k["body"]["contentType"], "metaData": {"name": "n"}}
+        if m == "PUT" and p.endswith("/file/url/complete"):
+            return {"key": k["body"]["key"]}
+        return {}
+    monkeypatch.setattr(client, "_request", req)
+    puts = []
+    monkeypatch.setattr(images, "_put", lambda url, data, ct, meta: puts.append((url, data, ct, meta)))
+    monkeypatch.setattr(images, "_download", lambda url: {"https://cdn/p.png": b"portrait-bytes"}.get(url, b"other"))
+    return puts
+
+
+def test_push_dry_run_uploads_nothing(tmp_path, monkeypatch, capsys):
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push"]) == 0
+    out = capsys.readouterr().out
+    assert "would upload: vela <- _attachments/characters/Vela.png" in out
+    assert "would upload: vela <- _attachments/characters/map.png" in out
+    assert not puts and not [c for c in calls if c[0] != "GET"]
+
+
+def test_push_execute_runs_the_three_step_upload(tmp_path, monkeypatch):
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 0
+    assert [p[1] for p in puts] == [b"portrait-bytes", b"map-bytes"]
+    assert puts[0][2] == "image/png"
+    posts = [c for c in calls if c[0] == "POST"]
+    assert posts[0][1] == "/world/w1/person/e-1/file/url"
+    assert posts[0][2] == {"fileName": "Vela.png", "contentType": "image/png", "contentLength": 14}
+    completes = [c for c in calls if c[0] == "PUT"]
+    assert completes[0][2] == {"key": "k-Vela.png"}
+
+
+def test_push_skips_an_image_already_on_the_element(tmp_path, monkeypatch, capsys):
+    calls = []
+    puts = _wire_push(monkeypatch, [{"type": "Image", "url": "https://cdn/p.png"}], calls)
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 0
+    assert [p[1] for p in puts] == [b"map-bytes"]
+    assert "already there: 1" in capsys.readouterr().out
+
+
+def test_push_respects_the_file_cap(tmp_path, monkeypatch, capsys):
+    calls = []
+    files = [{"type": "Image", "url": "https://cdn/a.png"}, {"type": "Image", "url": "https://cdn/b.png"}]
+    puts = _wire_push(monkeypatch, files, calls)
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 0
+    assert not puts
+    assert "over the file cap: 2" in capsys.readouterr().out
+
+
+def test_push_without_write_access_says_so(tmp_path, monkeypatch, capsys):
+    calls = []
+    _wire_push(monkeypatch, [], calls, fail=(("POST", "/world/w1/person/e-1/file/url"), 403))
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 1
+    assert "you need write access" in capsys.readouterr().out
+
+
+def test_push_only_filters_by_name(tmp_path, monkeypatch, capsys):
+    calls = []
+    _wire_push(monkeypatch, [], calls)
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--only", "nobody"]) == 0
+    assert not calls
+
+
+def test_push_reports_an_unresolved_image(tmp_path, monkeypatch, capsys):
+    calls = []
+    _wire_push(monkeypatch, [], calls)
+    v = _push_vault(tmp_path, body="![[missing.png]]\n")
+    images.run(["w1", "--vault", str(v), "--push"])
+    assert "not found (or more than one match) under _attachments/: vela -> missing.png" in capsys.readouterr().out
+
+
+def test_only_needs_push(tmp_path):
+    with pytest.raises(SystemExit):
+        images.run(["w1", "--vault", str(tmp_path), "--only", "x"])

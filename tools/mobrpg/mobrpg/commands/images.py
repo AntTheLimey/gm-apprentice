@@ -16,12 +16,23 @@ nodes (the single source of truth); there is no sidecar crosswalk.
 World-level AI art lives separately at /world/{w}/generated/images and is
 attached to no entity; it is listed at the end for manual placement.
 
-GET-only against mobRPG; writes only the vault (dry-run default, --execute to
-apply).
+Without --push it is GET-only against mobRPG and writes only the vault
+(dry-run default, --execute to apply).
+
+`--push` goes the other way (#185): each linked note's `portrait:` and body
+image embeds are uploaded to its element through mobRPG's three-step upload
+(POST .../file/url for a signed URL, PUT the bytes to it, PUT .../complete).
+It is a direct write, so it needs write access to the element; there is no
+suggestion-queue path for files yet. An image whose bytes already match one of
+the element's files is skipped, so pushing is idempotent and never re-uploads
+an image this command pulled down. mobRPG caps a non-admin at two files per
+element; a push over the cap is reported, not attempted.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
+import mimetypes
 import os
 import re
 import sys
@@ -124,16 +135,173 @@ def _scan(world: str, token: str) -> list[dict]:
     return found
 
 
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+# mobRPG refuses a third file on an element for anyone but an admin.
+FILE_CAP = 2
+_EMBED = re.compile(r"!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
+_PORTRAIT = re.compile(r'^portrait:\s*"?([^"\n]*?)"?\s*$', re.M)
+# node element_kind -> API endpoint segment.
+_KIND_EP = {"person": "person", "organization": "organization", "political": "political",
+            "landfeature": "landfeature", "item": "item", "creature": "creature"}
+
+
+def _attachment_index(vault_dir: str) -> dict:
+    """lower-cased basename -> [vault paths] under _attachments/, for resolving a
+    bare `portrait: Vela.png` or `![[Vela.png]]` the way Obsidian does."""
+    idx: dict = {}
+    root = os.path.join(vault_dir, "_attachments")
+    for dirpath, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for f in files:
+            idx.setdefault(f.lower(), []).append(os.path.join(dirpath, f))
+    return idx
+
+
+def _local_images(vault_dir: str, txt: str, index: dict) -> tuple[list[str], list[str]]:
+    """(image files this note shows, references that didn't resolve to one file).
+    The portrait first, then body embeds, each once. Only files inside the vault."""
+    refs = []
+    m = _PORTRAIT.search(txt.split("\n---", 1)[0] if txt.startswith("---") else "")
+    if m and m.group(1).strip():
+        refs.append(m.group(1).strip())
+    refs += [r.strip() for r in _EMBED.findall(_vault.body_of(txt))]
+    root = os.path.realpath(vault_dir)
+    found, unresolved = [], []
+    for ref in refs:
+        if os.path.splitext(ref)[1].lower() not in IMAGE_EXTS:
+            continue
+        direct = os.path.join(vault_dir, ref)
+        hits = [direct] if os.path.isfile(direct) else index.get(os.path.basename(ref).lower(), [])
+        if len(hits) != 1 or not _within(root, hits[0]):
+            unresolved.append(ref)
+            continue
+        if hits[0] not in found:
+            found.append(hits[0])
+    return found, unresolved
+
+
+def _sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _put(url: str, data: bytes, content_type: str, meta: dict) -> None:
+    """PUT the bytes to the signed URL, with the headers the signature covers."""
+    req = urllib.request.Request(_check_url(url), data=data, method="PUT")
+    req.add_header("Content-Type", content_type)
+    for k, v in (meta or {}).items():
+        req.add_header(f"x-amz-meta-{k}", str(v))
+    with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310 - scheme checked
+        if resp.status >= 300:
+            raise client.ApiError(resp.status, "", "signed upload URL")
+
+
+def _upload(world: str, kind_ep: str, eid: str, path: str, token: str) -> dict:
+    """mobRPG's three-step element file upload. Returns the attached file."""
+    data = open(path, "rb").read()
+    ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+    base = f"/world/{world}/{kind_ep}/{eid}/file/url"
+    signed = client._request("POST", base, token=token, body={
+        "fileName": os.path.basename(path), "contentType": ctype,
+        "contentLength": len(data)}) or {}
+    _put(signed["signedUrl"], data, signed.get("contentType") or ctype,
+         signed.get("metaData") or {})
+    return client._request("PUT", f"{base}/complete", token=token,
+                           body={"key": signed["key"]}) or {}
+
+
+def run_push(args, token: str) -> int:
+    vault_dir = os.path.expanduser(args.vault)
+    index = _attachment_index(vault_dir)
+    uploaded = present = capped = denied = failed = 0
+    for path, txt, nd in _vault.iter_linked_notes(vault_dir):
+        name = os.path.splitext(os.path.basename(path))[0].replace("_", " ")
+        if args.only and args.only.lower() not in name.lower():
+            continue
+        images, unresolved = _local_images(vault_dir, txt, index)
+        for ref in unresolved:
+            print(f"  not found (or more than one match) under _attachments/: {name} -> {ref}")
+        if not images:
+            continue
+        kind_ep = _KIND_EP.get(str(nd.get("element_kind") or "").lower())
+        if not kind_ep:
+            print(f"  SKIPPED (unknown element kind {nd.get('element_kind')!r}): {name}")
+            continue
+        eid = nd["element_id"]
+        try:
+            detail = client._request("GET", f"/world/{args.world}/{kind_ep}/{eid}", token=token) or {}
+        except client.ApiError as e:
+            print(f"  FAILED reading the element: {name}: HTTP {e.status}", file=sys.stderr)
+            failed += 1
+            continue
+        files = detail.get("files") or []
+        remote = set()
+        for f in files:
+            if f.get("type") == "Image" and f.get("url"):
+                try:
+                    remote.add(_sha(_download(f["url"])))
+                except (ValueError, OSError) as e:
+                    print(f"  could not read an existing image on {name} ({e}); "
+                          "it can't be compared", file=sys.stderr)
+        count = len(files)
+        for img in images:
+            rel = os.path.relpath(img, vault_dir)
+            if _sha(open(img, "rb").read()) in remote:
+                present += 1
+                continue
+            if count >= FILE_CAP:
+                capped += 1
+                print(f"  NOT PUSHED (element already has {count} files, mobRPG's limit "
+                      f"for non-admins): {name} <- {rel}")
+                continue
+            if not args.execute:
+                print(f"  would upload: {name} <- {rel}")
+                uploaded += 1
+                count += 1
+                continue
+            try:
+                _upload(args.world, kind_ep, eid, img, token)
+            except client.ApiError as e:
+                if e.status in (401, 403, 404):
+                    denied += 1
+                    print(f"  NOT PUSHED (HTTP {e.status}: you need write access to this "
+                          f"element; ask the world owner to upload it): {name} <- {rel}")
+                else:
+                    failed += 1
+                    print(f"  FAILED (HTTP {e.status}): {name} <- {rel}", file=sys.stderr)
+                continue
+            except (ValueError, OSError) as e:
+                failed += 1
+                print(f"  FAILED ({e}): {name} <- {rel}", file=sys.stderr)
+                continue
+            uploaded += 1
+            count += 1
+            print(f"  uploaded: {name} <- {rel}")
+    print(f"{'uploaded' if args.execute else 'would upload'}: {uploaded}, "
+          f"already there: {present}, over the file cap: {capped}, "
+          f"no write access: {denied}, failed: {failed}")
+    if not args.execute:
+        print("dry-run — pass --execute to upload")
+    return 1 if failed or denied else 0
+
+
 def run(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         prog="mobrpg images",
         description="Pull entity images from a mobRPG world into the vault's "
-                    "_attachments/ folders and fill empty portrait: fields.")
+                    "_attachments/ folders and fill empty portrait: fields, or "
+                    "with --push, upload the vault's images to their elements.")
     ap.add_argument("world", help="mobRPG worldId")
     ap.add_argument("--vault", required=True, help="vault root path")
     ap.add_argument("--execute", action="store_true",
-                     help="download and write files (default: dry-run)")
+                     help="download and write files, or upload with --push (default: dry-run)")
+    ap.add_argument("--push", action="store_true",
+                    help="upload each linked note's portrait and image embeds to its "
+                         "element (needs write access to the element)")
+    ap.add_argument("--only", default="",
+                    help="with --push: only notes whose name contains this text")
     args = ap.parse_args(argv)
+    if args.only and not args.push:
+        ap.error("--only needs --push")
 
     vault_dir = os.path.expanduser(args.vault)
     try:
@@ -141,6 +309,9 @@ def run(argv: list[str]) -> int:
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+
+    if args.push:
+        return run_push(args, token)
 
     id_to_path = _node_paths(vault_dir)
 

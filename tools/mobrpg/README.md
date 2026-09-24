@@ -136,8 +136,13 @@ Run `mobrpg <command> --help` for a command's own options.
   edge into `relationships:` and fills an empty `parent_location:` scalar to
   match; no other frontmatter fields are populated.
 - `images <world> --vault <path>` — pull entity images into the vault.
-  **Pull-only**: there is no upload path, so a vault-side image reaches mobRPG
-  only through the web UI.
+- `images <world> --vault <path> --push [--only <text>] [--execute]` — upload
+  each linked note's `portrait:` and image embeds to its element. An image
+  whose bytes already match one of the element's files is skipped. This is a
+  direct write, so it needs write access to the element: mobRPG has no
+  suggestion path for files yet, so a collaborator without write access
+  still uploads through the web UI. mobRPG allows a non-admin two files per
+  element; the push reports anything over that.
 
 ### Reconcile (keep a vault current)
 

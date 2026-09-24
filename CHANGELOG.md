@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.11] — 2026-09-24
+
+### Added
+
+- **`mobrpg images --push` uploads vault images to their elements
+  (#185).** Each linked note's `portrait:` and body image embeds go up
+  through mobRPG's upload (a signed URL, then the bytes, then a completing
+  call). It's a dry run by default; `--execute` uploads and `--only`
+  scopes it to matching notes. An image whose bytes already match one of
+  the element's files is skipped, so a push never re-uploads an image
+  `images` pulled down. mobRPG allows a non-admin two files per element,
+  and the push reports anything over that instead of trying. The upload
+  is a direct write, so it needs write access to the element. A
+  collaborator without it gets a clear message: mobRPG has no suggestion
+  path for files yet (tdennis/game#67).
+
+---
+
 ## [1.10.10] — 2026-09-24
 
 ### Added
