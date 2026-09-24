@@ -312,4 +312,39 @@ function pairStoryFiles(pages, vaultPath) {
   }
 }
 
-module.exports = { slugify, scanVault, scanVaultReport, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+// Every note in the vault with just its name and frontmatter, ignoring
+// excludeDirs, folderMap and `type:` (#212). GM aliases are resolved against
+// this, because Obsidian resolves a link to any note in the vault, and a
+// GM-only folder the site never scans is the likeliest home for a secret.
+function scanAllNotes(vaultPath) {
+  const out = [];
+  (function walk(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(full); continue; }
+      if (!e.isFile() || !e.name.toLowerCase().endsWith('.md')) continue;
+      const title = e.name.slice(0, -3);
+      let frontmatter = {};
+      let text = '';
+      try {
+        text = fs.readFileSync(full, 'utf8');
+        // Only a note that declares aliases needs its frontmatter parsed.
+        if (/^(gm_)?aliases:/m.test(text)) frontmatter = matter(text).data || {};
+      } catch (err) {
+        // Its name still counts. A secret that silently stops being
+        // protected is the one failure that must not be quiet.
+        if (/^gm_aliases:/m.test(text)) {
+          console.warn(`WARNING: ${path.relative(vaultPath, full)} has gm_aliases but its frontmatter `
+            + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
+        }
+      }
+      out.push({ title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full });
+    }
+  })(vaultPath);
+  return out;
+}
+
+module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

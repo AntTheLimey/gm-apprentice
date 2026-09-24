@@ -979,3 +979,20 @@ def test_without_show_body_the_payload_stays_out_of_the_table(tmp_path, monkeypa
     _wire(monkeypatch, detail, [])
     sync_cmd.run(["w1", "--vault", str(v)])
     assert "Old vault prose." not in capsys.readouterr().out
+
+
+def test_push_never_carries_a_gm_alias(tmp_path, monkeypatch):
+    # #212: a GM alias in the body is pushed as its owner's name, not the secret.
+    v = _vault(tmp_path, text=NOTE.replace("Old vault prose.", "Old vault prose about [[Elias Crowe]]."))
+    npc = v / "Characters" / "NPCs" / "Lord_Vane.md"
+    npc.parent.mkdir(parents=True)
+    npc.write_text('---\ntype: npc\ngm_aliases: ["Elias Crowe"]\n---\nA patron.\n', encoding="utf-8")
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    detail = {"description": "<p>Server prose.</p>",
+              "lastModified": "2026-07-01T00:00:00Z"}
+    submitted = []
+    _wire(monkeypatch, detail, submitted)
+    sync_cmd.run(["w1", "--vault", str(v), "--execute"])
+    desc = submitted[0]["suggestions"][0]["payload"]["description"]
+    assert "Crowe" not in desc
+    assert "Lord Vane" in desc

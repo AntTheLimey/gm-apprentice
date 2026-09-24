@@ -523,16 +523,26 @@ def wikilink_target(value: Any) -> str:
     return re.sub(r"[\[\]]", "", str(value)).split("|")[0].split("#")[0].strip()
 
 
+def link_aliases(fm: dict[str, Any]) -> list[str]:
+    """Every name a link may use for this file: `aliases:` then the
+    GM-only `gm_aliases:` (#212), deduplicated. Lists only — an
+    `aliases: Doc` scalar is malformed, and treating it as one alias
+    would make the link graph disagree with Obsidian's own reading."""
+    names: list[str] = []
+    for field in ("aliases", "gm_aliases"):
+        values = fm.get(field)
+        if not isinstance(values, list):
+            continue
+        for a in values:
+            name = str(a).strip().strip("\"'")
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
 def frontmatter_aliases(text: str) -> list[str]:
-    """The `aliases:` list, inline or block. Never a bare scalar — an
-    `aliases: Doc` is malformed, and treating it as one alias would make
-    the link graph disagree with Obsidian's own reading of the file."""
-    fm = extract_frontmatter(text) or {}
-    aliases = fm.get("aliases")
-    if not isinstance(aliases, list):
-        return []
-    return [str(a).strip().strip("\"'") for a in aliases
-            if str(a).strip().strip("\"'")]
+    """`link_aliases` of a file's text."""
+    return link_aliases(extract_frontmatter(text) or {})
 
 
 # Session numbers above this are implausible — a larger value is a
@@ -1431,11 +1441,7 @@ def active_pc_names(vault: Path) -> set[str]:
             for tok in stem.split():
                 if len(tok) >= 3 and tok[:1].isupper():
                     names.add(tok)
-        aliases = fm.get("aliases")
-        if isinstance(aliases, list):
-            for a in aliases:
-                if isinstance(a, str) and a.strip():
-                    names.add(a.strip())
+        names.update(link_aliases(fm))
     return names
 
 

@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.7"
+current_version: "1.10.8"
 ---
 
 # Vault Migration Registry
@@ -822,3 +822,30 @@ Templates carry their own section guidance. No frontmatter changes.
 ### Tooling
 
 - `plan_check.py` knows the new section and the `**Handouts:**` label.
+
+## Migration: 1.10.7 → 1.10.8
+
+New optional frontmatter field `gm_aliases` (#212): secret names that
+resolve links but are never published. No existing file needs it.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Nothing to backfill. A GM who has been hiding every alias with
+  `exclude_fields: [aliases]` (or `publish_exclude_fields: [aliases]`)
+  just to keep one secret name off the site can move that name into
+  `gm_aliases` and drop the exclusion, so the other aliases publish
+  again. Offer this only when the vault uses that exclusion.
+
+### Tooling
+
+- publish-site 1.11.33 rewrites every GM alias to its owner's title
+  before rendering and strips `gm_aliases` from the site.
+- `vault_check`, `graph_check` and `session_context` resolve links and
+  match PCs through `gm_aliases`.
+- mobrpg rewrites a GM alias to its owner's name before any push, never
+  sends one as an `altName`, and no longer mistakes a `gm_aliases:` line
+  for `aliases:`.

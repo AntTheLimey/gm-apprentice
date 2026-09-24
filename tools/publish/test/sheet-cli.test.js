@@ -346,3 +346,18 @@ test('--player-safe honours a per-file overrides.fields re-include', async () =>
   await r2.promise;
   assert.ok(!r2.out.join('\n').includes('BOBSECRET'), r2.out.join('\n'));
 });
+
+test('player-safe view rewrites a GM alias to its owner, as the site does (#212)', async () => {
+  const withAlias = () => {
+    const list = pages();
+    list[0].markdown += '\nOwes money to [[Elias Crowe]].\n';
+    list[0].frontmatter.relationships.push({ target: 'Elias Crowe', type: 'owes' });
+    list[2].frontmatter.gm_aliases = ['Elias Crowe'];
+    return list;
+  };
+  const r = run({ pc: 'Jane Ashford', playerSafe: true, scan: withAlias });
+  assert.equal(await r.promise, 0);
+  const text = r.out.join('\n');
+  assert.ok(!text.includes('Crowe'), text);
+  assert.ok(text.includes('[[Gatekeeper]]'));
+});

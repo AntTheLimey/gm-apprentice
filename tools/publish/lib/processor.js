@@ -664,7 +664,133 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   delete filtered.publish;
   delete filtered.publish_exclude_fields;
   delete filtered.publish_include_sections;
+
+  // `gm_aliases` resolve links and are never shown (#212). A GM on Obsidian
+  // may list the same name under `aliases` too, since Obsidian only resolves
+  // links through `aliases`, so a GM alias is also removed from that list.
+  const secret = new Set(gmAliasList(frontmatter).map(gmAliasKey));
+  delete filtered.gm_aliases;
+  if (Array.isArray(filtered.aliases) && secret.size > 0) {
+    const shown = filtered.aliases.filter(a => !secret.has(gmAliasKey(a)));
+    if (shown.length > 0) filtered.aliases = shown;
+    else delete filtered.aliases;
+  }
   return filtered;
 }
 
-module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, publishMode, isGmOnlyEdge, keepOnlySections };
+function gmAliasList(frontmatter) {
+  const raw = frontmatter && frontmatter.gm_aliases;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(a => String(a).trim()).filter(Boolean);
+}
+
+// How a name is compared against GM aliases: the way Obsidian resolves a link,
+// so any spelling that reaches the page in Obsidian is caught here too. NFC,
+// case-folded, `_` read as a space.
+function gmAliasKey(name) {
+  return canonicalNfc(String(name)).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Frontmatter fields the renderers resolve as a page name, bare or bracketed.
+const GM_ALIAS_NAME_FIELDS = new Set([
+  'location', 'parent_location', 'parent', 'part_of', 'leadership', 'territory',
+  'current_holder', 'origin', 'first_appearance', 'participants', 'superseded_by',
+  'chapter', 'about', 'practitioner', 'found_by', 'author',
+]);
+
+// A rewriter that replaces every GM alias with the name of the page that owns
+// it (#212), or null when the vault has none. `pages` is every note in the
+// vault, published or not (`scanAllNotes` plus the scanned pages): a withheld
+// villain's page is the likeliest owner of a secret name, and the rewrite must
+// still happen when that page has no URL (the link then renders as its public
+// title in plain text).
+//
+// A GM alias that is also a published page's title or public alias is
+// skipped: that name belongs to the other page, and its links stay as they
+// are. `published` is the pages the site publishes (default: all of `pages`).
+function gmAliasRewriter(pages, published) {
+  const owners = new Map();
+  for (const page of pages) {
+    for (const key of gmAliasList(page.frontmatter || {}).map(gmAliasKey)) {
+      if (!owners.has(key)) owners.set(key, page);
+    }
+  }
+  // Only a published page can claim a name: its title is on the site anyway.
+  // An unpublished note named after the secret (a GM's `Elias Crowe.md`)
+  // would leave the name showing as plain text, so it never claims it.
+  for (const page of published || pages) {
+    const fm = page.frontmatter || {};
+    const secret = new Set(gmAliasList(fm).map(gmAliasKey));
+    owners.delete(gmAliasKey(page.title));
+    for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) {
+      if (!secret.has(gmAliasKey(a))) owners.delete(gmAliasKey(a));
+    }
+  }
+  if (owners.size === 0) return null;
+
+  const WIKI = /(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]/g;
+  function links(text, labelled) {
+    return String(text).replace(WIKI, (match, bang, target, anchor, label) => {
+      const owner = owners.get(gmAliasKey(target));
+      if (!owner) return match;
+      // In prose, an unlabelled link shows the page's display title rather
+      // than its filename. Frontmatter values keep a bare target, because
+      // several renderers strip the brackets and look the rest up as-is.
+      const shown = !label && labelled && owner.displayTitle && owner.displayTitle !== humanizeName(owner.title)
+        ? `|${owner.displayTitle}` : '';
+      return `${bang}[[${owner.title}${anchor || ''}${label || shown}]]`;
+    });
+  }
+  // `[[...]]` inside any value, at any depth.
+  function linksIn(v) {
+    if (typeof v === 'string') return links(v, false);
+    if (Array.isArray(v)) return v.map(linksIn);
+    if (v && typeof v === 'object' && !(v instanceof Date)) {
+      const out = {};
+      for (const [k, x] of Object.entries(v)) out[k] = linksIn(x);
+      return out;
+    }
+    return v;
+  }
+  // A field the renderers resolve as a page name also takes a bare name
+  // (`location: Elias Crowe`). Only those fields: a GM alias that happens to
+  // be an ordinary word must not rewrite `status:` or `occupation:`.
+  function nameIn(v) {
+    if (typeof v === 'string') {
+      const owner = owners.get(gmAliasKey(v));
+      return owner ? owner.title : links(v, false);
+    }
+    if (Array.isArray(v)) return v.map(nameIn);
+    return linksIn(v);
+  }
+  function relationships(v) {
+    if (Array.isArray(v)) {
+      return v.map(r => (r && typeof r === 'object' && !Array.isArray(r))
+        ? Object.assign(linksIn(r), 'target' in r ? { target: nameIn(r.target) } : {})
+        : nameIn(r));
+    }
+    if (v && typeof v === 'object' && !(v instanceof Date)) {
+      const out = {};
+      for (const [k, x] of Object.entries(v)) out[k] = nameIn(x);
+      return out;
+    }
+    return nameIn(v);
+  }
+  return {
+    markdown: text => links(text, true),
+    // `aliases` and `gm_aliases` are the declarations themselves;
+    // publishedFrontmatter removes the secret names from them.
+    frontmatter(fm) {
+      const out = {};
+      for (const [k, v] of Object.entries(fm || {})) {
+        if (k === 'aliases' || k === 'gm_aliases') out[k] = v;
+        else if (k === 'relationships') out[k] = relationships(v);
+        else if (GM_ALIAS_NAME_FIELDS.has(k)) out[k] = nameIn(v);
+        else out[k] = linksIn(v);
+      }
+      return out;
+    },
+  };
+}
+
+module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };

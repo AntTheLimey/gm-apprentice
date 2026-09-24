@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.8] — 2026-09-24
+
+### Added
+
+- **`gm_aliases`: secret names that resolve links but never publish
+  (#212).** A disguised NPC's true name can go in `gm_aliases`, so notes
+  can link `[[Elias Crowe]]` to Lord Vane's page. Before anything
+  renders, the publish build rewrites every GM alias to the title of
+  the note that owns it, in every page's body and frontmatter. The
+  owner can be any note in the vault, including one in a folder the site
+  never scans. That covers wikilinks in any spelling Obsidian resolves
+  (other case, underscores, a `#heading` anchor, an embed) and a bare
+  value in a field that names a page, such as a relationship `target:`
+  or `location:`. It keeps any `|label`. Other fields change only
+  inside `[[...]]`, so a GM alias that is an ordinary word never
+  rewrites `status:` or `occupation:`. Only a published page can keep a
+  name for itself: a GM-only note named after the secret doesn't stop
+  the rewrite. A note whose `gm_aliases` can't be read because of broken
+  frontmatter is reported as a build warning. So the
+  name never reaches the site: not the search index, the portrait alt
+  text, the frontmatter, relationships, the location card,
+  Connections, the graph or the sidebar. When the owner page isn't
+  published, the link shows its public title as plain text.
+  `sheet show --player-safe` applies the same rewrite. Obsidian only
+  resolves links through `aliases`, so a name may be listed in both
+  fields and is still removed from the published `aliases`. A GM alias
+  that is another page's title or public alias is left to that page.
+  `vault_check` (names, index, PC roster), `graph_check` and
+  `session_context` resolve through it too. Publish tool 1.11.33.
+- **mobrpg never pushes a GM alias upstream.** `sync`, `pull-canon`'s
+  edit guard and `suggest` rewrite a GM alias to its owner's name (the
+  owner can be a note in any folder) before building a description, a
+  classifier, a link or a relationship event and its description. The
+  link reaches the owner's element under its public name.
+
+### Fixed
+
+- **mobrpg no longer reads `gm_aliases:` as `aliases:`.** The alias parser
+  wasn't anchored to the start of a line. A `gm_aliases` list could be
+  sent upstream as the element's alternate names, and a trailing
+  `# comment` on a block-list item became part of the name.
+
+---
+
 ## [1.10.7] — 2026-09-24
 
 ### Removed

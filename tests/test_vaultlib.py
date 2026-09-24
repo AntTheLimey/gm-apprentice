@@ -559,6 +559,15 @@ class TextHelperTests(unittest.TestCase):
             ["Doc", "The Colonel"])
         self.assertEqual(vl.frontmatter_aliases("# no frontmatter\n"), [])
 
+    def test_link_aliases_include_gm_aliases(self):
+        # #212: GM-only aliases resolve links too; a name in both is listed once.
+        self.assertEqual(
+            vl.frontmatter_aliases(
+                '---\naliases: [Vane, "Red"]\ngm_aliases:\n  - Red\n  - Elias Crowe\n---\n'),
+            ["Vane", "Red", "Elias Crowe"])
+        self.assertEqual(vl.link_aliases({"gm_aliases": ["Crowe"]}), ["Crowe"])
+        self.assertEqual(vl.link_aliases({"gm_aliases": "Crowe"}), [])
+
     def test_raw_frontmatter_and_body_of(self):
         text = "---\ntype: npc\n---\n\n# Body\n\ntext\n"
         self.assertEqual(vl.raw_frontmatter(text), "type: npc")

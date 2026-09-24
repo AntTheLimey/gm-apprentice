@@ -162,6 +162,7 @@ from vaultlib import (  # noqa: F401
     get_key,
     is_skipped_path,
     iter_body_lines,
+    link_aliases,
     link_target,
     nested_mapping,
     normalize,
@@ -349,10 +350,8 @@ def check_names(vault: Path, threshold: float) -> list[str]:
             continue
         etype = fm.get("type")
         entries.append((stem, rel, "name", etype, phonetic_words(stem)))
-        aliases = fm.get("aliases")
-        if isinstance(aliases, list):
-            for a in aliases:
-                entries.append((a, rel, "alias", etype, phonetic_words(a)))
+        for a in link_aliases(fm):
+            entries.append((a, rel, "alias", etype, phonetic_words(a)))
     rows = []
     seen_pairs = set()
     phonetic = {}  # pair -> row; emitted only if no exact/fuzzy row exists
@@ -437,11 +436,9 @@ def check_index(vault: Path) -> list[str]:
         stem = normalize(Path(rel).stem)
         names.add(stem)
         refs = {stem}
-        aliases = fm.get("aliases")
-        if isinstance(aliases, list):
-            for a in aliases:
-                names.add(normalize(a))
-                refs.add(normalize(a))
+        for a in link_aliases(fm):
+            names.add(normalize(a))
+            refs.add(normalize(a))
         referenced_by[rel] = refs
         # Underscore dirs are infrastructure, not indexable content.
         if not rel.split("/")[0].startswith("_"):
@@ -760,9 +757,7 @@ def list_active_pcs(vault: Path) -> list[str]:
     """
     rows = []
     for rel, fm in active_pcs(vault):
-        aliases = fm.get("aliases")
-        names = ", ".join(str(a).strip() for a in aliases
-                          if str(a).strip()) if isinstance(aliases, list) else ""
+        names = ", ".join(link_aliases(fm))
         as_of = fm.get("asOfSession")
         stamp = str(as_of) if as_of not in (None, "", []) else "?"
         rows.append(f"PC\t{rel}\t{Path(rel).stem}; "

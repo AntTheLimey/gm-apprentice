@@ -125,6 +125,15 @@ class CheckNamesPhoneticTests(unittest.TestCase):
         self.assertEqual(len(rows_for(rows, "PHONETIC")), 1)
         self.assertTrue(rows[0].startswith("INFO\t"))
 
+    def test_gm_alias_counts_as_a_name(self):
+        # #212: a GM-only alias is a name the GM can confuse like any other.
+        d = self._vault(["Herzfeld", "Adler"])
+        (d / "Adler.md").write_text(
+            "---\ntype: npc\nname: Adler\ngm_aliases:\n  - Herzveld\n---\n")
+        rows = vc.check_names(d, 0.85)
+        self.assertEqual(len(rows), 1)
+        self.assertIn("Herzveld", rows[0])
+
     def test_fuzzy_match_is_not_double_reported_as_phonetic(self):
         rows = vc.check_names(self._vault(["Herzfeld", "Herzveld"]), 0.85)
         self.assertEqual(len(rows), 1)
@@ -198,3 +207,15 @@ class CheckReadAloudTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class GmAliasIndexTests(unittest.TestCase):
+    def test_note_indexed_by_a_gm_alias_counts_as_referenced(self):
+        # #212: check_index resolves a link through gm_aliases like aliases.
+        d = Path(tempfile.mkdtemp(prefix="vc-gm-index-"))
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        (d / "_meta").mkdir()
+        (d / "_meta" / "index.md").write_text("- [[Elias Crowe]]\n")
+        (d / "Lord Vane.md").write_text(
+            "---\ntype: npc\ngm_aliases:\n  - Elias Crowe\n---\n")
+        self.assertEqual(vc.check_index(d), [])

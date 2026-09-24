@@ -15,13 +15,14 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
-const { scanVault, slugify } = require('./scanner');
+const { scanVault, scanAllNotes, slugify } = require('./scanner');
 const { loadPublishConfig, vaultRelPath } = require('./config');
 const {
   playerSafeMarkdown,
   keepOnlySections,
   publishedFrontmatter,
   publishMode,
+  gmAliasRewriter,
 } = require('./processor');
 
 function casefold(value) {
@@ -108,8 +109,26 @@ async function runSheetShow(deps) {
   const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
-  const pcs = scan().filter((p) => p.frontmatter && p.frontmatter.type === 'pc');
-  const page = findPc(pcs, wanted);
+  const scanned = scan();
+  const pcs = scanned.filter((p) => p.frontmatter && p.frontmatter.type === 'pc');
+  const found = findPc(pcs, wanted);
+  // The player-safe view is what the site shows, so GM aliases (#212) are
+  // rewritten to their owners' names exactly as build.js does. The raw view
+  // below keeps the file as written.
+  const allNotes = deps.scanAllNotes || scanAllNotes;
+  const scannedPaths = new Set(scanned.map((p) => p.sourcePath));
+  const gmAliases = playerSafe
+    // No page claims a name here: this CLI can't tell which pages the site
+    // actually publishes (drafts, the manifest), so it errs toward hiding.
+    ? gmAliasRewriter(
+      scanned.concat(allNotes(vaultPath).filter((n) => !scannedPaths.has(n.sourcePath))), [])
+    : null;
+  const page = found && gmAliases
+    ? Object.assign({}, found, {
+      markdown: gmAliases.markdown(found.markdown || ''),
+      frontmatter: gmAliases.frontmatter(found.frontmatter),
+    })
+    : found;
   if (!page) {
     const names = pcs.map(displayNameOf).join(', ');
     err(`No PC named "${wanted}". PCs: ${names || '(none in this vault)'}`);

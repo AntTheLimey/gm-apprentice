@@ -11,7 +11,7 @@ drift *detector*: this script does not import that module (and must not),
 but the two are designed to agree on what counts as indexable content —
 `_`-prefixed top-level directories and `SKIP_DIRS` are infrastructure, not
 content, in both places. `check_index` requires every other `.md` file to
-be referenced by its own stem or an `aliases:` entry, so this generator
+be referenced by its own stem or an `aliases:`/`gm_aliases:` entry, so this generator
 links everything it finds a place for: chapters, every session and scene
 (nested under its chapter), every session-chain document (nested under
 its session), every `*_Story.md` companion (nested under its PC), and

@@ -242,6 +242,11 @@ class SpotlightUnitTests(unittest.TestCase):
         self.assertTrue(sc.pc_matches("Second", "Characters/PCs/Second_Name.md", {}))
         self.assertFalse(sc.pc_matches("Nobody", "Characters/PCs/Hero.md", fm))
 
+    def test_pc_matches_gm_alias(self):
+        # #212: a play-notes cell naming a PC by a GM-only alias still matches.
+        fm = {"gm_aliases": ["The Masked One"]}
+        self.assertTrue(sc.pc_matches("the masked one", "Characters/PCs/Hero.md", fm))
+
 
 class ArcsCLITests(unittest.TestCase):
     def test_arcs_report(self):

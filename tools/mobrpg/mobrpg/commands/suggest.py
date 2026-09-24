@@ -40,13 +40,83 @@ def _read(path: str) -> tuple[str, str]:
     return fm_body, body
 
 
+def _list_field(fm: str, field: str) -> list[str]:
+    """A top-level frontmatter list, inline or block. Anchored to the start of
+    a line so `aliases` never matches inside `gm_aliases`."""
+    block = re.search(rf"^{field}:(.*?)(?=\n\w|\Z)", fm, re.S | re.M)
+    items = re.findall(r"^\s*-\s*(.+?)\s*$", block.group(1), re.M) if block else []
+    # A YAML comment needs whitespace before the `#`; a quoted item keeps its own.
+    items = [a if a[:1] in "\"'" else re.sub(r"\s+#.*$", "", a) for a in items]
+    inline = re.search(rf"^{field}:\s*\[([^\]]*)\]", fm, re.M)
+    items = [a for a in (inline.group(1) if inline else "").split(",") if a.strip()] or items
+    return [a.strip().strip("\"'") for a in items if a.strip().strip("\"'")]
+
+
+def _gm_aliases(fm: str) -> list[str]:
+    """GM-only names (#212): they resolve links in the vault but never go
+    upstream. `unmask_gm_aliases` rewrites them before anything is pushed."""
+    return _list_field(fm, "gm_aliases")
+
+
 def _aliases(fm: str) -> list[str]:
-    aliases = (re.findall(r'-\s*"?([^"\n]+?)"?\s*$',
-                          re.search(r"aliases:(.*?)(?=\n\w|\Z)", fm, re.S).group(1), re.M)
-               if "aliases:" in fm else [])
-    aliases = [a for a in (re.findall(r'aliases:\s*\[([^\]]*)\]', fm) or [""])[0].split(",")
-               if a.strip()] or aliases
-    return [a.strip().strip('"') for a in aliases if a.strip()]
+    """The public aliases, which go upstream as altNames. A GM alias listed
+    under `aliases` too, so Obsidian resolves it, is still kept back."""
+    secret = {_key(a) for a in _gm_aliases(fm)}
+    return [a for a in _list_field(fm, "aliases") if _key(a) not in secret]
+
+
+def gm_alias_owners(vault) -> dict[str, str]:
+    """{name key of a GM alias: display name of the note that owns it} (#212).
+    An owner can be any note in the vault, in any folder: Obsidian resolves a
+    link to any of them, and a GM-only folder is the likeliest home for a
+    secret. Only a note in an entity folder (one that can become a mobRPG
+    element) claims a name, so a GM alias that is also such a note's name or
+    public alias is left to it. A GM-only note named after the secret doesn't
+    claim it: its name would go upstream as plain text."""
+    owned: dict[str, str] = {}
+    vault = os.path.expanduser(vault)
+    for root, dirs, files in os.walk(vault):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules")
+        for f in sorted(files):
+            if not f.lower().endswith(".md"):
+                continue
+            p = os.path.join(root, f)
+            try:
+                fm, _ = _read(p)
+            except (OSError, UnicodeDecodeError):
+                continue
+            for a in _gm_aliases(fm):
+                owned.setdefault(_key(a), _display_name(p))
+    if not owned:
+        return {}
+    for folder in map_cmd.FOLDERS:
+        for p in glob.glob(os.path.join(vault, folder, "*.md")):
+            owned.pop(_key(_display_name(p)), None)
+            try:
+                fm, _ = _read(p)
+            except (OSError, UnicodeDecodeError):
+                continue
+            for a in _aliases(fm):
+                owned.pop(_key(a), None)
+    return owned
+
+
+_WIKILINK = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]")
+
+
+def unmask_gm_aliases(text: str, owners: dict) -> str:
+    """Point every `[[GM alias]]` at its owner's name, keeping any `#anchor` and
+    `|label`, so nothing pushed upstream carries the secret name (#212). Run it
+    before link rewriting, so the link resolves to the owner's element."""
+    if not owners or not text:
+        return text
+
+    def sub(m):
+        owner = owners.get(_key(m.group(2)))
+        if not owner:
+            return m.group(0)
+        return f"{m.group(1)}[[{owner}{m.group(3) or ''}{m.group(4) or ''}]]"
+    return _WIKILINK.sub(sub, text)
 
 
 def _relationships(fm: str) -> list[dict]:
@@ -123,6 +193,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
     vault = os.path.expanduser(vault)
     exclude_kinds = exclude_kinds or set()
     vault_only = vault_only_sections(vault)
+    owners = gm_alias_owners(vault)
     out = []
     for folder, vkind in map_cmd.FOLDERS.items():
         if kind and vkind != kind:
@@ -137,6 +208,9 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
             if only and only.lower() not in name.lower():
                 continue
             fm, body = _read(p)
+            # No GM alias reaches anything built from this note (#212): its
+            # classifiers, relationship descriptions and body are all pushed.
+            fm, body = unmask_gm_aliases(fm, owners), unmask_gm_aliases(body, owners)
             # An entity folder can hold non-entity sidecars (e.g. a `character-story`
             # note living beside its `pc`). Its `type` won't match the folder's kind,
             # and it isn't a world element — skip it so it never becomes a bogus
@@ -158,7 +232,9 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
                 "gender": map_cmd._scalar(fm, "gender"),
                 "faction_type": map_cmd._scalar(fm, "faction_type"),
                 "creature_type": map_cmd._scalar(fm, "creature_type"),
-                "relationships": _relationships(fm),
+                "relationships": [
+                    {**r, "target": owners.get(_key(r["target"].split("#")[0]), r["target"])}
+                    for r in _relationships(fm)],
             })
     if limit:
         out = out[:limit]

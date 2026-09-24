@@ -538,6 +538,7 @@ def run(argv: list[str]) -> int:
     # candidate rebuilt here from a note's CURRENT body hashes identically to
     # one `sync` would have built from the same body.
     push_idx, _linked_keys, _submitted_keys = suggest.node_index(args.vault)
+    gm_owners = suggest.gm_alias_owners(args.vault)
     vault_only = vault_only_sections(args.vault)
     # Notes an `upd/` row already answered for THIS run. The upd branch writes
     # the file and releases `pending_ref`, so a create-ref row reached later in
@@ -609,7 +610,8 @@ def run(argv: list[str]) -> int:
                 # the next sync takes the push/tie path (review, not a
                 # silent overwrite) instead of `pull`.
                 cand_md = sync_cmd._push_candidate(
-                    body_of(txt), push_idx, args.world, links.URL_FMT, vault_only)
+                    body_of(txt), push_idx, args.world, links.URL_FMT, vault_only,
+                    gm_owners)
                 pushed_digest = hashlib.sha256(
                     cand_md.encode("utf-8")).hexdigest()[:12]
                 pin_mtime = ext.rsplit("#", 1)[-1] == pushed_digest

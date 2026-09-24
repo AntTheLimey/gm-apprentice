@@ -1,10 +1,10 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { scanVault, scanAllNotes, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -364,6 +364,22 @@ function build(options = {}) {
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
+
+  // A GM alias must never reach the site (#212): rewrite every one to the
+  // title of the note that owns it, in every scanned page's body and
+  // frontmatter, before anything renders or derives from them. Owners come
+  // from the whole vault; the rewrite runs over the corpus, not just `pages`,
+  // because the landing page also reads unpublished pages.
+  const scannedPaths = new Set(corpus.map(p => p.sourcePath));
+  const gmAliases = gmAliasRewriter(corpus.concat(
+    scanAllNotes(config.vaultPath).filter(n => !scannedPaths.has(n.sourcePath))), pages);
+  if (gmAliases) {
+    for (const page of corpus) {
+      page.markdown = gmAliases.markdown(page.markdown || '');
+      if (page.storyMarkdown) page.storyMarkdown = gmAliases.markdown(page.storyMarkdown);
+      page.frontmatter = gmAliases.frontmatter(page.frontmatter);
+    }
+  }
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
