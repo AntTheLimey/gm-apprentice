@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.3] — 2026-09-24
+
+### Added
+
+- `vault_check.py`: `--file` (repeatable) and `--newer-than <path>` on
+  `relationships`, `tables` and `pc-body`, and `--folder` on
+  `relationships` and `tables` (`pc-body` already had it). All combine
+  by AND. A run's own validation no longer has to read a vault's whole
+  pre-existing backlog to find the rows it wrote — on a real vault that
+  was 490 off-vocabulary relationship rows and a folder's worth of
+  unrelated PC-body findings per wrap-up. `--newer-than` is a backstop
+  scope (files with an mtime at or after a named file's own), usable
+  alone or as a completeness cross-check against an explicit `--file`
+  list. Every `--file`/`--newer-than` value — absolute or relative,
+  with a leading `./`, doubled slashes, or an interior `..` that stays
+  inside the vault — is resolved to a real vault-relative path (never
+  the merely-normalised input string) and matched exactly against the
+  vault's actual files, directories excluded; a path outside the
+  vault, in a skipped directory (hidden, `_Templates/`, `_inbox/`), a
+  different case, or simply nonexistent is a CLI error (exit 2), never
+  a silently empty or silently wrong report. `wrapup`'s pre-existing
+  `--file` goes through the same validation, so a genuinely missing
+  path is now caught there too instead of falling through to a
+  same-looking "no wrap-up with that path" row (#219).
+- `tests/test_entity_schema_required_fields.py`: parses
+  `shared/entity-schema.md` § Required Fields and asserts it matches
+  `schema_rules.REQUIRED_FIELDS`, so the two can't drift apart again
+  without a test failure (#221).
+
+### Changed
+
+- `session-wrapup`: Step 4's validation now passes `--file` for every
+  path Step 4 created, edited or re-pointed — entities, re-pointed
+  container children, cross-entity claim targets, Event files — to
+  `relationships`, and for every PC refreshed in Step 3c to `pc-body`,
+  instead of scanning the whole `Characters/PCs` folder and asking the
+  model to read only the relevant rows by eye. When Step 4 ran as
+  sub-agents, each now returns the vault-relative paths it wrote, and
+  Validate runs `relationships` once more with `--newer-than <session
+  index>` (stamped once, before Step 1, and never touched again) as a
+  completeness cross-check on that list (#219).
+- `shared/entity-schema.md` § Required Fields now lists exactly what
+  `schema_rules.REQUIRED_FIELDS` enforces (`type` + `canon_status` for
+  most types, per-type extras for the rest) and relabels `aliases`,
+  `tags`, `source_document`, `campaign` and `first_appearance` as
+  recommended, not required. Removes the skill-diet branch's stopgap
+  note, and its lead sentence no longer implies `canon_status` is
+  universal (#221).
+- `shared/reconcile.md`: the `wrapup --file` confirmation step now
+  says a missing path exits 2, and that the `no wrap-up with that
+  path` INFO row means only a wrong `type:` (#219).
+
 ## [1.10.2] — 2026-09-24
 
 ### Added

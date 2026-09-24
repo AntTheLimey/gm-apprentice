@@ -108,22 +108,66 @@ constraint inheritance in the relationship ontology.
 
 ## Frontmatter Schemas
 
-### Required Fields (All Entity Types)
+### Required Fields (by Entity Type)
+
+Most entity types require `type` and `canon_status`; the exact
+per-type set is below. This is exactly what `vault_check.py
+frontmatter` enforces via
+`schema_rules.REQUIRED_FIELDS` — that mapping is authoritative, and
+`tests/test_entity_schema_required_fields.py` checks this block
+against it so the two cannot drift silently.
+
+```yaml
+npc: [type, canon_status]
+pc: [type, canon_status]
+location: [type, canon_status]
+faction: [type, canon_status]
+organization: [type, canon_status]
+item: [type, canon_status]
+creature: [type, canon_status]
+clue: [type, canon_status]
+event: [type, canon_status]
+document: [type, canon_status]
+adventure-brief: [type, canon_status, scope]
+session: [type, session_number, status, documents]
+session-plan: [type, canon_status, session]
+session-play-notes: [type, canon_status, session]
+session-wrap-up: [type, canon_status, session]
+session-wrapup: [type, canon_status, session]
+session_wrap: [type, canon_status, session]
+scene: [type, canon_status, scene_type, status]
+chapter: [type]
+meta: [type]
+timeline: [type]
+player-characters: [type]
+character-story: [type, canon_status]
+campaign_overview: [type, canon_status]
+heritage: [type, canon_status]
+plan: [type, canon_status, plan_type, chapter]
+world_domain: [type, canon_status, domain, status]
+world_flags: [type]
+```
+
+A `type:` outside this list is a custom type: `vault_check.py
+frontmatter` surfaces it as INFO ("no schema rules applied") rather
+than enforcing anything against it.
+
+Recommended on every type, though not enforced: `aliases`, `tags`,
+`source_document`, `campaign`, `first_appearance`. Write them
+anyway — `vault_check.py names` reads `aliases`, and campaign-qa's
+audits lean on the rest.
 
 ```yaml
 ---
 type: npc              # From the type hierarchy
 canon_status: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
-aliases: []
-tags: []
-source_document: ""
-campaign: ""
-first_appearance: ""   # Link to scene or session
+aliases: []             # recommended, not enforced
+tags: []                # recommended, not enforced
+source_document: ""     # recommended, not enforced
+campaign: ""            # recommended, not enforced
+first_appearance: ""    # recommended, not enforced — link to scene or session
 ---
 ```
-
-(`vault_check.py frontmatter` enforces `type` and `canon_status`,
-plus per-type extras; write the rest anyway.)
 
 ### Relationships Block
 
