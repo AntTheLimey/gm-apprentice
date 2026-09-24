@@ -64,13 +64,14 @@ their drift can come from any skill run, not one migration:
   any live basename collisions (two or more files resolving to the
   same wikilink target).
 - **GM-only headings** — run `vault_check.py <vault> gm-leak`
-  (see `shared/vault-access.md`); if the 1.8.3 entry is pending or
-  `exclude_sections` is not exactly `["GM Notes"]`, also run
-  `gm-leak --renest-excludes` (dry run):
+  (see `shared/vault-access.md`); while the 1.8.3 entry is pending,
+  also run `gm-leak --renest-excludes` (dry run). Once 1.8.3 is done,
+  leave the GM's `exclude_sections` list alone:
   - `WOULD-FIX` rows (re-nests, and the `_meta/vault-config.md`
     collapse) and bold-wrapped ERROR heading rows → one structural
-    item. An ERROR `re-nest refused` or `migration blocked` row →
-    list it; the item cannot apply until that file is fixed by hand.
+    item. An ERROR row (`re-nest refused`, `migration blocked`,
+    `not understood`, a code-fence heading ending an exclusion) →
+    list it; the item cannot apply until it is fixed by hand.
   - Fence-balance rows (orphan `<!-- /gm-only -->`, unclosed
     opener) → their own pending item: list file and line; fix the
     marker first, since an orphan closer changes what every line
@@ -127,8 +128,8 @@ applying them and stamping need one GM yes for the whole group — an
 instruction already in the request, such as "apply the structural
 changes," counts. The yes covers every item in the Structural group
 regardless of file count; never reclassify a structural item as a
-judgment call. A structural item is outstanding only if the GM
-refused it by name or it failed. Content and tooling items are
+judgment call. A structural item is outstanding if not applied —
+the GM declined the group or the item, or it failed. Content and tooling items are
 chosen one at a time by checkbox; ticked ones run whatever the
 structural answer. An empty or content-only preview needs no yes to
 stamp — declined content never blocks it.
@@ -163,9 +164,12 @@ In this order:
    then `vault_check.py <vault> gm-leak --renest-excludes --fix`. That
    one command re-nests every heading titled with a current
    `exclude_sections` entry under `## GM Notes` and then collapses
-   the list to `["GM Notes"]` — all or nothing: any refused file
-   writes nothing. Re-run `gm-leak`; require zero ERROR heading rows
-   and no `re-nest refused` row, or the item failed
+   the list to `["GM Notes"]` (a vault with no list keeps the
+   defaults) — all or nothing: any refusal writes nothing. Then
+   re-run `gm-leak` and `wrapup`; any ERROR row from either (a
+   heading row, `re-nest refused`, `repair refused`, a fence that
+   crosses a section, a Keeper-facing H2 that publishes) means the
+   item failed
 7. Copy selected templates to `_Templates/` (content)
 8. Overwrite selected templates in `_Templates/` (content)
 9. Update or add selected `_meta/entity-types.md` Type-Specific
@@ -206,8 +210,7 @@ Every structural item applied:
 > - [accepted content changes]
 > - [accepted tooling changes]"
 
-A structural item was refused by name or failed (Step 7's partial
-stamp):
+A structural item was not applied (Step 7's partial stamp):
 > "Vault is at version {stamped}, not {new} — [the outstanding
 > item] is still pending and will be offered again next migration.
 > Changes applied: ..."

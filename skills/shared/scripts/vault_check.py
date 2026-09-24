@@ -46,9 +46,12 @@ and its sub-headings a level; keyword WARNINGs, INFO rows and level-1
 headings never move. `--renest-excludes` is the 1.8.3 migration:
 it re-nests every heading titled with a current `exclude_sections`
 entry (hidden today or not), then collapses the list to
-`["GM Notes"]`. No rewrite is written if a hidden line would publish
-after it or a fence would unbalance (ERROR row instead), and one
-refused file blocks the collapse.
+`["GM Notes"]` (a vault with no list keeps the defaults). It walks
+every file the publisher might ship and fails closed on an
+`exclude_sections` it cannot read exactly. No rewrite is written if
+a hidden line would publish after it — judged by a port of the
+publish pipeline — or a fence would unbalance (ERROR row instead),
+and one refusal blocks the whole migration.
 
 `pc-body` runs over every `type: pc` sheet except `*_Story.md`
 companions and `publish: none` pages. ERROR is `## Current Status`
@@ -1104,13 +1107,12 @@ def check_gm_leak(vault: Path, folder: str | None,
     move — keyword-only WARNING headings and INFO rows are the GM's
     call and are never moved.
 
-    `renest_excludes` is the 1.8.3 migration: every level-2+ heading at
-    fence depth 0 whose title is in the vault's CURRENT exclude list
-    moves under `## GM Notes`, whether or not it publishes today, and
-    then `publish.exclude_sections` collapses to `["GM Notes"]` — after
-    the files, so the two steps cannot run out of order. Every file is
-    checked against the leak invariant under both configs; one refusal
-    blocks the collapse.
+    `renest_excludes` appends `renest_excludes_migration`'s rows (the
+    1.8.3 migration) instead of planning the plain re-nest.
+
+    A heading-shaped line inside a code fence that ends a running
+    exclusion is an ERROR: `filterSections` does not track code fences,
+    so everything after it publishes.
     """
     excludes = effective_exclude_sections(vault)
     match = {s.casefold() for s in excludes}

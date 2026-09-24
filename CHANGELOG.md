@@ -21,23 +21,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command. Re-nests every level-2+ heading titled with an entry of the
   vault's current `exclude_sections` (hidden today or not), then
   collapses the list to `["GM Notes"]` in `_meta/vault-config.md`,
-  all or nothing (#228).
+  all or nothing (#228). It walks every file the publisher might ship
+  (played session plans, `_inbox/` too), keeps a vault that sets no
+  list on the publisher defaults, and refuses to write anything when
+  `exclude_sections` is in a form it cannot read exactly.
 - A leak invariant on every rewrite (`gm-leak --fix`, `--renest-excludes`,
   `wrapup --fix`): a file is refused, with nothing written and an
-  ERROR row, if any line hidden before would publish after, or if the
-  rewrite adds a gm-only/spoiler fence problem.
+  ERROR row, if any line hidden before would publish after, a moved
+  heading would still publish, or the rewrite adds a gm-only/spoiler
+  fence problem. It reads the result through a line-for-line Python
+  port of the publish pipeline, not a model of it.
+- `gm-leak` reports a heading-shaped line inside a code fence that
+  ends a running exclusion (the site's section filter ignores code
+  fences, so everything after it publishes).
 
 ### Changed
 
 - `migration-procedure.md` Step 6 re-nests GM-only headings with
   `wrapup --fix` then `gm-leak --renest-excludes --fix`, and requires
-  a clean `gm-leak` re-run; Step 3 builds the preview from its dry run
-  and lists keyword WARNINGs as per-item Content choices (#228).
+  clean `gm-leak` and `wrapup` re-runs; Step 3 builds the preview
+  from its dry run only while 1.8.3 is pending, and lists keyword
+  WARNINGs as per-item Content choices (#228).
 - Migration consent is stated once, in Step 5: when the preview has
   Structural items, applying them and stamping need one GM yes (an
   instruction in the request counts), which covers the whole group
   regardless of file count; a structural item is never reclassified as
-  a judgment call and is outstanding only if refused by name or
+  a judgment call and is outstanding if not applied — declined or
   failed. Ticked content items run whatever the structural answer; an
   empty or content-only preview stamps. A headless run with no
   instruction gets a preview only. `shared/migrations.md` now says
@@ -48,7 +57,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list alone; the defaults apply only when it sets none. It used to
   add the defaults always, so the checks treated Player Notes, Source
   References and the other defaults as hidden on sites that publish
-  them.
+  them. The list is now parsed strictly (trailing comments, quoted
+  keys and items, commas inside quotes); a form it cannot read is
+  treated as excluding nothing, with a warning.
+- `scan_body` ends exclusions at heading-shaped lines inside code
+  fences, as the publisher does, and never re-anchors a running
+  exclusion at a nested excluded heading.
 
 ### Fixed
 
@@ -57,8 +71,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines moved into a fenced `## GM Notes` landed after its closer; and
   a pre-collapse migration moved nothing already hidden, so collapsing
   `exclude_sections` published it. Blocks now run to the closer of any
-  fence they open, and moved lines go before a fenced GM Notes'
-  closer.
+  fence they open, and moved lines go straight after `## GM Notes`'s
+  lead prose — inside its fence when fenced, before any nested
+  excluded heading that could claim them.
+- gm-publish 1.11.31: a nested excluded heading inside an active
+  exclusion (`## GM Notes` / `### Player Notes` / `### Secrets`) reset
+  the exclusion level, so `### Secrets` and everything after it
+  published on any vault whose list includes Player Notes — the
+  defaults do.
 - Step 7 no longer stamps the full target version past an outstanding
   structural item: it stamps the version of the last pending entry
   before the earliest entry with one (unchanged if that is the first

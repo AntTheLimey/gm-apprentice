@@ -387,13 +387,16 @@ hidden until revealed in play, not permanently secret.
   with an entry of the vault's own pre-collapse `exclude_sections`
   list (the publish defaults when it sets none) moves under one
   `## GM Notes` per file (created where absent), demoted one level
-  with its sub-headings, and the list collapses to `["GM Notes"]`. Run it as one command:
-  `vault_check.py <vault> gm-leak --renest-excludes --fix` (dry run
-  without `--fix`). It re-nests first and collapses after, all or
-  nothing: a file where any hidden line would publish (an H1 so
-  titled, an unbalanced fence) is refused and nothing is written. A
-  pure structural move — nothing added, removed, or reworded — applied
-  as one batch on the GM's yes.
+  with its sub-headings, and the list collapses to `["GM Notes"]` —
+  unless the vault set no list, which keeps the defaults. Run it as
+  one command: `vault_check.py <vault> gm-leak --renest-excludes
+  --fix` (dry run without `--fix`). It covers every file the
+  publisher might ship, re-nests first and collapses after, and is
+  all or nothing: a file where any hidden line would publish (an H1
+  so titled, an unbalanced fence, a code-fence heading), or an
+  `exclude_sections` it cannot read exactly, writes nothing. A pure
+  structural move — nothing added, removed, or reworded — applied as
+  one batch on the GM's yes.
 
 ### Content
 
