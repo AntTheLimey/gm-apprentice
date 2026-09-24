@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.1"
+current_version: "1.10.2"
 ---
 
 # Vault Migration Registry
@@ -787,3 +787,31 @@ A Session Plan template, and two fixes to what `plan_check.py` and
   `played` from an earlier chapter's play notes. A vault that earlier
   runs told to set `status: played` on such a session should be re-run
   before applying the stamp.
+
+## Migration: 1.9.15 → 1.9.16
+
+Templates carry their own section guidance. No frontmatter changes.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Copy `_Templates/_Template_Session_WrapUp.md` from
+  `shared/templates/session-wrap.md`. Each `### What Carries Forward`
+  subsection now defines what belongs in it, the Keeper Checklist names
+  its task kinds, and the Advancement label records the amount on the
+  sheet rather than awarding one.
+- Copy `_Templates/_Template_Session_Plan.md` from
+  `shared/templates/session-plan.md`. It gains a `## Handouts & Props`
+  table (between Contingency Scenes and Session End Objectives) and an
+  optional `**Handouts:**` scene label, and Open Questions no longer
+  asks for a note about defaulted bookkeeping.
+- Existing Plan and Wrap-Up files are not touched. `plan_check.py`
+  reports a Plan without `## Handouts & Props` as a `sections` WARNING;
+  session-prep adds the section the next time it preps that session.
+
+### Tooling
+
+- `plan_check.py` knows the new section and the `**Handouts:**` label.
