@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.9] — 2026-09-24
+
+### Removed
+
+- **The standalone Thread entity schema (#231).** `entity-schema.md`
+  described Thread files that nothing ever created: no folder, no
+  template, no hierarchy slot. Threads stay inline, in each PC's
+  `## Current Status` → Open threads and a Plan's `## Active Threads`.
+  The entity schema now says so.
+
+### Changed
+
+- **continuity-engine's Thread Tracker carries the foreshadowing
+  fields.** Foreshadowing and Chekhov's-gun threads add Planted Detail,
+  Intended Payoff and Ripeness lines. world-evolution points there
+  instead of at Thread entities.
+
+---
+
 ## [1.10.8] — 2026-09-24
 
 ### Added

@@ -81,8 +81,8 @@ Evolved types are identical to built-in ones.
 ### Temporal and Entity Fields
 
 Universal temporal fields (`lastUpdated`, `asOfSession`,
-`createdSession`, `source`), faction/clue world-evolution fields
-and thread fields are in `shared/entity-schema.md` (§ Universal
+`createdSession`, `source`) and faction/clue world-evolution fields
+are in `shared/entity-schema.md` (§ Universal
 Fields, § Core Entity Types — read those sections, not the whole
 file). Preserve them in every Organize or Weave pass.
 
