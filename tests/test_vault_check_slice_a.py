@@ -639,6 +639,10 @@ class GmLeakCommandTests(unittest.TestCase):
                 self.assertFalse(rows_for(self.rows, rel), self.rows)
 
     def test_that_is_every_row(self):
+        # 8 findings and no WOULD-FIX: Config.md's and Stub.md's heading
+        # rows are keyword WARNINGs, which `--fix` never moves (#228), and
+        # Leaky.md's ERRORs sit beside its own unbalanced fence, so the
+        # whole file is refused.
         self.assertEqual(len(self.rows), 8, self.rows)
 
     def test_folder_restricts_the_walk(self):
@@ -652,6 +656,530 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertIn("## gm-leak", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
         self.assertIn("## gm-leak", run_cli(LEAK, "all").stdout)
+
+
+FIX_CONFIG = ('---\ntype: meta\npublish:\n'
+              '  exclude_sections: ["GM Notes", "Keeper Secrets"]\n---\n')
+
+
+def leak_heading_rows(rows, rel):
+    """ERROR/WARNING heading rows for one file — what `--fix` exists to
+    clear."""
+    return [r for r in rows if r.startswith(("ERROR", "WARNING"))
+            and f"{rel}:" in r and "heading" in r]
+
+
+def assert_fences_ordered(case, text):
+    """Every gm-only closer follows its opener, and none is left over."""
+    states, problems = vc.scan_body(text, ())
+    case.assertEqual(problems, [], text)
+    case.assertLess(text.index("<!-- gm-only -->"),
+                    text.index("<!-- /gm-only -->"), text)
+
+
+class GmLeakFixTests(unittest.TestCase):
+    """`vault_check.py VAULT gm-leak --fix` — re-nests the bold-wrapped
+    ERROR headings only (issue #228)."""
+
+    LEAKING = (
+        "---\ntype: npc\n---\n\n"
+        "# Villain\n\n"
+        "Some player-facing description.\n\n"
+        "## **Keeper Secrets**\n\n"
+        "The villain's true plan is X.\n\n"
+        "### Sub Detail\n\n"
+        "More secret detail.\n\n"
+        "## Notes\n\n"
+        "Ordinary notes that stay put.\n"
+    )
+
+    def vault_with(self, text, name="Villain.md", config=FIX_CONFIG):
+        vault = make_vault(self, config)
+        (vault / name).write_text(text, encoding="utf-8")
+        return vault
+
+    def test_dry_run_changes_nothing(self):
+        vault = self.vault_with(self.LEAKING)
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\tVillain.md"), rows)
+        self.assertEqual(read(vault, "Villain.md"), self.LEAKING)
+
+    def test_apply_renests_under_gm_notes(self):
+        vault = self.vault_with(self.LEAKING)
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertTrue(rows_for(rows, "FIXED\tVillain.md"), rows)
+        after = read(vault, "Villain.md")
+        self.assertIn("## GM Notes\n\n### **Keeper Secrets**\n", after)
+        self.assertIn("#### Sub Detail", after)
+        self.assertFalse(vc.check_gm_leak(vault, None))
+
+    def test_idempotent_second_run(self):
+        vault = self.vault_with(self.LEAKING)
+        vc.check_gm_leak(vault, None, fix=True)
+        once = read(vault, "Villain.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "Villain"), rows)
+        self.assertEqual(read(vault, "Villain.md"), once)
+
+    def test_already_correct_file_is_untouched(self):
+        correct = ("---\ntype: npc\n---\n\n# Ally\n\nPlayer-facing text.\n\n"
+                   "## GM Notes\n\n### Keeper Secrets\n\nAlready nested.\n")
+        vault = self.vault_with(correct, "Ally.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "Ally"), rows)
+        self.assertEqual(read(vault, "Ally.md"), correct)
+
+    def test_player_facing_headings_are_left_alone(self):
+        vault = self.vault_with(self.LEAKING)
+        vc.check_gm_leak(vault, None, fix=True)
+        self.assertIn(
+            "Some player-facing description.\n\n## Notes\n\n"
+            "Ordinary notes that stay put.", read(vault, "Villain.md"))
+
+    def test_appends_to_an_existing_gm_notes(self):
+        text = ("---\ntype: npc\n---\n\n# Bob\n\nPlayer text.\n\n"
+                "## GM Notes\n\nSome existing gm content here.\n\n"
+                "## **Keeper Secrets**\n\nSecret text.\n")
+        vault = self.vault_with(text, "Bob.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertTrue(rows_for(rows, "FIXED\tBob.md"), rows)
+        after = read(vault, "Bob.md")
+        self.assertEqual(after.count("## GM Notes"), 1)
+        self.assertIn(
+            "Some existing gm content here.\n\n### **Keeper Secrets**", after)
+
+    def test_unbalanced_fence_blocks_the_whole_file(self):
+        text = ("---\ntype: npc\n---\n\n# X\n\nPlayer text.\n\n"
+                "## **Keeper Secrets**\n\nhidden text\n<!-- /gm-only -->\n"
+                "more text\n")
+        vault = self.vault_with(text, "Leaky.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "FIXED\tLeaky.md"), rows)
+        self.assertFalse(rows_for(rows, "WOULD-FIX\tLeaky.md"), rows)
+        self.assertEqual(read(vault, "Leaky.md"), text)
+
+    def test_cli_fix_writes_and_reports_fixed(self):
+        vault = self.vault_with(self.LEAKING)
+        proc = run_cli(vault, "gm-leak", "--fix")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("FIXED\tVillain.md", proc.stdout)
+        self.assertIn("## GM Notes", read(vault, "Villain.md"))
+
+    def test_cli_all_never_writes(self):
+        vault = self.vault_with(self.LEAKING)
+        proc = run_cli(vault, "all", "--fix")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(read(vault, "Villain.md"), self.LEAKING)
+
+    # ---- C3: keyword WARNINGs are reported, never moved ----------------
+
+    def test_keyword_warnings_are_reported_but_never_moved(self):
+        text = ("---\ntype: location\n---\n\n# The Lighthouse Keeper\n\n"
+                "A tall tower.\n\n## Secret Passage\n\nBehind the stove.\n\n"
+                "## Innkeeper\n\nMarta.\n\n## Shopkeeper\n\nOtto.\n\n"
+                "## Tactics\n\nHold the stairs.\n")
+        vault = self.vault_with(text, "Lighthouse.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(leak_heading_rows(rows, "Lighthouse.md")), 5,
+                         rows)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "Lighthouse.md"), text)
+
+    def test_a_level_one_heading_never_moves(self):
+        text = ("---\ntype: npc\n---\n\n# **Keeper Secrets**\n\n"
+                "Body text.\n")
+        vault = self.vault_with(text, "Title.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "Title.md"), text)
+
+    # ---- C2: a moved block never splits a fence ------------------------
+
+    def test_a_moved_block_extends_to_the_closer_it_opened(self):
+        text = ("---\ntype: npc\n---\n\n# Bob\n\nPlayer text.\n\n"
+                "## **Keeper Secrets**\n\n<!-- gm-only -->\nHe lied.\n\n"
+                "## Motive\n\nRevenge for his brother.\n<!-- /gm-only -->\n\n"
+                "## Public\n\nEveryone knows this.\n")
+        vault = self.vault_with(text, "Bob.md")
+        vc.check_gm_leak(vault, None, fix=True)
+        after = read(vault, "Bob.md")
+        assert_fences_ordered(self, after)
+        hidden = vc.hidden_lines(after, ["GM Notes", "Keeper Secrets"],
+                                 {"type": "npc"})
+        self.assertIn("Revenge for his brother.", hidden)
+        self.assertNotIn("Everyone knows this.", hidden)
+        self.assertFalse(vc.check_gm_leak(vault, None))
+
+    # ---- C4: a fenced ## GM Notes takes the block inside its fence -----
+
+    def test_fenced_gm_notes_mid_file(self):
+        text = ("---\ntype: npc\n---\n\n# Bob\n\n<!-- gm-only -->\n"
+                "## GM Notes\n\nOld notes.\n<!-- /gm-only -->\n\n"
+                "## Description\n\nTall.\n\n## **Keeper Secrets**\n\n"
+                "He lied.\n\n## Later\n\nShown.\n")
+        vault = self.vault_with(text, "Bob.md")
+        vc.check_gm_leak(vault, None, fix=True)
+        after = read(vault, "Bob.md")
+        assert_fences_ordered(self, after)
+        self.assertLess(after.index("He lied."),
+                        after.index("<!-- /gm-only -->"), after)
+        self.assertFalse(vc.check_gm_leak(vault, None))
+        once = after
+        vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(read(vault, "Bob.md"), once)
+
+    def test_fenced_gm_notes_at_eof(self):
+        text = ("---\ntype: npc\n---\n\n# Bob\n\n## **Keeper Secrets**\n\n"
+                "He lied.\n\n<!-- gm-only -->\n## GM Notes\n\nOld notes.\n"
+                "<!-- /gm-only -->\n")
+        vault = self.vault_with(text, "Bob.md")
+        vc.check_gm_leak(vault, None, fix=True)
+        after = read(vault, "Bob.md")
+        assert_fences_ordered(self, after)
+        self.assertLess(after.index("He lied."),
+                        after.index("<!-- /gm-only -->"), after)
+        self.assertTrue(after.rstrip().endswith("<!-- /gm-only -->"), after)
+        self.assertFalse(vc.check_gm_leak(vault, None))
+        once = after
+        vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(read(vault, "Bob.md"), once)
+
+    # ---- the leak invariant --------------------------------------------
+
+    def test_gm_notes_missing_from_the_list_refuses(self):
+        # Moving under a `## GM Notes` the site publishes hides nothing
+        # and would demote the heading again on every run.
+        config = ('---\ntype: meta\npublish:\n'
+                  '  exclude_sections: ["Keeper Secrets"]\n---\n')
+        vault = self.vault_with(self.LEAKING, config=config)
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertTrue(rows_for(rows, "ERROR\tVillain.md\tre-nest refused"),
+                        rows)
+        self.assertEqual(read(vault, "Villain.md"), self.LEAKING)
+
+    def test_leak_problem_catches_a_hidden_line_that_publishes(self):
+        before = "## GM Notes\n\nsecret\n\n## Public\n\nshown\n"
+        after = "## Public\n\nshown\n\nsecret\n"
+        self.assertIn("would publish",
+                      vc.leak_problem(before, ["GM Notes"], after,
+                                      ["GM Notes"], {}))
+        self.assertIsNone(vc.leak_problem(before, ["GM Notes"], before,
+                                          ["GM Notes"], {}))
+
+    def test_leak_problem_catches_a_new_fence_problem(self):
+        before = "<!-- gm-only -->\nx\n<!-- /gm-only -->\n"
+        after = "<!-- /gm-only -->\nx\n<!-- gm-only -->\n"
+        self.assertIn("rewrite leaves",
+                      vc.leak_problem(before, [], after, [], {}))
+
+
+class GmLeakRenestExcludesTests(unittest.TestCase):
+    """`gm-leak --renest-excludes` — the 1.8.3 migration in one command:
+    re-nest every current exclude-list heading, then collapse the list."""
+
+    OLD_CONFIG = (
+        "---\ntype: meta\ngm_apprentice_version: \"1.8.0\"\npublish:\n"
+        "  mode: player\n"
+        '  exclude_sections: ["GM Notes", "World State", "Keeper Checklist",'
+        ' "Player Notes", "Source References"]\n'
+        "  exclude_fields: [secrets]\n---\n\n# Config\n")
+    BOB = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+           "## World State\n\nThe harbour burns in week 3.\n\n"
+           "## Keeper Checklist\n\n- Plant the letter.\n\n"
+           "## Player Notes\n\nThey suspect the mate.\n\n"
+           "## Source References\n\nKeeper Rulebook p. 99.\n")
+    SECRETS = ("The harbour burns in week 3.", "- Plant the letter.",
+               "They suspect the mate.", "Keeper Rulebook p. 99.")
+
+    def vault(self, config=OLD_CONFIG, **files):
+        vault = make_vault(self, config)
+        for name, text in (files or {"Bob.md": self.BOB}).items():
+            (vault / name).write_text(text, encoding="utf-8")
+        return vault
+
+    def test_plain_gm_leak_sees_nothing_before_the_collapse(self):
+        # The C1 trap: every heading is hidden by today's list.
+        vault = self.vault()
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "Bob.md"))
+
+    def test_dry_run_plans_every_heading_and_the_collapse(self):
+        vault = self.vault()
+        rows = vc.check_gm_leak(vault, None, renest_excludes=True)
+        for title in ("World State", "Keeper Checklist", "Player Notes",
+                      "Source References"):
+            self.assertIn(f"WOULD-FIX\tBob.md\tre-nested '{title}' under "
+                          f"## GM Notes", rows)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\t_meta/vault-config.md"),
+                        rows)
+        self.assertEqual(read(vault, "Bob.md"), self.BOB)
+        self.assertEqual(read(vault, "_meta/vault-config.md"),
+                         self.OLD_CONFIG)
+
+    def test_fix_hides_everything_after_the_collapse(self):
+        vault = self.vault()
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
+        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
+        config = read(vault, "_meta/vault-config.md")
+        self.assertIn("  exclude_fields: [secrets]", config)
+        self.assertIn('gm_apprentice_version: "1.8.0"', config)
+        hidden = vc.hidden_lines(read(vault, "Bob.md"), ["GM Notes"],
+                                 {"type": "npc"})
+        for line in self.SECRETS:
+            self.assertIn(line, hidden)
+        self.assertFalse(leak_heading_rows(vc.check_gm_leak(vault, None),
+                                           "Bob.md"))
+
+    def test_second_run_is_a_no_op(self):
+        vault = self.vault()
+        vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        once = read(vault, "Bob.md")
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "Bob.md"), once)
+
+    def test_a_block_list_config_collapses_cleanly(self):
+        config = ("---\npublish:\n  exclude_sections:\n    - GM Notes\n"
+                  "    - World State\n  mode: player\n---\n")
+        vault = self.vault(config)
+        vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertEqual(read(vault, "_meta/vault-config.md"),
+                         '---\npublish:\n  exclude_sections: ["GM Notes"]\n'
+                         "  mode: player\n---\n")
+
+    def test_a_vault_on_the_defaults_is_re_nested_but_keeps_its_defaults(
+            self):
+        # Writing ["GM Notes"] would drop Reconciliation Context, Handoff
+        # to Reconcile and the rest for every future file (#144).
+        text = ("---\ntype: npc\n---\n\n# Ann\n\n## Player Notes\n\nx1\n\n"
+                "## Reconciliation Context\n\nx2\n")
+        config = "---\npublish:\n  mode: player\n---\n"
+        vault = self.vault(config, **{"Ann.md": text})
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "collapsed"), rows)
+        self.assertEqual(read(vault, "_meta/vault-config.md"), config)
+        self.assertEqual(vc.effective_exclude_sections(vault),
+                         vc.resolve_exclude_sections(None))
+        hidden = vc.hidden_lines(read(vault, "Ann.md"), ["GM Notes"], {})
+        self.assertIn("x1", hidden)
+        self.assertIn("x2", hidden)
+
+    def test_an_h1_that_would_leak_blocks_everything(self):
+        h1 = "---\ntype: npc\n---\n\n# World State\n\nThe war is lost.\n"
+        vault = self.vault(**{"Bob.md": self.BOB, "H1.md": h1})
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "ERROR\tH1.md\tre-nest refused"), rows)
+        self.assertTrue(rows_for(rows, "migration blocked"), rows)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "Bob.md"), self.BOB)
+        self.assertEqual(read(vault, "_meta/vault-config.md"),
+                         self.OLD_CONFIG)
+
+    def test_an_already_nested_heading_stays_put(self):
+        text = ("---\ntype: npc\n---\n\n# Cy\n\n## GM Notes\n\n"
+                "### World State\n\nquiet\n")
+        vault = self.vault(**{"Cy.md": text})
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "Cy.md"), rows)
+        self.assertEqual(read(vault, "Cy.md"), text)
+
+    def test_cli_refuses_a_folder(self):
+        vault = self.vault()
+        proc = run_cli(vault, "gm-leak", "--renest-excludes", "--folder",
+                       "X")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(read(vault, "Bob.md"), self.BOB)
+
+    def test_cli_fix_runs_the_whole_migration(self):
+        vault = self.vault()
+        proc = run_cli(vault, "gm-leak", "--renest-excludes", "--fix")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("FIXED\t_meta/vault-config.md", proc.stdout)
+        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
+
+
+class RenestReviewRegressionTests(unittest.TestCase):
+    """The second review's reproductions (N1-N4, I1): each must hide
+    everything the publisher itself hid before the fix."""
+
+    WS = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+          "## World State\n\nSECRET-WS\n\n## Keeper Checklist\n\n"
+          "SECRET-KC\n")
+
+    def vault(self, config, files):
+        vault = make_vault(self, config)
+        for rel, text in files.items():
+            (vault / rel).parent.mkdir(parents=True, exist_ok=True)
+            (vault / rel).write_text(text, encoding="utf-8")
+        return vault
+
+    def published(self, vault, rel):
+        text = read(vault, rel)
+        fm = vc.extract_frontmatter(text) or {}
+        return "\n".join(vc.publisher_lines(
+            text, vc.effective_exclude_sections(vault), fm))
+
+    # ---- N1: exclude_sections parsed strictly, fail closed -----------
+
+    def test_key_comment_block_list_is_read_and_migrated(self):
+        config = ("---\npublish:\n  exclude_sections:   # hidden bits\n"
+                  "    - GM Notes\n    - World State # c\n"
+                  "    - 'Keeper Checklist'\n---\n")
+        vault = self.vault(config, {"Bob.md": self.WS})
+        self.assertEqual(vc.effective_exclude_sections(vault),
+                         ["GM Notes", "World State", "Keeper Checklist"])
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
+        self.assertEqual(read(vault, "_meta/vault-config.md"),
+                         '---\npublish:\n  exclude_sections: ["GM Notes"]\n'
+                         "---\n")
+        out = self.published(vault, "Bob.md")
+        self.assertNotIn("SECRET", out)
+
+    def test_quoted_key_is_replaced_not_duplicated(self):
+        config = ('---\npublish:\n  "exclude_sections": [GM Notes, '
+                  'World State, Keeper Checklist]\n  mode: player\n---\n')
+        vault = self.vault(config, {"Bob.md": self.WS})
+        vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        after = read(vault, "_meta/vault-config.md")
+        self.assertEqual(after.count("exclude_sections"), 1, after)
+        self.assertNotIn("SECRET", self.published(vault, "Bob.md"))
+
+    def test_a_quoted_item_keeps_its_comma(self):
+        config = ('---\npublish:\n  exclude_sections: ["GM Notes", '
+                  '"Keeper, Notes"] # c\n---\n')
+        vault = self.vault(config, {})
+        self.assertEqual(vc.effective_exclude_sections(vault),
+                         ["GM Notes", "Keeper, Notes"])
+
+    def test_forms_not_read_exactly_fail_closed(self):
+        forms = {
+            "multi-line flow": "publish:\n  exclude_sections: [\n"
+                               "    GM Notes,\n    World State]\n",
+            "flow publish": "publish: {exclude_sections: [GM Notes, "
+                            "World State]}\n",
+            "duplicate publish": "publish:\n  exclude_sections: [GM Notes]"
+                                 "\npublish:\n  exclude_sections: [World "
+                                 "State]\n",
+            "anchor": "publish:\n  exclude_sections: &x [GM Notes]\n",
+            "nested item": "publish:\n  exclude_sections:\n"
+                           "    - [GM Notes]\n",
+        }
+        for name, body in forms.items():
+            with self.subTest(form=name):
+                config = f"---\n{body}---\n"
+                vault = self.vault(config, {"Bob.md": self.WS})
+                rows = vc.check_gm_leak(vault, None, fix=True,
+                                        renest_excludes=True)
+                self.assertTrue(rows_for(rows, "not understood"), rows)
+                self.assertFalse(rows_for(rows, "FIXED"), rows)
+                self.assertEqual(read(vault, "_meta/vault-config.md"), config)
+                self.assertEqual(read(vault, "Bob.md"), self.WS)
+
+    # ---- N2: code-fence headings end exclusions on the site ----------
+
+    def test_a_code_fence_heading_ending_gm_notes_is_reported(self):
+        text = ("---\ntype: npc\n---\n\n# C\n\n## GM Notes\n\nhidden\n\n"
+                "```text\n## Roll table\n```\nSECRET-after-code\n")
+        vault = self.vault(FIX_CONFIG, {"C.md": text})
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "in a code fence ends the 'GM Notes'"),
+                        rows)
+        self.assertIn("SECRET-after-code", self.published(vault, "C.md"))
+
+    def test_a_moved_block_with_a_code_fence_heading_is_refused(self):
+        text = ("---\ntype: npc\n---\n\n# C\n\nPublic.\n\n"
+                "## **Keeper Secrets**\n\n```\n## World State\n```\n"
+                "SECRET\n")
+        vault = self.vault(FIX_CONFIG, {"C.md": text})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertTrue(rows_for(rows, "heading-shaped line in a code fence"),
+                        rows)
+        self.assertEqual(read(vault, "C.md"), text)
+
+    def test_a_collapse_exposed_by_a_code_fence_heading_is_refused(self):
+        # Under the old list `### World State` re-starts an exclusion after
+        # the code heading ends GM Notes; under ["GM Notes"] it would not.
+        text = ("---\ntype: npc\n---\n\n# C\n\n## GM Notes\n\n```\n"
+                "## Roll table\n```\n\n### World State\n\nSECRET-WS\n")
+        config = ('---\npublish:\n  exclude_sections: [GM Notes, '
+                  'World State]\n---\n')
+        vault = self.vault(config, {"C.md": text})
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "migration blocked"), rows)
+        self.assertEqual(read(vault, "_meta/vault-config.md"), config)
+
+    # ---- N3: every file the publisher might ship ---------------------
+
+    def test_a_played_session_plan_and_inbox_file_are_migrated(self):
+        plan = ("---\ntype: session-plan\nstatus: played\n---\n"
+                "## Session Overview\n\nOverview.\n\n## World State\n\n"
+                "SECRET-PLAN\n")
+        inbox = ("---\ntype: npc\n---\n## Look\n\nx\n\n## World State"
+                 "\n\nSECRET-INBOX\n")
+        config = ('---\npublish:\n  exclude_sections: [GM Notes, '
+                  'World State]\n---\n')
+        vault = self.vault(config, {"Sessions/Plan.md": plan,
+                                    "_inbox/N.md": inbox})
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "FIXED\tSessions/Plan.md"), rows)
+        self.assertTrue(rows_for(rows, "FIXED\t_inbox/N.md"), rows)
+        self.assertNotIn("SECRET", self.published(vault, "Sessions/Plan.md"))
+        self.assertNotIn("SECRET", self.published(vault, "_inbox/N.md"))
+
+    # ---- I1: moved blocks land before any nested excluded heading ----
+
+    def test_moved_blocks_are_not_swallowed_by_a_nested_exclusion(self):
+        text = ("---\ntype: npc\n---\n\n# R\n\n## Look\n\nPublic.\n\n"
+                "## GM Notes\n\nGeneral GM text.\n\n### World State\n\n"
+                "SECRET-WS\n\n## **World State**\n\nSECRET-BOLD\n")
+        config = ('---\npublish:\n  exclude_sections: [GM Notes, '
+                  'World State]\n---\n')
+        vault = self.vault(config, {"R.md": text})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertTrue(rows_for(rows, "FIXED\tR.md"), rows)
+        after = read(vault, "R.md")
+        self.assertIn("General GM text.\n\n### **World State**", after)
+        self.assertNotIn("SECRET", self.published(vault, "R.md"))
+        self.assertFalse(after.endswith("\n\n"), after)
+
+    def test_scan_body_never_re_anchors_a_running_exclusion(self):
+        states, _ = vc.scan_body(
+            "## GM Notes\n### Player Notes\nx\n### Secrets\nHe lied.\n",
+            ["GM Notes", "Player Notes"])
+        self.assertFalse(any(s.published for s in states))
+
+    def test_still_published_names_the_heading(self):
+        self.assertEqual(
+            vc._still_published("## Keeper\nx\n", ["GM Notes"], {},
+                                ["Keeper"]), "Keeper")
+
+    # ---- minor: page-title advice -------------------------------------
+
+    def test_an_h1_refusal_advises_renaming_the_page(self):
+        h1 = "---\ntype: npc\n---\n\n# World State\n\nThe war is lost.\n"
+        config = ('---\npublish:\n  exclude_sections: [GM Notes, '
+                  'World State]\n---\n')
+        vault = self.vault(config, {"H1.md": h1})
+        rows = vc.check_gm_leak(vault, None, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "rename the page title"), rows)
+
+
+class WrapupLeakInvariantTests(unittest.TestCase):
+    """`wrapup --fix` runs through the same leak invariant."""
+
+    def test_a_refused_rewrite_writes_nothing(self):
+        vault = make_vault(self)
+        rel = "W.md"
+        text = ("---\ntype: session_wrap\n---\n\n## Narrative Recap\n\n"
+                "It happened.\n\n## Keeper Checklist\n\n- task\n")
+        (vault / rel).write_text(text, encoding="utf-8")
+        original = vc.leak_problem
+        self.addCleanup(setattr, vc, "leak_problem", original)
+        vc.leak_problem = lambda *a, **k: "forced for the test"
+        rows = vc.check_wrapup(vault, rel, True)
+        self.assertTrue(rows_for(rows, "repair refused: forced"), rows)
+        self.assertEqual(read(vault, rel), text)
 
 
 class PcBodyCommandTests(unittest.TestCase):

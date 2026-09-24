@@ -63,28 +63,30 @@ their drift can come from any skill run, not one migration:
   `Session_NN_Wrap_Up.md` pattern → pending: list the files and
   any live basename collisions (two or more files resolving to the
   same wikilink target).
-- **GM-only headings** — run `vault_check.py <vault> gm-leak` (see
-  `shared/vault-access.md`) and read each row against the vault's
-  `exclude_sections`:
-  - Heading rows (bold-wrapped excluded heading, or a published
-    heading matching an `exclude_sections` entry or Keeper
-    keyword) → structural re-nest items.
+- **GM-only headings** — run `vault_check.py <vault> gm-leak`
+  (see `shared/vault-access.md`); while the 1.8.3 entry is pending,
+  also run `gm-leak --renest-excludes` (dry run). Once 1.8.3 is done,
+  leave the GM's `exclude_sections` list alone:
+  - `WOULD-FIX` rows (re-nests, and the `_meta/vault-config.md`
+    collapse) and bold-wrapped ERROR heading rows → one structural
+    item. An ERROR row (`re-nest refused`, `migration blocked`,
+    `not understood`, a code-fence heading ending an exclusion) →
+    list it; the item cannot apply until it is fixed by hand.
   - Fence-balance rows (orphan `<!-- /gm-only -->`, unclosed
     opener) → their own pending item: list file and line; fix the
-    marker before any re-nest, since an orphan closer changes what
-    every line above it means. Step 6's re-nest does not fix
-    markers, and `wrapup --fix` refuses an unbalanced wrap-up.
-  - INFO rows (Keeper-facing bold label or callout) → content
-    items for GM confirmation; never auto-convert (a bold
-    paragraph is not a heading; a callout needs the GM to pick
-    `## GM Notes` or a spoiler).
+    marker first, since an orphan closer changes what every line
+    above it means. No `--fix` rewrites markers.
+  - Keyword WARNING heading rows (a title merely containing
+    "Keeper", "Secret", "Tactic"…) and INFO rows (bold label or
+    callout) → content items, one per heading/line; never
+    auto-moved.
 
 ## Step 4: Build preview
 
 Three groups; omit an empty group. If all are empty, go to
 Step 7.
 
-**Structural (will apply after confirmation):** bullets, e.g.
+**Structural (one yes applies the group):** bullets, e.g.
 > - Add `gm_apprentice_version: "1.4.9"` to vault-config
 > - Rename 4 Wrap-Up files to the chapter-disambiguated pattern
 >   (`Chapter_03_Session_01_Wrap_Up.md`, ...) — 2 basename
@@ -118,12 +120,23 @@ Step 7.
 >
 > [preview]
 >
-> "The structural changes will be applied automatically. For
-> the items marked with checkboxes, let me know which you'd
-> like to include."
+> "May I apply the structural changes? For the items marked with
+> checkboxes, let me know which you'd like to include."
 
-Wait for confirmation of the structural batch and the
-content/tooling selection.
+**Consent (issue #220).** When the preview has Structural items,
+applying them and stamping need one GM yes for the whole group — an
+instruction already in the request, such as "apply the structural
+changes," counts. The yes covers every item in the Structural group
+regardless of file count; never reclassify a structural item as a
+judgment call. A structural item is outstanding if not applied —
+the GM declined the group or the item, or it failed. Content and tooling items are
+chosen one at a time by checkbox; ticked ones run whatever the
+structural answer. An empty or content-only preview needs no yes to
+stamp — declined content never blocks it.
+
+No GM reachable — a scripted or headless run carrying no instruction
+about the migration — is not a yes: show the preview, apply nothing,
+stamp nothing, and report the pending migration in Step 8.
 
 ## Step 6: Execute
 
@@ -145,22 +158,28 @@ In this order:
    containing file's chapter/session context; a link you can't
    resolve that way goes in the Step 8 report for the GM — never
    guess.
-6. Re-nest each mechanically matched heading as a `###`
-   subsection under `## GM Notes` in its file (create `## GM
-   Notes` if absent), demoting it and its sub-headings to sit one
-   level below. For Session Wrap-Up files use
-   `vault_check.py <vault> wrapup --fix` instead (re-nest, the
-   `<!-- gm-only -->` fence, and the 1.9.5 frontmatter and heading
-   fixes); run it without `--fix` first and put every `WOULD-FIX`
-   row in the preview. Once every entry with a match is re-nested,
-   collapse the vault's `exclude_sections` to `["GM Notes"]`
-   (structural)
+6. Re-nest GM-only headings (structural): first
+   `vault_check.py <vault> wrapup --fix` for Session Wrap-Ups
+   (re-nest, the `<!-- gm-only -->` fence, and the 1.9.5 fixes),
+   then, while the 1.8.3 entry is pending,
+   `vault_check.py <vault> gm-leak --renest-excludes --fix`. That
+   one command re-nests every heading titled with a current
+   `exclude_sections` entry under `## GM Notes` and then collapses
+   the list to `["GM Notes"]` (a vault with no list keeps the
+   defaults) — all or nothing: any refusal writes nothing. Once
+   1.8.3 is done, run `vault_check.py <vault> gm-leak --fix`
+   instead: it moves only bold-wrapped ERROR headings and never
+   touches `exclude_sections`. Then
+   re-run `gm-leak` and `wrapup`; any ERROR row from either (a
+   heading row, `re-nest refused`, `repair refused`, a fence that
+   crosses a section, a Keeper-facing H2 that publishes) means the
+   item failed
 7. Copy selected templates to `_Templates/` (content)
 8. Overwrite selected templates in `_Templates/` (content)
 9. Update or add selected `_meta/entity-types.md` Type-Specific
    Fields entries: replace a stale line in place; insert a new one
    at the position it holds in `shared/entity-schema.md` (content)
-10. Apply the selected bold-heading, bold-paragraph and callout
+10. Apply the selected keyword-heading, bold-paragraph and callout
     conversions — each becomes a `###` subsection under
     `## GM Notes` or is wrapped in `<!-- spoiler -->` markers, per
     the GM's choice for that item (content)
@@ -172,16 +191,40 @@ In this order:
 
 ## Step 7: Stamp version
 
-Set `gm_apprentice_version` in `_meta/vault-config.md` to the
-plugin version from Step 1, whatever opt-in items were declined.
-Declined items do not re-prompt next session.
+Every structural item applied (or none pending): stamp
+`gm_apprentice_version` in `_meta/vault-config.md` at the plugin
+version from Step 1. Declined content and tooling items never block
+the stamp and do not re-prompt.
+
+A structural item outstanding (issue #228): find the earliest pending
+entry with an outstanding structural item and stamp the version of
+the pending entry just before it. If it is the first pending entry,
+leave the stamp unchanged. Name the outstanding item in Step 8; the
+next MISMATCH offers it again. The every-pass Step 3 checks (schema
+mirror, Wrap-Up filenames, GM-only headings) do not gate the stamp —
+they re-run on every MISMATCH — unless the item is also a pending
+entry's own (the 1.8.3 re-nest while 1.8.3 is pending). No GM
+reachable: stamp nothing.
 
 ## Step 8: Report and return
 
+Every structural item applied:
 > "Vault upgraded to version {new}. Changes applied:
 > - [structural changes]
 > - [accepted content changes]
 > - [accepted tooling changes]"
+
+A structural item was not applied (Step 7's partial stamp):
+> "Vault is at version {stamped}, not {new} — [the outstanding
+> item] is still pending and will be offered again next migration.
+> Changes applied: ..."
+
+No GM reachable (Step 5's no-consent case — nothing applied, nothing
+stamped):
+> "Vault is at version {old}; the plugin is now {new}. Here's what's
+> pending:"
+>
+> [preview]
 
 List each field-sweep value conflict (file, both values) and
 each unresolved Wrap-Up link, and ask the GM to confirm or

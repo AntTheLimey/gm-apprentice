@@ -1,7 +1,7 @@
 ---
 type: meta
 publish:
-  exclude_sections: ["Keeper Notes"]
+  exclude_sections: ["GM Notes", "Keeper Notes"]
 ---
 
 # Vault Config

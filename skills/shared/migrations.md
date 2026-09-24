@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.0"
+current_version: "1.10.1"
 ---
 
 # Vault Migration Registry
@@ -21,17 +21,18 @@ fails when the two differ.
 
 Each entry lists changes in three categories:
 
-- **Structural** — applied automatically after user confirms the
-  preview (fields, folders, scaffolding)
+- **Structural** — applied together as one batch, on the GM's single
+  yes for it (fields, folders, scaffolding)
 - **Content** — opt-in per item (templates, story files, anything
   in the user's content space)
 - **Tooling** — opt-in (npm package updates, external tool
   changes)
 
 The migration procedure diff-checks each step against the vault's
-current state. Steps already satisfied are skipped. See
-`campaign-organizer/references/migration-procedure.md` for the
-full workflow.
+current state. Steps already satisfied are skipped. Consent — what
+counts as the GM's yes, and what happens with no GM reachable — is
+`campaign-organizer/references/migration-procedure.md` Step 5's rule;
+this file doesn't restate it. See that file for the full workflow.
 
 ### Schema Mirror Sync (runs on every pass)
 
@@ -346,8 +347,8 @@ campaign, but that nothing was ever checking.
   chapter/session context; if undeterminable under a live
   collision, list it for GM review rather than guessing). This is
   a pure rename + relink — file contents are otherwise untouched,
-  so it applies automatically after preview confirmation like
-  other structural changes.
+  so it is applied with the rest of the structural batch on the GM's
+  yes.
 
 ### Content
 
@@ -382,14 +383,20 @@ hidden until revealed in play, not permanently secret.
 
 ### Structural
 
-- **GM-only heading re-nesting** — every heading in the vault's own
-  `_meta/vault-config.md` `exclude_sections` list gets re-nested as a
-  `###` subsection under one `## GM Notes` heading per file (creating
-  it where absent), and the vault's `exclude_sections` list collapses
-  down to `["GM Notes"]` once everything's been moved. This is a pure
-  structural move — no content is added, removed, or reworded, only
-  relocated and demoted a heading level — so it applies automatically
-  after preview confirmation like other structural changes.
+- **GM-only heading re-nesting** — every level-2+ heading titled
+  with an entry of the vault's own pre-collapse `exclude_sections`
+  list (the publish defaults when it sets none) moves under one
+  `## GM Notes` per file (created where absent), demoted one level
+  with its sub-headings, and the list collapses to `["GM Notes"]` —
+  unless the vault set no list, which keeps the defaults. Run it as
+  one command: `vault_check.py <vault> gm-leak --renest-excludes
+  --fix` (dry run without `--fix`). It covers every file the
+  publisher might ship, re-nests first and collapses after, and is
+  all or nothing: a file where any hidden line would publish (an H1
+  so titled, an unbalanced fence, a code-fence heading), or an
+  `exclude_sections` it cannot read exactly, writes nothing. A pure
+  structural move — nothing added, removed, or reworded — applied as
+  one batch on the GM's yes.
 
 ### Content
 
@@ -601,8 +608,8 @@ was introduced to end.
   where absent. Its own subsections demote one level with it
   (`### Consequences` → `#### Consequences`, and likewise Salvageable Prep,
   GM Decisions, and World Evolution). A pure structural move — nothing is
-  added, removed, or reworded, only relocated and demoted — so it applies
-  automatically after preview confirmation, like the 1.8.3 re-nesting.
+  added, removed, or reworded, only relocated and demoted — applied with
+  the structural batch on the GM's yes, like the 1.8.3 re-nesting.
 - Readers accept **both** forms. A vault that has not yet migrated keeps
   working: session-prep looks for the nested heading first and falls back to
   a top-level `## Reconciliation Context`.
