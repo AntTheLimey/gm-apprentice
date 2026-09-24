@@ -120,7 +120,8 @@ On GM approval:
    rules; on a violation ask ("This NPC is 400 years old, but world
    rules say humans live 60-85 years. Is that intentional?"):
    - **Intentional** → promote with a note explaining the exception
-   - **Correct it** → update the entity, then promote
+   - **Correct it** → update the entity, then promote; a replaced
+     GM ruling is struck through and marked `superseded YYYY-MM-DD`
    - **Defer** → promote and set `needs_review: true`
 4. `stamp_entities.py <vault> "<loser>" --supersede-by "[[Winner]]"`
    for contradicted content
