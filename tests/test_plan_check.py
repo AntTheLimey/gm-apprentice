@@ -240,7 +240,8 @@ class NewSkeletonTests(unittest.TestCase):
         # finished scene, not an incomplete one.
         rows = self._rows(BAD, "scene-labels")
         for label in ("**Points to land**", "**NPCs**", "**Complications**",
-                      "**Entities:**", "**If the players...**"):
+                      "**Entities:**", "**Handouts:**",
+                      "**If the players...**"):
             self.assertFalse(
                 [ln for ln in rows if f"is missing {label}" in ln], label)
 
@@ -814,7 +815,7 @@ class MinimumSceneTests(unittest.TestCase):
 
     def test_optional_labels_are_never_reported_missing(self):
         rows = scene_rows(self.MINIMUM)
-        for label in ("Entities", "NPCs", "Points to land",
+        for label in ("Entities", "Handouts", "NPCs", "Points to land",
                       "If the players...", "Complications"):
             self.assertFalse([r for r in rows if label in r.message], label)
 

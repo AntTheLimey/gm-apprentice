@@ -132,6 +132,7 @@ opens — a thing in motion, not a theme or a lesson.
 that brings the PCs here in the first sixty seconds, and what they want
 from *this* PC. A scene that cannot answer this is not finished.
 **Entities:** [[NPC]], [[Location]], [[Item]]
+**Handouts:** [[Document]] — what this scene hands over, and how
 **NPCs**
 - **[[Name]]:** wants X. Does Y if left alone. Two lines maximum.
 **Points to land**
@@ -161,6 +162,15 @@ consequences only.
 **Then**
 - What happens, as bullets. Promote to a full scene above only if it
   needs its own NPCs and Points to land.
+
+## Handouts & Props
+
+Every handout and prop this session delivers, built or not — one row
+each, in scene order. Status is built, print or to build.
+
+| Document | Scene | Status | Notes |
+|----------|-------|--------|-------|
+| [[Document]] | Scene 1 | to build | What it says, who hands it over |
 
 ## Session End Objectives
 
@@ -197,7 +207,8 @@ content.
 
 ## Gaps & Actions
 
-[Missing entities, stale files, structural issues. Step 16.]
+[Missing entities, stale files, structural issues. Step 16.
+Handouts go in Handouts & Props.]
 
 ## Planned vs Played
 

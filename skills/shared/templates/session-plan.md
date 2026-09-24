@@ -86,6 +86,7 @@ opens — a thing in motion, not a theme.
 that brings the PCs here in the first sixty seconds, and what they want
 from *this* PC.
 **Entities:** [[NPC]], [[Location]], [[Item]]
+**Handouts:** [[Document]] — what this scene hands over, and how
 **NPCs**
 - **[[Name]]:** wants X. Does Y if left alone.
 **Points to land**
@@ -114,6 +115,15 @@ Scenes that fire on a player choice or a clock, not by default.
 **Trigger:** One line. What activates this scene.
 **Then**
 - What happens, as bullets.
+
+## Handouts & Props
+
+Every handout and prop this session delivers, built or not — one row
+each, in scene order. Status is built, print or to build.
+
+| Document | Scene | Status | Notes |
+|----------|-------|--------|-------|
+| [[Document]] | Scene 1 | to build | What it says, who hands it over |
 
 ## Session End Objectives
 
@@ -146,7 +156,8 @@ without the GM had to guess, the guess lives here, labelled
 
 ## Gaps & Actions
 
-[Missing entities, stale files, structural issues.]
+[Missing entities, stale files, structural issues. Handouts go in
+Handouts & Props.]
 
 ## Planned vs Played
 

@@ -126,6 +126,7 @@ TEMPLATE_SECTIONS: tuple[str, ...] = (
     "World State",
     "Planned Scenes",
     "Contingency Scenes",
+    "Handouts & Props",
     "Session End Objectives",
     "PC Roster & Arcs",
     "Touchpoint Plan",
@@ -166,6 +167,7 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Per-PC touchpoint assignments",
     "Per-PC estimated spotlight share",
     "Missing entities, stale files",
+    "Every handout and prop this session delivers",
     "Left blank during prep",
     "Same structure",
 )
@@ -185,7 +187,8 @@ PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
 # tools, offered and not demanded, and a scene that omits one is finished,
 # not incomplete. A label that is *attempted* and mistyped is still an
 # error: that is a typo, not an omission.
-SCENE_LABELS_INLINE: tuple[str, ...] = ("Situation", "Starts it", "Entities")
+SCENE_LABELS_INLINE: tuple[str, ...] = (
+    "Situation", "Starts it", "Entities", "Handouts")
 SCENE_LABELS_BLOCK: tuple[str, ...] = (
     "NPCs", "Points to land", "If the players...", "Complications")
 SCENE_LABELS: tuple[str, ...] = SCENE_LABELS_INLINE + SCENE_LABELS_BLOCK

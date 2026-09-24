@@ -75,6 +75,7 @@ quiet exit is ever needed.
 **Situation:** Bruyère has Ada briefly alone by the antechamber door with champagne in hand.
 **Starts it:** Bruyère. Wants to learn whether Ada remembers the courier without naming him.
 **Entities:** [[Bruyère]], [[Ada]], Hofburg Antechamber
+**Handouts:** [[Courier's Calling Card]] — Bruyère slips it to Ada as he leaves
 **NPCs**
 - **Bruyère:** steers every exchange back to Prague. If nobody engages him, corners another PC before midnight.
 **Points to land**
@@ -118,6 +119,12 @@ quiet exit is ever needed.
 **Then**
 - Ada admits she remembers — Bruyère grows warmer, testing how far her honesty goes.
 - Ada denies it outright — Bruyère lets it go for tonight, but Winslow noticed the tension.
+
+## Handouts & Props
+
+| Document | Scene | Status | Notes |
+|----------|-------|--------|-------|
+| [[Courier's Calling Card]] | Scene 1 | print | Engraved name, Prague address on the back |
 
 ## Session End Objectives
 
