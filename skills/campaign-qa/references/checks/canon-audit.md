@@ -83,7 +83,7 @@ is out of scope here. Detect only; Validate mode handles the fix.
 
 ### Step 3: Check PC Roster Consistency
 
-Read `player_characters.md`. For each entry, verify:
+Read `_Campaign/Player Characters.md`. For each entry, verify:
 - The player/character mapping matches references in session
   notes
 - Character status (active, retired, dead, NPC) is consistent

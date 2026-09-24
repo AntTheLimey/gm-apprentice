@@ -90,7 +90,6 @@ Reach for ttrpg-expert when you need to:
 | Relationship patterns | `relationship-patterns.md` | The sanctioned predicate table with inverses, storage direction, and modeling patterns |
 | Random generation | `random-generation.md` | Inspiration tables, random content |
 | GM session patterns | `gm-session-patterns.md` | Session pacing, table management techniques |
-| RPG terminology | `rpg-terminology.md` | Shared vocabulary definitions |
 
 ## What to Expect
 

@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.9.15] — 2026-09-23
+
+### Changed
+
+- Skill diet: every SKILL.md and the shared files they read on most runs
+  rewritten to their working minimum. The nine SKILL.md files drop from
+  147 KB to 83 KB. Removed: restatements of templates and shared files the
+  skill already reads, repeated cautions, step-by-step descriptions of what
+  a script does, rationale that changes no action, and trigger phrases in
+  skill bodies. Rare paths moved to references read only when they fire:
+  `session-wrapup/references/gmassistant-export.md`,
+  `session-prep/references/scene-note-template.md`,
+  `campaign-organizer/references/vault-setup.md`.
+- The version check now lives once, as the Version Gate in
+  `shared/session-principles.md`; five skills point to it.
+- The migration procedure reads only the `shared/migrations.md` entries
+  newer than the vault, not the whole file.
+
+### Fixed
+
+- `shared/migrations.md` `current_version` was only stamped by the zip
+  build, so git installs stamped migrated vaults with a stale version and
+  the next check asked to migrate again. The source now carries the real
+  version and CI fails when it differs from `plugin.json`.
+- The PC roster is `_Campaign/Player Characters.md`; three places named a
+  `player_characters.md` that no vault has.
+- `stale-draft-detection.md` described the old vault-wide algorithm the
+  script replaced in #162; it now defers to `vault_check.py stale-drafts`.
+
+### Removed
+
+- `ttrpg-expert/INDEX.md` (its routing rows that were not already in
+  SKILL.md moved there), `ttrpg-expert/rpg-terminology.md`, the
+  blog-credit footers on ten ttrpg-expert references,
+  `campaign-qa/references/check-procedures.md` (never read), and the
+  superseded "Keeper Notes (Structured)" recap format.
+
 ## [1.9.14] — 2026-09-21
 
 ### Added

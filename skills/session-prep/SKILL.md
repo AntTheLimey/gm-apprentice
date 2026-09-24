@@ -1,508 +1,324 @@
 ---
 name: session-prep
-description: "Use when a GM is preparing for an upcoming TTRPG session, reconciling what happened last time with what comes next, or reviewing prep plans. This is the between-sessions skill for looking forward — processing the aftermath of the last session into preparation for the next one. Not for during-play help (session-play) or post-session wrap-up (session-wrapup)."
+description: "Use when a GM is preparing for an upcoming TTRPG session — prep or plan my session, getting ready for next week, what should I prepare — or reconciling last session's wrap-up with what comes next (reconcile, what did we skip, what changed), or reviewing a prep plan. Not for during-play help (session-play) or post-session wrap-up (session-wrapup)."
 ---
 
-Session preparation assistant. Builds on what session-wrapup
-established as canon to get the GM ready for next session.
+Session preparation assistant: builds on the canon session-wrapup
+established to get the GM ready for next session.
 Workflow: Reconcile → Gather → Plan → Verify → Handoff.
 
 ## Stance — you draw the session out of the GM
 
-You draw the session out of the GM — spark, shape, refine, never decide for
-them. Every creative call (intent, spotlight, scenes) is offered as 2–3 seeds
-to react to, not a finished answer. Lead harder when the GM is low on energy —
-offer more concrete options — but they always choose. Never resolve a creative
-question the GM hasn't: unresolved plot calls go to `## Open Questions`, named
-and un-invented, never silently filled. The apprentice does the chores (gather,
-draft prose from the GM's decisions, run checks); the GM makes the calls.
+You spark, shape and refine; the GM decides. Every creative call
+(intent, spotlight, scenes) is offered as 2–3 seeds to react to. Lead
+harder with more concrete options when the GM is low on energy, but
+they always choose. A plot call the GM hasn't made goes to
+`## Open Questions`, named and un-invented — never silently filled.
+You do the chores (gather, draft prose from the GM's decisions, run
+checks).
 
-**Ask only plot questions.** Before any question reaches the GM, sort
-it: a plot question (changes what an NPC wants, knows or does, a scene's
-shape, or what the players can discover) is asked with 2–3 seeds; a
-player decision (which way, who with, what they say) is written as a
-`Do | Then` branch and never asked; bookkeeping (a die result, a sheet
-number, a date no scene turns on) is defaulted and the default noted in
-one line; craft and cosmetics (fonts, prop layout, filenames,
-formatting) are decided silently. The test is "would a different answer
-change a scene this session?" When the GM asks what an item on your list
-is or why you need it, answer from what is already in context — no tool
-calls, no re-reading — and act only after they reply.
+**Ask only plot questions.** Sort every question first: a plot
+question (changes what an NPC wants, knows or does, a scene's shape,
+or what the players can discover) is asked with 2–3 seeds; a player
+decision (which way, who with, what they say) becomes a `Do | Then`
+row, never asked; bookkeeping (a die result, a sheet number, a date no
+scene turns on) is defaulted with the default noted in one line; craft
+and cosmetics (fonts, prop layout, filenames, formatting) are decided
+silently. Test: would a different answer change a scene this session?
+When the GM asks what an item on your list is or why you need it,
+answer from context — no tool calls, no re-reading — and act only
+after they reply.
 
-**Two voices.** The seeds you speak to the GM may be evocative ("the
-anklet debt is owed"). The text you write to the Plan file may not: it
-is read cold, days later, mid-session, by a Keeper who has forgotten
-this conversation. Name the document, the person and the reason in the
-line that uses them, and write bullets, tables and checklists, never
-paragraphs (the read-aloud blockquote is the one exception).
+**Two voices.** Seeds you speak may be evocative ("the anklet debt is
+owed"). The Plan file is read cold, days later, mid-session, by a
+Keeper who has forgotten this conversation: name the document, the
+person and the reason in the line that uses them, in bullets, tables
+and checklists — never paragraphs (the read-aloud blockquote is the one
+exception).
 
-**Shared references:** Read `shared/session-principles.md` on
-first invocation.
+## Setup
 
-**Version check:** On first invocation run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
-row and hand off to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`) before
-proceeding with prep; resume after it completes. `AHEAD` →
-announce the row and tell the GM to update the plugin; do not
-proceed. `ERROR` → report the row; the plugin install is broken —
-do not proceed. No verdict row and a `not a directory` error on
-stderr means the vault path is wrong — ask the GM for it rather than
-proceeding.
+- Read `shared/session-principles.md` and run its Version Gate on first
+  invocation.
+- Read `shared/session-document-chain.md`. You write Plan files and
+  update the session index. You read earlier Wrap-Ups for context, not
+  other sessions' Play Notes or Plans (exception: raw Play Notes, to
+  generate a recap when no Wrap-Up exists — step 7).
+- Read `references/session-templates.md` when creating or updating
+  session notes.
+- Before creative planning (steps 11–14), read
+  `skills/ttrpg-expert/arc-spotlight-reference.md` and the active
+  system's `session-procedures.md` for arc drivers.
+- Write each step's output to the Plan file before moving on; the Plan
+  is the persistent artifact.
 
-**Scope to the question.** The version gate always runs; everything
-after it is scoped to what the GM asked. "Prep my session" walks the
-whole workflow below. A narrow question — a status check, "what
-changed", "did we skip anything", one conformance check — runs the
-single script that answers it and reports, then stops: document-chain
-status → `vault_check.py <vault> sessions`; thread ages →
-`session_context.py <vault> --threads`; a plan's conformance →
-`plan_check.py <plan>`. No read-set bundle, no Reconcile, no checks
-the GM didn't ask for. Offer the next step in one line — don't take it.
-
-**Document chain:** Read `shared/session-document-chain.md`.
-Session-prep writes Plan files and updates the session index.
-It reads previous Wrap-Up files for context — normally never
-Play Notes or Plan files from other sessions (exception: raw
-Play Notes may be read as a fallback when no Wrap-Up exists,
-to generate a recap only — see step 7).
-
-**Trigger phrases:** "prep my session", "plan my session",
-"getting ready for next week", "what should I prepare",
-"reconcile", "what did we skip", "what changed"
-
-**Session note templates:** Read `references/session-templates.md`
-when creating or updating session notes.
-
-**Creative planning references:** Read
-`skills/ttrpg-expert/arc-spotlight-reference.md` before
-starting creative planning (the elicited Intent → Spotlight →
-Scenes sequence, steps 11–14). For system-specific arc drivers,
-also read the active campaign's system `session-procedures.md`.
-The creative middle is *elicited*, not generated — see the Stance
-section above.
-
-**Progressive file writes:** Every step writes its output to
-the Plan file before proceeding. The Plan file is the
-persistent artifact — conversation is ephemeral.
+**Scope to the question.** After the version gate, do only what was
+asked. "Prep my session" walks the whole workflow. A narrow question
+runs the one script that answers it, reports, and stops:
+document-chain status → `vault_check.py <vault> sessions`; thread ages
+→ `session_context.py <vault> --threads`; a plan's conformance →
+`plan_check.py <plan>`. Offer the next step in one line; don't take it.
 
 ## Context Source — Step 5, opening move of a prep invocation
 
-**Gather the standard read-set in ONE call** before any
-individual reads:
+Gather the standard read-set in ONE call before any individual reads:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path> --brief
 ```
 
-It emits the last Wrap-Up with its reconcile-provenance blocks stubbed
-to one line each (Memorable Moments; Name Conflicts, Cross-Entity
-Claims, World Fact Findings, Quality Notes, Reconciliation Context —
-each stub carries the word count), every active PC's `## Current
-Status` block, the upcoming session's existing Plan, deferred world
-flags, and the campaign overview as frontmatter plus a heading outline
-with word counts. The existing Plan is outlined the same way — Step 6
-reads it properly through `plan_check.py --inventory/--state`, so the
-bundle only has to say it exists and what shape it is in. Read a
-stubbed or outlined section from its file only when a step below needs
-it. On a real vault the full bundle is 109 KB and drove one prep past
-800k tokens; the brief one is 45 KB and is what prep consumes.
+It carries the last Wrap-Up (reconcile-provenance blocks stubbed to one
+line with word counts), every active PC's `## Current Status` block,
+deferred world flags, and outlines (frontmatter, headings, word counts)
+of the campaign overview and the upcoming session's existing Plan. Read
+a stubbed or outlined section from its file only when a step needs it.
+After the bundle, vault dives are targeted reads, proportional to the
+upcoming session's complexity, not the campaign's size.
 
-**After the bundle:** vault dives are targeted reads only,
-proportional to upcoming session complexity, not campaign size.
-
-### Personal Reference Files
-
-`systems/{system}/personal/` may contain the user's own
-setting reference (factions, NPCs, locations, random tables).
-Gitignored — never distributed. Check here when prep needs
-setting detail the public SRD/ORC files don't cover —
-faction rosters, NPC references, location atmosphere.
+When prep needs setting detail the SRD/ORC files lack (faction rosters,
+NPC references, location atmosphere), check the user's gitignored
+`systems/{system}/personal/`.
 
 ## Phase 1: Reconcile (conditional)
 
-Runs in a prep invocation when the `Just played:` header line from
-`session_context.py` shows `status: wrap-up` (no separate index read).
-Skip for first sessions or when already `reviewed`.
-
-**Invoke `shared/reconcile.md`.** Reconcile walks the GM through
-reviewing the Wrap-Up, promotes canon status, and handles
-salvageable prep triage. See the shared procedure for the full
-workflow.
-
-**Reconcile-to-Prep handoff:** Reconcile writes
-`### Reconciliation Context` under the Wrap-Up file's
-`## GM Notes`, capturing consequences, salvageable prep, and
-GM decisions. Steps 7-10 read this and only gather what's new.
+Run when the bundle's `Just played:` line shows `status: wrap-up`; skip
+for first sessions or when already `reviewed`. Follow
+`shared/reconcile.md`. It writes `### Reconciliation Context` under the
+Wrap-Up's `## GM Notes` (consequences, salvageable prep, GM decisions);
+steps 7–10 read it (also accept a top-level `## Reconciliation Context`
+in an unmigrated vault) and gather only what's new.
 
 ## Phase 2: Prep Forward — Context Gathering
 
-**6. Existing prep review** — If a Plan file (`type: session-plan`)
-already exists for the upcoming session, run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>
---inventory`, then separately with `--state` (the script only ever prints
-one mode per invocation); sections marked `placeholder` are the ones to
-gather; read the plan body only for sections marked `present` that
-Reconcile may have invalidated.
+Steps 7–10 are independent reads — parallelize with sub-agents if
+available.
 
-To find what the upcoming session should *cover*, follow the
-node graph: from the narrative-plan entity (`type: plan`) the
-last session resolved, read its `leads_to` field for the next
-plan node(s). Two or more targets are branches — surface them as
-the GM's choice, don't pick one silently.
-→ Write `## Prior Prep Review` to Plan file.
+**6. Existing prep review** — If a Plan (`type: session-plan`) exists
+for the upcoming session, run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan> --inventory`,
+then separately `--state` (one mode per invocation). Gather the
+`placeholder` sections; read the body only for `present` sections
+Reconcile may have invalidated. To find what the session should
+*cover*, read the `leads_to` of the narrative-plan entity
+(`type: plan`) the last session resolved; two or more targets are
+branches — offer them as the GM's choice.
+→ `## Prior Prep Review`
 
-**7. Recap** — Present the "Previously on..." narrative recap from last
-session's Wrap-Up file (generated by session-wrapup).
-→ Write `## Previously On...` to Plan file.
-
-If no recap exists (GM skipped wrap-up):
-
-> "The last session doesn't have a Wrap-Up file yet. I can
-> generate a quick 'Previously on...' from raw play notes,
-> but the vault won't have been updated — no new entities,
-> no existing entity updates, no timeline entries, no
-> carry-forward. Want me to do a full wrap-up first
-> (recommended), or just the quick recap?"
-
-Skipping wrap-up means entity updates and creation don't
-happen. The vault stays frozen at pre-session state.
+**7. Recap** — Use the "Previously on..." recap from last session's
+Wrap-Up. → `## Previously On...`
+If there is no Wrap-Up, tell the GM the vault hasn't been updated (no
+new or updated entities, timeline entries or carry-forward) and ask:
+full wrap-up first (recommended), or a quick recap from the raw Play
+Notes?
 
 **8. Threads** — `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
---threads` prints every PC's Open threads with first/last-seen wrap-up
-session and age, `STALE` at 3+, plus wrap-up threads that fell off every
-sheet. You decide whether two wordings are the same thread and whether
-an old one is dormant by design. Reference
-`skills/ttrpg-expert/continuity-engine.md` for that judgment.
-→ Write `## Active Threads` to Plan file.
+--threads` lists every PC's Open threads with first/last-seen session
+and age, `STALE` at 3+, plus wrap-up threads missing from every sheet.
+You judge whether two wordings are one thread and whether an old one
+is dormant by design (`skills/ttrpg-expert/continuity-engine.md`).
+→ `## Active Threads`
 
-**9. Key NPCs** — NPCs likely to appear, with status,
-motivations, off-screen activity. Read vault files only for
-those flagged in carry-forward or threads.
-→ Write `## NPC Quick Reference` to Plan file.
+**9. Key NPCs** — likely NPCs with status, motivations, off-screen
+activity; read vault files only for those flagged in carry-forward or
+threads. → `## NPC Quick Reference`
 
-**10. World state** — From Wrap-Up file's World State section.
-Date, location, threats, factions, clocks.
-→ Write `## World State` to Plan file.
+**10. World state** — date, location, threats, factions, clocks from
+the Wrap-Up's World State. → `## World State`
 
-#### Step 10b: World threads
-
-If `_World/_flags.md` exists, read the **Deferred** section.
-Surface items gaining traction:
+**10b. World threads** — If `_World/_flags.md` exists, surface
+**Deferred** items gaining traction (3+ sessions, 3+ mentions in one
+session, or tied to the upcoming adventure's themes or locations):
 
 > **World threads gaining traction:**
-> - "The Old Empire" — mentioned 3 times across sessions 3-5,
->   still no detail. Worth a midwife worldbuilding session?
-> - "River spirits" — mentioned twice, possibly related to the
->   Thornwood arc
+> - "The Old Empire" — mentioned 3 times across sessions 3-5, still no
+>   detail. Worth a midwife worldbuilding session?
 
-**Resurfacing criteria:**
-- Referenced in 3+ distinct sessions
-- 3+ mentions within a single session
-- Related to the upcoming adventure's themes or locations
+Awareness only, no three-state prompt; if the GM wants to resolve one,
+suggest a midwife worldbuilding conversation.
 
-**Awareness only** — no three-state prompt. The GM decides
-whether to act. If they want to resolve, suggest a midwife
-worldbuilding conversation.
+**10c. Narrative plans** — Forward design lives in **two** places;
+check both: `Chapters/{chapter}/Planning/` (stamped plan entities) and
+`_midwife/` (often richer, often the only one populated). Run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plans_index.py"
+<vault> --chapter "<chapter>" --against <NPC/location names from 8-10>`
+and present its Planning rows, manifest table, the RESOLVED
+adventure's file summaries and the Overlap section as "Narrative plans
+available", with "Most relevant for next session" from Overlap.
+`AMBIGUOUS` → ask the GM which adventure; never pick.
 
-If Reconcile ran, steps 7-10 read `### Reconciliation Context` (under
-`## GM Notes`; also accept a top-level `## Reconciliation Context` in a
-vault not yet migrated) and skip what's already established.
+If a midwife `timeline.md` exists (listed first), read it before any
+scene design: it says which beats belong to the upcoming days and
+which must not be pulled forward.
 
-#### Step 10c: Narrative plans
+Link to plans; never copy their content into the session plan
+(`shared/content-fidelity.md`). → `## Available Plans`
 
-Forward design for a chapter lives in **two** places and you
-must check both. `Chapters/{chapter}/Planning/` holds stamped
-plan entities. The `_midwife/` workspace holds whatever a
-midwife session produced — often the richer of the two, and
-frequently the only one populated.
-
-Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plans_index.py"
-<vault> --chapter "<chapter>" --against <NPC/location names gathered in
-8-10>`. Present its Planning rows, the manifest table, the RESOLVED
-adventure's file summaries, and the Overlap section as the "Narrative
-plans available" summary below. `AMBIGUOUS` means two or more
-adventures could plausibly match — ask the GM which, never pick.
-
-**Read `timeline.md` first if one exists** — the script lists it first
-among an adventure's file summaries for exactly this reason. A midwife
-day-by-day timeline is the highest-value prep artifact in the tree: it
-says which beats belong to the upcoming days and, just as importantly,
-which must not be pulled forward. Surface it *before* any scene design
-in Phase 2, not after — scene work invented against an unread timeline
-contradicts it, and the GM is the one who has to catch that.
-
-> **Narrative plans available for this chapter:**
-> - Arc: Arc_Shape.md — four-phase dramatic structure
-> - Scenes: Temple_Approach.md, Recognition_Scene.md,
->   Escort_Betrayal.md — scene designs with decision trees
-> - Midwife design (`_midwife/{adventure}/`): timeline.md —
->   day-by-day skeleton; chapter-shape.md, narrative-arc.md;
->   npcs/ profiles
->
-> **Most relevant for next session:** [from the Overlap section —
-> plans naming a thread or NPC already gathered in 8-10]
-
-Do not copy plan content into the session plan — link to
-it. Plans are reference documents the GM consults during
-play, not material to be duplicated. This applies to
-`_midwife/` exactly as it does to `Planning/`.
-(rationale: `shared/content-fidelity.md`)
-→ Write `## Available Plans` to Plan file.
-
-**If both roots are empty, say that plainly** — "no narrative
-plans found for this chapter" — and do not write it up as a
-vault gap. A Gap/Action asserting no plan entities exist is a
-claim about the vault, and it is false whenever the design is
-sitting in a directory this step failed to open.
+If both roots are empty, say "no narrative plans found for this
+chapter" — not a vault gap.
 
 ## Phase 2: Prep Forward — Creative Planning (elicited)
 
-The whole creative spine — intent, spotlight, scenes — is drawn out of the
-GM (see Stance). Offer seeds; the GM chooses. One question at a time, light
-touch — don't interrogate. Any plot call the GM defers goes to
-`## Open Questions`, never invented.
+Everything here is drawn out of the GM (Stance). One question at a
+time, light touch.
 
-**11. Session Intent — "what's this session for?"** Before any scene work,
-surface the vault-mined material as seeds and ask the GM to set the dramatic
-intent:
+**11. Session Intent** — Surface what's live as seeds and ask the GM
+to set the intent:
 
-> Here's what's live going into this session: [owed beats, ticking clocks,
-> dormant threads, PC arcs due — drawn from Gather, steps 8–10]. What do you
+> Here's what's live going into this session: [owed beats, ticking
+> clocks, dormant threads, PC arcs due — from steps 8–10]. What do you
 > want this one to be *about*? Whose moment is it?
 
-The GM sets the intent; you do not. Write their stated purpose to
-`## Session Intent` in the Plan file (and a one-line synopsis to
-`## Session Overview`). If the GM is unsure, offer 2–3 concrete directions
-grounded in what's live — but the choice is theirs. Do not proceed to
-spotlight until intent is set or explicitly deferred to `## Open Questions`.
-→ Write `## Session Intent` to Plan file.
+If the GM is unsure, offer 2–3 directions grounded in what's live.
+Don't move to spotlight until intent is set or deferred to
+`## Open Questions`.
+→ `## Session Intent` (their purpose) and a one-line
+`## Session Overview`
 
-**12. PC Roster + Arc Check (grounding)** — Ground the conversation in the
-active PCs. Each PC's `## Current Status` block is already in context from the
-Step 5 bundle (`session_context.py`) — do **not** re-read that block. The
-durable arc data below lives in other sheet sections the bundle does
-not carry, so run `python3
+**12. PC Roster + Arc Check** — Each PC's `## Current Status` is
+already in the bundle; don't re-read it. Run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
---arcs` once: it prints every active PC's `## Background` and `## GM
-Notes` sections plus a spotlight history parsed from earlier Plans'
-`## Spotlight Forecast` tables (role, share, sessions since the last
-B-plot and C-plot). Do not open PC sheets in full — a six-PC roster is
-over 100 KB of sheet against ~30 KB of arc material. Arc stage is not a
-field on the sheet: judge it against the five-stage model from that
-evidence. Per-PC:
-- Backstory hooks, stated goals, current arc stage (five-stage model), arc
-  theme, relationships with other PCs and NPCs
-- `## Current Status` read: `Open threads` → decisions needing consequences /
-  next arc beat; `Knows (exclusive)` → personalized touchpoint fuel
-- Mechanical highlights (signature abilities, resources)
-- Last spotlight role and share, sessions since last B-plot feature (from
-  --arcs); next arc beat
+--arcs` once for every active PC's `## Background` and `## GM Notes`
+plus spotlight history from earlier Plans' `## Spotlight Forecast`
+(role, share, sessions since last B- and C-plot). Don't open full PC
+sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
+- backstory hooks, stated goals, arc stage and theme, relationships
+- `Open threads` → decisions needing consequences, next arc beat;
+  `Knows (exclusive)` → personalized touchpoint fuel
+- mechanical highlights (signature abilities, resources)
+- last spotlight role and share, sessions since last B-plot; next beat
 
-This is chore-work that *feeds* the GM's spotlight decision — it is evidence,
-not a decision.
+This is evidence for the GM's spotlight call, not the call.
+→ `## PC Roster & Arcs` — durable analysis only (arc stage, theme,
+spotlight history, next beat). For mutable state (SAN/HP, location,
+conditions, current threads) point at the PC's `## Current Status`;
+never copy a snapshot into the plan.
 
-→ Write `## PC Roster & Arcs` to Plan file — **reference, don't copy.** Capture
-only durable arc analysis (arc stage, theme, spotlight history, next beat). For
-mutable state — SAN/HP, location, conditions, current threads — point at the
-PC's live `## Current Status` block, never transcribe a snapshot of it into the
-plan. A copied value goes stale the moment the sheet changes and the plan then
-trusts the stale copy over the PC's own file; a reference cannot rot. Same
-principle as the self-documentation ban: the plan is an instrument you read
-from, not a container that duplicates state.
+**13. Spotlight** — Offer a lean plus alternatives from the arc data:
 
-**13. Spotlight — whose moment (elicited)** — Offer a lean plus alternatives,
-grounded in the arc/spotlight data, and let the GM choose the A/B/C split:
+> I'd lean Emma for the B-plot — the anklet debt is owed — or
+> Katherine, who hasn't had a solo beat in three sessions. Or someone
+> else entirely?
 
-> I'd lean Emma for the B-plot — the anklet debt is owed — or Katherine, who
-> hasn't had a solo beat in three sessions. Or someone else entirely?
-
-The data is *evidence for the GM's decision*, not the decision. A-plot
-(~50–60%, main storyline, all PCs); B-plot (~25–35%, one featured PC); C-plot
-(~10–15%, a lighter second PC). Once the GM chooses, assign touchpoints against
-that choice using the six types from arc-spotlight-reference.md (Backstory
-Connection, Moral Dilemma, Ability Showcase, Decision Callback, Arc Advancement
-Clue, Character Moment); the B-plot PC gets at least one high-impact touchpoint.
-Then run coverage as **questions**, never silent fills:
+The GM chooses the split: A-plot ~50–60% (main storyline, all PCs),
+B-plot ~25–35% (one featured PC), C-plot ~10–15% (a lighter second
+PC). Then assign touchpoints with the six types in
+arc-spotlight-reference.md; the B-plot PC gets at least one
+high-impact touchpoint. Raise coverage gaps as questions:
 
 > Freddy has no beat yet — light on purpose, or do you want one?
 
-→ Write `## Spotlight Forecast` and `## Touchpoint Plan` to Plan file.
+→ `## Spotlight Forecast` and `## Touchpoint Plan`
 
-**14. Scenes — from intent + spotlight (elicited)** — Scenes *emerge from* the
-intent and spotlight the GM just set. The propose-before-write gate lives at
-the **premise**, not the finished scene. For each scene:
+**14. Scenes** — Scenes emerge from the intent and spotlight. The
+propose-before-write gate is the **premise**. For each scene:
 
-1. Pitch the **situation + whose want drives it** — a lean, or 2–3 options:
-   > A dinner where the viscount's charm is the trap, or a back-room where
-   > the ledger is the trap? Either way it's Emma's want that opens the door.
+1. Pitch the situation and whose want drives it — a lean or 2–3
+   options:
+   > A dinner where the viscount's charm is the trap, or a back-room
+   > where the ledger is the trap? Either way it's Emma's want that
+   > opens the door.
 2. The GM shapes it — yes / no / tweak / their own premise.
-3. *Then* you write it up in the enumerated skeleton from
-   `references/session-templates.md` — every line a bullet, a table row
-   or a one-line label; prose only inside the read-aloud blockquote.
-   **Situation** and **Starts it** are the only two required labels; use
-   the rest where they earn their place and omit them where they don't.
-   A routing scene that is two lines is finished. Never write "N/A" or an
-   empty label to fill the skeleton out:
-   - **Situation** (required) — one line: the thing in motion when the
-     scene opens (name the pressure, not the theme).
-   - **Starts it** (required) — one line: the named NPC or household
-     schedule that brings this PC here in the first sixty seconds, and
-     what they want. A scene that cannot answer this is not finished.
-   - **Entities** — `[[NPC]], [[Location]], [[Item]]`: the wikilinks this
-     scene touches.
-   - **NPCs** — `- **Name:** wants X. Does Y if left alone.` Two lines
-     each. This is what the situation does without the players (Sly
-     Flourish's "Behaviours"; ref:
-     `skills/ttrpg-expert/scene-encounter-patterns.md`).
-   - **Points to land** — a `- [ ]` checklist of the facts the GM must
-     convey however the improv runs. The scene is done when they tick.
-   - **If the players...** — a `Do | Then` table: the choices the table
-     may make and what the situation does in reply, including the row
-     for "nobody engages".
-   - **Complications** — 2–3 bullets to drop when the scene sags.
-   - **Read-aloud** as a `> ` blockquote: 2–4 sentences, objective and
-     sensory, addressed to the table — never naming one PC or dictating a
-     feeling.
-   Every referent is named in the line that uses it: the document, the
-   person, the reason. The plan is read cold; it never teases the GM.
+3. Write it in the skeleton from `references/session-templates.md`.
+   **Situation** and **Starts it** are required; every other label is
+   optional, and a two-line routing scene is finished.
 
-Prefer embedding personal content in group scenes over splitting the party.
-Include open windows where PC initiative can emerge. The GM may propose their
-own scenes at any point — confirm understanding, then write. Spotlight balance
-across the written scenes is verification you run *against the GM's choices*,
-surfacing gaps as questions, never silently filling them.
-→ Write each scene to `## Planned Scenes` in Plan file.
+Prefer embedding personal content in group scenes over splitting the
+party, and leave open windows for PC initiative. The GM may propose
+scenes at any point — confirm understanding, then write. Check
+spotlight balance against the GM's choices and raise gaps as
+questions. → each scene to `## Planned Scenes`
 
 ## Phase 2: Verify (assistance, not enforcement)
 
-You run the deterministic checks as **chores** and act on them yourself. The
-GM never sees an ERROR/WARNING report. Silently fix objective breakage, offer
-to build artifacts, and raise only *genuine* craft issues conversationally.
+You run the checks and act on them; the GM never sees an
+ERROR/WARNING report. Fix objective breakage silently, offer to build
+artifacts, raise only genuine craft issues conversationally. Steps
+15–16 are independent — parallelize if sub-agents are available.
 
-**15. Run the checks as chores** — Run
+**15. Checks** — Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
-(and `--headless` when you were run without a GM; add `--gm-input` when the
-GM supplied the intent, scenes and spotlight up front). ERROR rows are fixed
-and the check re-run until it exits 0 (`duration`, `table`, `type`,
-`scene-labels` — every scene carries **Situation** and **Starts it**
-(a Contingency scene, **Trigger**; a routing or hub scene, neither), and any
-label that is attempted
-carries the exact punctuation the row names — and a missing
-`## GM Notes`);
-WARNING rows are fixed silently when mechanical (`preamble`, `recap`,
-`audit-trail`, `pc-state`, `scene-type`, the other `sections`) and raised
-as a question when they touch content; INFO rows are cues (`read-aloud`,
-`scene-length`, `placeholder`). Nothing in the report ever deletes a line
-of the GM's own writing — if a check's remedy would remove content, raise
-it as a question instead. Also run against the vault as a whole
-(`vault_check.py` lives at
-`${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`) — these cover
-ground `plan_check.py` can't see from a single file:
+(add `--headless` when run without a GM; `--gm-input` when the GM
+supplied intent, scenes and spotlight up front).
+- ERROR rows — fix and re-run until exit 0: `duration`, `table`,
+  `type`, `scene-labels` (every scene has **Situation** and
+  **Starts it** — a Contingency scene **Trigger**, a routing or hub
+  scene neither — with the exact punctuation the row names), and a
+  missing `## GM Notes`.
+- WARNING rows — fix silently when mechanical (`preamble`, `recap`,
+  `audit-trail`, `pc-state`, `scene-type`, the other `sections`);
+  raise as a question when they touch content.
+- INFO rows are cues (`read-aloud`, `scene-length`, `placeholder`).
+- Never delete a line of the GM's own writing; if a remedy would
+  remove content, ask instead.
 
-- **Tables** — `vault_check.py <vault> tables`. Aliased-wikilink pipes or
-  escaped pipes inside a table break Obsidian's reflow. **Silently fix** them
-  (alias-form links, no `\|`); do not narrate it.
-- **Multi-day clock** — `vault_check.py <vault> timeline`. If the plan spans
-  multiple days, *offer* to build the `## Timeline` clock with the GM so hours
-  and same-day travel stay coherent — an offer, not a warning:
-  > This one runs across three days — want me to lay out a quick hour-by-hour
-  > clock so nothing double-books?
-- **Read-aloud (vault-wide)** — `vault_check.py <vault> read-aloud`. Each hit
-  is a high-precision cue that a `> ` read-aloud line names a PC, dictates a
-  feeling ("you feel…"), or leans on a 3rd-person pronoun — checked against
-  every PC name in the vault, not just this plan. Raise only the real ones as
-  a question:
-  > Scene 2's boxed text says "Katherine steps into the lamplight" — want that
-  > kept general so it reads to the whole table?
-- **Scene length** — flag **bloat** regardless of length (restated theses,
-  repetition, self-documentation, unusable purple prose) and offer to trim it;
-  a scene runs as long as its content earns. It is a nudge, not a cap.
-  (ref: `skills/ttrpg-expert/scenario-writing.md`)
-- **Preamble** — a `preamble`/`recap` finding means the Keeper won't reach
-  Scene 1 fast. Trim silently.
-- **Canon** — NPC details, locations, or events not traceable to the vault are
-  not stated as canon. Anything you cannot ground goes to `## Open Questions`,
-  named — never invented as a "pipeline gap" fill.
-  (ref: `skills/ttrpg-expert/continuity-engine.md`)
+Then run vault-wide checks
+(`${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py`):
+- `vault_check.py <vault> tables` — fix aliased or escaped pipes in
+  table links silently (alias-form links, no `\|`), without comment.
+- `vault_check.py <vault> timeline` — if the plan spans several days,
+  offer to build a `## Timeline` hour-by-hour clock with the GM ("This
+  one runs across three days — want me to lay out a quick clock so
+  nothing double-books?").
+- `vault_check.py <vault> read-aloud` — a `> ` line that names a PC,
+  dictates a feeling ("you feel…") or uses a 3rd-person pronoun,
+  checked against every PC in the vault. Raise the real ones as a
+  question ("Scene 2's boxed text says 'Katherine steps into the
+  lamplight' — keep it general so it reads to the whole table?").
+- **Scene length** — flag bloat (restated theses, repetition,
+  self-documentation, unusable purple prose) at any length and offer to
+  trim; not a cap (`skills/ttrpg-expert/scenario-writing.md`).
+- **Canon** — NPC details, locations or events not traceable to the
+  vault are not stated as canon; they go to `## Open Questions`
+  (`skills/ttrpg-expert/continuity-engine.md`).
 
-→ Apply fixes in place; there is no audit-notes report for the GM to read.
+Apply fixes in place; there is no audit-notes report.
 
-**16. Gap Check** — Surface, as questions or a short actionable list:
-- NPCs referenced but lacking vault files; locations not
-  described; missing entity stubs needed for planned scenes —
-  run `graph_check.py unresolved` (vault-wide, no per-file
-  scoping) and filter its `target <- source` rows to the plan
-  file
-- Stale entity files: flag for update vs retire —
-  `vault_check.py stale-drafts`
-- **Unresolved calls** — plot questions the GM deferred, or you could not
-  ground in canon, go to `## Open Questions`, explicit and un-invented,
-  each with 2–3 seeds. Sort first (Stance): player decisions become
-  `Do | Then` rows, bookkeeping is defaulted with the default noted in
-  one line, cosmetics are decided. "Georgiana's post-Vienna SAN is
-  unrecorded" is bookkeeping — default it and note the default; "Does
-  Sophia know what her husband has become?" is the plot question.
+**16. Gap Check** — as questions or a short actionable list:
+- NPCs, locations or entity stubs the planned scenes need but the
+  vault lacks: run `graph_check.py unresolved` (vault-wide) and filter
+  its `target <- source` rows to the plan file.
+- Stale entity files to update or retire: `vault_check.py stale-drafts`.
+- Unresolved calls — plot questions the GM deferred or you couldn't
+  ground — each with 2–3 seeds, sorted per Stance ("Georgiana's
+  post-Vienna SAN is unrecorded" is bookkeeping: default it; "Does
+  Sophia know what her husband has become?" is a plot question).
 
-→ Write actionable gaps to `## Gaps & Actions` and unresolved calls to
-`## Open Questions` in Plan file.
+→ `## Gaps & Actions` and `## Open Questions`
 
 ## Hard Guard — never generate the creative spine
 
-session-prep does **not** emit a settled `## Session Intent`, spotlight, or
-`## Planned Scenes` without GM input. If pushed to "just do it," or run
-headless / non-interactively (e.g. dispatched as a subagent with no GM to
-answer):
+Never emit a settled `## Session Intent`, spotlight or
+`## Planned Scenes` without GM input. If pushed to "just do it", or
+run headless (e.g. as a sub-agent with no GM):
+- Stop and ask if a GM is reachable — intent gates the rest.
+- Otherwise write those sections **entirely under `## Open Questions`**,
+  each line labelled **(apprentice guess — confirm)**. Gather and
+  Verify may still run.
 
-- **Stop and ask** if a GM is reachable — the intent step gates the rest.
-- **Otherwise** produce those sections **entirely under `## Open Questions`**,
-  each line labelled **(apprentice guess — confirm)**, never as settled plan
-  content. The Gather and Verify chores may run; the creative calls may not be
-  silently resolved.
-
-`plan_check.py <plan> --headless` verifies this — a headless run that fails
-it must not be handed off. When the GM supplied the intent, scenes and
-spotlight up front (a scripted or batch prep), add `--gm-input`: the spine is
-theirs, not invented, so the guard is skipped.
-
-This is what makes the guided flow real rather than cosmetic.
+A headless run must pass `plan_check.py <plan> --headless` before
+handoff. When the GM supplied intent, scenes and spotlight up front (a
+scripted or batch prep), add `--gm-input`: the spine is theirs, so the
+guard is skipped. A sub-agent may gather and draft from the GM's
+decisions but never resolves intent, spotlight or scenes.
 
 ## Resumable prep
 
-Weekly prep gets interrupted. Keep a light prep-state marker in the Plan file
-so a resumed session doesn't re-ask settled questions. After each decision
-lands, update a short HTML comment near the top of the Plan recording what's
-decided vs open and where the conversation is:
+After each decision lands, update a prep-state comment near the top of
+the Plan:
 
 ```html
 <!-- prep-state: intent=set spotlight=Emma(B) scenes=1of3 open=[Freddy beat?] -->
 ```
 
-On resume, read it first and pick up from the first open item.
-`plan_check.py <plan> --state` prints the well-formed `key=value`
-tokens (or `# no prep-state marker` if none parse — including a fully
-malformed marker). The default `plan_check.py <plan>` run (no flags)
-is what actually reports a malformed marker, as a `prep-state`
-WARNING.
+On resume, read it first (`plan_check.py <plan> --state` prints the
+well-formed tokens, or `# no prep-state marker`) and pick up from the
+first open item; the default `plan_check.py <plan>` run reports a
+malformed marker as a `prep-state` WARNING.
 
 ## Handoff
 
-**17. Skill handoff** — Conversational only, not written to
-Plan file. Based on gaps and actions identified:
-- Content creation (scenes, NPCs, locations) → `ttrpg-expert`
-- Vault structure (entity files, metadata, organization) →
-  `campaign-organizer`
-- Structural issues (broken links, schema violations, graph
-  health) → `campaign-qa`
-
-## Sub-agent Opportunity
-
-- Steps 7-10: independent vault reads — parallelizable.
-- Steps 11-14: the elicited creative spine — run in order, *with the GM*.
-  A sub-agent may gather and draft prose from the GM's decisions, but must
-  not resolve intent/spotlight/scenes itself (see Hard Guard).
-- Steps 15-16: independent chore checks — parallelizable.
-
-If sub-agents unavailable, run all steps sequentially.
+**17.** In conversation only, not in the Plan, point gaps to:
+content (scenes, NPCs, locations) → `ttrpg-expert`; vault structure
+(entity files, metadata) → `campaign-organizer`; structural issues
+(broken links, schema, graph health) → `campaign-qa`.

@@ -1,6 +1,6 @@
 ---
-# Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.8.15"
+# Must equal plugin.json version — CI fails otherwise
+current_version: "1.9.15"
 ---
 
 # Vault Migration Registry

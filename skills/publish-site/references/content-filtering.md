@@ -130,7 +130,7 @@ Because a spoiler can be revealed in an entity that reconcile didn't
 happen to check that session (the reveal happened in dialogue that
 never made it into the wrap-up notes, or the entity wasn't obviously
 "touched"), campaign-qa also runs a full-vault open-spoilers audit on
-demand — see `campaign-qa/references/check-procedures.md`.
+demand — see `campaign-qa/references/checks/open-spoilers.md`.
 
 ## Excluding Callouts (opt-in)
 

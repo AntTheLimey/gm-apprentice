@@ -1,18 +1,14 @@
 # Vault Access Reference
 
-Read this file to determine how to access the campaign vault.
-Vault access is plain filesystem tools plus bundled
-utilities. There is no server, no app dependency, and no
-separate "Obsidian mode" — the vault is a folder of markdown,
-and Obsidian is a viewer the user may or may not have open.
+The vault is a folder of markdown. Access it with the filesystem
+tools and the bundled scripts; nothing depends on the Obsidian app
+being open.
 
 ## Tools
 
 | Operation | Use |
 |-----------|-----|
-| Read files | Read tool |
-| List files | Glob tool |
-| Write/edit files, frontmatter | Write/Edit tools |
+| Read / list / write / edit files and frontmatter | Read, Glob, Write, Edit |
 | Exact-term search (names, dates, markers) | Grep |
 | Ranked/prose search | `vault_search.py` |
 | Backlinks, orphans, unresolved/ambiguous links, dead ends | `graph_check.py` |
@@ -26,82 +22,46 @@ and Obsidian is a viewer the user may or may not have open.
 | Session-prep context bundle (one call) | `session_context.py` |
 | At-table plan brief | `session_context.py --play` |
 | Thread ages / decay | `session_context.py --threads` |
-| Prep bundle, brief form (Step 5 default) — provenance blocks stubbed, overview and existing Plan outlined | `session_context.py --brief` |
-| PC arc slice (Step 12) — every active PC's Background + GM Notes and spotlight history from prior Plans; replaces per-PC sheet reads | `session_context.py --arcs` |
-| Rebuild `_meta/index.md` from a vault scan | `index_build.py` |
+| Prep bundle, brief form (Step 5 default) | `session_context.py --brief` |
+| PC arc slice (Step 12) — replaces per-PC sheet reads | `session_context.py --arcs` |
+| Rebuild `_meta/index.md` | `index_build.py` |
 | Session Plan conformance | `plan_check.py` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
-| Frontmatter writes (set/increment/promote/supersede/reconciled) and legacy canon-key repair | `stamp_entities.py` |
-| Ingest source classification manifest (zero-read where extension/frontmatter settles it, indicator-scored otherwise) | `ingest_survey.py` |
-| Ingest `_inbox/` processed-file archival (date-stamped, never deletes) | `ingest_survey.py --archive` |
-| Ingest image filing (slug match, convert non-web-safe, portrait/embed) | `ingest_images.py` |
+| Frontmatter writes (set/increment/promote/supersede/reconciled), legacy canon-key repair | `stamp_entities.py` |
+| Ingest source classification manifest | `ingest_survey.py` |
+| Ingest `_inbox/` archival (never deletes) | `ingest_survey.py --archive` |
+| Ingest image filing | `ingest_images.py` |
 | Player-safe PC sheet view | `gm-publish sheet show --player-safe` |
 | Site rebuild (repoint, manifest, deploy+verify) | `gm-publish update-pin` / `manifest diff` / `deploy --verify` |
 | Site audit / why didn't this page publish | `gm-publish doctor --site` / `explain PATH` |
 
-Grep is the right tool when you know the term (an entity
-name, a date, a marker like `<!-- spoiler -->`). The
-utilities cover what Grep can't: relevance ranking and link
-graph analysis. Never hand-build a link map with Grep — the
-utility does it in one pass (benchmarked: under a second and
-a few hundred tokens, versus 50–125s and ~50k tokens for
-per-query approaches).
+Use Grep when you know the term. Never hand-build a link map with
+Grep — `graph_check.py` does it in one pass.
 
-## Bundled Utilities
+## Running the scripts
 
-All live in `skills/shared/scripts/`, stdlib-only Python 3.
-From a plugin install, invoke via the plugin root:
+They live in `skills/shared/scripts/` (stdlib Python 3). Invoke
+via the plugin root:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
   <vault-path> orphans --folder Characters
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
-  <vault-path> backlinks "Entity Name"
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
-  <vault-path> all
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_search.py" \
-  <vault-path> "what happened after the duel" --limit 5 --context
 ```
 
-Every utility documents itself: run it with `--help` before its first
-use in a session — the flags, output rows, and exit codes live there,
-not in this file. Findings are `LEVEL<TAB>path<TAB>message`; fix every
-ERROR, triage WARNINGs with the GM, treat INFO as context. Mutating
-scripts are dry-run by default; `--write` / `--fix` / `--execute`
-applies. `gm-publish <subcommand> --help` does the same for the
-publish tool's subcommands.
+Run each script (or `gm-publish <subcommand>`) with `--help` before
+its first use in a session; flags, output rows and exit codes live
+there. Findings are `LEVEL<TAB>path<TAB>message`: fix every ERROR,
+triage WARNINGs with the GM, treat INFO as context. Mutating scripts
+are dry-run by default; `--write` / `--fix` / `--execute` applies.
 
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
-  <vault-path> frontmatter --folder Characters
-```
+After creating or updating entity files, run
+`vault_check.py <vault-path> frontmatter --folder <dir>` on what you
+touched and fix ERRORs before moving on.
 
-**After creating or updating entity files** (session-wrapup,
-vault-ingest, campaign-organizer), run
-`vault_check.py frontmatter --folder <dir>` on what you
-touched and fix ERRORs before moving on — one deterministic
-call replaces re-reading files to self-check.
+## File format
 
-## File Format
-
-All files use:
-
-- YAML frontmatter with all schema fields
-- `[[wiki-links]]` for entity cross-references
-- Quoted `"[[Entity Name]]"` in frontmatter (Juggl format)
-- Same folder structure, `_meta/` schema, naming conventions
-
-Every campaign folder is a valid Obsidian vault — the user
-can open it in Obsidian at any time with zero migration.
-
-## Obsidian-App-Only Features
-
-These render only inside the Obsidian app; skills never
-depend on them:
-
-- **Graph view / Juggl visualization** — metadata is written
-  either way and visualizes when opened in Obsidian.
-- **Smart Connections** — in-app semantic search for the
-  user's own browsing; skills use `vault_search.py` instead.
-- **Templater auto-application and Dataview queries** —
-  template and query text is written as plain markdown.
+YAML frontmatter with all schema fields; `[[wiki-links]]` for
+cross-references; quoted `"[[Entity Name]]"` inside frontmatter.
+Graph view, Smart Connections, Templater and Dataview work only in
+the Obsidian app — write template and query text as plain markdown,
+and search with `vault_search.py`.

@@ -1,21 +1,22 @@
 # Entity Schema
 
-Merged reference combining entity type hierarchy, frontmatter
-schemas, and per-type attribute tables for all campaign entities.
+Entity type hierarchy, frontmatter schemas and per-type attributes
+for all campaign entities. Read the section you need
+(`grep -n '^## ' shared/entity-schema.md`, then Read at that
+offset) unless you are seeding `_meta/`.
 
 ## System-Specific Guidance
 
-Schemas here are system-agnostic. For system-specific stat
-blocks, skill formats, and mechanical conventions, also read:
-- CoC 7e: `systems/coc-7e/occupations.md` (percentile stats)
-- D&D 5e: `systems/dnd-5e-2024/conditions-rules.md` (CR, proficiency)
-- GURPS 4e: `systems/gurps-4e/character-generation.md` (point-buy attributes)
-- FitD: `systems/fitd/factions.md` (tier, hold, clocks)
+Schemas here are system-agnostic. For stat blocks and mechanical
+conventions also read, under `ttrpg-expert/`:
+`systems/coc-7e/occupations.md` (percentile stats),
+`systems/dnd-5e-2024/conditions-rules.md` (CR, proficiency),
+`systems/gurps-4e/character-generation.md` (point-buy),
+`systems/fitd/factions.md` (tier, hold, clocks).
 
 ## Universal Fields
 
-Apply to **every** entity type. Enable temporal queries
-("what changed in session 5?", "which entities are stale?").
+On **every** entity type:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -26,8 +27,8 @@ Apply to **every** entity type. Enable temporal queries
 | canon_status | string | Canon status: DRAFT / AUTHORITATIVE / SUPERSEDED / STUB |
 | era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"). Assumed campaign present if absent. |
 
-Always set `lastUpdated` and `asOfSession` to current session
-when filing or updating.
+Set `lastUpdated` and `asOfSession` to the current session when
+filing or updating.
 
 ## Entity Type Hierarchy
 
@@ -96,8 +97,8 @@ world (abstract)
 └── world_flags
 ```
 
-Abstract types cannot be assigned directly to entities but are
-used for constraint inheritance in the relationship ontology.
+Abstract types are never assigned to entities; they exist for
+constraint inheritance in the relationship ontology.
 
 ## Frontmatter Schemas
 
@@ -115,6 +116,9 @@ first_appearance: ""   # Link to scene or session
 ---
 ```
 
+(`vault_check.py frontmatter` enforces `type` and `canon_status`,
+plus per-type extras; write the rest anyway.)
+
 ### Relationships Block
 
 ```yaml
@@ -128,257 +132,106 @@ relationships:
     strength: 7           # 1-10 (1-2 weak, 9-10 defining)
     bidirectional: false
     description: "Serves as lieutenant"
-    gm_only: false        # optional; true hides this edge from a published
-                          # site — the page, its relationship graph, and the
-                          # search index
+    gm_only: false        # optional; true hides the edge from a published
+                          # site (page, relationship graph, search index)
 ```
 
-Extraction defaults:
-
-- `tone: neutral` and `strength: 5` when source is ambiguous
-- `bidirectional: false` unless inherently symmetric
-- Include `description` traceable to source text
-- `gm_only` omitted (visible) unless the edge's *existence* is the secret
+Extraction defaults: `tone: neutral` and `strength: 5` when the
+source is ambiguous; `bidirectional: false` unless inherently
+symmetric; a `description` traceable to source text; `gm_only`
+omitted unless the edge's *existence* is the secret.
 
 ### Publish control fields
 
-Optional, on any entity. Frontmatter carries no body prose, so
-`<!-- gm-only -->` has no meaning there — these are how a secret in
-frontmatter or a whole GM-facing file is kept off a player site.
+Optional, on any entity — how a frontmatter secret or a whole
+GM-facing file stays off a player site (`<!-- gm-only -->` has no
+meaning in frontmatter).
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `publish` | `false` \| `stub` | `false` — no page is emitted in any mode; the file still parses, so links to it render as plain text rather than as a broken link. `stub` — the page is emitted for navigation but only the sections named in `publish_include_sections` are kept. |
-| `publish_exclude_fields` | array | Field names hidden on **this file only**, merged over the vault's global `exclude_fields`. Use when excluding a field campaign-wide would strip it from every honest entity too. |
-| `publish_include_sections` | array | Only meaningful with `publish: stub`. Section headings to keep. Defaults to none — a stub opts content *in*. |
+| `publish` | `false` \| `stub` | `false` — no page in any mode; links to it render as plain text. `stub` — page emitted for navigation, keeping only `publish_include_sections`. |
+| `publish_exclude_fields` | array | Fields hidden on **this file only**, merged over the vault's `exclude_fields`. Not re-admitted by a config-level `overrides.fields.*.include`. |
+| `publish_include_sections` | array | With `publish: stub` only. Headings to keep; default none. |
 
-Absent means "publish normally"; a vault that uses none of these is
-unaffected. An unrecognized `publish:` value is treated as normal
-publication — a typo must not silently unpublish a page, nor silently
-publish one. A `publish_exclude_fields` entry is **not** re-admitted by a
-config-level `overrides.fields.*.include`: the file's own instruction about
-its own secret outranks a campaign-wide default.
+Absent, or an unrecognized `publish:` value, means normal
+publication.
 
 ## Core Entity Types
 
-### NPC
+Attribute names as each type has used them. Where a name differs
+from `## Type-Specific Fields` below (e.g. `factionType` vs
+`faction_type`), follow the vault's `_Templates/` file for that
+type.
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| occupation | string | Job or role |
-| age | number | Character age |
-| gender | string | Character gender |
-| nationality | string | Origin |
-| characteristics | object | System stats |
-| skills | array | Skill list |
-| motivations | array | Goals and drives |
-| secrets | string | Hidden information |
-| portrait | string | Optional: path to portrait image under `_attachments/` |
+- **NPC** — occupation, age (number), gender, nationality,
+  characteristics (object: system stats), skills (array),
+  motivations (array), secrets (hidden information), portrait
+- **Location** — locationType (building, outdoor…), address,
+  size, atmosphere, inhabitants (array), points_of_interest
+  (array), secrets, portrait (establishing shot)
+- **Item** — itemType (weapon, book, artifact…), value
+  (worth/rarity), origin (provenance), properties (object: special
+  abilities), currentHolder, portrait
+- **Faction** — factionType, goals (array), resources, leadership,
+  territory, tier (number, FitD), currentPlan (active objective),
+  planProgress (clock value or stage), alliances (array),
+  recentActions (array: last 1-3 sessions), status (active /
+  weakened / destroyed / allied / dormant), portrait (logo or HQ),
+  part_of (optional wiki-link to parent organization,
+  `"[[Parent Org]]"`)
+- **Clue** — clueType (physical, testimonial…), foundAt, foundBy,
+  leads_to (array of wiki-links to the node(s) this clue reveals;
+  shared with Plan), reliability, discoveryState (object, per PC:
+  `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}`)
+- **Thread** — threadType (Plot / Faction / Mystery / Chekhov /
+  Foreshadowing), status (Active / Stale / Resolved / Retired),
+  introduced and lastAdvanced (session numbers), knownBy (array:
+  PCs and NPCs aware), nextBeat, resolutionCondition,
+  plantedDetail and intendedPayoff (foreshadowing), ripeness
+  (Planted / Ripening / Ready / Paid Off / Retired)
+- **Creature** — creatureType, size, abilities (array),
+  weaknesses (array), sanityLoss (SAN loss on sight), stats
+  (object), portrait
+- **Organization** — orgType (university, company…), purpose,
+  size (member count), resources, notable_members (array),
+  portrait, part_of (optional wiki-link to parent organization)
+- **Event** — event_type, in_game_date, location (wiki-link),
+  participants (array: `[[Entity]] (role)`,
+  `[[Entity|Display]] (role)`, or plain text), outcome
+- **Plan** — plan_type (`arc`, `scene`, `investigation`,
+  `timeline`), chapter (`"[[Chapter_N_Overview]]"`), participants
+  and locations (wiki-link arrays), leads_to (wiki-link array; see
+  Not relationship predicates)
+- **Document** — docType (letter, journal, map…), author, date
+  (when written), content (the text), condition
+- **Adventure Brief** — scope (campaign / one-shot / few-shot),
+  sessions_estimated (number or range, e.g. "3-5"),
+  continuation_type (new / new-chapter / new-arc / time-jump /
+  prequel / parallel / new-pcs), adventure_shape (linear /
+  branching / hub-and-spoke / open-node / sandbox), system (game
+  system identifier or "undecided")
+- **Campaign Overview** — campaign, game_system, setting_year,
+  current_game_date, genre_tags (array), scope, status
+  (not_started / in_progress / paused / completed / abandoned),
+  sessions_played (number), last_session (wiki-link),
+  last_play_date (real-world ISO date), current_arc, arcs_planned
+  (number; 0 for sandbox), current_chapter (wiki-link),
+  chapters_planned (number: in current arc, or total), portrait.
+  session-wrapup auto-updates current_game_date, sessions_played,
+  last_session and last_play_date.
+- **Heritage** — lifespan_range ([min, max] age), maturity_age,
+  average_height, notable_traits (array), portrait
+- **World Domain** — one domain's world rules, in `_World/`; a
+  structural file, not a graph entity. domain (e.g. `heritages`,
+  `geography-climate`), status (active / stub / inactive), summary
+  (one line), rules (array; each rule has `id` for flag tracking,
+  `rule` in plain words, and `check` — a structured object:
+  field comparisons, allowed values, ranges)
+- **World Flags** — the three-state flag tracker, one per campaign
+  at `_World/_flags.md`; structural, not a graph entity.
+  last_reviewed (date)
 
-```json
-{
-    "name": "Dr. Henry Armitage",
-    "type": "npc",
-    "attributes": {
-        "occupation": "Librarian",
-        "age": 65,
-        "characteristics": {"INT": 85, "EDU": 90},
-        "skills": [{"name": "Library Use", "value": 90}]
-    },
-    "gmNotes": "Knows about the Necronomicon"
-}
-```
-
-### Location
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| locationType | string | Building, outdoor, etc. |
-| address | string | Physical location |
-| size | string | Scale |
-| atmosphere | string | Mood |
-| inhabitants | array | Who's here |
-| points_of_interest | array | Notable features |
-| secrets | string | Hidden aspects |
-| portrait | string | Optional: path to establishing shot under `_attachments/` |
-
-### Item
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| itemType | string | Weapon, book, artifact, etc. |
-| value | string | Worth/rarity |
-| origin | string | Provenance |
-| properties | object | Special abilities |
-| currentHolder | string | Who has it |
-| portrait | string | Optional: path to item illustration under `_attachments/` |
-
-### Faction
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| factionType | string | Cult, org, etc. |
-| goals | array | Objectives |
-| resources | string | Available power |
-| leadership | string | Who's in charge |
-| territory | string | Area of influence |
-| tier | number | Power level (FitD) |
-| currentPlan | string | Active objective |
-| planProgress | string | Clock value or stage |
-| alliances | array | Current allies/enemies |
-| recentActions | array | Last 1-3 sessions |
-| status | string | active / weakened / destroyed / allied / dormant |
-| portrait | string | Optional: path to logo or HQ image under `_attachments/` |
-| part_of | string | Optional: wiki-link to parent organization (`"[[Parent Org]]"`) |
-
-### Clue
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| clueType | string | Physical, testimonial, etc. |
-| foundAt | string | Location discovered |
-| foundBy | string | Who found it |
-| leads_to | array | Wiki-links to the node(s) this clue reveals (node-based sequencing; shared with Plan) |
-| reliability | string | Trustworthiness |
-| discoveryState | object | Per-PC: `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}` |
-
-### Thread
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| threadType | string | Plot / Faction / Mystery / Chekhov / Foreshadowing |
-| status | string | Active / Stale / Resolved / Retired |
-| introduced | string | Session number |
-| lastAdvanced | string | Session number |
-| knownBy | array | PCs and NPCs aware |
-| nextBeat | string | What should happen next |
-| resolutionCondition | string | What resolves this thread |
-| plantedDetail | string | Foreshadowing: what was planted |
-| intendedPayoff | string | Foreshadowing: what it foreshadows |
-| ripeness | string | Planted / Ripening / Ready / Paid Off / Retired |
-
-### Creature
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| creatureType | string | Species/category |
-| size | string | Physical scale |
-| abilities | array | Special powers |
-| weaknesses | array | Vulnerabilities |
-| sanityLoss | string | SAN loss on sight |
-| stats | object | Combat statistics |
-| portrait | string | Optional: path to creature art under `_attachments/` |
-
-### Organization
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| orgType | string | University, company, etc. |
-| purpose | string | Mission/function |
-| size | string | Member count |
-| resources | string | Available assets |
-| notable_members | array | Important people |
-| portrait | string | Optional: path to logo or HQ image under `_attachments/` |
-| part_of | string | Optional: wiki-link to parent organization (`"[[Parent Org]]"`) |
-
-### Event
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| event_type | string | Battle, ritual, meeting, etc. |
-| in_game_date | string | In-game date |
-| location | string | Where (wiki-link to Location entity) |
-| participants | array | Who — entries can be `[[Entity]] (role)`, `[[Entity\|Display]] (role)`, or plain text |
-| outcome | string | Result |
-
-### Plan
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| plan_type | string | `arc`, `scene`, `investigation`, or `timeline` |
-| chapter | string | Wiki-link to chapter overview (`"[[Chapter_N_Overview]]"`) |
-| participants | array | Wiki-link array to NPCs, factions, creatures involved |
-| locations | array | Wiki-link array to location entities |
-| leads_to | array | Wiki-link array to the plan node(s) this one leads to (node-based sequencing; see below) |
-
-### Document
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| docType | string | Letter, journal, map, etc. |
-| author | string | Who wrote it |
-| date | string | When written |
-| content | string | The text |
-| condition | string | Physical state |
-
-### Adventure Brief
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| scope | string | campaign / one-shot / few-shot |
-| sessions_estimated | string | Number or range (e.g. "3-5") |
-| continuation_type | string | new / new-chapter / new-arc / time-jump / prequel / parallel / new-pcs |
-| adventure_shape | string | linear / branching / hub-and-spoke / open-node / sandbox |
-| system | string | Game system identifier or "undecided" |
-
-### Campaign Overview
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| campaign | string | Campaign name |
-| game_system | string | Game system identifier |
-| setting_year | string | In-game era or year |
-| current_game_date | string | Current in-game date (auto-updated by session-wrapup) |
-| genre_tags | array | Genre descriptors |
-| scope | string | campaign / one-shot / few-shot |
-| status | string | not_started / in_progress / paused / completed / abandoned |
-| sessions_played | number | Total sessions played (auto-updated by session-wrapup) |
-| last_session | string | Wiki-link to most recent session file (auto-updated) |
-| last_play_date | string | Real-world ISO date of last session (auto-updated) |
-| current_arc | string | Name of the active story arc |
-| arcs_planned | number | Total arcs outlined (0 for sandbox) |
-| current_chapter | string | Wiki-link to active chapter |
-| chapters_planned | number | Chapters in current arc (or total if no arcs) |
-| portrait | string | Optional: path to campaign image under `_attachments/` |
-
-### Heritage
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| lifespan_range | array | [min, max] age range |
-| maturity_age | number | Age of adulthood |
-| average_height | string | Typical height range |
-| notable_traits | array | Distinguishing biological/cultural traits |
-| portrait | string | Optional: path to heritage illustration under `_attachments/` |
-
-### World Domain
-
-Structural file defining world rules for one domain (e.g.,
-heritages, geography, economics). Lives in `_World/`. Not a
-knowledge-graph entity — a structural file like Campaign
-Overview.
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| domain | string | Domain identifier (e.g., `heritages`, `geography-climate`) |
-| status | string | active / stub / inactive |
-| summary | string | One-line domain summary |
-| rules | array | Machine-checkable world rules (see below) |
-
-Each rule in the `rules` array has:
-- `id` — unique identifier for flag tracking
-- `rule` — human-readable description
-- `check` — structured object for validation (field comparisons,
-  allowed values, range checks)
-
-### World Flags
-
-Structural file tracking the three-state flag system. One per
-campaign at `_World/_flags.md`. Not a knowledge-graph entity.
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| last_reviewed | string | Date of last flag review |
+`portrait` is always optional: a path under `_attachments/`.
 
 ## Narrative Element Schemas
 
@@ -439,9 +292,8 @@ tags: []
 
 ## Type-Specific Fields
 
-NOTE: The Core Entity Types section above contains the detailed
-attribute tables. This section is the compact summary used
-during Dissect mode.
+Mirrored into each vault's `_meta/entity-types.md`; migrations diff
+the mirror against these entries.
 
 **NPC:** `occupation`, `age`, `gender`, `nationality`, `status`
 (alive/dead/missing/unknown), `portrait` (optional)
@@ -507,27 +359,17 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 
 ### The `mobrpg:` node (machine-managed — do not hand-edit)
 
-Entities synced to a mobRPG world carry a `mobrpg:` frontmatter node written and
-maintained by the `mobrpg` CLI. It is a regenerable sync ledger, not authored
-content — top-line frontmatter remains the single source of truth. Scalar values
-are JSON-encoded (`key: "text"`, `key: null`).
-
-| Key | Meaning |
-|-----|---------|
-| `world_id` / `external_ref` / `element_id` / `element_kind` | identity anchors (element_id is null until mobRPG accepts) |
-| `review_state` | `pending` / `accepted` / `dismissed` / `edited` / `deleted` |
-| `content_hash` / `last_synced` / `review_note` | sync bookkeeping |
-| `determined` | classifiers derived and sent (mobRPG canon overwrites on edit) |
-| `relationships[]` | reified-Event ids keyed by `(predicate, target)` |
-| `languages[]` | reserved (populated by the mobRPG skill) |
-
-Authority: mobRPG is canon. `accepted`/`edited` entities are refreshed from
-mobRPG on pull-down; `pending`/`dismissed` entities keep their vault content.
+Entities synced to a mobRPG world carry a `mobrpg:` node written by
+the `mobrpg` CLI — a regenerable sync ledger, not authored content;
+top-line frontmatter stays the source of truth. Never edit it or
+copy it into another entity. mobRPG is canon: `accepted`/`edited`
+entities (`review_state`) are refreshed from mobRPG on pull-down;
+`pending`/`dismissed` ones keep their vault content.
 
 ## Relationship Types
 
-Use the most specific type available. Generic types like
-`associated_with` or `related_to` add edges without meaning.
+Use the most specific type; generic types like `associated_with`
+or `related_to` add edges without meaning.
 
 | Category | Types |
 |----------|-------|
@@ -549,48 +391,34 @@ Use the most specific type available. Generic types like
 | Sci-Fi | uploaded_to, augmented_by, cloned_from, hacked |
 | Superhero | alter_ego_of, empowered_by, nemesis_of |
 
-Each type has an `inverse` name. Storage is single-direction only.
-If you record `A --[employs]--> B`, the inverse
-`B --[employed_by]--> A` is implied. Do NOT store both.
+Each type has an `inverse` name. Storage is single-direction only:
+record `A --[employs]--> B` and `B --[employed_by]--> A` is implied.
+Never store both.
 
 **Symmetric types** (stored once, no direction):
 knows, sibling_of, spouse_of, betrothed_to, enemy_of, allied_with,
 at_war_with, rival_of, friend_of, borders, trades_with, alter_ego_of,
 nemesis_of, negotiated_with
 
-**Genre tags:** Each type carries tags: `universal`, `fantasy`,
-`horror`, `scifi`, `superhero`, `historical`, `romance`. Filter
-suggestions to match the campaign's genre.
+**Genre tags:** each type carries `universal`, `fantasy`, `horror`,
+`scifi`, `superhero`, `historical` or `romance`; filter
+suggestions to the campaign's genre.
 
-For the full inverse name list, the symmetric-storage rule
-worked through, and modeling patterns (families, hierarchies,
-triangles) in this vocabulary, consult
-`relationship-patterns.md` in the ttrpg-expert skill.
+Inverse names and modeling patterns (families, hierarchies,
+triangles): ttrpg-expert's `relationship-patterns.md`.
 
-**This table is the authoritative vocabulary.** The machine-readable
-export `shared/gm-apprentice-ontology.json` restates these predicates
-and adds the mobRPG projection (`mobrpg_event_type` /
-`mobrpg_relation_type`) on top; it is generated *from* this table, not
-the other way round. `scripts/validate_ontology.py` fails CI when the
-two disagree on the **predicate set or the symmetric set**, and checks
-the mobRPG projection for internal enum-consistency — it does **not**
-cross-check the per-predicate mobRPG mapping values against this table,
-because the table does not carry them (that layer is authored in the
-export). A vault's `_meta/relationship-types.md` is a genre-filtered
-**subset** of this table — never a superset. Predicates that appear
-only in a vault copy are drift, not vocabulary.
+This table is the authoritative vocabulary
+(`shared/gm-apprentice-ontology.json` is generated from it). A
+vault's `_meta/relationship-types.md` is a genre-filtered subset —
+a predicate found only in a vault copy is drift.
 
-**Not relationship predicates:** narrative-flow / sequencing is **not**
-an edge in this relationship graph and never a `relationships:` block
-entry. It is modelled the node-based way (Alexandrian node-based
-scenario design; Twine's passage graph): a **`leads_to` frontmatter
-field** — an array of wiki-links to the node(s) this one leads to — on
-both **Clue** and **Plan** entities. A node with two or more `leads_to`
-targets *is* a branch; the branching is the graph structure, so there
-is no separate `precedes` (redundant with `leads_to`) or
-`alternative_to` (emergent from multiple targets) predicate or field. A
-vault vocabulary that lists a `Sequencing` relationship category
-invented it — convert those edges to `leads_to` fields.
+**Not relationship predicates:** sequencing is never an edge or a
+`relationships:` entry. It is a **`leads_to` frontmatter field** —
+an array of wiki-links to the next node(s) — on **Clue** and
+**Plan** entities. Two or more targets make a branch, so there is
+no `precedes` or `alternative_to`. A vault vocabulary with a
+`Sequencing` category invented it — convert those edges to
+`leads_to` fields.
 
 ## Required Relationships
 
@@ -625,27 +453,23 @@ invented it — convert those edges to `leads_to` fields.
 
 ## Vault Configuration Fields
 
-The vault's `_meta/vault-config.md` file uses YAML frontmatter
-for campaign-wide settings. These fields are read by multiple
-skills.
-
-### Core fields
+Frontmatter of `_meta/vault-config.md`, read by several skills.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `gm_apprentice_version` | string | Plugin version this vault was last migrated to. Set by the migration system. Skills compare this to `current_version` in `shared/migrations.md` to detect when migration is needed. |
-| `setting_year` | string | In-game date displayed on the published site |
+| `gm_apprentice_version` | string | Plugin version the vault was last migrated to; set by migration and checked by `vault_check.py <vault> version`. |
+| `setting_year` | string | In-game date shown on the published site |
 
-### Publish fields (under `publish:` key)
+Under `publish:`:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `system` | string | Game system identifier (`coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e`, `fitd`). Read by publish tool for system-specific rendering. |
-| `site_dir` | string | Absolute path to the site repo directory. Read by publish-site skill instead of asking each session. Optional — omit if vault doesn't use the publish tool. |
-| `mode` | string | `"player"` or `"full"` — controls GM-only content visibility |
-| `exclude_sections` | array | H2 heading names to strip from published output (default: `["GM Notes"]`) |
-| `exclude_fields` | array | Frontmatter field names to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
-| `exclude_dirs` | array | Vault folders to exclude from publishing (default: `["_meta", "_Templates"]`) |
-| `theme` | object | Theme configuration: `genre`, `palette`, `fonts`, `campaign_image` |
+| `system` | string | `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e` or `fitd`; drives system-specific rendering. |
+| `site_dir` | string | Absolute path to the site repo, so publish-site needn't ask each session. Optional. |
+| `mode` | string | `"player"` or `"full"` — GM-only content visibility |
+| `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes"]`) |
+| `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
+| `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
+| `theme` | object | `genre`, `palette`, `fonts`, `campaign_image` |
 | `four_oh_four` | object | Custom 404 page: `style`, `message` |
 | `overrides` | object | Per-file include/exclude/field overrides |

@@ -1,70 +1,46 @@
 ---
 name: campaign-organizer
-description: "Organize TTRPG campaign content into structured, interlinked markdown files with relationship graphs and narrative hierarchy (chapters/sessions/scenes). Works with Obsidian vaults (recommended) or plain filesystem folders. Use whenever the user wants to: organize campaign files, extract entities from campaign docs into linked notes, add wiki-links or relationship metadata, set up graph visualization, parse chapter outlines into entries, or manage campaign structure. Trigger on 'organize my campaign', 'link my notes', 'graph my NPCs', 'campaign wiki', 'chapter structure', 'vault', or any request to structure campaign content into navigable interlinked files — even just 'organize this' while working on TTRPG content."
+description: "Organize TTRPG campaign content into interlinked markdown files with relationship graphs and a chapter/session/scene hierarchy, in an Obsidian vault or plain folder. Use to organize campaign files, extract entities from campaign docs into linked notes, add wiki-links or relationship metadata, set up graph visualization, parse chapter outlines, or manage campaign structure. Trigger on 'organize my campaign', 'link my notes', 'graph my NPCs', 'campaign wiki', 'chapter structure', 'vault', or 'organize this' while working on TTRPG content."
 ---
 
 # Campaign Organizer
 
-You are a TTRPG campaign librarian and knowledge graph architect.
-Organize campaign content into clean, interlinked markdown files
-with Juggl-compatible graph metadata. You work with Obsidian
-vaults when available, or directly on the filesystem when not.
+You are a TTRPG campaign librarian and knowledge-graph architect:
+you classify, structure, cross-reference, link and validate
+campaign content as interlinked markdown with Juggl-compatible
+graph metadata. You don't create content — `ttrpg-expert` does.
+For a gap, scaffold a placeholder note and flag it.
 
-You are **not** a content creator. The `ttrpg-expert` skill
-handles generation. You classify, structure, cross-reference, link,
-and validate. When you find gaps, scaffold a placeholder note and
-flag it rather than inventing content.
-
-**Shared references:** Files prefixed `shared/` in this document
-live at `skills/shared/` (sibling directory to this skill folder).
+Files prefixed `shared/` live at `skills/shared/`.
 
 ## Companion Skills
 
-- **ttrpg-expert** — Content creation (NPCs, scenes, stat
-  blocks, handouts). Has authoritative schema definitions:
-  read its `shared/entity-schema.md`, `relationship-patterns.md`,
-  and `canon-management.md` for canonical type definitions.
-  Also has per-system topic files (creatures, spells,
-  factions, equipment) for quick reference and system-
-  specific routing via Quick Commands.
-
-- **session-prep** / **session-play** / **session-wrapup** —
-  Session lifecycle split into three skills: prep (between-
-  session preparation and reconciliation), play (at-the-table
-  support), wrap-up (post-session processing and entity
-  creation). Suggest session-wrapup after organizing
+- **ttrpg-expert** — content creation (NPCs, scenes, stat blocks,
+  handouts); `relationship-patterns.md` and `canon-management.md`
+  there; per-system topic files. Also owns thread and foreshadowing
+  tracking (`continuity-engine.md`).
+- **session-prep / session-play / session-wrapup** — the session
+  lifecycle. Suggest session-wrapup after organizing
   session-related content.
-
-- **campaign-qa** — Canon/timeline/graph validation. Suggest
-  after major Organize or Weave passes. For thread and
-  foreshadowing tracking, ttrpg-expert's continuity-engine.md
-  handles the narrative state.
+- **campaign-qa** — canon/timeline/graph validation. Suggest it
+  after a major Organize or Weave pass.
 
 ## Vault Access and Working Path
 
-Vault access is plain filesystem tools plus the bundled
-search and graph utilities — read `shared/vault-access.md`
-for the tool mapping and utility usage.
+Use plain filesystem tools plus the bundled utilities — read
+`shared/vault-access.md` for the mapping.
 
-On first invocation, **always** ask the user to confirm the
-working path:
+On first invocation, ask:
 
 > "Where should I work? Give me the path to your campaign
 > folder, or tell me where to create a new one."
 
-**Never default to the current working directory.** Wait for
-the user to provide a path before writing any files. This
-prevents accidentally creating campaign structure in an
-existing project directory. Once confirmed, use that path
-for the rest of the session without re-asking.
+Never default to the current working directory; write nothing
+until the user gives a path. Then use it for the whole session.
 
 ## The Vault Schema Layer: `_meta/`
 
-The vault is self-describing. All structural knowledge lives in
-`_meta/` files. **The vault's `_meta/` is the source of truth,
-not this skill.** This skill provides default seed values only.
-
-### Schema Files
+The vault's `_meta/` is the source of truth, not this skill.
 
 | File | Contents |
 |------|----------|
@@ -73,302 +49,172 @@ not this skill.** This skill provides default seed values only.
 | `_meta/vault-config.md` | Folder structure, naming conventions, campaign settings |
 | `_meta/index.md` | Master registry of every entity and narrative element |
 
-**Optional directories:** The vault may include an `_inbox/`
-staging area for source material being ingested by `vault-ingest`.
-Create it during vault setup if requested. See
-`shared/vault-structure.md`.
-
 ### Initialization
 
 On first contact with a vault:
 
-1. **`_meta/` exists** → Read all four files. These are the live
-   schema. Do not assume defaults.
-2. **`_meta/` missing** → Read `shared/entity-schema.md`
-   for seed data. Create `_meta/` and write all four files. Read
-   `references/index-template.md` for the index structure. The
-   index starts empty.
+1. **`_meta/` exists** → read all four files; they are the live
+   schema. Don't assume defaults. Then run the version check.
+2. **`_meta/` missing** → first-time setup: read
+   `references/vault-setup.md`. No version check.
 
-### Version Check
-
-After initialization confirms `_meta/` exists, on first
-invocation run `python3
+**Version check** (once per session): run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
-row and hand off to this skill's migration workflow
-(`references/migration-procedure.md`) before proceeding with any
-user request; resume after it completes. `AHEAD` → announce the
-row and tell the GM to update the plugin; do not proceed.
-`ERROR` → report the row; the plugin install is broken — do not
-proceed. No verdict row and a `not a directory` error on stderr
-means the vault path is wrong — ask the GM for it rather than
-proceeding.
-
-This check runs once per session on first vault contact. It
-does not apply during first-time vault setup (when `_meta/` is
-missing and initialization creates it — stamp the current
-version as part of setup).
-
-When initialization creates a new vault, set
-`gm_apprentice_version` in vault-config to
-`shared/migrations.md`'s `current_version` frontmatter value.
+version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
+run `references/migration-procedure.md`, then resume the request.
+`AHEAD` → announce the row, tell the GM to update the plugin, stop.
+`ERROR` → report the row (broken plugin install), stop. No verdict
+row plus `not a directory` on stderr → wrong vault path; ask for it.
 
 ### Schema Evolution
 
-When content doesn't fit existing types:
+When content doesn't fit an existing type, don't force it:
 
-1. Recognize the misfit — don't force it.
-2. Identify the nearest parent type in the hierarchy.
-3. Propose to the user: type name, parent, extra fields, folder.
-4. After confirmation, update `_meta/entity-types.md` (or
-   `_meta/relationship-types.md`).
-5. Create a template in `_Templates/`.
-6. Create a subfolder if needed.
+1. Find the nearest parent type in the hierarchy.
+2. Propose type name, parent, extra fields and folder.
+3. After confirmation, update `_meta/entity-types.md` (or
+   `_meta/relationship-types.md`), add a template to
+   `_Templates/`, and create a subfolder if needed.
 
-This is just editing the vault's own schema. Built-in and evolved
-types are identical.
+Evolved types are identical to built-in ones.
 
 ### Temporal and Entity Fields
 
-For universal temporal fields (`lastUpdated`, `asOfSession`,
-`createdSession`, `source`), world evolution fields on factions
-and clues, and thread entity fields, read
-`shared/entity-schema.md`.
+Universal temporal fields (`lastUpdated`, `asOfSession`,
+`createdSession`, `source`), faction/clue world-evolution fields
+and thread fields are in `shared/entity-schema.md` (§ Universal
+Fields, § Core Entity Types — read those sections, not the whole
+file). Preserve them in every Organize or Weave pass.
 
-**Always preserve these fields when reorganising or updating
-entities.** Do not delete temporal tracking or world state
-fields during Organize or Weave passes.
-
-**Campaign-timeline.md** may exist at the vault root as an
-append-only session-by-session record of what happened. Do
-not reorganise or edit past entries — the timeline is the
-canonical record of collapsed reality.
+`campaign-timeline.md` at the vault root, if present, is the
+append-only canonical record of what happened. Never reorganise
+or edit past entries.
 
 ## Image Attachments
 
-When creating or editing entities that support portraits (PC, NPC,
-Location, Faction, Organization, Item, Creature), accept an optional
-image path. Store images in `_attachments/<folder>/<slug>.<ext>`
-under the vault root, using the folder mapping:
-
-| Entity Type | Folder |
-|-------------|--------|
-| PC, NPC | `characters/` |
-| Location | `locations/` |
-| Faction, Organization | `factions/` |
-| Item | `items/` |
-| Creature | `creatures/` |
-
-Write the relative path into the frontmatter `portrait` field:
-
-```yaml
-portrait: "_attachments/characters/ronnie-vint.jpg"
-```
-
-The `portrait` field is optional — entities without images render
-cleanly. Users add portraits incrementally as images become available.
-
-For body-embedded images, Obsidian's `![[filename.ext]]` syntax works
-natively. Downstream consumers (site generators, PDF exporters)
-detect these patterns independently.
-
-Read `shared/vault-structure.md` for naming conventions and accepted
-formats.
+Entities that take portraits (PC, NPC, Location, Faction,
+Organization, Item, Creature) accept an optional image. File it
+under `_attachments/` and set `portrait:` per
+`shared/vault-structure.md` § Image Attachments (folders, naming,
+formats, body embeds). Entities without images are fine.
 
 ## The Two Layers
 
-### Narrative Layer (linear)
+- **Narrative (linear):** Campaign → Chapter → Session → Scene.
+  A chapter is a major arc or geographic segment; a session
+  belongs to one chapter; a scene is the atomic dramatic unit
+  with a type, objective and entity references.
+- **Entity (graph):** the persistent web of campaign elements,
+  typed per `_meta/entity-types.md`, in type folders, linked by
+  `[[wiki-links]]`.
 
-```text
-Campaign → Chapter → Session → Scene
-```
+Scenes reference entities via `entities` frontmatter and inline
+wiki-links; entity notes link back to scenes in an
+`Appearances` section.
 
-**Chapters**: major story arcs or geographic segments.
-**Sessions**: play events that stitch scenes, belonging to one
-chapter. Track prep notes, actual play notes, status.
-**Scenes**: atomic dramatic units with a type (investigation,
-social, combat, chase, transition, horror, downtime), objective,
-and entity references. Scenes bridge narrative and entity layers.
+## Rules for Every Mode
 
-### Entity Layer (graph)
-
-The interconnected web of campaign elements persisting across
-scenes. Types defined in `_meta/entity-types.md`. Entities live
-in type-based folders, referenced via `[[wiki-links]]`.
-
-### How They Connect
-
-Scenes reference entities through `entities` frontmatter and
-inline `[[wiki-links]]`. Entity notes link back to scenes in
-an "Appearances" section. Juggl shows both dimensions.
+- **Writing an entity:** read `_Templates/_Template_{Type}.md`
+  first and use it as the structure — never pattern-match off
+  existing entity files. Carry the source's prose about the
+  entity into the body verbatim; don't summarize or re-voice it
+  (an over-long entity is recoverable, a summarized one is lossy).
+  (rationale: `shared/content-fidelity.md`)
+- **World rules:** if `_World/` exists, check each created or
+  updated entity, relationship or field against the active domain
+  rules per `references/world-validation.md`. Surface violations
+  as advisory prompts (canon / ignore / defer).
+- **Update index:** run
+  `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
+  show the diff summary, then re-run with `--write`. The script is
+  idempotent; there is no incremental mode.
+- **Ignore `_inbox/`** (vault-ingest staging): never process,
+  reorganise or index it.
 
 ## Four Modes
 
-All four modes work in both Obsidian and filesystem
-environments. The workflow steps are identical — only the
-tools used to read, write, and search differ.
-
 ### Organize
 
-**Use when:** Collection of files needs vault structure.
+**Use when:** a collection of files needs vault structure.
 
-1. **Initialize schema** — Check `_meta/`. Seed if missing.
-2. **Survey** — Inventory input files: chapters, entity types,
-   time periods. Flag schema misfits.
-   **Ignore `_inbox/`** — this folder is a staging area for
-   `vault-ingest`. Do not process, reorganise, or index its
-   contents. It is not part of the campaign vault structure.
-3. **Propose structure** — Present vault layout. Read
-   `shared/vault-structure.md` for the default layout.
-   Adapt to content. During new vault setup, scaffold:
-   - `_World/` — create `world-index.md` and `_flags.md` from
-     `shared/templates/world-index.md` and
-     `shared/templates/world-flags.md`. Do not create individual
-     domain files — those are created on demand when content exists.
-   - `Heritages/` — entity folder for heritage entities. Add
-     `_Templates/_Template_Heritage.md` from
-     `shared/templates/heritage.md`.
-   - Add `_Templates/_Template_Faction.md` from
-     `shared/templates/faction.md` if not already present.
-   - Add `_Templates/_Template_Plan.md` from
-     `shared/templates/plan.md` if not already present.
-   - Add `_Templates/_Template_Session_WrapUp.md` from
-     `shared/templates/session-wrap.md` if not already present.
-   - Add `_Templates/_Template_Session_Plan.md` from
-     `shared/templates/session-plan.md` if not already present.
-   - For each chapter directory, create `Planning/` subfolder
-     if it doesn't already exist. This is where narrative
-     planning entities (scene designs, arc structures,
-     investigation flows) live.
-4. **Extract and file** — For each entity, read
-   `_Templates/_Template_{Type}.md` first, then create the note
-   using that template as the structure. Fill in frontmatter per
-   schema and embed `[[wiki-links]]`. When the source already
-   describes the entity, carry that prose into the body verbatim
-   — the template supplies structure, not replacement text; do
-   not summarize or re-voice it. Never pattern-match off existing
-   entity files — the template is canonical.
-   (rationale: `shared/content-fidelity.md`)
-
-**World-rule validation:** After creating or updating an entity,
-if `_World/` exists, check the entity against active domain
-rules. Read `references/world-validation.md` for the full
-procedure. Surface violations as advisory prompts with
-three-state responses (canon / ignore / defer).
-5. **Link pass** — Find missed cross-references.
-6. **Graph audit** — Read `references/graph-hygiene.md` and
-   run hygiene checks.
-7. **Update index** — Full rebuild of `_meta/index.md`: run
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
-   show the diff summary, then re-run with `--write`.
-8. **Report** — Counts, stubs, relationships, graph health.
+1. **Initialize schema** (above).
+2. **Survey** — inventory chapters, entity types, time periods;
+   flag schema misfits.
+3. **Propose structure** — present a layout based on
+   `shared/vault-structure.md`, adapted to the content.
+4. **Extract and file** — one note per entity, frontmatter per
+   schema, `[[wiki-links]]` embedded.
+5. **Link pass** — find missed cross-references.
+6. **Graph audit** — read `references/graph-hygiene.md`; run its
+   checks.
+7. **Update index.**
+8. **Report** — counts, stubs, relationships, graph health.
 
 ### Dissect
 
-**Use when:** Single large document needs breaking into notes.
+**Use when:** one large document needs breaking into notes.
 
-1. **Initialize schema** — Read `_meta/`.
-2. **Read and annotate** — Tag entities (name, type) and
-   narrative structures. Flag schema misfits.
-3. **Deduplicate** — Consolidate variant references into
+1. **Initialize schema.**
+2. **Read and annotate** — tag entities (name, type) and
+   narrative structures; flag misfits.
+3. **Deduplicate** — consolidate variant references into
    canonical names with aliases.
-4. **Extract** — One note per entity AND per narrative element:
-   chapter overviews, scene notes, session notes, entity notes.
-   For each entity, read `_Templates/_Template_{Type}.md` first
-   and use that template as the structure. Carry each entity's
-   source slice into the body verbatim — include frontmatter, the
-   preserved body prose, and `[[wiki-links]]`. Do not summarize or
-   condense the slice; an over-long entity is recoverable, a
-   summarized one is lossy. Never pattern-match off existing
-   entity files — the template is canonical.
-   (rationale: `shared/content-fidelity.md`)
-5. **Stub** — Read `_Templates/_Template_{Type}.md`, create with
-   that structure, set `canon_status: STUB`. Leave template
-   sections empty. Include `## Needs` section.
-6. **Update index** — Run
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
-   show the diff summary, then `--write`. It's the same command as
-   Organize's full rebuild — the script is idempotent, so there is no
-   separate incremental mode.
-7. **Report** — Extracted, stubbed, needs attention.
+4. **Extract** — one note per entity and per narrative element
+   (chapter overviews, scenes, sessions, entities), each with its
+   source slice.
+5. **Stub** — from the template, `canon_status: STUB`, template
+   sections left empty, plus a `## Needs` section.
+6. **Update index.**
+7. **Report** — extracted, stubbed, needs attention.
 
 ### Weave
 
-**Use when:** Existing notes need relationship enrichment.
+**Use when:** existing notes need relationship enrichment.
 
-1. **Initialize schema** — Read `_meta/`.
-2. **Scan** — Index all entity names, aliases, relationships.
-3. **Discover** — Find missing links in body text.
-4. **Propose** — Group by certainty: Explicit, Inferred, Possible.
-5. **Apply** — After confirmation, update frontmatter and links
-   only — Weave never rewrites body prose. Read
-   `references/graph-hygiene.md` for link conventions.
-
-When adding relationships or updating entity fields, check
-new values against `_World/` rules (if `_World/` exists).
-Follow `references/world-validation.md`.
-6. **Update index** — Run
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/index_build.py" <vault>`,
-   show the diff summary, then `--write`. It's the same command as
-   Organize's full rebuild — the script is idempotent, so there is no
-   separate incremental mode.
-7. **Graph audit** — Read `references/graph-hygiene.md` and
-   run full hygiene check.
+1. **Initialize schema.**
+2. **Scan** — index all entity names, aliases, relationships.
+3. **Discover** — find missing links in body text.
+4. **Propose** — grouped Explicit / Inferred / Possible.
+5. **Apply** — after confirmation, frontmatter and links only;
+   never rewrite body prose. Link conventions:
+   `references/graph-hygiene.md`.
+6. **Update index.**
+7. **Graph audit** — full check per `references/graph-hygiene.md`.
 
 ### Validate
 
-**Use when:** Check graph quality without adding content.
+**Use when:** checking graph quality without adding content.
 
-1. **Structural checks:** run the bundled utilities first —
-   `graph_check.py all` and `vault_check.py all` (see
-   `shared/vault-access.md`) — then interpret: type pair
-   violations, missing required relationships, mirrored edges
-   (the same fact stored on both endpoints — storage is
-   single-direction) on top of their orphan/ambiguity/schema
-   output.
-2. **Semantic checks:** redundant edges, implied traversal edges,
-   hub overload, generic type usage (`associated_with` etc.).
-   Read `references/graph-hygiene.md` for anti-patterns.
-3. **World-rule checks:** If `_World/` exists with active domain
-   files, check all entities against world rules. Report
-   violations as findings (not blocking). Follow
-   `references/world-validation.md` for check procedures.
-4. **Report** — Categorized findings with severity and fixes.
+1. **Structural:** run `graph_check.py all` and
+   `vault_check.py all` (see `shared/vault-access.md`), then
+   interpret on top of their orphan/ambiguity/schema output: type
+   pair violations, missing required relationships, mirrored edges
+   (one fact stored on both endpoints — storage is
+   single-direction).
+2. **Semantic:** redundant edges, implied traversal edges, hub
+   overload, generic types (`associated_with` etc.) — anti-patterns
+   in `references/graph-hygiene.md`.
+3. **World rules:** report `_World/` violations as findings, not
+   blockers.
+4. **Report** — categorized findings with severity and fixes.
 
 ## Handling Ambiguity
 
-**Deduplication:** When in doubt, don't merge — create one note
-with both names in `aliases`, flag for user confirmation.
-
-**Conflicts:** Don't pick a winner. Note one version, add
-`## Canon Conflicts`, set `canon_status: DRAFT`.
-  See `shared/canon-status.md` for the full canon status
-  state definitions.
-
-**Uncertain extractions:** Err toward creating a stub. A deleted
-stub is cheaper than a missed entity.
+- **Possible duplicates:** don't merge — one note with both names
+  in `aliases`, flagged for the user.
+- **Conflicts:** don't pick a winner — note one version, add
+  `## Canon Conflicts`, set `canon_status: DRAFT` (states:
+  `shared/canon-status.md`).
+- **Uncertain extractions:** create a stub; a deleted stub is
+  cheaper than a missed entity.
 
 ## Practical Guidance
 
-**Start small.** Chapter by chapter, document by document.
-
-**Show your work.** Summary after each pass: counts, relationships,
-stubs, graph health.
-
-**Respect existing notes.** Never delete user content. Add
-frontmatter and links only.
-
-**Think graph.** Fewer meaningful links > exhaustive cross-refs.
-Picture the Juggl visualization before committing.
-
-**Think eras.** Relationships change. Add `era` or `as_of` to
-descriptions rather than deleting old relationships.
-
-**Diverse sources.** Google Drive, AI conversation exports,
-GMAssistant logs, PDFs, raw text. Parse what you're given.
-
-**Handoff.** After major passes, suggest companion skills at
-natural transition points.
-
-**Let the vault evolve.** `_meta/` is a living document. Evolve
-the schema to match the campaign's actual shape.
+- Work chapter by chapter, document by document; summarize after
+  each pass.
+- Never delete user content — add frontmatter and links only.
+- Fewer meaningful links beat exhaustive cross-refs.
+- Relationships change: add `era` or `as_of` to descriptions
+  rather than deleting old relationships.
+- Sources vary (Google Drive, AI chat exports, GMAssistant logs,
+  PDFs, raw text) — parse what you're given.

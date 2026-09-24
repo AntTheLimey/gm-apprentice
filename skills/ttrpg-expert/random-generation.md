@@ -258,10 +258,3 @@ avoid deliberate red herrings (players generate their own).
   for predictability
 - **Override when:** result contradicts canon, breaks tone,
   creates unsafe situation, or simply isn't fun
-
-## Sources
-
-Mythic GME (Tana Pigeon); Ironsworn Oracle (Shawn Tomkin);
-Maze Rats (Ben Milton); Tome of Adventure Design (Matt Finch);
-Donjon RPG Generators; Perilous Wilds (Jason Lutes); Stars
-Without Number (Kevin Crawford).

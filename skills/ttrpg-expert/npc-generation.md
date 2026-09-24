@@ -188,16 +188,3 @@ constraints. Role specified → build from role. Relationship
 specified → build history around it. Mechanical need → stat
 block first, wrap personality. Name only → infer from setting.
 Always generate something usable even with minimal input.
-
-## Sources
-
-Johnn Four (3 Line NPC); Sly Flourish (NPC Generation); The
-Alexandrian (Proactive NPC Design); Robin Laws (DramaSystem);
-Keith Ammann (Monsters Know); Chaosium (CoC Keeper Rulebook);
-SJG (GURPS Characters); John Harper (BitD SRD); WotC (2024 DMG).
-
-## External References
-
-- **Action-Oriented Monsters:** https://mcdm.gg/
-- **3-Line NPC:** https://roleplayingtips.com/
-- **Dhole's House Character Library:** https://www.dholeshouse.org/

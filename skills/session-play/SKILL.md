@@ -1,93 +1,74 @@
 ---
 name: session-play
-description: "Use when the GM is actively running a TTRPG session and needs fast help at the table — quick lookups, rules questions, on-the-fly content generation, or capturing play notes. Speed is everything: short responses, no unsolicited analysis. Not for session prep (session-prep) or post-session processing (session-wrapup)."
+description: "Use when the GM is actively running a TTRPG session and needs fast help at the table — quick lookups, rules questions, on-the-fly NPCs and content, or capturing play notes. Speed is everything. Not for session prep (session-prep) or post-session processing (session-wrapup)."
 ---
 
-Table-side assistant for live TTRPG sessions. Players are
-waiting. Every response must be immediately usable.
+Table-side assistant. Players are waiting: every response must be
+usable immediately.
 
-**Shared references:** Read `shared/session-principles.md` on
-first invocation.
+**On first invocation:** read `shared/session-principles.md` and
+`shared/session-document-chain.md`, then run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py"
+<vault> --play` — the plan brief with every scene's full text, NPC
+table, world state, contingencies and end objectives. Open the Plan
+file only for a section the brief drops.
 
-**Document chain:** Read `shared/session-document-chain.md`.
-Session-play reads the Plan file for scene reference and writes
-to the Play Notes file for note capture.
+**Version check:** on first invocation, run the Version Gate in `shared/session-principles.md`.
 
-**On first invocation:** Run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
---play` — the plan brief (intent, each scene in full minus its Entities
-link list, the NPC table, world state, contingency scenes and end
-objectives). That is every scene's own text, so the Plan file itself is
-only worth opening for a section the brief drops.
+## Behavior
 
-**Version check:** On first invocation run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK` or `SETUP` → proceed. `MISMATCH` → announce the
-row and hand off to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`) before
-proceeding with play support; resume after it completes. `AHEAD`
-→ announce the row and tell the GM to update the plugin; do not
-proceed. `ERROR` → report the row; the plugin install is broken —
-do not proceed. No verdict row and a `not a directory` error on
-stderr means the vault path is wrong — ask the GM for it rather than
-proceeding.
-
-**Trigger phrases:** "we're playing now", "quick question",
-"during the session", "I need a [NPC/location]", "give me
-options for..."
+- 1-5 sentences unless the GM asks for more; abbreviations fine.
+- No unsolicited suggestions or analysis.
+- Generated content is provisional until the GM confirms it.
 
 ## Capabilities
 
-### Quick Reference
+**Quick reference** — NPC, location, rules and scene facts from the
+vault. Essentials only.
 
-Look up NPC details, location descriptions, rules, scene
-notes from the vault. Essential facts only — no analysis.
+**Rules assist** — answer the mechanical question, nothing more
+(routes below).
 
-### Rules Assist
+**On-the-fly generation** — NPCs, locations, shops, encounters,
+table-ready. Then ask **"Want me to save this to the vault?"** The
+GM may defer (e.g. three options, players haven't chosen) — flag
+unsaved content for wrap-up. Create a vault file only on the GM's
+yes: `canon_status: DRAFT`, and any `relationships:` `type:` from
+`_meta/relationship-types.md`, never invented (normalize via
+`shared/relationship-normalization.md`; deeper authoring waits for
+wrap-up). Note a saved entity in the Play Notes too.
 
-Answer system-specific mechanical questions. Reference
-ttrpg-expert's game-systems if needed, deliver only the
-answer.
+**Capture notes** — write raw shorthand to the session's Play Notes
+file (`type: session-play-notes`). If none exists, create it per
+`shared/session-document-chain.md` with `created_by: session-play`,
+set the session index's `documents.play_notes` to it and `status`
+to `played`. Acknowledge and hold — no editing or reorganizing;
+wrap-up processes it. Mark entities with:
 
-### On-the-Fly Generation
+| Marker | Use when |
+|--------|----------|
+| `NEW-NPC` | Improvised character appeared |
+| `NEW-LOC` | New location described |
+| `NEW-ITEM` | Item introduced |
+| `NEW-EVENT` | Significant event occurred |
+| `UPDATE` | Existing entity changed |
+| `CONFLICT` | Contradicts existing vault content |
 
-Create NPCs, locations, shops, encounters on the spot.
-Table-ready — usable immediately without editing.
+```text
+NEW-NPC: Madame Voss — fortune teller at the pier, nervous,
+  knows about the missing ship but won't say why
+Scene 3: PCs searched the harbour. UPDATE: The Merry Widow —
+  confirmed abandoned, signs of struggle below decks
+```
 
-After generating: **"Want me to save this to the vault?"**
-GM may defer (e.g., 3 options where players haven't chosen).
-Unsaved content flagged for wrap-up. If GM confirms, create
-vault file with `canon_status: DRAFT`. Any `relationships:` edge
-takes its `type:` from the vocabulary in `_meta/relationship-types.md`
-— never an invented predicate (normalize via
-`shared/relationship-normalization.md`; deep authoring waits for
-wrap-up).
+**Player sheet changes** — players' sheet edits from the published
+site are handled by publish-site's "start your checking loop"
+(`references/change-request-loop.md`) in a separate terminal; point
+the GM there.
 
-If saved during play, also note the entity in the Play Notes
-file so session-wrapup picks it up.
+## Mid-Game Lookups
 
-### Capture Notes
-
-Accept raw shorthand play notes. Write to the session's Play
-Notes file (`type: session-play-notes`). If no Play Notes file
-exists yet, create one with frontmatter per
-`shared/session-document-chain.md` and `created_by: session-play`.
-Update the session index: set `documents.play_notes` to the new
-file reference and advance `status` to `played`.
-
-Acknowledge and hold. No editing or analysis — processed during
-wrap-up. Note new entities for wrap-up attention.
-
-### Player Sheet Changes
-
-If players are submitting sheet edits from the published site during play, the
-**publish-site** skill runs the "start your checking loop" workflow in a
-separate terminal (`references/change-request-loop.md`). Point the GM there;
-session-play does not process the queue itself.
-
-## Common Mid-Game Lookups
-
-Route these requests directly — don't search, load the file.
+Load the file directly — don't search.
 
 | Need | Go to |
 |------|-------|
@@ -103,52 +84,9 @@ Route these requests directly — don't search, load the file.
 | Improvisation help | `ttrpg-expert/active-play-management.md` §Improvisation |
 | Narrative plan | `plans_index.py <vault> --chapter "<chapter>"` — Planning/ entities and the resolved midwife adventure with per-file summaries; `AMBIGUOUS` means ask, never guess |
 
-Read `ttrpg-expert/active-play-management.md` when the GM needs
-GM-craft advice (spotlight, pacing, improv, difficulty tuning)
-during play. Use it as a companion reference — don't summarize
-it, route to the relevant section and deliver the answer.
+For GM-craft questions, read only the routed section and deliver
+the answer, not a summary.
 
-### Personal Reference Files
-
-`systems/{system}/personal/` may contain the user's own
-setting reference (factions, NPCs, locations, random tables).
-Gitignored — never distributed. Check here during
-improvisation when public SRD/ORC files lack the setting
-detail you need.
-
-## Capture Shorthand
-
-When taking play notes, use these markers so session-wrapup
-can extract entities automatically:
-
-| Marker | Use when |
-|--------|----------|
-| `NEW-NPC` | Improvised character appeared |
-| `NEW-LOC` | New location described |
-| `NEW-ITEM` | Item introduced |
-| `NEW-EVENT` | Significant event occurred |
-| `UPDATE` | Existing entity changed |
-| `CONFLICT` | Contradicts existing vault content |
-
-Example play note entry:
-```text
-NEW-NPC: Madame Voss — fortune teller at the pier, nervous,
-  knows about the missing ship but won't say why
-Scene 3: PCs investigated the harbour. Found bloodstains
-  on the Merry Widow's deck. UPDATE: The Merry Widow —
-  confirmed abandoned, signs of struggle below decks
-```
-
-These markers match what session-wrapup expects in its entity
-extraction step — notes taken during play arrive pre-formatted
-for wrap-up processing.
-
-## Behavior Rules
-
-- **1-5 sentences** unless GM asks for more
-- **No unsolicited suggestions** during play
-- **Don't reorganize** play notes in real time
-- **Speed over polish** — abbreviations fine
-- **Generated content is provisional** until GM confirms
-- **Flag new entities** for wrap-up, don't create vault
-  files unless GM explicitly asks
+When improvising and the public SRD/ORC files lack setting detail,
+check `systems/{system}/personal/` (the user's own factions, NPCs,
+locations, tables).

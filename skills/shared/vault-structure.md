@@ -8,12 +8,12 @@ Written to `_meta/vault-config.md` on first setup.
 ├── _attachments/    (image files)
 │   ├── characters/  (PC and NPC portraits)
 │   ├── locations/   (location images)
-│   ├── factions/    (logos, HQ images)
+│   ├── factions/    (faction and organization logos, HQ images)
 │   ├── items/       (item illustrations)
 │   ├── creatures/   (creature art)
 │   ├── events/      (scene art)
 │   └── documents/   (scans, letter images)
-├── _midwife/        (adventure workspace — see below)
+├── _midwife/        (the-midwife's workspace)
 ├── _World/          (world rules and domain files)
 │   ├── world-index.md
 │   └── _flags.md
@@ -30,6 +30,7 @@ Written to `_meta/vault-config.md` on first setup.
 ├── Chapters/
 │   └── Chapter N - {Title}/
 │       ├── Chapter N Overview.md
+│       ├── Planning/
 │       ├── Sessions/
 │       └── Scenes/
 ├── Characters/ (PCs/, NPCs/)
@@ -43,53 +44,43 @@ Written to `_meta/vault-config.md` on first setup.
 └── Clues/
 ```
 
-**Campaign Overview** — Front page: campaign name, game system,
+**Campaign Overview** — front page: campaign name, game system,
 setting/era, chapter list with links, premise.
+**Player Characters** — PC roster: player name, character name,
+key traits, status, link to the full PC note.
+**Timeline** — master timeline of campaign events.
 
-**Player Characters** — Quick-reference PC roster: player name,
-character name, key traits, status, link to full PC note.
+**Templates** — one per schema type: create all on setup, and one
+immediately on schema evolution. Each has full frontmatter,
+section headings, a Dataview backlink query, `## Source
+References` and `## GM Notes`.
 
-**Timeline** — Master timeline of campaign events.
-
-**Templates** — One per type in schema. On setup, create all. On
-schema evolution, create immediately. Each includes: full
-frontmatter, section headings, Dataview backlink query,
-`## Source References` and `## GM Notes`.
-
-**Naming:** Entity notes use canonical name as filename. Sessions:
-`Session {NN} - {Title}.md`. Chapters: `Chapter {N} - {Title}/`.
-Aliases in frontmatter.
+**Naming:** entity notes use the canonical name as filename,
+aliases in frontmatter. Chapters: `Chapter {N} - {Title}/`.
+Session files: see Session Document Chain below.
 
 ## Image Attachments
 
-The `_attachments/` folder stores image files referenced by entity
-frontmatter or body embeds. Organize by entity type.
+Images live in `_attachments/<type folder>/` (tree above), named
+by slug matching the entity file — `characters/ronnie-vint.jpg`
+for `Ronnie Vint.md`; extra images get suffixes
+(`ronnie-vint-young.jpg`). Formats: jpg, jpeg, png, webp, gif —
+not HEIC or RAW.
 
-**Naming convention:** Use slug format (lowercase, hyphens) matching
-entity files — e.g., `characters/ronnie-vint.jpg` for the entity
-`Ronnie Vint.md`. Multiple images per entity get suffixed:
-`ronnie-vint-young.jpg`, `ronnie-vint-scarred.jpg`.
+Portrait-bearing entities reference it with a vault-root-relative
+path:
 
-**Accepted formats:** jpg, jpeg, png, webp, gif. Avoid HEIC or RAW
-(not web-safe).
-
-**Frontmatter reference:** Entity types that support portraits use
-the `portrait` field with a vault-root-relative path:
 ```yaml
 portrait: "_attachments/characters/ronnie-vint.jpg"
 ```
 
-**Body embeds:** Use Obsidian's wiki-embed syntax for inline images:
-```markdown
-![[ronnie-vint-selection.jpg]]
-```
-Obsidian resolves these by searching configured attachment paths.
+Inline images use Obsidian embeds (`![[ronnie-vint-selection.jpg]]`),
+which Obsidian resolves via its attachment paths.
 
 ## Session Document Chain
 
-Sessions use the document chain standard. Each session has an
-index hub and up to three document files. See
-`shared/session-document-chain.md` for the full standard.
+Each session has an index hub and up to three documents
+(standard: `shared/session-document-chain.md`):
 
 ```text
 Sessions/
@@ -101,107 +92,36 @@ Sessions/
 
 ## Inbox
 
-The `_inbox/` folder is a staging area for source material
-being ingested by the `vault-ingest` skill. After successful
-ingestion, files move to `_inbox/_processed/` with a date stamp.
-
-`campaign-qa` ignores `_inbox/` during audits.
-`campaign-organizer` creates it during vault setup but does
-not process its contents.
+`_inbox/` stages source material for vault-ingest; ingested files
+move to `_inbox/_processed/` with a date stamp. campaign-qa and
+campaign-organizer never process its contents.
 
 ## Adventures
 
-The `Adventures/` folder stores adventure briefs — structured
-design documents produced by the midwife skill. Each adventure
-gets its own subfolder:
-
-```text
-Adventures/
-└── {Adventure Name}/
-    └── {Adventure Name}.md    (adventure brief)
-```
-
-The adventure brief is the folder's primary file. Entity files
-referenced by the brief live in their normal type folders
-(Characters/, Locations/, etc.), not under Adventures/.
+`Adventures/{Adventure Name}/{Adventure Name}.md` holds a
+midwife adventure brief. Entities the brief references live in
+their normal type folders, not under `Adventures/`.
 
 ## Midwife Workspace
 
-The `_midwife/` folder is the midwife skill's creative
-workspace. It stores working notes, seed ideas, entity
-sketches, and other artifacts produced during adventure
-brainstorming. Created automatically on first midwife
-invocation.
+`_midwife/` is the-midwife's workspace (structure: the-midwife
+SKILL.md § Content Management). It is per adventure, not per
+chapter; adventures stay there until promoted, or for good.
 
-```text
-_midwife/
-├── index.md             (master manifest — all adventures)
-├── seeds/               (shared idea bank across adventures)
-│   ├── premises/        (adventure concepts, genre combos)
-│   ├── npcs/            (NPC ideas that didn't fit)
-│   ├── locations/       (place concepts)
-│   ├── hooks/           (plot hooks, inciting events)
-│   ├── tone/            (tone/genre/atmosphere ideas)
-│   └── mechanics/       (system-specific ideas)
-└── {adventure-name}/    (per-adventure working directory)
-    ├── index.md         (adventure TOC, status, open Qs)
-    ├── discoveries.md
-    ├── chapter-shape.md
-    ├── adventures/      (confirmed sub-adventures)
-    ├── npcs/            (confirmed NPC profiles)
-    ├── entity-sketches/ (draft entities for promotion)
-    ├── image-prompts/   (visual concept descriptions)
-    └── session-0/       (CATS pitch, safety, handouts)
-```
-
-Additional topic files (weather, cover stories, social events,
-romance threads) are created on demand. See the-midwife
-SKILL.md for the full list.
-
-Each adventure is an independent working directory. The
-midwife can work on multiple adventures in parallel.
-Adventures stay here until explicitly ingested into the vault
-via `Adventures/`. They may never be ingested — parked
-adventures remain as creative archives.
-
-The `seeds/` folder is shared across all adventures. When an
-idea is generated but not used, it goes to the appropriate
-seed category. When starting a new adventure, the midwife
-scans seeds for relevant prior ideas.
-
-### Who reads `_midwife/`
-
-`campaign-qa` ignores `_midwife/` during audits — a creative
-scratchpad should not be linted for schema compliance.
-
-**That is an auditing rule, not a general one.** `session-prep`
-and `session-play` must *read* the workspace: it is where a
-chapter's forward design actually lives once a midwife session
-has run, and it is often the only place it lives, with
-`Chapters/{chapter}/Planning/` left empty. A prep pass that
-skips it will invent scene structure that contradicts a
-timeline already sitting in the vault.
-
-**Directories here are named per adventure, not per chapter**
-(`_midwife/{adventure-name}/`, as written above). An adventure
-may be one chapter, several, or carry a name resembling
-neither. Readers must therefore resolve the directory through
-`_midwife/index.md`, the master manifest, rather than deriving
-a slug from the chapter title — and where the manifest leaves
-the match ambiguous, ask rather than guess. `Ingested` status
-means the design was already promoted into `Planning/`.
-
-Discover these files **by path**. They are creative working
-documents and carry no frontmatter, so any scan keyed on
-`type:` or `plan_type` finds nothing there regardless of its
-root. Read them, link to them, never copy them.
+- campaign-qa ignores it — never lint it for schema.
+- session-prep and session-play read it: it often holds a
+  chapter's only forward design. Resolve the directory through
+  `_midwife/index.md` (or `plans_index.py`), never from a
+  chapter-title slug; if the match is ambiguous, ask. `Ingested`
+  means it was already promoted to `Planning/`.
+- Its files have no frontmatter — find them by path, not by
+  `type:`. Read and link them; never copy them.
 
 ## World Layer
 
-The `_World/` folder stores world rules and domain definitions.
-Created on demand by any skill that needs to write world content.
-Domain files define machine-checkable rules; heritage entities in
-`Heritages/` are first-class vault entities.
+`_World/` holds world rules; created on demand by any skill that
+writes world content, with `world-index.md` and `_flags.md` stubbed
+at vault setup. Heritage entities live in `Heritages/`.
 
 ```text
 _World/
@@ -219,9 +139,4 @@ _World/
 └── language-communication.md (naming, scripts, barriers)
 ```
 
-Individual domain files are created when content exists — not
-all 10 are required. `world-index.md` and `_flags.md` are
-created as stubs during vault scaffolding.
-
-`campaign-qa` audits `_World/` domain rules against entities.
-`campaign-organizer` creates `_World/` during vault setup.
+Create a domain file only when it has content.
