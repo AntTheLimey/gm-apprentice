@@ -1,6 +1,6 @@
 ---
-# Stamped from plugin.json by build-skill-zips.sh — do not edit manually
-current_version: "1.8.15"
+# Must equal plugin.json version — CI fails otherwise
+current_version: "1.10.0"
 ---
 
 # Vault Migration Registry
@@ -13,9 +13,9 @@ skill proceeds.
 
 When adding a new migration entry: bump `version` in
 `.claude-plugin/plugin.json` and add the entry in ascending
-version order at the end of this file. `current_version` in the
-frontmatter above is stamped automatically from `plugin.json` by
-`build-skill-zips.sh` at build time — do not edit it by hand.
+version order at the end of this file. Set `current_version` in
+the frontmatter above to the same version in the same commit; CI
+fails when the two differ.
 
 ## How migrations work
 

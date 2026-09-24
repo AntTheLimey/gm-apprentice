@@ -1,14 +1,12 @@
 # Session Document Chain
 
-Defines the session lifecycle document standard. Each session
-splits into separate documents with clear ownership. All
-session skills read this reference.
+Each session splits into separate documents, each owned by one skill.
 
 ## Document Types
 
 ### 1. Session Index (`Session {NN} - {Title}.md`)
 
-The hub. Metadata and links only — no prose content.
+The hub: metadata and links only, no prose.
 
 ```yaml
 ---
@@ -30,23 +28,17 @@ tags: []
 ---
 ```
 
-**Date fields:** `play_date` is the real-world date the session
-was played — always `YYYY-MM-DD`. `in_game_date` is the fictional
-in-world date; the published timeline sorts on it
-(`tools/publish/lib/timeline.js`) by anchoring on a **4-digit year**,
-and it accepts ISO dates, month-name dates (`"August 11, 1814"`,
-`"July 1814"`), and seasonal phrases (`"Autumn 1813"`). Keep
-narrative time-of-day out of the field (`"Evening, 11 August 1814"`
-loses its date) — put it in prose.
+**Date fields:** `play_date` is the real-world play date, always
+`YYYY-MM-DD`. `in_game_date` is the fictional date; the published
+timeline sorts it by its **4-digit year** and accepts ISO dates,
+month-name dates (`"August 11, 1814"`, `"July 1814"`) and seasonal
+phrases (`"Autumn 1813"`). Keep time-of-day out of the field
+(`"Evening, 11 August 1814"` loses its date) — put it in prose. For a
+non-Earth calendar, record the world's own format and never fabricate
+a Gregorian date; without a 4-digit year it is left off the timeline
+(not an error).
 
-For a **non-Earth calendar** (Forgotten Realms, stardates, invented
-calendars), record the date in the world's own format — never
-fabricate a Gregorian date to satisfy the parser. If the string
-contains a 4-digit year it still sorts roughly by year; if it has
-none it is left off the auto-built timeline (not an error) but still
-appears on its own entity page.
-
-**Status** reflects the furthest document that exists:
+**Status** is the furthest document that exists:
 
 | Status | Meaning |
 |--------|---------|
@@ -57,20 +49,16 @@ appears on its own entity page.
 | reviewed | GM has reviewed and confirmed the Wrap-Up |
 
 Derive/verify with `vault_check.py sessions`; fix with
-`stamp_entities.py … --set status=…` (see
-`shared/vault-access.md`).
+`stamp_entities.py … --set status=…` (see `shared/vault-access.md`).
 
-**`world_evolved`:** Set by reconcile step 6.5 after the
-world-evolution procedure completes. Value is the session
-reference (e.g., `"Session_07"`). Null until world-evolution
-runs. Prevents reconcile from re-offering world-evolution
-for the same session.
+**`world_evolved`:** the session reference (e.g. `"Session_07"`) set by
+reconcile step 6.5 once world evolution has run for it, so it is not
+offered twice. Null until then.
 
 ### 2. Session Plan (`Session {NN} - {Title} - Plan.md`)
 
-Written by session-prep. Contains scenes, NPCs, threads,
-hooks, decision points, GM notes. Archived after play —
-not deleted, not updated.
+Written by session-prep: scenes, NPCs, threads, hooks, decision
+points, GM notes. Archived after play — not deleted, not updated.
 
 ```yaml
 ---
@@ -86,9 +74,8 @@ tags: []
 
 ### 3. Play Notes (`Session {NN} - {Title} - Play Notes.md`)
 
-Raw record of what happened. Written by GM during play
-(session-play), reconstructed by vault-ingest, or entered
-manually.
+Raw record of what happened: written during play (session-play),
+reconstructed by vault-ingest, or entered manually.
 
 ```yaml
 ---
@@ -104,22 +91,14 @@ tags: []
 
 ### 4. Session Wrap-Up (`Chapter_CC_Session_NN_Wrap_Up.md`)
 
-Canonical record: narrative recap, PC carry-forward, what
-carries forward, world state, keeper checklist, quality notes,
-and the handoff to session-prep.
-Starts DRAFT, promoted to AUTHORITATIVE via reconcile.
+Canonical record of the session. Starts DRAFT, promoted to
+AUTHORITATIVE via reconcile.
 
-Filename uses zero-padded chapter and session numbers with
-underscores: `Chapter_03_Session_07_Wrap_Up.md`. No session
-title in the filename. The chapter number is load-bearing, not
-decorative — session numbers are unique only within a chapter,
-and Obsidian wikilinks resolve by basename, so a title-free,
-chapter-free `Session_07_Wrap_Up.md` collides the moment a
-second chapter reaches its own session 7. The chapter number
-guarantees the basename stays unique vault-wide regardless of
-how session numbering itself is scoped. The file lives in the
-session's own directory (e.g.,
-`Sessions/Session 07/Chapter_03_Session_07_Wrap_Up.md`).
+Filename: zero-padded chapter and session numbers, no title —
+`Chapter_03_Session_07_Wrap_Up.md`, in the session's own directory
+(`Sessions/Session 07/`). Never drop the chapter number: session
+numbers repeat across chapters and Obsidian resolves links by
+basename.
 
 ```yaml
 ---
@@ -138,37 +117,20 @@ tags: []
 ---
 ```
 
-Both `session:` (wiki-link) and `session_number:` (scalar) are
-present because consumers key on different forms: the publish
-tool's recap lookup prefers the link and falls back to the
-scalar. `reconciled` is the machine-readable reconcile date. On files
-written since 1.9.5, `canon_status: AUTHORITATIVE` with
-`reconciled: null` means the promotion bypassed reconcile; on
-older files the date may simply predate the field — campaign-qa's
-Wrap-Up Conformance check backfills it where the body records a
-date, and asks once where it doesn't.
+Keep both `session:` (link) and `session_number:` (scalar) —
+consumers key on each.
 
-**Body skeleton:** canonical in `shared/templates/session-wrap.md`
-(provisioned into vaults as `_Templates/_Template_Session_WrapUp.md`).
-Two player-facing sections — `## Narrative Recap` (lifted by the
-publish tool as the session's site recap) and the optional
-`## Memorable Moments` — then a single `## GM Notes` H2 wrapped in
-one `<!-- gm-only -->`/`<!-- /gm-only -->` pair holding every
-Keeper-facing subsection at `###`. GM-side content never gets its
-own top-level H2: `exclude_sections` lists strip known names (the
-default covers six), but a Keeper-facing H2 with a novel name is
-on nobody's list and publishes to player sites — the failure the
-1.8.52 Reconciliation Context re-nesting fixed for one heading,
-the single fenced `## GM Notes` block ends for all of them.
+**Body:** canonical in `shared/templates/session-wrap.md`
+(provisioned as `_Templates/_Template_Session_WrapUp.md`). Two
+player-facing sections — `## Narrative Recap` (the site's session
+recap) and optional `## Memorable Moments` — then one `## GM Notes`
+H2 inside a single `<!-- gm-only -->`/`<!-- /gm-only -->` pair holding
+every Keeper-facing subsection at `###`. Keeper-facing content never
+gets its own top-level H2: a novel H2 name is on no exclude list and
+publishes to player sites.
 
-For reconstructed content (from vault-ingest), include a
-Reconstruction Note callout at the top of the document:
-
-```markdown
-> [!info] Reconstruction Note
-> Reconstructed from [source descriptions] on [date].
-> [limitations/gaps noted].
-```
+A reconstructed session (vault-ingest) opens with a
+`> [!info] Reconstruction Note` callout naming sources, date and gaps.
 
 ## Skill Ownership
 
@@ -182,19 +144,15 @@ Reconstruction Note callout at the top of the document:
 
 ## Rules
 
-1. **No skill writes to a document it doesn't own.**
+1. **Each skill writes only the documents it owns.**
 2. **Documents are append/update, never replace.**
 3. **The session index is the single source of truth for status.**
-4. **Missing documents are normal.** Not every session has
-   all four documents — especially reconstructed sessions.
-5. **The chain is the same whether played yesterday or
-   reconstructed.** Only `created_by` and reconstruction
-   notes differ.
+4. **Missing documents are normal**, especially for reconstructed
+   sessions.
+5. **The chain is the same for played and reconstructed sessions**;
+   only `created_by` and the reconstruction note differ.
 
 ## File Layout
-
-Each session has its own directory inside the chapter's
-Sessions/ folder:
 
 ```text
 Chapters/Chapter 1 - Title/Sessions/
@@ -204,10 +162,3 @@ Chapters/Chapter 1 - Title/Sessions/
     ├── Session 01 - The Arrival - Play Notes.md
     └── Chapter_01_Session_01_Wrap_Up.md
 ```
-
-## Companion References
-
-- `shared/session-principles.md` — Shared session rules
-- `shared/canon-status.md` — DRAFT/AUTHORITATIVE/SUPERSEDED
-- `shared/entity-schema.md` — Entity frontmatter schemas
-- `shared/vault-structure.md` — Folder layout and naming

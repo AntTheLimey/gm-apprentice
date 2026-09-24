@@ -1,15 +1,12 @@
 # Character Story Format
 
-Reference for PC companion story files. Each active PC has a
-story file that grows session by session — a rolling narrative
-of that character's journey through the campaign.
+Each active PC has a story file that grows session by session — a
+rolling narrative of that character's journey.
 
 ## File Location
 
-Story files live alongside their PC entity file:
-`Characters/PCs/{Name}_Story.md`
-
-Discovered by naming convention, not frontmatter pointer.
+`Characters/PCs/{Name}_Story.md`, beside the PC entity file.
+Discovered by naming convention, not a frontmatter pointer.
 
 ## Frontmatter
 
@@ -38,9 +35,8 @@ character did, decided, learned, and how they were changed.}
 
 ## Narrative Voice by Campaign Genre
 
-Voice is tied to the campaign's genre/tone, not the game
-system. A GURPS horror campaign uses atmospheric horror voice;
-a GURPS space opera uses something different.
+Voice follows the campaign's genre/tone, not the game system (a
+GURPS horror campaign uses horror voice).
 
 | Genre | Voice |
 |-------|-------|
@@ -58,29 +54,18 @@ a GURPS space opera uses something different.
 - Character names, not player names
 - Past tense for events, present for ongoing states
 - Wiki-links (`[[Entity Name]]`) for every entity reference
-- Focus on this character's perspective, not full session recap
+- This character's perspective, not a full session recap — the
+  party-wide narrative, mechanical changes and world state belong
+  in the Wrap-Up and entity files
 - Include consequences: injuries, relationship shifts, new
   knowledge, emotional impact
-- No bullet points — narrative prose only
-- 2-4 paragraphs per session entry
+- Narrative prose only, no bullet points
 
 ## Append Protocol
 
-1. Read existing story file (or create from template if none)
-2. Append new `## Session {N} — {Title}` at the bottom
+1. Read the existing story file (or create it from
+   `shared/templates/character-story.md`)
+2. Append `## Session {N} — {Title}` at the bottom
 3. Write narrative prose for this session
 4. Update `lastUpdated` and `asOfSession` in frontmatter
 5. Never edit prior session entries (append-only)
-
-## Story vs Wrap-Up Content
-
-Story files capture a single character's narrative arc.
-Session wrap-ups capture the full session for the whole party.
-
-| Content | Story file | Wrap-up |
-|---------|-----------|---------|
-| What this PC did | Yes | PC Carry-Forward only |
-| Full session narrative | No | Narrative Recap |
-| Mechanical changes | No (stat sheet) | Entity updates |
-| NPC relationship shifts | Yes, narratively | Carry-forward |
-| World state changes | No | World State section |

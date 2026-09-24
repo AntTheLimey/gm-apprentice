@@ -3,9 +3,8 @@
 ## The principle
 
 We help the GM write their story; we don't write it for them. When content
-moves between places in the vault, the GM's words are the asset. Rewriting
-well-formed prose substitutes our voice for theirs. Organizing it preserves
-their voice and gives it a home.
+moves between places in the vault, the GM's words are the asset: organizing
+them preserves their voice, rewriting substitutes ours.
 
 ## The rule
 
@@ -23,19 +22,18 @@ operation and says why generation is correct there.
 
 - The GM approved this content by choosing to move it. Relocation files it;
   it does not re-author it.
-- The prose is the product of human-in-the-loop creative work. Rewriting
-  keeps the cheap part (structure) and throws away the part with a human in it.
+- Rewriting keeps the cheap part (structure) and throws away the part with a
+  human in it.
 - Loss is silent and breaks play. Summarizing drops a planted clue, a
   foreshadowed detail, an NPC's exact phrasing — and the GM can't tell what
   was lost. A dropped clue can break an investigation chain (Three Clue Rule).
-- Rewriting flattens voice into generic model prose — the opposite of what a
-  campaign vault is for.
+- Rewriting flattens voice into generic model prose.
 
 ## The block/seam test (mixed operations)
 
 Some operations (Midwife brief synthesis, vault-ingest play-notes synthesis)
-hold both finished prose and raw fragments side by side. Apply the test at
-paragraph granularity, not document granularity:
+hold finished prose and raw fragments side by side. Apply the test per
+paragraph, not per document:
 
 - Finished-prose block (written to be read as-is) → preserve verbatim; place it.
 - Fragments (bullets, shorthand, Q&A, notes-to-self) → no finished prose to
@@ -47,8 +45,8 @@ Written → lift it. Raw → author from it.
 
 ## Authoring is a grudging exception
 
-Some operations must generate prose because none exists yet (a recap from
-shorthand, a story entry). When authoring:
+When an operation must generate prose because none exists yet (a recap from
+shorthand, a story entry):
 - Stay maximally faithful to the source material.
 - No embellishment. Scale prose to available data.
 - Never fabricate detail to fill space. Mark sparse sources, don't invent.

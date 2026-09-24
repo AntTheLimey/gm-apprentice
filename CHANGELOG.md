@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.0] — 2026-09-24
+
+### Changed
+
+- Skill diet: every SKILL.md and the shared files they read on most runs
+  rewritten to their working minimum. The nine SKILL.md files drop from
+  147 KB to 83 KB. Removed: restatements of templates and shared files the
+  skill already reads, repeated cautions, step-by-step descriptions of what
+  a script does, rationale that changes no action, and trigger phrases in
+  skill bodies. Rare paths moved to references read only when they fire:
+  `session-wrapup/references/gmassistant-export.md`,
+  `session-prep/references/scene-note-template.md`,
+  `campaign-organizer/references/vault-setup.md`.
+- The version check now lives once, as the Version Gate in
+  `shared/session-principles.md`; five skills point to it.
+- The migration procedure reads only the `shared/migrations.md` entries
+  newer than the vault, not the whole file.
+
+### Fixed
+
+- `shared/migrations.md` `current_version` was only stamped by the zip
+  build, so git installs stamped migrated vaults with a stale version and
+  the next check asked to migrate again. The source now carries the real
+  version and CI fails when it differs from `plugin.json`; the contributor
+  docs that said "do not edit it by hand" now say to bump it with
+  `plugin.json`.
+- The PC roster is `_Campaign/Player Characters.md` and the timeline is
+  `_Campaign/Timeline.md`; four places named files no vault has.
+- `stale-draft-detection.md` described the old vault-wide algorithm the
+  script replaced in #162; it now defers to `vault_check.py stale-drafts`.
+- `stale-draft-detection.md` also dropped the missing/future
+  `createdSession` Warning cases during the diet's rewrite; restored,
+  and campaign-qa's severity table no longer calls stale DRAFT an Info
+  example.
+- New-vault setup stamped `gm_apprentice_version` before scaffolding
+  `_World/`, templates and `Planning/`, so an interrupted setup could
+  look current with artifacts still missing. Stamping now runs last.
+- publish-site's content-filtering workflow could build
+  `publish-manifest.md` and rely on it while `mode: full` (which
+  ignores the manifest) was still set. It now confirms `mode: player`
+  first.
+- session-play ran `session_context.py --play` before the Version
+  Gate; it now runs the gate first, like the other session skills.
+
+### Removed
+
+- `ttrpg-expert/INDEX.md` (its routing rows that were not already in
+  SKILL.md moved there), `ttrpg-expert/rpg-terminology.md`,
+  `campaign-qa/references/check-procedures.md` (its check index now
+  lives in SKILL.md's Modes, with a path per check), and the
+  superseded "Keeper Notes (Structured)" recap format.
+
 ## [1.9.14] — 2026-09-21
 
 ### Added

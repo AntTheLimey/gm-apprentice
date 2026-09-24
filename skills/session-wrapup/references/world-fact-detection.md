@@ -1,7 +1,7 @@
 # World Fact Detection
 
-Heuristics for scanning session content and identifying
-potential world facts during the Wrap-Up generation pass.
+Heuristics for spotting potential world facts in session content
+during wrap-up.
 
 ## What to Scan For
 
@@ -18,38 +18,35 @@ potential world facts during the Wrap-Up generation pass.
 
 ## Signal vs Noise
 
-**Likely significant (flag it):**
+**Flag:**
 - Named AND described — a proper noun with enough context to
   create an entity or rule
-- Used by multiple NPCs or in multiple scenes — gaining weight
+- Used by multiple NPCs or in multiple scenes
 - Contradicts an existing world rule — always flag
-- Consistent with existing rules but extends them — flag as
+- Consistent with existing rules but extends them — flag as a
   potential addition
 
-**Likely flavor (don't flag):**
+**Don't flag (flavor):**
 - Mentioned once in passing with no description
 - Generic reference with no proper noun ("some old ruins")
-- Atmospheric detail that doesn't imply a world rule ("it was
-  raining heavily")
+- Atmosphere that implies no world rule ("it was raining heavily")
 
 ## Deduplication
 
 Before staging a finding:
-1. Check `_World/_flags.md` — is this already tracked?
-   - **Ignored** → suppress silently, do not stage
-   - **Deferred** → increment mention count, note session
-     number. Stage for reconcile when the topic has been
-     mentioned in 3 or more sessions.
-   - **Canon** → suppress, it's already resolved
-2. Check `_World/` domain files — is this fact already encoded?
-   If so, suppress.
-3. Check entity files — does a matching entity already exist?
-   If so, suppress.
+1. `_World/_flags.md`:
+   - **Ignored** → suppress silently
+   - **Deferred** → increment the mention count and note the
+     session; stage for reconcile once mentioned in 3+ sessions
+   - **Canon** → suppress
+2. `_World/` domain files — already encoded → suppress.
+3. Entity files — matching entity exists → suppress.
 
 ## Output Format
 
-Stage findings in the Wrap-Up file's `## GM Notes` section,
-as a `### World Fact Findings` subsection:
+Under the Wrap-Up's `## GM Notes`, as `### World Fact Findings`.
+Each finding gives the fact, evidence from the notes, the domains
+it touches, and whether it's new or accumulated:
 
 ```markdown
 ### World Fact Findings
@@ -57,14 +54,8 @@ as a `### World Fact Findings` subsection:
 - **Dwarf heritage** — Torga described as "a dwarf merchant"
   (first mention). No heritage definition exists.
   Domains: heritages
-- **Brackenmoor** — new settlement mentioned by two NPCs.
-  No vault entry.
-  Domains: geography-climate
 - **The Old Empire** — referenced again (deferred, 3 prior
   mentions, threshold reached). Sessions: 3, 4, 5, 7.
   Recommend resurfacing.
   Domains: history-timeline, politics-governance
 ```
-
-Each finding includes: the fact, evidence from session notes,
-which domains it touches, and whether it's new or accumulated.

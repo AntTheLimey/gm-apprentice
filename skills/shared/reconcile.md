@@ -1,140 +1,105 @@
 # Reconcile
 
-Shared procedure for reviewing vault content with the GM and
-promoting canon status. Any skill can invoke this.
+Shared procedure for reviewing a Wrap-Up with the GM and promoting
+canon status. Called by session-wrapup (after writing a Wrap-Up),
+session-prep (when the last session is at `wrap-up`), vault-ingest
+(after each ingested Wrap-Up), or standalone when the GM surfaces a
+contradiction ("these notes contradict Session 3"). Skip for first
+sessions or when status is already `reviewed`.
 
-## When to Call
+You need the Wrap-Up path, its related entity files and timeline
+entries, and the session index.
 
-- **session-wrapup** — after producing a Wrap-Up file, walk
-  GM through review before closing out
-- **session-prep** — fallback when previous session is at
-  `wrap-up` status (not yet `reviewed`)
-- **vault-ingest** — after each ingested Wrap-Up is generated
-- **standalone** — GM surfaces a contradiction or wants to
-  review specific content ("these notes contradict Session 3")
-
-Skip for first sessions or when status is already `reviewed`.
-
-## Prerequisites
-
-Before starting, have:
-- The target Wrap-Up file path
-- Access to related entity files and timeline entries
-- The session index file for status updates
+All stamps below use `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py"`:
+dry-run first, `--write` on GM confirmation (see
+`shared/vault-access.md`).
 
 ## Quick Scan — Fast Path
 
-Before starting the full procedure, check three conditions:
+Check three conditions:
 
-1. **No unverified markers:** Zero `<!-- UNVERIFIED -->` markers
-   in the Wrap-Up file
-2. **No DRAFT conflicts:** Zero DRAFT entities that contradict
-   existing AUTHORITATIVE entities on the same facts
-3. **No unplayed prep:** No Plan file exists for this session
-   (nothing to triage)
+1. Zero `<!-- UNVERIFIED -->` markers in the Wrap-Up
+2. Zero DRAFT entities contradicting AUTHORITATIVE ones on the same
+   facts
+3. No Plan file for this session (no unplayed prep to triage)
 
-If all three pass, offer the fast path:
+If all pass, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
-On GM confirmation, using the bundled stamper (dry-run first,
-`--write` on confirmation; see `shared/vault-access.md`):
-- `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py"
-  <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD` —
-  promotes the Wrap-Up's `canon_status` and stamps `reconciled:`
-  in one call
-- `stamp_entities.py <vault> <entity files> --promote` — all
-  DRAFT entities from this session to AUTHORITATIVE
+On yes:
+- `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
+- `stamp_entities.py <vault> <entity files> --promote` — this
+  session's DRAFT entities
 - `stamp_entities.py <vault> "<index>" --set status=reviewed`
-- Skip to step 6.5 (world evolution offer)
+- Go to step 6.5.
 
-If any condition fails → proceed with the full 6-step procedure
-below.
+Otherwise run the full procedure.
 
 ## Procedure
 
 ### 1. Load the target
 
-Read the Wrap-Up file. Read related entity files, timeline
-entries, and any linked scene notes. Build a picture of what
-this session established. *(reads only — no writes yet)*
+Read the Wrap-Up, related entity files, timeline entries and linked
+scene notes. Reads only — no writes yet.
 
 ### 2. Highlight uncertain areas
 
-Surface everything that needs GM attention:
-- `<!-- UNVERIFIED -->` markers in the Wrap-Up
+As a short inventory, not a wall of text:
+- `<!-- UNVERIFIED -->` markers
 - Reconstruction notes (`> [!info] Reconstruction Note`)
-- DRAFT entities created during wrap-up
+- DRAFT entities and any `canon_status: DRAFT` content tied to this
+  session
 - Timeline entries with uncertain dates or ordering
-- Any `canon_status: DRAFT` content tied to this session
-
-Present as a short inventory, not a wall of text.
 
 ### 2.5. World fact review
 
-If the Wrap-Up file's `## GM Notes` section contains a
-`### World Fact Findings` subsection (staged by session-wrapup),
-review each finding with the GM.
+If `## GM Notes` has a `### World Fact Findings` subsection, take each
+finding one at a time and wait for the GM's call:
 
-For each finding, present the three-state prompt:
+- **Canon** → create or update the `_World/` domain file and entities
+  (e.g. new heritage → `Heritages/{Name}.md` from
+  `shared/templates/heritage.md`, entry in `_World/heritages.md`,
+  record in `_flags.md` canon section). If `_World/` doesn't exist,
+  create `world-index.md` + `_flags.md` stubs from `shared/templates/`
+  first.
+- **Ignore** → `_flags.md` ignored section, with date and context;
+  future flags on the topic are suppressed.
+- **Defer** → `_flags.md` deferred section, with session number and
+  context. For a re-surfaced item, show the accumulated context ("The
+  Old Empire has come up in 3 sessions now — should we flesh this
+  out?").
 
-- **Canon** → create or update the relevant `_World/` domain
-  file and entities. Example: new heritage confirmed → create
-  `Heritages/{Name}.md` from `shared/templates/heritage.md`,
-  add entry to `_World/heritages.md`, record in `_flags.md`
-  canon section.
-  If `_World/` doesn't exist, create it first (world-index.md
-  + _flags.md stubs from shared/templates/).
-- **Ignore** → add to `_flags.md` ignored section with date
-  and context. Future flags on this topic are suppressed.
-- **Defer** → add to `_flags.md` deferred section with session
-  number and context. If the item was being re-surfaced
-  (accumulated mentions), present the accumulated context:
-  "The Old Empire has come up in 3 sessions now — should we
-  flesh this out?"
-
-One finding at a time. Wait for GM decision before continuing.
-Record each resolution in the `### Reconciliation Context`
-subsection under `## GM Notes` (step 7).
+Record each resolution for step 7.
 
 ### 3. Walk through conflicts
 
-One conflict at a time. For each:
-1. Show both versions (what the Wrap-Up says vs what the
-   vault says, or two contradicting sources)
-2. Explain the discrepancy in one sentence
-3. Propose a resolution
-4. **Wait for GM decision before moving on**
-
-Each answer shapes the next question. This is a conversation,
-not a report.
+One at a time: show both versions (Wrap-Up vs vault, or two
+sources), explain the discrepancy in one sentence, propose a
+resolution, and **wait for the GM's decision** before the next.
 
 ### 3.5. Spoiler reveal check
 
-For every entity this session's Wrap-Up actually touched (created or
-updated — the same bounded set session-wrapup already produced in its
-receipt), check for open `<!-- spoiler -->` blocks. For each one
-found, ask:
+For each entity this Wrap-Up created or updated (the set in
+session-wrapup's receipt) that holds an open `<!-- spoiler -->`
+block, ask:
 
 > "[[{Entity}]] has a pending spoiler: '{first ~10 words of the
 > spoiler text}...' — was this revealed to the players this session?
 > (y/n)"
 
-On yes: remove the `<!-- spoiler -->` / `<!-- /spoiler -->` markers
-from that entity's file, leaving the content as plain published
-prose. On no: leave it untouched — it stays hidden and gets asked
-about again next time this entity is touched, or caught by
-campaign-qa's full-vault audit if it never comes up again (see
-`publish-site/references/content-filtering.md`).
-
-Skip this step entirely if none of this session's touched entities
-contain a `<!-- spoiler -->` block — no empty prompt.
+Yes → remove the `<!-- spoiler -->` / `<!-- /spoiler -->` markers,
+leaving the content as published prose. No → leave it; it is asked
+again next time the entity is touched, or caught by campaign-qa (see
+`publish-site/references/content-filtering.md`). No spoiler blocks →
+skip silently.
 
 ### 5. Salvageable prep triage
 
-If a Plan file exists for this session, scan unplayed content.
-For each unplayed element, ask the GM:
+If a Plan file exists for this session, ask about each unplayed
+element:
 
 | Disposition | Meaning |
 |-------------|---------|
@@ -142,142 +107,82 @@ For each unplayed element, ask the GM:
 | **recycle** | Reuse in a future session |
 | **must-still-happen** | Critical clue or event players still need |
 
-Flag `must-still-happen` items prominently — these carry
-forward into the next session's prep.
+Flag `must-still-happen` items prominently — they carry into the next
+prep.
 
 ### 6. Promote canon status
 
-On GM approval, using the bundled stamper (dry-run first,
-`--write` on confirmation):
-1. `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled
-   YYYY-MM-DD`
+On GM approval:
+1. `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
 2. `stamp_entities.py <vault> "<index>" --set status=reviewed`
-3. `stamp_entities.py <vault> <entity files> --promote` where GM
-   confirmed content
-   3b. Before finalizing each entity promotion, check the entity
-       against active `_World/` rules (if `_World/` exists).
-       If a world rule is violated:
-       - Surface: "This NPC is 400 years old, but world rules
-         say humans live 60-85 years. Is that intentional?"
-       - **Yes, intentional** → promote with a note explaining
-         the exception
-       - **Correct it** → update the entity before promotion
-       - **Defer** → promote but tag `needs_review: true`
-4. `stamp_entities.py <vault> "<loser>" --supersede-by
-   "[[Winner]]"` for any contradicted content
+3. `stamp_entities.py <vault> <entity files> --promote` for confirmed
+   content. First, if `_World/` exists, check each entity against its
+   rules; on a violation ask ("This NPC is 400 years old, but world
+   rules say humans live 60-85 years. Is that intentional?"):
+   - **Intentional** → promote with a note explaining the exception
+   - **Correct it** → update the entity, then promote
+   - **Defer** → promote and set `needs_review: true`
+4. `stamp_entities.py <vault> "<loser>" --supersede-by "[[Winner]]"`
+   for contradicted content
 
-Do the bookkeeping immediately — don't leave a list for
-the GM. Hand off to campaign-organizer if entity filing
-is needed.
+Do the bookkeeping now rather than leaving the GM a list. Hand off to
+campaign-organizer if entity filing is needed.
 
 ### 6.5. World evolution (conditional)
 
-**Gate:** Only offer when reconciling the **most recent**
-session. Check the session index for a `world_evolved` field
-— if present and matching this session, skip.
+Offer only for the **most recent** session, and skip if the index's
+`world_evolved` already names this session.
 
 > "Session is settled. Want to evolve the world — faction
 > turns, consequence surfacing, foreshadowing review? This
 > updates how the world responds to what just happened. (y/n)"
 
-If the GM declines → skip to step 7.
-
-If the GM accepts → read and follow
-`ttrpg-expert/world-evolution.md`, skipping the Storage
-Checkpoint (already established). Run the 6-step procedure:
-thread state updates, faction turns, consequence surfacing,
-foreshadowing review, discovery state updates, world state
-changes. One item at a time, GM approves each — same
-conversational style as the rest of reconcile.
-
-**On completion:**
-- `stamp_entities.py <vault> "<index>" --set
-  world_evolved="Session_NN"` (current session reference)
-- `stamp_entities.py <vault> <entity files> --set
-  source=world-evolution --session N --date D` on entities
-  created or updated by this pass
-- Results feed into step 7's `### Reconciliation Context`
-  under `#### World Evolution`, containing:
-  - Faction turn summaries (one line per faction: action,
-    impact level, what's visible to PCs)
-  - Surfaced consequences (trigger, manifestation)
-  - Foreshadowing changes (ripeness updates, new plants)
-  - Discovery state changes (per-PC knowledge shifts)
-  - World state changes (calendar, environment, politics)
+Declined → step 7. Accepted → follow `ttrpg-expert/world-evolution.md`
+(skip its Storage Checkpoint): thread states, faction turns,
+consequences, foreshadowing, discovery state, world state — one item
+at a time, GM approves each. Then:
+- `stamp_entities.py <vault> "<index>" --set world_evolved="Session_NN"`
+- `stamp_entities.py <vault> <entity files> --set source=world-evolution --session N --date D`
+  on entities this pass created or updated
 
 ### 7. Record decisions
 
-Write a `### Reconciliation Context` subsection, opening
-with a `**Reconciled:** YYYY-MM-DD` line (the same date
-stamped into the frontmatter `reconciled:` field), capturing:
-- **Consequences** — forward-looking summary of what this
-  session established (every claim traceable to vault or
-  play notes, no invention)
-- **Promotion** — every entity moved DRAFT → AUTHORITATIVE,
-  by name
+Write `### Reconciliation Context`, opening with
+`**Reconciled:** YYYY-MM-DD` (the date stamped into `reconciled:`):
+- **Consequences** — what this session established, forward-looking,
+  every claim traceable to vault or play notes
+- **Promotion** — every entity moved DRAFT → AUTHORITATIVE, by name
 - **Salvageable prep** — disposition of each unplayed item
 - **GM decisions** — each conflict resolution with rationale
-- **World evolution** — if step 6.5 ran, include a
-  `#### World Evolution` sub-section with faction turn
-  summaries, surfaced consequences, foreshadowing and
-  discovery state changes, and world state updates
+- **World evolution** (if 6.5 ran) — a `#### World Evolution`
+  sub-section: one line per faction turn (action, impact, what PCs
+  can see), surfaced consequences (trigger, manifestation),
+  foreshadowing changes, per-PC discovery shifts, world state changes
 
-This section provides cross-conversation continuity.
-Session-prep reads it to avoid re-gathering context.
+Session-prep reads this instead of re-gathering context.
 
-**Where to write it:** Always in the Wrap-Up file, as a `###`
-subsection **under that file's `## GM Notes` heading** —
-if the file has none, create `## GM Notes` wrapped in its own
-`<!-- gm-only -->`/`<!-- /gm-only -->` fence (reconcile has no
-migration prerequisite, and an unfenced section on a legacy
-file can reach a published player site). If the GM Notes
-block is wrapped in a `<!-- gm-only -->` fence (standard since
-1.9.5), insert the subsection **before** the `<!-- /gm-only -->`
-closer — appending after it leaves the section outside the
-fence, breaking the one-fence invariant. If a Plan file
-exists, you may append a short pointer (`See Wrap-Up for
-reconciliation context`) but the Wrap-Up file is the canonical
-location. After writing, run `vault_check.py <vault> wrapup
---file "<wrap-up>"`. A `no wrap-up with that path` INFO means
-the path or the file's `type:` is wrong, not that the check
-passed — the command exits 0 either way. Confirmation is the
-absence of any row naming the Reconciliation Context heading
-(an unfenced or Keeper-facing-H2 finding at its line).
+**Where:** always in the Wrap-Up, as a `###` under its `## GM Notes`.
+Nest it there rather than as a top-level `## Reconciliation Context`,
+and never add it to an `exclude_sections` list instead — every item is
+Keeper-facing, and `## GM Notes` is already hidden in every vault's
+config. If the file has no `## GM Notes`, create one wrapped in its
+own `<!-- gm-only -->`/`<!-- /gm-only -->` fence. If the block is
+fenced, insert **before** the `<!-- /gm-only -->` closer. A Plan file
+may get a one-line pointer (`See Wrap-Up for reconciliation context`).
 
-**Why nested, not a top-level `## Reconciliation Context`:**
-every item in it is Keeper-facing — GM decisions and their
-rationale, unplayed prep, what the factions did while the PCs
-weren't looking. As a sibling H2 it published to player sites,
-because a GM's own `exclude_sections` list is respected as
-written and a newly-added default never reaches a vault that
-set its own. The 1.8.3 standard exists precisely so new GM
-content needs no new exclude entry: put it under `## GM Notes`
-and every config already hides it. Do not "fix" this by adding
-`Reconciliation Context` to an exclude list.
+Then run `vault_check.py <vault> wrapup --file "<wrap-up>"`. It exits
+0 either way: `no wrap-up with that path` INFO means the path or the
+file's `type:` is wrong. Confirmation is no row naming the
+Reconciliation Context heading.
 
-**Reading it back:** accept either form — `###` under
-`## GM Notes` (current) or a top-level `## Reconciliation
-Context` (vaults not yet migrated).
+**Reading it back:** accept `###` under `## GM Notes` or a top-level
+`## Reconciliation Context` (unmigrated vaults).
 
 ## Rules
 
 - **One conflict at a time.** Conversation, not report.
-- **Never silently resolve.** Even obvious corrections need
-  GM confirmation before writing.
-- **Record as you go.** Write each resolution immediately
-  after GM confirms. Don't batch.
-- **Know when to stop.** If the GM says "good enough," stop.
-  Partial review is better than no review.
+- **Confirm before writing**, even obvious corrections.
+- **Record each resolution as soon as the GM confirms.**
+- **Stop when the GM says "good enough."** Partial review beats none.
 
-## Companion References
-
-- `shared/canon-status.md` — DRAFT/AUTHORITATIVE/
-  SUPERSEDED states and promotion rules
-- `shared/session-document-chain.md` — Document types,
-  status transitions, skill ownership
-- `shared/session-principles.md` — Shared session rules
-- `ttrpg-expert/canon-management.md` — Full conflict
-  detection and resolution workflow
-- `ttrpg-expert/world-evolution.md` — Post-session world
-  evolution procedure (faction turns, consequences,
-  foreshadowing, discovery state)
+Full conflict detection and resolution: `ttrpg-expert/canon-management.md`.

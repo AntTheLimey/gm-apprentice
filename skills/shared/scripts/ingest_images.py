@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """File and link vault-ingest image material without a file-by-file manual pass.
 
-Backs vault-ingest Phase 1/3 image handling
-(`references/image-handling.md`), whose 162-line spec nobody had turned
-into code: classify by format, convert non-web-safe formats, slugify and
+Backs vault-ingest Phase 1/3 image handling. This script is the spec;
+`references/image-handling.md` keeps only the GM-decision rows. It does:
+classify by format, convert non-web-safe formats, slugify and
 match against vault entities, file into the right `_attachments/`
 subfolder, detect duplicates, and decide portrait vs. body-embed.
 
@@ -49,7 +49,7 @@ matching bug, they're a batch collision: identical bytes make the second
 one `SKIP-BATCH-DUP`; different bytes flag *both* as `DUP-FLAG`, because
 neither can be silently preferred over the other.
 
-Portrait vs. body-embed follows `image-handling.md`, gated on
+Portrait vs. body-embed is gated on
 `schema_rules.PORTRAIT_TYPES` (an entity type outside that set — `event`,
 `session` — always gets a body embed, never a `portrait:` write, even as
 the only match): a lone match becomes the portrait; among several matches
@@ -69,7 +69,7 @@ script flag: apply a keeper-interview portrait choice with
 `stamp_entities.py VAULT FILE --set portrait="_attachments/..." --write`;
 resolve a `DUP-FLAG` by hand (replace, rename the new file with a `-2`
 suffix and re-run, or leave it); an unmatched image marked "atmosphere
-art" has no dedicated destination in `image-handling.md`'s table — file
+art" has no dedicated destination in the filing map — file
 it under `_attachments/documents/` by hand.
 
 Output
@@ -100,7 +100,7 @@ duplicate-identical/differs verdicts (which require actually performing any
 non-web-safe conversion to get comparable bytes), but writes nothing. Pass
 --execute to copy/convert into `_attachments/` and write the `portrait:`
 field / `## Attachments` embed. A DUP-FLAG row is never auto-resolved, in
-either mode — "flag, don't guess" (Design Principle 6).
+either mode — "flag, don't guess" (vault-ingest Gotcha 7).
 
 Only a content digest, not the full bytes, is held across the planning
 pass — a batch of hundreds of large images does not load them all into
@@ -141,7 +141,7 @@ from vaultlib import (  # noqa: E402
 
 WEB_SAFE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
 
-# image-handling.md:58-66 — the filing map. Deliberately broader than
+# The filing map. Deliberately broader than
 # schema_rules.PORTRAIT_TYPES (it adds event/session, which the schema
 # does not consider portrait-bearing): this table says where the *file*
 # goes, not who may claim `portrait:` — that gate is separate, below.
@@ -158,7 +158,7 @@ _UNSAFE_SLUG_CHARS = re.compile(r'[\\/:*?"<>|\t\r\n\x00-\x1f]')
 
 
 def slugify(stem: str) -> str:
-    """image-handling.md's slug rule (lowercase, spaces/underscores ->
+    """The slug rule (lowercase, spaces/underscores ->
     hyphens, collapse consecutive hyphens), plus stripping characters the
     spec doesn't anticipate but that would corrupt the written YAML
     (quotes, backslashes) or the tab-separated report (tabs, newlines)."""
@@ -231,7 +231,7 @@ def _run_converter(cmd: list[str], dest: Path) -> bool:
 
 
 def convert_to_jpeg(src: Path, dest: Path) -> bool:
-    """Best-effort `sips` then `magick` conversion, per image-handling.md.
+    """Best-effort `sips` then `magick` conversion.
     Returns whether dest now holds converted bytes."""
     if shutil.which("sips") and _run_converter(
             ["sips", "-s", "format", "jpeg", str(src), "--out", str(dest)],
@@ -327,8 +327,7 @@ def build_plans(vault: Path, dir_: Path, tmp_dir: Path) -> list[Plan]:
     # (dropbox/a/portrait.jpg vs dropbox/b/portrait.jpg) may hold entirely
     # different images. They slugify to the same destination, so the
     # dest_claims check below settles them on *content* — identical bytes
-    # make the later one SKIP-BATCH-DUP (image-handling.md's "using the
-    # first copy"), different bytes flag both, never a silent drop.
+    # make the later one SKIP-BATCH-DUP (keep the first copy), different bytes flag both, never a silent drop.
     candidates: list[tuple[str, Path]] = []
     for path in walk(dir_):
         if path.suffix.lower() not in IMAGE_EXTS:

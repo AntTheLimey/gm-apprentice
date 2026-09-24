@@ -1,8 +1,8 @@
 # Canon Status
 
-Quick reference for the canon status states used across all
-campaign entity files. For the full conflict detection and
-resolution workflow, see `ttrpg-expert/canon-management.md`.
+The canon states used in every entity file. Conflict detection,
+source tracking and the promotion workflow:
+`ttrpg-expert/canon-management.md`.
 
 ## The States
 
@@ -23,26 +23,18 @@ resolution workflow, see `ttrpg-expert/canon-management.md`.
 
 ## The `canon_status` Field
 
-Every entity frontmatter includes:
-
 ```yaml
 canon_status: DRAFT    # AUTHORITATIVE | SUPERSEDED | STUB
 ```
 
-`canon_status` is the only correct field name. Two legacy names
-(`source_confidence` and `confidence`) may appear in vaults that
-haven't run the 1.8.0 migration — read them as equivalent, but
-never write them.
+`canon_status` is the only name to write. Read the legacy names
+`source_confidence` and `confidence` as equivalent.
 
 ## Repairing Legacy Keys
 
-**Mechanised:** `stamp_entities.py <vault> --repair-canon
-[--write]` applies exactly this; the cases below are its
-specification.
-
-This is the single authoritative repair algorithm. The 1.8.0
-migration sweep, campaign-qa's Legacy Canon Field Repair check,
-and any skill touching a file with a legacy key all apply it.
+Run `stamp_entities.py <vault> --repair-canon [--write]`; the
+cases below are its specification, and apply by hand to any file
+you touch that carries a legacy key.
 
 **Never blind-rename a key** — many files carry BOTH a legacy
 key and `canon_status`, and a rename would leave duplicate
@@ -59,9 +51,3 @@ which can flip the entity's status). Apply exactly one case:
 
 After repairing, the file must contain exactly one
 `canon_status:` line.
-
-## Companion Reference
-
-For detailed conflict detection rules, source tracking,
-and the full promotion workflow, read:
-`ttrpg-expert/canon-management.md`

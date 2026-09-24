@@ -1038,15 +1038,16 @@ def plugin_version() -> tuple[str, str] | None:
     """(version, source) for the installed plugin, or None.
 
     `.claude-plugin/plugin.json` is authoritative. `migrations.md` is the
-    fallback because the build stamps it from plugin.json, so a skill zip
-    that ships without the plugin manifest still knows its own version.
+    fallback because it carries the same version (CI enforces the match),
+    so a skill zip that ships without the plugin manifest still knows its
+    own version.
 
     A *missing* manifest is the ordinary skill-zip case and falls through
     quietly. A manifest that exists but cannot be parsed warns on stderr
-    first: in a repo checkout `migrations.md` carries the last stamped
-    version rather than the working one, so falling through silently
-    would report `AHEAD` on a current vault and send the GM off to update
-    a plugin that is already up to date.
+    first: that is a broken install, and a mid-edit version bump can leave
+    `migrations.md` behind the working version, so falling through
+    silently could report `AHEAD` on a current vault and send the GM off
+    to update a plugin that is already up to date.
     """
     here = Path(__file__).resolve()
     manifest = here.parents[3] / ".claude-plugin" / "plugin.json"
