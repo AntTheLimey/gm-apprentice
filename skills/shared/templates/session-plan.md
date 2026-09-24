@@ -147,10 +147,12 @@ each, in scene order. Status is built, print or to build.
 
 Plot questions only — calls that change what an NPC wants, knows or does,
 a scene's shape, or what the players can discover. Each carries 2–3
-seeds. A player decision belongs in a scene's `Do | Then` table;
-bookkeeping is defaulted, with the default noted in one line. If a run
-without the GM had to guess, the guess lives here, labelled
-**(apprentice guess — confirm)**, never in settled plan content.
+seeds. A player decision belongs in a scene's `Do | Then` table.
+Bookkeeping is never a question: put its default where it applies (a
+placeholder title in frontmatter, a value on its entity's own line),
+with no note that it was defaulted. If a run without the GM had to
+guess, the guess lives here, labelled **(apprentice guess — confirm)**,
+never in settled plan content.
 
 - [ ] [Unresolved question — who owns it, what is blocked until answered]
 

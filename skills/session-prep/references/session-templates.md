@@ -199,9 +199,10 @@ bullets. Step 13.]
 
 Plot questions only ("Does Sophia know what her husband has
 become?"), each with 2–3 seeds, sorted as in the skill's Stance. Kept
-explicit and un-invented. A guess from a run without the GM lives
-here, labelled **(apprentice guess — confirm)**, never in settled plan
-content.
+explicit and un-invented. Bookkeeping takes its default where it
+applies, with no note that it was defaulted. A guess from a run
+without the GM lives here, labelled **(apprentice guess — confirm)**,
+never in settled plan content.
 
 - [ ] [Unresolved question — who owns it, what's blocked until it's answered]
 

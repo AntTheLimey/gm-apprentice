@@ -22,7 +22,7 @@ question (changes what an NPC wants, knows or does, a scene's shape,
 or what the players can discover) is asked with 2–3 seeds; a player
 decision (which way, who with, what they say) becomes a `Do | Then`
 row, never asked; bookkeeping (a die result, a sheet number, a date no
-scene turns on) is defaulted with the default noted in one line; craft
+scene turns on) takes its default where it applies, unannounced; craft
 and cosmetics (fonts, prop layout, filenames, formatting) are decided
 silently. Test: would a different answer change a scene this session?
 When the GM asks what an item on your list is or why you need it,
@@ -40,8 +40,11 @@ exception).
 
 - Read `shared/session-principles.md` and run its Version Gate on first
   invocation.
-- Read `shared/session-document-chain.md`. You write Plan files and
-  update the session index. You read earlier Wrap-Ups for context, not
+- Read `shared/session-document-chain.md`. You write Plan files. On
+  the session index you set only `status` and `documents.plan`
+  (`stamp_entities.py --set`) and its plan link; never edit
+  `scenes:` — a narrowed scope lives in the Plan's scene list, and
+  wrap-up reconciles `scenes:` with what was played. You read earlier Wrap-Ups for context, not
   other sessions' Play Notes or Plans (exception: raw Play Notes, to
   generate a recap when no Wrap-Up exists — step 7).
 - Read `references/session-templates.md` when creating or updating
@@ -50,7 +53,8 @@ exception).
   `skills/ttrpg-expert/arc-spotlight-reference.md` and the active
   system's `session-procedures.md` for arc drivers.
 - Write each step's output to the Plan file before moving on; the Plan
-  is the persistent artifact.
+  is the persistent artifact. Run notes (migration applied, phases
+  skipped, checks run) go in your chat reply, never in the Plan.
 
 **Scope to the question.** After the version gate, do only what was
 asked. "Prep my session" walks the whole workflow. A narrow question
