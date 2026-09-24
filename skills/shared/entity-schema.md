@@ -550,7 +550,7 @@ Under `publish:`:
 | `site_dir` | string | Absolute path to the site repo, so publish-site needn't ask each session. Optional. |
 | `mode` | string | `"player"` or `"full"` — GM-only content visibility |
 | `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes"]`) |
-| `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
+| `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
 | `theme` | object | `genre`, `palette`, `fonts`, `campaign_image` |
 | `four_oh_four` | object | Custom 404 page: `style`, `message` |

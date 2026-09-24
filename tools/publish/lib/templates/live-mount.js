@@ -6,6 +6,7 @@ const CLIENTS = {
   'coc-7e': { script: 'coc-live.js', domId: 'coc-live-data' },
   'coc': { script: 'coc-live.js', domId: 'coc-live-data' },
   'regency-cthulhu': { script: 'coc-live.js', domId: 'coc-live-data' },
+  'coc-7e-regency': { script: 'coc-live.js', domId: 'coc-live-data' },
 };
 
 function clientFor(system) {

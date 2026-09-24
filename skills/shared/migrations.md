@@ -882,4 +882,8 @@ with the vault system's stat block.
 
 ### Tooling
 
-- Nothing.
+- `gm-apprentice-publish` 1.11.35 stops publishing a clue's
+  `reliability`, badges a Document's `doc_type` and `date`, and
+  recognises `coc-7e-regency` as Regency Cthulhu. If `publish.site_dir`
+  is set, offer `update-pin --site <site-dir>` (publish-site's build
+  tool).

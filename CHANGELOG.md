@@ -49,7 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The vault's system is defined once** for vault setup
   (`publish.system`, then the Campaign Overview, then the adventure
   brief, else ask), with aliases such as `regency-cthulhu` and `gurps`
-  mapped to the stat-block and PC-template files. Publish tool 1.11.35.
+  mapped to the stat-block and PC-template files. The publish tool
+  now recognises `coc-7e-regency`, the schema's Regency id, for the
+  CoC sheet, party board and live tracking; it knew only
+  `regency-cthulhu`. Publish tool 1.11.35.
 
 ### Removed
 

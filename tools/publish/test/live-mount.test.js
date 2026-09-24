@@ -7,6 +7,7 @@ test('clientFor maps GURPS and CoC system ids to their clients', () => {
   assert.deepEqual(lm.clientFor('gurps'), { script: 'gurps-live.js', domId: 'gurps-live-data' });
   assert.deepEqual(lm.clientFor('coc-7e'), { script: 'coc-live.js', domId: 'coc-live-data' });
   assert.deepEqual(lm.clientFor('regency-cthulhu'), { script: 'coc-live.js', domId: 'coc-live-data' });
+  assert.deepEqual(lm.clientFor('coc-7e-regency'), { script: 'coc-live.js', domId: 'coc-live-data' });
 });
 
 test('clientFor is case-insensitive and null for unknown systems', () => {

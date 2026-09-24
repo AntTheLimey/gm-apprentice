@@ -42,12 +42,12 @@ function isGurpsSystem(publishConfig) {
 }
 
 function isCocSystem(publishConfig) {
-  return ['coc-7e', 'coc', 'regency-cthulhu'].includes(String((publishConfig || {}).system || '').toLowerCase());
+  return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
 }
 
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
 function cocSystemLabel(publishConfig) {
-  return String((publishConfig || {}).system || '').toLowerCase() === 'regency-cthulhu'
+  return ['regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase())
     ? 'Regency Cthulhu'
     : 'Call of Cthulhu';
 }

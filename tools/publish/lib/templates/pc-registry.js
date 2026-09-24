@@ -8,6 +8,7 @@ const renderers = {
   'coc-7e': renderCoCSheet,
   'coc': renderCoCSheet,
   'regency-cthulhu': renderCoCSheet,
+  'coc-7e-regency': renderCoCSheet,
   'gurps-4e': renderGURPSSheet,
   'gurps': renderGURPSSheet,
   'dnd-5e': renderDnDSheet,
