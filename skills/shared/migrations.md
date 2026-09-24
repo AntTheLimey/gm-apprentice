@@ -802,12 +802,15 @@ Templates carry their own section guidance. No frontmatter changes.
   `shared/templates/session-wrap.md`. Each `### What Carries Forward`
   subsection now defines what belongs in it, the Keeper Checklist names
   its task kinds, and the Advancement label records the amount on the
-  sheet rather than awarding one.
+  sheet rather than awarding one. Declining this overwrite keeps the
+  old "XP/points awarded" wording; session-wrapup still records, never
+  awards.
 - Copy `_Templates/_Template_Session_Plan.md` from
   `shared/templates/session-plan.md`. It gains a `## Handouts & Props`
   table (between Contingency Scenes and Session End Objectives) and an
-  optional `**Handouts:**` scene label, and Open Questions no longer
-  asks for a note about defaulted bookkeeping.
+  optional `**Handouts:**` scene label (a session without handouts
+  writes "None this session."), and Open Questions no longer asks for a
+  note about defaulted bookkeeping.
 - Existing Plan and Wrap-Up files are not touched. `plan_check.py`
   reports a Plan without `## Handouts & Props` as a `sections` WARNING;
   session-prep adds the section the next time it preps that session.

@@ -12,28 +12,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Session Plan template: a `## Handouts & Props` table (document, scene,
-  status, notes) listing every handout the session delivers, and an
-  optional `**Handouts:**` scene label. `plan_check.py` knows both.
+  status, notes) listing every handout the session delivers ("None
+  this session." when there are none), and an optional `**Handouts:**`
+  scene label. `plan_check.py` knows both.
   Gaps & Actions no longer collects handouts (#223).
 - Superseded GM rulings: the replaced ruling is struck through and
   marked `superseded YYYY-MM-DD` in the same edit
-  (`shared/entity-schema.md`, session-wrapup); session-prep cites only
-  the latest ruling (#226).
+  (`shared/entity-schema.md`, session-wrapup, reconcile's "Correct
+  it"); session-prep cites only the latest ruling (#226).
 
 ### Changed
 
 - The Wrap-Up template carries its own section guidance: each What
   Carries Forward subsection and the Keeper Checklist define what goes
-  in them, and session-wrapup no longer restates it (#218).
+  in them. session-wrapup keeps one line for Skipped Prep, Pending
+  Consequences and Advancement, for vaults whose template copy predates
+  this (#218).
 - session-wrapup's grounding rule covers every synthesized GM Notes
   section: each claim traces to the Play Notes, the plan or a named
-  vault file, and anything uncertain is marked `(flag)` (#222).
-- session-prep sets only `status`, `documents.plan` and the plan link
-  on the session index and never edits `scenes:`; wrap-up reconciles
-  the scene list (#224).
+  vault file, and anything uncertain gets an `<!-- UNVERIFIED: … -->`
+  marker, which reconcile already queues (#222).
+- Session index ownership: on an existing index session-prep sets only
+  `status`, `documents.plan` and the plan link, adds new scenes to
+  `scenes:` and never removes entries; session-wrapup sets `scenes:` to
+  the scenes played and lists the rest under Skipped Prep
+  (`shared/session-document-chain.md`) (#224).
 - Bookkeeping defaults go where they apply, not in a note about
-  defaulting, and run notes (migration applied, phases skipped, checks
-  run) go in the reply to the GM, never in the Plan (#225).
+  defaulting; each default and the run notes (migration applied, phases
+  skipped, checks run) go in the reply to the GM, never in the Plan. A
+  value missing from an entity or PC sheet is never defaulted onto it:
+  it becomes an Open Question for the GM (#225).
 - Migration 1.9.15 → 1.9.16 re-copies both templates into `_Templates/`.
 
 ### Fixed
