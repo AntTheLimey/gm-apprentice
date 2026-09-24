@@ -307,3 +307,17 @@ Track in campaign continuity records (`continuity-engine.md`):
 - Create callbacks: name in Handout 3 reappears in Handout 12
 - Cross-ref with Chekhov protocol: introduced elements must
   pay off within reasonable session count
+
+## Sources
+
+Sly Flourish (Making Great Handouts, Lazy RPG Prep With
+Handouts); Chaosium (CoC scenario handout conventions);
+Dhole's House (https://www.dholeshouse.org/); Propnomicon
+(http://propnomicon.blogspot.com/); Roleplaying Tips
+(Creative Handouts); D&D Beyond (Awesome Handouts); Sly
+Flourish (Substitution Cipher Puzzles); Dungeon Vault
+(Cipher/Code Puzzles); Liminal Horror (layout/typography).
+
+## External References
+
+- **Dhole's House Handout Generator:** https://www.dholeshouse.org/

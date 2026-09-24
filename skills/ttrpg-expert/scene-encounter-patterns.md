@@ -209,3 +209,18 @@ of success, failure, flight. 6) System-appropriate difficulty.
 **Investigation:** 1) State needed conclusion. 2) ≥3 clues
 pointing there. 3) Across ≥2 nodes. 4) One proactive clue.
 5) Fail-forward for each skill-gated clue.
+
+## Sources
+
+Sly Flourish (Lazy DM); The Alexandrian (Three Clue Rule,
+Node-Based Design); John Harper (BitD SRD); Keith Ammann
+(Monsters Know); Matthew Colville (Action-Oriented Monsters);
+Robin Laws (GUMSHOE, Robin's Laws); Chaosium (CoC Keeper's
+Rulebook); SJG (GURPS Basic Set); WotC (2024 DMG).
+
+## External References
+
+- **Action-Oriented Monsters:** https://mcdm.gg/
+- **Three Clue Rule:** https://thealexandrian.net/wordpress/1118/roleplaying-games/three-clue-rule
+- **Node-Based Scenario Design:** https://thealexandrian.net/wordpress/7949/roleplaying-games/node-based-scenario-design-part-1-the-basics
+- **The Monsters Know:** https://themonstersknow.com/

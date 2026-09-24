@@ -200,3 +200,15 @@ Bargains prepared.
 8. Note timeline events
 9. Flag canon conflicts
 10. Create seed notes for next session
+
+## Sources
+
+Sly Flourish (Lazy DM); The Alexandrian (Three Clue Rule);
+Vincent Baker (Fronts, Apocalypse World); John Harper
+(Progress Clocks, BitD); Johnn Four (Five Room Dungeon);
+Patrick O'Leary (CATS Method).
+
+## External References
+
+- **Lazy DM Prep:** https://slyflourish.com/lazydm/
+- **Five Room Dungeon:** https://roleplayingtips.com/rptn/five-room-dungeons/

@@ -142,3 +142,18 @@ missed opportunity.
 | Neglected Quiet Player | Assuming quiet means the player does not want spotlight | Offer opportunity; provide written notes between sessions |
 | Arc Railroad | Predetermining how the arc resolves | GM creates situations; the player decides the outcome |
 | Stale Arc | No arc advancement for 4+ sessions | Even a small C-plot clue keeps an arc alive |
+
+## Sources
+
+Sly Flourish (Return of the Lazy DM, Step Zero); Angry GM
+(Character Arcs series); Gnome Stew (B-Plot, Session Zero);
+Matt Colville (Running the Game); The Alexandrian (NPC prep,
+node-based design); Luke Crane (Burning Wheel: Beliefs);
+Evil Hat (Fate Core: Advancement); John Harper (BitD:
+Vice/Trauma); Robin Laws (Robin's Laws); Ron Edwards (Story
+Now / GNS); Alphastream (PC Backstory integration).
+
+## External References
+
+- **GUMSHOE / Drive Mechanic:** https://site.pelgranepress.com/index.php/gumshoe/
+- **Lazy DM Session Prep:** https://slyflourish.com/lazydm/

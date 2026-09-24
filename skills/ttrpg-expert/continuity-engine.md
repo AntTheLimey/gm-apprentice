@@ -241,3 +241,11 @@ Automatic checks when generating content:
 6. **Tone consistency** — matches campaign genre?
 
 Flag conflicts; adjust automatically or ask GM for resolution.
+
+## Sources
+
+Justin Alexander (The Alexandrian) — Campaign Status Document,
+Node-Based Scenario Design; Sly Flourish — Secrets and Clues;
+Vincent Baker — Fronts (Apocalypse World); John Harper —
+Faction Clocks (BitD); Gnome Stew — campaign continuity;
+Robin Laws — Robin's Laws.

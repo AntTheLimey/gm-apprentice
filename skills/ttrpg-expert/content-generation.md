@@ -223,3 +223,11 @@ plan for failure states.
 | D&D 5e | Bold, evocative, wonder, clear stakes, colourful NPCs |
 | GURPS 4e | Precise, grounded, real consequences, technical accuracy |
 | FitD | Noir, rain/shadows/gaslight, everyone has an angle, ambition vs survival |
+
+## Sources
+
+The Alexandrian (Node-Based Design, Don't Prep Plots); Sly
+Flourish (Lazy DM); Sandy Petersen (Onion Layer); Robin Laws
+(GUMSHOE, Robin's Laws); John Harper (BitD SRD); Matthew
+Colville (Action-Oriented Monsters); Chaosium (CoC Keeper
+Rulebook); SJG (GURPS Campaigns); WotC (2024 DMG).

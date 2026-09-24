@@ -270,3 +270,14 @@ Plan obstacles not solutions. Engagement roll skips detailed
 planning. Flashbacks eliminate need to anticipate PC plans.
 Progress clocks for sustained effort. Menu of obstacles per
 zone, not fixed sequence.
+
+## Sources
+
+The Alexandrian (Three Clue Rule, Don't Prep Plots, Node-
+Based Design); Sly Flourish (Lazy DM); Sandy Petersen (Onion
+Layer); Chaosium (CoC Style Guide); Robin Laws / Pelgrane
+(GUMSHOE, core clue design); John Harper (BitD SRD); WotC
+(2024 DMG); Scott Rehm / The Angry GM (Adventure Shapes,
+Momentous & Inertial Design); Johnn Four / Roleplaying Tips
+(Campaign Seed Recipe); Mythcreants (Story-to-Campaign
+Adaptation).
