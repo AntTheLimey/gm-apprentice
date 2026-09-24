@@ -446,10 +446,15 @@ class ShippedTemplateTests(unittest.TestCase):
                 "| [[Ledger Page]] | Scene 2 | print | Torn at the fold |\n")
         self.assertFalse(pc._is_placeholder_body(body))
 
-    def test_handouts_none_this_session_is_not_placeholder(self):
+    def test_example_row_left_beside_real_rows_is_not_placeholder(self):
+        body = self._handouts_body().rstrip("\n") + (
+            "\n| [[Ledger Page]] | Scene 2 | print | Torn at the fold |\n")
+        self.assertFalse(pc._is_placeholder_body(body))
+
+    def test_handouts_none_is_not_placeholder(self):
         guidance = self._handouts_body().split("|", 1)[0]
         self.assertFalse(
-            pc._is_placeholder_body(guidance + "None this session.\n"))
+            pc._is_placeholder_body(guidance + "No handouts or props.\n"))
 
     def test_template_marks_only_the_two_required_labels(self):
         text = self.TEMPLATE.read_text(encoding="utf-8")

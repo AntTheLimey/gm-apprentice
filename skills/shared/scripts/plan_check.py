@@ -167,13 +167,16 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Per-PC touchpoint assignments",
     "Per-PC estimated spotlight share",
     "Missing entities, stale files",
-    # The example row, not the bracketed guidance: a GM keeps the
-    # guidance and fills the table, so the guidance proves nothing.
-    "What it says, who hands it over",
     "Left blank during prep",
     "Same structure",
 )
 PLACEHOLDER_EXEMPT_FROM_REPORTING = {"planned vs played"}
+# A template table's example row. The section is placeholder only while
+# that row is the table's sole data row and nothing but `[...]` guidance
+# sits beside it — a GM keeps the guidance and adds rows, and may leave
+# the example row behind.
+EXAMPLE_ROW_PHRASES: tuple[str, ...] = ("What it says, who hands it over",)
+_TABLE_SEPARATOR_RE = re.compile(r"\|?[\s:|-]+\|?")
 
 # The Plan scene skeleton: inline labels are `**Label:**` on their own
 # line; block labels are `**Label**` (optional trailing text before the
@@ -272,6 +275,14 @@ def _is_placeholder_body(body: str) -> bool:
     if not stripped:
         return True
     lines = [ln for ln in stripped.splitlines() if ln.strip()]
+    rows = [ln.strip() for ln in lines if ln.lstrip().startswith("|")]
+    if any(p in row for row in rows for p in EXAMPLE_ROW_PHRASES):
+        data = [r for r in rows if not _TABLE_SEPARATOR_RE.fullmatch(r)][1:]
+        prose = "\n".join(ln for ln in lines
+                          if not ln.lstrip().startswith("|"))
+        prose = re.sub(r"\[[^\[\]]*\]", "", prose).strip()
+        return not prose and all(
+            any(p in r for p in EXAMPLE_ROW_PHRASES) for r in data)
     if lines and all(_bracket_only_line(ln) for ln in lines):
         return True
     low = stripped.casefold()

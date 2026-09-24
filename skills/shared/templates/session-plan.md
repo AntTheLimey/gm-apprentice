@@ -119,8 +119,8 @@ Scenes that fire on a player choice or a clock, not by default.
 ## Handouts & Props
 
 [Every handout and prop this session delivers, built or not — one row
-each, in scene order. Status is built, print or to build. No handouts:
-write "None this session."]
+each, in scene order. Status is built, print or to build. If there are
+none, write "No handouts or props."]
 
 | Document | Scene | Status | Notes |
 |----------|-------|--------|-------|
