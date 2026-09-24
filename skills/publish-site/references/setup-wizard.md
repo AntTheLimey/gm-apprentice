@@ -443,7 +443,8 @@ publish tool that matches the installed plugin.
 The tool is distributed with the plugin, not published as a live npm
 package, so pinning to the cache is what keeps the renderer in lockstep
 with the skill that drives it. A floating pin (like `"latest"`) would
-resolve from the npm registry — which lags the plugin — and is how sites
+resolve from the npm registry, where the package is deprecated and stuck
+at 1.2.1, which leaks GM-only content. Floating pins are also how sites
 silently went stale before. The build tool prints a loud
 **version-drift warning** at the start of any build when a newer version
 is installed in the cache, and routine updates (capability 2) repoint

@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publish tool ships only with the plugin. The tool's README now says the
   npm package is deprecated and shouldn't be installed.
 
+### Fixed
+
+- **Migrations repin the publish tool with `update-pin`, not
+  `npm update`.** A site pins the tool with a `file:` path, so
+  `npm update gm-apprentice-publish` only re-linked the same old version.
+  Five migration entries and the migration procedure's Tooling step
+  now use `update-pin --site <site-dir>`, which moves the pin to the
+  newest version in the plugin cache.
+
 ### Changed
 
 - **The publish tool's `package.json` is marked `private`**, so the leaky

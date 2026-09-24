@@ -186,8 +186,9 @@ In this order:
 11. Create selected story files from
     `shared/templates/character-story.md`, filling PC name and
     campaign from the PC's frontmatter (content)
-12. `npm update gm-apprentice-publish` in the site directory, if
-    selected (tooling)
+12. `node "$TOOL" update-pin --site <site-dir>` (publish-site's build
+    tool), if selected (tooling). Not `npm update`: the site pins the
+    tool with a `file:` path, so `npm update` re-links the same old version
 
 ## Step 7: Stamp version
 
