@@ -14,7 +14,7 @@ const PUBLISH_DEFAULTS = {
   // plot state; they must never reach a published player-mode site (#144).
   // test/unit/config.test.js has a sync check that fails if these drift apart.
   exclude_sections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
-  exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes'],
+  exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability'],
   exclude_dirs: ['_meta', '_Templates'],
   // Landing page selection. build.js has always read publishConfig.landing.*,
   // but `landing` was missing from the whitelist that builds `merged`, so the

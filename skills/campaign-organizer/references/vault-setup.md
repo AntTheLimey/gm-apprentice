@@ -51,13 +51,21 @@ can read `_Templates/_Template_{Type}.md`.
 | `campaign-overview.md` | `_Template_Campaign_Overview.md` |
 | `session-plan.md` | `_Template_Session_Plan.md` |
 | `session-wrap.md` | `_Template_Session_WrapUp.md` |
-| `pc-{system}.md` for the vault's system, else `pc-generic.md` | same name |
+| `pc-{system}.md` for the vault's system (below), else `pc-generic.md` | same name |
 | `character-story.md` | same name |
 | `crew-fitd.md` (FitD vaults only) | same name |
 
+**The vault's system** is `publish.system` in `_meta/vault-config.md`,
+else the Campaign Overview's `game_system`, else the adventure
+brief's `system`; if none is set, ask the GM once and record the
+answer as `publish.system`. Read it case-insensitively and map
+aliases to the file ids: `coc` → `coc-7e`; `regency-cthulhu` →
+`coc-7e-regency`; `gurps` → `gurps-4e`; `dnd`, `dnd-5e` →
+`dnd-5e-2024`; `pathfinder`, `pathfinder-2e` → `pf2e`; `blades` →
+`fitd`.
+
 **Stat blocks.** `npc.md` and `creature.md` hold a `{STAT BLOCK: …}`
-paragraph under `## GM Notes`. Replace it with the vault's block,
-chosen by `publish.system`:
+paragraph under `## GM Notes`. Replace it with the vault's block:
 
 - NPC: `npc-stats/{system}.md`.
 - Creature: `creature-stats/{system}.md` if it exists, else

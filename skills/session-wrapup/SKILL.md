@@ -170,11 +170,14 @@ creating entities.
   `shared/relationship-normalization.md`. Never invent a `type:`.
   Mirror each edge in the body's `## Related` (a `gm_only` edge in
   `### Hidden Ties`), per `shared/entity-schema.md` § Relationships.
-- **Campaign logs:** each entity that appeared this session gets one
+- **Campaign logs:** each non-PC entity that appeared this session gets one
   bullet in its `## Campaign Log` (a Creature's is `## Encounters`),
   as the party saw it: `- **[[Session link]]** — {what happened}`.
   Where the truth differs, add the matching bullet to its GM Notes
   `### Behind the Scenes`. Add either section if the file lacks it.
+  PCs are exempt from this and from the Related mirror: their body
+  follows `shared/pc-body-structure.md`, and their session record is
+  the Story companion.
 - **New container entities** (a district between a station and its
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per

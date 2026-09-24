@@ -875,7 +875,7 @@ with the vault system's stat block.
   (`discoveryState`), Document (`current_holder`; the text moves to
   `## The Text`) and Creature (`threat_level`) entries.
 - Offer, once and opt-in, to write `## Related` (and `### Hidden Ties`
-  for `gm_only` edges) into existing entities from their
+  for `gm_only` edges) into existing non-PC entities from their
   `relationships` frontmatter. Declining is fine: session-wrapup and
   campaign-organizer add the lines as they touch each entity, and add
   a `## Campaign Log` the first time an entity appears in a session.

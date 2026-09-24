@@ -177,8 +177,8 @@ wiki-links; entity notes link back to sessions in their
 4. **Propose** — grouped Explicit / Inferred / Possible.
 5. **Apply** — after confirmation, frontmatter and links only,
    plus each new edge's line in `## Related` or `### Hidden Ties`
-   (`shared/entity-schema.md` § Relationships); never rewrite body
-   prose. Link conventions:
+   on non-PC entities (`shared/entity-schema.md` § Relationships);
+   never rewrite body prose. Link conventions:
    `references/graph-hygiene.md`.
 6. **Update index.**
 7. **Graph audit** — full check per `references/graph-hygiene.md`.

@@ -135,14 +135,16 @@ const TYPE_BADGE_FIELDS = {
   event: ['event_type', 'in_game_date', 'location'],
   item: ['item_type', 'tl', 'origin'],
   creature: ['creature_type', 'location'],
-  clue: ['clue_type', 'reliability', 'found_by'],
+  // Not `reliability`: a planted false clue would publish as "misleading".
+  clue: ['clue_type', 'found_by'],
   document: ['document_type', 'author', 'classification', 'date_written'],
   session: ['session_number', 'play_date', 'status', 'stage'],
   scene: ['scene_type', 'status'],
   chapter: ['sort_order'],
 };
 
-const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date' };
+// The seeded Document template writes `doc_type` and `date` (entity-schema.md).
+const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date', document_type: 'doc_type', date_written: 'date' };
 
 function metadataBadgesFor(frontmatter) {
   const fields = TYPE_BADGE_FIELDS[frontmatter.type];

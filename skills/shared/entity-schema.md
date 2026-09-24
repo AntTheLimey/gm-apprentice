@@ -194,7 +194,8 @@ relationships:
                           # site (page, relationship graph, search index)
 ```
 
-Every relationship also appears in the body, readable: under
+Every relationship on a non-PC entity also appears in the body,
+readable (a PC's body follows `shared/pc-body-structure.md`): under
 `## Related` (grouped People, Places, Groups, Things, one line per
 tie), or under `### Hidden Ties` in GM Notes when `gm_only: true`.
 Write, change or remove both together.
@@ -382,7 +383,7 @@ published Locations listing (fallback: `location_type`).
 
 **Faction/Organization:** `faction_type` (cult, guild, military,
 etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
-`status` (active/weakened/destroyed/dormant),
+`status` (active/weakened/destroyed/allied/dormant),
 `part_of` (wiki-link to the parent body, optional), `portrait`
 (optional). `faction_type` groups the published Factions listing.
 

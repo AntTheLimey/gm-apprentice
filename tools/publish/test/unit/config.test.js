@@ -15,7 +15,7 @@ describe('PUBLISH_DEFAULTS', () => {
   });
 
   it('excludes secrets, current_plan, plan_progress, gm_notes, prep_notes by default', () => {
-    assert.deepStrictEqual(PUBLISH_DEFAULTS.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes']);
+    assert.deepStrictEqual(PUBLISH_DEFAULTS.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
   });
 
   it('excludes _meta and _Templates dirs by default', () => {
@@ -127,7 +127,7 @@ describe('loadPublishConfig', () => {
     fs.writeFileSync(path.join(metaDir, 'vault-config.md'), '---\ntitle: Test\n---\nSome config');
     const result = loadPublishConfig(tmpDir);
     assert.strictEqual(result.mode, 'player');
-    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes']);
+    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

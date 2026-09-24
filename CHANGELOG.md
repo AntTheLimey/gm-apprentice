@@ -23,8 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `relationships` frontmatter into People, Places, Groups and Things,
   one line per tie; `gm_only` edges go in `### Hidden Ties`.
   session-wrapup and campaign-organizer write both together, and
-  session-wrapup adds a Campaign Log bullet for every entity that
-  appears in a session.
+  session-wrapup adds a Campaign Log bullet for every non-PC entity
+  that appears in a session. PCs keep their fixed body and Story
+  companion.
 - **An NPC stat block for each supported system,** modelled on how the
   system presents an NPC to the GM: CoC 7e (Regency adds Reputation),
   GURPS 4e, D&D 5e 2024, PF2e and a FitD GM card. CoC also gets a
@@ -38,6 +39,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moves to `## The Text`), and Creature `threat_level`. Creature
   `abilities` and `weaknesses` publish, so the template keeps them in
   GM Notes.
+
+- **A clue's `reliability` no longer publishes.** It was a badge on
+  the clue page, so a planted false clue said "misleading". It's now in
+  the default `exclude_fields`.
+- **Document badges read `doc_type` and `date`,** the names the schema
+  and the new template use, with `document_type` and `date_written`
+  still read first. The Faction template writes `faction_type`.
+- **The vault's system is defined once** for vault setup
+  (`publish.system`, then the Campaign Overview, then the adventure
+  brief, else ask), with aliases such as `regency-cthulhu` and `gurps`
+  mapped to the stat-block and PC-template files. Publish tool 1.11.35.
 
 ### Removed
 

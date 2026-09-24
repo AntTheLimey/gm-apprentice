@@ -18,7 +18,7 @@ All campaign content falls into three categories:
   fenced code blocks are preserved. An unclosed `<!--` strips to end
   of file and prints a build warning.
 - Frontmatter fields in `exclude_fields` (default:
-  `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`)
+  `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`)
 - Files whose frontmatter says `publish: false` — in **every** mode,
   including `full`. The file still parses, so links to it render as
   plain text rather than as a broken link; no page is emitted.

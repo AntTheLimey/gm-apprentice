@@ -16,7 +16,7 @@ each other — see § Precedence.
 | Publish mode | `publish.mode` | `player` or `full` |
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
-| Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
+| Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`). Spelling is normalized (trailing `/`, leading `./`, backslashes, an absolute path inside the vault) and matched case-insensitively, so `"NPCs/Hidden/"` and `"npcs/hidden"` exclude the same folder |
 | Landing NPC count | `publish.landing.max_npcs` | Cards in "NPCs in Play" (default: `6`) |
 | Landing location count | `publish.landing.max_locations` | Cards in "Latest Locations" (default: `4`) |

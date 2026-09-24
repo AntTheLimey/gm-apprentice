@@ -14,7 +14,7 @@ goals: []
 leadership: ""        # "[[Who runs it]]"
 territory: ""         # "[[Where it operates from]]"
 part_of: ""           # "[[Parent body]]", if any
-status: active        # active / weakened / destroyed / dormant
+status: active        # active / weakened / destroyed / allied / dormant
 portrait: ""          # logo, seal or headquarters
 relationships:
   - target: "[[]]"
