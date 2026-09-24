@@ -125,7 +125,9 @@ is dormant by design (`skills/ttrpg-expert/continuity-engine.md`).
 
 **9. Key NPCs** — likely NPCs with status, motivations, off-screen
 activity; read vault files only for those flagged in carry-forward or
-threads. → `## NPC Quick Reference`
+threads. From any entity file, cite only its latest GM ruling (the
+one not struck through).
+→ `## NPC Quick Reference`
 
 **10. World state** — date, location, threats, factions, clocks from
 the Wrap-Up's World State. → `## World State`

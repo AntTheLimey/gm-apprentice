@@ -149,7 +149,9 @@ creating entities.
   not replacement prose. Never pattern-match off existing entity
   files.
 - **Updated entities:** edit the entity's own file — one file per
-  entity, no separate update files.
+  entity, no separate update files. A GM ruling that replaces an
+  earlier one: strike the old one through and append
+  `superseded YYYY-MM-DD` in the same edit.
 - **Cross-entity claims:** when a note asserts something about a
   *different* existing entity (e.g. an aside in a NEW-NPC line
   placing an established NPC somewhere new), never fold it silently

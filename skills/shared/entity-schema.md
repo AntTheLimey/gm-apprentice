@@ -30,6 +30,12 @@ On **every** entity type:
 Set `lastUpdated` and `asOfSession` to the current session when
 filing or updating.
 
+**Dated GM rulings** in an entity body stay as history. When a
+ruling replaces an earlier one, strike the old one through and
+append `superseded YYYY-MM-DD` in the same edit:
+`~~stays in town (2026-08-30)~~ superseded 2026-09-03`.
+Cite only the latest ruling that is not struck through.
+
 ## Entity Type Hierarchy
 
 ```text
