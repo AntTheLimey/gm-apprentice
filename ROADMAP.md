@@ -101,6 +101,19 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Skill diet~~ — PR #229 (v1.10.0). The nine SKILL.md files cut from
+  147 KB to 84 KB (restated templates, repeated cautions, script
+  walk-throughs, rationale that changes no action); migration reads only
+  entries newer than the vault; `current_version` stamped in source with
+  a CI check. A/B vs 1.9.14: −20.5% tokens, judge quality flat.
+- ~~Post-diet fix batch~~ — v1.10.1–1.10.6: migration consent rule, gap-safe
+  stamp and scripted 1.8.3 re-nest, plus the nested-exclusion publish leak
+  (#238); templates carry their own guidance (#232); `vault_check`
+  `--file`/`--newer-than` scoping (#235); `rules_lookup` aliases and
+  weak-match tier (#233); publish-site exclude_dirs, player-mode images,
+  self-hosted fonts (#234); mobrpg duplicate-stub and degrading-pull fixes
+  (#237).
+
 - ~~Mechanization Slice G: license and attribution CI~~ — PR #216 (v1.9.13).
   `scripts/attribution_check.py` (one `NOTICE.md` per system carrying its
   required licence text, shipped in the zip in place of per-file notices;
