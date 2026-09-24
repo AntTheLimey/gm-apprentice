@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.5] — 2026-09-24
+
+gm-publish 1.11.32.
+
+### Added
+
+- `publish.theme.fonts.source: local` (default `google`, unchanged): opts a
+  published site out of the `fonts.googleapis.com` `@import` that every
+  visitor's browser hit directly on every page load. `theme.fonts.files`
+  lists local font files (`family`, `path`, optional `weight`/`style`);
+  the build copies each into the site's `fonts/` directory and emits
+  `@font-face` for them instead. `source: local` with no `files` emits no
+  import at all (#211).
+
+### Fixed
+
+- `publishConfig.exclude_dirs` — the union of `publish.exclude_dirs` from
+  `_meta/vault-config.md` and `vault.config.json`'s legacy `excludeDirs`
+  — was computed and then never read: the scanner only ever saw the raw
+  legacy field. A GM who set `publish.exclude_dirs` in the documented
+  per-vault config file had it silently ignored. `build.js` now routes
+  the scanner through the unioned list (#209).
+- `scanAttachments` walked the whole attachments tree with no exclude
+  filtering at all, not even directory-level `excludeDirs`; a GM-only
+  image dropped in an excluded subfolder (e.g. `_attachments/gm-maps`)
+  shipped regardless. It now honours the same unioned exclude list as
+  the page scanner. Separately, player mode's "only copy images
+  referenced by published pages" filter was gated on a publish manifest
+  existing — a manifest-less player-mode vault shipped every attachment
+  regardless of mode. That filter now always applies in player mode;
+  full/GM mode is unchanged (#210).
+- The bestiary index header and empty state claimed play history
+  ("N creatures encountered" / "No creatures encountered yet") for every
+  published `type: creature` page, including GM prep or reference
+  statblocks nobody has met in play. Reworded to "N creatures" / "No
+  creatures yet" — no new frontmatter field (#213).
+- The nav's Story group has always linked Sessions at
+  `sessions/index.html`, but nothing generated that page for a vault
+  whose `folderMap` routes a folder to `sessions` output — a guaranteed
+  404. `sessions` is now in `DIR_LABELS` (`lib/templates/base.js`), so
+  its index is built the same way every other section's is; the link
+  stays hidden (as it already did) when no session pages exist (#214).
+
 ## [1.10.4] — 2026-09-24
 
 ### Fixed

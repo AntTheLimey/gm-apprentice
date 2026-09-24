@@ -509,7 +509,9 @@ function renderBestiary(pages, indexDir) {
     .filter(p => p.frontmatter.type === 'creature')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
 
-  if (creatures.length === 0) return '<p class="text-muted">No creatures encountered yet.</p>';
+  // "encountered" claims play history the vault does not record — a creature page can be
+  // GM prep or a reference statblock nobody has met in play (#213). Neutral wording only.
+  if (creatures.length === 0) return '<p class="text-muted">No creatures yet.</p>';
 
   function threatLevel(fm) {
     const abilities = fm.abilities || [];
@@ -1053,7 +1055,7 @@ ${bodyContent}`;
     content = `
 <div class="index-header">
   <h1 class="page-title">${escapeHtml(sectionTitle('creatures', publishConfig))}</h1>
-  <span class="index-count">${total} creature${total !== 1 ? 's' : ''} encountered</span>
+  <span class="index-count">${total} creature${total !== 1 ? 's' : ''}</span>
 </div>
 ${bodyContent}`;
   } else if (isLocations) {

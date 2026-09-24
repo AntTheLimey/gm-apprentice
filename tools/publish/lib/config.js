@@ -45,6 +45,12 @@ const PUBLISH_DEFAULTS = {
     fonts: {
       heading: 'system-ui',
       body: 'system-ui',
+      // 'google' (default): custom fonts pull from fonts.googleapis.com, as always.
+      // 'local': no Google import; the build copies theme.fonts.files into the site's
+      // fonts/ and emits @font-face for them instead (#211). No files under 'local'
+      // means no import at all — the fonts are whatever stack cssFontValue falls back to.
+      source: 'google',
+      files: [],
     },
     campaign_image: null,
   },
@@ -90,6 +96,57 @@ function unionExcludeList(primary, fallback, defaults) {
       if (!seen.has(key)) {
         seen.add(key);
         out.push(item);
+      }
+    }
+  }
+  return out;
+}
+
+// exclude_dirs entries are matched against vault-relative POSIX paths the scanner walks
+// (scanner.js), so an entry authored differently than the scanner spells it fails open —
+// the folder still publishes. Normalizes the common spellings a GM or a JSON/YAML author
+// would reasonably write: backslashes (Windows-authored config), a trailing slash
+// ("NPCs/Hidden/"), a leading "./" ("./NPCs/Hidden"), and an absolute path that resolves
+// inside the vault (rewritten relative to it). An absolute path resolving OUTSIDE the
+// vault can never match anything the scanner walks, so it is dropped with a warning
+// rather than silently doing nothing forever. Returns null for an entry that normalizes
+// to nothing (empty, or outside the vault).
+function normalizeExcludeDir(entry, vaultPath) {
+  let raw = String(entry).trim().replace(/\\/g, '/');
+  if (!raw) return null;
+  const looksAbsolute = raw.startsWith('/') || /^[A-Za-z]:\//.test(raw);
+  if (looksAbsolute) {
+    const resolved = path.resolve(raw);
+    const vaultRoot = path.resolve(vaultPath);
+    if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
+      console.warn(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
+      return null;
+    }
+    raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
+  }
+  raw = raw.replace(/^\.\//, '').replace(/\/+$/, '');
+  return raw || null;
+}
+
+// Same shape as unionExcludeList (dedup case-insensitively, preserve first-seen casing/
+// order, fall back to `defaults` only when neither source provides a list) but for
+// exclude_dirs specifically: every entry is run through normalizeExcludeDir first, so
+// dedup and the scanner's own matching both operate on the same normalized spelling.
+// Kept separate from unionExcludeList because exclude_sections/exclude_fields are not
+// filesystem paths and must not be slash/absolute-path normalized.
+function unionExcludeDirs(primary, fallback, defaults, vaultPath) {
+  const sources = [primary, fallback].filter(Array.isArray);
+  const lists = sources.length === 0 ? [defaults] : sources;
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    for (const item of list) {
+      const normalized = normalizeExcludeDir(item, vaultPath);
+      if (normalized == null) continue;
+      const key = normalized.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(normalized);
       }
     }
   }
@@ -241,10 +298,11 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       jsonConfigFallback.excludeFields,
       PUBLISH_DEFAULTS.exclude_fields,
     ),
-    exclude_dirs: unionExcludeList(
+    exclude_dirs: unionExcludeDirs(
       publish.exclude_dirs,
       jsonConfigFallback.excludeDirs,
       PUBLISH_DEFAULTS.exclude_dirs,
+      vaultPath,
     ),
     // Per-key merge, not a whole-block replace: setting only max_npcs must not
     // silently drop recency_window back to nothing. Publish block wins, then
@@ -314,4 +372,15 @@ function vaultRelPath(vaultPath, sourcePath) {
   return canonicalPath(path.relative(vaultPath, sourcePath).split(path.sep).join('/'));
 }
 
-module.exports = { loadPublishConfig, vaultRelPath, PUBLISH_DEFAULTS, loadVaultConfig };
+// The one config object scanVault/scanVaultReport/scanAttachments should ever be handed:
+// the raw vault.config.json config, with `excludeDirs` replaced by publishConfig's already
+// normalized, already-unioned exclude_dirs. build.js, `explain`, `manifest diff` and
+// `doctor --site` all promise the scanner sees the same exclusions the GM configured
+// (either vault-config.md's publish.exclude_dirs or the legacy vault.config.json field) —
+// before this helper existed, each of the four re-derived that union (or, in three of the
+// four, didn't) independently, and drifted (#209 follow-up).
+function scanConfigFor(config, publishConfig) {
+  return Object.assign({}, config, { excludeDirs: publishConfig.exclude_dirs });
+}
+
+module.exports = { loadPublishConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig };

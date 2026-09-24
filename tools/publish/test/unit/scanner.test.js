@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles } = require('../../lib/scanner');
+const { slugify, mapFolder, buildLinkMap, scanVault, pairStoryFiles, scanAttachments, dirIsExcluded, matchExcludedDir } = require('../../lib/scanner');
 const { getCanonStatus } = require('../../lib/templates/base');
 
 describe('slugify', () => {
@@ -418,6 +418,143 @@ describe('scanVault untyped-file warning', () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('dirIsExcluded / matchExcludedDir case-insensitivity (review follow-up)', () => {
+  // unionExcludeList's dedup is case-insensitive but kept whichever spelling was
+  // first-seen ("GM" from a JSON excludeDirs, say). A case-SENSITIVE match here then
+  // fails to match the real folder ("gm") on any filesystem, not just a case-sensitive
+  // one — this is a plain JS string comparison, not an OS-level lookup.
+  it('matches regardless of case', () => {
+    assert.strictEqual(dirIsExcluded('gm', ['GM']), true);
+    assert.strictEqual(dirIsExcluded('GM', ['gm']), true);
+    assert.strictEqual(dirIsExcluded('gm/secrets', ['GM']), true);
+  });
+
+  it('still does not match an unrelated directory', () => {
+    assert.strictEqual(dirIsExcluded('gmnotes', ['GM']), false, 'must not prefix-match "gmnotes" against "GM"');
+  });
+
+  it('matchExcludedDir returns the entry in its own configured casing', () => {
+    assert.strictEqual(matchExcludedDir('gm/secrets', ['GM']), 'GM');
+  });
+
+  it('matchExcludedDir returns undefined for no match', () => {
+    assert.strictEqual(matchExcludedDir('locations', ['GM']), undefined);
+  });
+});
+
+describe('scanVault excludeDirs matching fails open on common spellings (review follow-up)', () => {
+  function makeVault() {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scanner-excl-spelling-'));
+    fs.mkdirSync(path.join(tmpDir, 'gm'), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, 'gm', 'Hidden.md'), '---\ntype: npc\n---\n\n# Hidden\n');
+    return tmpDir;
+  }
+
+  const config = (vaultPath, excludeDirs) => ({
+    vaultPath,
+    excludeDirs,
+    folderMap: { gm: 'gm' },
+  });
+
+  it('excludes a folder even when the configured entry differs only in case', () => {
+    const vaultPath = makeVault();
+    try {
+      const pages = scanVault(config(vaultPath, ['GM']));
+      assert.strictEqual(pages.length, 0, 'differently-cased excludeDirs entry must still exclude the real folder');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  // Slash/leading-"./" spellings are normalized once, upstream, by config.js's
+  // loadPublishConfig (see test/unit/config.test.js "exclude_dirs spelling
+  // normalization") — scanner.js's own job is only case-insensitivity, tested above.
+  // A raw trailing-slash entry handed directly to scanVault (bypassing that
+  // normalization) is intentionally still a literal, unmatched spelling here.
+  it('does NOT strip a trailing slash itself — that is config.js loadPublishConfig\'s job', () => {
+    const vaultPath = makeVault();
+    try {
+      const pages = scanVault(config(vaultPath, ['gm/']));
+      assert.strictEqual(pages.length, 1, 'scanner.js does not normalize slashes on its own');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('scanAttachments excludeDirs (#210)', () => {
+  function makeVault() {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scanner-attachments-'));
+    const attachmentsDir = path.join(tmpDir, '_attachments');
+    fs.mkdirSync(path.join(attachmentsDir, 'gm-maps'), { recursive: true });
+    fs.mkdirSync(path.join(attachmentsDir, 'portraits'), { recursive: true });
+    fs.writeFileSync(path.join(attachmentsDir, 'gm-maps', 'Secret Map.png'), 'fake-png-bytes');
+    fs.writeFileSync(path.join(attachmentsDir, 'portraits', 'Hero.png'), 'fake-png-bytes');
+    return tmpDir;
+  }
+
+  it('walks the whole attachments tree with no excludeDirs given', () => {
+    const vaultPath = makeVault();
+    try {
+      const map = scanAttachments({ vaultPath, attachmentsDir: '_attachments' });
+      assert.ok('Secret Map.png' in map);
+      assert.ok('Hero.png' in map);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('skips a subfolder of the attachments tree listed in excludeDirs', () => {
+    const vaultPath = makeVault();
+    try {
+      const map = scanAttachments({
+        vaultPath,
+        attachmentsDir: '_attachments',
+        excludeDirs: ['_attachments/gm-maps'],
+      });
+      assert.ok(!('Secret Map.png' in map), 'excluded GM-only map must not be scanned');
+      assert.ok('Hero.png' in map, 'unexcluded attachment still scanned');
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  // CodeRabbit (PR #234): the walk only ever tested CHILD directories against
+  // excludeDirs — it never checked the attachments root itself, so a GM who excludes
+  // the whole attachments folder still got every image directly under that root
+  // (not just ones in subfolders) scanned and copied.
+  it('excludes everything, including top-level images, when the attachments root itself is listed in excludeDirs', () => {
+    const vaultPath = makeVault();
+    // A top-level image directly under _attachments/, not inside any subfolder —
+    // the case the walk's child-only check could never have caught anyway.
+    fs.writeFileSync(path.join(vaultPath, '_attachments', 'Top Level.png'), 'fake-png-bytes');
+    try {
+      const map = scanAttachments({
+        vaultPath,
+        attachmentsDir: '_attachments',
+        excludeDirs: ['_attachments'],
+      });
+      assert.deepStrictEqual(Object.keys(map), [], `expected no images, got: ${Object.keys(map).join(', ')}`);
+    } finally {
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+  });
+
+  it('warns when the attachments root is excluded', () => {
+    const vaultPath = makeVault();
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...a) => warns.push(a.join(' '));
+    try {
+      scanAttachments({ vaultPath, attachmentsDir: '_attachments', excludeDirs: ['_attachments'] });
+    } finally {
+      console.warn = orig;
+      fs.rmSync(vaultPath, { recursive: true, force: true });
+    }
+    assert.ok(warns.some((w) => w.includes('excludeDirs') && w.includes('_attachments')), warns.join(' | '));
   });
 });
 

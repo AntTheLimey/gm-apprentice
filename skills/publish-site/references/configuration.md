@@ -17,7 +17,7 @@ each other — see § Precedence.
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes"]`) |
-| Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`) |
+| Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`). Spelling is normalized (trailing `/`, leading `./`, backslashes, an absolute path inside the vault) and matched case-insensitively, so `"NPCs/Hidden/"` and `"npcs/hidden"` exclude the same folder |
 | Landing NPC count | `publish.landing.max_npcs` | Cards in "NPCs in Play" (default: `6`) |
 | Landing location count | `publish.landing.max_locations` | Cards in "Latest Locations" (default: `4`) |
 | Landing recency window | `publish.landing.recency_window` | How many recent sessions feed the scoring (default: `3`) |
@@ -26,7 +26,7 @@ each other — see § Precedence.
 | Quick links | `publish.landing.quick_links` | A short row of pinned links near the top of the landing page |
 | Campaign image | `publish.theme.campaign_image` | Vault-relative path to hero image |
 | Theme palette | `publish.theme.palette` | Colour scheme (primary, accent, background, text) |
-| Theme fonts | `publish.theme.fonts` | Heading and body font families |
+| Theme fonts | `publish.theme.fonts` | Heading and body font families. `fonts.source: google` (default) pulls custom families from Google Fonts; `local` self-hosts instead — `fonts.files` lists `{family, path, weight?, style?}` entries copied into the site's `fonts/` (`path` must be `.woff2`/`.woff`/`.ttf`/`.otf`) and referenced with `@font-face` |
 | Theme genre | `publish.theme.genre` | Genre tag for theming hints |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
 | Per-file field overrides | `publish.overrides.fields` | Re-admit an excluded frontmatter field for one named file (see § Per-file field overrides) |

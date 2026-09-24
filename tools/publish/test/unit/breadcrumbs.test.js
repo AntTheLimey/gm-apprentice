@@ -37,11 +37,19 @@ describe('generateBreadcrumbs', () => {
     assert.strictEqual(lastDir.href, null, 'chapter subfolder segment must be non-linking');
   });
 
-  it('does not link a top-level dir that gets no generated index (e.g. sessions/)', () => {
-    // 'sessions' is a friendly label but is NOT in the authoritative index-bearing set,
-    // so build.js writes no sessions/index.html — the crumb must not link to it.
+  it('links sessions/ now that build.js generates its index (#214)', () => {
+    // 'sessions' was added to DIR_LABELS (base.js) so build.js writes sessions/index.html
+    // the same way it does for every other section — the crumb should link to it now.
     const result = generateBreadcrumbs('sessions/session-1.html', {});
-    assert.strictEqual(result.filter(c => c.href === 'index.html').length, 0);
+    const sessionsCrumb = result.find(c => c.label === 'Sessions');
+    assert.ok(sessionsCrumb, 'Sessions segment present');
+    assert.strictEqual(sessionsCrumb.href, 'index.html');
+  });
+
+  it('does not link a top-level dir that still gets no generated index (nested chapter subfolder)', () => {
+    const result = generateBreadcrumbs('chapters/Chapter 1 - London/session-1.html', {});
+    const chapterSubfolder = result[result.length - 2];
+    assert.strictEqual(chapterSubfolder.href, null, 'chapter subfolder segment must be non-linking');
   });
 
   it('still links index-bearing dirs by their full path (characters/npcs)', () => {

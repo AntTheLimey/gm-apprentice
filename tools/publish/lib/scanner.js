@@ -25,6 +25,30 @@ function toPosix(p) {
   return p.split(path.sep).join('/');
 }
 
+// exclude_dirs entries are already normalized (slashes, leading "./", trailing "/",
+// absolute→vault-relative) by config.js's loadPublishConfig before they reach here — but
+// case is not, deliberately: a GM's own casing survives dedup for display. Matching must
+// still be case-insensitive, because the filesystem the scanner walks may or may not be
+// (macOS/Windows: case-insensitive by default; Linux: case-sensitive). Without this, a
+// vault-config.md entry spelled "GM" and a JSON excludeDirs entry spelled "gm" collapse
+// to one surviving spelling in the union, and whichever one wins case-sensitively matches
+// the on-disk folder on macOS but silently fails to exclude it on Linux.
+// Returns the excludeDirs entry that matched relPath (in its own configured casing, for
+// display — "in NPCs/Hidden/ — listed in excludeDirs" should show the GM's own spelling),
+// or undefined if none matched. dirIsExcluded is this with only the boolean kept.
+function matchExcludedDir(relPath, excludeDirs) {
+  if (!Array.isArray(excludeDirs) || excludeDirs.length === 0) return undefined;
+  const lower = relPath.toLowerCase();
+  return excludeDirs.find((ex) => {
+    const exLower = String(ex).toLowerCase();
+    return lower === exLower || lower.startsWith(exLower + '/');
+  });
+}
+
+function dirIsExcluded(relPath, excludeDirs) {
+  return matchExcludedDir(relPath, excludeDirs) !== undefined;
+}
+
 function mapFolder(vaultRelPath, folderMap) {
   const rel = toPosix(vaultRelPath);
   const entries = Object.entries(folderMap).sort(([a], [b]) => b.length - a.length);
@@ -69,7 +93,7 @@ function scanVaultReport(config) {
       const relPath = toPosix(path.relative(vaultPath, fullPath));
 
       if (entry.isDirectory()) {
-        if (excludeDirs.some(ex => relPath === ex || relPath.startsWith(ex + '/')) || entry.name.startsWith('.')) continue;
+        if (dirIsExcluded(relPath, excludeDirs) || entry.name.startsWith('.')) continue;
         walk(fullPath);
       } else if (entry.name.endsWith('.md')) {
         const raw = fs.readFileSync(fullPath, 'utf-8');
@@ -200,12 +224,29 @@ function buildLinkMap(pages) {
 }
 
 function scanAttachments(config) {
-  const { vaultPath, attachmentsDir } = config;
+  const { vaultPath, attachmentsDir, excludeDirs } = config;
   const attachmentsPath = path.join(vaultPath, attachmentsDir || '_attachments');
   const map = {};
 
   // Wrapped on this path too: the returned type must not depend on whether _attachments/ exists.
   if (!fs.existsSync(attachmentsPath)) return nfcLookupTable(map);
+
+  // Same vault-relative exclusion rule scanVaultReport applies to pages (#210): a GM who
+  // lists a folder in excludeDirs — including a subfolder of the attachments tree, e.g.
+  // "_attachments/gm-maps" — means it in both places. Without this, a GM-only map or
+  // hidden-NPC portrait dropped there ships on every build regardless of mode.
+  const excludes = Array.isArray(excludeDirs) ? excludeDirs : [];
+
+  // The walk below only tests CHILD directories against excludeDirs — it never checks
+  // the attachments root itself, so a GM who excludes the whole attachments folder (e.g.
+  // a vault-config.md that gives GM-only attachments their own directory and excludes
+  // it wholesale) still got every image directly under that root scanned and copied
+  // (CodeRabbit review, PR #234). Check the root the same way before ever walking it.
+  const attachmentsRootRel = toPosix(path.relative(vaultPath, attachmentsPath));
+  if (dirIsExcluded(attachmentsRootRel, excludes)) {
+    console.warn(`scanner: attachments root "${attachmentsRootRel}" is listed in excludeDirs — no attachments scanned`);
+    return nfcLookupTable(map);
+  }
 
   const IMAGE_EXTS = /\.(jpe?g|png|webp|gif|svg|avif)$/i;
 
@@ -214,6 +255,8 @@ function scanAttachments(config) {
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        const relDir = toPosix(path.relative(vaultPath, full));
+        if (dirIsExcluded(relDir, excludes) || entry.name.startsWith('.')) continue;
         walk(full);
       } else if (IMAGE_EXTS.test(entry.name)) {
         const relPath = toPosix(path.relative(attachmentsPath, full));
@@ -269,4 +312,4 @@ function pairStoryFiles(pages, vaultPath) {
   }
 }
 
-module.exports = { slugify, scanVault, scanVaultReport, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles };
+module.exports = { slugify, scanVault, scanVaultReport, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

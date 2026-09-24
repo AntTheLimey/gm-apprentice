@@ -82,6 +82,37 @@ describe('indexTemplate — campaign index', () => {
   });
 });
 
+describe('indexTemplate — bestiary header does not claim play history (#213)', () => {
+  const navFor = () => '<nav></nav>';
+  const config = { siteTitle: 'Test Campaign' };
+  const publishConfig = { theme: {} };
+
+  it('shows a bare count, not "encountered", when creatures are published', () => {
+    const pages = [
+      { frontmatter: { type: 'creature' }, title: 'Dragon', displayTitle: 'Dragon', outputPath: 'creatures/dragon.html' },
+    ];
+    const html = indexTemplate('creatures', 'Creatures', pages, navFor, config, publishConfig);
+    assert.ok(html.includes('1 creature'), html);
+    assert.ok(!html.includes('encountered'), html);
+  });
+
+  it('pluralizes with a bare count for more than one creature', () => {
+    const pages = [
+      { frontmatter: { type: 'creature' }, title: 'Dragon', displayTitle: 'Dragon', outputPath: 'creatures/dragon.html' },
+      { frontmatter: { type: 'creature' }, title: 'Wolf', displayTitle: 'Wolf', outputPath: 'creatures/wolf.html' },
+    ];
+    const html = indexTemplate('creatures', 'Creatures', pages, navFor, config, publishConfig);
+    assert.ok(html.includes('2 creatures'), html);
+    assert.ok(!html.includes('encountered'), html);
+  });
+
+  it('shows a neutral empty state, not "No creatures encountered yet"', () => {
+    const html = indexTemplate('creatures', 'Creatures', [], navFor, config, publishConfig);
+    assert.ok(html.includes('No creatures yet'), html);
+    assert.ok(!html.includes('encountered'), html);
+  });
+});
+
 describe('indexTemplate — section titles', () => {
   const navFor = () => '<nav></nav>';
   const config = { siteTitle: 'Test' };
