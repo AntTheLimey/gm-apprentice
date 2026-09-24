@@ -372,7 +372,7 @@ function build(options = {}) {
   // because the landing page also reads unpublished pages.
   const scannedPaths = new Set(corpus.map(p => p.sourcePath));
   const gmAliases = gmAliasRewriter(corpus.concat(
-    scanAllNotes(config.vaultPath).filter(n => !scannedPaths.has(n.sourcePath))));
+    scanAllNotes(config.vaultPath).filter(n => !scannedPaths.has(n.sourcePath))), pages);
   if (gmAliases) {
     for (const page of corpus) {
       page.markdown = gmAliases.markdown(page.markdown || '');

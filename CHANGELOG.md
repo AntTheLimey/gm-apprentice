@@ -22,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value in a field that names a page, such as a relationship `target:`
   or `location:`. It keeps any `|label`. Other fields change only
   inside `[[...]]`, so a GM alias that is an ordinary word never
-  rewrites `status:` or `occupation:`. So the
+  rewrites `status:` or `occupation:`. Only a published page can keep a
+  name for itself: a GM-only note named after the secret doesn't stop
+  the rewrite. A note whose `gm_aliases` can't be read because of broken
+  frontmatter is reported as a build warning. So the
   name never reaches the site: not the search index, the portrait alt
   text, the frontmatter, relationships, the location card,
   Connections, the graph or the sidebar. When the owner page isn't

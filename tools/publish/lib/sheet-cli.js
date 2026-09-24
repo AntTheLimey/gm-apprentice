@@ -118,7 +118,9 @@ async function runSheetShow(deps) {
   const allNotes = deps.scanAllNotes || scanAllNotes;
   const scannedPaths = new Set(scanned.map((p) => p.sourcePath));
   const gmAliases = playerSafe
-    ? gmAliasRewriter(scanned.concat(allNotes(vaultPath).filter((n) => !scannedPaths.has(n.sourcePath))))
+    ? gmAliasRewriter(
+      scanned.concat(allNotes(vaultPath).filter((n) => !scannedPaths.has(n.sourcePath))),
+      scanned.filter((p) => publishMode(p.frontmatter) !== 'none'))
     : null;
   const page = found && gmAliases
     ? Object.assign({}, found, {

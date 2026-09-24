@@ -695,7 +695,7 @@ function gmAliasKey(name) {
 const GM_ALIAS_NAME_FIELDS = new Set([
   'location', 'parent_location', 'parent', 'part_of', 'leadership', 'territory',
   'current_holder', 'origin', 'first_appearance', 'participants', 'superseded_by',
-  'chapter', 'about', 'practitioner',
+  'chapter', 'about', 'practitioner', 'found_by', 'author',
 ]);
 
 // A rewriter that replaces every GM alias with the name of the page that owns
@@ -705,23 +705,27 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // still happen when that page has no URL (the link then renders as its public
 // title in plain text).
 //
-// A GM alias that is also another page's title or public alias is skipped:
-// that name belongs to the other page, and its links stay as they are.
-function gmAliasRewriter(pages) {
+// A GM alias that is also a published page's title or public alias is
+// skipped: that name belongs to the other page, and its links stay as they
+// are. `published` is the pages the site publishes (default: all of `pages`).
+function gmAliasRewriter(pages, published) {
   const owners = new Map();
-  const claimed = new Set();
   for (const page of pages) {
-    const fm = page.frontmatter || {};
-    const secret = new Set(gmAliasList(fm).map(gmAliasKey));
-    claimed.add(gmAliasKey(page.title));
-    for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) {
-      if (!secret.has(gmAliasKey(a))) claimed.add(gmAliasKey(a));
-    }
-    for (const key of secret) {
+    for (const key of gmAliasList(page.frontmatter || {}).map(gmAliasKey)) {
       if (!owners.has(key)) owners.set(key, page);
     }
   }
-  for (const key of claimed) owners.delete(key);
+  // Only a published page can claim a name: its title is on the site anyway.
+  // An unpublished note named after the secret (a GM's `Elias Crowe.md`)
+  // would leave the name showing as plain text, so it never claims it.
+  for (const page of published || pages) {
+    const fm = page.frontmatter || {};
+    const secret = new Set(gmAliasList(fm).map(gmAliasKey));
+    owners.delete(gmAliasKey(page.title));
+    for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) {
+      if (!secret.has(gmAliasKey(a))) owners.delete(gmAliasKey(a));
+    }
+  }
   if (owners.size === 0) return null;
 
   const WIKI = /(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]/g;

@@ -1097,6 +1097,8 @@ def _gm_vault(tmp_path):
       body="Ada saw [[Elias Crowe]] and [[elias crowe#Past|a shadow]].")
     # An owner outside the entity folders still owns its secret.
     w("_GM/Villains/Mara.md", 'type: npc\ngm_aliases: ["The Veiled One"]')
+    # A GM-only note named after a secret must not claim it.
+    w("_GM/Elias_Crowe.md", 'type: npc')
     return str(tmp_path)
 
 

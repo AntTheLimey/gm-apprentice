@@ -23,7 +23,7 @@ function writeVault(root) {
     '---', 'type: npc', 'status: alive', 'portrait: "Lord Vane.png"',
     // The Obsidian case: the secret is also under `aliases` so Obsidian resolves it.
     `aliases: [Vane, "${OBSIDIAN_SECRET}"]`,
-    `gm_aliases: ["${SECRET}", "${OBSIDIAN_SECRET}"]`,
+    `gm_aliases: ["${SECRET}", "${OBSIDIAN_SECRET}", "Red Hand"]`,
     '---', '', 'A courtly patron of the arts.', '',
   ].join('\n'));
   f('Characters/NPCs/Ada Marsh.md', [
@@ -51,6 +51,12 @@ function writeVault(root) {
   // An owner the site never scans (an excluded GM folder) still owns its secret.
   f('_GM/Villains/Lord Crane.md', [
     '---', 'type: npc', 'gm_aliases: ["The Veiled One"]', '---', '', 'Hidden.', '',
+  ].join('\n'));
+  // Unpublished notes named after a secret, or aliasing it, must not claim it.
+  f(`_GM/${SECRET}.md`, ['---', 'type: npc', '---', '', 'GM file on the disguise.', ''].join('\n'));
+  f('_GM/Plot.md', ['---', 'aliases: [Red Hand]', '---', '', 'Plot notes.', ''].join('\n'));
+  f('Locations/Dock.md', [
+    '---', 'type: location', '---', '', 'The [[Red Hand]] meets here.', '',
   ].join('\n'));
   // GM aliases that are ordinary words must not rewrite ordinary fields.
   f('Characters/NPCs/Wren.md', [
@@ -114,7 +120,7 @@ describe('gm_aliases (#212)', () => {
     for (const [rel, text] of tree) {
       assert.ok(!text.includes(SECRET), `${rel} contains "${SECRET}"`);
       assert.ok(!text.includes(OBSIDIAN_SECRET), `${rel} contains "${OBSIDIAN_SECRET}"`);
-      assert.ok(!/crowe|weaver|veiled/i.test(text), `${rel} contains a spelling of a GM alias`);
+      assert.ok(!/crowe|weaver|veiled|red hand/i.test(text), `${rel} contains a spelling of a GM alias`);
     }
   });
 
@@ -146,6 +152,19 @@ describe('gm_aliases (#212)', () => {
     const harbour = pageFor('Harbour');
     assert.match(harbour, /href="[^"]*ada-marsh\.html"/);
     assert.doesNotMatch(harbour, /tomas-reed\.html/);
+  });
+});
+
+describe('scanAllNotes (#212)', () => {
+  it('warns when a note with gm_aliases has unreadable frontmatter', () => {
+    const { scanAllNotes } = require('../../lib/scanner');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-alias-bad-'));
+    fs.writeFileSync(path.join(dir, 'Mara.md'), '---\ngm_aliases: [The Veiled One\n---\nBody.\n');
+    const warned = [];
+    const orig = console.warn;
+    console.warn = m => warned.push(String(m));
+    try { scanAllNotes(dir); } finally { console.warn = orig; fs.rmSync(dir, { recursive: true, force: true }); }
+    assert.ok(warned.some(w => w.includes('Mara.md') && w.includes('NOT hidden')), warned.join('\n'));
   });
 });
 

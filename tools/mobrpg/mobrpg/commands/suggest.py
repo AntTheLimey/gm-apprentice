@@ -67,12 +67,13 @@ def _aliases(fm: str) -> list[str]:
 
 def gm_alias_owners(vault) -> dict[str, str]:
     """{name key of a GM alias: display name of the note that owns it} (#212).
-    Every note in the vault counts, in any folder: Obsidian resolves a link to
-    any of them, and a GM-only folder is the likeliest home for a secret. A GM
-    alias that is also some note's own name or public alias is left out,
-    because that name belongs to the other note."""
+    An owner can be any note in the vault, in any folder: Obsidian resolves a
+    link to any of them, and a GM-only folder is the likeliest home for a
+    secret. Only a note in an entity folder (one that can become a mobRPG
+    element) claims a name, so a GM alias that is also such a note's name or
+    public alias is left to it. A GM-only note named after the secret doesn't
+    claim it: its name would go upstream as plain text."""
     owned: dict[str, str] = {}
-    public: set[str] = set()
     vault = os.path.expanduser(vault)
     for root, dirs, files in os.walk(vault):
         dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules")
@@ -80,16 +81,24 @@ def gm_alias_owners(vault) -> dict[str, str]:
             if not f.lower().endswith(".md"):
                 continue
             p = os.path.join(root, f)
-            name = _display_name(p)
-            public.add(_key(name))
             try:
                 fm, _ = _read(p)
             except (OSError, UnicodeDecodeError):
                 continue
-            public.update(_key(a) for a in _aliases(fm))
             for a in _gm_aliases(fm):
-                owned.setdefault(_key(a), name)
-    return {k: v for k, v in owned.items() if k not in public}
+                owned.setdefault(_key(a), _display_name(p))
+    if not owned:
+        return {}
+    for folder in map_cmd.FOLDERS:
+        for p in glob.glob(os.path.join(vault, folder, "*.md")):
+            owned.pop(_key(_display_name(p)), None)
+            try:
+                fm, _ = _read(p)
+            except (OSError, UnicodeDecodeError):
+                continue
+            for a in _aliases(fm):
+                owned.pop(_key(a), None)
+    return owned
 
 
 _WIKILINK = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]")

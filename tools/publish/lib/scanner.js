@@ -328,11 +328,19 @@ function scanAllNotes(vaultPath) {
       if (!e.isFile() || !e.name.toLowerCase().endsWith('.md')) continue;
       const title = e.name.slice(0, -3);
       let frontmatter = {};
+      let text = '';
       try {
-        const text = fs.readFileSync(full, 'utf8');
+        text = fs.readFileSync(full, 'utf8');
         // Only a note that declares aliases needs its frontmatter parsed.
         if (/^(gm_)?aliases:/m.test(text)) frontmatter = matter(text).data || {};
-      } catch (err) { /* unreadable or malformed: its name still counts */ }
+      } catch (err) {
+        // Its name still counts. A secret that silently stops being
+        // protected is the one failure that must not be quiet.
+        if (/^gm_aliases:/m.test(text)) {
+          console.warn(`WARNING: ${path.relative(vaultPath, full)} has gm_aliases but its frontmatter `
+            + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
+        }
+      }
       out.push({ title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full });
     }
   })(vaultPath);
