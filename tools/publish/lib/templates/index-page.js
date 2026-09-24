@@ -685,7 +685,7 @@ function renderDocuments(pages, indexDir, imageMap = {}) {
 
   function renderCard(p) {
     const fm = p.frontmatter;
-    const subtitle = plainMetaValue(fm.doc_kind || fm.document_type || (fm.type === 'reference' ? 'reference' : '') || '');
+    const subtitle = plainMetaValue(fm.doc_kind || fm.document_type || fm.doc_type || (fm.type === 'reference' ? 'reference' : '') || '');
     return `<a class="entity-card" href="${escapeHtml(relHref(p, indexDir))}"
   data-entity-type="${escapeHtml(fm.doc_kind || fm.type || '')}"
   data-entity-name="${escapeHtml(p.displayTitle)}"

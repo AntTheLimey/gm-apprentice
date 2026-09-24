@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.11"
+current_version: "1.10.12"
 ---
 
 # Vault Migration Registry
@@ -849,3 +849,41 @@ resolve links but are never published. No existing file needs it.
 - mobrpg rewrites a GM alias to its owner's name before any push, never
   sends one as an `altName`, and no longer mistakes a `gm_aliases:` line
   for `aliases:`.
+
+## Migration: 1.10.11 → 1.10.12
+
+Every entity type has a template (#230). The new ones carry a public
+`## Related` list (the `relationships` frontmatter, readable), a
+`## Campaign Log`, and GM Notes with `### Hidden Ties` and
+`### Behind the Scenes`. NPC and Creature templates open GM Notes
+with the vault system's stat block.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Copy each missing template into `_Templates/`, names and stat-block
+  substitution per `campaign-organizer/references/vault-setup.md` →
+  Templates: NPC, Location, Item, Creature, Organization, Event, Clue,
+  Document, World Domain, Campaign Overview. Offer each by name. An
+  existing template that differs is offered as an overwrite, with the
+  warning that local changes are lost.
+- `_meta/entity-types.md`: the schema mirror check offers the updated
+  NPC (`location`), Faction/Organization (`status`), Clue
+  (`discoveryState`), Document (`current_holder`; the text moves to
+  `## The Text`) and Creature (`threat_level`) entries.
+- Offer, once and opt-in, to write `## Related` (and `### Hidden Ties`
+  for `gm_only` edges) into existing non-PC entities from their
+  `relationships` frontmatter. Declining is fine: session-wrapup and
+  campaign-organizer add the lines as they touch each entity, and add
+  a `## Campaign Log` the first time an entity appears in a session.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.35 stops publishing a clue's
+  `reliability`, badges a Document's `doc_type` and `date`, and
+  recognises `coc-7e-regency` as Regency Cthulhu. If `publish.site_dir`
+  is set, offer `update-pin --site <site-dir>` (publish-site's build
+  tool).

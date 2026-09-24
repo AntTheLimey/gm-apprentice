@@ -14,7 +14,7 @@ test('boardFor maps GURPS aliases to the GURPS skin', () => {
 });
 
 test('boardFor maps CoC / Regency aliases to the CoC skin', () => {
-  for (const s of ['coc', 'coc-7e', 'regency-cthulhu']) {
+  for (const s of ['coc', 'coc-7e', 'regency-cthulhu', 'coc-7e-regency']) {
     const b = boardFor(s);
     assert.equal(b.scriptId, 'coc-party-data');
     assert.deepEqual(b.clientScripts, ['party-core.js', 'coc-party.js']);

@@ -21,7 +21,7 @@ const COC = {
 };
 const REGISTRY = {
   'gurps': GURPS, 'gurps-4e': GURPS,
-  'coc': COC, 'coc-7e': COC, 'regency-cthulhu': COC,
+  'coc': COC, 'coc-7e': COC, 'regency-cthulhu': COC, 'coc-7e-regency': COC,
 };
 
 function boardFor(system) {

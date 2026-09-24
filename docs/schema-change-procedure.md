@@ -45,7 +45,8 @@ adding a new field, renaming a field, changing a field's type
   the entity's schema. Common locations:
   - `session-prep/references/session-templates.md` — session
     and session-plan schemas
-  - `campaign-organizer/references/event-template.md` — events
+  - `shared/templates/{type}.md` — every entity type (the vault copy
+    is seeded per `campaign-organizer/references/vault-setup.md`)
   - `campaign-organizer/references/` — other entity types
 - [ ] Add a comment explaining the field's purpose, valid
   values, and which code consumes it

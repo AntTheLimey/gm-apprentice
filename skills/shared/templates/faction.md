@@ -8,7 +8,7 @@ asOfSession: ""
 lastUpdated: ""
 aliases: []
 tags: []
-factionType: ""
+faction_type: ""
 goals: []
 resources: ""
 leadership: ""

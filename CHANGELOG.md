@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.12] — 2026-09-24
+
+### Added
+
+- **A template for every entity type (#230).** Vault setup now seeds
+  NPC, Location, Item, Creature, Organization, Event, Clue and Document
+  templates, and it now also seeds World Domain and Campaign Overview.
+  Each template is written for running a game. The public half is what
+  the PCs know, and it includes a `## Campaign Log` of what happened
+  with the party each session. The GM half sits behind a closed
+  `<!-- gm-only -->` fence: how to play them, what they want and hide,
+  checks and hazards, `### Behind the Scenes` for what really happened.
+- **A readable `## Related` list on every entity.** It groups the
+  `relationships` frontmatter into People, Places, Groups and Things,
+  one line per tie; `gm_only` edges go in `### Hidden Ties`.
+  session-wrapup and campaign-organizer write both together, and
+  session-wrapup adds a Campaign Log bullet for every non-PC entity
+  that appears in a session. PCs keep their fixed body and Story
+  companion.
+- **An NPC stat block for each supported system,** modelled on how the
+  system presents an NPC to the GM: CoC 7e (Regency adds Reputation),
+  GURPS 4e, D&D 5e 2024, PF2e and a FitD GM card. CoC also gets a
+  creature block. Vault setup puts the vault's block first under the
+  NPC and Creature templates' GM Notes.
+
+### Changed
+
+- **Entity schema:** NPC gains `location`, Faction/Organization
+  `status`, Clue `discoveryState`, Document `current_holder` (the text
+  moves to `## The Text`), and Creature `threat_level`. Creature
+  `abilities` and `weaknesses` publish, so the template keeps them in
+  GM Notes.
+
+- **A clue's `reliability` no longer publishes.** It was a badge on
+  the clue page, so a planted false clue said "misleading". It's now in
+  the default `exclude_fields`.
+- **Document badges read `doc_type` and `date`,** the names the schema
+  and the new template use, with `document_type` and `date_written`
+  still read first. The Faction template writes `faction_type`.
+- **The vault's system is defined once** for vault setup
+  (`publish.system`, then the Campaign Overview, then the adventure
+  brief, else ask), with aliases such as `regency-cthulhu` and `gurps`
+  mapped to the stat-block and PC-template files. The publish tool
+  now recognises `coc-7e-regency`, the schema's Regency id, for the
+  CoC sheet, party board and live tracking; it knew only
+  `regency-cthulhu`. Publish tool 1.11.35.
+
+### Removed
+
+- `campaign-organizer/references/event-template.md`, replaced by the
+  shared Event template.
+
+---
+
 ## [1.10.11] — 2026-09-24
 
 ### Added
