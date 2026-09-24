@@ -197,7 +197,8 @@ def _put(url: str, data: bytes, content_type: str, meta: dict) -> None:
 
 def _upload(world: str, kind_ep: str, eid: str, path: str, token: str) -> dict:
     """mobRPG's three-step element file upload. Returns the attached file."""
-    data = open(path, "rb").read()
+    with open(path, "rb") as fh:
+        data = fh.read()
     ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
     base = f"/world/{world}/{kind_ep}/{eid}/file/url"
     signed = client._request("POST", base, token=token, body={
@@ -245,7 +246,9 @@ def run_push(args, token: str) -> int:
         count = len(files)
         for img in images:
             rel = os.path.relpath(img, vault_dir)
-            if _sha(open(img, "rb").read()) in remote:
+            with open(img, "rb") as fh:
+                local_sha = _sha(fh.read())
+            if local_sha in remote:
                 present += 1
                 continue
             if count >= FILE_CAP:

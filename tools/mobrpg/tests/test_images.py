@@ -225,3 +225,15 @@ def test_push_reports_an_unresolved_image(tmp_path, monkeypatch, capsys):
 def test_only_needs_push(tmp_path):
     with pytest.raises(SystemExit):
         images.run(["w1", "--vault", str(tmp_path), "--only", "x"])
+
+
+def test_push_refuses_an_ambiguous_image_name(tmp_path, monkeypatch, capsys):
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    v = _push_vault(tmp_path, body="Body.\n")
+    other = v / "_attachments" / "maps"
+    other.mkdir()
+    (other / "Vela.png").write_bytes(b"a different image")
+    images.run(["w1", "--vault", str(v), "--push", "--execute"])
+    assert "more than one match" in capsys.readouterr().out
+    assert not puts
