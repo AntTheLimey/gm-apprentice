@@ -118,7 +118,7 @@ otherwise.}
 
 {Only if any. One line per claim: claim → CONFIRMED / REJECTED /
 HELD, by whom, written where. Held claims carry an inline
-`UNVERIFIED` HTML-comment marker for reconcile.}
+`<!-- UNVERIFIED: {claim} -->` marker for reconcile.}
 
 ### World Fact Findings
 

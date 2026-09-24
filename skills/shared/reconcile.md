@@ -19,7 +19,8 @@ dry-run first, `--write` on GM confirmation (see
 
 Check three conditions:
 
-1. Zero `<!-- UNVERIFIED -->` markers in the Wrap-Up
+1. Zero `<!-- UNVERIFIED: … -->` markers (or bare
+   `<!-- UNVERIFIED -->`) in the Wrap-Up
 2. Zero DRAFT entities contradicting AUTHORITATIVE ones on the same
    facts
 3. No Plan file for this session (no unplayed prep to triage)
@@ -48,7 +49,7 @@ scene notes. Reads only — no writes yet.
 ### 2. Highlight uncertain areas
 
 As a short inventory, not a wall of text:
-- `<!-- UNVERIFIED -->` markers
+- `<!-- UNVERIFIED: … -->` markers (or bare `<!-- UNVERIFIED -->`)
 - Reconstruction notes (`> [!info] Reconstruction Note`)
 - DRAFT entities and any `canon_status: DRAFT` content tied to this
   session
