@@ -426,26 +426,45 @@ class ExcludeSectionsTests(unittest.TestCase):
             ("GM Notes", "DM Notes", "Player Notes", "Source References",
              "Reconciliation Context", "Handoff to Reconcile"))
 
-    def test_union_with_vault_config_inline_list(self):
+    # config.js unionExcludeList: the vault's own list replaces the
+    # defaults; they are a fallback only when it sets none.
+    def test_vault_list_replaces_the_defaults_inline(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
             write(vault, "_meta/vault-config.md",
                   '---\npublish:\n  mode: full\n'
                   '  exclude_sections: ["GM Notes", "Keeper Notes"]\n---\n')
             got = vl.effective_exclude_sections(vault)
-        self.assertEqual(got, list(vl.DEFAULT_EXCLUDE_SECTIONS)
-                         + ["Keeper Notes"])
+        self.assertEqual(got, ["GM Notes", "Keeper Notes"])
 
-    def test_union_with_vault_config_block_list(self):
+    def test_vault_list_replaces_the_defaults_block(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
             write(vault, "_meta/vault-config.md",
                   "---\npublish:\n  exclude_sections:\n"
-                  '    - "Keeper Notes"\n    - "gm notes"\n---\n')
+                  '    - "Keeper Notes"\n    - "keeper notes"\n---\n')
             got = vl.effective_exclude_sections(vault)
-        # 'gm notes' de-duplicates case-insensitively against the default
-        self.assertEqual(got, list(vl.DEFAULT_EXCLUDE_SECTIONS)
-                         + ["Keeper Notes"])
+        # de-duplicated case-insensitively, first casing wins
+        self.assertEqual(got, ["Keeper Notes"])
+
+    def test_an_empty_list_hides_nothing(self):
+        # `[]` is an array to config.js: no defaults, nothing excluded.
+        with tempfile.TemporaryDirectory() as d:
+            vault = Path(d)
+            write(vault, "_meta/vault-config.md",
+                  "---\npublish:\n  exclude_sections: []\n---\n")
+            self.assertEqual(vl.effective_exclude_sections(vault), [])
+
+    def test_no_list_or_a_non_list_falls_back_to_the_defaults(self):
+        for body in ("publish:\n  mode: player\n",
+                     "publish:\n  exclude_sections:\n",
+                     'publish:\n  exclude_sections: "GM Notes"\n'):
+            with self.subTest(body=body), \
+                    tempfile.TemporaryDirectory() as d:
+                vault = Path(d)
+                write(vault, "_meta/vault-config.md", f"---\n{body}---\n")
+                self.assertEqual(vl.effective_exclude_sections(vault),
+                                 list(vl.DEFAULT_EXCLUDE_SECTIONS))
 
     def test_no_config_returns_defaults(self):
         with tempfile.TemporaryDirectory() as d:

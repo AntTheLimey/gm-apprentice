@@ -221,8 +221,13 @@ def nested_mapping(text: str, key: str) -> dict[str, str]:
     return out
 
 
-def _list_value(lines: list[str], key: str) -> list[str]:
-    """A YAML list value for `key:` within `lines` — inline or block."""
+def _list_value(lines: list[str], key: str) -> list[str] | None:
+    """A YAML list value for `key:` within `lines` — inline or block.
+
+    None when the key is absent or its value is not a list (null, a
+    scalar): config.js tests `Array.isArray`, and a non-list is "no list
+    set", which is not the same thing as an empty one.
+    """
     for i, line in enumerate(lines):
         m = re.match(rf"^(\s*){re.escape(key)}:\s*(.*)$", line)
         if not m:
@@ -233,7 +238,7 @@ def _list_value(lines: list[str], key: str) -> list[str]:
             return [v.strip().strip('"').strip("'")
                     for v in value[1:-1].split(",") if v.strip()]
         if value:
-            return [value]
+            return None
         items = []
         for nxt in lines[i + 1:]:
             if not nxt.strip():
@@ -245,8 +250,8 @@ def _list_value(lines: list[str], key: str) -> list[str]:
                 continue
             if depth <= indent:
                 break
-        return items
-    return []
+        return items or None
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -901,35 +906,56 @@ DEFAULT_EXCLUDE_SECTIONS: tuple[str, ...] = (
 )
 
 
-def effective_exclude_sections(vault: Path) -> list[str]:
-    """The defaults plus whatever `_meta/vault-config.md` adds.
+def vault_exclude_sections(vault: Path) -> list[str] | None:
+    """`publish.exclude_sections` as `_meta/vault-config.md` sets it, or
+    None when the vault sets no list (no config, no key, a non-list).
 
-    Union, never replacement — matching config.js's `unionExcludeList`,
-    so naming one extra section in a vault config cannot accidentally
-    re-publish GM Notes. De-duplicated case-insensitively, first casing
-    wins.
+    An unreadable config warns and reads as None — the defaults.
     """
-    result = list(DEFAULT_EXCLUDE_SECTIONS)
-    seen = {s.casefold() for s in result}
     config = vault / "_meta" / "vault-config.md"
     try:
         text = config.read_text(encoding="utf-8", errors="replace")
     except FileNotFoundError:
-        # No vault config at all is the ordinary case, not a failure.
-        return result
+        return None
     except OSError as e:
-        # An unreadable config silently reverting to the defaults is how
-        # a check quietly stops honouring the vault's own exclude list.
-        # The direction is safe (over-reporting), but say so.
         print(f"warning: unreadable _meta/vault-config.md: {e} — "
               f"using the default exclude_sections", file=sys.stderr)
-        return result
+        return None
     block = _nested_block(raw_frontmatter(text), "publish")
-    for value in _list_value(block, "exclude_sections"):
+    return _list_value(block, "exclude_sections")
+
+
+def resolve_exclude_sections(vault_list: list[str] | None) -> list[str]:
+    """config.js `unionExcludeList` for the vault-config source: the
+    vault's own list when it sets one — the defaults are NOT added — and
+    the defaults only when it sets none. De-duplicated
+    case-insensitively, first casing wins.
+
+    The site's `vault.config.json` `excludeSections` is unioned in by the
+    publisher too; it is not read here. That only ever adds exclusions,
+    so ignoring it errs toward reporting a line as published.
+    """
+    source = list(DEFAULT_EXCLUDE_SECTIONS) if vault_list is None else vault_list
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in source:
         if value and value.casefold() not in seen:
             seen.add(value.casefold())
             result.append(value)
     return result
+
+
+def effective_exclude_sections(vault: Path) -> list[str]:
+    """The exclude list the publisher actually applies to this vault.
+
+    Matches tools/publish/lib/config.js exactly: a vault that sets
+    `publish.exclude_sections` gets that list and nothing else (the
+    defaults are a fallback, not a floor); a vault that sets none gets
+    the defaults. Treating the defaults as always-on told the checks
+    Player Notes and Source References were hidden on sites that
+    publish them.
+    """
+    return resolve_exclude_sections(vault_exclude_sections(vault))
 
 
 # --------------------------------------------------------------------------
