@@ -91,7 +91,11 @@ function filterSections(markdown, excludeSections = []) {
         excluding = false;
       }
 
-      if (excludeSections.some(s => title.toLowerCase() === s.toLowerCase())) {
+      // Never re-anchor an exclusion that is already running: a nested
+      // excluded heading (`## GM Notes` / `### Player Notes`) used to reset
+      // excludeLevel to 3, so the next `### Secrets` ended the exclusion and
+      // published the rest of GM Notes (#228).
+      if (!excluding && excludeSections.some(s => title.toLowerCase() === s.toLowerCase())) {
         excluding = true;
         excludeLevel = level;
         continue;

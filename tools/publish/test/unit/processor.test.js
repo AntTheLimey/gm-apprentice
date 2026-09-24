@@ -124,6 +124,16 @@ describe('filterSections', () => {
     const result = filterSections(md, ['Player Notes']);
     assert.ok(!result.includes('Secret'));
   });
+
+  it('a nested excluded heading never re-anchors a running exclusion (#228)', () => {
+    // `### Player Notes` used to reset the exclusion level to 3, so the
+    // sibling `### Secrets` ended it and published the rest of GM Notes.
+    const md = '## GM Notes\n### Player Notes\nnotes\n### Secrets\nHe lied.\n## Public\nShown';
+    const result = filterSections(md, ['GM Notes', 'Player Notes']);
+    assert.ok(!result.includes('Secrets'));
+    assert.ok(!result.includes('He lied.'));
+    assert.ok(result.includes('Shown'));
+  });
 });
 
 describe('stripDataview', () => {
