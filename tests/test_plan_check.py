@@ -549,6 +549,30 @@ class HeadlessTests(unittest.TestCase):
             any("Confirm the guard fires here too" in f.message
                 for f in guard_rows), guard_rows)
 
+    def _guard_rows(self, open_questions: str) -> list[pc.Finding]:
+        text = ("---\ntype: session-plan\n---\n\n## Open Questions\n\n"
+                + open_questions)
+        found = pc.run_checks("p.md", text, {"type": "session-plan"},
+                              True, False)
+        return [f for f in found if f.id == "hard-guard"]
+
+    def test_missing_item_needs_no_guess_marker(self):
+        rows = self._guard_rows(
+            "- [ ] **Missing:** Georgiana's SAN after Vienna is not on "
+            "her sheet\n")
+        self.assertEqual(rows, [])
+
+    def test_plot_question_still_needs_the_guess_marker(self):
+        rows = self._guard_rows(
+            "- [ ] Does Sophia know what her husband has become?\n")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0].level, "ERROR")
+
+    def test_missing_label_mid_item_is_not_the_missing_form(self):
+        rows = self._guard_rows(
+            "- [ ] Sophia's motive (**Missing:** from the notes)\n")
+        self.assertEqual(len(rows), 1, rows)
+
     def test_gm_input_without_headless_is_refused(self):
         proc = run_cli(GOOD, "--gm-input")
         self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)

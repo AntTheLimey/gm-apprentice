@@ -70,7 +70,9 @@ Checks, by id, level, and the rule they mechanise:
   guess         WARNING  "(apprentice guess" only appears in Open Questions
                          (SKILL.md, Hard Guard)
   hard-guard    ERROR    --headless only: no settled creative spine, every
-                         Open Questions line carries the guess marker.
+                         Open Questions line carries the guess marker —
+                         except a `**Missing:**` item, a value the vault
+                         doesn't record (a fact to ask, not a guess).
                          `--gm-input` says the GM supplied the spine (a
                          scripted or batch prep): the guard's job is to
                          stop an apprentice inventing it, so it is skipped
@@ -241,6 +243,11 @@ MECHANICAL_RE = re.compile(
 GUESS_RE = re.compile(r"\(apprentice guess", re.IGNORECASE)
 GUARD_MARKER_RE = re.compile(
     r"\(apprentice guess\s*[-–—]\s*confirm\)", re.IGNORECASE)
+# An Open Questions item naming a value the vault doesn't record
+# (`- [ ] **Missing:** Georgiana's SAN after Vienna`): a fact for the GM
+# to supply, not an invented plot call, so it needs no guess marker.
+MISSING_ITEM_RE = re.compile(
+    r"^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?\*\*Missing:\*\*")
 GUARD_SECTIONS: tuple[str, ...] = (
     "Session Intent", PLANNED_SCENES_TITLE, "Spotlight Forecast",
 )
@@ -843,7 +850,7 @@ def check_hard_guard(rel: str, states: list[vl.LineState],
                 f"hard-guard: '## {raw_title}' has non-placeholder "
                 f"content while running headless — GM input required"))
     for start, joined in _open_questions_items(states):
-        if GUARD_MARKER_RE.search(joined):
+        if GUARD_MARKER_RE.search(joined) or MISSING_ITEM_RE.match(joined):
             continue
         findings.append(Finding(
             "hard-guard", "ERROR", f"{rel}:{start}",

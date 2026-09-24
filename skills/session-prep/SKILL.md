@@ -25,7 +25,7 @@ row, never asked; bookkeeping (a die result, a sheet number, a date no
 scene turns on) takes its default where it applies, listed in your
 reply, never noted in the Plan — but a value missing from an entity or
 PC sheet is never defaulted onto it: it goes to `## Open Questions`
-for the GM; craft
+as a `**Missing:**` item for the GM; craft
 and cosmetics (fonts, prop layout, filenames, formatting) are decided
 silently. Test: would a different answer change a scene this session?
 When the GM asks what an item on your list is or why you need it,

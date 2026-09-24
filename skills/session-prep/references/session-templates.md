@@ -202,7 +202,9 @@ Plot questions only ("Does Sophia know what her husband has
 become?"), each with 2–3 seeds, sorted as in the skill's Stance. Kept
 explicit and un-invented. Bookkeeping takes its default where it
 applies, with no note that it was defaulted; a value an entity or PC
-sheet doesn't record is listed here for the GM, never guessed. A guess
+sheet doesn't record is listed here for the GM as
+`- [ ] **Missing:** {value, whose sheet}`, never guessed (no guess
+marker needed). A guess
 from a run without the GM lives here, labelled
 **(apprentice guess — confirm)**, never in settled plan content.
 
