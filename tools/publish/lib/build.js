@@ -6,10 +6,10 @@ const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
-const { loadPublishConfig, vaultRelPath } = require('./config');
+const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { generateThemeCSS, resolveGenrePreset } = require('./theme');
+const { generateThemeCSS, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -89,12 +89,31 @@ function build(options = {}) {
     fs.copyFileSync(src, dest);
   }
 
+  // A genre preset's own CSS may hardcode a Google Fonts @import for its default look
+  // (scifi's Rajdhani) independent of theme.fonts.heading/body — that import is baked
+  // into the static css/themes/*.css file, so theme.js's fontsPreamble (which only sees
+  // the GM's configured fonts) never touches it. theme.fonts.source: local means no
+  // request to Google at all, so strip any such @import line on copy (#211 follow-up).
+  // Without a files entry supplying the preset's own font (e.g. Rajdhani), the stack
+  // falls back to the next family in the preset's own --font-heading list.
+  const GOOGLE_FONTS_IMPORT_RE = /^@import\s+url\(['"]?https?:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com)[^)]*\)\s*;\s*$/;
+
   function copyGenreCSS() {
     if (!genrePreset) return;
     const src = path.join(__dirname, `../css/themes/${genrePreset}.css`);
     const dest = path.join(outputDir, `css/themes/${genrePreset}.css`);
     ensureDir(dest);
-    fs.copyFileSync(src, dest);
+    const fontsCfg = publishConfig.theme.fonts || {};
+    if (fontsCfg.source === 'local') {
+      const raw = fs.readFileSync(src, 'utf8');
+      const stripped = raw
+        .split('\n')
+        .filter((line) => !GOOGLE_FONTS_IMPORT_RE.test(line.trim()))
+        .join('\n');
+      fs.writeFileSync(dest, stripped);
+    } else {
+      fs.copyFileSync(src, dest);
+    }
     console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
@@ -135,6 +154,52 @@ function build(options = {}) {
     console.log('  wrote css/theme.css');
   }
 
+  // theme.fonts.source: 'local' (#211): the @font-face rules theme.js writes into
+  // css/theme.css reference "../fonts/<fontOutputPath(path)>" — copy each listed file to
+  // that same path (the full relative subpath, not just the basename, so two fonts that
+  // happen to share a filename in different subfolders don't overwrite each other —
+  // #211 follow-up) so the reference resolves. Same vault-relative safety check as
+  // campaign_image: resolves against vaultPath, throws if it escapes the vault, warns
+  // and skips (never fails the build) if the file just isn't there. A path whose
+  // extension isn't a real font format is rejected with a warning before any of that —
+  // otherwise a mistyped `files[].path` (e.g. a GM's .md page) would get copied straight
+  // into the public site.
+  function copyThemeFonts() {
+    const fontsCfg = publishConfig.theme.fonts || {};
+    const files = Array.isArray(fontsCfg.files) ? fontsCfg.files : [];
+    if (files.length === 0) return;
+    const vaultRoot = path.resolve(config.vaultPath);
+    for (const f of files) {
+      if (!f || !f.path) continue;
+      const outPath = fontOutputPath(f.path);
+      const ext = outPath.includes('.') ? outPath.split('.').pop().toLowerCase() : '';
+      if (!Object.prototype.hasOwnProperty.call(FONT_FORMATS, ext)) {
+        console.warn(`  WARNING: theme.fonts.files entry "${f.path}" is not a supported font file (.woff2/.woff/.ttf/.otf) — skipping`);
+        continue;
+      }
+      const vaultFontPath = path.resolve(vaultRoot, f.path);
+      if (!vaultFontPath.startsWith(vaultRoot + path.sep)) {
+        throw new Error(`Refusing to copy font file outside vault: ${f.path}`);
+      }
+      if (!fs.existsSync(vaultFontPath)) {
+        console.warn(`  WARNING: theme.fonts.files entry "${f.path}" not found in the vault — skipping`);
+        continue;
+      }
+      // outPath now carries the GM's full relative subpath (not just a basename), so a
+      // path containing ".." segments could otherwise escape outputDir/fonts/ on write —
+      // the same class of check as vaultFontPath above, applied to the destination.
+      const fontsRoot = path.resolve(outputDir, 'fonts');
+      const dest = path.resolve(fontsRoot, outPath);
+      if (dest !== fontsRoot && !dest.startsWith(fontsRoot + path.sep)) {
+        console.warn(`  WARNING: theme.fonts.files entry "${f.path}" resolves outside the site's fonts/ directory — skipping`);
+        continue;
+      }
+      ensureDir(dest);
+      fs.copyFileSync(vaultFontPath, dest);
+      console.log(`  wrote fonts/${outPath}`);
+    }
+  }
+
   function writeNoJekyll() {
     fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
   }
@@ -172,8 +237,17 @@ function build(options = {}) {
 
   // Main build logic
   assertSafeOutputDir();
+  // publishConfig.exclude_dirs is already the normalized union of vault.config.json's
+  // legacy `excludeDirs` and `publish.exclude_dirs` from vault-config.md (config.js's
+  // unionExcludeDirs), but the raw `config` object handed to the scanner still only
+  // carries the legacy field. scanConfigFor routes the scanner through the unioned list
+  // so a GM who sets `publish.exclude_dirs` in vault-config.md is actually honoured
+  // (#209), and scanAttachments applies the same skip list to the attachments tree
+  // (#210). `explain`, `manifest diff` and `doctor --site` use the same helper so all
+  // four predict exactly the same exclusions the build applies.
+  const scanConfig = scanConfigFor(config, publishConfig);
   console.log('Scanning vault:', config.vaultPath);
-  let pages = scanVault(config);
+  let pages = scanVault(scanConfig);
   console.log(`Found ${pages.length} pages`);
   // Capture the scanned pages before the manifest/draft filters reassign `pages` to the published
   // subset, so templates can reach context that is excluded from rendering — above all the
@@ -471,7 +545,7 @@ function build(options = {}) {
     ? 'timeline.html'
     : (authoredTimeline ? authoredTimeline.outputPath : null);
 
-  const imageMap = scanAttachments(config);
+  const imageMap = scanAttachments(scanConfig);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
 
   // Re-encode before a single page renders. The tool owns both the image copy and every
@@ -508,6 +582,7 @@ function build(options = {}) {
   copyJS();
   copyGenreCSS();
   writeThemeCSS();
+  copyThemeFonts();
   publishConfig._overridesCss = copyOverridesCSS();
 
   let campaignImageCopied = false;
@@ -776,8 +851,12 @@ function build(options = {}) {
     }
   }
 
-  // Copy images — in player mode, only copy images referenced by published pages
-  if (manifest && publishConfig.mode === 'player') {
+  // Copy images — in player mode, only copy images referenced by published pages. This
+  // always applies in player mode, manifest or not (#210): `pages` is already filtered to
+  // what actually publishes (decidePage's verdicts, above), and `usedImages` is populated
+  // from that filtered set regardless of whether a manifest exists, so gating this on
+  // `manifest` just meant a manifest-less player build shipped every GM-only image.
+  if (publishConfig.mode === 'player') {
     const filteredMap = {};
     for (const [basename, entry] of Object.entries(imageMap)) {
       if (usedImages.has(basename)) filteredMap[basename] = entry;

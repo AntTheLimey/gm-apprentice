@@ -11,8 +11,8 @@
 // keeping the annotations on the entries it was not asked to touch.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport } = require('./scanner');
-const { loadPublishConfig, vaultRelPath, loadVaultConfig } = require('./config');
+const { scanVaultReport, dirIsExcluded } = require('./scanner');
+const { loadPublishConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage } = require('./publish-decision');
 
@@ -40,7 +40,7 @@ function listVaultMarkdown(vaultPath, excludeDirs) {
       const rel = toPosix(path.relative(vaultPath, full));
       if (entry.isDirectory()) {
         if (entry.name.startsWith('.')) continue;
-        if (excluded.some((ex) => rel === ex || rel.startsWith(ex + '/'))) continue;
+        if (dirIsExcluded(rel, excluded)) continue;
         walk(full);
       } else if (entry.name.endsWith('.md')) {
         found.push(canonicalPath(rel));
@@ -150,7 +150,11 @@ function surveyVault(options, deps) {
   const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
   const manifest = loadManifest(vaultPath);
 
-  const report = scanVaultReport(Object.assign({}, config, { vaultPath }));
+  // scanConfigFor: same unioned, normalized exclude_dirs build.js uses, so this command
+  // predicts exactly what the build does with a folder excluded only via vault-config.md's
+  // publish.exclude_dirs, not just the legacy vault.config.json field (#209 follow-up).
+  const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
+  const report = scanVaultReport(scanConfig);
   const pagesByRel = new Map(report.pages.map((p) => [vaultRelPath(vaultPath, p.sourcePath), p]));
   const untyped = new Set(report.untyped.map(canonicalPath));
   const unmappedDirs = new Set(report.unmapped.map((u) => canonicalPath(u.dir)));
@@ -160,7 +164,7 @@ function surveyVault(options, deps) {
   // (which shares this verdicts map) need to say the file itself is broken instead.
   const malformedByRel = new Map(report.malformed.map((m) => [canonicalPath(m.rel), m.message]));
 
-  const files = listVaultMarkdown(vaultPath, config.excludeDirs);
+  const files = listVaultMarkdown(vaultPath, publishConfig.exclude_dirs);
   const verdicts = new Map();
   for (const rel of files) {
     const page = pagesByRel.get(rel);

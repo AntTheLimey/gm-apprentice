@@ -115,6 +115,28 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  // Review follow-up: `doctor --site` used to scan with the raw vault.config.json
+  // excludeDirs only, so a folder excluded exclusively via vault-config.md's
+  // publish.exclude_dirs still got walked and reported FOLDER_UNMAPPED — a false
+  // positive for a folder the GM deliberately excluded, and a disagreement with what
+  // the real build does.
+  it('does not report a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-vaultconfig-excl-'));
+    write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
+    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+
+    const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(c.out.join(''));
+    assert.ok(
+      !payload.findings.some((f) => f.path === 'Drafts'),
+      JSON.stringify(payload.findings),
+    );
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('groups the human report by code and counts the severities', async () => {
     const vault = messyVault();
     const { configPath } = siteFor(vault);

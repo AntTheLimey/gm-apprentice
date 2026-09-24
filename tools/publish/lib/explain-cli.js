@@ -11,7 +11,7 @@
 // second reading of the same rules.
 const fs = require('fs');
 const path = require('path');
-const { mapFolder } = require('./scanner');
+const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
@@ -77,7 +77,11 @@ async function runExplain(options, deps) {
   // excludeDirs is the scanner's rule, not decidePage's — decidePage only knows the
   // directories that are excluded on every site. Fold the config's own list in here
   // so the verdict matches what the build would actually do with this file.
-  const configExcluded = (config.excludeDirs || []).find((ex) => dir === ex || dir.startsWith(ex + '/'));
+  // publishConfig.exclude_dirs (not the raw config.excludeDirs): the normalized union of
+  // vault-config.md's publish.exclude_dirs and the legacy vault.config.json field, matched
+  // case-insensitively — otherwise this command disagreed with the build about a folder
+  // excluded only via vault-config.md, or via a differently-cased spelling (#209 follow-up).
+  const configExcluded = matchExcludedDir(dir, publishConfig.exclude_dirs);
   const alwaysExcluded = dir.split('/').some((segment) => ALWAYS_EXCLUDE_DIRS.includes(segment));
 
   // `excludeDirs` names a folder never true of every site — that is ALWAYS_EXCLUDE_DIRS,

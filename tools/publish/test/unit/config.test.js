@@ -208,6 +208,106 @@ describe('loadPublishConfig', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+});
+
+describe('exclude_dirs spelling normalization', () => {
+  it('strips a trailing slash', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_dirs:\n    - "NPCs/Hidden/"\n---\n');
+    const result = loadPublishConfig(tmpDir);
+    assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
+    assert.ok(!result.exclude_dirs.includes('NPCs/Hidden/'), result.exclude_dirs.join(', '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('strips a leading "./"', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_dirs:\n    - "./NPCs/Hidden"\n---\n');
+    const result = loadPublishConfig(tmpDir);
+    assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('converts backslashes to forward slashes', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_dirs:\n    - "NPCs\\\\Hidden"\n---\n');
+    const result = loadPublishConfig(tmpDir);
+    assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('rewrites an absolute path resolving inside the vault to vault-relative', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    const absolute = path.join(tmpDir, 'NPCs', 'Hidden');
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      `---\npublish:\n  exclude_dirs:\n    - "${absolute.replace(/\\/g, '\\\\')}"\n---\n`);
+    const result = loadPublishConfig(tmpDir);
+    assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('drops an absolute path resolving outside the vault, with a warning', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    const outside = path.join(os.tmpdir(), 'somewhere-else-entirely');
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      `---\npublish:\n  exclude_dirs:\n    - "${outside.replace(/\\/g, '\\\\')}"\n---\n`);
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...a) => warns.push(a.join(' '));
+    let result;
+    try {
+      result = loadPublishConfig(tmpDir);
+    } finally {
+      console.warn = orig;
+    }
+    assert.ok(!result.exclude_dirs.some((d) => d.includes('somewhere-else-entirely')), result.exclude_dirs.join(', '));
+    assert.ok(warns.some((w) => w.includes('outside the vault')), warns.join(' | '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('dedupes case-insensitively across a JSON-cased and a YAML-cased spelling, keeping one', () => {
+    // GM: JSON legacy field spells it "GM", vault-config.md spells it "gm" — on a
+    // case-sensitive filesystem (Linux) only one spelling can ever match the real
+    // folder, so both scanner call sites must compare case-insensitively regardless
+    // of which spelling the union kept.
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_dirs:\n    - "gm"\n---\n');
+    const result = loadPublishConfig(tmpDir, { excludeDirs: ['GM'] });
+    const gmCount = result.exclude_dirs.filter((d) => d.toLowerCase() === 'gm').length;
+    assert.strictEqual(gmCount, 1, result.exclude_dirs.join(', '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('trailing-slash and bare spellings of the same folder dedupe to one entry', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
+    const metaDir = path.join(tmpDir, '_meta');
+    fs.mkdirSync(metaDir);
+    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+      '---\npublish:\n  exclude_dirs:\n    - "NPCs/Hidden/"\n---\n');
+    const result = loadPublishConfig(tmpDir, { excludeDirs: ['NPCs/Hidden'] });
+    const count = result.exclude_dirs.filter((d) => d.toLowerCase() === 'npcs/hidden').length;
+    assert.strictEqual(count, 1, result.exclude_dirs.join(', '));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+});
+
+describe('loadPublishConfig — setting_year', () => {
   it('extracts setting_year from vault-config.md frontmatter', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');

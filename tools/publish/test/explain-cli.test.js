@@ -256,6 +256,32 @@ describe('explain', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  // Review follow-up: explain used to read the raw vault.config.json `excludeDirs` only,
+  // so a folder excluded exclusively via vault-config.md's `publish.exclude_dirs` was
+  // reported as publishable here while the real build actually dropped it — the two
+  // commands disagreed about the same file.
+  it('reports DIR_CONFIG_EXCLUDED for a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-vaultconfig-excluded-'));
+    write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
+    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-vaultconfig-excluded-site-'));
+    const configPath = path.join(dir, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      siteTitle: 'Vault Config Exclude Test',
+      vaultPath: vault,
+      outputDir: './docs',
+      excludeDirs: ['_meta', '_Templates'],
+      folderMap: {},
+    }, null, 2));
+
+    const c = capture();
+    const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
+    assert.strictEqual(rc, 0);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in excludeDirs \(DIR_CONFIG_EXCLUDED\)/);
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   // M3: explain shares surveyVault with `manifest`, so a bad config path must fail
   // the same clean way instead of a raw `require()` "Cannot find module" stack.
   it('fails with a clean message on a config path that does not exist', async () => {

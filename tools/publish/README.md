@@ -149,7 +149,7 @@ directories listed in `preserveDirs`.
 | `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |
 | `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
 | `folderMap` | object | Maps vault folder paths to site output paths (see below) |
-| `excludeDirs` | array | Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`) |
+| `excludeDirs` | array | Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Unioned with `publish.exclude_dirs` from `_meta/vault-config.md` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
 | `excludeSections` | array | Markdown H2 section headings to strip before rendering (e.g. `["GM Notes"]`) |
 | `preserveDirs` | array | Output subdirectories to keep across builds (e.g. `["superpowers"]`) |
 
@@ -298,11 +298,66 @@ back to the flat view — one section is not a grouping.
 
 ### Player-mode image filtering
 
-When building in `player` mode with a publish manifest, only images
-referenced by the published pages are copied to the output. This
-prevents GM-only images (maps, handouts, portraits of hidden NPCs)
-from leaking into the public site. In full mode, all vault images
-are copied.
+When building in `player` mode, only images referenced by the published
+pages are copied to the output — with or without a publish manifest.
+This prevents GM-only images (maps, handouts, portraits of hidden NPCs)
+from leaking into the public site. In full mode, all vault images are
+copied.
+
+`scanAttachments` also honours `excludeDirs`/`publish.exclude_dirs`, so
+a vault-relative folder listed there (including a subfolder of the
+attachments tree, e.g. `_attachments/gm-maps`) never reaches the scan at
+all, in either mode.
+
+### Theme fonts
+
+`publish.theme.fonts.heading`/`.body` name Google Fonts families by
+default, and the build emits a `fonts.googleapis.com` `@import` at the
+top of `css/theme.css` — every visitor's browser then requests the font
+directly from Google. Set `source: local` to opt out and self-host
+instead:
+
+```yaml
+publish:
+  theme:
+    fonts:
+      heading: Cinzel
+      body: Inter
+      source: local        # 'google' (default) | 'local'
+      files:
+        - family: Cinzel
+          path: _attachments/fonts/Cinzel-Regular.woff2
+        - family: Inter
+          path: _attachments/fonts/Inter-Regular.woff2
+          weight: 400       # optional, default 400
+          style: normal     # optional, default normal
+```
+
+Each `files` entry is copied from the vault (path resolved relative to
+`vaultPath`, same safety rule as `campaign_image`) into the site's
+`fonts/` directory — under its **full relative path**, not just its
+filename, so `_attachments/fonts/Cinzel-Regular.woff2` lands at
+`fonts/_attachments/fonts/Cinzel-Regular.woff2`. This is deliberate:
+two font files that happen to share a filename in different subfolders
+(`fonts/Cinzel/Regular.woff2` and `fonts/Inter/Regular.woff2`) must not
+overwrite each other. `theme.css` gets an `@font-face` rule per entry,
+referencing that same path, instead of the Google import. `path` must
+end in `.woff2`, `.woff`, `.ttf` or `.otf` — anything else (a mistyped
+path pointing at a GM's own note, say) is rejected with a warning and
+never copied. `source: local` with no `files` emits no import at all —
+fonts fall back to whatever stack `cssFontValue` supplies
+(`'<family>', serif`/`sans-serif`), so pair it with a generic
+`heading`/`body` (`system-ui`, `serif`, …) if you don't intend to ship
+font files.
+
+A genre preset's own CSS can also hardcode a Google Fonts import
+independent of `theme.fonts` — the `scifi` preset's Rajdhani heading
+font is one (`css/themes/scifi.css`). `source: local` strips that
+import from the copied preset CSS too, so nothing in the built output
+ever requests fonts.googleapis.com or fonts.gstatic.com. Without a
+`files` entry supplying Rajdhani yourself, the scifi preset's heading
+font falls back to the next family in its own stack (a condensed
+system font, then `sans-serif`) rather than rendering as Rajdhani.
 
 ### Image optimization
 

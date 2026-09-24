@@ -37,12 +37,66 @@ function cssFontValue(font, fallback) {
 }
 
 function googleFontsImport(fonts) {
-  const toImport = Object.values(fonts)
+  const toImport = ['heading', 'body']
+    .map(k => fonts[k])
     .filter(f => f && !GENERIC_FAMILIES.has(f))
     .filter((v, i, a) => a.indexOf(v) === i);
   if (toImport.length === 0) return '';
   const families = toImport.map(f => `family=${f.replace(/ /g, '+')}`).join('&');
   return `@import url('https://fonts.googleapis.com/css2?${families}&display=swap');\n\n`;
+}
+
+const FONT_FORMATS = { woff2: 'woff2', woff: 'woff', ttf: 'truetype', otf: 'opentype' };
+
+// Normalizes a theme.fonts.files[].path into the path used both as the @font-face src
+// (relative to css/theme.css, under "../fonts/") and as the copy destination under the
+// output fonts/ directory. The FULL relative path is kept, not just the basename: two
+// fonts organized under subfolders that happen to share a filename (fonts/Cinzel/
+// Regular.woff2 and fonts/Inter/Regular.woff2) must not collide by both collapsing to
+// "Regular.woff2" (#211 follow-up). build.js copies to this exact same path, so the
+// emitted src always resolves to what actually got copied.
+function fontOutputPath(rawPath) {
+  return String(rawPath).replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+}
+
+function fontExtension(outputPath) {
+  return outputPath.includes('.') ? outputPath.split('.').pop().toLowerCase() : '';
+}
+
+// Every visitor's browser hitting fonts.googleapis.com directly leaks their IP to Google on
+// every page load, with no config flag to stop it short of only using generic keywords
+// (#211). `theme.fonts.source: local` opts out of that request entirely: the build copies
+// each listed file into the output and this emits @font-face rules pointing at it instead
+// of the Google Fonts import. A path whose extension isn't a real font format (a mistyped
+// path, e.g. a GM's .md page) is warned about and skipped rather than emitted — build.js
+// applies the same extension check before it will copy anything (#211 follow-up).
+function localFontFaceCSS(files) {
+  if (!Array.isArray(files) || files.length === 0) return '';
+  const rules = files
+    .filter(f => f && f.family && f.path)
+    .map(f => {
+      const outPath = fontOutputPath(f.path);
+      const ext = fontExtension(outPath);
+      if (!Object.prototype.hasOwnProperty.call(FONT_FORMATS, ext)) {
+        console.warn(`theme: theme.fonts.files path "${f.path}" is not a supported font file (.woff2/.woff/.ttf/.otf) — skipped.`);
+        return null;
+      }
+      const format = FONT_FORMATS[ext];
+      const weight = f.weight || 400;
+      const style = f.style || 'normal';
+      return `@font-face {\n  font-family: '${f.family}';\n  src: url('../fonts/${outPath}') format('${format}');\n  font-weight: ${weight};\n  font-style: ${style};\n  font-display: swap;\n}`;
+    })
+    .filter(Boolean);
+  if (rules.length === 0) return '';
+  return rules.join('\n') + '\n\n';
+}
+
+// Chooses the Google import or the local @font-face rules, or neither (`source: local`
+// with no `files`, or nothing custom configured at all). Shared by both generateThemeCSS
+// branches so a genre preset with a custom font honours the same setting as a full palette.
+function fontsPreamble(fonts) {
+  if (fonts.source === 'local') return localFontFaceCSS(fonts.files);
+  return googleFontsImport(fonts);
 }
 
 function parseHex(hex) {
@@ -88,8 +142,20 @@ function generateThemeCSS(config) {
     const fontVars = [];
     if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
     if (fonts.body && !GENERIC_FAMILIES.has(fonts.body)) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
-    if (fontVars.length === 0) return '/* Genre preset active — no overrides */\n';
-    const fontsImport = googleFontsImport(fonts);
+    // Computed even when there are no --font-* overrides to emit: with source: local,
+    // the GM may be self-hosting the preset's OWN font (e.g. scifi's Rajdhani) under
+    // its own family name, with no heading/body override at all — the preset's static
+    // CSS already references that family name via its own --font-heading value, and
+    // copyGenreCSS strips its Google import when source is local, so the @font-face
+    // rule supplying the real file is the only thing left standing between that name
+    // and a silent fallback (CodeRabbit review, PR #234). Returning before this ran
+    // meant a files entry with no matching heading/body override never got emitted.
+    const fontsImport = fontsPreamble(fonts);
+    if (fontVars.length === 0) {
+      return fontsImport
+        ? `${fontsImport}/* Genre preset active — no --font-heading/--font-body overrides */\n`
+        : '/* Genre preset active — no overrides */\n';
+    }
     return `${fontsImport}:root {\n${fontVars.join('\n')}\n}\n`;
   }
 
@@ -128,9 +194,9 @@ function generateThemeCSS(config) {
   if (fonts.heading) vars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
   if (fonts.body) vars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
 
-  const fontsImport = googleFontsImport(fonts);
+  const fontsImport = fontsPreamble(fonts);
 
   return `${fontsImport}:root {\n${vars.join('\n')}\n}\n`;
 }
 
-module.exports = { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS };
+module.exports = { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };

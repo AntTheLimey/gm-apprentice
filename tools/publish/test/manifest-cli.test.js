@@ -153,6 +153,27 @@ describe('manifest diff', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  // Review follow-up: surveyVault (shared by `manifest diff` and `explain`) used to walk
+  // the vault with the raw vault.config.json `excludeDirs` only — a folder excluded
+  // exclusively via vault-config.md's `publish.exclude_dirs` still showed up in the diff
+  // as a New file, disagreeing with what the real build would do with it.
+  it('never lists a file under a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-vaultconfig-excl-'));
+    fs.mkdirSync(path.join(vault, 'Drafts'), { recursive: true });
+    fs.writeFileSync(path.join(vault, 'Drafts', 'Idea.md'), '---\ntype: npc\n---\n\nA half-formed idea.\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
+      '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const rc = await runManifest({ verb: 'diff', configPath, json: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(c.out.join(''));
+    const all = [...payload.new, ...(payload.unchanged || [])];
+    assert.ok(!all.some((e) => e.path === 'Drafts/Idea.md'), JSON.stringify(payload));
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   // M3: manifest shares surveyVault's config loading with deploy and explain — a
   // bad config path must fail the same clean way instead of a raw `require()`
   // "Cannot find module" stack.

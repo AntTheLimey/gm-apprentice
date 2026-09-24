@@ -14,6 +14,11 @@ const DIR_LABELS = {
   'documents': 'Documents',
   'clues': 'Clues',
   'chapters': 'Chapters',
+  // The nav's Story group has always linked Sessions at sessions/index.html (nav.js's
+  // NAV_GROUPS), but nothing generated that page — a 404 on any build where a folderMap
+  // entry routes a folder to "sessions" output (#214). Added here so it's built the same
+  // way every other section index is.
+  'sessions': 'Sessions',
   'creatures': 'Creatures',
   'heritages': 'Heritages',
   'world': 'World',
