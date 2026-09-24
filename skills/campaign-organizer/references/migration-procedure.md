@@ -161,11 +161,15 @@ In this order:
 6. Re-nest GM-only headings (structural): first
    `vault_check.py <vault> wrapup --fix` for Session Wrap-Ups
    (re-nest, the `<!-- gm-only -->` fence, and the 1.9.5 fixes),
-   then `vault_check.py <vault> gm-leak --renest-excludes --fix`. That
+   then, while the 1.8.3 entry is pending,
+   `vault_check.py <vault> gm-leak --renest-excludes --fix`. That
    one command re-nests every heading titled with a current
    `exclude_sections` entry under `## GM Notes` and then collapses
    the list to `["GM Notes"]` (a vault with no list keeps the
-   defaults) — all or nothing: any refusal writes nothing. Then
+   defaults) — all or nothing: any refusal writes nothing. Once
+   1.8.3 is done, run `vault_check.py <vault> gm-leak --fix`
+   instead: it moves only bold-wrapped ERROR headings and never
+   touches `exclude_sections`. Then
    re-run `gm-leak` and `wrapup`; any ERROR row from either (a
    heading row, `re-nest refused`, `repair refused`, a fence that
    crosses a section, a Keeper-facing H2 that publishes) means the
