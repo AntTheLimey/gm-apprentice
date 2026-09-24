@@ -16,7 +16,7 @@ Usage:
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships
   vault_check.py VAULT sessions
-  vault_check.py VAULT gm-leak [--folder SUB]
+  vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT pc-body [--folder SUB]
   vault_check.py VAULT wrapup [--file REL] [--fix]
   vault_check.py VAULT version
@@ -39,7 +39,12 @@ closer (everything above it publishes) or a bold-wrapped excluded
 heading like `### **GM Notes**`; WARNING is an unclosed opener or a
 published heading whose title contains an exclude-list entry or
 Keeper keyword; INFO is a Keeper-facing bold label or callout —
-prose the GM has to judge, not auto-movable.
+prose the GM has to judge, not auto-movable. `--fix` re-nests every
+heading the rows flag (the ERROR and WARNING cases above, never the
+INFO ones) as a `###` subsection under one `## GM Notes`, demoting
+it and its own sub-headings a level — the 1.8.3 migration's
+structural move, mechanised. A file whose gm-only/spoiler fences are
+unbalanced is left untouched: fix the marker by hand first.
 
 `pc-body` runs over every `type: pc` sheet except `*_Story.md`
 companions and `publish: none` pages. ERROR is `## Current Status`
@@ -57,10 +62,11 @@ player-facing section boundary gets its frontmatter backfilled and
 its body left alone, for the GM to fix by hand; filename renames
 are never automatic.
 
-`wrapup` is the one command that can write. It prints its findings
-first and then a repair row per action — `WOULD-FIX` on a dry run,
-`FIXED` when `--fix` applies them, `UNCHANGED` for a conformant
-file. It joins `all` as a dry run: `all` never writes.
+`wrapup` and `gm-leak` are the commands that can write. Each prints
+its findings first and then a repair row per action — `WOULD-FIX` on
+a dry run, `FIXED` when `--fix` applies them; `wrapup` also prints
+`UNCHANGED` for a conformant file. Both join `all` as a dry run:
+`all` never writes.
 
 Two commands are gates rather than reports and sit outside `all`:
 `version` emits one row whose first column is a verdict
@@ -1055,7 +1061,8 @@ def _published_linenos(states: list[LineState],
     return kept
 
 
-def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
+def check_gm_leak(vault: Path, folder: str | None,
+                  fix: bool = False) -> list[str]:
     """Keeper-facing content that would actually reach the player site.
 
     Mechanises graph-health.md's "Un-fenced GM-only content" prose. The
@@ -1075,6 +1082,12 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
     A file's fence problems lead its rows rather than falling into line
     order: an orphan closer changes what every line above it means, so
     it is the first thing to read, not the fifth.
+
+    `fix` re-nests whatever ERROR/WARNING heading rows this file earned
+    — never the INFO bold-label/callout rows, which are a GM's judgment
+    call — and prints `WOULD-FIX`/`FIXED` rows for it, the same
+    dry-run-by-default discipline `wrapup --fix` uses. A file with no
+    heading rows writes nothing and prints nothing extra.
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
@@ -1089,6 +1102,7 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
+        heading_leak = False
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
@@ -1098,7 +1112,9 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
             if state.in_code or not state.published:
                 continue
             if state.heading is not None:
-                rows.extend(_heading_leak(rel, state, excludes))
+                found = _heading_leak(rel, state, excludes)
+                rows.extend(found)
+                heading_leak = heading_leak or bool(found)
                 continue
             bold = BOLD_LABEL_RE.match(state.line)
             if bold and _keeper_text(bold.group(1), excludes):
@@ -1115,6 +1131,8 @@ def check_gm_leak(vault: Path, folder: str | None) -> list[str]:
                     rows.append(f"INFO\t{rel}:{state.lineno}\tcallout {label} "
                                 f"reads Keeper-facing — confirm it should "
                                 f"publish")
+        if heading_leak:
+            rows.extend(_apply_gm_leak_fix(vault, rel, fm, excludes, fix))
     return rows
 
 
@@ -2146,6 +2164,152 @@ def renest_wrapup(text: str) -> str:
     return head + eol.join(body) + tail
 
 
+def renest_gm_leak(rel: str, text: str, excludes: list[str],
+                   kept: set[int] | None = None) -> tuple[str, list[str]]:
+    """(new text, titles moved) — the 1.8.3 migration's structural
+    re-nest, generalised from Session Wrap-Ups to any entity file.
+
+    Moves every heading `_heading_leak` flags (a bold-wrapped exclude
+    match, or a published heading matching an `exclude_sections` entry
+    or Keeper keyword) under one `## GM Notes` — appended to it if the
+    file already has one, created at the end of the body if not —
+    demoting the heading and its own sub-headings a level with
+    `_demoted`, the same primitive `renest_wrapup` moves Keeper-facing
+    H2s with. `kept` is the stub-page line filter `check_gm_leak`
+    itself reads with; passing the same one keeps what a preview shows
+    and what `--fix` moves in exact agreement.
+
+    A heading `gm-leak` does not flag — including one already hidden by
+    the vault's current, pre-collapse `exclude_sections` list — is left
+    exactly where it is; only what the check itself reports ever moves,
+    and nothing moves at all in a file whose gm-only/spoiler fences are
+    unbalanced (`problems` non-empty): an orphan closer changes what
+    every earlier line means, so which headings actually leak cannot be
+    decided mechanically. Fix the marker by hand first, same as
+    `wrapup --fix`'s own refusal.
+
+    Content is never reordered inside a moved block and never reworded
+    — only relocated and demoted, exactly as the migration entry
+    promises.
+    """
+    states, problems = scan_body(text, excludes)
+    if not states or problems:
+        return text, []
+
+    matched_lines = {
+        s.lineno for s in states
+        if s.heading is not None and not s.in_code and s.published
+        and (kept is None or s.lineno in kept)
+        and _heading_leak(rel, s, excludes)
+    }
+    if not matched_lines:
+        return text, []
+
+    raw = text.splitlines(keepends=True)
+    head = "".join(raw[:states[0].lineno - 1])
+    eol = _wrap_eol(text)
+
+    kept_states: list[LineState] = []
+    moved_blocks: list[list[LineState]] = []
+    moved_titles: list[str] = []
+    i, n = 0, len(states)
+    while i < n:
+        state = states[i]
+        if state.heading is not None and state.lineno in matched_lines:
+            level = state.heading[0]
+            moved_titles.append(state.heading[1])
+            block = [state]
+            j = i + 1
+            while j < n:
+                nxt = states[j]
+                if nxt.heading is not None and nxt.heading[0] <= level:
+                    break
+                block.append(nxt)
+                j += 1
+            moved_blocks.append(block)
+            i = j
+        else:
+            kept_states.append(state)
+            i += 1
+
+    moved_lines: list[str] = []
+    for block in moved_blocks:
+        if moved_lines:
+            moved_lines.append("")
+        moved_lines.extend(_trim([_demoted(s) for s in block]))
+
+    kept_lines = [s.line for s in kept_states]
+    gm_headings = [(idx, s.heading[0]) for idx, s in enumerate(kept_states)
+                   if s.heading is not None and s.heading[0] == 2
+                   and s.heading[1].casefold() == GM_NOTES]
+    if gm_headings:
+        gm_index, level = gm_headings[0]
+        end = len(kept_states)
+        for later in range(gm_index + 1, len(kept_states)):
+            h = kept_states[later].heading
+            if h is not None and h[0] <= level:
+                end = later
+                break
+        existing = kept_lines[gm_index + 1:end]
+        while existing and not existing[0].strip():
+            existing.pop(0)
+        existing = _trim(existing)
+        gm_body: list[str] = []
+        for part in (existing, moved_lines):
+            if not part:
+                continue
+            if gm_body:
+                gm_body.append("")
+            gm_body.extend(part)
+        new_kept = kept_lines[:gm_index + 1]
+        if gm_body:
+            new_kept.append("")
+            new_kept.extend(gm_body)
+        after = kept_lines[end:]
+        if after:
+            new_kept.append("")
+            new_kept.extend(after)
+    else:
+        new_kept = _trim(kept_lines)
+        if new_kept:
+            new_kept.append("")
+        new_kept += ["## GM Notes", ""] + moved_lines
+
+    tail = eol if text.endswith("\n") else ""
+    return head + eol.join(new_kept) + tail, moved_titles
+
+
+def _apply_gm_leak_fix(vault: Path, rel: str, fm: dict, excludes: list[str],
+                       fix: bool) -> list[str]:
+    """`gm-leak`'s mechanical repair, run for one file.
+
+    Re-reads the file directly (exact bytes, its own line endings)
+    rather than the already-parsed copy `check_gm_leak` walked with —
+    the same discipline `wrapup --fix` uses before it writes. Prints
+    nothing when the transform changes nothing (no matched heading, or
+    the file's fences are unbalanced); otherwise one `WOULD-FIX` row per
+    heading moved on a dry run, `FIXED` once `--fix` writes them.
+    """
+    path = vault / rel
+    try:
+        with path.open("r", encoding="utf-8", newline="") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        return [f"ERROR\t{rel}\tunreadable ({e.__class__.__name__}) "
+                f"— not fixed"]
+    states, _problems = scan_body(text, excludes)
+    kept = _published_linenos(states, fm)
+    new_text, moved_titles = renest_gm_leak(rel, text, excludes, kept)
+    if not moved_titles or new_text == text:
+        return []
+    if fix:
+        with path.open("w", encoding="utf-8", newline="") as f:
+            f.write(new_text)
+    mode = "FIXED" if fix else "WOULD-FIX"
+    return [f"{mode}\t{rel}\tre-nested '{title}' under ## GM Notes"
+            for title in moved_titles]
+
+
 def rename_decorated_headings(text: str) -> tuple[str, list[str]]:
     """Split `### Name — Qualifier` into the template name and an italic
     line. Returns (text, actions); the qualifier is kept, never dropped."""
@@ -2365,11 +2529,12 @@ def main() -> int:
                          "file (e.g. \"Chapters/C3/Sessions/Session 07/"
                          "Chapter_03_Session_07_Wrap_Up.md\")")
     ap.add_argument("--fix", action="store_true",
-                    help="apply the wrapup check's mechanical repairs "
-                         "(frontmatter backfills and the Keeper-facing "
-                         "re-nest); without it the repairs print as "
-                         "WOULD-FIX rows and nothing is written. Ignored "
-                         "by `all`.")
+                    help="apply the wrapup or gm-leak check's mechanical "
+                         "repairs (frontmatter backfills and the "
+                         "Keeper-facing re-nest for wrapup; the "
+                         "ERROR/WARNING heading re-nest for gm-leak); "
+                         "without it the repairs print as WOULD-FIX rows "
+                         "and nothing is written. Ignored by `all`.")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
     ap.add_argument("--since", type=int,
@@ -2414,7 +2579,10 @@ def main() -> int:
     if args.command in ("sessions", "all"):
         emit("sessions", check_sessions(args.vault))
     if args.command in ("gm-leak", "all"):
-        emit("gm-leak", check_gm_leak(args.vault, args.folder))
+        # `all` is a report, so it never writes — same reasoning as
+        # `wrapup` below.
+        emit("gm-leak", check_gm_leak(args.vault, args.folder,
+                                      args.fix and args.command == "gm-leak"))
     if args.command in ("pc-body", "all"):
         emit("pc-body", check_pc_body(args.vault, args.folder))
     if args.command in ("wrapup", "all"):
