@@ -12,21 +12,49 @@ recognises the three shapes those files actually use:
   * `### Title` stat blocks — the heading names the record, the
     paragraph under it is the record
 
-Matching runs in tiers: exact (case-insensitive, also matching a name
-whose trailing parenthetical is dropped, so "fast-draw" finds
-"Fast-Draw (Sword)"), then substring, then a difflib near-miss fallback.
+Matching runs in tiers, most confident first:
+
+  1. exact — name and query are normalised the same way (casefold,
+     `[a-z0-9]+` tokens joined by single spaces, trailing parenthetical
+     dropped) and compare equal, so "fast draw" finds "Fast-Draw" and
+     "off guard" finds "Off-Guard".
+  2. substring — the normalised query is a substring of the normalised
+     name.
+  3. name-words — every query word (stopwords dropped, a trailing
+     plural "s" folded) appears as a whole word in the record's NAME,
+     in any order, so "pushing a roll" finds "Pushing Rolls".
+  4. weak / "mentions" — the query doesn't name a record, but every
+     query word appears as a whole word somewhere in the record's name
+     or body text (no stemming of body text: "Fires" never matches
+     "fire"), or all but one word do and at least one word hit the
+     name. Scored by (words matched, words matched in the name) and
+     sorted highest first; reported with a header that says the hit is
+     weak and names the query, because these records don't name the
+     thing asked for — they mention it.
+  5. fuzzy — a difflib near-miss on the name, last resort.
 
 Usage:
   rules_lookup.py SYSTEM "term" [--kind K] [--variant V] [--limit N]
                   [--json] [--personal] [--systems-dir DIR]
 
-SYSTEM is a system slug (`gurps-4e`) or `all`. Output is one
-`name<TAB>system<TAB>kind<TAB>file:line<TAB>summary` row per record,
-under a `# match: ...` header line; block records print their text
-indented two spaces. A `--kind` filter that matches nothing falls back
-to an unfiltered lookup and says so, rather than reporting "no such
-rule". Exit 0 on a match, 1 on none, 2 on a bad invocation (blank term,
-missing `--systems-dir`).
+SYSTEM is a system slug (`gurps-4e`), a recognised alias (`gurps`,
+`dnd`, `pf2e-remaster` and others — see SYSTEM_ALIASES), or `all`
+(case-insensitive). It may carry a `/variant` suffix (`coc-7e/regency`)
+when the base system has a `variants/<suffix>/` folder; this implies
+`--variant <suffix>` (an explicit `--variant` still overrides it). An
+unrecognised system or variant exits 2 with the list of valid slugs (or
+valid variants), rather than reporting "no such rule" for what is
+actually a bad invocation.
+
+Output is one `name<TAB>system<TAB>kind<TAB>file:line<TAB>summary` row
+per record, under a `# match: ...` header line; block records print
+their text indented two spaces. `--json` instead prints one object,
+`{"match": mode, "total": n, "records": [...]}` (plus `"kind_fallback"`
+when a `--kind` miss fell back to an unfiltered lookup — see below).
+A `--kind` filter that matches nothing falls back to an unfiltered
+lookup and says so, rather than reporting "no such rule". Exit 0 on a
+match, 1 on none, 2 on a bad invocation (blank term, unknown system or
+variant, missing `--systems-dir`).
 
 Copyright: this prints back only what the corpus files already contain,
 one record at a time — never a whole table or file, and it writes
@@ -66,8 +94,31 @@ KIND_BY_STEM: dict[str, str] = {
     "occupations": "class",
     "playbooks": "class",
     "classes": "class",
-    "ancestries": "class",
+    "ancestries": "ancestry",
     "conditions": "condition",
+}
+
+# System slug -> the argument a user or a skill might type instead.
+# Values must be real top-level directory names under SYSTEMS_DIR; that
+# is checked at lookup time (list_systems()), not assumed here, so a
+# stale alias fails loudly rather than silently resolving to nothing.
+SYSTEM_ALIASES: dict[str, str] = {
+    "gurps": "gurps-4e",
+    "gurps4e": "gurps-4e",
+    "dnd": "dnd-5e-2024",
+    "dnd5e": "dnd-5e-2024",
+    "5e": "dnd-5e-2024",
+    "dnd-5e": "dnd-5e-2024",
+    "d&d": "dnd-5e-2024",
+    "pf2": "pf2e",
+    "pathfinder": "pf2e",
+    "pf2e-remaster": "pf2e",
+    "coc": "coc-7e",
+    "coc7e": "coc-7e",
+    "cthulhu": "coc-7e",
+    "blades": "fitd",
+    "bitd": "fitd",
+    "fitd": "fitd",
 }
 
 FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
@@ -82,6 +133,14 @@ LEAD_TAIL_RE = re.compile(r"^\s*(?:\([^)]*\)\s*)?(?:[|—–]|--\s|$)")
 SEPARATOR_CELL_RE = re.compile(r"^:?-+:?$")
 TRAILING_TAG_RE = re.compile(r"\s*\[[^\[\]]*\]\s*$")
 TRAILING_PAREN_RE = re.compile(r"\s*\([^()]*\)\s*$")
+# A table row whose first cell is a bare integer (a level-progression
+# table's "Level" column, e.g. GURPS Rogue's `| 1 | ... |`) isn't a
+# named record.
+NUMERIC_CELL_RE = re.compile(r"^\d+$")
+
+WORD_TOKEN_RE = re.compile(r"[a-z0-9]+")
+STOPWORDS = frozenset(
+    {"a", "an", "the", "of", "to", "in", "on", "for", "and", "or"})
 
 FUZZY_CUTOFF = 0.72
 
@@ -128,6 +187,78 @@ def kind_for_stem(stem: str) -> str:
         if stem == prefix or stem.startswith(prefix + "-"):
             return KIND_BY_STEM[prefix]
     return stem
+
+
+def list_systems(systems_dir: Path = SYSTEMS_DIR) -> list[str]:
+    """Real system slugs: the top-level directories under `systems_dir`
+    (skips loose files such as `shared-patterns.md`)."""
+    if not systems_dir.is_dir():
+        return []
+    return sorted(p.name for p in systems_dir.iterdir() if p.is_dir())
+
+
+def resolve_system(raw: str, systems_dir: Path = SYSTEMS_DIR) -> str | None:
+    """Map a system argument to a real slug: itself if it already is one
+    (case-insensitively), else a SYSTEM_ALIASES lookup validated against
+    the real slugs, else None."""
+    valid = list_systems(systems_dir)
+    key = raw.strip().lower()
+    for slug in valid:
+        if slug.lower() == key:
+            return slug
+    canonical = SYSTEM_ALIASES.get(key)
+    if canonical and canonical in valid:
+        return canonical
+    return None
+
+
+def list_variants(base_slug: str, systems_dir: Path = SYSTEMS_DIR) -> list[str]:
+    """Variant slugs for a base system: the subdirectories of its
+    `variants/` folder (empty if it has none)."""
+    variants_dir = systems_dir / base_slug / "variants"
+    if not variants_dir.is_dir():
+        return []
+    return sorted(p.name for p in variants_dir.iterdir() if p.is_dir())
+
+
+def _fold_plural(word: str) -> str:
+    """'rolls' -> 'roll', but not 'his' (too short) or 'cross' (already
+    ends 'ss') — a light plural fold, not a stemmer."""
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
+
+
+def _normalize_key(text: str) -> str:
+    """Casefold, drop a trailing parenthetical, keep only `[a-z0-9]+`
+    tokens joined by single spaces. Used by the exact and substring
+    tiers so punctuation differences (hyphens, en dashes, a missing
+    space) don't matter: "Fast-Draw (Sword)" and "fast draw" both
+    normalise to "fast draw"."""
+    stripped = TRAILING_PAREN_RE.sub("", text)
+    return " ".join(WORD_TOKEN_RE.findall(stripped.casefold()))
+
+
+def _query_words(term: str) -> list[str]:
+    """Query tokens for the word tiers: casefold, `[a-z0-9]+` only,
+    stopwords dropped, a trailing plural folded."""
+    return [_fold_plural(t) for t in WORD_TOKEN_RE.findall(term.casefold())
+            if t not in STOPWORDS]
+
+
+def _name_words(name: str) -> set[str]:
+    """A record name's tokens, normalised the same way as the query —
+    stopwords dropped, a trailing plural folded — so the name-words and
+    weak tiers can compare them directly."""
+    return {_fold_plural(t) for t in WORD_TOKEN_RE.findall(name.casefold())
+            if t not in STOPWORDS}
+
+
+def _text_words(text: str) -> set[str]:
+    """A record's body tokens, literal — no stopword drop, no plural
+    fold. The weak tier must not let "Fires" match a query for "fire";
+    only an exact word counts against body text."""
+    return set(WORD_TOKEN_RE.findall(text.casefold()))
 
 
 def clean_name(raw: str) -> str:
@@ -197,7 +328,8 @@ def parse_file(path: Path, system: str, rel: str) -> list[Record]:
                     in_table = True
                 pending_header = None
             elif in_table:
-                if cells and cells[0]:
+                if (cells and cells[0]
+                        and not NUMERIC_CELL_RE.match(cells[0].strip())):
                     add(clean_name(cells[0]), i + 1, "table", line.rstrip(),
                         headers, cells)
             else:
@@ -292,6 +424,15 @@ def _sort_key(rec: Record) -> tuple[str, str, int]:
     return (rec.system, rec.file, rec.line)
 
 
+def _confident_sort_key(rec: Record) -> tuple[int, str, str, int]:
+    """For the exact/substring/name-words tiers: the shortest,
+    least-decorated name sorts first (plain "Fast-Draw" ahead of
+    "Fast-Draw (Sword)"), tie-broken by file order. Every record in
+    these tiers is an equally valid match — this only orders which
+    shows up first when several normalise the same way."""
+    return (len(rec.name), *_sort_key(rec))
+
+
 def _matches_filters(rec: Record, system: str | None, kind: str | None,
                      variant: str | None) -> bool:
     base, _, rec_variant = rec.system.partition("/")
@@ -321,33 +462,70 @@ def lookup(term: str, *, system: str | None = None, kind: str | None = None,
     """
     if not term.strip():
         return "none", [], 0
-    needle = term.casefold()
     systems = [system.split("/")[0]] if system else None
     candidates = [rec for rec in iter_records(systems_dir, personal=personal,
                                               systems=systems)
                   if _matches_filters(rec, system, kind, variant)]
 
+    query_key = _normalize_key(term)
     exact: list[Record] = []
     substring: list[Record] = []
     for rec in candidates:
-        folded = rec.name.casefold()
-        if folded == needle or TRAILING_PAREN_RE.sub("", folded) == needle:
+        name_key = _normalize_key(rec.name)
+        if name_key == query_key:
             exact.append(rec)
-        elif needle in folded:
+        elif query_key and query_key in name_key:
             substring.append(rec)
 
     # Tiers are exclusive: a hit in a higher tier stops the lower ones
     # from being reported at all, so "exact (N)" never silently counts
     # substring rows in N (#M4).
     if exact:
-        hits = sorted(exact, key=_sort_key)
+        hits = sorted(exact, key=_confident_sort_key)
         return "exact", hits[:limit], len(hits)
     if substring:
-        hits = sorted(substring, key=_sort_key)
+        hits = sorted(substring, key=_confident_sort_key)
         return "substring", hits[:limit], len(hits)
 
+    words = _query_words(term)
+    if words:
+        word_set = set(words)
+        name_hits = [rec for rec in candidates
+                    if word_set <= _name_words(rec.name)]
+        if name_hits:
+            hits = sorted(name_hits, key=_confident_sort_key)
+            return "name-words", hits[:limit], len(hits)
+
+        # Weak "mentions" tier: no record is named this, but some
+        # mention every word (or all but one, with at least one word
+        # landing in the name — that's the "Breathe Fire" case, a spell
+        # named for one of the two query words whose short text doesn't
+        # happen to repeat the other). Body text is matched literally,
+        # never stemmed, so "Fires" never counts as "fire" (#C1).
+        # Names compare folded tokens; body text compares the query's raw
+        # tokens, so "bonus" (folded to "bonu") still matches a body
+        # "bonus" while "fire" still never matches "fires".
+        raw = [t for t in WORD_TOKEN_RE.findall(term.casefold())
+               if t not in STOPWORDS]
+        pairs = list(zip(words, raw))
+        scored: list[tuple[tuple[int, int], Record]] = []
+        for rec in candidates:
+            name_toks = _name_words(rec.name)
+            text_toks = _text_words(rec.text)
+            matched = sum(1 for w, r in pairs
+                          if w in name_toks or r in text_toks)
+            name_hit_count = sum(1 for w in words if w in name_toks)
+            if (matched == len(words)
+                    or (name_hit_count >= 1 and matched >= len(words) - 1)):
+                scored.append(((matched, name_hit_count), rec))
+        if scored:
+            scored.sort(key=lambda pair: _sort_key(pair[1]))
+            scored.sort(key=lambda pair: (-pair[0][0], -pair[0][1]))
+            hits = [rec for _, rec in scored]
+            return "weak", hits[:limit], len(hits)
+
     names = sorted({rec.name.casefold() for rec in candidates})
-    close = difflib.get_close_matches(needle, names, n=limit,
+    close = difflib.get_close_matches(term.casefold(), names, n=limit,
                                       cutoff=FUZZY_CUTOFF)
     if not close:
         return "none", [], 0
@@ -358,8 +536,8 @@ def lookup(term: str, *, system: str | None = None, kind: str | None = None,
 
 
 def render(mode: str, records: list[Record], *, total: int = 0,
-          kind: str | None = None, fallback: list[Record] | None = None
-          ) -> str:
+          kind: str | None = None, fallback: list[Record] | None = None,
+          term: str | None = None) -> str:
     if mode == "none":
         if kind and fallback:
             out = [f"# match: none for kind={kind} — closest without it:"]
@@ -368,6 +546,15 @@ def render(mode: str, records: list[Record], *, total: int = 0,
             return "# match: none"
     elif mode == "fuzzy":
         out = ["# match: fuzzy — no exact hit, closest:"]
+    elif mode == "weak":
+        quoted = f'"{term}"' if term else "the term"
+        header = (f'# match: weak ({total}) — {quoted} is not a record '
+                  f"name; these records mention its words. Open the "
+                  f"file before answering.")
+        if total > len(records):
+            header += (f" (showing {len(records)}, "
+                      f"{total - len(records)} suppressed by --limit)")
+        out = [header]
     else:
         header = f"# match: {mode} ({total})"
         if total > len(records):
@@ -385,7 +572,8 @@ def render(mode: str, records: list[Record], *, total: int = 0,
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Look up one rules record in the systems corpus.")
-    parser.add_argument("system", help="system slug, or 'all'")
+    parser.add_argument("system",
+                        help="system slug, a recognised alias, or 'all'")
     parser.add_argument("term", help="name to look up")
     parser.add_argument("--kind", help="restrict to one record kind")
     parser.add_argument("--variant", help="include this variant's records")
@@ -405,25 +593,64 @@ def main(argv: list[str] | None = None) -> int:
         print("error: blank lookup term", file=sys.stderr)
         return 2
 
-    system = None if args.system == "all" else args.system
+    if args.system.strip().lower() == "all":
+        system: str | None = None
+        implied_variant: str | None = None
+    else:
+        base_part, _, variant_part = args.system.partition("/")
+        base = resolve_system(base_part, args.systems_dir)
+        if base is None:
+            valid = list_systems(args.systems_dir)
+            print(f"error: unknown system {base_part!r} — valid slugs: "
+                  f"{', '.join(valid)}, all", file=sys.stderr)
+            return 2
+        if variant_part:
+            valid_variants = list_variants(base, args.systems_dir)
+            implied_variant = next(
+                (v for v in valid_variants
+                 if v.lower() == variant_part.strip().lower()), None)
+            if implied_variant is None:
+                detail = (f"valid variants: {', '.join(valid_variants)}"
+                          if valid_variants else "it has no variants")
+                print(f"error: unknown variant {variant_part!r} for "
+                      f"system {base!r} — {detail}", file=sys.stderr)
+                return 2
+        else:
+            implied_variant = None
+        system = base
+
+    variant = args.variant or implied_variant
+
     mode, records, total = lookup(
-        args.term, system=system, kind=args.kind, variant=args.variant,
+        args.term, system=system, kind=args.kind, variant=variant,
         limit=args.limit, personal=args.personal,
         systems_dir=args.systems_dir)
 
     fallback: list[Record] = []
+    fallback_mode = "none"
+    fallback_total = 0
     if mode == "none" and args.kind:
-        _, fallback, _ = lookup(
-            args.term, system=system, kind=None, variant=args.variant,
+        fallback_mode, fallback, fallback_total = lookup(
+            args.term, system=system, kind=None, variant=variant,
             limit=args.limit, personal=args.personal,
             systems_dir=args.systems_dir)
 
     if args.json:
-        shown = records or fallback
-        print(json.dumps([rec.as_dict() for rec in shown], indent=2))
+        if records:
+            payload: dict[str, object] = {
+                "match": mode, "total": total,
+                "records": [rec.as_dict() for rec in records]}
+        elif fallback:
+            payload = {
+                "match": mode, "kind_fallback": fallback_mode,
+                "total": fallback_total,
+                "records": [rec.as_dict() for rec in fallback]}
+        else:
+            payload = {"match": mode, "total": total, "records": []}
+        print(json.dumps(payload, indent=2))
     else:
         print(render(mode, records, total=total, kind=args.kind,
-                     fallback=fallback))
+                     fallback=fallback, term=args.term))
     return 0 if records else 1
 
 

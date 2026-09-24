@@ -7,3 +7,4 @@ Invented parser fixture. Names and numbers are made up for these tests.
 | Fast-Draw (Sword) | DX/E | Z10 | Invented fixture note |
 | Fast-Draw (Bandage) | DX/E | Z11 | Invented fixture note |
 | Bracketwork | DX/A | Z12 | Invented fixture note |
+| Overwatch | DX/H | Z13 | Invented fixture note: usable from a desperate position only |

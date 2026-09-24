@@ -197,7 +197,7 @@ investigation. No keyword or tag → base files only.
 | Spells (by rank) | `spells.md` index → `spells-cantrips.md`, `spells-rank-{1-10}.md` | spell |
 | Feats | `feats.md` index → `feats-{general-skill,ancestry,class,archetype}.md` | feat |
 | Classes | `classes.md` | class |
-| Ancestries / heritages / backgrounds | `ancestries.md` | class |
+| Ancestries / heritages / backgrounds | `ancestries.md` | ancestry |
 | Conditions / rules | `conditions-rules.md` | condition |
 | Equipment / weapons / armour / runes | `equipment.md` | item |
 | Combat / actions | `rules-reference.md` | |
