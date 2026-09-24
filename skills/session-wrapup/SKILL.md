@@ -213,7 +213,13 @@ presents the three-state prompts.
 
 ### 5. Remaining GM Notes
 
-Fill What Carries Forward, World State, Keeper Checklist (next-prep
+What Carries Forward, per subsection: Unresolved Threads
+(cliffhangers, live threads), Player-Stated Intentions, Pending
+Consequences (decisions whose effects haven't landed), NPCs Needing
+Follow-Up, Skipped Prep (unplayed prep — scenes that didn't fire —
+with clues the players still need).
+
+Then fill World State, Keeper Checklist (next-prep
 tasks: scenes to write, GM decisions, rules to review, handouts),
 Quality Notes, and Handoff to session-prep — the section
 session-prep reads first — per the template.
