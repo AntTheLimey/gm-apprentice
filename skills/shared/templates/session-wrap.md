@@ -129,8 +129,9 @@ HELD, by whom, written where. Held claims carry an inline
 
 {What worked / what was missing / what to adjust — plus provenance:
 name canonicalisations applied, entities deliberately folded rather
-than created, `(flag)` markers for ambiguities reconcile should
-queue.}
+than created. Mark any claim in these GM Notes that the Play Notes,
+the plan or a named vault file don't support with
+`<!-- UNVERIFIED: {claim} -->`; reconcile queues them.}
 
 ### Handoff to session-prep
 

@@ -45,7 +45,8 @@ carry-forward): no embellishment, invent nothing the session
 didn't produce. The synthesized GM Notes sections (What Carries
 Forward, World State, Keeper Checklist, Quality Notes) are
 grounded too: each claim traces to the Play Notes, the plan or a
-named vault file; mark anything uncertain `(flag)`. Everything
+named vault file; mark anything uncertain `<!-- UNVERIFIED: … -->`
+for reconcile. Everything
 else that moves existing text keeps it verbatim.
 
 ## Workflow
@@ -223,7 +224,11 @@ presents the three-state prompts.
 
 Fill What Carries Forward, World State, Keeper Checklist, Quality
 Notes and Handoff to session-prep (the section session-prep reads
-first) per the template.
+first) per the template. Whatever an older vault template copy says:
+Skipped Prep lists every planned scene and clue that didn't fire,
+with what the players still need; Pending Consequences are decisions
+whose effects haven't landed; Advancement records what the sheet or
+notes show, never awards.
 
 ### 6. Review (Reconcile)
 
