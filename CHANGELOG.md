@@ -13,15 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The change-request loop runs for CoC 7e (#215),** including Regency
   Cthulhu. It used to stop at its prerequisites for anything but GURPS.
-  Notes and Current Status edits always apply. SAN, HP, MP, Luck and
-  condition changes are edited in the sheet's Derived table and Status
-  list and kept between 0 and Max, with a player override for going over
-  Max. The loop logs a threshold for the GM (HP 0, a Major Wound, SAN 0,
-  5+ SAN at once) and never ticks the condition itself. On a site with
-  live tracking these values, and improvement checks, are on the
-  player's own tracker, so the loop replies with that instead of making
-  an edit the live value would override. Skill and characteristic
+  Notes and Current Status edits always apply. SAN, HP, MP, Luck,
+  Reputation and conditions depend on the sheet. When the built sheet is
+  live-tracked, those values and the improvement ticks are on the
+  player's own tracker, so the loop tells them to tap it instead of
+  making an edit the live value would override. Otherwise the loop
+  records the change in the vault, kept between 0 and Max, with a player
+  override for going over Max. It says the change is recorded, since the
+  site doesn't show those values. The loop logs thresholds for the GM
+  (HP 0, a Major Wound, SAN 0, 5+ SAN at once, a fifth of SAN in a
+  session) and never ticks the condition itself. Skill and characteristic
   increases stay with the GM's end-of-session improvement rolls.
+
+### Fixed
+
+- **Live CoC sheets ran every tap twice.** `coc-sheet.js` and
+  `coc-live.js` both handled the status bar and the skill ticks. A
+  stepper moved by 2, a condition chip toggled back off, an HP or MP pip
+  landed one short, and a tick saved as unticked. A saved tick also never
+  showed after a reload, because the stylesheet draws it from the row's
+  `.checked` class. `coc-sheet.js` now leaves those controls to
+  `coc-live.js` on a live sheet, and a saved tick is drawn.
 
 ---
 
