@@ -10,8 +10,8 @@ does the waiting, and you only wake when a request actually arrives.
 
 - The inbox is set up (KV namespace + `wrangler.toml` id + deployed Function).
   See `references/cloudflare-pages.md` → "Change-request inbox".
-- The system is GURPS 4e (v1). For other systems, stop and tell the GM this
-  isn't supported yet.
+- The system is GURPS 4e or CoC 7e (including Regency Cthulhu). For any
+  other system, stop and tell the GM this isn't supported yet.
 
 ## Start
 
@@ -118,8 +118,9 @@ does the waiting, and you only wake when a request actually arrives.
 The watcher hands you a JSON array of pending entries
 `{id, character, text, timestamp, status}` (re-run `npx gm-apprentice-publish
 inbox pull` if you want the freshest state). For each, in per-character
-submission order (`timestamp` ascending), tracking **running unspent points**
-(read the current value from the PC's `.md`):
+submission order (`timestamp` ascending), tracking the **running value** each
+request changes (GURPS: unspent points; CoC: the stat being changed), read
+first from the PC's `.md`:
 
 0. **Resolve the `character` against the PC roster first.** `character` and
    `text` are whatever the player's browser posted — the endpoint checks the
@@ -143,7 +144,8 @@ submission order (`timestamp` ascending), tracking **running unspent points**
    raise/remove/note) or a **question** (interrogative / advice-seeking). If
    genuinely unsure, treat it as a question — never edit the sheet on a guess.
 2. **Change → apply, or refuse only when you must.** Default to trusting the
-   player. Validate spends against GURPS costs using `ttrpg-expert`'s references
+   player. **CoC 7e:** follow "CoC 7e changes" below instead of the rest of
+   this step. **GURPS 4e:** validate spends against GURPS costs using `ttrpg-expert`'s references
    (`systems/gurps-4e/character-generation.md`, `character-sheet.md`,
    `skills-*.md`, `traits-*.md`). Attributes: ST/HT 10/level, DX/IQ 20/level;
    skills/traits per those references. Then:
@@ -243,6 +245,55 @@ same answer twice. Finalized entries linger for 7 days, so a
 player who put the phone down still gets the answer; a request the server has
 lost reports `status: gone` to the widget, which tells the player to resend.
 
+## CoC 7e changes
+
+CoC has no points pool to spend from, so a change is checked against the
+sheet's own limits instead. Everything else (roster match, questions, the
+one deploy per batch, replies) is the same as for GURPS.
+
+- **Notes and Current Status — always apply.** The player's own words, edited
+  at their request, are trusted self-service: apply, never flag, log a `✓`.
+- **SAN, HP, MP, Luck and conditions** ("lost 4 SAN", "HP is 7 now", "spent
+  10 Luck", "I'm unconscious"). First check whether the site tracks them live:
+  `publish.backend.statusBar` is `true` in `_meta/vault-config.md` (or
+  `backend.statusBar` in `vault.config.json`).
+  - **Live tracking on:** these values live on the player's sheet and are
+    saved the moment they tap the tracker, and the live value wins over the
+    vault. An edit here would be silently ignored. Apply nothing and
+    finalize with **`advice`**:
+
+    ```bash
+    npx gm-apprentice-publish inbox reply <id> advice "Your SAN, HP, MP and Luck are live on your sheet: tap the tracker and it saves straight away."
+    ```
+
+  - **No live tracking:** edit the `### Derived` table's **Current** column
+    (and tick or clear the `### Status` checklist for a condition). Accept a
+    change ("lost 4") or a new value ("SAN is 42"); for a change, work from the
+    running value. Keep the result between 0 and the row's **Max** (Luck has
+    no Max column; its ceiling is 99). A result above Max is refused like an
+    unaffordable GURPS spend — explain it and invite an override; a player
+    override applies it and logs **`⚠ OVERRIDE`**. A result below 0 is set to
+    0. A Luck spend larger than the current Luck is refused (there is nothing
+    to override: Luck can't go below 0). The table has already made the
+    ruling, so don't re-litigate it; you only record the number.
+  - **Thresholds are the Keeper's call, not yours.** Apply the number, but
+    never tick a condition the player didn't ask for, and log
+    **`⚠ NEEDS YOU`** when a change crosses one: HP reaching 0, a single HP
+    loss of half the Max or more (a Major Wound), SAN reaching 0, or 5+ SAN
+    lost at once (possible temporary insanity).
+- **Improvement checks** ("tick Spot Hidden"). With live tracking on, they
+  are part of the sheet's tracker: reply with the same `advice` as above.
+  Without it, nothing stores them (the sheet's tick is a local toggle and
+  the vault has no column for it). Apply nothing and reply **`advice`**:
+  note it on paper for the end-of-session improvement rolls.
+- **Skill, characteristic or occupation-point changes** ("raise Library Use to
+  60"). Not handled by the loop: skill increases come from the end-of-session
+  improvement rolls, which the GM runs. Apply nothing, finalize with
+  **`rejected`** saying so, and log a `⚠` line.
+
+Write a vitals confirmation in the same shape as GURPS:
+`✓ SAN 55→51 — applied`.
+
 ## When the watcher reports failure
 
 Either mode can wake you with a failure signal instead of a batch — the
@@ -279,6 +330,8 @@ One line per request so a glance tells the whole story:
 ✓ 14:32  Ana — Streetwise +1 (1 pt)      applied · live
 ✓ 14:32  Bo  — added TL11 stun baton      applied · live
 ⚠ 14:33  Cy  — spend 20 pts on DX         needs 40, has 15 · NEEDS YOU
+✓ 21:05  Iris — SAN 55→49                 applied · live
+⚠ 21:05  Iris — lost 6 SAN at once        possible temporary insanity · NEEDS YOU
 ```
 
 ## Stop
@@ -335,11 +388,17 @@ so re-running it when nothing changed is a harmless no-op.
 Edit the vault file in place — it is the source of truth; the deploy reflects
 it. Locate unspent/earned points and the relevant section by reading the file
 (GURPS sheets carry an Identity block with Point Total / Unspent Points / Total
-Points Earned, plus Attributes, Skills, and an equipment list). A crash between
+Points Earned, plus Attributes, Skills, and an equipment list; CoC sheets
+carry `## Stat Sheet` with `### Derived` (Max and Current columns) and
+`### Status` checkboxes). A crash between
 editing a `.md` and the deploy leaves the entry `pending`, so the next watcher
 cycle pulls it again. Before applying any request, first check whether its
 change is already present in the `.md` (the attribute is already at the target
-level and the unspent points already reflect the cost); if so, treat the apply
-as a no-op and let it ride to the next deploy. This makes re-processing safe.
+level and the unspent points already reflect the cost; for CoC, the Current
+cell already holds the target value); if so, treat the apply as a no-op and
+let it ride to the next deploy. A relative CoC change ("lost 4 SAN") can't be
+recognised that way. If you applied its id earlier in this session, it's a
+no-op. If you have no record of it (the session restarted), ask the GM before
+applying it again. This makes re-processing safe.
 Copyright: this only writes the GM's own campaign data — no licensed text is
 introduced.

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.10] — 2026-09-24
+
+### Added
+
+- **The change-request loop runs for CoC 7e (#215),** including Regency
+  Cthulhu. It used to stop at its prerequisites for anything but GURPS.
+  Notes and Current Status edits always apply. SAN, HP, MP, Luck and
+  condition changes are edited in the sheet's Derived table and Status
+  list and kept between 0 and Max, with a player override for going over
+  Max. The loop logs a threshold for the GM (HP 0, a Major Wound, SAN 0,
+  5+ SAN at once) and never ticks the condition itself. On a site with
+  live tracking these values, and improvement checks, are on the
+  player's own tracker, so the loop replies with that instead of making
+  an edit the live value would override. Skill and characteristic
+  increases stay with the GM's end-of-session improvement rolls.
+
+---
+
 ## [1.10.9] — 2026-09-24
 
 ### Removed
