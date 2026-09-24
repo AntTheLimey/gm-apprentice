@@ -183,17 +183,26 @@ creating entities.
 
 **Validate** with one call each, then fix every ERROR before
 presenting receipts: `vault_check.py frontmatter --folder <dir>`
-per folder touched, `vault_check.py relationships`,
-`vault_check.py pc-body --folder Characters/PCs` (read only the
-refreshed PCs' rows), `vault_check.py wrapup --file <wrap-up>`.
-Don't re-read files to self-check.
+per folder touched, `vault_check.py relationships` with `--file
+<path>` repeated for every vault-relative path Step 4 created,
+edited or re-pointed — new/updated entities, re-pointed container
+children, cross-entity claim targets, Event files — `vault_check.py
+pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
+PC refreshed in 3c, `vault_check.py wrapup --file <wrap-up>`. If
+Step 4 ran as sub-agents, also run `relationships` once more with
+`--newer-than <session index>` (stamped once, before Step 1, and
+never touched again) as a completeness cross-check on the `--file`
+list — a row naming a path not already in that list means a
+sub-agent under-reported. Don't re-read files to self-check.
 
 **Receipts:** show new/updated entity content in the conversation
 as `## New Entity Files` and `## Updated Entities`, never in the
 Wrap-Up file, which only wiki-links entities.
 
 Step 4's writes are independent: with the Agent tool, run them as
-parallel light-model sub-agents; otherwise sequentially.
+parallel light-model sub-agents, each returning the vault-relative
+paths it wrote for Validate's `--file` list and cross-check;
+otherwise sequentially.
 
 ### 4b. Update Campaign Overview
 

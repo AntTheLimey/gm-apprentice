@@ -172,9 +172,10 @@ own `<!-- gm-only -->`/`<!-- /gm-only -->` fence. If the block is
 fenced, insert **before** the `<!-- /gm-only -->` closer. A Plan file
 may get a one-line pointer (`See Wrap-Up for reconciliation context`).
 
-Then run `vault_check.py <vault> wrapup --file "<wrap-up>"`. It exits
-0 either way: `no wrap-up with that path` INFO means the path or the
-file's `type:` is wrong. Confirmation is no row naming the
+Then run `vault_check.py <vault> wrapup --file "<wrap-up>"`. A missing
+or wrong-case path exits 2 with a stderr error; the `no wrap-up with
+that path` INFO row (exit 0) now means only that the path resolved but
+the file's `type:` isn't a wrap-up. Confirmation is no row naming the
 Reconciliation Context heading.
 
 **Reading it back:** accept `###` under `## GM Notes` or a top-level

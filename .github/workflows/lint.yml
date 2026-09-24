@@ -142,6 +142,12 @@ jobs:
       - name: vault_check Slice A tests
         run: python tests/test_vault_check_slice_a.py
 
+      - name: vault_check --file/--folder scope tests
+        run: python tests/test_vault_check_file_scope.py
+
+      - name: entity-schema Required Fields drift test
+        run: python tests/test_entity_schema_required_fields.py
+
       - name: rules_lookup tests
         run: python tests/test_rules_lookup.py
 

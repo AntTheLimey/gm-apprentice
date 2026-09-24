@@ -11,18 +11,44 @@ Usage:
   vault_check.py VAULT index
   vault_check.py VAULT stale-drafts
   vault_check.py VAULT changed --since N
-  vault_check.py VAULT tables
+  vault_check.py VAULT tables [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT timeline
   vault_check.py VAULT read-aloud
-  vault_check.py VAULT relationships
+  vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT sessions
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
-  vault_check.py VAULT pc-body [--folder SUB]
+  vault_check.py VAULT pc-body [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT wrapup [--file REL] [--fix]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
   vault_check.py VAULT all
+
+`--file` is repeatable (`--file A.md --file B.md`) and combines with
+`--folder`/`--newer-than` by AND; `tables`, `relationships` and
+`pc-body` scope their walk to it so a run's own receipts aren't buried
+in the vault's pre-existing findings. `wrapup` takes only the first
+`--file` given — that check enumerates by `type:`, not by folder, so
+it has never taken `--folder`. `frontmatter` and `gm-leak` take
+`--folder` but not `--file`/`--newer-than`; both are accepted (and
+validated) on every command but read only by the three checks named
+above, and `all` scopes exactly the checks that would scope on their
+own. `--newer-than REL` is a backstop: it names a vault-relative file
+(typically the Wrap-Up, written before its own validation step) and
+keeps only files with an mtime at or after that file's own — useful
+as the whole scope, or as a completeness cross-check run once
+alongside an explicit `--file` list.
+
+A `--file`/`--newer-than` value is validated once, up front, by
+resolving it to a vault-relative path (an absolute value is resolved
+fully; a relative one — including one with interior `..` or doubled
+slashes — is normalised lexically, without following any symlink a
+note itself might be) and then requiring an *exact* string match
+against a listing of the vault's real `.md` files. A path outside
+VAULT, in a skipped directory (hidden, `_Templates/`, `_inbox/`), or
+merely a different case or Unicode form of a real filename is
+rejected the same as one that plain doesn't exist — always a clear
+error (exit 2), never a silently empty or silently wrong report.
 
 Skips hidden directories, `_Templates/`, and `_inbox/` (staging).
 Output: labelled sections, `# count: N` headers, one finding per
@@ -86,6 +112,7 @@ roster read.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from collections import Counter
 import sys
@@ -93,6 +120,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
+from typing import Iterable
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -132,10 +160,12 @@ from vaultlib import (  # noqa: F401
     resolve_exclude_sections,
     frontmatter_span,
     get_key,
+    is_skipped_path,
     iter_body_lines,
     link_target,
     nested_mapping,
     normalize,
+    normalize_file_arg,
     opens_a_block,
     parse_version,
     plugin_version,
@@ -536,8 +566,15 @@ def table_findings(rel: str, text: str) -> list[str]:
     return rows
 
 
-def check_tables(vault: Path) -> list[str]:
-    return [r for rel, text in vault_files(vault) for r in table_findings(rel, text)]
+def check_tables(vault: Path, folder: str | None = None,
+                 files: Iterable[str] | None = None,
+                 newer_than: float | None = None) -> list[str]:
+    """`table_findings` over the vault. `folder`/`files`/`newer_than`
+    scope the walk to the file(s) a run just wrote, same as
+    `check_relationships`."""
+    return [r for rel, text in vault_files(vault, folder, files,
+                                           newer_than=newer_than)
+            for r in table_findings(rel, text)]
 
 
 TIMELINE_SECTION_RE = re.compile(r"^##\s+Timeline\b", re.IGNORECASE | re.MULTILINE)
@@ -630,14 +667,20 @@ def check_read_aloud(vault: Path) -> list[str]:
     return rows
 
 
-def check_relationships(vault: Path) -> list[str]:
+def check_relationships(vault: Path, folder: str | None = None,
+                        files: Iterable[str] | None = None,
+                        newer_than: float | None = None) -> list[str]:
     """Every relationship predicate must come from the sanctioned vocabulary.
 
     An invented `type:` is worse than a vague one: no query, no
     inverse-inference and no publish step knows about it, so the edge is
     written and then silently ignored (issue #130 — one session's entity
     generation invented eleven of them). ERROR, with the nearest
-    sanctioned predicates so the fix is a rename, not a hunt."""
+    sanctioned predicates so the fix is a rename, not a hunt.
+
+    `folder`/`files`/`newer_than` scope the walk to what a run just
+    touched — a full vault's off-vocabulary backlog otherwise buries
+    the findings that belong to the files just written."""
     try:
         vocabulary = predicate_vocabulary()
         # Warm the inverse map here too: predicate_problem() reads it through
@@ -647,7 +690,7 @@ def check_relationships(vault: Path) -> list[str]:
         return [f"ERROR\t(vault)\tcannot read the predicate vocabulary "
                 f"from shared/gm-apprentice-ontology.json: {e}"]
     rows = []
-    for rel, text in vault_files(vault):
+    for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         for lineno, key, predicate in iter_relationship_predicates(text):
             if predicate in vocabulary:
                 continue
@@ -1213,7 +1256,9 @@ def _has_labelled_field(states: list[LineState], start: LineState,
     return False
 
 
-def check_pc_body(vault: Path, folder: str | None = None) -> list[str]:
+def check_pc_body(vault: Path, folder: str | None = None,
+                  files: Iterable[str] | None = None,
+                  newer_than: float | None = None) -> list[str]:
     """PC sheet skeleton and `## Current Status` placement.
 
     `shared/pc-body-structure.md` makes three promises about the block
@@ -1230,10 +1275,14 @@ def check_pc_body(vault: Path, folder: str | None = None) -> list[str]:
     not sheets, and are skipped, as is any sheet the `publish:` gate
     keeps off the site — a `publish: false` PC's Current Status cannot
     leak from inside a fence, because the page does not exist.
+
+    `folder`/`files`/`newer_than` scope the walk to the PC sheet(s) a
+    run just refreshed — the check reads every row it emits either way,
+    so scoping is about not emitting the vault's pre-existing findings.
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
-    for rel, text in vault_files(vault, folder):
+    for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
@@ -2815,6 +2864,71 @@ def _line_of(where: str) -> int:
     return int(tail) if tail.isdigit() else 0
 
 
+def _vault_relative_key(vault_root_abs: str, raw: str) -> str | None:
+    """The vault-relative posix path a `--file` value names, or `None`
+    when it normalises outside the vault (an absolute path elsewhere,
+    or enough `..` to escape) — string arithmetic only, deliberately.
+
+    A relative value is joined onto `vault_root_abs` and lexically
+    normalised (`os.path.normpath`: collapses `..`, `.` and doubled
+    slashes) without ever touching the filesystem — so a note that is
+    itself a symlink keeps the path it was written at as its key,
+    rather than being rewritten to wherever the symlink points.
+
+    An absolute value is fully resolved (`Path.resolve()`) before the
+    comparison, because `vault_root_abs` is resolved too: without that,
+    an absolute path reached through a symlinked ancestor (macOS's
+    `/tmp` -> `/private/tmp` is the everyday case) would never compare
+    equal to one built from the vault's own resolved form. This is the
+    one place a symlink is followed, and only for the value the caller
+    handed in as absolute.
+
+    The result is not checked for existence or case here — the caller
+    matches it against an exact listing of real vault files, which is
+    what turns a wrong-case or NFC/NFD-mismatched name into an error
+    instead of a silent non-match.
+    """
+    value = normalize_file_arg(raw)
+    if os.path.isabs(value):
+        candidate = str(Path(value).resolve())
+    else:
+        candidate = os.path.normpath(os.path.join(vault_root_abs, value))
+    if candidate != vault_root_abs and not candidate.startswith(
+            vault_root_abs + os.sep):
+        return None
+    rel = os.path.relpath(candidate, vault_root_abs)
+    return rel if os.sep == "/" else rel.replace(os.sep, "/")
+
+
+def _resolve_vault_paths(vault: Path, raw_paths: list[str]
+                         ) -> tuple[list[str], list[str]]:
+    """(valid vault-relative keys, the raw values that didn't resolve).
+
+    Shared by `--file` and `--newer-than` in `main()`: both name a real
+    vault file and both get the same validation — see
+    `_vault_relative_key` for what "resolve" means here.
+    """
+    vault_root_abs = str(vault.resolve())
+    # One rglob, no reads: the exact set of real vault-relative `.md`
+    # paths, on-disk casing and all. A value's derived key must be an
+    # exact member of this set — a wrong-case or NFC/NFD-mismatched name
+    # is a real string mismatch here, not a filesystem lookup that a
+    # case-insensitive volume would paper over, so it errors instead of
+    # silently matching nothing (or, for `--newer-than`, silently using
+    # the wrong file's mtime).
+    real_files = {p.relative_to(vault).as_posix()
+                 for p in vault.rglob("*.md") if p.is_file()}
+    valid: list[str] = []
+    invalid: list[str] = []
+    for raw in raw_paths:
+        rel = _vault_relative_key(vault_root_abs, raw)
+        if rel is None or is_skipped_path(rel) or rel not in real_files:
+            invalid.append(raw)
+            continue
+        valid.append(rel)
+    return valid, invalid
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
@@ -2825,12 +2939,20 @@ def main() -> int:
                                         "gm-leak", "pc-body", "wrapup",
                                         "version", "active-pcs", "all"])
     ap.add_argument("--folder",
-                    help="restrict the frontmatter, gm-leak and pc-body "
-                         "checks to a subfolder")
-    ap.add_argument("--file",
-                    help="restrict the wrapup check to one vault-relative "
-                         "file (e.g. \"Chapters/C3/Sessions/Session 07/"
-                         "Chapter_03_Session_07_Wrap_Up.md\")")
+                    help="restrict the frontmatter, tables, relationships, "
+                         "gm-leak and pc-body checks to a subfolder")
+    ap.add_argument("--file", action="append",
+                    help="restrict the check to one vault-relative file "
+                         "(e.g. \"Chapters/C3/Sessions/Session 07/"
+                         "Chapter_03_Session_07_Wrap_Up.md\") — repeatable "
+                         "for tables, relationships and pc-body; wrapup "
+                         "takes only the first if given more than one")
+    ap.add_argument("--newer-than",
+                    help="restrict tables/relationships/pc-body to files "
+                         "with an mtime at or after this vault-relative "
+                         "file's own mtime — a backstop scope, or a "
+                         "completeness cross-check against an explicit "
+                         "--file list")
     ap.add_argument("--fix", action="store_true",
                     help="apply the wrapup or gm-leak check's mechanical "
                          "repairs (frontmatter backfills and the "
@@ -2858,6 +2980,22 @@ def main() -> int:
               "whole vault (no --folder): it rewrites the vault config",
               file=sys.stderr)
         return 2
+    newer_than_mtime: float | None = None
+    if args.file:
+        normalized, invalid = _resolve_vault_paths(args.vault, args.file)
+        if invalid:
+            print(f"error: --file not found in vault: "
+                  f"{', '.join(invalid)}", file=sys.stderr)
+            return 2
+        args.file = normalized
+    if args.newer_than:
+        normalized, invalid = _resolve_vault_paths(
+            args.vault, [args.newer_than])
+        if invalid:
+            print(f"error: --newer-than not found in vault: "
+                  f"{', '.join(invalid)}", file=sys.stderr)
+            return 2
+        newer_than_mtime = (args.vault / normalized[0]).stat().st_mtime
     if args.command == "changed":
         if args.since is None:
             print("error: changed requires --since N", file=sys.stderr)
@@ -2883,13 +3021,16 @@ def main() -> int:
     if args.command in ("stale-drafts", "all"):
         emit("stale-drafts", check_stale_drafts(args.vault))
     if args.command in ("tables", "all"):
-        emit("tables", check_tables(args.vault))
+        emit("tables", check_tables(args.vault, args.folder, args.file,
+                                    newer_than_mtime))
     if args.command in ("timeline", "all"):
         emit("timeline", check_timeline(args.vault))
     if args.command in ("read-aloud", "all"):
         emit("read-aloud", check_read_aloud(args.vault))
     if args.command in ("relationships", "all"):
-        emit("relationships", check_relationships(args.vault))
+        emit("relationships",
+             check_relationships(args.vault, args.folder, args.file,
+                                 newer_than_mtime))
     if args.command in ("sessions", "all"):
         emit("sessions", check_sessions(args.vault))
     if args.command in ("gm-leak", "all"):
@@ -2899,12 +3040,14 @@ def main() -> int:
                                       args.fix and args.command == "gm-leak",
                                       args.renest_excludes))
     if args.command in ("pc-body", "all"):
-        emit("pc-body", check_pc_body(args.vault, args.folder))
+        emit("pc-body", check_pc_body(args.vault, args.folder, args.file,
+                                      newer_than_mtime))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects
         # from a command whose other twelve checks are read-only.
-        emit("wrapup", check_wrapup(args.vault, args.file,
+        wrap_file = args.file[0] if args.file else None
+        emit("wrapup", check_wrapup(args.vault, wrap_file,
                                     args.fix and args.command == "wrapup"))
     return 0
 

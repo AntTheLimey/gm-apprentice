@@ -40,22 +40,75 @@ LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
 FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.DOTALL)
 
 
+def normalize_file_arg(raw: str) -> str:
+    """A `--file` value as a vault-relative posix path.
+
+    Converts backslashes to `/` and strips a leading `./` (repeated, not
+    just once) and a trailing `/`. This is prefix stripping, not
+    character-class stripping — `../foo.md` is left alone rather than
+    losing its leading dots, so a caller checking whether the result
+    still resolves inside the vault sees the real path. Does not touch
+    interior `..` segments; callers that must keep a path inside the
+    vault check that themselves (see `vault_check.py main()`).
+    """
+    value = raw.strip().replace("\\", "/")
+    while value.startswith("./"):
+        value = value[2:]
+    return value.rstrip("/")
+
+
+def is_skipped_path(rel: str, skip_dirs: set[str] = SKIP_DIRS) -> bool:
+    """Would `vault_files` skip this vault-relative posix path?
+
+    True for a hidden directory/file (a leading `.` on any path
+    segment) or a top-level directory in `skip_dirs` (templates, the
+    `_inbox` staging area). Shared with the `--file` existence check in
+    `vault_check.py main()`, so a path that is real on disk but would
+    never be walked — `_Templates/Foo.md` — is reported as the same
+    clear error as a path that doesn't exist at all, rather than a
+    silently empty report.
+    """
+    parts = rel.split("/")
+    if any(p.startswith(".") for p in parts):
+        return True
+    return parts[0] in skip_dirs
+
+
 def vault_files(vault: Path, folder: str | None = None,
-                skip_dirs: set[str] = SKIP_DIRS) -> Iterator[tuple[str, str]]:
+                files: Iterable[str] | None = None,
+                skip_dirs: set[str] = SKIP_DIRS,
+                newer_than: float | None = None) -> Iterator[tuple[str, str]]:
     """Yield (vault-relative posix path, text) for every readable note.
 
     Hidden directories and `skip_dirs` (templates, the `_inbox` staging
     area) are skipped; an unreadable file warns on stderr rather than
     aborting the walk. Sorted, so every caller's output is stable.
+
+    `files`, when given, restricts the walk to that exact set of
+    vault-relative paths (as `--file` collects them, run through
+    `normalize_file_arg`) — combined with `folder` by AND, not OR, so a
+    caller can pass both. A path in `files` that names no real note
+    yields nothing here, which is why callers that need a clear error
+    validate existence themselves (with `is_skipped_path` too) before
+    walking.
+
+    `newer_than`, when given, keeps only files whose mtime is at or
+    after it (an epoch timestamp, as `--newer-than <path>` derives from
+    that path's own `st_mtime`) — a backstop scope for "everything
+    touched since I started", independent of an explicit `files` list
+    and combined with `folder`/`files` by AND like everything else here.
     """
+    wanted = ({normalize_file_arg(f) for f in files}
+              if files else None)
     for path in sorted(vault.rglob("*.md")):
         rel = path.relative_to(vault).as_posix()
-        parts = rel.split("/")
-        if any(p.startswith(".") for p in parts):
-            continue
-        if parts[0] in skip_dirs:
+        if is_skipped_path(rel, skip_dirs):
             continue
         if folder and not rel.startswith(folder.strip("/") + "/"):
+            continue
+        if wanted is not None and rel not in wanted:
+            continue
+        if newer_than is not None and path.stat().st_mtime < newer_than:
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
