@@ -432,6 +432,25 @@ class ShippedTemplateTests(unittest.TestCase):
         self.assertEqual(norm(tpl), norm(ref))
         self.assertEqual(norm(tpl), keep)
 
+    def _handouts_body(self) -> str:
+        text = self.TEMPLATE.read_text(encoding="utf-8")
+        return pc._by_norm_title(text)["handouts & props"][2]
+
+    def test_untouched_handouts_section_is_placeholder(self):
+        self.assertTrue(pc._is_placeholder_body(self._handouts_body()))
+
+    def test_handouts_guidance_kept_with_filled_table_is_not_placeholder(self):
+        guidance = self._handouts_body().split("|", 1)[0]
+        body = (guidance + "| Document | Scene | Status | Notes |\n"
+                "|---|---|---|---|\n"
+                "| [[Ledger Page]] | Scene 2 | print | Torn at the fold |\n")
+        self.assertFalse(pc._is_placeholder_body(body))
+
+    def test_handouts_none_this_session_is_not_placeholder(self):
+        guidance = self._handouts_body().split("|", 1)[0]
+        self.assertFalse(
+            pc._is_placeholder_body(guidance + "None this session.\n"))
+
     def test_template_marks_only_the_two_required_labels(self):
         text = self.TEMPLATE.read_text(encoding="utf-8")
         self.assertEqual(text.count("*(required)*"), 2)

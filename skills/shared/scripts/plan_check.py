@@ -167,7 +167,9 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Per-PC touchpoint assignments",
     "Per-PC estimated spotlight share",
     "Missing entities, stale files",
-    "Every handout and prop this session delivers",
+    # The example row, not the bracketed guidance: a GM keeps the
+    # guidance and fills the table, so the guidance proves nothing.
+    "What it says, who hands it over",
     "Left blank during prep",
     "Same structure",
 )
