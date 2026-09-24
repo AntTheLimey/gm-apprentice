@@ -221,39 +221,6 @@ def nested_mapping(text: str, key: str) -> dict[str, str]:
     return out
 
 
-def _list_value(lines: list[str], key: str) -> list[str] | None:
-    """A YAML list value for `key:` within `lines` — inline or block.
-
-    None when the key is absent or its value is not a list (null, a
-    scalar): config.js tests `Array.isArray`, and a non-list is "no list
-    set", which is not the same thing as an empty one.
-    """
-    for i, line in enumerate(lines):
-        m = re.match(rf"^(\s*){re.escape(key)}:\s*(.*)$", line)
-        if not m:
-            continue
-        indent = len(m.group(1))
-        value = scalar_value(m.group(2))
-        if value.startswith("[") and value.endswith("]"):
-            return [v.strip().strip('"').strip("'")
-                    for v in value[1:-1].split(",") if v.strip()]
-        if value:
-            return None
-        items = []
-        for nxt in lines[i + 1:]:
-            if not nxt.strip():
-                continue
-            depth = len(nxt) - len(nxt.lstrip())
-            stripped = nxt.strip()
-            if stripped.startswith("- ") and depth >= indent:
-                items.append(stripped[2:].strip().strip('"').strip("'"))
-                continue
-            if depth <= indent:
-                break
-        return items or None
-    return None
-
-
 # --------------------------------------------------------------------------
 # Frontmatter line editing
 #
@@ -781,16 +748,15 @@ def scan_body(text: str,
     letting that heading exclude the rest of the file would blind every
     leak check to everything a GM appends below the fence.
 
-    Two deliberate divergences from `filterSections`, both erring toward
-    calling a line published — the safe direction for a leak check, since
-    over-reporting costs a false positive while under-reporting hides a
-    real leak:
+    Exclusion boundaries match `filterSections`: a heading-shaped line
+    inside a code fence starts or ends an exclusion exactly as on the
+    built site (it does no fence tracking), though `heading` stays unset
+    for it. A nested excluded heading never re-anchors an exclusion that
+    is already running.
 
-    * Heading detection here is gated on being outside a code fence.
-      `filterSections` does no fence tracking at all, so a `## GM Notes`
-      written inside a fenced example DOES start exclusion on the built
-      site. A line this module calls published may therefore be dropped
-      by the publish tool.
+    Known divergences, which can err either way — the leak invariant in
+    vault_check.py uses `publisher_lines`, an exact port, instead:
+
     * Titles are compared with `str.casefold()`; `filterSections` uses
       JavaScript `toLowerCase()`. The two differ on a handful of
       non-ASCII titles (German `ß`, Turkish dotted/dotless `I`), so a
@@ -798,8 +764,8 @@ def scan_body(text: str,
     * Only the two marker blocks suppress exclusion, not multi-line HTML
       comments, which `stripHtmlComments` also removes before
       `filterSections`. A `## GM Notes` commented out that way still
-      starts an exclusion here and does not on the site — the same safe
-      direction, and rare enough not to be worth a third depth counter.
+      starts an exclusion here and does not on the site, so what follows
+      it is called hidden here and publishes there.
 
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.
@@ -867,18 +833,23 @@ def scan_body(text: str,
             if marker is None:
                 hm = HEADING_RE.match(line)
                 if hm:
-                    level = len(hm.group(1))
-                    title = hm.group(2).strip()
-                    heading = (level, title)
-                    # A heading inside a marker block neither starts nor
-                    # ends an exclusion: the publish pipeline strips the
-                    # block before `filterSections` ever sees the line.
-                    if depths["gm"] == 0 and depths["spoiler"] == 0:
-                        if excluded_by is not None and level <= exclude_level:
-                            excluded_by = None
-                        if title.casefold() in excludes:
-                            excluded_by = title
-                            exclude_level = level
+                    heading = (len(hm.group(1)), hm.group(2).strip())
+
+        # Exclusion boundaries follow `filterSections`, which sees every
+        # heading-shaped line — inside a code fence too — but only at
+        # marker depth zero: the pipeline strips marker blocks first.
+        hm = HEADING_RE.match(line)
+        if hm and marker is None and depths["gm"] == 0 \
+                and depths["spoiler"] == 0:
+            level = len(hm.group(1))
+            title = hm.group(2).strip()
+            if excluded_by is not None and level <= exclude_level:
+                excluded_by = None
+            # A nested excluded heading inside an active exclusion never
+            # re-anchors it deeper (the #228 filterSections fix).
+            if excluded_by is None and title.casefold() in excludes:
+                excluded_by = title
+                exclude_level = level
 
         states.append(LineState(
             lineno=lineno,
@@ -897,6 +868,391 @@ def scan_body(text: str,
     return states, problems
 
 
+# --------------------------------------------------------------------------
+# An exact port of the publisher's body pipeline
+#
+# tools/publish/lib/processor.js `playerSafeMarkdown` (stripDataview,
+# stripGmOnly, stripSpoiler, stripHtmlComments, filterSections), preceded
+# by build.js's `keepOnlySections` for a `publish: stub` page. Callout
+# stripping is left out: it is a config option that only ever removes
+# more, and leaving it out errs toward calling a line published. Kept
+# line-for-line with the JS so the leak invariant never trusts a model.
+# --------------------------------------------------------------------------
+
+_JS_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
+_JS_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+_JS_COMMENT_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+
+
+def body_text(text: str) -> str:
+    """The body as gray-matter hands it to the publisher: frontmatter
+    removed, `\\r` dropped (playerSafeMarkdown does the same)."""
+    norm = text.replace("\r\n", "\n").replace("\r", "")
+    lines = norm.split("\n")
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
+                return "\n".join(lines[i + 1:])
+    return norm
+
+
+def _js_keep_only_sections(lines: list[str],
+                           include: list[str]) -> list[str]:
+    wanted = [s.lower() for s in include if isinstance(s, str)]
+    if not wanted:
+        return []
+    out: list[str] = []
+    keeping, keep_level = False, 0
+    for line in lines:
+        m = _JS_HEADING_RE.match(line)
+        if m:
+            level = len(m.group(1))
+            if keeping and level <= keep_level:
+                keeping = False
+            if m.group(2).strip().lower() in wanted:
+                keeping, keep_level = True, level
+        if keeping:
+            out.append(line)
+    return out
+
+
+def _js_strip_marked(lines: list[str], word: str) -> list[str]:
+    open_re = re.compile(rf"^<!--\s*{re.escape(word)}\s*-->")
+    close_re = re.compile(rf"^<!--\s*/{re.escape(word)}\s*-->")
+    out: list[str] = []
+    depth = 0
+    fence: str | None = None
+    for line in lines:
+        m = _JS_FENCE_RE.match(line)
+        is_fence_line = False
+        if m:
+            delim, info = m.group(1), m.group(2)
+            if fence is None:
+                if delim[0] != "`" or "`" not in info:
+                    fence, is_fence_line = delim, True
+            elif (delim[0] == fence[0] and len(delim) >= len(fence)
+                  and not info.strip()):
+                fence, is_fence_line = None, True
+        if fence is not None or is_fence_line:
+            if depth == 0:
+                out.append(line)
+            continue
+        if open_re.match(line.strip()):
+            depth += 1
+            if depth == 1:
+                out.append("")
+            continue
+        if close_re.match(line.strip()):
+            if depth:
+                depth -= 1
+            continue
+        if depth == 0:
+            out.append(line)
+    return out
+
+
+def _js_strip_comments(lines: list[str]) -> list[str]:
+    out: list[str] = []
+    fence: str | None = None
+    in_comment = False
+    for line in lines:
+        m = None if in_comment else _JS_COMMENT_FENCE_RE.match(line)
+        if m:
+            if fence is None:
+                fence = m.group(1)
+            elif fence == m.group(1):
+                fence = None
+        if fence is not None or m:
+            out.append(line)
+            continue
+        kept, i = "", 0
+        while i < len(line):
+            if in_comment:
+                end = line.find("-->", i)
+                if end == -1:
+                    break
+                in_comment, i = False, end + 3
+            else:
+                start = line.find("<!--", i)
+                if start == -1:
+                    kept += line[i:]
+                    break
+                kept += line[i:start]
+                in_comment, i = True, start + 4
+        if not kept.strip() and line.strip():
+            continue
+        out.append(kept)
+    return out
+
+
+def _js_filter_sections(lines: list[str], excludes: Iterable[str]
+                        ) -> list[str]:
+    wanted = {s.lower() for s in excludes}
+    out: list[str] = []
+    excluding, exclude_level = False, 0
+    for line in lines:
+        m = _JS_HEADING_RE.match(line)
+        if m:
+            level = len(m.group(1))
+            if excluding and level <= exclude_level:
+                excluding = False
+            if not excluding and m.group(2).strip().lower() in wanted:
+                excluding, exclude_level = True, level
+                continue
+        if not excluding:
+            out.append(line)
+    return out
+
+
+def publisher_lines(text: str, excludes: Iterable[str],
+                    fm: dict[str, Any] | None = None) -> list[str]:
+    """The body lines the player site renders for this file."""
+    body = body_text(text)
+    body = re.sub(r"```dataview[\s\S]*?```", "", body)
+    lines = body.split("\n")
+    if publish_mode(fm) == "none":
+        return []
+    if publish_mode(fm) == "stub":
+        raw = (fm or {}).get("publish_include_sections")
+        lines = _js_keep_only_sections(lines,
+                                       raw if isinstance(raw, list) else [])
+    lines = _js_strip_marked(lines, "gm-only")
+    lines = _js_strip_marked(lines, "spoiler")
+    lines = _js_strip_comments(lines)
+    return _js_filter_sections(lines, excludes)
+
+
+# --------------------------------------------------------------------------
+# publish.exclude_sections, parsed strictly
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class ExcludeListConfig:
+    """`publish.<key>` in `_meta/vault-config.md`.
+
+    `value` is the list, or None when the vault sets none (key absent,
+    null, or a scalar — config.js falls back to its defaults for any
+    non-array). `error` is set when the key is present in a shape this
+    parser does not understand exactly; `value` is then None and must not
+    be trusted by anything that writes. `span` is the [start, end)
+    frontmatter-line range (0-based, within the lines between the
+    delimiters) the key and its items occupy, for a writer to replace.
+    """
+
+    value: list[str] | None = None
+    error: str | None = None
+    span: tuple[int, int] | None = None
+    publish_line: int | None = None
+
+
+_KEY_LINE_RE = re.compile(r"""^(\s*)(["']?)([\w.-]+)\2\s*:(?:\s+(.*)|\s*)$""")
+_PLAIN_BAD_START = tuple("[]{}&*!|>'\"%@`,#?:-")
+
+
+def _strip_comment(value: str) -> str:
+    """Drop an unquoted trailing ` # comment`."""
+    quote: str | None = None
+    for i, ch in enumerate(value):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or value[i - 1] in " \t"):
+            return value[:i].rstrip()
+    return value.strip()
+
+
+def _yaml_item(raw: str) -> str:
+    """One flow- or block-list scalar, or ValueError if not a plain
+    string this parser reads exactly."""
+    item = raw.strip()
+    if not item:
+        raise ValueError("empty list item")
+    if item[0] == '"':
+        if len(item) < 2 or item[-1] != '"':
+            raise ValueError(f"unterminated quoted item {item!r}")
+        inner = item[1:-1]
+        if re.search(r'\\[^"\\]', inner) or re.search(r'(?<!\\)"', inner):
+            raise ValueError(f"escape sequence in {item!r}")
+        return inner.replace('\\"', '"').replace("\\\\", "\\")
+    if item[0] == "'":
+        if len(item) < 2 or item[-1] != "'":
+            raise ValueError(f"unterminated quoted item {item!r}")
+        inner = item[1:-1]
+        if re.search(r"(?<!')'(?!')", inner):
+            raise ValueError(f"stray quote in {item!r}")
+        return inner.replace("''", "'")
+    if item.startswith(_PLAIN_BAD_START) or ": " in item or item.endswith(":"):
+        raise ValueError(f"list item {item!r} is not a plain string")
+    return item
+
+
+def _flow_items(value: str) -> list[str]:
+    """`[a, "b, c"]` → items, splitting on commas outside quotes."""
+    inner = value[1:-1]
+    items: list[str] = []
+    buf = ""
+    quote: str | None = None
+    for ch in inner:
+        if quote:
+            buf += ch
+            if ch == quote:
+                quote = None
+            continue
+        if ch in "\"'":
+            quote = ch
+            buf += ch
+        elif ch == ",":
+            items.append(buf)
+            buf = ""
+        elif ch in "[]{}":
+            raise ValueError("nested flow collection")
+        else:
+            buf += ch
+    if quote:
+        raise ValueError("unterminated quote in flow list")
+    items.append(buf)
+    if items and not items[-1].strip():
+        items.pop()      # a trailing comma is legal YAML
+    return [_yaml_item(i) for i in items]
+
+
+def parse_publish_list(fm_lines: list[str], key: str) -> ExcludeListConfig:
+    """Strictly read `publish.<key>` from the raw frontmatter lines.
+
+    Understood exactly: an inline flow list on one line, a block list of
+    plain or quoted scalars (items at or below the key's indent), null,
+    or a plain scalar (no list set), each with optional trailing
+    comments; the key itself may be quoted. Anything else — a flow
+    `publish:` mapping that names the key, a multi-line flow list,
+    anchors, tags, a duplicate key, tabs — is an error rather than a
+    guess.
+    """
+    lines = [line.rstrip("\r\n") for line in fm_lines]
+    cfg = ExcludeListConfig()
+    starts = []
+    for i, line in enumerate(lines):
+        m = _KEY_LINE_RE.match(line)
+        if m and not m.group(1) and m.group(3) == "publish":
+            starts.append((i, _strip_comment(m.group(4) or "")))
+        elif re.match(r"""^["']?publish["']?\s*:""", line):
+            starts.append((i, "?"))
+    if not starts:
+        return cfg
+    if len(starts) > 1:
+        cfg.error = "publish: appears more than once"
+        return cfg
+    start, inline = starts[0]
+    cfg.publish_line = start
+    if inline:
+        if key in inline or inline == "?":
+            cfg.error = f"publish: is a flow mapping — write {key} as a block"
+        return cfg
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if lines[j].strip() and not lines[j][:1].isspace():
+            end = j
+            break
+    indent: int | None = None
+    for j in range(start + 1, end):
+        body = lines[j]
+        if "\t" in body[:len(body) - len(body.lstrip())]:
+            cfg.error = "tab indentation under publish:"
+            return cfg
+        if not body.strip() or body.strip().startswith("#"):
+            continue
+        depth = len(body) - len(body.lstrip())
+        if indent is None:
+            indent = depth
+    hits = []
+    for j in range(start + 1, end):
+        m = _KEY_LINE_RE.match(lines[j])
+        if m and len(m.group(1)) == indent and m.group(3) == key:
+            hits.append((j, m))
+        elif re.match(rf"""^\s{{{indent or 0}}}["']?{re.escape(key)}["']?\s*:""",
+                      lines[j]) and len(lines[j]) - len(lines[j].lstrip()) == indent:
+            cfg.error = f"{key}: line not understood"
+            return cfg
+    if not hits:
+        return cfg
+    if len(hits) > 1:
+        cfg.error = f"{key}: appears more than once under publish:"
+        return cfg
+    j, m = hits[0]
+    value = _strip_comment(m.group(4) or "")
+    k = j + 1
+    try:
+        if value in ("", ):
+            items: list[str] = []
+            last = j
+            while k < end:
+                body = lines[k]
+                stripped = body.strip()
+                depth = len(body) - len(body.lstrip())
+                if not stripped or stripped.startswith("#"):
+                    k += 1
+                    continue
+                if stripped.startswith("-") and depth >= len(m.group(1)):
+                    if not re.match(r"^-(\s|$)", stripped):
+                        raise ValueError(f"list item {stripped!r}")
+                    items.append(_yaml_item(_strip_comment(stripped[1:])))
+                    last = k
+                    k += 1
+                    continue
+                if depth > len(m.group(1)):
+                    raise ValueError(f"unexpected line {stripped!r}")
+                break
+            cfg.span = (j, last + 1)
+            cfg.value = items or None
+            return cfg
+        cfg.span = (j, j + 1)
+        if value in ("~", "null", "Null", "NULL"):
+            return cfg
+        if value.startswith("["):
+            if not value.endswith("]"):
+                raise ValueError("multi-line flow list")
+            cfg.value = _flow_items(value)
+            return cfg
+        if value[0] in "{&*!|>":
+            raise ValueError(f"value {value!r}")
+        _yaml_item(value)        # a string: config.js uses its defaults
+        return cfg
+    except ValueError as e:
+        cfg.span = None
+        cfg.value = None
+        cfg.error = f"{key}: {e}"
+        return cfg
+
+
+def _frontmatter_lines(text: str) -> list[str] | None:
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n") != "---":
+        return None
+    for i in range(1, len(lines)):
+        if lines[i].rstrip("\r\n") == "---":
+            return lines[1:i]
+    return None
+
+
+def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
+    """`parse_publish_list` over `_meta/vault-config.md`; no file, no
+    frontmatter → no list set. An unreadable file is an error."""
+    config = vault / "_meta" / "vault-config.md"
+    try:
+        text = config.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ExcludeListConfig()
+    except (OSError, UnicodeDecodeError) as e:
+        return ExcludeListConfig(error=f"unreadable _meta/vault-config.md "
+                                       f"({e.__class__.__name__})")
+    fm = _frontmatter_lines(text)
+    if fm is None:
+        return ExcludeListConfig()
+    return parse_publish_list(fm, key)
+
+
 # The publish pipeline's own defaults (tools/publish/lib/config.js
 # PUBLISH_DEFAULTS.exclude_sections). Keep the two in step: a section the
 # site drops but a check treats as published is a leak waiting to happen.
@@ -904,25 +1260,6 @@ DEFAULT_EXCLUDE_SECTIONS: tuple[str, ...] = (
     "GM Notes", "DM Notes", "Player Notes", "Source References",
     "Reconciliation Context", "Handoff to Reconcile",
 )
-
-
-def vault_exclude_sections(vault: Path) -> list[str] | None:
-    """`publish.exclude_sections` as `_meta/vault-config.md` sets it, or
-    None when the vault sets no list (no config, no key, a non-list).
-
-    An unreadable config warns and reads as None — the defaults.
-    """
-    config = vault / "_meta" / "vault-config.md"
-    try:
-        text = config.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        return None
-    except OSError as e:
-        print(f"warning: unreadable _meta/vault-config.md: {e} — "
-              f"using the default exclude_sections", file=sys.stderr)
-        return None
-    block = _nested_block(raw_frontmatter(text), "publish")
-    return _list_value(block, "exclude_sections")
 
 
 def resolve_exclude_sections(vault_list: list[str] | None) -> list[str]:
@@ -955,7 +1292,16 @@ def effective_exclude_sections(vault: Path) -> list[str]:
     Player Notes and Source References were hidden on sites that
     publish them.
     """
-    return resolve_exclude_sections(vault_exclude_sections(vault))
+    cfg = read_publish_list(vault, "exclude_sections")
+    if cfg.error:
+        # Guessing at a list we cannot read is how a check ends up
+        # trusting a section to be hidden that the site publishes. Treat
+        # nothing as excluded (over-reporting) and say why.
+        print(f"warning: _meta/vault-config.md publish.exclude_sections "
+              f"not understood ({cfg.error}) — treating nothing as "
+              f"excluded", file=sys.stderr)
+        return []
+    return resolve_exclude_sections(cfg.value)
 
 
 # --------------------------------------------------------------------------
