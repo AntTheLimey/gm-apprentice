@@ -33,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   landed one short, and a tick saved as unticked. A saved tick also never
   showed after a reload, because the stylesheet draws it from the row's
   `.checked` class. `coc-sheet.js` now leaves those controls to
-  `coc-live.js` on a live sheet, and a saved tick is drawn.
+  `coc-live.js` on a live sheet, and a saved tick is drawn. Publish tool
+  1.11.34.
 
 ---
 
