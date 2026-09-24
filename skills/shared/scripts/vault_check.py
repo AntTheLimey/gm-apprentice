@@ -17,6 +17,7 @@ Usage:
   vault_check.py VAULT relationships
   vault_check.py VAULT sessions
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
+  vault_check.py VAULT gm-leak --renest-excludes [--fix]
   vault_check.py VAULT pc-body [--folder SUB]
   vault_check.py VAULT wrapup [--file REL] [--fix]
   vault_check.py VAULT version
@@ -39,12 +40,15 @@ closer (everything above it publishes) or a bold-wrapped excluded
 heading like `### **GM Notes**`; WARNING is an unclosed opener or a
 published heading whose title contains an exclude-list entry or
 Keeper keyword; INFO is a Keeper-facing bold label or callout —
-prose the GM has to judge, not auto-movable. `--fix` re-nests every
-heading the rows flag (the ERROR and WARNING cases above, never the
-INFO ones) as a `###` subsection under one `## GM Notes`, demoting
-it and its own sub-headings a level — the 1.8.3 migration's
-structural move, mechanised. A file whose gm-only/spoiler fences are
-unbalanced is left untouched: fix the marker by hand first.
+prose the GM has to judge, not auto-movable. `--fix` re-nests only
+the bold-wrapped ERROR headings under `## GM Notes`, demoting each
+and its sub-headings a level; keyword WARNINGs, INFO rows and level-1
+headings never move. `--renest-excludes` is the 1.8.3 migration:
+it re-nests every heading titled with a current `exclude_sections`
+entry (hidden today or not), then collapses the list to
+`["GM Notes"]`. No rewrite is written if a hidden line would publish
+after it or a fence would unbalance (ERROR row instead), and one
+refused file blocks the collapse.
 
 `pc-body` runs over every `type: pc` sheet except `*_Story.md`
 companions and `publish: none` pages. ERROR is `## Current Status`
@@ -80,6 +84,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections import Counter
 import sys
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -117,6 +122,8 @@ from vaultlib import (  # noqa: F401
     delete_key,
     effective_exclude_sections,
     entity_type,
+    resolve_exclude_sections,
+    vault_exclude_sections,
     frontmatter_span,
     get_key,
     iter_body_lines,
@@ -132,6 +139,7 @@ from vaultlib import (  # noqa: F401
     scan_body,
     session_ref_number,
     set_key,
+    set_nested_key,
     vault_files,
     wikilink_target,
     yaml_scalar,
@@ -1062,7 +1070,8 @@ def _published_linenos(states: list[LineState],
 
 
 def check_gm_leak(vault: Path, folder: str | None,
-                  fix: bool = False) -> list[str]:
+                  fix: bool = False,
+                  renest_excludes: bool = False) -> list[str]:
     """Keeper-facing content that would actually reach the player site.
 
     Mechanises graph-health.md's "Un-fenced GM-only content" prose. The
@@ -1083,13 +1092,28 @@ def check_gm_leak(vault: Path, folder: str | None,
     order: an orphan closer changes what every line above it means, so
     it is the first thing to read, not the fifth.
 
-    `fix` re-nests whatever ERROR/WARNING heading rows this file earned
-    — never the INFO bold-label/callout rows, which are a GM's judgment
-    call — and prints `WOULD-FIX`/`FIXED` rows for it, the same
-    dry-run-by-default discipline `wrapup --fix` uses. A file with no
-    heading rows writes nothing and prints nothing extra.
+    Every call also plans the heading re-nest (`WOULD-FIX` rows); `fix`
+    writes it (`FIXED`). Only the ERROR bold-wrapped exclude matches
+    move — keyword-only WARNING headings and INFO rows are the GM's
+    call and are never moved.
+
+    `renest_excludes` is the 1.8.3 migration: every level-2+ heading at
+    fence depth 0 whose title is in the vault's CURRENT exclude list
+    moves under `## GM Notes`, whether or not it publishes today, and
+    then `publish.exclude_sections` collapses to `["GM Notes"]` — after
+    the files, so the two steps cannot run out of order. Every file is
+    checked against the leak invariant under both configs; one refusal
+    blocks the collapse.
     """
-    excludes = effective_exclude_sections(vault)
+    vault_list = vault_exclude_sections(vault)
+    excludes = resolve_exclude_sections(vault_list)
+    match = {s.casefold() for s in excludes}
+    after_excludes = excludes
+    if renest_excludes:
+        after_excludes = list(COLLAPSED_EXCLUDES)
+        match.add(GM_NOTES)
+    refused = 0
+    writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
     for rel, text in vault_files(vault, folder):
         fm = extract_frontmatter(text) or {}
@@ -1131,8 +1155,46 @@ def check_gm_leak(vault: Path, folder: str | None,
                     rows.append(f"INFO\t{rel}:{state.lineno}\tcallout {label} "
                                 f"reads Keeper-facing — confirm it should "
                                 f"publish")
-        if heading_leak:
-            rows.extend(_apply_gm_leak_fix(vault, rel, fm, excludes, fix))
+        if not (heading_leak or renest_excludes):
+            continue
+        moved, new_text, safe = _plan_gm_leak_fix(
+            vault, rel, fm, excludes, after_excludes, match,
+            always_check=renest_excludes)
+        if not safe:
+            refused += 1
+            rows.append(f"ERROR\t{rel}\tre-nest refused: {moved[0]} — "
+                        f"nothing written; move it under ## GM Notes by "
+                        f"hand")
+        elif new_text is not None:
+            writes.append((rel, new_text, moved))
+    if renest_excludes:
+        config_text, config_error = _plan_collapse(vault, vault_list)
+        if config_error:
+            refused += 1
+            rows.append(f"ERROR\t{VAULT_CONFIG}\texclude_sections cannot "
+                        f"be collapsed: {config_error}")
+        if refused:
+            # All or nothing: a re-nested file is only safe once the
+            # config has collapsed, and the collapse is only safe once
+            # every file is re-nested.
+            rows.append(f"ERROR\t{VAULT_CONFIG}\tmigration blocked by "
+                        f"{refused} refusal(s) above — nothing written, "
+                        f"exclude_sections not collapsed")
+            return rows
+        if config_text is not None:
+            writes.append((VAULT_CONFIG, config_text, []))
+    mode = "FIXED" if fix else "WOULD-FIX"
+    for rel, new_text, moved in writes:
+        if fix:
+            _write_text(vault, rel, new_text)
+        if rel == VAULT_CONFIG and renest_excludes:
+            old = ("the defaults" if vault_list is None
+                   else "[" + ", ".join(f'"{s}"' for s in vault_list) + "]")
+            rows.append(f"{mode}\t{rel}\tcollapsed exclude_sections from "
+                        f"{old} to [\"GM Notes\"]")
+            continue
+        rows.extend(f"{mode}\t{rel}\tre-nested '{title}' under ## GM Notes"
+                    for title in moved)
     return rows
 
 
@@ -2164,50 +2226,106 @@ def renest_wrapup(text: str) -> str:
     return head + eol.join(body) + tail
 
 
-def renest_gm_leak(rel: str, text: str, excludes: list[str],
+def _plain_title(title: str) -> str:
+    """A heading title with any whole-title emphasis unwrapped."""
+    m = EMPHASIS_RE.match(title)
+    return m.group(2).strip() if m else title
+
+
+def _depth(state: LineState) -> int:
+    return state.gm_depth + state.spoiler_depth
+
+
+def _line_key(line: str) -> str:
+    """How a line is recognised after a move: a heading by its title
+    alone, since the move demotes it; anything else verbatim."""
+    stripped = line.strip()
+    m = HEADING_RE.match(stripped)
+    if m:
+        return "#" + m.group(2).strip()
+    return stripped
+
+
+def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
+    """Every non-blank, non-marker line the site would NOT publish.
+
+    The leak invariant every writer here checks before it writes: a line
+    hidden before a repair must still be hidden after it. Counted by
+    content, not position, because a repair moves lines; headings by
+    title, because it demotes them. `fm` is the file's own frontmatter,
+    so a stub page's include filter applies on both sides.
+    """
+    states, _ = scan_body(text, excludes)
+    kept = _published_linenos(states, fm)
+    hidden: Counter = Counter()
+    for s in states:
+        if s.marker is not None or not s.line.strip():
+            continue
+        if s.published and (kept is None or s.lineno in kept):
+            continue
+        hidden[_line_key(s.line)] += 1
+    return hidden
+
+
+def leak_problem(before: str, before_excludes: list[str], after: str,
+                 after_excludes: list[str], fm: dict) -> str | None:
+    """Why `after` must not be written, or None when it is safe.
+
+    Unsafe means the rewrite added a gm-only/spoiler fence problem, or a
+    line hidden in `before` (read under `before_excludes`) publishes in
+    `after` (read under `after_excludes`). The two exclude lists differ
+    only for a migration that also changes the vault's config.
+    """
+    _states, was = scan_body(before, before_excludes)
+    _states, now = scan_body(after, after_excludes)
+    if len(now) > len(was):
+        return f"the rewrite leaves {now[-1]}"
+    lost = hidden_lines(before, before_excludes, fm) - hidden_lines(
+        after, after_excludes, fm)
+    if lost:
+        first = next(iter(lost)).lstrip("#")
+        return (f"{sum(lost.values())} hidden line(s) would publish "
+                f"(first: '{first[:60]}')")
+    return None
+
+
+def renest_gm_leak(text: str, match: set[str], excludes: list[str],
                    kept: set[int] | None = None) -> tuple[str, list[str]]:
     """(new text, titles moved) — the 1.8.3 migration's structural
     re-nest, generalised from Session Wrap-Ups to any entity file.
 
-    Moves every heading `_heading_leak` flags (a bold-wrapped exclude
-    match, or a published heading matching an `exclude_sections` entry
-    or Keeper keyword) under one `## GM Notes` — appended to it if the
-    file already has one, created at the end of the body if not —
-    demoting the heading and its own sub-headings a level with
-    `_demoted`, the same primitive `renest_wrapup` moves Keeper-facing
-    H2s with. `kept` is the stub-page line filter `check_gm_leak`
-    itself reads with; passing the same one keeps what a preview shows
-    and what `--fix` moves in exact agreement.
+    Moves every heading of level 2 or deeper that publishes under
+    `excludes` (the config in force AFTER the fix) and whose title, with
+    any emphasis unwrapped, is in `match` (casefolded). For plain
+    `gm-leak --fix` both are the vault's current list, so only the
+    emphasis-wrapped ERROR rows move; `--renest-excludes` passes
+    `["GM Notes"]` and the pre-collapse list, so every exact title that
+    collapse would expose moves. Keyword-only WARNING headings never
+    match, and a level-1 heading never moves.
 
-    A heading `gm-leak` does not flag — including one already hidden by
-    the vault's current, pre-collapse `exclude_sections` list — is left
-    exactly where it is; only what the check itself reports ever moves,
-    and nothing moves at all in a file whose gm-only/spoiler fences are
-    unbalanced (`problems` non-empty): an orphan closer changes what
-    every earlier line means, so which headings actually leak cannot be
-    decided mechanically. Fix the marker by hand first, same as
-    `wrapup --fix`'s own refusal.
-
-    Content is never reordered inside a moved block and never reworded
-    — only relocated and demoted, exactly as the migration entry
-    promises.
+    A moved block runs to the next heading at its level or shallower
+    *at fence depth 0* — never ending while a gm-only/spoiler fence it
+    opened is still open. Blocks go under the first `## GM Notes`: at the
+    end of its section when it is unfenced, immediately before its own
+    closer when it sits inside a fence (content after the closer
+    publishes); a new `## GM Notes` is appended when there is none.
+    Nothing moves in a file with unbalanced fences. Content is never
+    reworded or reordered inside a block, only relocated and demoted.
+    The caller re-checks the result with `leak_problem` before writing.
     """
     states, problems = scan_body(text, excludes)
     if not states or problems:
         return text, []
 
-    matched_lines = {
-        s.lineno for s in states
-        if s.heading is not None and not s.in_code and s.published
-        and (kept is None or s.lineno in kept)
-        and _heading_leak(rel, s, excludes)
-    }
-    if not matched_lines:
-        return text, []
+    def target(s: LineState) -> bool:
+        return (s.heading is not None and s.heading[0] >= 2
+                and not s.in_code and s.published
+                and (kept is None or s.lineno in kept)
+                and _plain_title(s.heading[1]).casefold() in match)
 
-    raw = text.splitlines(keepends=True)
-    head = "".join(raw[:states[0].lineno - 1])
-    eol = _wrap_eol(text)
+    def ends_block(s: LineState, level: int) -> bool:
+        return (s.heading is not None and not s.in_code
+                and _depth(s) == 0 and s.heading[0] <= level)
 
     kept_states: list[LineState] = []
     moved_blocks: list[list[LineState]] = []
@@ -2215,22 +2333,19 @@ def renest_gm_leak(rel: str, text: str, excludes: list[str],
     i, n = 0, len(states)
     while i < n:
         state = states[i]
-        if state.heading is not None and state.lineno in matched_lines:
+        if state.heading is not None and target(state):
             level = state.heading[0]
             moved_titles.append(state.heading[1])
-            block = [state]
             j = i + 1
-            while j < n:
-                nxt = states[j]
-                if nxt.heading is not None and nxt.heading[0] <= level:
-                    break
-                block.append(nxt)
+            while j < n and not ends_block(states[j], level):
                 j += 1
-            moved_blocks.append(block)
+            moved_blocks.append(states[i:j])
             i = j
         else:
             kept_states.append(state)
             i += 1
+    if not moved_blocks:
+        return text, []
 
     moved_lines: list[str] = []
     for block in moved_blocks:
@@ -2238,76 +2353,166 @@ def renest_gm_leak(rel: str, text: str, excludes: list[str],
             moved_lines.append("")
         moved_lines.extend(_trim([_demoted(s) for s in block]))
 
-    kept_lines = [s.line for s in kept_states]
-    gm_headings = [(idx, s.heading[0]) for idx, s in enumerate(kept_states)
-                   if s.heading is not None and s.heading[0] == 2
-                   and s.heading[1].casefold() == GM_NOTES]
-    if gm_headings:
-        gm_index, level = gm_headings[0]
+    lines = [s.line for s in kept_states]
+    gm = [idx for idx, s in enumerate(kept_states)
+          if s.heading is not None and not s.in_code
+          and s.heading[0] == 2 and s.heading[1].casefold() == GM_NOTES]
+    unfenced = [idx for idx in gm if _depth(kept_states[idx]) == 0]
+    if unfenced or gm:
+        g = (unfenced or gm)[0]
+        head_state = kept_states[g]
         end = len(kept_states)
-        for later in range(gm_index + 1, len(kept_states)):
-            h = kept_states[later].heading
-            if h is not None and h[0] <= level:
+        for later in range(g + 1, len(kept_states)):
+            s = kept_states[later]
+            if _depth(head_state) == 0:
+                if ends_block(s, 2):
+                    end = later
+                    break
+            elif (s.marker is not None and s.marker.startswith("close-")
+                  and (s.gm_depth < head_state.gm_depth
+                       or s.spoiler_depth < head_state.spoiler_depth)):
                 end = later
                 break
-        existing = kept_lines[gm_index + 1:end]
+        existing = lines[g + 1:end]
         while existing and not existing[0].strip():
             existing.pop(0)
-        existing = _trim(existing)
-        gm_body: list[str] = []
-        for part in (existing, moved_lines):
-            if not part:
-                continue
-            if gm_body:
-                gm_body.append("")
-            gm_body.extend(part)
-        new_kept = kept_lines[:gm_index + 1]
+        gm_body = _trim(existing)
         if gm_body:
-            new_kept.append("")
-            new_kept.extend(gm_body)
-        after = kept_lines[end:]
+            gm_body.append("")
+        gm_body.extend(moved_lines)
+        new_lines = lines[:g + 1] + [""] + gm_body
+        after = lines[end:]
         if after:
-            new_kept.append("")
-            new_kept.extend(after)
+            new_lines += [""] + after
     else:
-        new_kept = _trim(kept_lines)
-        if new_kept:
-            new_kept.append("")
-        new_kept += ["## GM Notes", ""] + moved_lines
+        new_lines = _trim(lines)
+        if new_lines:
+            new_lines.append("")
+        new_lines += ["## GM Notes", ""] + moved_lines
 
+    raw = text.splitlines(keepends=True)
+    head = "".join(raw[:states[0].lineno - 1])
+    eol = _wrap_eol(text)
     tail = eol if text.endswith("\n") else ""
-    return head + eol.join(new_kept) + tail, moved_titles
+    return head + eol.join(new_lines) + tail, moved_titles
 
 
-def _apply_gm_leak_fix(vault: Path, rel: str, fm: dict, excludes: list[str],
-                       fix: bool) -> list[str]:
-    """`gm-leak`'s mechanical repair, run for one file.
+def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
+                      before_excludes: list[str], after_excludes: list[str],
+                      match: set[str], always_check: bool = False
+                      ) -> tuple[list[str], str | None, bool]:
+    """`gm-leak`'s mechanical repair, planned for one file.
 
-    Re-reads the file directly (exact bytes, its own line endings)
-    rather than the already-parsed copy `check_gm_leak` walked with —
-    the same discipline `wrapup --fix` uses before it writes. Prints
-    nothing when the transform changes nothing (no matched heading, or
-    the file's fences are unbalanced); otherwise one `WOULD-FIX` row per
-    heading moved on a dry run, `FIXED` once `--fix` writes them.
+    Returns (moved titles, new text or None, safe). Re-reads the file
+    directly (exact bytes, its own line endings), the same discipline
+    `wrapup --fix` uses. Nothing is written here. `safe` is False, with
+    the reason as the only "title", when the file must not be touched —
+    `leak_problem` found a hidden line that would publish (or a new
+    fence problem), or the file is unreadable. `always_check` (the
+    migration) runs that check even when nothing moves, because the
+    config collapse alone can expose a file.
     """
     path = vault / rel
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
     except (OSError, UnicodeDecodeError) as e:
-        return [f"ERROR\t{rel}\tunreadable ({e.__class__.__name__}) "
-                f"— not fixed"]
-    states, _problems = scan_body(text, excludes)
+        return [f"unreadable ({e.__class__.__name__})"], None, False
+    states, problems = scan_body(text, after_excludes)
     kept = _published_linenos(states, fm)
-    new_text, moved_titles = renest_gm_leak(rel, text, excludes, kept)
-    if not moved_titles or new_text == text:
-        return []
-    if fix:
-        with path.open("w", encoding="utf-8", newline="") as f:
-            f.write(new_text)
-    mode = "FIXED" if fix else "WOULD-FIX"
-    return [f"{mode}\t{rel}\tre-nested '{title}' under ## GM Notes"
-            for title in moved_titles]
+    new_text, moved = renest_gm_leak(text, match, after_excludes, kept)
+    if not always_check and (not moved or new_text == text):
+        return [], None, True
+    if moved and GM_NOTES not in {s.casefold() for s in after_excludes}:
+        # Moving under a `## GM Notes` the site publishes hides nothing,
+        # and the next run would find the same heading and demote it
+        # again.
+        return ["GM Notes is not in exclude_sections, so moving under it "
+                "hides nothing — add it to the list first"], None, False
+    problem = leak_problem(text, before_excludes, new_text, after_excludes,
+                           fm)
+    if problem:
+        if problems:
+            problem += ("; its gm-only/spoiler fences are unbalanced, fix "
+                        "the marker first")
+        return [problem], None, False
+    if not moved or new_text == text:
+        return [], None, True
+    return moved, new_text, True
+
+
+def _write_text(vault: Path, rel: str, text: str) -> None:
+    with (vault / rel).open("w", encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
+COLLAPSED_EXCLUDES = ["GM Notes"]
+
+
+def collapse_exclude_sections(text: str) -> str:
+    """`_meta/vault-config.md` with `publish.exclude_sections` set to
+    exactly `["GM Notes"]` — a block list's items removed, the key or
+    the `publish:` block added when absent. Line editing only: every
+    other key, comment and line ending survives. Raises ValueError on
+    frontmatter this refuses to guess at.
+    """
+    lines = text.splitlines(keepends=True)
+    close, err = frontmatter_span(lines)
+    if err:
+        raise ValueError(err)
+    fm = lines[1:close]
+    eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    start = next((i for i, line in enumerate(fm)
+                  if re.match(r"^publish:\s*(?:#.*)?$",
+                              line.rstrip("\r\n"))), None)
+    if start is not None:
+        for j in range(start + 1, len(fm)):
+            body = fm[j].rstrip("\r\n")
+            if body.strip() and not body[:1].isspace():
+                break
+            m = re.match(r"^(\s+)exclude_sections:\s*(?:#.*)?$", body)
+            if not m:
+                continue
+            indent = len(m.group(1))
+            k = j + 1
+            last_item = j
+            while k < len(fm):
+                nxt = fm[k].rstrip("\r\n")
+                if not nxt.strip():
+                    k += 1
+                    continue
+                depth = len(nxt) - len(nxt.lstrip())
+                if depth > indent or (depth == indent
+                                      and nxt.strip().startswith("-")):
+                    last_item = k
+                    k += 1
+                    continue
+                break
+            del fm[j + 1:last_item + 1]
+            break
+    set_nested_key(fm, "publish", "exclude_sections",
+                   '["GM Notes"]', eol)
+    lines[1:close] = fm
+    return "".join(lines)
+
+
+def _plan_collapse(vault: Path, vault_list: list[str] | None
+                   ) -> tuple[str | None, str | None]:
+    """(new vault-config text, error) for the `--renest-excludes` config
+    step; (None, None) when the list is already exactly `["GM Notes"]`."""
+    if vault_list is not None and [s.casefold() for s in vault_list] == [
+            s.casefold() for s in COLLAPSED_EXCLUDES]:
+        return None, None
+    try:
+        with (vault / VAULT_CONFIG).open("r", encoding="utf-8",
+                                         newline="") as f:
+            text = f.read()
+        return collapse_exclude_sections(text), None
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        return None, str(e)
+
+
+VAULT_CONFIG = "_meta/vault-config.md"
 
 
 def rename_decorated_headings(text: str) -> tuple[str, list[str]]:
@@ -2454,6 +2659,11 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
         # Byte-identical: whatever the plan said, nothing moved.
         rows.append(f"UNCHANGED\t{rel}\tnothing to fix")
         return rows
+    problem = leak_problem(text, excludes, new_text, excludes, fm)
+    if problem:
+        rows.append(f"ERROR\t{rel}\trepair refused: {problem} — nothing "
+                    f"written; fix it by hand")
+        return rows
     if fix:
         with path.open("w", encoding="utf-8", newline="") as f:
             f.write(new_text)
@@ -2532,9 +2742,15 @@ def main() -> int:
                     help="apply the wrapup or gm-leak check's mechanical "
                          "repairs (frontmatter backfills and the "
                          "Keeper-facing re-nest for wrapup; the "
-                         "ERROR/WARNING heading re-nest for gm-leak); "
+                         "bold-wrapped ERROR heading re-nest for gm-leak); "
                          "without it the repairs print as WOULD-FIX rows "
                          "and nothing is written. Ignored by `all`.")
+    ap.add_argument("--renest-excludes", action="store_true",
+                    help="gm-leak only, vault-wide: the 1.8.3 migration — "
+                         "re-nest every heading titled with a current "
+                         "exclude_sections entry under ## GM Notes, then "
+                         "collapse exclude_sections to [\"GM Notes\"]. "
+                         "Dry run unless --fix.")
     ap.add_argument("--threshold", type=float, default=0.85,
                     help="similarity ratio for names (default 0.85)")
     ap.add_argument("--since", type=int,
@@ -2543,6 +2759,11 @@ def main() -> int:
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
+        return 2
+    if args.renest_excludes and (args.command != "gm-leak" or args.folder):
+        print("error: --renest-excludes needs the gm-leak command and the "
+              "whole vault (no --folder): it rewrites the vault config",
+              file=sys.stderr)
         return 2
     if args.command == "changed":
         if args.since is None:
@@ -2582,7 +2803,8 @@ def main() -> int:
         # `all` is a report, so it never writes — same reasoning as
         # `wrapup` below.
         emit("gm-leak", check_gm_leak(args.vault, args.folder,
-                                      args.fix and args.command == "gm-leak"))
+                                      args.fix and args.command == "gm-leak",
+                                      args.renest_excludes))
     if args.command in ("pc-body", "all"):
         emit("pc-body", check_pc_body(args.vault, args.folder))
     if args.command in ("wrapup", "all"):
