@@ -10,18 +10,21 @@ gm-apprentice concept (canon_status promotion).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
 
 from mobrpg import client
+from mobrpg import links
 from mobrpg import lww
 from mobrpg import node
-from mobrpg.vault import iter_linked_notes
+from mobrpg.vault import body_of, iter_linked_notes, vault_only_sections
 from mobrpg.commands import pull
 from mobrpg.commands import rel_baseline
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
+from mobrpg.commands import sync_cmd
 
 
 def apply_state(existing: dict, live: dict) -> dict:
@@ -530,6 +533,12 @@ def run(argv: list[str]) -> int:
     # already belongs to a note on disk under a DIFFERENT ref; scaffolding here
     # forks the element into two vault notes (#202).
     claimed_refs, claimed_eids = _reconciled_claims(args.vault)
+    # For the upd/-accepted-row edit-guard below: the SAME resolution index
+    # and vault-only sections `sync` builds its push candidates from, so a
+    # candidate rebuilt here from a note's CURRENT body hashes identically to
+    # one `sync` would have built from the same body.
+    push_idx, _linked_keys, _submitted_keys = suggest.node_index(args.vault)
+    vault_only = vault_only_sections(args.vault)
     # Notes an `upd/` row already answered for THIS run. The upd branch writes
     # the file and releases `pending_ref`, so a create-ref row reached later in
     # the same pass would re-read a note that no longer looks pending and flip
@@ -564,6 +573,7 @@ def run(argv: list[str]) -> int:
                 continue
             adjudicated.add(path)
             newn = dict(existing)
+            pin_mtime = True
             if live.get("state") == "accepted":
                 newn["review_state"] = "accepted"
                 # Deliberately do NOT advance last_synced here (#190/#193). An
@@ -578,6 +588,31 @@ def run(argv: list[str]) -> int:
                 # a clean `pull` verdict — which the strict compare then
                 # either re-stamps as a harmless echo of the vault's own push
                 # or genuinely pulls, but never silently skips.
+                #
+                # BUT: a `pending` note is held by `sync` (Behavior 1) — the
+                # GM can freely edit its body for as long as it sits waiting
+                # on review, and nothing here has looked at the body yet.
+                # Pinning mtime to the stale pre-push last_synced regardless
+                # would mask any such edit as clean: the next `sync decide`
+                # would read vault-clean + server-dirty (a bare `pull`), and
+                # the strict compare — correctly seeing the edited body
+                # differ from the server's pre-edit copy — would have
+                # `_pull_body` silently overwrite the GM's edit. So: rebuild
+                # the push candidate from the CURRENT body and compare its
+                # digest against the one `pending_ref` recorded for the
+                # content that was actually pushed (`sync._build_suggestion`'s
+                # `#<sha256[:12]>` suffix — `ext` IS that pending_ref, already
+                # verified above). Only a match proves the body hasn't moved
+                # since the push landed, which is the ONLY condition under
+                # which pinning mtime to last_synced is safe; on a mismatch
+                # mtime is left untouched so the note reads vault-dirty and
+                # the next sync takes the push/tie path (review, not a
+                # silent overwrite) instead of `pull`.
+                cand_md = sync_cmd._push_candidate(
+                    body_of(txt), push_idx, args.world, links.URL_FMT, vault_only)
+                pushed_digest = hashlib.sha256(
+                    cand_md.encode("utf-8")).hexdigest()[:12]
+                pin_mtime = ext.rsplit("#", 1)[-1] == pushed_digest
             elif live.get("state") == "dismissed":
                 newn["review_state"] = "dismissed"
                 newn["review_note"] = live.get("review_note") or ""
@@ -593,9 +628,11 @@ def run(argv: list[str]) -> int:
                 # accept — see above) so the note doesn't read vault-dirty
                 # against a stamp that never moved, which would otherwise
                 # re-file a dismissed suggestion or mask a real accept-time
-                # sync opportunity.
+                # sync opportunity. Skipped on accept when the body moved
+                # since the push (see above) — the real, current mtime must
+                # survive so the note reads vault-dirty.
                 ls = lww.parse_ts(newn["last_synced"])
-                if ls is not None:
+                if pin_mtime and ls is not None:
                     os.utime(path, (ls, ls))
             updated += 1
             continue

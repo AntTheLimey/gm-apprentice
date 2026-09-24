@@ -47,11 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "now" or the element's CURRENT `lastModified` at pull-canon time, either of
   which can silently mark a LATER owner edit (one landing between the accept
   and whenever pull-canon happens to run) as already-synced and swallow it
-  forever. `last_synced` now stays at its pre-push value, with the file's
-  mtime pinned to match, so the very next `sync decide` reliably reads the
-  server as dirty (a clean `pull`) and the strict compare above takes it
-  from there — re-stamping an echo, or pulling a real edit, but never
-  silently.
+  forever. `last_synced` now stays at its pre-push value, so the very next
+  `sync decide` reliably reads the server as dirty (a clean `pull`) and the
+  strict compare above takes it from there — re-stamping an echo, or pulling
+  a real edit, but never silently. A note sits editable the whole time it's
+  `pending`, though — `sync` holds a pending note, so nothing stops a GM
+  editing its body before pull-canon ever runs — so the file's mtime is only
+  pinned to that pre-push `last_synced` when a push candidate rebuilt from
+  the CURRENT body still hashes to the digest `pending_ref` recorded for
+  what was actually pushed; a body that moved since the push keeps its real,
+  current mtime, so the note reads vault-dirty and the next sync takes the
+  push/conflict path instead of a `pull` that would have overwritten the
+  edit.
 
 ## [1.10.5] — 2026-09-24
 
