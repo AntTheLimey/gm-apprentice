@@ -22,7 +22,10 @@ question (changes what an NPC wants, knows or does, a scene's shape,
 or what the players can discover) is asked with 2–3 seeds; a player
 decision (which way, who with, what they say) becomes a `Do | Then`
 row, never asked; bookkeeping (a die result, a sheet number, a date no
-scene turns on) takes its default where it applies, unannounced; craft
+scene turns on) takes its default where it applies, listed in your
+reply, never noted in the Plan — but a value missing from an entity or
+PC sheet is never defaulted onto it: it goes to `## Open Questions`
+for the GM; craft
 and cosmetics (fonts, prop layout, filenames, formatting) are decided
 silently. Test: would a different answer change a scene this session?
 When the GM asks what an item on your list is or why you need it,
@@ -54,7 +57,8 @@ exception).
   system's `session-procedures.md` for arc drivers.
 - Write each step's output to the Plan file before moving on; the Plan
   is the persistent artifact. Run notes (migration applied, phases
-  skipped, checks run) go in your chat reply, never in the Plan.
+  skipped, checks run, defaults applied) go in your chat reply, never
+  in the Plan.
 
 **Scope to the question.** After the version gate, do only what was
 asked. "Prep my session" walks the whole workflow. A narrow question
@@ -286,9 +290,10 @@ Apply fixes in place; there is no audit-notes report.
   its `target <- source` rows to the plan file.
 - Stale entity files to update or retire: `vault_check.py stale-drafts`.
 - Unresolved calls — plot questions the GM deferred or you couldn't
-  ground — each with 2–3 seeds, sorted per Stance ("Georgiana's
-  post-Vienna SAN is unrecorded" is bookkeeping: default it; "Does
-  Sophia know what her husband has become?" is a plot question).
+  ground — each with 2–3 seeds, sorted per Stance. "Does Sophia know
+  what her husband has become?" is a plot question; "Georgiana's
+  post-Vienna SAN is unrecorded" is an unrecorded sheet value — an
+  Open Question for the GM, never a guessed number.
 
 → `## Gaps & Actions` and `## Open Questions`
 

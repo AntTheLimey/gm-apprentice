@@ -149,8 +149,9 @@ Plot questions only — calls that change what an NPC wants, knows or does,
 a scene's shape, or what the players can discover. Each carries 2–3
 seeds. A player decision belongs in a scene's `Do | Then` table.
 Bookkeeping is never a question: put its default where it applies (a
-placeholder title in frontmatter, a value on its entity's own line),
-with no note that it was defaulted. If a run without the GM had to
+placeholder title in frontmatter), with no note that it was defaulted.
+A value an entity or PC sheet doesn't record is the exception: list it
+here for the GM, never guessed. If a run without the GM had to
 guess, the guess lives here, labelled **(apprentice guess — confirm)**,
 never in settled plan content.
 
