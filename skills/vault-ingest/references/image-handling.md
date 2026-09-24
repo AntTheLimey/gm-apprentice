@@ -36,10 +36,13 @@ portrait="_attachments/..." --write`, then re-run
 `ingest_images.py --execute` to embed the rest automatically.
 
 For `UNMATCHED` and `AMBIGUOUS-ENTITY` the image was never
-copied — filename matching failed, and setting `portrait` alone
-doesn't file it. Rename the source to match the entity's slug
-(e.g. `ronnie-vint.jpg` for `Ronnie Vint.md`) and re-run
-`--execute`; it will match, copy and stamp `portrait` together.
+copied, and setting `portrait` alone doesn't file it.
+`UNMATCHED`: rename the source to the entity's slug (e.g.
+`ronnie-vint.jpg` for `Ronnie Vint.md`) and re-run `--execute`;
+it will match, copy and stamp together. `AMBIGUOUS-ENTITY`:
+renaming can't help (the slug is shared) — copy the image into
+the chosen entity's `_attachments/<type folder>/` by hand, then
+set its `portrait` with `stamp_entities.py`.
 Atmosphere art has no row; file it under `_attachments/documents/`
 by hand.
 
