@@ -115,16 +115,18 @@ def _pull_body(old_body: str, description: str | None, desc_type: str | None,
 
 
 def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
-                    vault_only: tuple) -> str:
+                    vault_only: tuple, gm_owners: dict | None = None) -> str:
     """The markdown mobRPG should hold as this note's description: authored canon
     prose and nothing else. Vault-only sections are sliced off first so they are
     neither rewritten nor pushed (#146/#147), then machine boilerplate is
     stripped, then any heading left with no body is dropped — an empty
     `## Properties` is a vault writing prompt, not canon — and finally
-    `[[wikilinks]]` become element links."""
+    `[[wikilinks]]` become element links, after any GM alias is rewritten to
+    its owner's name (#212)."""
     main = section.split_vault_only(old_body, vault_only)[0]
     main = _md.strip_boilerplate(main)
     main = section.drop_empty_sections(main)
+    main = suggest.unmask_gm_aliases(main, gm_owners or {})
     main = links.rewrite_md_for_push(main, idx, world, url_fmt)
     return main.strip()
 
@@ -237,12 +239,14 @@ def plan(notes, fetch, now: str, skew: float, *,
          idx: dict | None = None, world: str = "",
          url_fmt: str = links.URL_FMT,
          name_by_eid: dict | None = None,
-         vault_only: tuple = section.DEFAULT_VAULT_ONLY) -> list[Action]:
+         vault_only: tuple = section.DEFAULT_VAULT_ONLY,
+         gm_owners: dict | None = None) -> list[Action]:
     """Pure decision pass. `notes` yields (path, txt, nd, mtime); `fetch(nd)`
     returns (detail, status) with status in {ok, deleted, unknown}. `now` is the
     stamp to apply; no I/O happens here. `idx`/`world`/`url_fmt` drive the push
     wikilink->element rewrite; `name_by_eid` drives the pull element->wikilink
-    rewrite; `vault_only` names the H2 sections that belong to the vault alone."""
+    rewrite; `vault_only` names the H2 sections that belong to the vault alone;
+    `gm_owners` maps GM aliases to their owners' names, so no push carries one."""
     idx = idx or {}
     actions: list[Action] = []
     for path, txt, nd, mtime in notes:
@@ -271,7 +275,7 @@ def plan(notes, fetch, now: str, skew: float, *,
         # authored body and just adopts a baseline, leaving real drift to surface
         # on the next edit of either side.
         if decision == "baseline":
-            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
+            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners)
             if _matches_server(cand_md, detail, url_fmt):
                 actions.append(_stamped(path, ref, "in-sync", txt, nd,
                                         old_body, now))
@@ -300,7 +304,7 @@ def plan(notes, fetch, now: str, skew: float, *,
         # of the vault's own prose; anything else — including a difference
         # only the loose compare would have missed — genuinely pulls.
         if decision == "pull":
-            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
+            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners)
             if _matches_server_strict(cand_md, detail):
                 actions.append(_stamped(path, ref, "in-sync", txt, nd,
                                         old_body, now))
@@ -313,7 +317,7 @@ def plan(notes, fetch, now: str, skew: float, *,
             continue
 
         # Behavior 6: push / tie — compare authored prose to the live description.
-        cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
+        cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners)
         if _matches_server(cand_md, detail, url_fmt):
             # Already in sync — stamp last_synced only (no suggestion).
             actions.append(_stamped(path, ref, "in-sync", txt, nd, old_body, now))
@@ -391,6 +395,7 @@ def run(argv: list[str]) -> int:
     # rewrite. Both are built from ALL linked notes — a --only-filtered note can
     # still be a valid link target — so they are populated before the filter.
     idx, _linked, _submitted = suggest.node_index(args.vault)
+    gm_owners = suggest.gm_alias_owners(args.vault)
     try:
         notes = []
         name_by_eid: dict[str, str] = {}
@@ -411,7 +416,8 @@ def run(argv: list[str]) -> int:
         actions = plan(notes, fetch, now, args.skew,
                        idx=idx, world=args.world, url_fmt=links.URL_FMT,
                        name_by_eid=name_by_eid,
-                       vault_only=vault_only_sections(args.vault))
+                       vault_only=vault_only_sections(args.vault),
+                       gm_owners=gm_owners)
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1

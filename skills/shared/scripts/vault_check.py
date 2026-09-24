@@ -757,9 +757,7 @@ def list_active_pcs(vault: Path) -> list[str]:
     """
     rows = []
     for rel, fm in active_pcs(vault):
-        aliases = fm.get("aliases")
-        names = ", ".join(str(a).strip() for a in aliases
-                          if str(a).strip()) if isinstance(aliases, list) else ""
+        names = ", ".join(link_aliases(fm))
         as_of = fm.get("asOfSession")
         stamp = str(as_of) if as_of not in (None, "", []) else "?"
         rows.append(f"PC\t{rel}\t{Path(rel).stem}; "

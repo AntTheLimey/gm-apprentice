@@ -44,14 +44,17 @@ def _list_field(fm: str, field: str) -> list[str]:
     """A top-level frontmatter list, inline or block. Anchored to the start of
     a line so `aliases` never matches inside `gm_aliases`."""
     block = re.search(rf"^{field}:(.*?)(?=\n\w|\Z)", fm, re.S | re.M)
-    items = re.findall(r'-\s*"?([^"\n]+?)"?\s*$', block.group(1), re.M) if block else []
+    items = re.findall(r"^\s*-\s*(.+?)\s*$", block.group(1), re.M) if block else []
+    # A YAML comment needs whitespace before the `#`; a quoted item keeps its own.
+    items = [a if a[:1] in "\"'" else re.sub(r"\s+#.*$", "", a) for a in items]
     inline = re.search(rf"^{field}:\s*\[([^\]]*)\]", fm, re.M)
     items = [a for a in (inline.group(1) if inline else "").split(",") if a.strip()] or items
-    return [a.strip().strip('"') for a in items if a.strip()]
+    return [a.strip().strip("\"'") for a in items if a.strip().strip("\"'")]
 
 
 def _gm_aliases(fm: str) -> list[str]:
-    """GM-only names (#212): they resolve links but never go upstream."""
+    """GM-only names (#212): they resolve links in the vault but never go
+    upstream. `unmask_gm_aliases` rewrites them before anything is pushed."""
     return _list_field(fm, "gm_aliases")
 
 
@@ -60,6 +63,42 @@ def _aliases(fm: str) -> list[str]:
     under `aliases` too, so Obsidian resolves it, is still kept back."""
     secret = {_key(a) for a in _gm_aliases(fm)}
     return [a for a in _list_field(fm, "aliases") if _key(a) not in secret]
+
+
+def gm_alias_owners(vault) -> dict[str, str]:
+    """{name key of a GM alias: display name of the note that owns it} (#212).
+    A GM alias that is also some note's own name or public alias is left out,
+    because that name belongs to the other note."""
+    owned: dict[str, str] = {}
+    public: set[str] = set()
+    vault = os.path.expanduser(vault)
+    for folder in map_cmd.FOLDERS:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            fm, _ = _read(p)
+            name = _display_name(p)
+            public.add(_key(name))
+            public.update(_key(a) for a in _aliases(fm))
+            for a in _gm_aliases(fm):
+                owned.setdefault(_key(a), name)
+    return {k: v for k, v in owned.items() if k not in public}
+
+
+_WIKILINK = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]")
+
+
+def unmask_gm_aliases(text: str, owners: dict) -> str:
+    """Point every `[[GM alias]]` at its owner's name, keeping any `#anchor` and
+    `|label`, so nothing pushed upstream carries the secret name (#212). Run it
+    before link rewriting, so the link resolves to the owner's element."""
+    if not owners or not text:
+        return text
+
+    def sub(m):
+        owner = owners.get(_key(m.group(2)))
+        if not owner:
+            return m.group(0)
+        return f"{m.group(1)}[[{owner}{m.group(3) or ''}{m.group(4) or ''}]]"
+    return _WIKILINK.sub(sub, text)
 
 
 def _relationships(fm: str) -> list[dict]:
@@ -136,6 +175,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
     vault = os.path.expanduser(vault)
     exclude_kinds = exclude_kinds or set()
     vault_only = vault_only_sections(vault)
+    owners = gm_alias_owners(vault)
     out = []
     for folder, vkind in map_cmd.FOLDERS.items():
         if kind and vkind != kind:
@@ -165,14 +205,15 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
             out.append({
                 "path": p, "kind": vkind, "name": name, "provenance": prov,
                 "aliases": _aliases(fm),
-                "gm_aliases": _gm_aliases(fm),
-                "description": _description(body, vault_only),
+                "description": _description(unmask_gm_aliases(body, owners), vault_only),
                 "location_type": map_cmd._scalar(fm, "location_type"),
                 "occupation": map_cmd._scalar(fm, "occupation"),
                 "gender": map_cmd._scalar(fm, "gender"),
                 "faction_type": map_cmd._scalar(fm, "faction_type"),
                 "creature_type": map_cmd._scalar(fm, "creature_type"),
-                "relationships": _relationships(fm),
+                "relationships": [
+                    {**r, "target": owners.get(_key(r["target"].split("#")[0]), r["target"])}
+                    for r in _relationships(fm)],
             })
     if limit:
         out = out[:limit]
@@ -392,7 +433,7 @@ def node_index(vault) -> tuple[dict, set, set]:
             eid = nd["element_id"]
             idx[subj] = eid
             fm, _ = _read(p)
-            for al in _aliases(fm) + _gm_aliases(fm):
+            for al in _aliases(fm):
                 aliases.append((_key(al), eid))     # aliased target resolution (name wins — added after)
             for r in nd.get("relationships", []):
                 if r.get("event_id"):
@@ -428,7 +469,7 @@ def node_kind_index(vault) -> dict:
                 continue
             idx[_key(_display_name(p))] = nd["element_kind"]
             fm, _ = _read(p)
-            for al in _aliases(fm) + _gm_aliases(fm):
+            for al in _aliases(fm):
                 aliases.append((_key(al), nd["element_kind"]))
     for k, kind in aliases:
         idx.setdefault(k, kind)
@@ -980,7 +1021,7 @@ def run(argv: list[str]) -> int:
         # "not a world element".
         for ent, live in preexisting:
             ent_id_by_key.setdefault(_key(ent["name"]), live["id"])
-            for al in ent.get("aliases", []) + ent.get("gm_aliases", []):
+            for al in ent.get("aliases", []):
                 ent_id_by_key.setdefault(_key(al), live["id"])
 
     # Every NET-NEW entity's in-batch group ref, so a relationship whose target is
@@ -989,7 +1030,7 @@ def run(argv: list[str]) -> int:
     # to their real id via ent_id_by_key, which is consulted first.)
     ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(net_new, 1)}
     for i, ent in enumerate(net_new, 1):           # aliases resolve too; names already set win
-        for al in ent.get("aliases", []) + ent.get("gm_aliases", []):
+        for al in ent.get("aliases", []):
             ref_by_key.setdefault(_key(al), f"e{i}")
     # What each endpoint IS upstream, which is what decides an affiliation edge's
     # eventType (map_cmd.affiliation). Canon first — a linked note's node records
@@ -1002,7 +1043,7 @@ def run(argv: list[str]) -> int:
         if not proposed:
             continue
         kind_by_key.setdefault(_key(ent["name"]), proposed)
-        for al in ent.get("aliases", []) + ent.get("gm_aliases", []):
+        for al in ent.get("aliases", []):
             kind_by_key.setdefault(_key(al), proposed)
 
     groups, refs, all_reports = [], [], []

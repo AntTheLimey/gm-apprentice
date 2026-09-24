@@ -1063,7 +1063,8 @@ def test_dry_run_write_back_changes_no_files(tmp_path, monkeypatch, capsys):
     assert node.read_node((d / "Characters/NPCs/Gary_Johnson.md").read_text()) is None
 
 
-# #212: GM-only aliases resolve locally and never go upstream as altNames.
+
+# #212: GM-only aliases resolve in the vault and never go upstream.
 def test_aliases_does_not_read_gm_aliases():
     fm = 'type: npc\ngm_aliases:\n  - Elias Crowe\naliases:\n  - Vane\n'
     assert suggest._aliases(fm) == ["Vane"]
@@ -1075,5 +1076,40 @@ def test_gm_alias_also_under_aliases_is_kept_back():
     assert suggest._aliases(fm) == ["Vane"]
 
 
-def test_gm_aliases_only_file_has_no_public_aliases():
-    assert suggest._aliases('type: npc\ngm_aliases: [Elias Crowe]\n') == []
+def test_list_field_drops_a_trailing_yaml_comment():
+    fm = 'aliases:\n  - Elias Crowe # secret\n  - "Red # Hand"\ngm_aliases:\n  - Elias Crowe\n'
+    assert suggest._list_field(fm, "aliases") == ["Elias Crowe", "Red # Hand"]
+    assert suggest._aliases(fm) == ["Red # Hand"]
+
+
+def _gm_vault(tmp_path):
+    def w(rel, fm, body="Body text."):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"---\n{fm}\n---\n{body}\n", encoding="utf-8")
+    w("Characters/NPCs/Lord_Vane.md",
+      'type: npc\naliases: [Vane]\ngm_aliases: ["Elias Crowe", "Ada Marsh"]')
+    w("Characters/NPCs/Ada_Marsh.md",
+      'type: npc\nrelationships:\n  - target: "[[Elias Crowe]]"\n    type: fears',
+      body="Ada saw [[Elias Crowe]] and [[elias crowe#Past|a shadow]].")
+    return str(tmp_path)
+
+
+def test_gm_alias_owners_skips_a_name_another_note_owns(tmp_path):
+    owners = suggest.gm_alias_owners(_gm_vault(tmp_path))
+    assert owners == {suggest._key("Elias Crowe"): "Lord Vane"}
+
+
+def test_unmask_keeps_anchor_and_label():
+    owners = {suggest._key("Elias Crowe"): "Lord Vane"}
+    assert (suggest.unmask_gm_aliases("[[Elias Crowe]] / [[elias crowe#Past|x]]", owners)
+            == "[[Lord Vane]] / [[Lord Vane#Past|x]]")
+
+
+def test_collected_entity_carries_no_gm_alias(tmp_path):
+    ents = {e["name"]: e for e in suggest.collect_entities(_gm_vault(tmp_path))}
+    ada = ents["Ada Marsh"]
+    assert "Crowe" not in ada["description"]
+    assert "Lord Vane" in ada["description"]
+    assert [r["target"] for r in ada["relationships"]] == ["Lord Vane"]
+    assert "Crowe" not in str(ents["Lord Vane"])

@@ -842,9 +842,10 @@ resolve links but are never published. No existing file needs it.
 
 ### Tooling
 
-- publish-site 1.11.33 resolves `gm_aliases`, strips them from the
-  site, and rewrites links written with one to show the page's title.
+- publish-site 1.11.33 rewrites every GM alias to its owner's title
+  before rendering and strips `gm_aliases` from the site.
 - `vault_check`, `graph_check` and `session_context` resolve links and
   match PCs through `gm_aliases`.
-- mobrpg never sends a `gm_aliases` name upstream as an `altName`, and
-  no longer mistakes a `gm_aliases:` line for `aliases:`.
+- mobrpg rewrites a GM alias to its owner's name before any push, never
+  sends one as an `altName`, and no longer mistakes a `gm_aliases:` line
+  for `aliases:`.

@@ -3,7 +3,6 @@ const path = require('path');
 const matter = require('gray-matter');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
-const { gmAliasList } = require('./processor');
 
 function slugify(name) {
   const slug = name
@@ -217,16 +216,6 @@ function buildLinkMap(pages) {
         if (!(key in map)) {
           map[key] = page.outputPath;
         }
-      }
-    }
-  }
-
-  // Pass 4: GM-only aliases (#212), last so a title or public alias wins a clash.
-  for (const page of pages) {
-    for (const alias of gmAliasList(page.frontmatter)) {
-      const key = canonicalNfc(alias);
-      if (!(key in map)) {
-        map[key] = page.outputPath;
       }
     }
   }

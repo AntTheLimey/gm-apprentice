@@ -30,8 +30,23 @@ function writeVault(root) {
     '---', 'type: npc', 'status: alive', `location: "[[${SECRET}]]"`,
     'relationships:',
     `  - target: "[[${SECRET}]]"`, '    type: fears',
+    // Bare, with no brackets: renderers look this up in the link map too.
+    `  - target: ${SECRET}`, '    type: suspects',
     '---', '',
-    `Ada has seen [[${SECRET}]] twice, and once [[${OBSIDIAN_SECRET}|a shadow in red]].`, '',
+    `Ada has seen [[${SECRET}]] twice, and once [[${OBSIDIAN_SECRET}|a shadow in red]].`,
+    // Spellings Obsidian resolves: other case, underscores, a heading anchor, an embed.
+    `She wrote [[elias crowe]], [[Elias_Crowe]] and [[${SECRET}#Past]] in her diary. ![[${SECRET}]]`,
+    '',
+  ].join('\n'));
+  // An unpublished owner: its secret must still be rewritten wherever it is linked.
+  f('Characters/NPCs/Mother Grey.md', [
+    '---', 'type: npc', 'publish: false', 'gm_aliases: ["The Weaver"]',
+    '---', '', 'Spins the town.', '',
+  ].join('\n'));
+  f('Characters/NPCs/Kit Lowe.md', [
+    '---', 'type: npc', 'status: alive',
+    'relationships:', '  fears: The Weaver',
+    '---', '', 'Kit dreams of [[The Weaver]]. ![[The Weaver]]', '',
   ].join('\n'));
   // A GM alias that collides with a real page title must not steal that page's links.
   f('Characters/NPCs/Tomas Reed.md', [
@@ -91,7 +106,13 @@ describe('gm_aliases (#212)', () => {
     for (const [rel, text] of tree) {
       assert.ok(!text.includes(SECRET), `${rel} contains "${SECRET}"`);
       assert.ok(!text.includes(OBSIDIAN_SECRET), `${rel} contains "${OBSIDIAN_SECRET}"`);
+      assert.ok(!/crowe|weaver/i.test(text), `${rel} contains a spelling of a GM alias`);
     }
+  });
+
+  it('shows an unpublished owner by its public name, unlinked', () => {
+    const kit = pageFor('Kit Lowe');
+    assert.match(kit, /Kit dreams of Mother Grey\./);
   });
 
   it('resolves a GM-alias link to its page, shown under the public name', () => {

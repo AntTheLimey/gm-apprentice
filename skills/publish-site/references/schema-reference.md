@@ -280,7 +280,7 @@ These fields are read by all templates if present:
 | Field | Description |
 |-------|-------------|
 | `aliases` | List of alternate names used for wiki-link resolution |
-| `gm_aliases` | Secret alternate names: they resolve wiki-links but are never published. A link written with one shows the page's title, and a name listed in both `aliases` and `gm_aliases` is removed from the published `aliases` |
+| `gm_aliases` | Secret alternate names: they resolve wiki-links but are never published. The build rewrites each one, in links and bare frontmatter values, to the owning page's title (plain text if that page isn't published). A name listed in both `aliases` and `gm_aliases` is removed from the published `aliases` |
 | `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED / STUB — renders a canon status badge (see below) |
 | `source_confidence`, `confidence` | Legacy names for `canon_status` — honored at read time for unmigrated vaults, never written |
 | `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
