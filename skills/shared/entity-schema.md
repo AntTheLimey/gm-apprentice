@@ -364,7 +364,17 @@ the `mobrpg` CLI — a regenerable sync ledger, not authored content;
 top-line frontmatter stays the source of truth. Never edit it or
 copy it into another entity. mobRPG is canon: `accepted`/`edited`
 entities (`review_state`) are refreshed from mobRPG on pull-down;
-`pending`/`dismissed` ones keep their vault content.
+`pending`/`dismissed` ones keep their vault content. Scalar values
+are JSON-encoded (`key: "text"`, `key: null`).
+
+| Key | Meaning |
+|-----|---------|
+| `world_id` / `external_ref` / `element_id` / `element_kind` | identity anchors (element_id is null until mobRPG accepts) |
+| `review_state` | `pending` / `accepted` / `dismissed` / `edited` / `deleted` |
+| `content_hash` / `last_synced` / `review_note` | sync bookkeeping |
+| `determined` | classifiers derived and sent (mobRPG canon overwrites on edit) |
+| `relationships[]` | reified-Event ids keyed by `(predicate, target)` |
+| `languages[]` | reserved (populated by the mobRPG skill) |
 
 ## Relationship Types
 
