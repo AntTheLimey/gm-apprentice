@@ -37,6 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_Campaign/Timeline.md`; four places named files no vault has.
 - `stale-draft-detection.md` described the old vault-wide algorithm the
   script replaced in #162; it now defers to `vault_check.py stale-drafts`.
+- `stale-draft-detection.md` also dropped the missing/future
+  `createdSession` Warning cases during the diet's rewrite; restored,
+  and campaign-qa's severity table no longer calls stale DRAFT an Info
+  example.
+- New-vault setup stamped `gm_apprentice_version` before scaffolding
+  `_World/`, templates and `Planning/`, so an interrupted setup could
+  look current with artifacts still missing. Stamping now runs last.
+- publish-site's content-filtering workflow could build
+  `publish-manifest.md` and rely on it while `mode: full` (which
+  ignores the manifest) was still set. It now confirms `mode: player`
+  first.
+- session-play ran `session_context.py --play` before the Version
+  Gate; it now runs the gate first, like the other session skills.
 
 ### Removed
 
