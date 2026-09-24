@@ -173,14 +173,14 @@ Five questions per active faction:
 ## Tracking State
 
 Consequences, foreshadowing, and discovery state are tracked
-via the entity schema — not standalone files. See
-`shared/entity-schema.md` for:
+without standalone tracking files:
 
-- **Thread entities** with `threadType: "Foreshadowing"`,
-  `plantedDetail`, `intendedPayoff`, `ripeness`
-- **Clue entities** with `discoveryState` (per-PC knowledge
-  levels: Unknown → Rumoured → Observed → Investigated →
-  Understood)
+- **Foreshadowing** — a thread in the Thread Tracker format
+  (`continuity-engine.md`), with its Planted Detail, Intended
+  Payoff and Ripeness lines
+- **Clue entities** with `discoveryState` in
+  `shared/entity-schema.md` (per-PC knowledge levels: Unknown →
+  Rumoured → Observed → Investigated → Understood)
 
 Consequences surface through session-wrapup's carry-forward
 section and session-prep's thread review. World state snapshots

@@ -120,6 +120,10 @@ its absence as a gap.
 
 ### Thread Tracker
 
+Threads are tracked inline, not as entity files: each PC's
+`## Current Status` → Open threads, and a Plan's `## Active Threads`.
+Use this format when the GM asks for a thread tracker or a review:
+
 ```markdown
 ## [Thread Name]
 Type:  Introduced: [session + context]
@@ -128,6 +132,14 @@ Summary:  Known By: [PCs and NPCs aware]
 Connected Entities:  Last Advanced: [session + what happened]
 Next Beat:  Resolution Condition:
 Urgency: [Immediate / This arc / Long-term / Background]
+```
+
+Foreshadowing and Chekhov's-gun threads add three lines:
+
+```markdown
+Planted Detail: [what the players saw or heard, and when]
+Intended Payoff: [what it turns out to mean]
+Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 ```
 
 ### Chekhov Protocol
