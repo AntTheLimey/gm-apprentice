@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.1] — 2026-09-24
+
+### Added
+
+- `vault_check.py <vault> gm-leak --fix`: re-nests the ERROR/WARNING
+  heading rows `gm-leak` already reports (a bold-wrapped exclude match,
+  or a published heading matching an `exclude_sections` entry or Keeper
+  keyword) as a `###` subsection under `## GM Notes`, demoting it and
+  its own sub-headings a level — the 1.8.3 migration's structural move,
+  mechanised for any entity file the same way `wrapup --fix` already
+  handles Session Wrap-Ups. Dry-run by default (`WOULD-FIX` rows);
+  `--fix` writes and reports `FIXED`. A file with unbalanced
+  `<!-- gm-only -->`/`<!-- spoiler -->` fences is left untouched (#228).
+
+### Changed
+
+- `migration-procedure.md` Step 6's hand re-nest of GM-only headings
+  now calls `gm-leak --fix` instead of one Edit per heading (#228).
+- Migration consent is now stated once, in `migration-procedure.md`
+  Step 5: structural changes need one GM yes for the whole batch — an
+  instruction already in the request counts as that yes — content and
+  tooling items are chosen one at a time, and nothing applies or stamps
+  without that yes. A scripted/headless run with no such instruction
+  gets a preview only: nothing applied, nothing stamped, the pending
+  migration reported. `shared/migrations.md`'s own description of
+  Structural changes now points at that rule instead of restating it.
+  Removed the wording that told the GM structural changes "will be
+  applied automatically" (#220).
+
+### Fixed
+
+- Step 7 no longer stamps `gm_apprentice_version` at the full target
+  version when a structural item was skipped, refused, or failed: it
+  stamps the highest version whose own structural items are all done
+  and names the outstanding item in the Step 8 report, so the next
+  MISMATCH still offers it instead of the vault reading current with a
+  structural change never applied (#228).
+
 ## [1.10.0] — 2026-09-24
 
 ### Changed
