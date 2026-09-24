@@ -809,8 +809,9 @@ Templates carry their own section guidance. No frontmatter changes.
   `shared/templates/session-plan.md`. It gains a `## Handouts & Props`
   table (between Contingency Scenes and Session End Objectives) and an
   optional `**Handouts:**` scene label (a session without handouts
-  writes "None this session."), and Open Questions no longer asks for a
-  note about defaulted bookkeeping.
+  writes "No handouts or props."), and Open Questions no longer asks for
+  a note about defaulted bookkeeping; an unrecorded sheet value is a
+  `**Missing:**` item there.
 - Existing Plan and Wrap-Up files are not touched. `plan_check.py`
   reports a Plan without `## Handouts & Props` as a `sections` WARNING;
   session-prep adds the section the next time it preps that session.

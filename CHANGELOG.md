@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Session Plan template: a `## Handouts & Props` table (document, scene,
-  status, notes) listing every handout the session delivers ("None
-  this session." when there are none), and an optional `**Handouts:**`
-  scene label. `plan_check.py` knows both.
+  status, notes) listing every handout the session delivers ("No
+  handouts or props." when there are none), and an optional
+  `**Handouts:**` scene label. `plan_check.py` knows both, and reports
+  the section as placeholder only while the example row is its sole
+  data row.
   Gaps & Actions no longer collects handouts (#223).
 - Superseded GM rulings: the replaced ruling is struck through and
   marked `superseded YYYY-MM-DD` in the same edit
@@ -37,11 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scenes:` and never removes entries; session-wrapup sets `scenes:` to
   the scenes played and lists the rest under Skipped Prep
   (`shared/session-document-chain.md`) (#224).
-- Bookkeeping defaults go where they apply, not in a note about
-  defaulting; each default and the run notes (migration applied, phases
-  skipped, checks run) go in the reply to the GM, never in the Plan. A
-  value missing from an entity or PC sheet is never defaulted onto it:
-  it becomes an Open Question for the GM (#225).
+- A bookkeeping default goes where it applies in the Plan's content and
+  is listed in the reply to the GM; the Plan carries no "defaulted"
+  note. Run notes (migration applied, phases skipped, checks run) go in
+  the reply, never in the Plan. A value missing from an entity or PC
+  sheet is never defaulted onto it: it becomes a `**Missing:**` Open
+  Question for the GM, which `plan_check.py --headless` accepts without
+  the guess marker (#225).
 - Migration 1.9.15 → 1.9.16 re-copies both templates into `_Templates/`.
 
 ### Fixed
