@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.4] — 2026-09-24
+
+### Fixed
+
+- `rules_lookup.py`: an unrecognised system slug (`gurps` instead of
+  `gurps-4e`) printed `# match: none` and exited 1, indistinguishable
+  from a rule that genuinely doesn't exist. It now resolves common
+  aliases (`gurps`/`gurps4e`, `dnd`/`dnd5e`/`5e`/`dnd-5e`/`d&d`,
+  `pf2`/`pathfinder`/`pf2e-remaster`, `coc`/`coc7e`/`cthulhu`,
+  `blades`/`bitd`/`fitd`) against the real slugs under `systems/`
+  (`all` is now case-insensitive too), and a genuinely unknown system
+  exits 2 with the list of valid slugs. A `base/variant` system
+  argument (`coc-7e/regency`) now implies `--variant`, resolved against
+  that system's `variants/` folder, instead of erroring or silently
+  filtering the variant out.
+- `rules_lookup.py`: hyphenated and spelled-out names didn't match each
+  other ("fast draw" missed "Fast-Draw", "off guard" missed
+  "Off-Guard") because the exact and substring tiers compared raw
+  casefolded strings. Both now compare normalised names — `[a-z0-9]+`
+  tokens joined by single spaces, a trailing parenthetical dropped — so
+  punctuation no longer matters, and the shortest, least-decorated name
+  is shown first when several forms of a name tie.
+- `rules_lookup.py`: a multi-word query whose words landed in different
+  records ("fire damage" — one word in a spell's name, the other only
+  in unrelated records' body text) either found nothing or, in an
+  earlier attempt at this fix, matched on loose substrings of body text
+  (`"fires"` counted as `"fire"`), burying a real hit like "Breathe
+  Fire" under noise like "Force Barrage". Matching now runs two further
+  tiers between substring and the fuzzy fallback: name-words (every
+  query word is a whole word in the record's NAME, in any order, common
+  words dropped, a trailing plural folded) and a weak "mentions" tier
+  (every word, or all but one with at least one landing in the name, is
+  a whole word somewhere in the name or body text — text is matched
+  literally, never stemmed, so "Fires" no longer matches "fire").
+  Mentions-tier hits are scored and sorted, and reported with a header
+  that says the hit is weak and names the query, since these records
+  don't name the thing asked for — they mention it.
+- `rules_lookup.py`: a table row whose first cell was a bare level
+  number (the D&D Rogue level-progression table) became a record
+  literally named "1", which could out-rank the real answer. Such rows
+  are no longer indexed as records.
+- `rules_lookup.py`: PF2e ancestries (`ancestries.md`) were classified
+  as `kind=class`, so `--kind ancestry` filtering and `--kind class`
+  results both looked wrong. `KIND_BY_STEM` now maps `ancestries` to
+  `ancestry`; `ttrpg-expert/SKILL.md`'s PF2e routing table updated to
+  match.
+
+### Changed
+
+- `rules_lookup.py --json` now prints one object,
+  `{"match": mode, "total": n, "records": [...]}`, instead of a bare
+  array, so a `--json` caller can see which tier answered (and, on a
+  `--kind` miss that fell back to an unfiltered lookup, the fallback's
+  own tier via `"kind_fallback"`) instead of only the records.
+
 ## [1.10.3] — 2026-09-24
 
 ### Added

@@ -72,6 +72,14 @@ class TableRecords(unittest.TestCase):
         self.assertEqual(kinds["gurps-4e/skills-combat.md"], {"skill"})
         self.assertEqual(kinds["coc-7e/creatures.md"], {"monster"})
         self.assertEqual(kinds["dnd-5e-2024/spells-1.md"], {"spell"})
+        self.assertEqual(kinds["pf2e/ancestries.md"], {"ancestry"})
+
+    def test_ancestries_stem_maps_to_ancestry_not_class(self):
+        self.assertEqual(rl.kind_for_stem("ancestries"), "ancestry")
+        mode, recs, _total = rl.lookup("Fixture-kin", system="pf2e",
+                                       systems_dir=FIX)
+        self.assertEqual(mode, "exact")
+        self.assertEqual(recs[0].kind, "ancestry")
 
     def test_header_and_separator_rows_are_not_records(self):
         names = {r.name for r in rl.iter_records(FIX, systems=["gurps-4e"])}
@@ -141,6 +149,63 @@ class MatchTiers(unittest.TestCase):
         mode, recs, _total = rl.lookup("Bracketwork", kind="skill", systems_dir=FIX)
         self.assertEqual(mode, "exact")
         self.assertEqual(recs[0].kind, "skill")
+
+    def test_weak_tier_matches_text_not_just_name(self):
+        """A multi-word query with no record name containing the whole
+        phrase still hits, via the weak "mentions" tier, before fuzzy."""
+        mode, recs, total = rl.lookup("fire damage", systems_dir=FIX)
+        self.assertEqual(mode, "weak")
+        self.assertEqual(total, 1)
+        self.assertEqual(recs[0].name, "Ember Reach")
+
+        mode, recs, _total = rl.lookup("desperate position", systems_dir=FIX)
+        self.assertEqual(mode, "weak")
+        self.assertEqual(recs[0].name, "Overwatch")
+
+    def test_weak_tier_word_order_independent(self):
+        mode, recs, _total = rl.lookup("position desperate", systems_dir=FIX)
+        self.assertEqual(mode, "weak")
+        self.assertEqual(recs[0].name, "Overwatch")
+
+    def test_weak_tier_reported_in_header(self):
+        mode, recs, total = rl.lookup("fire damage", systems_dir=FIX)
+        text = rl.render(mode, recs, total=total, term="fire damage")
+        header = text.splitlines()[0]
+        self.assertTrue(header.startswith("# match: weak ("))
+        self.assertIn('"fire damage"', header)
+        self.assertIn("not a record name", header)
+
+    def test_weak_tier_body_text_is_not_stemmed(self):
+        """A record whose text says "fires" (not "fire") must not match
+        a query for "fire" — body text is matched literally, never
+        stemmed, unlike the query and name tokens (#C1)."""
+        mode, recs, _total = rl.lookup("fire", systems_dir=FIX)
+        names = {r.name for r in recs}
+        self.assertNotIn("Cannon Volley", names)
+
+    def test_weak_tier_body_matches_unfolded_query_word(self):
+        """The plural fold on query tokens ("bonus" -> "bonu") must not
+        stop a body-text match on the exact word "bonus"."""
+        mode, recs, _total = rl.lookup("circumstance bonus",
+                                       system="pf2e")
+        self.assertEqual(mode, "weak")
+        # Before the fix only a record named "Circumstance" matched.
+        self.assertIn("Aid", {r.name for r in recs})
+
+    def test_exact_wins_over_word_tiers(self):
+        """A query that would also satisfy a word tier still reports as
+        exact, because exact is checked first and short-circuits."""
+        mode, recs, _total = rl.lookup("Absolute Timing", systems_dir=FIX)
+        self.assertEqual(mode, "exact")
+        self.assertEqual(recs[0].name, "Absolute Timing")
+
+    def test_no_record_named_a_bare_number(self):
+        """A level-progression table's numeric first column (D&D Rogue's
+        `| 1 | ... |`) must never become a record name (#C1)."""
+        names = {r.name for r in rl.iter_records(FIX, systems=["dnd-5e-2024"])}
+        self.assertNotIn("1", names)
+        self.assertNotIn("2", names)
+        self.assertNotIn("3", names)
 
 
 class Gating(unittest.TestCase):
@@ -250,9 +315,69 @@ class KindFallback(unittest.TestCase):
                       "--systems-dir", str(FIX), "--json")
         self.assertEqual(out.returncode, 1, out.stderr)
         payload = json.loads(out.stdout)
-        self.assertTrue(payload, "the text mode shows the fallback rows; "
+        self.assertEqual(payload["match"], "none")
+        self.assertEqual(payload["kind_fallback"], "exact")
+        records = payload["records"]
+        self.assertTrue(records, "the text mode shows the fallback rows; "
                                  "--json must not print an empty array here")
-        self.assertTrue(any(rec["name"] == "Bracketwork" for rec in payload))
+        self.assertTrue(any(rec["name"] == "Bracketwork" for rec in records))
+
+
+class SystemAliases(unittest.TestCase):
+    """I#: an alias like `gurps` resolves to the real slug `gurps-4e`
+    instead of being treated as an unknown, silently-empty system; a
+    genuinely unknown slug is a reported error, not "no such rule"."""
+
+    def test_alias_resolves_to_real_slug(self):
+        self.assertEqual(rl.resolve_system("gurps", FIX), "gurps-4e")
+        self.assertEqual(rl.resolve_system("gurps4e", FIX), "gurps-4e")
+        self.assertEqual(rl.resolve_system("dnd", FIX), "dnd-5e-2024")
+        self.assertEqual(rl.resolve_system("5e", FIX), "dnd-5e-2024")
+        self.assertEqual(rl.resolve_system("d&d", FIX), "dnd-5e-2024")
+        self.assertEqual(rl.resolve_system("pf2", FIX), "pf2e")
+        self.assertEqual(rl.resolve_system("pathfinder", FIX), "pf2e")
+        self.assertEqual(rl.resolve_system("coc", FIX), "coc-7e")
+        self.assertEqual(rl.resolve_system("cthulhu", FIX), "coc-7e")
+        self.assertIsNone(rl.resolve_system("nope-not-a-system", FIX))
+
+    def test_alias_hits_via_cli(self):
+        out = run_cli("gurps", "Absolute Timing", "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("Absolute Timing", out.stdout)
+
+    def test_unknown_system_exits_2_with_slug_list(self):
+        out = run_cli("nope-not-a-system", "Absolute Timing",
+                      "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("unknown system", out.stderr)
+        # every real slug under the fixture corpus is listed
+        for slug in rl.list_systems(FIX):
+            self.assertIn(slug, out.stderr)
+        self.assertIn("all", out.stderr)
+        self.assertEqual(out.stdout, "")
+
+    def test_list_systems_reads_the_directory(self):
+        self.assertEqual(rl.list_systems(FIX),
+                         ["coc-7e", "dnd-5e-2024", "gurps-4e", "pf2e"])
+
+    def test_system_resolution_is_case_insensitive(self):
+        self.assertEqual(rl.resolve_system("GURPS-4E", FIX), "gurps-4e")
+        self.assertEqual(rl.resolve_system("Gurps", FIX), "gurps-4e")
+
+    def test_variant_suffix_via_cli(self):
+        """`coc-7e/regency` as the system argument implies `--variant
+        regency` instead of erroring as an unknown system (#C1)."""
+        out = run_cli("coc-7e/regency", "Cartography",
+                      "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("Cartography", out.stdout)
+        self.assertIn("coc-7e/regency", out.stdout)
+
+    def test_unknown_variant_suffix_exits_2(self):
+        out = run_cli("coc-7e/not-a-real-variant", "Cartography",
+                      "--systems-dir", str(FIX))
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("unknown variant", out.stderr)
 
 
 class BadSystemsDir(unittest.TestCase):
@@ -292,11 +417,20 @@ class Cli(unittest.TestCase):
                       "--json")
         self.assertEqual(out.returncode, 0, out.stderr)
         payload = json.loads(out.stdout)
-        self.assertEqual(len(payload), 1)
-        self.assertEqual(sorted(payload[0]),
+        self.assertEqual(payload["match"], "exact")
+        self.assertEqual(payload["total"], 1)
+        records = payload["records"]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(sorted(records[0]),
                          ["cells", "file", "headers", "kind", "line", "name",
                           "system", "text"])
-        self.assertEqual(payload[0]["system"], "pf2e")
+        self.assertEqual(records[0]["system"], "pf2e")
+
+    def test_cli_all_case_insensitive(self):
+        for spelling in ("all", "ALL", "All"):
+            out = run_cli(spelling, "Ghoul Soldier", "--systems-dir", str(FIX))
+            self.assertEqual(out.returncode, 0, (spelling, out.stderr))
+            self.assertIn("Ghoul Soldier", out.stdout)
 
     def test_cli_block_text_is_indented(self):
         out = run_cli("dnd-5e-2024", "Commoner", "--systems-dir", str(FIX))
@@ -355,6 +489,58 @@ class RealCorpus(unittest.TestCase):
     def test_real_corpus_skips_personal(self):
         self.assertFalse([r for r in rl.iter_records()
                           if "/personal/" in r.file])
+
+    def test_real_corpus_aliases_resolve(self):
+        self.assertEqual(rl.resolve_system("gurps"), "gurps-4e")
+        self.assertEqual(rl.resolve_system("dnd"), "dnd-5e-2024")
+        self.assertEqual(rl.resolve_system("pf2"), "pf2e")
+        self.assertEqual(rl.resolve_system("coc"), "coc-7e")
+        self.assertEqual(rl.resolve_system("blades"), "fitd")
+
+    def test_real_corpus_pf2e_ancestry_kind(self):
+        mode, recs, _total = rl.lookup("Goblin", system="pf2e", kind="ancestry")
+        self.assertEqual(mode, "exact")
+        self.assertTrue(recs)
+        self.assertTrue(all(r.kind == "ancestry" for r in recs))
+
+    def test_real_corpus_fast_draw_normalises_to_exact(self):
+        """#C1: "fast draw" (space) must exact-match "Fast-Draw" (hyphen)
+        via normalisation, with the undecorated name shown first, not
+        the misspelled-fuzzy or noisy words-tier hit it regressed to."""
+        mode, recs, _total = rl.lookup("fast draw", system="gurps-4e")
+        self.assertEqual(mode, "exact")
+        self.assertEqual(recs[0].name, "Fast-Draw")
+
+    def test_real_corpus_off_guard_normalises_to_exact(self):
+        mode, recs, _total = rl.lookup("off guard", system="pf2e")
+        self.assertEqual(mode, "exact")
+        self.assertEqual(recs[0].name, "Off-Guard")
+
+    def test_real_corpus_fire_damage_weak_tier_quality(self):
+        """#C1: the weak tier must surface Breathe Fire (named for one
+        of the two words, text doesn't repeat the other) and must not
+        surface Force Barrage (whose text says "Fires", not "fire" —
+        no stemming of body text)."""
+        mode, recs, _total = rl.lookup("fire damage", system="pf2e",
+                                       kind="spell")
+        names = {r.name for r in recs}
+        self.assertEqual(mode, "weak")
+        self.assertIn("Breathe Fire", names)
+        self.assertNotIn("Force Barrage", names)
+
+    def test_real_corpus_sneak_attack_no_numeric_junk(self):
+        """#C1: the D&D Rogue level table's numeric first column must
+        never surface as a record named "1"."""
+        mode, recs, _total = rl.lookup("sneak attack", system="dnd-5e-2024")
+        self.assertNotEqual(mode, "none")
+        for rec in recs:
+            self.assertFalse(rec.name.strip().isdigit(), rec.name)
+
+    def test_real_corpus_variant_slug_via_cli(self):
+        out = run_cli("coc-7e/regency", "Credit Rating")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("Credit Rating", out.stdout)
+        self.assertIn("coc-7e/regency", out.stdout)
 
 
 if __name__ == "__main__":
