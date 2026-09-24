@@ -11,39 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `vault_check.py <vault> gm-leak --fix`: re-nests the ERROR/WARNING
-  heading rows `gm-leak` already reports (a bold-wrapped exclude match,
-  or a published heading matching an `exclude_sections` entry or Keeper
-  keyword) as a `###` subsection under `## GM Notes`, demoting it and
-  its own sub-headings a level — the 1.8.3 migration's structural move,
-  mechanised for any entity file the same way `wrapup --fix` already
-  handles Session Wrap-Ups. Dry-run by default (`WOULD-FIX` rows);
-  `--fix` writes and reports `FIXED`. A file with unbalanced
-  `<!-- gm-only -->`/`<!-- spoiler -->` fences is left untouched (#228).
+- `vault_check.py <vault> gm-leak --fix`: re-nests the bold-wrapped
+  ERROR heading rows (`### **GM Notes**`, `## *Keeper Notes*`) under
+  `## GM Notes`, demoting each a level with its sub-headings.
+  Keyword-only WARNING headings ("The Lighthouse Keeper", "Secret
+  Passage", "Tactics") and level-1 headings are reported, never moved.
+  Dry run by default (`WOULD-FIX`); `--fix` writes (`FIXED`) (#228).
+- `gm-leak --renest-excludes [--fix]`: the 1.8.3 migration as one
+  command. Re-nests every level-2+ heading titled with an entry of the
+  vault's current `exclude_sections` (hidden today or not), then
+  collapses the list to `["GM Notes"]` in `_meta/vault-config.md`,
+  all or nothing (#228).
+- A leak invariant on every rewrite (`gm-leak --fix`, `--renest-excludes`,
+  `wrapup --fix`): a file is refused, with nothing written and an
+  ERROR row, if any line hidden before would publish after, or if the
+  rewrite adds a gm-only/spoiler fence problem.
 
 ### Changed
 
-- `migration-procedure.md` Step 6's hand re-nest of GM-only headings
-  now calls `gm-leak --fix` instead of one Edit per heading (#228).
-- Migration consent is now stated once, in `migration-procedure.md`
-  Step 5: structural changes need one GM yes for the whole batch — an
-  instruction already in the request counts as that yes — content and
-  tooling items are chosen one at a time, and nothing applies or stamps
-  without that yes. A scripted/headless run with no such instruction
-  gets a preview only: nothing applied, nothing stamped, the pending
-  migration reported. `shared/migrations.md`'s own description of
-  Structural changes now points at that rule instead of restating it.
-  Removed the wording that told the GM structural changes "will be
-  applied automatically" (#220).
+- `migration-procedure.md` Step 6 re-nests GM-only headings with
+  `wrapup --fix` then `gm-leak --renest-excludes --fix`, and requires
+  a clean `gm-leak` re-run; Step 3 builds the preview from its dry run
+  and lists keyword WARNINGs as per-item Content choices (#228).
+- Migration consent is stated once, in Step 5: when the preview has
+  Structural items, applying them and stamping need one GM yes (an
+  instruction in the request counts), which covers the whole group
+  regardless of file count; a structural item is never reclassified as
+  a judgment call and is outstanding only if refused by name or
+  failed. Ticked content items run whatever the structural answer; an
+  empty or content-only preview stamps. A headless run with no
+  instruction gets a preview only. `shared/migrations.md` now says
+  structural changes are "applied as one batch on the GM's yes", not
+  "automatically" (#220).
+- `effective_exclude_sections` now matches the publisher's
+  `config.js`: a vault that sets `publish.exclude_sections` gets that
+  list alone; the defaults apply only when it sets none. It used to
+  add the defaults always, so the checks treated Player Notes, Source
+  References and the other defaults as hidden on sites that publish
+  them.
 
 ### Fixed
 
-- Step 7 no longer stamps `gm_apprentice_version` at the full target
-  version when a structural item was skipped, refused, or failed: it
-  stamps the highest version whose own structural items are all done
-  and names the outstanding item in the Step 8 report, so the next
-  MISMATCH still offers it instead of the vault reading current with a
-  structural change never applied (#228).
+- `gm-leak --fix` could leak GM content: a moved block ended at the
+  next heading inside an open `<!-- gm-only -->` fence, splitting it;
+  lines moved into a fenced `## GM Notes` landed after its closer; and
+  a pre-collapse migration moved nothing already hidden, so collapsing
+  `exclude_sections` published it. Blocks now run to the closer of any
+  fence they open, and moved lines go before a fenced GM Notes'
+  closer.
+- Step 7 no longer stamps the full target version past an outstanding
+  structural item: it stamps the version of the last pending entry
+  before the earliest entry with one (unchanged if that is the first
+  pending entry) and names the item in Step 8, so the next MISMATCH
+  offers it again (#228).
 
 ## [1.10.0] — 2026-09-24
 
