@@ -100,6 +100,47 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
     return _MDLINK.sub(_ml, text)
 
 
+# `href` located anywhere in the tag (not just as the first attribute) and in
+# either quote style — an anchor mobRPG's OWN web-editor round-trip produced
+# (or the server otherwise re-serialized) is not guaranteed to write `href`
+# first the way our own `md.md_to_html` always does. Matching only the
+# `<a href="...">` shape a candidate always has, and falling through silently
+# on anything else, made the two sides of a compare drift APART instead of
+# together: a candidate anchor normalizes to its `[[eid]]` marker while a
+# same-content server anchor with `rel`/`target` before `href` (or a
+# single-quoted href) falls through unnormalized to its literal text — two
+# representations of identical content that no longer read equal, a
+# regression from the plain full-tag-strip compare this replaced.
+_ANCHOR = re.compile(
+    r'<a\b[^>]*?\bhref\s*=\s*(?P<q>["\'])(?P<href>.*?)(?P=q)[^>]*>.*?</a>',
+    re.S | re.I)
+
+
+def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> str:
+    """Reduce an mobRPG element-link anchor to a marker keyed on the linked
+    element's id, dropping its display TEXT. `sync`'s content compare
+    (`_matches_server`) works on plain text, so an aliased wikilink
+    (`[[Target|alias]]` -> `<a href=...>alias</a>` on push) reads as a content
+    difference against ANY copy whose anchor text isn't that exact alias —
+    including the server's own accepted copy of this note's own push (#190),
+    and a copy this tool itself degraded through an earlier alias-dropping
+    pull, before this fix. The link's TARGET still has to agree — a link
+    retargeted to a different element is a real edit — only the display text
+    is insensitive. Anchors that aren't mobRPG element links (external URLs,
+    left untouched by the push rewrite) are not touched, since their text can
+    carry real meaning."""
+    eid_re = _element_url_re(url_fmt)
+
+    def _sub(m: re.Match) -> str:
+        # A trailing slash is not a different target — tolerate one so a
+        # server-normalized URL (many web frameworks append `/`) still
+        # resolves to the same eid.
+        um = eid_re.fullmatch(m.group("href").rstrip("/"))
+        return f"[[{um.group('eid')}]]" if um else m.group(0)
+
+    return _ANCHOR.sub(_sub, html or "")
+
+
 def rewrite_md_for_pull(md_text: str, path_by_element_id: dict) -> str:
     """Element URLs (matched against `URL_FMT`) whose id maps to a known vault
     note -> `[[Name]]`; every other link is left untouched."""

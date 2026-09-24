@@ -92,6 +92,34 @@ def _vault_file(external_ref, vault):
     return p if os.path.exists(p) else None
 
 
+def _reconciled_claims(vault):
+    """Every ref and element_id an existing linked note already claims.
+
+    A rename (`relink`) leaves the OLD accepted-suggestion row in the review
+    queue forever, with its externalRef pointing at the path the note used to
+    live at. Without this, pull-canon sees that old ref with no file at its
+    path and scaffolds a duplicate stub there (#202) — same element_id, a
+    second vault note pretending to be the source of truth. `relink` records
+    the old path as `previous_ref` for exactly this reconciliation; a note's
+    own `external_ref` covers the symmetric case of an accepted row that
+    simply hasn't caught up to a note written by another path. Matching on
+    element_id too catches a same-day rename whose Accepted row already
+    carries the NEW resultElementId but under the OLD ref (the row was
+    submitted before the rename landed).
+    """
+    refs: set[str] = set()
+    eids: set[str] = set()
+    for _, _, nd in iter_linked_notes(vault):
+        for key in ("external_ref", "previous_ref"):
+            v = nd.get(key)
+            if v:
+                refs.add(v)
+        eid = nd.get("element_id")
+        if eid:
+            eids.add(eid)
+    return refs, eids
+
+
 # Ref namespaces that are handles, not note paths: `rel/` for reified
 # relationship Events, `desc/` for the description suggestions the retired
 # `suggest-desc` verb minted, `upd/` for `sync`'s content-hashed description
@@ -497,6 +525,11 @@ def run(argv: list[str]) -> int:
     updated = 0
     orphan_updates = 0
     unscaffoldable: list[str] = []
+    reconciled: list[str] = []
+    # A rename/relink's OLD accepted row (or a race with a not-yet-linked note)
+    # already belongs to a note on disk under a DIFFERENT ref; scaffolding here
+    # forks the element into two vault notes (#202).
+    claimed_refs, claimed_eids = _reconciled_claims(args.vault)
     # Notes an `upd/` row already answered for THIS run. The upd branch writes
     # the file and releases `pending_ref`, so a create-ref row reached later in
     # the same pass would re-read a note that no longer looks pending and flip
@@ -533,7 +566,18 @@ def run(argv: list[str]) -> int:
             newn = dict(existing)
             if live.get("state") == "accepted":
                 newn["review_state"] = "accepted"
-                newn["last_synced"] = lww.now_iso()
+                # Deliberately do NOT advance last_synced here (#190/#193). An
+                # element's `lastModified` at pull-canon time reflects
+                # whatever state the element is in NOW — if the owner edited
+                # it again between the accept and this pull-canon run,
+                # stamping to "now" (or to that current lastModified) would
+                # mark that later edit as already-synced and swallow it
+                # forever. Leaving last_synced at its pre-push value (and
+                # pinning the file's mtime to that same value, below) makes
+                # the next `sync decide` reliably read the server as dirty —
+                # a clean `pull` verdict — which the strict compare then
+                # either re-stamps as a harmless echo of the vault's own push
+                # or genuinely pulls, but never silently skips.
             elif live.get("state") == "dismissed":
                 newn["review_state"] = "dismissed"
                 newn["review_note"] = live.get("review_note") or ""
@@ -545,8 +589,11 @@ def run(argv: list[str]) -> int:
             if args.execute:
                 with open(path, "w", encoding="utf-8") as fh:
                     fh.write(merged)
-                # Pin mtime to the fresh stamp, same as the note-ref branch, so
-                # the note doesn't read vault-dirty and re-file on the next sync.
+                # Pin mtime to last_synced (fresh on dismiss, unchanged on
+                # accept — see above) so the note doesn't read vault-dirty
+                # against a stamp that never moved, which would otherwise
+                # re-file a dismissed suggestion or mask a real accept-time
+                # sync opportunity.
                 ls = lww.parse_ts(newn["last_synced"])
                 if ls is not None:
                     os.utime(path, (ls, ls))
@@ -554,7 +601,16 @@ def run(argv: list[str]) -> int:
             continue
         path = _vault_file(ext, args.vault)
         if not path:
-            if live.get("state") == "accepted" and _scaffoldable(ext, args.vault):
+            eid = live.get("element_id")
+            # An eid on the row is authoritative: a ref match alone can't
+            # rule out a DIFFERENT element that happens to have been
+            # accepted at a renamed note's old path (ref reuse is not
+            # identity). Only fall back to ref-only matching when the row
+            # carries no eid to check at all.
+            claimed = (eid in claimed_eids) if eid else (ext in claimed_refs)
+            if live.get("state") == "accepted" and claimed:
+                reconciled.append(ext)
+            elif live.get("state") == "accepted" and _scaffoldable(ext, args.vault):
                 rel, text = scaffold_note(ext, live, os.path.basename(args.vault))
                 dest = os.path.join(os.path.expanduser(args.vault), rel)
                 if args.execute and not os.path.exists(dest):
@@ -616,6 +672,17 @@ def run(argv: list[str]) -> int:
         print(f"{orphan_updates} update suggestion(s) skipped — no vault note for "
               f"their ref (note moved, renamed or deleted since the push; "
               f"`relink` re-points a moved note)")
+    if reconciled:
+        # Accepted, no file at THIS ref's path, but a linked note elsewhere
+        # already claims it (via `external_ref` or a `relink`-recorded
+        # `previous_ref`) or its element_id — a rename or relink already
+        # reconciled this row (#202). A count, not a listing: the row is
+        # Accepted and stays in the review queue forever, so this is expected
+        # steady-state on every run from now on, not a one-off finding — the
+        # same reason `orphan_updates` below reports a count rather than
+        # naming each ref.
+        print(f"{len(reconciled)} accepted ref(s) RECONCILED — already claimed by "
+              f"an existing linked note (rename/relink); no stub created")
     print(f"pull-canon: {updated} node(s) updated"
           + ("" if args.execute else "  [dry-run — no files changed]"))
     return 0

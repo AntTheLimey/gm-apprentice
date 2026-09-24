@@ -129,19 +129,54 @@ def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
     return main.strip()
 
 
-def _matches_server(cand_md: str, detail: dict) -> bool:
+def _matches_server(cand_md: str, detail: dict, url_fmt: str = links.URL_FMT) -> bool:
     """True when the push candidate and the live description hold the same
-    content. The compare always happens in HTML space — raw markdown vs
-    html_to_md(server_html) produced 170 false positives on a real vault — so the
-    server side is folded to HTML when it is stored as Markdown. Only the PUSHED
-    PAYLOAD switches to raw Markdown (#150)."""
+    content, under a LOOSE compare — used only by the push/tie and baseline
+    branches, where a false 'differs' just files an extra suggestion for
+    review. Never used to gate the pull branch's unconditional overwrite; see
+    `_matches_server_strict` for that. The compare always happens in HTML
+    space — raw markdown vs html_to_md(server_html) produced 170 false
+    positives on a real vault — so the server side is folded to HTML when it
+    is stored as Markdown. Only the PUSHED PAYLOAD switches to raw Markdown
+    (#150).
+
+    Element-link anchors are reduced to an id-keyed marker before the compare
+    (#190) — a `[[Target|alias]]` wikilink pushes as `<a href=...>alias</a>`,
+    and comparing raw anchor text treats any copy with different display text
+    as a content difference, which is noise for a push/tie decision (the
+    alias didn't change what element the link points to)."""
     server_desc = detail.get("description") or ""
     if (detail.get("descriptionType") or "").lower() == "markdown":
         server_html = _md.md_to_html(server_desc)
     else:
         server_html = server_desc
-    return (_md.normalize_html_for_compare(_md.md_to_html(cand_md))
+    cand_html = links.normalize_element_links_for_compare(_md.md_to_html(cand_md), url_fmt)
+    server_html = links.normalize_element_links_for_compare(server_html, url_fmt)
+    return (_md.normalize_html_for_compare(cand_html)
             == _md.normalize_html_for_compare(server_html))
+
+
+def _matches_server_strict(cand_md: str, detail: dict) -> bool:
+    """STRICT content compare — the ONLY thing allowed to gate the pull
+    branch's unconditional overwrite (#190/#193). `_matches_server` above is
+    deliberately loose (case-folded, every heading's text dropped, link
+    display text ignored) because a false 'differs' there costs only an
+    unreviewed suggestion. Run that same loose compare against the pull
+    branch and a false 'matches' silently discards a real owner edit
+    forever: a changed link caption, a case fix, a new or renamed heading, a
+    bold removed — none of those would register as a difference. This keeps
+    all of that as real content; only whitespace and HTML shape (tag/
+    attribute order, quoting) are noise, via `normalize_html_for_strict_
+    compare`, which also drops the vault's own leading `## Overview`
+    heading (a structural artifact of vault organization mobRPG's element
+    description never carries, not content)."""
+    server_desc = detail.get("description") or ""
+    if (detail.get("descriptionType") or "").lower() == "markdown":
+        server_html = _md.md_to_html(server_desc)
+    else:
+        server_html = server_desc
+    return (_md.normalize_html_for_strict_compare(_md.md_to_html(cand_md))
+            == _md.normalize_html_for_strict_compare(server_html))
 
 
 def _stamped(path: str, ref: str, decision: str, txt: str, nd: dict,
@@ -237,7 +272,7 @@ def plan(notes, fetch, now: str, skew: float, *,
         # on the next edit of either side.
         if decision == "baseline":
             cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
-            if _matches_server(cand_md, detail):
+            if _matches_server(cand_md, detail, url_fmt):
                 actions.append(_stamped(path, ref, "in-sync", txt, nd,
                                         old_body, now))
                 continue
@@ -253,8 +288,23 @@ def plan(notes, fetch, now: str, skew: float, *,
             continue
 
         # Behavior 5: server wins — overwrite prose, keep the vault-only tail,
-        # stamp.
+        # stamp. But a timestamp verdict of "pull" only means the SERVER side
+        # moved past last_synced — which is exactly what happens the instant
+        # the GM accepts THIS note's own earlier push: the element's
+        # lastModified jumps to the accept time carrying zero new content
+        # (#190). Compare first — with the STRICT compare, not the loose one
+        # push/tie uses below (#193): this gates an unconditional overwrite,
+        # so a false 'matches' would silently discard a real owner edit
+        # forever, where a false 'matches' in push/tie only costs an
+        # unreviewed suggestion. A strict match re-stamps as a harmless echo
+        # of the vault's own prose; anything else — including a difference
+        # only the loose compare would have missed — genuinely pulls.
         if decision == "pull":
+            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
+            if _matches_server_strict(cand_md, detail):
+                actions.append(_stamped(path, ref, "in-sync", txt, nd,
+                                        old_body, now))
+                continue
             new_body = _pull_body(old_body, detail.get("description"),
                                   detail.get("descriptionType"), name_by_eid,
                                   vault_only)
@@ -264,7 +314,7 @@ def plan(notes, fetch, now: str, skew: float, *,
 
         # Behavior 6: push / tie — compare authored prose to the live description.
         cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only)
-        if _matches_server(cand_md, detail):
+        if _matches_server(cand_md, detail, url_fmt):
             # Already in sync — stamp last_synced only (no suggestion).
             actions.append(_stamped(path, ref, "in-sync", txt, nd, old_body, now))
             continue

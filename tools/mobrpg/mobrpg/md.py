@@ -311,8 +311,45 @@ def normalize_html_for_compare(html: str | None) -> str:
     `<span style="">`-wrapped. Left raw, otherwise-identical text scored ~0.82–
     0.87 and mis-flagged as 'differs'. So: drop heading blocks (`<h1..h6>`, i.e.
     the `## Overview` header), strip all remaining tags (incl. the style spans),
-    decode entities, collapse whitespace, and lowercase — applied to BOTH sides."""
+    decode entities, collapse whitespace, and lowercase — applied to BOTH sides.
+
+    Deliberately LOOSE: used to gate `sync`'s push/tie branch, where a false
+    'differs' only costs an unreviewed suggestion — never the pull branch,
+    where a false 'matches' would silently discard a real owner edit. See
+    `normalize_html_for_strict_compare` for that gate."""
     s = _HEADING_TAG.sub(" ", html or "")
     s = _TAG.sub(" ", s)
     s = _html.unescape(s)
     return re.sub(r"\s+", " ", s).strip().lower()
+
+
+_LEADING_OVERVIEW_MD = re.compile(r"^\s*#{1,6}[ \t]*Overview[ \t]*\n+", re.I)
+
+
+def normalize_html_for_strict_compare(html: str | None) -> str:
+    """STRICT reduce, for gating an unconditional overwrite (`sync`'s pull
+    branch, #190/#193) rather than the push/tie branch `normalize_html_for_
+    compare` above is built for. A false 'differs' there just files an extra
+    suggestion for review; a false 'matches' here silently discards a real
+    owner edit forever — case, every heading's text, bold/emphasis markers
+    and a link's display text (and target) are all real content and must
+    count as a difference if they differ.
+
+    Reuses `html_to_md` rather than stripping tags: converting BOTH sides to
+    markdown-ish text keeps case, headings as literal `## text`, bold/italic
+    as literal `**`/`*` markers (so removing emphasis from a word is a real
+    text difference, not silently absorbed the way blunt tag-stripping
+    would), and a link as `[display](href)` (so a changed caption, a changed
+    target, or both, all show up) — while still being naturally insensitive
+    to HTML shape (tag/attribute order, quoting), since `html_to_md` reads
+    attributes by name regardless of their order or quote style. Only
+    whitespace is additionally collapsed, with one tolerated asymmetry: the
+    vault's own leading `## Overview` heading. `write_cmd.py` always
+    scaffolds the canon body under that heading, but mobRPG's element
+    description carries the body alone with no heading — a structural
+    artifact of vault organization, not content — so it is dropped, but
+    ONLY when it is the very first heading; a later heading (a renamed
+    section, a genuinely new one) still counts as content."""
+    md_text = html_to_md(html or "")
+    md_text = _LEADING_OVERVIEW_MD.sub("", md_text, count=1)
+    return re.sub(r"\s+", " ", md_text).strip()

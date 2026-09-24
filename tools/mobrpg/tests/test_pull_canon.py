@@ -487,6 +487,95 @@ def test_run_scaffolds_a_known_root_with_the_canon_name(monkeypatch, tmp_path):
     assert "# Stolen Transport" not in text     # not the mangled-ref fallback
 
 
+# ---------------------------------------------------------------------------
+# #202 — pull-canon must not scaffold a stub at a renamed/relinked note's OLD
+# ref path. `relink` records the old path as `previous_ref`; pull-canon must
+# read it before minting a duplicate note that forks the element in two.
+# ---------------------------------------------------------------------------
+
+def test_run_does_not_scaffold_over_a_relinked_notes_previous_ref(monkeypatch, tmp_path, capsys):
+    """Repro from #202: Characters/NPCs/Monroe.md renamed to
+    Characters/NPCs/Roselyn_Monroe.md via `relink`, filed upstream as an
+    UpdateElement, and accepted. An OLDER Accepted suggestion whose externalRef
+    is still the pre-rename path must be recognised as already reconciled by
+    the renamed note's `previous_ref`, not scaffolded as a second note."""
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Roselyn_Monroe",
+          "previous_ref": "space_game:Characters/NPCs/Monroe",
+          "element_id": "el-monroe", "element_kind": "Person",
+          "review_state": "accepted", "last_synced": "", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    (vault / "Characters" / "NPCs" / "Roselyn_Monroe.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(nd) + "---\n# Roselyn Monroe\n",
+        encoding="utf-8")
+    old_ref = "space_game:Characters/NPCs/Monroe"
+    live = {old_ref: {"state": "accepted", "element_id": "el-monroe",
+                       "element_kind": "Person", "name": "Monroe",
+                       "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert not (vault / "Characters" / "NPCs" / "Monroe.md").exists()
+    out = capsys.readouterr().out
+    assert "1 accepted ref(s) RECONCILED" in out
+    assert "0 node(s) updated" in out
+
+
+def test_run_does_not_scaffold_when_element_id_already_claimed(monkeypatch, tmp_path, capsys):
+    """Symmetric case: an Accepted row already carries the linked note's
+    element_id under a ref the note itself doesn't (yet) record as
+    `previous_ref` or `external_ref` — still reconciled, not scaffolded."""
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Roselyn_Monroe",
+          "element_id": "el-monroe", "element_kind": "Person",
+          "review_state": "accepted", "last_synced": "", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    (vault / "Characters" / "NPCs" / "Roselyn_Monroe.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(nd) + "---\n# Roselyn Monroe\n",
+        encoding="utf-8")
+    stray_ref = "space_game:Characters/NPCs/Some_Other_Path"
+    live = {stray_ref: {"state": "accepted", "element_id": "el-monroe",
+                        "element_kind": "Person", "name": "Monroe",
+                        "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    assert not (vault / "Characters" / "NPCs" / "Some_Other_Path.md").exists()
+    out = capsys.readouterr().out
+    assert "RECONCILED" in out
+    assert "0 node(s) updated" in out
+
+
+def test_run_scaffolds_a_different_element_accepted_at_a_renamed_notes_previous_ref(
+        monkeypatch, tmp_path, capsys):
+    """A ref match alone must not reconcile: ref REUSE is not identity. If a
+    genuinely DIFFERENT element (a different element_id) was separately
+    accepted at the OLD path a renamed note's `previous_ref` happens to
+    record, that element has no note of its own yet and must be scaffolded
+    (or at minimum reported by name) — never silently folded into the
+    renamed note's count."""
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "NPCs").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "space_game:Characters/NPCs/Roselyn_Monroe",
+          "previous_ref": "space_game:Characters/NPCs/Monroe",
+          "element_id": "el-monroe", "element_kind": "Person",
+          "review_state": "accepted", "last_synced": "", "review_note": "",
+          "determined": {}, "relationships": [], "languages": []}
+    (vault / "Characters" / "NPCs" / "Roselyn_Monroe.md").write_text(
+        "---\ntype: npc\n" + node.emit_node(nd) + "---\n# Roselyn Monroe\n",
+        encoding="utf-8")
+    old_ref = "space_game:Characters/NPCs/Monroe"
+    # A DIFFERENT element (el-someone-else, not el-monroe) is what's Accepted
+    # at that old ref this time.
+    live = {old_ref: {"state": "accepted", "element_id": "el-someone-else",
+                       "element_kind": "Person", "name": "Someone Else",
+                       "determined": {}, "event_ids": {}}}
+    _run_execute(monkeypatch, vault, live)
+    out = capsys.readouterr().out
+    assert "RECONCILED" not in out
+    p = vault / "Characters" / "NPCs" / "Monroe.md"
+    assert p.exists()                                   # scaffolded, not swallowed
+    assert node.read_node(p.read_text(encoding="utf-8"))["element_id"] == "el-someone-else"
+
+
 def test_fetch_live_carries_element_kind_and_name_into_the_summary(monkeypatch):
     """`_fetch_live` never populated kind or name, so every scaffolded note fell
     through `scaffold_note`'s defaults to Person/npc and an underscore-mangled
@@ -848,10 +937,31 @@ def test_accepted_upd_suggestion_adjudicates_pending_note(tmp_path, monkeypatch)
     assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
     out = node.read_node(p.read_text(encoding="utf-8"))
     assert out["review_state"] == "accepted"
-    assert out["last_synced"] not in ("", "2020-01-01T00:00:00Z")
     assert out.get("pending_ref", "") == ""            # claim released
     stamp = lww.parse_ts(out["last_synced"])
     assert stamp is not None and os.path.getmtime(p) == stamp   # mtime pinned
+
+
+def test_upd_accept_does_not_advance_last_synced(tmp_path, monkeypatch):
+    """#190/#193: an accept must NOT stamp last_synced to "now" (or to the
+    element's CURRENT lastModified at pull-canon time) — either one can trail
+    the accept by any amount, and if the owner edits again in that window a
+    fresh-looking stamp would mark that later edit as already-synced and
+    swallow it forever. last_synced stays at its pre-push value; a fixed
+    fake `lastModified` on the element proves the stamp isn't derived from
+    it either."""
+    vault, p = _pending_push_vault(tmp_path)
+    _queue(monkeypatch, {"Accepted": [_sug(REF_A, "e-77", etype="Creature")]},
+           elements={"e-77": {"type": "creature", "relations": [],
+                              "lastModified": "2020-03-15T09:30:00Z"}})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--execute"]) == 0
+    out = node.read_node(p.read_text(encoding="utf-8"))
+    assert out["review_state"] == "accepted"
+    # Unchanged from _pending_push_vault's fixture value — not "now", not the
+    # element's lastModified.
+    assert out["last_synced"] == "2020-01-01T00:00:00Z"
+    stamp = lww.parse_ts(out["last_synced"])
+    assert os.path.getmtime(p) == stamp                # mtime pinned to it too
 
 
 def test_dismissed_upd_suggestion_clears_pending(tmp_path, monkeypatch):
