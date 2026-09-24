@@ -157,11 +157,19 @@ Recommended on every type, though not enforced: `aliases`, `tags`,
 anyway — `vault_check.py names` reads `aliases`, and campaign-qa's
 audits lean on the rest.
 
+`gm_aliases` (optional list) holds names only the GM should know, such
+as a disguised NPC's true name. They resolve `[[links]]` like `aliases`,
+but publish-site never shows them: a link written with one displays the
+page's own title, and mobrpg never sends one upstream. Obsidian only
+resolves links through `aliases`, so to make such a link work in
+Obsidian, list the name under both fields. It still stays off the site.
+
 ```yaml
 ---
 type: npc              # From the type hierarchy
 canon_status: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
 aliases: []             # recommended, not enforced
+gm_aliases: []          # optional — secret names; resolve links, never published
 tags: []                # recommended, not enforced
 source_document: ""     # recommended, not enforced
 campaign: ""            # recommended, not enforced

@@ -1061,3 +1061,19 @@ def test_dry_run_write_back_changes_no_files(tmp_path, monkeypatch, capsys):
     assert rc == 0
     assert "would be written" in capsys.readouterr().out
     assert node.read_node((d / "Characters/NPCs/Gary_Johnson.md").read_text()) is None
+
+
+# #212: GM-only aliases resolve locally and never go upstream as altNames.
+def test_aliases_does_not_read_gm_aliases():
+    fm = 'type: npc\ngm_aliases:\n  - Elias Crowe\naliases:\n  - Vane\n'
+    assert suggest._aliases(fm) == ["Vane"]
+    assert suggest._gm_aliases(fm) == ["Elias Crowe"]
+
+
+def test_gm_alias_also_under_aliases_is_kept_back():
+    fm = 'type: npc\naliases: [Vane, "The Crimson Hand"]\ngm_aliases: ["The Crimson Hand"]\n'
+    assert suggest._aliases(fm) == ["Vane"]
+
+
+def test_gm_aliases_only_file_has_no_public_aliases():
+    assert suggest._aliases('type: npc\ngm_aliases: [Elias Crowe]\n') == []

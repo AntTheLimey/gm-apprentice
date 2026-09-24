@@ -664,7 +664,47 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   delete filtered.publish;
   delete filtered.publish_exclude_fields;
   delete filtered.publish_include_sections;
+
+  // `gm_aliases` resolve links and are never shown (#212). A GM on Obsidian
+  // may list the same name under `aliases` too, since Obsidian only resolves
+  // links through `aliases`, so a GM alias is also removed from that list.
+  const secret = new Set(gmAliasList(frontmatter).map(canonicalNfc));
+  delete filtered.gm_aliases;
+  if (Array.isArray(filtered.aliases) && secret.size > 0) {
+    const shown = filtered.aliases.filter(a => !secret.has(canonicalNfc(String(a).trim())));
+    if (shown.length > 0) filtered.aliases = shown;
+    else delete filtered.aliases;
+  }
   return filtered;
 }
 
-module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, publishMode, isGmOnlyEdge, keepOnlySections };
+function gmAliasList(frontmatter) {
+  const raw = frontmatter && frontmatter.gm_aliases;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(a => String(a).trim()).filter(Boolean);
+}
+
+// Point every `[[GM alias]]` at the page's own title, keeping any `|label`.
+// Run on a page's body and frontmatter after the link map is built, so every
+// renderer downstream (links, relationships, sidebars, graph, backlinks) sees
+// the public name and never the secret one. `titleFor` maps a GM alias to the
+// title of the page it resolves to, or nothing.
+function rewriteGmAliasLinks(text, titleFor) {
+  return String(text).replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (match, target, label) => {
+    const title = titleFor[target.trim()];
+    return title ? `[[${title}${label || ''}]]` : match;
+  });
+}
+
+function rewriteGmAliasValues(value, titleFor) {
+  if (typeof value === 'string') return rewriteGmAliasLinks(value, titleFor);
+  if (Array.isArray(value)) return value.map(v => rewriteGmAliasValues(v, titleFor));
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = rewriteGmAliasValues(v, titleFor);
+    return out;
+  }
+  return value;
+}
+
+module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, rewriteGmAliasLinks, rewriteGmAliasValues, publishMode, isGmOnlyEdge, keepOnlySections };

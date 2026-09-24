@@ -576,7 +576,7 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
 
 def pc_matches(cell: str, rel: str, fm: dict) -> bool:
     """cell.casefold() equals the file stem with `_`→space, or the stem's
-    first token, or any entry of fm["aliases"] (list, or a single
+    first token, or any entry of fm["aliases"] or fm["gm_aliases"] (list, or a single
     string), all casefolded. The cell is tried both as written and with
     `_`→space, so a PC named by wikilink target (`[[Hero_Name]]`)
     matches the file its link points at."""
@@ -587,11 +587,12 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
     # first name — the report lists the PC's file path so the reader can tell.
     if tokens:
         candidates.add(tokens[0].casefold())
-    aliases = fm.get("aliases")
-    if isinstance(aliases, str):
-        aliases = [aliases]
-    if isinstance(aliases, list):
-        candidates.update(str(a).casefold() for a in aliases)
+    for field in ("aliases", "gm_aliases"):
+        aliases = fm.get(field)
+        if isinstance(aliases, str):
+            aliases = [aliases]
+        if isinstance(aliases, list):
+            candidates.update(str(a).casefold() for a in aliases)
     return (cell.casefold() in candidates
             or cell.replace("_", " ").casefold() in candidates)
 

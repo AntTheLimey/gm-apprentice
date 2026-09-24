@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.8] — 2026-09-24
+
+### Added
+
+- **`gm_aliases`: secret names that resolve links but never publish
+  (#212).** A disguised NPC's true name can go in `gm_aliases`, so notes
+  can link `[[Elias Crowe]]` to Lord Vane's page. The name doesn't reach
+  the site: it isn't in the search index, the portrait alt text or the
+  frontmatter, and the link shows the page's own title everywhere it
+  renders (body text, relationships, the location card, Connections,
+  the graph and the sidebar). A `|label` is kept. Obsidian only resolves
+  links through `aliases`, so a name may be listed in both fields and is
+  still removed from the published `aliases`. A GM alias that clashes
+  with another page's title or public alias leaves that page's links
+  alone. `vault_check`, `graph_check` and `session_context` resolve
+  through it too. Publish tool 1.11.33.
+
+### Fixed
+
+- **mobrpg no longer reads `gm_aliases:` as `aliases:`.** The alias parser
+  wasn't anchored to the start of a line, so a `gm_aliases` list could be
+  sent upstream as the element's alternate names. GM aliases now resolve
+  relationship targets locally and are never sent.
+
+---
+
 ## [1.10.7] — 2026-09-24
 
 ### Removed

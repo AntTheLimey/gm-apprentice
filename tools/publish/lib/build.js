@@ -4,11 +4,11 @@ const path = require('path');
 const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasList, rewriteGmAliasLinks, rewriteGmAliasValues, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
-const { canonicalNfc } = require('./unicode');
+const { canonicalNfc, nfcLookupTable } = require('./unicode');
 const { generateThemeCSS, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -364,6 +364,26 @@ function build(options = {}) {
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
+
+  // A `[[GM alias]]` must resolve but never display (#212): rewrite each one
+  // to the title of the page it resolves to, in every published page's body
+  // and frontmatter, before anything renders or derives from them. Only an
+  // alias the link map actually gave to that page is rewritten, so a GM alias
+  // that clashes with another page's title keeps pointing at that page.
+  const gmAliasTitles = {};
+  for (const page of pages) {
+    for (const alias of gmAliasList(page.frontmatter)) {
+      if (linkMap[alias] === page.outputPath) gmAliasTitles[canonicalNfc(alias)] = page.title;
+    }
+  }
+  const titleForGmAlias = nfcLookupTable(gmAliasTitles);
+  if (Object.keys(gmAliasTitles).length > 0) {
+    for (const page of pages) {
+      page.markdown = rewriteGmAliasLinks(page.markdown || '', titleForGmAlias);
+      if (page.storyMarkdown) page.storyMarkdown = rewriteGmAliasLinks(page.storyMarkdown, titleForGmAlias);
+      page.frontmatter = rewriteGmAliasValues(page.frontmatter, titleForGmAlias);
+    }
+  }
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.

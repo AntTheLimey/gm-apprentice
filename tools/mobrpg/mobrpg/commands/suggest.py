@@ -40,13 +40,26 @@ def _read(path: str) -> tuple[str, str]:
     return fm_body, body
 
 
+def _list_field(fm: str, field: str) -> list[str]:
+    """A top-level frontmatter list, inline or block. Anchored to the start of
+    a line so `aliases` never matches inside `gm_aliases`."""
+    block = re.search(rf"^{field}:(.*?)(?=\n\w|\Z)", fm, re.S | re.M)
+    items = re.findall(r'-\s*"?([^"\n]+?)"?\s*$', block.group(1), re.M) if block else []
+    inline = re.search(rf"^{field}:\s*\[([^\]]*)\]", fm, re.M)
+    items = [a for a in (inline.group(1) if inline else "").split(",") if a.strip()] or items
+    return [a.strip().strip('"') for a in items if a.strip()]
+
+
+def _gm_aliases(fm: str) -> list[str]:
+    """GM-only names (#212): they resolve links but never go upstream."""
+    return _list_field(fm, "gm_aliases")
+
+
 def _aliases(fm: str) -> list[str]:
-    aliases = (re.findall(r'-\s*"?([^"\n]+?)"?\s*$',
-                          re.search(r"aliases:(.*?)(?=\n\w|\Z)", fm, re.S).group(1), re.M)
-               if "aliases:" in fm else [])
-    aliases = [a for a in (re.findall(r'aliases:\s*\[([^\]]*)\]', fm) or [""])[0].split(",")
-               if a.strip()] or aliases
-    return [a.strip().strip('"') for a in aliases if a.strip()]
+    """The public aliases, which go upstream as altNames. A GM alias listed
+    under `aliases` too, so Obsidian resolves it, is still kept back."""
+    secret = {_key(a) for a in _gm_aliases(fm)}
+    return [a for a in _list_field(fm, "aliases") if _key(a) not in secret]
 
 
 def _relationships(fm: str) -> list[dict]:
@@ -152,6 +165,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
             out.append({
                 "path": p, "kind": vkind, "name": name, "provenance": prov,
                 "aliases": _aliases(fm),
+                "gm_aliases": _gm_aliases(fm),
                 "description": _description(body, vault_only),
                 "location_type": map_cmd._scalar(fm, "location_type"),
                 "occupation": map_cmd._scalar(fm, "occupation"),
@@ -378,7 +392,7 @@ def node_index(vault) -> tuple[dict, set, set]:
             eid = nd["element_id"]
             idx[subj] = eid
             fm, _ = _read(p)
-            for al in _aliases(fm):
+            for al in _aliases(fm) + _gm_aliases(fm):
                 aliases.append((_key(al), eid))     # aliased target resolution (name wins — added after)
             for r in nd.get("relationships", []):
                 if r.get("event_id"):
@@ -414,7 +428,7 @@ def node_kind_index(vault) -> dict:
                 continue
             idx[_key(_display_name(p))] = nd["element_kind"]
             fm, _ = _read(p)
-            for al in _aliases(fm):
+            for al in _aliases(fm) + _gm_aliases(fm):
                 aliases.append((_key(al), nd["element_kind"]))
     for k, kind in aliases:
         idx.setdefault(k, kind)
@@ -966,7 +980,7 @@ def run(argv: list[str]) -> int:
         # "not a world element".
         for ent, live in preexisting:
             ent_id_by_key.setdefault(_key(ent["name"]), live["id"])
-            for al in ent.get("aliases", []):
+            for al in ent.get("aliases", []) + ent.get("gm_aliases", []):
                 ent_id_by_key.setdefault(_key(al), live["id"])
 
     # Every NET-NEW entity's in-batch group ref, so a relationship whose target is
@@ -975,7 +989,7 @@ def run(argv: list[str]) -> int:
     # to their real id via ent_id_by_key, which is consulted first.)
     ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(net_new, 1)}
     for i, ent in enumerate(net_new, 1):           # aliases resolve too; names already set win
-        for al in ent.get("aliases", []):
+        for al in ent.get("aliases", []) + ent.get("gm_aliases", []):
             ref_by_key.setdefault(_key(al), f"e{i}")
     # What each endpoint IS upstream, which is what decides an affiliation edge's
     # eventType (map_cmd.affiliation). Canon first — a linked note's node records
@@ -988,7 +1002,7 @@ def run(argv: list[str]) -> int:
         if not proposed:
             continue
         kind_by_key.setdefault(_key(ent["name"]), proposed)
-        for al in ent.get("aliases", []):
+        for al in ent.get("aliases", []) + ent.get("gm_aliases", []):
             kind_by_key.setdefault(_key(al), proposed)
 
     groups, refs, all_reports = [], [], []
