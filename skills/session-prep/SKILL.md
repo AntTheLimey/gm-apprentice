@@ -41,10 +41,10 @@ exception).
 - Read `shared/session-principles.md` and run its Version Gate on first
   invocation.
 - Read `shared/session-document-chain.md`. You write Plan files. On
-  the session index you set only `status` and `documents.plan`
-  (`stamp_entities.py --set`) and its plan link; never edit
-  `scenes:` — a narrowed scope lives in the Plan's scene list, and
-  wrap-up reconciles `scenes:` with what was played. You read earlier Wrap-Ups for context, not
+  an existing session index set only `status`, `documents.plan`
+  (`stamp_entities.py --set`) and the plan link; when you create the
+  index or a new scene note, add it to `scenes:`; never remove
+  entries — a narrowed scope lives in the Plan's scene list. You read earlier Wrap-Ups for context, not
   other sessions' Play Notes or Plans (exception: raw Play Notes, to
   generate a recap when no Wrap-Up exists — step 7).
 - Read `references/session-templates.md` when creating or updating
