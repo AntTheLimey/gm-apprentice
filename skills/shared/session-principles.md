@@ -19,6 +19,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault> ver
 - `ERROR` → report the row: the plugin install is broken. Stop.
 - No verdict row and `not a directory` on stderr → the vault path is
   wrong; ask the GM for it.
+- A `warning: unusable .claude-plugin/plugin.json` line on stderr
+  alongside an `OK` verdict means the manifest is present but
+  broken and the fallback version happened to match — treat it
+  like `ERROR` and stop. (A *missing* manifest, the normal
+  skill-zip case, prints no warning and is fine.)
 
 ## Absolute Rules
 

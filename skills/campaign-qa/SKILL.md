@@ -74,8 +74,9 @@ recommendations.
   - **Critical** — visibly breaks at the table (dead NPC alive,
     timeline impossibility players can spot).
   - **Warning** — could cause confusion (conflicting facts across
-    files, missing clue paths).
-  - **Info** — housekeeping (stale DRAFT, minor naming, orphan).
+    files, missing clue paths, a DRAFT stale 3+ sessions or with a
+    missing/future `createdSession`).
+  - **Info** — housekeeping (a young DRAFT, minor naming, orphan).
   Calibrate by context: a DRAFT is expected to have gaps; a name
   in a plan's skipped content matters less than one in a played
   scene.

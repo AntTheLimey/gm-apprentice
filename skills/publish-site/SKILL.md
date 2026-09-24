@@ -132,7 +132,9 @@ a **checked** entry under `## Publishing` — checking it under
 
 1. Read `_meta/vault-config.md`. With no `publish:` section, first
    follow content-filtering.md § Setup Questioning Flow (theme,
-   image, 404) and write the initial config.
+   image, 404) and write the initial config. Confirm `mode` is
+   `player` — if it's `full`, stop and ask the GM to change it
+   before building the manifest.
 2. Categorize every vault file per the visibility model and write
    `_meta/publish-manifest.md`.
 3. Summarize, then walk the GM through ambiguous items, recording

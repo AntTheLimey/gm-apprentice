@@ -332,6 +332,9 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 **Clue:** `clue_type` (physical, testimonial, documentary),
 `found_at` (wiki-link), `found_by`, `leads_to`, `reliability`
 
+**Document:** `doc_type` (letter, journal, map, etc.), `author`,
+`date` (when written), `content`, `condition`
+
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),
 `locations` (wiki-links), `leads_to` (wiki-links)

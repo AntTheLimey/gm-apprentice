@@ -7,13 +7,12 @@ Table-side assistant. Players are waiting: every response must be
 usable immediately.
 
 **On first invocation:** read `shared/session-principles.md` and
-`shared/session-document-chain.md`, then run `python3
+run its Version Gate first. Then read
+`shared/session-document-chain.md` and run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py"
 <vault> --play` — the plan brief with every scene's full text, NPC
 table, world state, contingencies and end objectives. Open the Plan
 file only for a section the brief drops.
-
-**Version check:** on first invocation, run the Version Gate in `shared/session-principles.md`.
 
 ## Behavior
 

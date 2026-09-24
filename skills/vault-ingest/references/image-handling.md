@@ -30,11 +30,18 @@ normal flow rather than as a separate pass:
 - **`AMBIGUOUS-ENTITY`** — ask which of the two entities the image
   belongs to.
 
-Apply an entity answer with `stamp_entities.py <vault> FILE --set
-portrait="_attachments/..." --write` (or embed by hand), then
-re-run `ingest_images.py --execute` — it embeds that entity's
-other images automatically. Atmosphere art has no row; file it
-under `_attachments/documents/` by hand.
+For `portrait-ambiguous` the image is already filed — apply the
+GM's choice with `stamp_entities.py <vault> FILE --set
+portrait="_attachments/..." --write`, then re-run
+`ingest_images.py --execute` to embed the rest automatically.
+
+For `UNMATCHED` and `AMBIGUOUS-ENTITY` the image was never
+copied — filename matching failed, and setting `portrait` alone
+doesn't file it. Rename the source to match the entity's slug
+(e.g. `ronnie-vint.jpg` for `Ronnie Vint.md`) and re-run
+`--execute`; it will match, copy and stamp `portrait` together.
+Atmosphere art has no row; file it under `_attachments/documents/`
+by hand.
 
 - **`DUP-FLAG`** (same destination, different content — on disk
   or two batch sources) — ask: "`[name]` already exists in
