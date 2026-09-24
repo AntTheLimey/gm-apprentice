@@ -99,9 +99,13 @@ class VersionCommandTests(unittest.TestCase):
         # 1.8.9 < 1.9.6 lexically too; 1.10.0 vs 1.9.6 is the real test.
         vault = make_vault(self, '---\ngm_apprentice_version: "1.10.0"\n---\n')
         (token, _path, _message), _code = self.verdict(vault)
-        expected = "AHEAD" if vc.parse_version("1.10.0") > vc.parse_version(
-            plugin_version_string()) else "MISMATCH"
+        vault_v = vc.parse_version("1.10.0")
+        plugin_v = vc.parse_version(plugin_version_string())
+        expected = ("OK" if vault_v == plugin_v
+                    else "AHEAD" if vault_v > plugin_v else "MISMATCH")
         self.assertEqual(token, expected)
+        # "1.9.99" sorts after "1.10.0" as text; numerically it is behind.
+        self.assertLess(vc.parse_version("1.9.99"), vc.parse_version("1.10.0"))
 
     def test_ahead_tells_the_user_to_update_the_plugin(self):
         vault = make_vault(self, '---\ngm_apprentice_version: "99.0.0"\n---\n')
