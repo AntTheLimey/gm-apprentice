@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sheet is never defaulted onto it: it becomes a `**Missing:**` Open
   Question for the GM, which `plan_check.py --headless` accepts without
   the guess marker (#225).
-- Migration 1.9.15 → 1.9.16 re-copies both templates into `_Templates/`.
+- Migration 1.10.1 → 1.10.2 re-copies both templates into `_Templates/`.
 
 ### Fixed
 

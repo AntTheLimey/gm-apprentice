@@ -788,7 +788,7 @@ A Session Plan template, and two fixes to what `plan_check.py` and
   runs told to set `status: played` on such a session should be re-run
   before applying the stamp.
 
-## Migration: 1.9.15 → 1.9.16
+## Migration: 1.10.1 → 1.10.2
 
 Templates carry their own section guidance. No frontmatter changes.
 
