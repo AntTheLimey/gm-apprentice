@@ -40,22 +40,47 @@ def _read(path: str) -> tuple[str, str]:
     return fm_body, body
 
 
-def _list_field(fm: str, field: str) -> list[str]:
+def _yaml_item(a: str) -> str:
+    """One YAML scalar as written in a list or after a key, decoded: a
+    single-quoted `'O''Neil'` is `O'Neil`, a double-quoted `"a \\"b\\""` is
+    `a "b"`, and an unquoted value drops a ` # comment`. A secret name that
+    decodes wrong would never match its links, and would push unhidden."""
+    a = a.strip()
+    m = re.match(r"'((?:[^']|'')*)'", a)
+    if m:
+        return m.group(1).replace("''", "'")
+    m = re.match(r'"((?:[^"\\]|\\.)*)"', a)
+    if m:
+        return re.sub(r'\\(.)', r"\1", m.group(1))
+    return re.sub(r"\s+#.*$", "", a).strip()
+
+
+def _list_field(fm: str, field: str, scalar: bool = False) -> list[str]:
     """A top-level frontmatter list, inline or block. Anchored to the start of
-    a line so `aliases` never matches inside `gm_aliases`."""
+    a line so `aliases` never matches inside `gm_aliases`.
+
+    With `scalar=True` (used for `gm_aliases`), a bare `gm_aliases: Elias
+    Crowe` is read as one name: dropping it would leave the secret
+    unprotected. An `aliases:` scalar stays malformed and is skipped, as the
+    publish tool and vaultlib do."""
     block = re.search(rf"^{field}:(.*?)(?=\n\w|\Z)", fm, re.S | re.M)
     items = re.findall(r"^\s*-\s*(.+?)\s*$", block.group(1), re.M) if block else []
-    # A YAML comment needs whitespace before the `#`; a quoted item keeps its own.
-    items = [a if a[:1] in "\"'" else re.sub(r"\s+#.*$", "", a) for a in items]
     inline = re.search(rf"^{field}:\s*\[([^\]]*)\]", fm, re.M)
     items = [a for a in (inline.group(1) if inline else "").split(",") if a.strip()] or items
-    return [a.strip().strip("\"'") for a in items if a.strip().strip("\"'")]
+    if scalar and not items and block and not inline:
+        # Only the value on the field's own line: a following comment or
+        # quoted key must not be swallowed into the name. `[]` (every
+        # template's default), `~` and `null` are empty, not names.
+        scalar = block.group(1).split("\n", 1)[0].strip()
+        if scalar and not scalar.startswith(("[", "#")) and scalar not in ("~", "null", "Null", "NULL"):
+            items = [scalar]
+    return [n for n in (_yaml_item(a) for a in items) if n]
 
 
 def _gm_aliases(fm: str) -> list[str]:
     """GM-only names (#212): they resolve links in the vault but never go
     upstream. `unmask_gm_aliases` rewrites them before anything is pushed."""
-    return _list_field(fm, "gm_aliases")
+    return _list_field(fm, "gm_aliases", scalar=True)
 
 
 def _aliases(fm: str) -> list[str]:
@@ -71,8 +96,11 @@ def gm_alias_owners(vault) -> dict[str, str]:
     link to any of them, and a GM-only folder is the likeliest home for a
     secret. Only a note in an entity folder (one that can become a mobRPG
     element) claims a name, so a GM alias that is also such a note's name or
-    public alias is left to it. A GM-only note named after the secret doesn't
-    claim it: its name would go upstream as plain text."""
+    public alias is left to it: its key maps to "" rather than being removed,
+    so a link TO that name is left alone but a secret used as a link's LABEL
+    is still dropped (as the publish tool's `secretKeys` does). A GM-only note
+    named after the secret doesn't claim it: its name would go upstream as
+    plain text."""
     owned: dict[str, str] = {}
     vault = os.path.expanduser(vault)
     for root, dirs, files in os.walk(vault):
@@ -86,18 +114,27 @@ def gm_alias_owners(vault) -> dict[str, str]:
             except (OSError, UnicodeDecodeError):
                 continue
             for a in _gm_aliases(fm):
-                owned.setdefault(_key(a), _display_name(p))
+                # A name with no key (all non-Latin, or only "the"/"of"...)
+                # would match every such link; it can't be told apart.
+                if _key(a):
+                    owned.setdefault(_key(a), _display_name(p))
+                else:
+                    print(f"  WARNING: gm_aliases name {a!r} in {os.path.relpath(p, vault)} "
+                          "has no Latin letters or digits; mobrpg can't match it, so "
+                          "links using it are pushed unchanged", file=sys.stderr)
     if not owned:
         return {}
     for folder in map_cmd.FOLDERS:
         for p in glob.glob(os.path.join(vault, folder, "*.md")):
-            owned.pop(_key(_display_name(p)), None)
+            if _key(_display_name(p)) in owned:
+                owned[_key(_display_name(p))] = ""
             try:
                 fm, _ = _read(p)
             except (OSError, UnicodeDecodeError):
                 continue
             for a in _aliases(fm):
-                owned.pop(_key(a), None)
+                if _key(a) in owned:
+                    owned[_key(a)] = ""
     return owned
 
 
@@ -105,17 +142,33 @@ _WIKILINK = re.compile(r"(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]")
 
 
 def unmask_gm_aliases(text: str, owners: dict) -> str:
-    """Point every `[[GM alias]]` at its owner's name, keeping any `#anchor` and
-    `|label`, so nothing pushed upstream carries the secret name (#212). Run it
-    before link rewriting, so the link resolves to the owner's element."""
+    """Point every `[[GM alias]]` at its owner's name, keeping any `#anchor`,
+    so nothing pushed upstream carries the secret name (#212). Run it before
+    link rewriting, so the link resolves to the owner's element.
+
+    A `|label` is kept too — UNLESS the label itself is a secret. Obsidian
+    autocomplete writes `[[Public Name|GM Alias]]` whenever the text typed at
+    the cursor matched the alias but the note's canonical name is public
+    (e.g. typing "Elias" resolves to Lord Vane, whose note is named "Lord
+    Vane"): the TARGET there is already public, so a check that only ever
+    inspected the target left the secret sitting in the display text and
+    pushed it verbatim. A secret label is dropped rather than replaced with
+    the owner's name a second time — `[[Lord Vane|Elias Crowe]]` becomes
+    `[[Lord Vane]]`, the same unlabelled form a bare `[[Elias Crowe]]` link
+    resolves to."""
     if not owners or not text:
         return text
 
     def sub(m):
-        owner = owners.get(_key(m.group(2)))
-        if not owner:
+        bang, target, anchor, label = m.group(1), m.group(2), m.group(3) or "", m.group(4) or ""
+        owner = owners.get(_key(target))
+        label_name = label[1:] if label else ""
+        label_secret = bool(label_name) and _key(label_name) in owners
+        if not owner and not label_secret:
             return m.group(0)
-        return f"{m.group(1)}[[{owner}{m.group(3) or ''}{m.group(4) or ''}]]"
+        new_target = owner or target
+        new_label = "" if label_secret else label
+        return f"{bang}[[{new_target}{anchor}{new_label}]]"
     return _WIKILINK.sub(sub, text)
 
 
@@ -233,7 +286,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
                 "faction_type": map_cmd._scalar(fm, "faction_type"),
                 "creature_type": map_cmd._scalar(fm, "creature_type"),
                 "relationships": [
-                    {**r, "target": owners.get(_key(r["target"].split("#")[0]), r["target"])}
+                    {**r, "target": owners.get(_key(r["target"].split("#")[0])) or r["target"]}
                     for r in _relationships(fm)],
             })
     if limit:

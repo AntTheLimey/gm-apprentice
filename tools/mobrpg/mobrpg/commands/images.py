@@ -27,6 +27,13 @@ suggestion-queue path for files yet. An image whose bytes already match one of
 the element's files is skipped, so pushing is idempotent and never re-uploads
 an image this command pulled down. mobRPG caps a non-admin at two files per
 element; a push over the cap is reported, not attempted.
+
+Body embeds are collected only from the player-visible part of the note — the
+same split `sync` applies to prose before a push: vault-only H2 sections
+(`## GM Notes` and the rest of `vault_only_sections`) are dropped, then any
+`<!-- gm-only -->` fenced block is stripped. `portrait:` is always eligible (it
+is never GM-only). This keeps a secret reference image out of the shared world
+even when it resolves to a real `_attachments/` file.
 """
 from __future__ import annotations
 
@@ -40,6 +47,8 @@ import urllib.parse
 import urllib.request
 
 from mobrpg import client
+from mobrpg import md as _md
+from mobrpg import section as _section
 from mobrpg import vault as _vault
 
 KINDS = ["person", "organization", "political", "landfeature", "item"]
@@ -157,14 +166,25 @@ def _attachment_index(vault_dir: str) -> dict:
     return idx
 
 
-def _local_images(vault_dir: str, txt: str, index: dict) -> tuple[list[str], list[str]]:
+def _local_images(vault_dir: str, txt: str, index: dict,
+                  vault_only: tuple = _section.DEFAULT_VAULT_ONLY) -> tuple[list[str], list[str]]:
     """(image files this note shows, references that didn't resolve to one file).
-    The portrait first, then body embeds, each once. Only files inside the vault."""
+    The portrait first, then body embeds, each once. Only files inside the vault.
+
+    `portrait:` is always eligible — it is never GM-only. Body embeds are
+    collected only from the player-visible part of the body: the same split
+    `sync`'s `_push_candidate` applies (`section.split_vault_only` to drop the
+    vault-only H2 sections, then `md.strip_boilerplate` to drop `<!-- gm-only
+    -->` fenced blocks). An embed the GM keeps secret under `## GM Notes` or a
+    gm-only fence must never be uploaded to the shared world, even when it
+    resolves to a real attachment."""
     refs = []
     m = _PORTRAIT.search(txt.split("\n---", 1)[0] if txt.startswith("---") else "")
     if m and m.group(1).strip():
         refs.append(m.group(1).strip())
-    refs += [r.strip() for r in _EMBED.findall(_vault.body_of(txt))]
+    public_body = _section.split_vault_only(_vault.body_of(txt), vault_only)[0]
+    public_body = _md.strip_boilerplate(public_body)
+    refs += [r.strip() for r in _EMBED.findall(public_body)]
     root = os.path.realpath(vault_dir)
     found, unresolved = [], []
     for ref in refs:
@@ -204,6 +224,8 @@ def _upload(world: str, kind_ep: str, eid: str, path: str, token: str) -> dict:
     signed = client._request("POST", base, token=token, body={
         "fileName": os.path.basename(path), "contentType": ctype,
         "contentLength": len(data)}) or {}
+    if not isinstance(signed, dict) or not signed.get("signedUrl") or not signed.get("key"):
+        raise ValueError("mobRPG returned no upload URL for this file")
     _put(signed["signedUrl"], data, signed.get("contentType") or ctype,
          signed.get("metaData") or {})
     return client._request("PUT", f"{base}/complete", token=token,
@@ -213,12 +235,13 @@ def _upload(world: str, kind_ep: str, eid: str, path: str, token: str) -> dict:
 def run_push(args, token: str) -> int:
     vault_dir = os.path.expanduser(args.vault)
     index = _attachment_index(vault_dir)
+    vault_only = _vault.vault_only_sections(vault_dir)
     uploaded = present = capped = denied = failed = 0
     for path, txt, nd in _vault.iter_linked_notes(vault_dir):
         name = os.path.splitext(os.path.basename(path))[0].replace("_", " ")
         if args.only and args.only.lower() not in name.lower():
             continue
-        images, unresolved = _local_images(vault_dir, txt, index)
+        images, unresolved = _local_images(vault_dir, txt, index, vault_only)
         for ref in unresolved:
             print(f"  not found (or more than one match) under _attachments/: {name} -> {ref}")
         if not images:
@@ -260,6 +283,7 @@ def run_push(args, token: str) -> int:
                 print(f"  would upload: {name} <- {rel}")
                 uploaded += 1
                 count += 1
+                remote.add(local_sha)
                 continue
             try:
                 _upload(args.world, kind_ep, eid, img, token)
@@ -278,6 +302,7 @@ def run_push(args, token: str) -> int:
                 continue
             uploaded += 1
             count += 1
+            remote.add(local_sha)
             print(f"  uploaded: {name} <- {rel}")
     print(f"{'uploaded' if args.execute else 'would upload'}: {uploaded}, "
           f"already there: {present}, over the file cap: {capped}, "

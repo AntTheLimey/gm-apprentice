@@ -223,8 +223,9 @@ publication.
 ## Core Entity Types
 
 Threads are not entity files. They live in each PC's `## Current
-Status` → Open threads and in a Plan's `## Active Threads`, in the
-Thread Tracker format in `ttrpg-expert/continuity-engine.md`.
+Status` → Open threads and in the Session Plan's `## Active
+Threads`, in the Thread Tracker format in
+`ttrpg-expert/continuity-engine.md`.
 
 Attribute names as each type has used them. Where a name differs
 from `## Type-Specific Fields` below (e.g. `factionType` vs

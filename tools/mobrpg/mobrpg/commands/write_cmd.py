@@ -153,7 +153,7 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
             f"---\n"
         )
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Motivations & Secrets\n\n"
-              f"## Appearances\n\n## Source References\n\n- {source_doc}\n\n"
+              f"## Campaign Log\n\n## Source References\n\n- {source_doc}\n\n"
               f"> [!info] Reconstruction Note\n> Imported from mobRPG; descriptive prose is "
               f"Tim's. Relationships derived from mobRPG event join-entities.\n\n## GM Notes\n")
 

@@ -2,12 +2,15 @@
 
 mobRPG canon descriptions map to a note's authored prose; some H2 sections are
 pure vault bookkeeping — `## GM Notes` (secret), and the play-log sections
-`## Appearances` / `## Source References` / `## Notes` that `write` scaffolds and
-`session-wrapup` appends to. None of them are canon: pushing them spammed the
-world owner's review queue with bookkeeping churn (#147) and pulling destroyed
-them (#146). `split_vault_only` slices the body into the canon-facing main and
-the verbatim vault tail so `sync` can push/pull the main while preserving the
-tail untouched.
+`## Campaign Log` / `## Encounters` / `## Source References` / `## Notes` that
+`write` scaffolds and `session-wrapup` appends to. (`## Appearances` is kept
+in the default list too, for vaults built before release 1.10.12 replaced it
+with `## Campaign Log` in every entity template; `## Encounters` is the
+creature template's equivalent.) None of them are canon: pushing them spammed
+the world owner's review queue with bookkeeping churn (#147) and pulling
+destroyed them (#146). `split_vault_only` slices the body into the
+canon-facing main and the verbatim vault tail so `sync` can push/pull the main
+while preserving the tail untouched.
 
 Stdlib only, pure string surgery — no frontmatter, no HTML.
 """
@@ -15,7 +18,8 @@ from __future__ import annotations
 
 import re
 
-DEFAULT_VAULT_ONLY = ("GM Notes", "Notes", "Appearances", "Source References")
+DEFAULT_VAULT_ONLY = ("GM Notes", "Notes", "Appearances", "Campaign Log",
+                      "Encounters", "Source References")
 
 # `[ \t\r]*$` (not `[ \t]*$`): re.M `$` matches before a `\n` but not before the
 # `\r` of a CRLF line ending, so the `\r` must be allowed in the trailing run or

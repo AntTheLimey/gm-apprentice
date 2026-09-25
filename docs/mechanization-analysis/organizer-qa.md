@@ -364,6 +364,8 @@ Ordered by leverage. "Overlap" says whether to extend an existing script.
   `campaign-organizer/references/event-template.md:20-60` rather than in
   `shared/templates/`, so it is invisible to the migration template-diff at
   `migration-procedure.md:51-53` and can never be offered as a template update).
+  *Fixed in 1.10.12 (#246): the Event template now ships as
+  `shared/templates/event.md` and `event-template.md` is gone.*
 - **Size:** M. **Overlap:** shares the copy-if-missing/diff primitives with
   `migrate.py` (B-3).
 
@@ -669,7 +671,7 @@ copy will validate green while the other two rot.
 - Deduplication and conflict handling (`SKILL.md:322-333`) — "when in doubt,
   don't merge."
 - Schema evolution proposals (`SKILL.md:114-127`).
-- Event threshold "at least two of four" (`event-template.md:6-18`) — three of
+- Event threshold "at least two of four" (`event-template.md:6-18`, now in the comment block of `shared/templates/event.md`) — three of
   the four criteria need narrative judgment.
 - Travel-time validation (`timeline-validation.md:29-46`) — setting-specific and
   prose-sourced; the reference table is hardcoded to 1814 Regency and explicitly

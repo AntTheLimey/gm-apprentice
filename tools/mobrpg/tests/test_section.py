@@ -28,6 +28,23 @@ def test_split_vault_only_no_sections_is_identity():
     assert section.split_vault_only("plain prose\n") == ("plain prose\n", "")
 
 
+def test_campaign_log_and_encounters_are_vault_only_by_default():
+    # Release 1.10.12 replaced `## Appearances` with `## Campaign Log` in every
+    # entity template and creatures use `## Encounters`; session-wrapup appends
+    # to Campaign Log every session. Both must default to vault-only, same as
+    # the older `## Appearances`, or new-template vaults push session log
+    # churn as canon and drift on every pull.
+    body = ("## Overview\n\nCanon prose.\n\n"
+            "## Campaign Log\n\nSession 3: crossed vacuum.\n\n"
+            "## Encounters\n\nAmbush at the airlock.\n\n"
+            "## GM Notes\n\nSecret.\n")
+    canon, tail = section.split_vault_only(body)
+    assert "Canon prose." in canon
+    for kept in ("## Campaign Log", "Session 3", "## Encounters",
+                 "Ambush at the airlock", "## GM Notes", "Secret."):
+        assert kept in tail and kept not in canon
+
+
 def test_drop_empty_sections_removes_heading_only_sections():
     out = section.drop_empty_sections(BODY)
     assert "## Points of Interest" not in out        # empty scaffold heading

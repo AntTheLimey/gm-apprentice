@@ -680,6 +680,14 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
 
 function gmAliasList(frontmatter) {
   const raw = frontmatter && frontmatter.gm_aliases;
+  // Hand-edited or older frontmatter may write a single secret as a bare
+  // scalar (`gm_aliases: Elias Crowe`) rather than a YAML list. Treat it as a
+  // one-item list rather than silently dropping it — an ignored scalar is a
+  // secret that ships unhidden.
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    return trimmed ? [trimmed] : [];
+  }
   if (!Array.isArray(raw)) return [];
   return raw.map(a => String(a).trim()).filter(Boolean);
 }
@@ -710,8 +718,17 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // are. `published` is the pages the site publishes (default: all of `pages`).
 function gmAliasRewriter(pages, published) {
   const owners = new Map();
+  // Every declared secret key, independent of the owner-collision cleanup
+  // below. A link's LABEL (not just its target) can carry a secret verbatim
+  // — entity-schema.md tells GMs to list the secret in both `aliases` and
+  // `gm_aliases`, so Obsidian autocomplete writes `[[Lord Vane|Elias Crowe]]`
+  // (a public target, but a secret label) — and that check has to survive
+  // even when `owners` itself no longer has the key (e.g. it collided with
+  // some other page's public name and was deleted below).
+  const secretKeys = new Set();
   for (const page of pages) {
     for (const key of gmAliasList(page.frontmatter || {}).map(gmAliasKey)) {
+      secretKeys.add(key);
       if (!owners.has(key)) owners.set(key, page);
     }
   }
@@ -726,19 +743,23 @@ function gmAliasRewriter(pages, published) {
       if (!secret.has(gmAliasKey(a))) owners.delete(gmAliasKey(a));
     }
   }
-  if (owners.size === 0) return null;
+  if (owners.size === 0 && secretKeys.size === 0) return null;
 
   const WIKI = /(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]/g;
   function links(text, labelled) {
     return String(text).replace(WIKI, (match, bang, target, anchor, label) => {
       const owner = owners.get(gmAliasKey(target));
-      if (!owner) return match;
+      const labelIsSecret = !!label && secretKeys.has(gmAliasKey(label.slice(1)));
+      if (!owner && !labelIsSecret) return match;
+      // A secret label is never shown, whether or not it names the same page
+      // as the target — treat it exactly as an absent label from here on.
+      const effectiveLabel = labelIsSecret ? '' : label;
       // In prose, an unlabelled link shows the page's display title rather
       // than its filename. Frontmatter values keep a bare target, because
       // several renderers strip the brackets and look the rest up as-is.
-      const shown = !label && labelled && owner.displayTitle && owner.displayTitle !== humanizeName(owner.title)
+      const shown = !effectiveLabel && labelled && owner && owner.displayTitle && owner.displayTitle !== humanizeName(owner.title)
         ? `|${owner.displayTitle}` : '';
-      return `${bang}[[${owner.title}${anchor || ''}${label || shown}]]`;
+      return `${bang}[[${owner ? owner.title : target}${anchor || ''}${effectiveLabel || shown}]]`;
     });
   }
   // `[[...]]` inside any value, at any depth.

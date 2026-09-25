@@ -109,6 +109,12 @@ def _pull_body(old_body: str, description: str | None, desc_type: str | None,
     else:
         converted = _md.html_to_md(description or "")
     converted = links.rewrite_md_for_pull(converted, name_by_eid or {})
+    # A vault-only section the server still holds (e.g. a Campaign Log pushed
+    # before 1.10.13 made it vault-only) is dropped when the vault has its own
+    # copy, which comes back in the tail: keeping both would duplicate it for
+    # good. A section only the server holds is kept, or the pull would lose it.
+    local = {t.lower() for _s, _e, t in section._sections(vault_tail)}
+    converted = section.split_vault_only(converted, tuple(local))[0] if local else converted
     if vault_tail and not converted.endswith("\n\n"):
         return converted + "\n\n" + vault_tail
     return converted + vault_tail

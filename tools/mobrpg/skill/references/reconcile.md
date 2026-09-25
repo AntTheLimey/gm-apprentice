@@ -162,9 +162,10 @@ GM (see `push.md`'s "Reading the execute output" for the full breakdown).
 
 **Vault-only sections are never pushed and never pulled over.** `## GM Notes`
 stays local by design (until mobRPG enforces hidden-note access server-side), and
-so do the play-log sections `## Notes`, `## Appearances` and
-`## Source References` — session bookkeeping, not canon prose, and pushing them
-buried the world owner's review queue in churn. Both directions treat them as the
+so do the play-log sections `## Notes`, `## Appearances`, `## Campaign Log`,
+`## Encounters` and `## Source References` — session bookkeeping, not canon
+prose, and pushing them buried the world owner's review queue in churn. Both
+directions treat them as the
 vault's own: a push strips them, a pull preserves them verbatim. A vault can
 replace that list with a top-level `"vaultOnlySections": ["...", ...]` array in
 `_meta/mobrpg-map.json`. The array **replaces** the default rather than adding to
