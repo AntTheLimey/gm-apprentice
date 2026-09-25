@@ -88,8 +88,11 @@ def gm_alias_owners(vault) -> dict[str, str]:
     link to any of them, and a GM-only folder is the likeliest home for a
     secret. Only a note in an entity folder (one that can become a mobRPG
     element) claims a name, so a GM alias that is also such a note's name or
-    public alias is left to it. A GM-only note named after the secret doesn't
-    claim it: its name would go upstream as plain text."""
+    public alias is left to it: its key maps to "" rather than being removed,
+    so a link TO that name is left alone but a secret used as a link's LABEL
+    is still dropped (as the publish tool's `secretKeys` does). A GM-only note
+    named after the secret doesn't claim it: its name would go upstream as
+    plain text."""
     owned: dict[str, str] = {}
     vault = os.path.expanduser(vault)
     for root, dirs, files in os.walk(vault):
@@ -115,13 +118,15 @@ def gm_alias_owners(vault) -> dict[str, str]:
         return {}
     for folder in map_cmd.FOLDERS:
         for p in glob.glob(os.path.join(vault, folder, "*.md")):
-            owned.pop(_key(_display_name(p)), None)
+            if _key(_display_name(p)) in owned:
+                owned[_key(_display_name(p))] = ""
             try:
                 fm, _ = _read(p)
             except (OSError, UnicodeDecodeError):
                 continue
             for a in _aliases(fm):
-                owned.pop(_key(a), None)
+                if _key(a) in owned:
+                    owned[_key(a)] = ""
     return owned
 
 
@@ -273,7 +278,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
                 "faction_type": map_cmd._scalar(fm, "faction_type"),
                 "creature_type": map_cmd._scalar(fm, "creature_type"),
                 "relationships": [
-                    {**r, "target": owners.get(_key(r["target"].split("#")[0]), r["target"])}
+                    {**r, "target": owners.get(_key(r["target"].split("#")[0])) or r["target"]}
                     for r in _relationships(fm)],
             })
     if limit:

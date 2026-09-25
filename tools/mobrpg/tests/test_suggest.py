@@ -1124,8 +1124,17 @@ def _gm_vault(tmp_path):
 
 def test_gm_alias_owners_skips_a_name_another_note_owns(tmp_path):
     owners = suggest.gm_alias_owners(_gm_vault(tmp_path))
+    # Ada Marsh is a real note, so Lord Vane doesn't own the name: links to it
+    # stay put, but it is still a secret when used as another link's label.
     assert owners == {suggest._key("Elias Crowe"): "Lord Vane",
+                      suggest._key("Ada Marsh"): "",
                       suggest._key("The Veiled One"): "Mara"}
+
+
+def test_a_secret_label_is_dropped_even_when_another_page_has_that_name(tmp_path):
+    owners = suggest.gm_alias_owners(_gm_vault(tmp_path))
+    assert (suggest.unmask_gm_aliases("[[Ada Marsh]] met [[Lord Vane|Ada Marsh]].", owners)
+            == "[[Ada Marsh]] met [[Lord Vane]].")
 
 
 def test_unmask_keeps_anchor_and_label():
@@ -1189,3 +1198,12 @@ def test_gm_alias_owners_ignores_a_name_with_no_key(tmp_path):
     owners = suggest.gm_alias_owners(str(tmp_path))
     assert "" not in owners
     assert suggest.unmask_gm_aliases("Went to [[Tokyo|東京]].", owners) == "Went to [[Tokyo|東京]]."
+
+
+def test_a_relationship_to_a_name_another_note_owns_keeps_its_target(tmp_path):
+    vault = _gm_vault(tmp_path)
+    p = tmp_path / "Characters" / "NPCs" / "Beck.md"
+    p.write_text('---\ntype: npc\nrelationships:\n  - target: "[[Ada Marsh]]"\n'
+                 '    type: knows\n---\nBody.\n', encoding="utf-8")
+    beck = [e for e in suggest.collect_entities(vault) if e["name"] == "Beck"][0]
+    assert [r["target"] for r in beck["relationships"]] == ["Ada Marsh"]
