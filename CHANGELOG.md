@@ -20,11 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Earlier world-evolution notes count as projections, not canon, until
   a wrap-up shows they played.
 - **AIMS backfill as NPCs come up.** An NPC file with no `### Wants`
-  or `### Under Pressure` gets both drafted from what the vault already
+  or `### Under Pressure`, and no `AIMS:` block, gets both drafted from what the vault already
   records, with each line cited and inferences marked. The draft is
   proposed with the reaction and filed only on approval, so older NPC
   files gain the sections over time.
-- Reconcile's World Evolution record gains one line per NPC reaction.
+- An approved reaction is filed under `### Behind the Scenes` marked
+  `(projected)`, and an open fork is filed with both branches and its
+  hinge. The Campaign Log waits for session-wrapup, once the move plays.
+- The D&D "NPC reactions" and CoC "NPC loyalty shifts" guidance now
+  feeds this step, and continuity-engine's Motivation Consistency check
+  reads Wants and Under Pressure as well as `AIMS:` blocks.
+- Reconcile's World Evolution record gains one line per NPC reaction,
+  and its offer names the step.
 
 ---
 

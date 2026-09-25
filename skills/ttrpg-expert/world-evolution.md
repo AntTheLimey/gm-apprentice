@@ -73,25 +73,29 @@ System-specific modules override when available:
 
 For each named NPC who learned something this session, came under
 new pressure, or is hit by a Step 2 faction move, decide what they
-do next from who they are, not from what the plot needs.
+do next from who they are, not from what the plot needs. The system
+modules' NPC guidance (D&D "NPC reactions", CoC "NPC loyalty
+shifts") applies here: the NPC's traits choose among the shapes a
+reaction can take.
 
 1. **Pressure.** One line on what changed for them: "the party has
    shown her that standing near them is dangerous."
 2. **Read them.** GM Notes `### Wants`, `### Under Pressure` and
-   `### Secrets`, plus the public description and history. Quote
-   the traits that bear on this pressure, with the file. Evidence is
-   what played: an earlier world-evolution note is a projection until
-   a wrap-up shows it happened, so label it as one.
-3. **Backfill what's missing.** No Wants or Under Pressure (older
-   files have neither): draft them first, per the AIMS framework in
-   `npc-generation.md`. Wants carries the three agenda layers;
-   Under Pressure carries the instinct (fight/flee/freeze/fawn,
-   trusting/suspicious, generous/self-preserving,
-   honest/deceptive). Draw only on what the vault already records
-   (description, In Play, Campaign Log, wrap-ups), cite each line,
-   and mark inference. The draft goes under the file's gm-only
-   `## GM Notes`, created fenced if absent, and is proposed with
-   the reaction.
+   `### Secrets` (or an `AIMS:` block: Agenda as Wants, Instinct as
+   Under Pressure), plus Overview and History. Quote the traits that
+   bear on this pressure, with the file. Evidence is what played: an
+   earlier world-evolution note is a projection until a wrap-up
+   shows it happened, so label it as one.
+3. **Backfill what's missing.** No Wants or Under Pressure and no
+   `AIMS:` block (older files have none): draft them first, per the
+   AIMS framework in `npc-generation.md`. Wants carries the three
+   agenda layers; Under Pressure carries the instinct
+   (fight/flee/freeze/fawn, trusting/suspicious,
+   generous/self-preserving, honest/deceptive). Draw only on what the
+   vault already records (Overview, History, Campaign Log, Behind the
+   Scenes, wrap-ups), cite each line, and mark inference. The draft
+   goes under the file's gm-only `## GM Notes`, created fenced if
+   absent, and is proposed with the reaction.
 4. **React.** Traits pointing one way: be decisive, write it as a
    scene, name the trait. Traits pulling two ways (protect the
    children vs refuse to be managed): present a fork, each branch
@@ -102,9 +106,12 @@ do next from who they are, not from what the plot needs.
    settle a fork silently. Time each move to when the people in it
    are actually present.
 5. **Record.** On approval the reaction goes in `### Behind the
-   Scenes` (and the Campaign Log if the PCs saw it). If it showed
-   something new about how they break, add it to `### Under
-   Pressure`, so the next reaction agrees with this one.
+   Scenes`, labelled as a projection: `- **After [[Session NN]]**
+   (projected) — …`. An open fork is recorded the same way, with
+   both branches and its hinge. The Campaign Log waits for
+   session-wrapup, once it plays. If the reaction showed something
+   new about how they break, add it to `### Under Pressure`, so the
+   next reaction agrees with this one.
 
 A reaction can put a question to a player; it never decides what a
 PC does or feels.

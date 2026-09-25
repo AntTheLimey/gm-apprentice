@@ -57,7 +57,8 @@ systematic tracking is cheaper than repair through retcon.
 5. Flag clues pointing to nonexistent nodes/entities
 
 **Motivation Consistency:**
-1. Review NPCs with AIMS profiles against recent actions
+1. Review NPCs with AIMS profiles (an `AIMS:` block, or GM Notes
+   Wants/Under Pressure) against recent actions
 2. Flag actions contradicting instinct/agenda without justification
 3. Flag NPCs whose goals achieved/impossible without profile update
 
