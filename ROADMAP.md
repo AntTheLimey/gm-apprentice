@@ -114,6 +114,13 @@ decision rather than pure score.
   weak-match tier (#233); publish-site exclude_dirs, player-mode images,
   self-hosted fonts (#234); mobrpg duplicate-stub and degrading-pull fixes
   (#237).
+- ~~Post-diet feature batch~~ — v1.10.7–1.10.12: npm package
+  `gm-apprentice-publish` deprecated, tool repinned via `update-pin`
+  (#241, #208); `gm_aliases`, secret names that resolve links but never
+  publish (#242, #212); threads kept inline, standalone Thread schema
+  dropped (#243, #231); change-request loop for CoC 7e play-time edits
+  (#244, #215); `mobrpg images --push` (#245, #185); a template for every
+  entity type with a backfill migration (#246, #230).
 
 - ~~Mechanization Slice G: license and attribution CI~~ — PR #216 (v1.9.13).
   `scripts/attribution_check.py` (one `NOTICE.md` per system carrying its
