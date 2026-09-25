@@ -566,7 +566,15 @@ class TextHelperTests(unittest.TestCase):
                 '---\naliases: [Vane, "Red"]\ngm_aliases:\n  - Red\n  - Elias Crowe\n---\n'),
             ["Vane", "Red", "Elias Crowe"])
         self.assertEqual(vl.link_aliases({"gm_aliases": ["Crowe"]}), ["Crowe"])
-        self.assertEqual(vl.link_aliases({"gm_aliases": "Crowe"}), [])
+        # A hand-typed scalar (`gm_aliases: Elias Crowe`) is a one-item
+        # list, not dropped.
+        self.assertEqual(vl.link_aliases({"gm_aliases": "Elias Crowe"}),
+                         ["Elias Crowe"])
+        self.assertEqual(
+            vl.link_aliases({"aliases": "Doc", "gm_aliases": "Crowe"}),
+            ["Crowe"])
+        self.assertEqual(vl.link_aliases({"gm_aliases": ""}), [])
+        self.assertEqual(vl.link_aliases({"gm_aliases": "   "}), [])
 
     def test_raw_frontmatter_and_body_of(self):
         text = "---\ntype: npc\n---\n\n# Body\n\ntext\n"

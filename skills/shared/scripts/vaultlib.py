@@ -525,12 +525,15 @@ def wikilink_target(value: Any) -> str:
 
 def link_aliases(fm: dict[str, Any]) -> list[str]:
     """Every name a link may use for this file: `aliases:` then the
-    GM-only `gm_aliases:` (#212), deduplicated. Lists only — an
-    `aliases: Doc` scalar is malformed, and treating it as one alias
-    would make the link graph disagree with Obsidian's own reading."""
+    GM-only `gm_aliases:` (#212), deduplicated. An `aliases: Doc` scalar
+    is malformed and skipped, matching the publish tool. A `gm_aliases:`
+    scalar is read as one name: dropping it would leave the secret
+    unprotected without a word."""
     names: list[str] = []
     for field in ("aliases", "gm_aliases"):
         values = fm.get(field)
+        if field == "gm_aliases" and isinstance(values, str):
+            values = [values] if values.strip() else []
         if not isinstance(values, list):
             continue
         for a in values:
