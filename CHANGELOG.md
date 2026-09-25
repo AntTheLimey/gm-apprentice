@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.14] — 2026-09-25
+
+### Added
+
+- **NPC Reactions in world evolution.** A new Step 3 decides what each
+  NPC does next from who they are. It names the pressure they're
+  under, quotes the traits that bear on it, and writes a decisive
+  reaction. When the traits pull two ways it presents a fork instead
+  of settling it silently: each branch gets its trait and its first
+  ripple, and a PC's answer, the GM, or a resolve roll decides.
+  Earlier world-evolution notes count as projections, not canon, until
+  a wrap-up shows they played.
+- **AIMS backfill as NPCs come up.** An NPC file with no `### Wants`
+  or `### Under Pressure` gets both drafted from what the vault already
+  records, with each line cited and inferences marked. The draft is
+  proposed with the reaction and filed only on approval, so older NPC
+  files gain the sections over time.
+- Reconcile's World Evolution record gains one line per NPC reaction.
+
+---
+
 ## [1.10.13] — 2026-09-25
 
 ### Fixed

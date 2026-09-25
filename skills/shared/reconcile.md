@@ -141,7 +141,7 @@ Offer only for the **most recent** session, and skip if the index's
 
 Declined → step 7. Accepted → follow `ttrpg-expert/world-evolution.md`
 (skip its Storage Checkpoint): thread states, faction turns,
-consequences, foreshadowing, discovery state, world state — one item
+NPC reactions, consequences, foreshadowing, discovery state, world state — one item
 at a time, GM approves each. Then:
 - `stamp_entities.py <vault> "<index>" --set world_evolved="Session_NN"`
 - `stamp_entities.py <vault> <entity files> --set source=world-evolution --session N --date D`
@@ -158,7 +158,8 @@ Write `### Reconciliation Context`, opening with
 - **GM decisions** — each conflict resolution with rationale
 - **World evolution** (if 6.5 ran) — a `#### World Evolution`
   sub-section: one line per faction turn (action, impact, what PCs
-  can see), surfaced consequences (trigger, manifestation),
+  can see), one per NPC reaction (pressure, trait, reaction, and the
+  GM's pick where it forked), surfaced consequences (trigger, manifestation),
   foreshadowing changes, per-PC discovery shifts, world state changes
 
 Session-prep reads this instead of re-gathering context.

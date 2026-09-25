@@ -46,8 +46,8 @@ When invoked standalone, determine where campaign state lives:
 
 ## Post-Session Update Checklist
 
-Six steps in order. Each produces proposals. Present all
-together after Step 6; wait for GM confirmation before filing.
+Seven steps in order. Each produces proposals. Present all
+together after Step 7; wait for GM confirmation before filing.
 
 ### Step 1: Thread State Updates
 
@@ -69,27 +69,67 @@ System-specific modules override when available:
 - PF2e: `systems/pf2e/session-procedures.md`
 - GURPS/Generic: Universal Faction Turn as-is
 
-### Step 3: Consequence Surfacing
+### Step 3: NPC Reactions
+
+For each named NPC who learned something this session, came under
+new pressure, or is hit by a Step 2 faction move, decide what they
+do next from who they are, not from what the plot needs.
+
+1. **Pressure.** One line on what changed for them: "the party has
+   shown her that standing near them is dangerous."
+2. **Read them.** GM Notes `### Wants`, `### Under Pressure` and
+   `### Secrets`, plus the public description and history. Quote
+   the traits that bear on this pressure, with the file. Evidence is
+   what played: an earlier world-evolution note is a projection until
+   a wrap-up shows it happened, so label it as one.
+3. **Backfill what's missing.** No Wants or Under Pressure (older
+   files have neither): draft them first, per the AIMS framework in
+   `npc-generation.md`. Wants carries the three agenda layers;
+   Under Pressure carries the instinct (fight/flee/freeze/fawn,
+   trusting/suspicious, generous/self-preserving,
+   honest/deceptive). Draw only on what the vault already records
+   (description, In Play, Campaign Log, wrap-ups), cite each line,
+   and mark inference. The draft goes under the file's gm-only
+   `## GM Notes`, created fenced if absent, and is proposed with
+   the reaction.
+4. **React.** Traits pointing one way: be decisive, write it as a
+   scene, name the trait. Traits pulling two ways (protect the
+   children vs refuse to be managed): present a fork, each branch
+   with its reaction, the trait behind it, and its first ripple on
+   factions, threads and PCs. Where the NPC's first move is to
+   confront a PC, that PC's answer can be the hinge; otherwise the
+   GM picks, or lets a resolve roll settle it (CoC: POW). Never
+   settle a fork silently. Time each move to when the people in it
+   are actually present.
+5. **Record.** On approval the reaction goes in `### Behind the
+   Scenes` (and the Campaign Log if the PCs saw it). If it showed
+   something new about how they break, add it to `### Under
+   Pressure`, so the next reaction agrees with this one.
+
+A reaction can put a question to a player; it never decides what a
+PC does or feels.
+
+### Step 4: Consequence Surfacing
 
 Review carry-forward items and active threads. For each deferred consequence:
 has enough time passed? Does the current situation make surfacing
 natural? Manifests as event, NPC reaction, environmental change,
 or rumour?
 
-### Step 4: Foreshadowing Review
+### Step 5: Foreshadowing Review
 
 For each planted element: did a player notice it? Is it ripe
 for payoff? Should more hints be planted? Is the intended payoff
 still narratively relevant?
 
-### Step 5: Discovery State Updates
+### Step 6: Discovery State Updates
 
 Update per-PC discovery state for clues/secrets changed this
 session. Five levels: Unknown → Rumoured → Observed →
 Investigated → Understood. Track individual PC knowledge vs
 group knowledge.
 
-### Step 6: World State Changes
+### Step 7: World State Changes
 
 - **Calendar:** in-world date, time passed, upcoming deadlines
 - **Environment:** weather, seasonal changes, natural events
