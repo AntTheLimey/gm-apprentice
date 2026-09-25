@@ -912,4 +912,8 @@ Fixes found reviewing 1.10.7–1.10.12. No file changes shape.
 - mobrpg treats `## Campaign Log` and `## Encounters` as vault-only, so
   wrap-up lines no longer drift or push upstream; `images --push`
   skips images under GM Notes or in gm-only fences, uploads identical
-  bytes once, and hides a secret link label on push.
+  bytes once, and hides a secret link label on push. A pull drops a
+  Campaign Log the server still holds from an older push instead of
+  doubling it.
+- If `_meta/mobrpg-map.json` sets its own `vaultOnlySections`, that list
+  replaces the default: offer to add `Campaign Log` and `Encounters`.

@@ -1166,3 +1166,26 @@ def test_list_field_skips_a_scalar_aliases():
     fm = "name: Vane\naliases: Lord Vane\ngm_aliases: Elias Crowe\n"
     assert suggest._list_field(fm, "aliases") == []
     assert suggest._gm_aliases(fm) == ["Elias Crowe"]
+
+
+def test_template_empty_gm_aliases_is_no_secret():
+    # The exact line every entity template ships.
+    fm = "name: Aaron\naliases: []\ngm_aliases: []        # secret names: resolve links, never publish\n"
+    assert suggest._gm_aliases(fm) == []
+    for empty in ("gm_aliases: ~\n", "gm_aliases: null\n", "gm_aliases:\n"):
+        assert suggest._gm_aliases("name: A\n" + empty) == []
+
+
+def test_scalar_gm_aliases_does_not_swallow_the_next_line():
+    fm = 'name: Vane\ngm_aliases: Elias Crowe\n# a comment\n"quoted": 1\n'
+    assert suggest._gm_aliases(fm) == ["Elias Crowe"]
+
+
+def test_gm_alias_owners_ignores_a_name_with_no_key(tmp_path):
+    npc = tmp_path / "Characters" / "NPCs"
+    npc.mkdir(parents=True)
+    (npc / "Aaron.md").write_text("---\nname: Aaron\ngm_aliases: [Москва]\n---\nBody.\n",
+                                  encoding="utf-8")
+    owners = suggest.gm_alias_owners(str(tmp_path))
+    assert "" not in owners
+    assert suggest.unmask_gm_aliases("Went to [[Tokyo|東京]].", owners) == "Went to [[Tokyo|東京]]."

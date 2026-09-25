@@ -996,3 +996,12 @@ def test_push_never_carries_a_gm_alias(tmp_path, monkeypatch):
     desc = submitted[0]["suggestions"][0]["payload"]["description"]
     assert "Crowe" not in desc
     assert "Lord Vane" in desc
+
+
+def test_pull_does_not_duplicate_a_campaign_log_the_server_still_holds():
+    from mobrpg.commands.sync_cmd import _pull_body
+    old = "Canon.\n\n## Campaign Log\n\n- S1 met\n- S2 fought\n\n## GM Notes\n\nsecret\n"
+    server = "Canon edited.\n\n## Campaign Log\n\n- S1 met\n\n## Traits\n\nTall.\n"
+    out = _pull_body(old, server, "Markdown", {})
+    assert out.count("## Campaign Log") == 1
+    assert "- S2 fought" in out and "## Traits" in out and "Canon edited." in out

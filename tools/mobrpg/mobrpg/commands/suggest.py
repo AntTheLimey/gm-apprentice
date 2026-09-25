@@ -54,9 +54,12 @@ def _list_field(fm: str, field: str, scalar: bool = False) -> list[str]:
     items = [a if a[:1] in "\"'" else re.sub(r"\s+#.*$", "", a) for a in items]
     inline = re.search(rf"^{field}:\s*\[([^\]]*)\]", fm, re.M)
     items = [a for a in (inline.group(1) if inline else "").split(",") if a.strip()] or items
-    if scalar and not items and block:
-        scalar = block.group(1).strip()
-        if scalar:
+    if scalar and not items and block and not inline:
+        # Only the value on the field's own line: a following comment or
+        # quoted key must not be swallowed into the name. `[]` (every
+        # template's default), `~` and `null` are empty, not names.
+        scalar = block.group(1).split("\n", 1)[0].strip()
+        if scalar and not scalar.startswith(("[", "#")) and scalar not in ("~", "null", "Null", "NULL"):
             # A quoted scalar keeps everything through its closing quote (so a
             # `#` inside it, or a real comment after it, is handled the same
             # way a quoted block-list item already is above); an unquoted
@@ -100,7 +103,14 @@ def gm_alias_owners(vault) -> dict[str, str]:
             except (OSError, UnicodeDecodeError):
                 continue
             for a in _gm_aliases(fm):
-                owned.setdefault(_key(a), _display_name(p))
+                # A name with no key (all non-Latin, or only "the"/"of"...)
+                # would match every such link; it can't be told apart.
+                if _key(a):
+                    owned.setdefault(_key(a), _display_name(p))
+                else:
+                    print(f"  WARNING: gm_aliases name {a!r} in {os.path.relpath(p, vault)} "
+                          "has no Latin letters or digits; mobrpg can't match it, so "
+                          "links using it are pushed unchanged", file=sys.stderr)
     if not owned:
         return {}
     for folder in map_cmd.FOLDERS:

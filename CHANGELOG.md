@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image instead of stopping the run.
 - **Campaign Log and Encounters synced to mobRPG as canon (#230).**
   Each wrap-up bullet made the entity drift and filed a suggestion.
-  Both sections are now vault-only by default, like `Appearances`.
+  Both sections are now vault-only by default, like `Appearances`. A
+  pull drops the copy an older push left on the server, so the section
+  isn't doubled.
 - **session-wrapup** adds a Campaign Log only to NPC, Location, Item,
   Organization and Creature (as `## Encounters`), and falls back to the
   plugin's Event template for the event threshold.
