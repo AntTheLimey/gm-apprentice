@@ -866,10 +866,10 @@ with the vault system's stat block.
 
 - Copy each missing template into `_Templates/`, names and stat-block
   substitution per `campaign-organizer/references/vault-setup.md` →
-  Templates: NPC, Location, Item, Creature, Organization, Event, Clue,
-  Document, World Domain, Campaign Overview. Offer each by name. An
-  existing template that differs is offered as an overwrite, with the
-  warning that local changes are lost.
+  Templates: NPC, Location, Item, Creature, Organization, Faction,
+  Event, Clue, Document, World Domain, Campaign Overview. Offer each
+  by name. An existing template that differs is offered as an
+  overwrite, with the warning that local changes are lost.
 - `_meta/entity-types.md`: the schema mirror check offers the updated
   NPC (`location`), Faction/Organization (`status`), Clue
   (`discoveryState`), Document (`current_holder`; the text moves to

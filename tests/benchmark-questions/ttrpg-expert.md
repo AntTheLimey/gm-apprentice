@@ -28,11 +28,12 @@ My investigators found a clue — a coded letter in a professor's
 desk. Create a clue entity with the discovery state model showing
 what each PC knows.
 
-### Q5 — Thread entity for campaign-spanning narrative
+### Q5 — Thread Tracker for a campaign-spanning narrative
 
 I have a narrative thread — "The Missing Professor" — that was
 introduced in Session 1 and needs to be tracked across the
-campaign. How do thread entities work, and create one for me.
+campaign. How are threads tracked in this system, and write me a
+Thread Tracker entry for it.
 
 ## Agent Prompts
 
@@ -63,7 +64,8 @@ model showing what each PC knows.
 
 Q5: I have a narrative thread — "The Missing Professor" — that was
 introduced in Session 1 and needs to be tracked across the
-campaign. How do thread entities work, and create one for me.
+campaign. How are threads tracked in this system, and write me a
+Thread Tracker entry for it.
 ```
 
 ### Test prompt (post-refactor — feature branch)
@@ -96,7 +98,8 @@ model showing what each PC knows.
 
 Q5: I have a narrative thread — "The Missing Professor" — that was
 introduced in Session 1 and needs to be tracked across the
-campaign. How do thread entities work, and create one for me.
+campaign. How are threads tracked in this system, and write me a
+Thread Tracker entry for it.
 ```
 
 ### Evaluator prompt (blind scoring)
@@ -121,7 +124,7 @@ Q1: Entity tracking schema for a new CoC 7e campaign
 Q2: Full NPC entity — cult leader with AIMS profile and stats
 Q3: Faction entity — secret society with goals, clock, alliances
 Q4: Clue entity — coded letter with discovery state model per PC
-Q5: Thread entity — "The Missing Professor" spanning multiple sessions
+Q5: Thread Tracker — "The Missing Professor" spanning multiple sessions
 
 For each question, output:
 - Scores for A and B on each dimension

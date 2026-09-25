@@ -121,7 +121,8 @@ its absence as a gap.
 ### Thread Tracker
 
 Threads are tracked inline, not as entity files: each PC's
-`## Current Status` → Open threads, and a Plan's `## Active Threads`.
+`## Current Status` → Open threads, and the Session Plan's
+`## Active Threads`.
 Use this format when the GM asks for a thread tracker or a review:
 
 ```markdown
