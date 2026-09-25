@@ -204,6 +204,8 @@ def _upload(world: str, kind_ep: str, eid: str, path: str, token: str) -> dict:
     signed = client._request("POST", base, token=token, body={
         "fileName": os.path.basename(path), "contentType": ctype,
         "contentLength": len(data)}) or {}
+    if not signed.get("signedUrl") or not signed.get("key"):
+        raise ValueError("mobRPG returned no upload URL for this file")
     _put(signed["signedUrl"], data, signed.get("contentType") or ctype,
          signed.get("metaData") or {})
     return client._request("PUT", f"{base}/complete", token=token,
@@ -260,6 +262,7 @@ def run_push(args, token: str) -> int:
                 print(f"  would upload: {name} <- {rel}")
                 uploaded += 1
                 count += 1
+                remote.add(local_sha)
                 continue
             try:
                 _upload(args.world, kind_ep, eid, img, token)
@@ -278,6 +281,7 @@ def run_push(args, token: str) -> int:
                 continue
             uploaded += 1
             count += 1
+            remote.add(local_sha)
             print(f"  uploaded: {name} <- {rel}")
     print(f"{'uploaded' if args.execute else 'would upload'}: {uploaded}, "
           f"already there: {present}, over the file cap: {capped}, "

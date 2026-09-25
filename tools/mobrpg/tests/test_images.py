@@ -237,3 +237,26 @@ def test_push_refuses_an_ambiguous_image_name(tmp_path, monkeypatch, capsys):
     images.run(["w1", "--vault", str(v), "--push", "--execute"])
     assert "more than one match" in capsys.readouterr().out
     assert not puts
+
+
+def test_push_uploads_identical_bytes_once(tmp_path, monkeypatch, capsys):
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    vault = _push_vault(tmp_path)
+    (vault / "_attachments" / "characters" / "map.png").write_bytes(b"portrait-bytes")
+    assert images.run(["w1", "--vault", str(vault), "--push", "--execute"]) == 0
+    assert [p[1] for p in puts] == [b"portrait-bytes"]
+    assert "already there: 1" in capsys.readouterr().out
+
+
+def test_push_survives_a_signed_url_response_without_a_url(tmp_path, monkeypatch, capsys):
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    real = client._request
+    monkeypatch.setattr(client, "_request",
+                        lambda m, p, **k: {} if m == "POST" else real(m, p, **k))
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 1
+    assert not puts
+    out = capsys.readouterr()
+    assert out.err.count("no upload URL") == 2
+    assert "failed: 2" in out.out
