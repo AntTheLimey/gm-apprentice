@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.13] — 2026-09-25
+
+### Fixed
+
+- **GM aliases leaked through a link's display text (#212).**
+  Obsidian's autocomplete writes `[[Lord Vane|Elias Crowe]]` when a
+  secret name is also listed under `aliases`. The site and mobRPG
+  pushes showed "Elias Crowe". A secret label is now dropped, and the
+  link shows the page's public title. Publish tool 1.11.36.
+- **A single-name `gm_aliases: Elias Crowe` was ignored**, so the
+  name wasn't hidden. The publish tool, the vault scripts and mobrpg
+  now read it as one name. A scalar `aliases:` is still skipped.
+- **`mobrpg images --push` uploaded GM-only images (#185).** It
+  collected embeds from the whole note. It now reads only the
+  player-visible part, as `sync` does. It also uploads identical
+  bytes once per run, and a malformed upload response fails that
+  image instead of stopping the run.
+- **Campaign Log and Encounters synced to mobRPG as canon (#230).**
+  Each wrap-up bullet made the entity drift and filed a suggestion.
+  Both sections are now vault-only by default, like `Appearances`.
+- **session-wrapup** adds a Campaign Log only to NPC, Location, Item,
+  Organization and Creature (as `## Encounters`), and falls back to the
+  plugin's Event template for the event threshold.
+- **The 1.10.12 migration now offers the Faction template**, which
+  writes `faction_type`.
+- **Threads** live in the Session Plan's `## Active Threads`, not a
+  Plan's; the benchmark asks about the Thread Tracker.
+
+---
+
 ## [1.10.12] — 2026-09-24
 
 ### Added

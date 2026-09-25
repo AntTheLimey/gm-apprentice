@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.12"
+current_version: "1.10.13"
 ---
 
 # Vault Migration Registry
@@ -887,3 +887,29 @@ with the vault system's stat block.
   recognises `coc-7e-regency` as Regency Cthulhu. If `publish.site_dir`
   is set, offer `update-pin --site <site-dir>` (publish-site's build
   tool).
+
+## Migration: 1.10.12 → 1.10.13
+
+Fixes found reviewing 1.10.7–1.10.12. No file changes shape.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Offer the Faction template if 1.10.12 didn't: it now writes
+  `faction_type`, which the site's faction badge reads.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.36 hides a GM alias used as a link's
+  display text (`[[Lord Vane|Elias Crowe]]`) and reads a single-name
+  `gm_aliases: Elias Crowe`. If `publish.site_dir` is set, offer
+  `update-pin --site <site-dir>` (publish-site's build tool).
+- `vault_check`, `graph_check` and `session_context` read a
+  single-name `gm_aliases:` too.
+- mobrpg treats `## Campaign Log` and `## Encounters` as vault-only, so
+  wrap-up lines no longer drift or push upstream; `images --push`
+  skips images under GM Notes or in gm-only fences, uploads identical
+  bytes once, and hides a secret link label on push.
