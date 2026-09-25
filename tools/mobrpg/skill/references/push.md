@@ -215,9 +215,9 @@ timestamps (last-writer-wins) — when the vault's prose is newer it files an
 mobRPG's is newer it pulls the canon prose down. See `reconcile.md` for the full
 decision table (including the `baseline` verdict for a never-synced note) and
 the dry-run → present → confirm → `--execute` walk-through. `## GM Notes` and
-the other vault-only sections (`## Notes`, `## Appearances`,
-`## Source References`, or a vault's own `vaultOnlySections` list) are never
-pushed — they stay local to the vault by design. The same list is stripped from
+the other vault-only sections (`## Notes`, `## Appearances`, `## Campaign Log`,
+`## Encounters`, `## Source References`, or a vault's own `vaultOnlySections`
+list) are never pushed — they stay local to the vault by design. The same list is stripped from
 the `CreateElement` descriptions this push flow sends, so a section a vault has
 opted out of never reaches the world by either route.
 

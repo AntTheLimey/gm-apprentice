@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from mobrpg import client
@@ -247,6 +249,54 @@ def test_push_uploads_identical_bytes_once(tmp_path, monkeypatch, capsys):
     assert images.run(["w1", "--vault", str(vault), "--push", "--execute"]) == 0
     assert [p[1] for p in puts] == [b"portrait-bytes"]
     assert "already there: 1" in capsys.readouterr().out
+
+
+def test_push_never_uploads_a_gm_only_embed(tmp_path, monkeypatch, capsys):
+    # #<gm-image-leak>: images --push must only look at the player-visible part
+    # of the body, the same way `sync` does — an embed under `## GM Notes` or
+    # inside a `<!-- gm-only -->` fence must never be uploaded, even though it
+    # resolves to a real attachment.
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    body = (
+        "Body.\n![[public.png]]\n\n"
+        "<!-- gm-only -->\n![[hidden.png]]\n<!-- /gm-only -->\n\n"
+        "## GM Notes\n\n![[secret.png]]\n"
+    )
+    v = _push_vault(tmp_path, body=body)
+    att = v / "_attachments" / "characters"
+    (att / "public.png").write_bytes(b"public-bytes")
+    (att / "hidden.png").write_bytes(b"hidden-bytes")
+    (att / "secret.png").write_bytes(b"secret-bytes")
+    assert images.run(["w1", "--vault", str(v), "--push"]) == 0
+    out = capsys.readouterr().out
+    assert "would upload: vela <- _attachments/characters/public.png" in out
+    assert "hidden.png" not in out
+    assert "secret.png" not in out
+    assert not puts
+
+
+def test_local_images_excludes_gm_only_body(tmp_path):
+    # Unit-level check on the collector itself, mirroring sync's
+    # `_push_candidate` split: portrait always counts; body embeds are
+    # filtered to the player-visible part before collection.
+    vault_dir = tmp_path
+    att = vault_dir / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "public.png").write_bytes(b"1")
+    (att / "hidden.png").write_bytes(b"1")
+    (att / "secret.png").write_bytes(b"1")
+    index = images._attachment_index(str(vault_dir))
+    txt = (
+        '---\nname: Vela\nportrait: ""\n---\n'
+        "Body.\n![[public.png]]\n\n"
+        "<!-- gm-only -->\n![[hidden.png]]\n<!-- /gm-only -->\n\n"
+        "## GM Notes\n\n![[secret.png]]\n"
+    )
+    found, unresolved = images._local_images(str(vault_dir), txt, index)
+    names = {os.path.basename(f) for f in found}
+    assert names == {"public.png"}
+    assert unresolved == []
 
 
 def test_push_survives_a_signed_url_response_without_a_url(tmp_path, monkeypatch, capsys):

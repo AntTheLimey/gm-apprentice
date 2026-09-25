@@ -1076,6 +1076,26 @@ def test_gm_alias_also_under_aliases_is_kept_back():
     assert suggest._aliases(fm) == ["Vane"]
 
 
+def test_list_field_accepts_a_scalar_string():
+    # `gm_aliases: Elias Crowe` (a bare string, not a YAML list) must be
+    # treated as a one-item list, not silently ignored — an author who types
+    # a single alias without list syntax still gets it kept secret.
+    fm = 'type: npc\ngm_aliases: Elias Crowe\naliases: [Vane]\n'
+    assert suggest._list_field(fm, "gm_aliases", scalar=True) == ["Elias Crowe"]
+    assert suggest._gm_aliases(fm) == ["Elias Crowe"]
+    assert suggest._aliases(fm) == ["Vane"]
+
+
+def test_list_field_scalar_with_quotes_and_comment():
+    fm = 'gm_aliases: "Elias Crowe"  # secret\n'
+    assert suggest._list_field(fm, "gm_aliases", scalar=True) == ["Elias Crowe"]
+
+
+def test_list_field_empty_scalar_is_empty_list():
+    fm = 'gm_aliases:\naliases: [Vane]\n'
+    assert suggest._list_field(fm, "gm_aliases", scalar=True) == []
+
+
 def test_list_field_drops_a_trailing_yaml_comment():
     fm = 'aliases:\n  - Elias Crowe # secret\n  - "Red # Hand"\ngm_aliases:\n  - Elias Crowe\n'
     assert suggest._list_field(fm, "aliases") == ["Elias Crowe", "Red # Hand"]
@@ -1114,6 +1134,23 @@ def test_unmask_keeps_anchor_and_label():
             == "[[Lord Vane]] / [[Lord Vane#Past|x]]")
 
 
+def test_unmask_strips_a_secret_piped_label():
+    # Obsidian autocomplete writes `[[Public Name|GM Alias]]` when the typed
+    # text matched the alias but the note's canonical name is public. The
+    # TARGET here is already the owner's public name, so the old unmask (which
+    # only ever inspected the target) left the secret label untouched and
+    # pushed it verbatim.
+    owners = {suggest._key("Elias Crowe"): "Lord Vane"}
+    assert (suggest.unmask_gm_aliases("[[Lord Vane|Elias Crowe]]", owners)
+            == "[[Lord Vane]]")
+    # The anchor form must survive the same rewrite.
+    assert (suggest.unmask_gm_aliases("[[Lord Vane#Past|Elias Crowe]]", owners)
+            == "[[Lord Vane#Past]]")
+    # A label that is not a secret is left exactly as it was.
+    assert (suggest.unmask_gm_aliases("[[Lord Vane|the vigilante]]", owners)
+            == "[[Lord Vane|the vigilante]]")
+
+
 def test_collected_entity_carries_no_gm_alias(tmp_path):
     ents = {e["name"]: e for e in suggest.collect_entities(_gm_vault(tmp_path))}
     ada = ents["Ada Marsh"]
@@ -1123,3 +1160,9 @@ def test_collected_entity_carries_no_gm_alias(tmp_path):
     assert "Crowe" not in str(ada)
     assert "Veiled" not in str(ada)
     assert "Crowe" not in str(ents["Lord Vane"])
+
+
+def test_list_field_skips_a_scalar_aliases():
+    fm = "name: Vane\naliases: Lord Vane\ngm_aliases: Elias Crowe\n"
+    assert suggest._list_field(fm, "aliases") == []
+    assert suggest._gm_aliases(fm) == ["Elias Crowe"]
