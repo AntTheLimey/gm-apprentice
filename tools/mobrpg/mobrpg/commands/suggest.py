@@ -40,6 +40,21 @@ def _read(path: str) -> tuple[str, str]:
     return fm_body, body
 
 
+def _yaml_item(a: str) -> str:
+    """One YAML scalar as written in a list or after a key, decoded: a
+    single-quoted `'O''Neil'` is `O'Neil`, a double-quoted `"a \\"b\\""` is
+    `a "b"`, and an unquoted value drops a ` # comment`. A secret name that
+    decodes wrong would never match its links, and would push unhidden."""
+    a = a.strip()
+    m = re.match(r"'((?:[^']|'')*)'", a)
+    if m:
+        return m.group(1).replace("''", "'")
+    m = re.match(r'"((?:[^"\\]|\\.)*)"', a)
+    if m:
+        return re.sub(r'\\(.)', r"\1", m.group(1))
+    return re.sub(r"\s+#.*$", "", a).strip()
+
+
 def _list_field(fm: str, field: str, scalar: bool = False) -> list[str]:
     """A top-level frontmatter list, inline or block. Anchored to the start of
     a line so `aliases` never matches inside `gm_aliases`.
@@ -50,8 +65,6 @@ def _list_field(fm: str, field: str, scalar: bool = False) -> list[str]:
     publish tool and vaultlib do."""
     block = re.search(rf"^{field}:(.*?)(?=\n\w|\Z)", fm, re.S | re.M)
     items = re.findall(r"^\s*-\s*(.+?)\s*$", block.group(1), re.M) if block else []
-    # A YAML comment needs whitespace before the `#`; a quoted item keeps its own.
-    items = [a if a[:1] in "\"'" else re.sub(r"\s+#.*$", "", a) for a in items]
     inline = re.search(rf"^{field}:\s*\[([^\]]*)\]", fm, re.M)
     items = [a for a in (inline.group(1) if inline else "").split(",") if a.strip()] or items
     if scalar and not items and block and not inline:
@@ -60,13 +73,8 @@ def _list_field(fm: str, field: str, scalar: bool = False) -> list[str]:
         # template's default), `~` and `null` are empty, not names.
         scalar = block.group(1).split("\n", 1)[0].strip()
         if scalar and not scalar.startswith(("[", "#")) and scalar not in ("~", "null", "Null", "NULL"):
-            # A quoted scalar keeps everything through its closing quote (so a
-            # `#` inside it, or a real comment after it, is handled the same
-            # way a quoted block-list item already is above); an unquoted
-            # scalar drops a trailing `# comment` the same way.
-            qm = re.match(r"^([\"'])(.*?)\1", scalar)
-            items = [qm.group(0)] if qm else [re.sub(r"\s+#.*$", "", scalar)]
-    return [a.strip().strip("\"'") for a in items if a.strip().strip("\"'")]
+            items = [scalar]
+    return [n for n in (_yaml_item(a) for a in items) if n]
 
 
 def _gm_aliases(fm: str) -> list[str]:

@@ -1207,3 +1207,12 @@ def test_a_relationship_to_a_name_another_note_owns_keeps_its_target(tmp_path):
                  '    type: knows\n---\nBody.\n', encoding="utf-8")
     beck = [e for e in suggest.collect_entities(vault) if e["name"] == "Beck"][0]
     assert [r["target"] for r in beck["relationships"]] == ["Ada Marsh"]
+
+
+def test_quoted_gm_aliases_are_decoded():
+    assert suggest._gm_aliases("gm_aliases: 'O''Neil'  # secret\n") == ["O'Neil"]
+    assert suggest._gm_aliases('gm_aliases: "Say \\"Hi\\""\n') == ['Say "Hi"']
+    assert suggest._gm_aliases("gm_aliases:\n  - 'O''Neil'\n  - \"Red # Hand\"\n") == ["O'Neil", "Red # Hand"]
+    assert suggest._gm_aliases("gm_aliases: ['O''Neil']\n") == ["O'Neil"]
+    owners = {suggest._key(a): "Lord Vane" for a in suggest._gm_aliases("gm_aliases: 'O''Neil'\n")}
+    assert suggest.unmask_gm_aliases("[[Vane|O'Neil]]", owners) == "[[Vane]]"

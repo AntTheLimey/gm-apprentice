@@ -575,6 +575,10 @@ class TextHelperTests(unittest.TestCase):
             ["Crowe"])
         self.assertEqual(vl.link_aliases({"gm_aliases": ""}), [])
         self.assertEqual(vl.link_aliases({"gm_aliases": "   "}), [])
+        # The parser keeps YAML escapes as written; the decoded spelling is
+        # the one a link uses.
+        self.assertIn("O'Neil", vl.link_aliases({"gm_aliases": "O''Neil"}))
+        self.assertIn('Say "Hi"', vl.link_aliases({"aliases": ['Say \\"Hi\\"']}))
 
     def test_raw_frontmatter_and_body_of(self):
         text = "---\ntype: npc\n---\n\n# Body\n\ntext\n"

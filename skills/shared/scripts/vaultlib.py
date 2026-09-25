@@ -528,7 +528,9 @@ def link_aliases(fm: dict[str, Any]) -> list[str]:
     GM-only `gm_aliases:` (#212), deduplicated. An `aliases: Doc` scalar
     is malformed and skipped, matching the publish tool. A `gm_aliases:`
     scalar is read as one name: dropping it would leave the secret
-    unprotected without a word."""
+    unprotected without a word. The frontmatter parser keeps YAML escapes
+    as written, so a quoted `'O''Neil'` or `"a \\"b\\""` also adds its
+    decoded spelling, the one a link actually uses."""
     names: list[str] = []
     for field in ("aliases", "gm_aliases"):
         values = fm.get(field)
@@ -537,9 +539,12 @@ def link_aliases(fm: dict[str, Any]) -> list[str]:
         if not isinstance(values, list):
             continue
         for a in values:
-            name = str(a).strip().strip("\"'")
-            if name and name not in names:
-                names.append(name)
+            name = str(a).strip()
+            if len(name) > 1 and name[0] == name[-1] and name[0] in "\"'":
+                name = name[1:-1].strip()
+            for n in (name, name.replace("''", "'"), name.replace('\\"', '"')):
+                if n and n not in names:
+                    names.append(n)
     return names
 
 

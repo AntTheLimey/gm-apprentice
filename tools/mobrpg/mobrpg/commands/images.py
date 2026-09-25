@@ -224,7 +224,7 @@ def _upload(world: str, kind_ep: str, eid: str, path: str, token: str) -> dict:
     signed = client._request("POST", base, token=token, body={
         "fileName": os.path.basename(path), "contentType": ctype,
         "contentLength": len(data)}) or {}
-    if not signed.get("signedUrl") or not signed.get("key"):
+    if not isinstance(signed, dict) or not signed.get("signedUrl") or not signed.get("key"):
         raise ValueError("mobRPG returned no upload URL for this file")
     _put(signed["signedUrl"], data, signed.get("contentType") or ctype,
          signed.get("metaData") or {})

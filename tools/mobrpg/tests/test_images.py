@@ -310,3 +310,14 @@ def test_push_survives_a_signed_url_response_without_a_url(tmp_path, monkeypatch
     out = capsys.readouterr()
     assert out.err.count("no upload URL") == 2
     assert "failed: 2" in out.out
+
+
+def test_push_survives_a_signed_url_response_that_is_not_an_object(tmp_path, monkeypatch, capsys):
+    calls = []
+    puts = _wire_push(monkeypatch, [], calls)
+    real = client._request
+    monkeypatch.setattr(client, "_request",
+                        lambda m, p, **k: ["x"] if m == "POST" else real(m, p, **k))
+    assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 1
+    assert not puts
+    assert "failed: 2" in capsys.readouterr().out
