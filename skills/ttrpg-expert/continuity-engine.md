@@ -59,7 +59,9 @@ systematic tracking is cheaper than repair through retcon.
 **Motivation Consistency:**
 1. Review NPCs with AIMS profiles (an `AIMS:` block, or GM Notes
    Wants/Under Pressure) against recent actions
-2. Flag actions contradicting instinct/agenda without justification
+2. Flag actions contradicting instinct/agenda without justification.
+   A `(projected)` trait isn't confirmed until a wrap-up settles it;
+   never flag against one
 3. Flag NPCs whose goals achieved/impossible without profile update
 
 **Canon Grounding Check:**

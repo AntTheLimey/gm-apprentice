@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session-wrapup settles `(projected)` entries on NPCs who appeared:
   the marker is dropped if the move played, struck through as
   `not played` if play went elsewhere, or left if it's still pending.
+  Continuity-engine's Motivation Consistency check never flags against
+  a `(projected)` trait.
 - The D&D "NPC reactions" and CoC "NPC loyalty shifts" guidance now
   feeds this step, and continuity-engine's Motivation Consistency check
   reads Wants and Under Pressure as well as `AIMS:` blocks.
