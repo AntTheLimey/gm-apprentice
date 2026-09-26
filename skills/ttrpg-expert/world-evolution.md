@@ -120,7 +120,11 @@ reaction can take.
    odds: a reaction that can trip an escalation trigger changes which
    of that faction's beats are still coming. A beat gated on a
    faction level or a party choice is conditional, never a fixed
-   point.
+   point. Each link rests on the ones above it: present the chain as
+   conditional on the GM approving them, and rerun it from any link
+   the GM changes. End it with the GM's calls it rests on (did a
+   scene happen, what a ruling allows) as questions, never settled
+   facts.
 6. **Record.** On approval the reaction goes in `### Behind the
    Scenes`, labelled as a projection: `- **After [[Session NN]]**
    (projected) — …`. An open fork is recorded the same way, with
