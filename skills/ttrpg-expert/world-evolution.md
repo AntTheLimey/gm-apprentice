@@ -93,7 +93,8 @@ reaction can take.
    (fight/flee/freeze/fawn, trusting/suspicious,
    generous/self-preserving, honest/deceptive). Draw only on what the
    vault already records (Overview, History, Campaign Log, Behind the
-   Scenes, wrap-ups), cite each line, and mark inference. The draft
+   Scenes, wrap-ups), cite each line, and mark inference. A
+   `(projected)` entry is not evidence. The draft
    goes under the file's gm-only `## GM Notes`, created fenced if
    absent, and is proposed with the reaction.
 4. **React.** Traits pointing one way: be decisive, write it as a
@@ -108,30 +109,39 @@ reaction can take.
    are actually present.
 5. **Chain.** A reaction is new pressure on whoever it lands on:
    the people in the room, the household, anyone it reaches through
-   servants, informants, letters or gossip. Run steps 1–4 for each of
-   them, in the order they would learn of it, and keep going until a
-   reaction lands only on PCs (it becomes a question for the players)
-   or on nobody new. Stop at three links unless the GM wants more,
-   and say what is left unrun. Follow the recommended branch down the
-   whole chain and the other branch one link, so the GM sees where
-   they split. An NPC reached twice reacts in line with their first
-   reaction, or names what changed. A faction reached by the chain
-   gets its Step 2 turn revised, not a second one. That includes its
-   odds: a reaction that can trip an escalation trigger changes which
-   of that faction's beats are still coming. A beat gated on a
-   faction level or a party choice is conditional, never a fixed
-   point. Each link rests on the ones above it: present the chain as
+   servants, informants, letters or gossip. The first NPC's reaction
+   is link 1. Run steps 1–4 for each person it reaches whose reaction
+   would change something the PCs or a faction will meet, in the
+   order they would learn of it; name the rest in one line as unrun.
+   Keep going until a reaction lands only on PCs (it becomes a
+   question for the players) or on nobody new. Stop at three links
+   and list what is left unrun, so the GM can ask for more at review.
+   Follow the recommended branch down the whole chain and the other
+   branch one link, so the GM sees where they split. An NPC reached
+   twice reacts in line with their first reaction, or names what
+   changed. A faction reached by the chain gets its Step 2 turn
+   revised, not a second one. That includes its odds: a reaction
+   that can trip an escalation trigger changes which of that
+   faction's beats are still coming. A beat gated on a faction level
+   (CoC heat, FitD tier, a scenario stage) or a party choice is
+   conditional, never a fixed point. NPCs the
+   revised turn newly hits join this chain's three links; they never
+   start a new chain. Each link rests on the ones above it: present the chain as
    conditional on the GM approving them, and rerun it from any link
    the GM changes. End it with the GM's calls it rests on (did a
    scene happen, what a ruling allows) as questions, never settled
    facts.
-6. **Record.** On approval the reaction goes in `### Behind the
-   Scenes`, labelled as a projection: `- **After [[Session NN]]**
-   (projected) — …`. An open fork is recorded the same way, with
-   both branches and its hinge, and a chain as its links in order.
-   The Campaign Log waits for session-wrapup, once it plays. If the
-   reaction showed something new about how they break, add it to
-   `### Under Pressure`, so the next reaction agrees with this one.
+6. **Record.** On approval each reaction goes in its own NPC's
+   `### Behind the Scenes`, labelled as a projection:
+   `- **After [[Session NN - Title]]** (projected) — …`. An open
+   fork is recorded the same way, with both branches and its hinge;
+   the first NPC's entry also lists the chain's links in order. The
+   Campaign Log waits for session-wrapup, which drops the marker
+   once it plays or strikes the entry through if it never does. A
+   decided reaction that showed something new about how they break
+   also goes in `### Under Pressure`, tagged `(projected, After
+   [[Session NN - Title]])` until a wrap-up confirms it; an open
+   fork adds nothing there.
 
 A reaction can put a question to a player; it never decides what a
 PC does or feels.
@@ -173,9 +183,8 @@ or rejects each. Then execute the filing protocol.
 ### Filing Protocol
 
 **New entities:** create file per `shared/entity-schema.md` schema,
-setting `createdSession` in the initial write. Then, for both new
-and changed entities, stamp the rest with the bundled stamper
-(dry-run first, `--write` on confirmation):
+setting `createdSession` in the initial write. Then stamp the rest
+with the bundled stamper (dry-run first, `--write` on confirmation):
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
@@ -185,7 +194,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 `--session`/`--date` write `asOfSession`/`lastUpdated`.
 
 **Changed entities:** update changed fields only, then apply the
-same stamp above.
+same stamp without `--set source=world-evolution`: `source` records
+how the entity entered canon, and a projection doesn't change that.
 
 **Timeline entry (standalone only)** — when invoked outside
 reconcile, append to `campaign-timeline.md`. Skip when

@@ -24,24 +24,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whether in the room, in the household, or through servants,
   informants, letters and gossip. Each of those NPCs reacts in turn, in
   the order they would learn of it, until a reaction lands only on PCs
-  or on nobody new, or three links in. The recommended branch is
+  or on nobody new, or three links in. Only NPCs whose reaction
+  changes something the PCs or a faction will meet are run; the rest
+  are named as unrun, and NPCs hit by a revised faction turn join the
+  same chain rather than start a new one. The recommended branch is
   followed all the way and the other for one link. A faction the chain
   reaches gets its faction turn revised, including which of its gated
   beats are still coming. Each link waits on the GM approving the ones
   above it, and the chain ends with the GM's open calls as questions.
 - **AIMS backfill as NPCs come up.** An NPC file with no `### Wants`
-  or `### Under Pressure`, and no `AIMS:` block, gets both drafted from what the vault already
-  records, with each line cited and inferences marked. The draft is
+  or `### Under Pressure`, and no `AIMS:` block, gets both drafted
+  from what the vault already records, with each line cited and
+  inferences marked. Projected entries don't count as evidence. The draft is
   proposed with the reaction and filed only on approval, so older NPC
   files gain the sections over time.
-- An approved reaction is filed under `### Behind the Scenes` marked
-  `(projected)`, and an open fork is filed with both branches and its
-  hinge. The Campaign Log waits for session-wrapup, once the move plays.
+- An approved reaction is filed under its own NPC's `### Behind the
+  Scenes` marked `(projected)`, and an open fork is filed with both
+  branches and its hinge. A new trait from a decided reaction goes in
+  `### Under Pressure`, also marked `(projected)`. The Campaign Log
+  waits for session-wrapup, once the move plays.
+- Session-wrapup settles `(projected)` entries on NPCs who appeared:
+  the marker is dropped if the move played, struck through as
+  `not played` if play went elsewhere, or left if it's still pending.
 - The D&D "NPC reactions" and CoC "NPC loyalty shifts" guidance now
   feeds this step, and continuity-engine's Motivation Consistency check
   reads Wants and Under Pressure as well as `AIMS:` blocks.
 - Reconcile's World Evolution record gains one line per NPC reaction,
   and its offer names the step.
+
+### Fixed
+
+- World evolution no longer overwrites `source` on entities it only
+  updates. `source` records how an entity entered canon, so only
+  entities the pass creates are stamped `world-evolution`.
 
 ---
 

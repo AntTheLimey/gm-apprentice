@@ -137,16 +137,18 @@ Offer only for the **most recent** session, and skip if the index's
 
 > "Session is settled. Want to evolve the world — faction
 > turns, NPC reactions, consequence surfacing, foreshadowing
-> review? This
-> updates how the world responds to what just happened. (y/n)"
+> review? This updates how the world responds to what just
+> happened. (y/n)"
 
 Declined → step 7. Accepted → follow `ttrpg-expert/world-evolution.md`
 (skip its Storage Checkpoint): thread states, faction turns,
 NPC reactions, consequences, foreshadowing, discovery state, world
 state — presented together, GM approves each item. Then:
 - `stamp_entities.py <vault> "<index>" --set world_evolved="Session_NN"`
-- `stamp_entities.py <vault> <entity files> --set source=world-evolution --session N --date D`
-  on entities this pass created or updated
+- `stamp_entities.py <vault> <new entity files> --set source=world-evolution --session N --date D`
+  on entities this pass created
+- `stamp_entities.py <vault> <changed entity files> --session N --date D`
+  on entities it updated (their `source` stays)
 
 ### 7. Record decisions
 
