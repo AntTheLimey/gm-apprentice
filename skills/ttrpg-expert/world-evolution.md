@@ -116,7 +116,11 @@ reaction can take.
    whole chain and the other branch one link, so the GM sees where
    they split. An NPC reached twice reacts in line with their first
    reaction, or names what changed. A faction reached by the chain
-   gets its Step 2 turn revised, not a second one.
+   gets its Step 2 turn revised, not a second one. That includes its
+   odds: a reaction that can trip an escalation trigger changes which
+   of that faction's beats are still coming. A beat gated on a
+   faction level or a party choice is conditional, never a fixed
+   point.
 6. **Record.** On approval the reaction goes in `### Behind the
    Scenes`, labelled as a projection: `- **After [[Session NN]]**
    (projected) — …`. An open fork is recorded the same way, with
