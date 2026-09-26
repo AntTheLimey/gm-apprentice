@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the order they would learn of it, until a reaction lands only on PCs
   or on nobody new, or three links in. The recommended branch is
   followed all the way and the other for one link. A faction the chain
-  reaches gets its faction turn revised.
+  reaches gets its faction turn revised, including which of its gated
+  beats are still coming. Each link waits on the GM approving the ones
+  above it, and the chain ends with the GM's open calls as questions.
 - **AIMS backfill as NPCs come up.** An NPC file with no `### Wants`
   or `### Under Pressure`, and no `AIMS:` block, gets both drafted from what the vault already
   records, with each line cited and inferences marked. The draft is
