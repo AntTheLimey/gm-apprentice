@@ -100,18 +100,30 @@ reaction can take.
    scene, name the trait. Traits pulling two ways (protect the
    children vs refuse to be managed): present a fork, each branch
    with its reaction, the trait behind it, and its first ripple on
-   factions, threads and PCs. Where the NPC's first move is to
-   confront a PC, that PC's answer can be the hinge; otherwise the
+   factions, threads and PCs. Recommend one anyway: say which
+   branch the traits favour, and why. Where the NPC's first move is
+   to confront a PC, that PC's answer can be the hinge; otherwise the
    GM picks, or lets a resolve roll settle it (CoC: POW). Never
    settle a fork silently. Time each move to when the people in it
    are actually present.
-5. **Record.** On approval the reaction goes in `### Behind the
+5. **Chain.** A reaction is new pressure on whoever it lands on:
+   the people in the room, the household, anyone it reaches through
+   servants, informants, letters or gossip. Run steps 1–4 for each of
+   them, in the order they would learn of it, and keep going until a
+   reaction lands only on PCs (it becomes a question for the players)
+   or on nobody new. Stop at three links unless the GM wants more,
+   and say what is left unrun. Follow the recommended branch down the
+   whole chain and the other branch one link, so the GM sees where
+   they split. An NPC reached twice reacts in line with their first
+   reaction, or names what changed. A faction reached by the chain
+   gets its Step 2 turn revised, not a second one.
+6. **Record.** On approval the reaction goes in `### Behind the
    Scenes`, labelled as a projection: `- **After [[Session NN]]**
    (projected) — …`. An open fork is recorded the same way, with
-   both branches and its hinge. The Campaign Log waits for
-   session-wrapup, once it plays. If the reaction showed something
-   new about how they break, add it to `### Under Pressure`, so the
-   next reaction agrees with this one.
+   both branches and its hinge, and a chain as its links in order.
+   The Campaign Log waits for session-wrapup, once it plays. If the
+   reaction showed something new about how they break, add it to
+   `### Under Pressure`, so the next reaction agrees with this one.
 
 A reaction can put a question to a player; it never decides what a
 PC does or feels.

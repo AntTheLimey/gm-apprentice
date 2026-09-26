@@ -18,7 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of settling it silently: each branch gets its trait and its first
   ripple, and a PC's answer, the GM, or a resolve roll decides.
   Earlier world-evolution notes count as projections, not canon, until
-  a wrap-up shows they played.
+  a wrap-up shows they played. A fork still carries a recommendation:
+  which branch the traits favour, and why.
+- **Reactions chain.** A reaction is new pressure on whoever it reaches,
+  whether in the room, in the household, or through servants,
+  informants, letters and gossip. Each of those NPCs reacts in turn, in
+  the order they would learn of it, until a reaction lands only on PCs
+  or on nobody new, or three links in. The recommended branch is
+  followed all the way and the other for one link. A faction the chain
+  reaches gets its faction turn revised.
 - **AIMS backfill as NPCs come up.** An NPC file with no `### Wants`
   or `### Under Pressure`, and no `AIMS:` block, gets both drafted from what the vault already
   records, with each line cited and inferences marked. The draft is

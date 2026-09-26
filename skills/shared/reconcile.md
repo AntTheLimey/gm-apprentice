@@ -159,8 +159,9 @@ Write `### Reconciliation Context`, opening with
 - **GM decisions** — each conflict resolution with rationale
 - **World evolution** (if 6.5 ran) — a `#### World Evolution`
   sub-section: one line per faction turn (action, impact, what PCs
-  can see), one per NPC reaction (pressure, trait, reaction, and the
-  GM's pick, or the open hinge, where it forked), surfaced consequences (trigger, manifestation),
+  can see), one per NPC reaction (pressure, trait, reaction, the link
+  that set it off, and the GM's pick, or the open hinge, where it
+  forked), surfaced consequences (trigger, manifestation),
   foreshadowing changes, per-PC discovery shifts, world state changes
 
 Session-prep reads this instead of re-gathering context.
