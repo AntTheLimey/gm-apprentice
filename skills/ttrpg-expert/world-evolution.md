@@ -137,7 +137,8 @@ reaction can take.
    fork is recorded the same way, with both branches and its hinge;
    the first NPC's entry also lists the chain's links in order. The
    Campaign Log waits for session-wrapup, which drops the marker
-   once it plays or strikes the entry through if it never does. A
+   once it plays or strikes the entry through if it never does (a
+   fork branch by branch). A
    decided reaction that showed something new about how they break
    also goes in `### Under Pressure`, tagged `(projected, After
    [[Session NN - Title]])` until a wrap-up confirms it; an open

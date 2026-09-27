@@ -180,7 +180,8 @@ creating entities.
   `(projected)` entry (Behind the Scenes or Under Pressure) on an
   entity that appeared: drop the marker if it played, strike it
   through with `not played` if play went elsewhere, or leave it if
-  still pending. PCs are
+  still pending. A fork is settled branch by branch: keep the branch
+  that played and strike the other through with `not played`. PCs are
   exempt from this and from the Related mirror: their body follows
   `shared/pc-body-structure.md`, and their session record is the
   Story companion.
