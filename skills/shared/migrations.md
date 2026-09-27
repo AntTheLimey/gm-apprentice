@@ -917,3 +917,27 @@ Fixes found reviewing 1.10.7–1.10.12. No file changes shape.
   doubling it.
 - If `_meta/mobrpg-map.json` sets its own `vaultOnlySections`, that list
   replaces the default: offer to add `Campaign Log` and `Encounters`.
+
+## Migration: 1.10.14 → 1.10.15
+
+mobrpg import fixes (#252–#258). No file changes shape.
+
+### Structural
+
+- If the vault holds mobRPG culture or race notes in a folder other than
+  `Heritages/` (a hand-made `Cultures/`, say), offer to move them to
+  `Heritages/` with `type: heritage`. mobrpg now writes and tracks them
+  there, and `whats-new` doesn't look anywhere else.
+
+### Content
+
+- Nothing.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.37 resolves Obsidian path links
+  (`[[Locations/Drageby|Drageby]]`), which mobrpg writes when two linked
+  notes in different folders share a name. If `publish.site_dir` is set,
+  offer `update-pin --site <site-dir>` (publish-site's build tool).
+- mobrpg: after upgrading, a vault whose notes carry `.:` external refs
+  (from `--vault .`) can repair each one with `mobrpg relink`.

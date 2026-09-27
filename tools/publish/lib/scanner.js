@@ -140,6 +140,10 @@ function scanVaultReport(config) {
 
         pages.push({
           sourcePath: fullPath,
+          // Vault-relative path without `.md`: the target of an Obsidian path
+          // link (`[[Locations/Drageby]]`), which names one page when two
+          // folders hold a note of the same name.
+          vaultPath: relPath.replace(/\.md$/i, ''),
           title: baseName,
           displayTitle,
           slug,
@@ -217,6 +221,14 @@ function buildLinkMap(pages) {
           map[key] = page.outputPath;
         }
       }
+    }
+  }
+
+  // Pass 4: add vault paths (`[[Folder/Name]]`), which never collide with a title.
+  for (const page of pages) {
+    if (page.vaultPath) {
+      const key = canonicalNfc(page.vaultPath);
+      if (!(key in map)) map[key] = page.outputPath;
     }
   }
 

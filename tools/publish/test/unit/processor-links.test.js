@@ -69,3 +69,20 @@ describe('encodeHref', () => {
     assert.strictEqual(encodeHref, encodeImageUrl);
   });
 });
+
+describe('path-form wikilinks show the note name, not the folder', () => {
+  const linkMap = { 'Locations/Drageby': 'locations/drageby.html' };
+  it('resolves [[Folder/Name]] in prose and labels it with the basename', () => {
+    const out = resolveWikiLinks('From [[Locations/Drageby]].', linkMap, 'characters/x.html');
+    assert.strictEqual(out, 'From [Drageby](../locations/drageby.html).');
+  });
+  it('resolves and labels a path target in a relationship list, alias or not', () => {
+    const html = renderRelationships({ relationships: [
+      { target: '[[Locations/Drageby]]', type: 'located_at' },
+      { target: '[[Locations/Drageby|the town]]', type: 'part_of' },
+    ] }, linkMap, 'characters/x.html');
+    assert.match(html, /href="\.\.\/locations\/drageby\.html" class="entity-link">Drageby</);
+    assert.match(html, /class="entity-link">the town</);
+    assert.doesNotMatch(html, /Locations\//);
+  });
+});

@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Drageby), `write` and `sync` pull link each by its path
   (`[[Heritages/Drageby|Drageby]]`), and a bare `[[Drageby]]` resolves to
   the place, not the heritage.
+- **The published site resolves Obsidian path links** (publish tool
+  1.11.37). `[[Locations/Drageby]]` links to that page and shows
+  "Drageby", in prose and in relationship lists; before, it rendered as
+  unlinked text. A migration entry offers `update-pin`, and a move of
+  hand-made culture notes into `Heritages/`.
 - **`write`'s faction notes keep the import note out of mobRPG.** The
   Reconstruction Note sat under `## History` and was pushed with the
   description; it now sits under `## Source References`, as in every

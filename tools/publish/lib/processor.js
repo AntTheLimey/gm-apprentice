@@ -13,7 +13,8 @@ function escapeHtml(str) {
 // Turn a wiki-link slug/target into human-readable display text (underscores → spaces).
 // Used wherever a raw entity name would otherwise show, e.g. Lord_Percival_Harcourt.
 function humanizeName(s) {
-  return String(s == null ? '' : s).replace(/_/g, ' ');
+  // A path link (`[[Locations/Drageby]]`) shows the note's name, not its folder.
+  return String(s == null ? '' : s).split('/').pop().replace(/_/g, ' ');
 }
 
 // Parse a wiki ref (`[[Target]]` or `[[Target|Alias]]`, brackets optional) into the raw
@@ -370,9 +371,9 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
 
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
   const items = valid.map(r => {
-    const targetName = String(r.target).replace(/\[\[|\]\]/g, '');
+    const { target: targetName, label } = parseWikiRef(r.target);
     const targetPath = linkMap[targetName];
-    const escapedName = escapeHtml(targetName.replace(/_/g, ' '));
+    const escapedName = escapeHtml(label);
     const link = targetPath
       ? `<a href="${encodeHref(relativePath(currentDir, targetPath))}" class="entity-link">${escapedName}</a>`
       : escapedName;
