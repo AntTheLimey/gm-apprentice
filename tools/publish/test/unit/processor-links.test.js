@@ -86,3 +86,15 @@ describe('path-form wikilinks show the note name, not the folder', () => {
     assert.doesNotMatch(html, /Locations\//);
   });
 });
+
+describe('plain values keep their slashes; only link targets drop the folder', () => {
+  const { parseWikiRef, humanizeName, wikiTargetLabel } = require('../../lib/processor');
+  it('leaves a plain value intact', () => {
+    assert.strictEqual(parseWikiRef('The Crown / the Order').label, 'The Crown / the Order');
+    assert.strictEqual(humanizeName('Road to Arkham/Kingsport'), 'Road to Arkham/Kingsport');
+  });
+  it('labels a bracketed path target by its note name', () => {
+    assert.strictEqual(parseWikiRef('[[Locations/Drageby]]').label, 'Drageby');
+    assert.strictEqual(wikiTargetLabel('Locations/Old_Mill'), 'Old Mill');
+  });
+});
