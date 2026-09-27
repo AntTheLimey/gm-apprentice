@@ -173,6 +173,14 @@ Transformation: reproduced as an optional collapsible
 reference appendix with citation, displayed only when the
 user expands the details element.
 
+## Third-Party Code
+
+- **3D simplex noise (GLSL)** in `tools/map/star-map.template.html`,
+  by Ashima Arts and Stefan Gustavson, MIT licence. Credited in a
+  comment at the point of use; used unmodified.
+- **three.js** (MIT) is loaded by the map page from a CDN at runtime
+  and is not vendored in this repository.
+
 ## Referenced Frameworks and Concepts
 
 The following frameworks and concepts are referenced in this

@@ -1,0 +1,54 @@
+{
+  "_comment": "Example layout for build_map.py. Everything canonical (what exists, what contains what, which gate feeds which lane) is read from the vault's Locations/; this file holds only what the vault has no field for. Copy it to VAULT/_meta/map/layout.json and replace the fictional names with your campaign's. Systems missing from sector_positions are auto-placed next to their neighbours.",
+  "vault_name": "example-vault",
+  "page": {
+    "_comment": "Wording shown on the page. region must match the note name of the sector-level location, if there is one.",
+    "title": "Example Star Map",
+    "nav_title": "Example · Nav",
+    "region": "Sector 12-K",
+    "region_kicker": "Sector · Example Compact",
+    "site_name": "Campaign wiki",
+    "navy_label": "Compact Navy",
+    "navy_prefix": "CNS",
+    "home_port": "Anvil Station",
+    "hauler_names": { "Anvil System": "Anvil Ore Hauler" }
+  },
+  "sector_positions": {
+    "Anvil System": [-40, 4, 0],
+    "Brightwater System": [20, -6, 18],
+    "Cinder System": [60, 8, -24]
+  },
+  "anomalies": {
+    "The Hollow Reach": { "pos": [110, 0, 40], "radius": 22 }
+  },
+  "inferred_routes": [
+    { "a": "Brightwater System", "b": "Cinder System", "gate_a": "Brightwater Gate B",
+      "note": "Rumoured by dockhands; no gate on the Cinder side has been seen." }
+  ],
+  "anchors": {
+    "_comment": "Station or gate name -> the body it sits beside, when only the prose says so.",
+    "Anvil Station": "Anvil II"
+  },
+  "outer_gates": ["Cinder Outer Gate"],
+  "traffic_profiles": {
+    "_comment": "frontier | settled | hub | corporate; unlisted systems are settled.",
+    "Anvil System": "corporate",
+    "Brightwater System": "hub",
+    "Cinder System": "frontier"
+  },
+  "crew_ship": { "note": "Items/The Wayfarer", "label": "Crew ship" },
+  "keeper": {
+    "_comment": "GM-only. Never shipped in a --player build. keyword unlocks the Keeper layer in the GM build (casual-proofing only).",
+    "keyword": "keeper",
+    "hidden_gates": [
+      {
+        "name": "Cinder Dark Gate",
+        "system": "Cinder System",
+        "near": "Cinder IV",
+        "leads_to": "The Hollow Reach",
+        "source_notes": ["Cinder IV"],
+        "runner_route": ["Cinder II", "Cinder IV"]
+      }
+    ]
+  }
+}

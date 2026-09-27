@@ -77,3 +77,7 @@ tools/publish/node_modules/.cache/
 tools/publish/node_modules/.vite/
 tools/publish/node_modules/.package-lock.json
 tools/publish/node_modules/**/.package-lock.json
+
+# Map builder output and art cache (tools/map; generated per vault)
+tools/map/tests/fixture-vault/_meta/map/.cache/
+tools/map/tests/fixture-vault/_meta/map/star-map*.html
