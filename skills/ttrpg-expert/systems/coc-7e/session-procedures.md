@@ -238,7 +238,7 @@ session at most. The dread comes from the investigators
 realising they're being watched before anything violent
 happens.
 
-**NPC loyalty shifts:**
+**NPC loyalty shifts** (applied in world-evolution Step 3):
 NPCs in CoC are fragile. They have their own fears, debts,
 and secrets. Track loyalty as a gut feeling, not a number:
 

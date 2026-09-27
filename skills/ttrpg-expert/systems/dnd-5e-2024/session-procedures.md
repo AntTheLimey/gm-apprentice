@@ -177,7 +177,8 @@ with D&D-specific mechanics.
 - Political changes (new ruler, treaty, betrayal) can
   happen in 1 session if triggered by PC actions.
 
-**NPC reactions:**
+**NPC reactions** (applied in world-evolution Step 3, the NPC's
+traits choosing among them):
 - Propose specific NPC responses to PC actions:
   - Grateful patron: offers reward, information, or future
     favour.

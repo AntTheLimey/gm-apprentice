@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.14] — 2026-09-25
+
+### Added
+
+- **NPC Reactions in world evolution.** A new Step 3 decides what each
+  NPC does next from who they are. It names the pressure they're
+  under, quotes the traits that bear on it, and writes a decisive
+  reaction. When the traits pull two ways it presents a fork instead
+  of settling it silently: each branch gets its trait and its first
+  ripple, and a PC's answer, the GM, or a resolve roll decides.
+  Earlier world-evolution notes count as projections, not canon, until
+  a wrap-up shows they played. A fork still carries a recommendation:
+  which branch the traits favour, and why.
+- **Reactions chain.** A reaction is new pressure on whoever it reaches,
+  whether in the room, in the household, or through servants,
+  informants, letters and gossip. Each of those NPCs reacts in turn, in
+  the order they would learn of it, until a reaction lands only on PCs
+  or on nobody new, or three links in. Only NPCs whose reaction
+  changes something the PCs or a faction will meet are run; the rest
+  are named as unrun, and NPCs hit by a revised faction turn join the
+  same chain rather than start a new one. The recommended branch is
+  followed all the way and the other for one link. A faction the chain
+  reaches gets its faction turn revised, including which of its gated
+  beats are still coming. Each link waits on the GM approving the ones
+  above it, and the chain ends with the GM's open calls as questions.
+- **AIMS backfill as NPCs come up.** An NPC file with no `### Wants`
+  or `### Under Pressure`, and no `AIMS:` block, gets both drafted
+  from what the vault already records, with each line cited and
+  inferences marked. Projected entries don't count as evidence. The draft is
+  proposed with the reaction and filed only on approval, so older NPC
+  files gain the sections over time.
+- An approved reaction is filed under its own NPC's `### Behind the
+  Scenes` marked `(projected)`, and an open fork is filed with both
+  branches and its hinge. A new trait from a decided reaction goes in
+  `### Under Pressure`, also marked `(projected)`. The Campaign Log
+  waits for session-wrapup, once the move plays.
+- Session-wrapup settles `(projected)` entries on NPCs who appeared:
+  the marker is dropped if the move played, struck through as
+  `not played` if play went elsewhere, or left if it's still pending.
+  A fork is settled branch by branch.
+  Continuity-engine's Motivation Consistency check never flags against
+  a `(projected)` trait.
+- The D&D "NPC reactions" and CoC "NPC loyalty shifts" guidance now
+  feeds this step, and continuity-engine's Motivation Consistency check
+  reads Wants and Under Pressure as well as `AIMS:` blocks.
+- Reconcile's World Evolution record gains one line per NPC reaction,
+  and its offer names the step.
+
+### Fixed
+
+- World evolution no longer overwrites `source` on entities it only
+  updates. `source` records how an entity entered canon, so only
+  entities the pass creates are stamped `world-evolution`.
+
+---
+
 ## [1.10.13] — 2026-09-25
 
 ### Fixed

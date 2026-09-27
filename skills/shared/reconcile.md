@@ -136,16 +136,19 @@ Offer only for the **most recent** session, and skip if the index's
 `world_evolved` already names this session.
 
 > "Session is settled. Want to evolve the world — faction
-> turns, consequence surfacing, foreshadowing review? This
-> updates how the world responds to what just happened. (y/n)"
+> turns, NPC reactions, consequence surfacing, foreshadowing
+> review? This updates how the world responds to what just
+> happened. (y/n)"
 
 Declined → step 7. Accepted → follow `ttrpg-expert/world-evolution.md`
 (skip its Storage Checkpoint): thread states, faction turns,
-consequences, foreshadowing, discovery state, world state — one item
-at a time, GM approves each. Then:
+NPC reactions, consequences, foreshadowing, discovery state, world
+state — presented together, GM approves each item. Then:
 - `stamp_entities.py <vault> "<index>" --set world_evolved="Session_NN"`
-- `stamp_entities.py <vault> <entity files> --set source=world-evolution --session N --date D`
-  on entities this pass created or updated
+- `stamp_entities.py <vault> <new entity files> --set source=world-evolution --session N --date D`
+  on entities this pass created
+- `stamp_entities.py <vault> <changed entity files> --session N --date D`
+  on entities it updated (their `source` stays)
 
 ### 7. Record decisions
 
@@ -158,7 +161,9 @@ Write `### Reconciliation Context`, opening with
 - **GM decisions** — each conflict resolution with rationale
 - **World evolution** (if 6.5 ran) — a `#### World Evolution`
   sub-section: one line per faction turn (action, impact, what PCs
-  can see), surfaced consequences (trigger, manifestation),
+  can see), one per NPC reaction (pressure, trait, reaction, the link
+  that set it off, and the GM's pick, or the open hinge, where it
+  forked), surfaced consequences (trigger, manifestation),
   foreshadowing changes, per-PC discovery shifts, world state changes
 
 Session-prep reads this instead of re-gathering context.
