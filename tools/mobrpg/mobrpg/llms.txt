@@ -172,7 +172,8 @@ vault whose entities already exist upstream but carry no node is linked with
                                   import needs no `adopt`. Elements that share a
                                   name each get a file (`Name (2).md`, in
                                   element-id order; a re-run keeps each element
-                                  on the note that already links it). mobRPG
+                                  on the note that already links it, and skips
+                                  one linked from another folder). mobRPG
                                   element URLs in the prose become wikilinks.
                                   Existing notes are SKIPPED unless --overwrite
                                   is given; with it they are replaced wholesale,

@@ -237,3 +237,21 @@ def test_element_already_linked_elsewhere_is_not_stamped_again(tmp_path, monkeyp
     assert node.read_node((v / "Characters/NPCs/Jeremias Travers.md").read_text()) is None
     out = capsys.readouterr().out
     assert "already linked by" in out and "J Travers" in out
+
+
+def test_claimed_twin_does_not_turn_an_ambiguous_match_into_a_stamp(tmp_path, monkeypatch, capsys):
+    # review: two live Reginald Dunlaps, one already linked; the unlinked note
+    # could be either, so it stays ambiguous rather than taking the other
+    v = _vault(tmp_path)
+    twin = v / "Characters/NPCs/Reginald Dunlap (2).md"
+    twin.parent.mkdir(parents=True)
+    twin.write_text(node.write_node("---\ntype: npc\n---\nBody.\n",
+                                    {"external_ref": "space_game:Characters/NPCs/Reginald Dunlap (2)",
+                                     "element_id": "A"}), encoding="utf-8")
+    _note(v, "Characters/NPCs/Reginald Dunlap.md")
+    _auth(monkeypatch)
+    monkeypatch.setattr(client, "_request", _fake_live({"person": [
+        {"id": "A", "name": "Reginald Dunlap"}, {"id": "B", "name": "Reginald Dunlap"}]}))
+    assert adopt.run(["w1", "--vault", str(v), "--execute"]) == 0
+    assert node.read_node((v / "Characters/NPCs/Reginald Dunlap.md").read_text()) is None
+    assert "ambiguous, skipped: Reginald Dunlap" in capsys.readouterr().out

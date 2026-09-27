@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import re
+import unicodedata
 
 from mobrpg import links
 from mobrpg import md as _md
@@ -58,7 +59,9 @@ def landfeature_type(name: str) -> str:
 
 
 def slug(name: str, name_style: str) -> str:
-    s = re.sub(r"[^\w\s-]", "", name).strip()
+    # NFC first: macOS treats the composed and decomposed spellings of one
+    # name as the same file, so they must slug alike.
+    s = re.sub(r"[^\w\s-]", "", unicodedata.normalize("NFC", name)).strip()
     s = re.sub(r"\s+", " ", s)
     return s if name_style == "space" else s.replace(" ", "_")
 
@@ -154,8 +157,7 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
     if kind not in KIND_MAP:
         return None
     folder, etype = KIND_MAP[kind]
-    rec = _clean(rec)
-    name = rec["name"]
+    name = rec["name"].strip()
     body = rec.get("body_md") or ""
     rels = rec.get("relationships", [])
     aliases = rec.get("altNames") or []
@@ -292,7 +294,7 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
 
     elif etype == "heritage":
         # A culture's prose is its culture; a race's is its biology.
-        section = "Culture" if kind == "culture" else "Biology"
+        biology, culture = ("", body) if kind == "culture" else (body, "")
         fm = (
             f"---\n"
             f"type: heritage\n{fm_common}"
@@ -304,7 +306,8 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
             f"relationships:{rel_block(rels, 'associated_with', None, name_style)}\n"
             f"---\n"
         )
-        md = (f"{fm}\n## {section}\n\n{body}\n\n## History\n\n"
+        md = (f"{fm}\n## Biology\n\n{biology}\n\n## Culture\n\n{culture}\n\n## History\n\n"
+              f"## Second-Order Notes\n\n"
               f"## Source References\n\n- {source_doc}\n\n> [!info] Reconstruction Note\n"
               f"> Imported from mobRPG (canon): a mobRPG {kind} element.\n\n## GM Notes\n")
     else:
@@ -357,15 +360,22 @@ def run(argv: list[str]) -> int:
     written: dict[str, int] = {}
     skipped = 0
     shared: list[tuple[str, str, str]] = []
+    elsewhere: list[tuple[str, str]] = []
     for rec in records:
         rel_path = paths[rec["_key"]]
+        if os.path.dirname(rel_path) != KIND_MAP[rec["kind"]][0]:
+            # Already linked by a note in another folder (a PC linked to its
+            # Person, say). A second note would put two linked notes on one
+            # element, which sync would pull and push from both.
+            elsewhere.append((rec["name"], rel_path))
+            continue
         rec = _clean(rec, file_by_id)
         for r in rec["relationships"]:
             r["_file"] = _target_file(r, file_by_id, files_by_name, args.name_style)
         md = build(rec, args.campaign, args.source_doc, args.name_style)[1]
-        if file_by_id[rec["_key"]] != slug(rec["name"], args.name_style):
+        is_twin = _is_twin_file(file_by_id[rec["_key"]], rec["name"], args.name_style)
+        if is_twin:
             md = md.rstrip("\n") + "\n\n" + shared_name_callout(rec) + "\n"
-            shared.append((rec["name"], rec.get("id") or "no id", rel_path))
         if rec.get("id"):
             md = node.write_node(md, import_node(rec, rel_path, world, namespace))
         full = os.path.join(out, rel_path)
@@ -378,6 +388,8 @@ def run(argv: list[str]) -> int:
         os.makedirs(os.path.dirname(full), exist_ok=True)
         with open(full, "w", encoding="utf-8") as f:
             f.write(md)
+        if is_twin:
+            shared.append((rec["name"], rec.get("id") or "no id", rel_path))
         written.setdefault(rec["kind"], 0)
         written[rec["kind"]] += 1
     print(f"wrote to {out}/:", written, "| total", sum(written.values()))
@@ -386,6 +398,8 @@ def run(argv: list[str]) -> int:
     if unsupported:
         print(f"ignored {unsupported} entit(y/ies) of unsupported kind(s) — "
               f"no vault template maps them")
+    for name, rel_path in elsewhere:
+        print(f"skipped {name!r}: already linked by {rel_path}")
     if shared:
         print(f"{len(shared)} element(s) share a name with another; each got its own "
               f"note (rename them to tell them apart):")
@@ -397,26 +411,29 @@ def run(argv: list[str]) -> int:
 def plan_paths(records: list[dict], linked: dict, name_style: str) -> dict:
     """{record _key: vault-relative path}, one distinct file per element (#254).
 
-    An element a note already links keeps that note, so a re-run never
-    reshuffles files, even after a hand rename. The rest take their name's file
-    in element-id order; when elements share a name (fathers and sons, regnal
-    numbers, true duplicates) the later ones get `Name (2).md`, `Name (3).md`.
-    Paths compare case-insensitively, as case-insensitive filesystems do, and
-    slug() can map distinct names ("A/B", "AB") onto one file too."""
+    An element a note already links keeps that note, wherever it is, so a
+    re-run never reshuffles files, even after a hand rename (run() skips one
+    linked outside its kind's folder). The rest take their name's file in
+    element-id order; when elements share a name (fathers and sons, regnal
+    numbers, true duplicates) the later ones get `Name (2).md`, `Name (3).md`
+    (`Name_(2).md` in plain style). Paths compare case-insensitively, as
+    case-insensitive filesystems do, and slug() can map distinct names
+    ("A/B", "AB") onto one file too."""
     paths, taken = {}, set()
     for rec in records:
         rel = linked.get(rec["_key"])
-        if rel and os.path.dirname(rel) == KIND_MAP[rec["kind"]][0]:
+        if rel:
             paths[rec["_key"]] = rel
-            taken.add(rel.lower())
+            taken.add(unicodedata.normalize("NFC", rel).lower())
     for rec in sorted(records, key=lambda r: r["_key"]):
         if rec["_key"] in paths:
             continue
         base = f"{KIND_MAP[rec['kind']][0]}/{slug(_md.fix_c1(rec['name']), name_style)}"
+        sep = " " if name_style == "space" else "_"
         rel, n = f"{base}.md", 1
         while rel.lower() in taken:
             n += 1
-            rel = f"{base} ({n}).md"
+            rel = f"{base}{sep}({n}).md"
         paths[rec["_key"]] = rel
         taken.add(rel.lower())
     return paths
@@ -429,6 +446,13 @@ def _target_file(rel: dict, file_by_id: dict, files_by_name: dict, name_style: s
         return file_by_id[rel["targetId"]]
     files = files_by_name.get((rel.get("target") or "").strip(), set())
     return next(iter(files)) if len(files) == 1 else slug(rel["target"], name_style)
+
+
+def _is_twin_file(stem: str, name: str, name_style: str) -> bool:
+    """Whether `stem` is a numbered twin `write` gave a shared name — not a
+    note the GM renamed, which needs no callout."""
+    return re.fullmatch(re.escape(slug(_md.fix_c1(name), name_style)) + r"[ _]\(\d+\)",
+                        stem) is not None
 
 
 def shared_name_callout(rec: dict) -> str:

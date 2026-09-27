@@ -73,17 +73,28 @@ def _element_url_re(url_fmt: str) -> re.Pattern:
 _ELEMENT_URL = _element_url_re(URL_FMT)
 
 # Every element URL shape mobRPG itself writes into descriptions (#252), with
-# no host, an empty one (`http:///world/...`), `https://www.mobrpg.com` or a
-# dev host: `/world/<w>/link/<id>`, the same with `/detail.html`,
-# `/world/<w>/element/<kind>/<id>` and `/world/worlds/<w>/search/<id>`.
-# URL_FMT stays the one shape push WRITES; this is what pull and `write` READ.
+# no host, an empty one (`http:///world/...`), a mobRPG host or a local dev
+# host: `/world/<w>/link/<id>`, the same with `/detail.html`,
+# `/world/<w>/element/<kind>/<id>` and `/world/worlds/<w>/search/<id>`. A
+# query or fragment after the id is not part of it. Other hosts are not
+# mobRPG, so their links are left alone. URL_FMT stays the one shape push
+# WRITES; this is what pull and `write` READ.
+_ID = r"(?!detail\.html\b)[^/?#\s)]+"
 _ANY_ELEMENT_URL = re.compile(
-    r"(?:https?://[^/\s)]*)?/world/(?:"
-    r"worlds/[^/\s)]+/search/(?P<eid3>[^/\s)]+)"
-    r"|[^/\s)]+/link/(?P<eid>[^/\s)]+)(?:/detail\.html)?"
-    r"|[^/\s)]+/element/[^/\s)]+/(?P<eid2>[^/\s)]+))/?")
-# write's link pass also takes an empty label: `[](url)` is an invisible anchor.
+    r"(?:https?://(?:[\w.-]*mobrpg\.com|localhost|127\.0\.0\.1)?(?::\d+)?)?/world/(?:"
+    rf"worlds/[^/\s)]+/search/(?P<eid3>{_ID})"
+    rf"|[^/\s)]+/link/(?P<eid>{_ID})(?:/detail\.html)?"
+    rf"|[^/\s)]+/element/[^/\s)]+/(?P<eid2>{_ID}))/?(?:[?#][^\s)]*)?")
+# The pull and write passes also take an empty label: `[](url)` is an
+# invisible anchor.
 _MDLINK_ANY_LABEL = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _wikilink(target: str, label: str) -> str:
+    """`[[target]]`, or `[[target|label]]` when the text differs. A `|` in the
+    label would end the alias early, so it becomes `/`."""
+    label = label.replace("|", "/")
+    return f"[[{target}]]" if target == label else f"[[{target}|{label}]]"
 
 
 def element_id_of(href: str) -> str | None:
@@ -160,15 +171,21 @@ def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> st
     return _ANCHOR.sub(_sub, html or "")
 
 
-def rewrite_md_for_pull(md_text: str, path_by_element_id: dict) -> str:
-    """Element URLs (any shape `element_id_of` reads) whose id maps to a known
-    vault note -> `[[Name]]`; every other link is left untouched."""
+def rewrite_md_for_pull(md_text: str, file_by_element_id: dict) -> str:
+    """Element URLs (any shape `element_id_of` reads) whose id maps to a linked
+    vault note -> `[[File]]`, or `[[File|text]]` when the link text differs.
+    Keyed by the note's FILE stem, which is what a wikilink resolves: two
+    same-name elements have two files but one `name:`. An empty-label link to
+    a known note goes (it is invisible in mobRPG). Every other link is left
+    untouched."""
     def _ml(m: re.Match) -> str:
-        eid = element_id_of(m.group(2))
-        name = path_by_element_id.get(eid) if eid else None
-        return f"[[{name}]]" if name else m.group(0)
+        label, eid = m.group(1), element_id_of(m.group(2))
+        target = file_by_element_id.get(eid) if eid else None
+        if not target:
+            return m.group(0)
+        return _wikilink(target, label) if label else ""
 
-    return _MDLINK.sub(_ml, md_text or "")
+    return _MDLINK_ANY_LABEL.sub(_ml, md_text or "")
 
 
 def rewrite_md_for_write(md_text: str, file_by_element_id: dict) -> str:
@@ -185,6 +202,6 @@ def rewrite_md_for_write(md_text: str, file_by_element_id: dict) -> str:
         target = file_by_element_id.get(eid)
         if not target or not label:
             return label
-        return f"[[{target}]]" if target == label else f"[[{target}|{label}]]"
+        return _wikilink(target, label)
 
     return _MDLINK_ANY_LABEL.sub(_ml, md_text or "")

@@ -1216,3 +1216,15 @@ def test_quoted_gm_aliases_are_decoded():
     assert suggest._gm_aliases("gm_aliases: ['O''Neil']\n") == ["O'Neil"]
     owners = {suggest._key(a): "Lord Vane" for a in suggest._gm_aliases("gm_aliases: 'O''Neil'\n")}
     assert suggest.unmask_gm_aliases("[[Vane|O'Neil]]", owners) == "[[Vane]]"
+
+
+def test_node_index_resolves_heritage_notes_for_link_rewriting(tmp_path):
+    # review: a [[Hill Folk]] link in an NPC body must resolve on push, not
+    # collapse to bare text, now that write links culture elements
+    from mobrpg import node as _n
+    p = tmp_path / "Heritages/Hill Folk.md"
+    p.parent.mkdir(parents=True)
+    p.write_text(_n.write_node("---\ntype: heritage\n---\nBody\n", {"element_id": "C"}),
+                 encoding="utf-8")
+    idx, _linked, _submitted = suggest.node_index(str(tmp_path))
+    assert idx.get(suggest._key("Hill Folk")) == "C"

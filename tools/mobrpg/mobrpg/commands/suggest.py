@@ -493,7 +493,9 @@ def node_index(vault) -> tuple[dict, set, set]:
     idx, linked, submitted = {}, set(), set()
     aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
-    for folder in map_cmd.FOLDERS:
+    # MIRROR_FOLDERS: a heritage is never pushed, but a [[link]] to one must
+    # still resolve to its element, or the push flattens it to plain text.
+    for folder in map_cmd.MIRROR_FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             txt = open(p, encoding="utf-8").read()
             nd = node.read_node(txt)

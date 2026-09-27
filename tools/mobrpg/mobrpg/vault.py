@@ -45,10 +45,15 @@ def vault_only_sections(vault: str) -> tuple:
     return out
 
 
-def iter_linked_notes(vault: str):
-    """Yield (path, text, node_dict) for every vault note carrying an element_id."""
+def iter_linked_notes(vault: str, folders=None):
+    """Yield (path, text, node_dict) for every vault note carrying an element_id.
+
+    `folders` defaults to the push folders (map_cmd.FOLDERS). A caller that
+    only reads or reconciles links passes map_cmd.MIRROR_FOLDERS so heritage
+    notes are covered too; sync and suggest must not, since nothing pushes a
+    heritage upstream."""
     vault = os.path.expanduser(vault)
-    for folder in map_cmd.FOLDERS:
+    for folder in (folders or map_cmd.FOLDERS):
         for path in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             txt = open(path, encoding="utf-8").read()
             nd = node.read_node(txt)

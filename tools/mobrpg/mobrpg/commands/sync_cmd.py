@@ -36,7 +36,6 @@ import os
 import sys
 from dataclasses import dataclass
 
-import re
 
 from mobrpg import client
 from mobrpg import links
@@ -44,7 +43,7 @@ from mobrpg import lww
 from mobrpg import md as _md
 from mobrpg import node
 from mobrpg import section
-from mobrpg.vault import body_of, iter_linked_notes, vault_only_sections
+from mobrpg.vault import body_of, iter_linked_notes, linked_element_paths, vault_only_sections
 from mobrpg.commands import submit_batch
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
@@ -80,16 +79,13 @@ class Action:
     delta: str = ""                     # decision-table suffix (pull cost line)
 
 
-def _note_name(path: str, txt: str) -> str:
-    """The display name a `[[wikilink]]` should carry for this note: the
-    top-level frontmatter `name:` if present, else the filename stem. Consumed
-    only to build the pull-side {element_id: name} map."""
-    _pre, fm_body, _post = node._split_frontmatter(txt)
-    if fm_body:
-        m = re.search(r"(?m)^name:\s*(.+?)\s*$", fm_body)
-        if m:
-            return m.group(1).strip().strip('"')
-    return os.path.splitext(os.path.basename(path))[0]
+def link_targets(vault: str) -> dict:
+    """{element_id: file stem} for every linked note, heritages included: the
+    pull-side link map. A wikilink resolves by file, and two same-name
+    elements share a `name:` but not a file, so keying on `name:` pointed a
+    link to `Foo (2)` at `Foo`."""
+    return {eid: os.path.splitext(os.path.basename(rel))[0]
+            for eid, rel in linked_element_paths(vault).items()}
 
 
 def _pull_body(old_body: str, description: str | None, desc_type: str | None,
@@ -397,18 +393,15 @@ def run(argv: list[str]) -> int:
         return 1
 
     # Resolution indexes for link rewriting. `idx` (name-key -> element_id) drives
-    # the push rewrite; `name_by_eid` (element_id -> display name) drives the pull
+    # the push rewrite; `name_by_eid` (element_id -> file stem) drives the pull
     # rewrite. Both are built from ALL linked notes — a --only-filtered note can
     # still be a valid link target — so they are populated before the filter.
     idx, _linked, _submitted = suggest.node_index(args.vault)
     gm_owners = suggest.gm_alias_owners(args.vault)
     try:
         notes = []
-        name_by_eid: dict[str, str] = {}
+        name_by_eid = link_targets(args.vault)
         for path, txt, nd in iter_linked_notes(args.vault):
-            eid = nd.get("element_id")
-            if eid:
-                name_by_eid[eid] = _note_name(path, txt)
             if args.only and args.only not in (nd.get("external_ref") or "") and args.only not in path:
                 continue
             notes.append((path, txt, nd, os.path.getmtime(path)))

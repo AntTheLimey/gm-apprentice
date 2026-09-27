@@ -173,3 +173,24 @@ def test_write_rewrite_drops_an_empty_label_element_link():
     # an empty anchor is invisible in mobRPG; it must not leave `[](url)` behind
     out = links.rewrite_md_for_write("in [](/world/w/link/b1)[[Bacciz]].", {"b1": "Bacciz"})
     assert out == "in [[Bacciz]]."
+
+
+def test_pull_keeps_the_link_text_as_the_display_alias():
+    # review: pull used to drop "his father" for the note name; keep it, as
+    # write does, so an aliased link survives the round trip
+    out = links.rewrite_md_for_pull("met [his father](/world/w/link/A).", {"A": "Foo (2)"})
+    assert out == "met [[Foo (2)|his father]]."
+
+
+def test_element_id_of_edge_cases():
+    assert links.element_id_of("/world/w/link/abc#x") == "abc"
+    assert links.element_id_of("/world/w/link/abc?tab=2") == "abc"
+    assert links.element_id_of("/world/w/link/detail.html") is None
+    assert links.element_id_of("https://example.com/world/w/link/abc") is None
+    assert links.element_id_of("https://dev.mobrpg.com/world/w/link/abc") == "abc"
+    assert links.element_id_of("http://127.0.0.1:8080/world/w/link/abc") == "abc"
+
+
+def test_write_rewrite_never_nests_a_pipe_in_the_alias():
+    out = links.rewrite_md_for_write("[a|b](/world/w/link/f2)", {"f2": "Foo (2)"})
+    assert out == "[[Foo (2)|a/b]]"

@@ -187,7 +187,9 @@ def test_pull_rewrites_element_url_to_wikilink(tmp_path, monkeypatch):
     _wire(monkeypatch, detail, [])
     sync_cmd.run(["w1", "--vault", str(v), "--execute"])
     txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
-    assert "[[Marsh Hag]]" in txt
+    # the link targets the FILE (a wikilink resolves by filename) and keeps
+    # the text as its alias
+    assert "[[marsh-hag|Marsh Hag]]" in txt
     assert url not in txt
 
 
@@ -1012,3 +1014,18 @@ def test_pull_keeps_a_campaign_log_only_the_server_holds():
     out = _pull_body("Canon.\n\n## GM Notes\n\nsecret\n",
                      "Canon.\n\n## Campaign Log\n\n- S1 met\n", "Markdown", {})
     assert "- S1 met" in out and out.count("## Campaign Log") == 1 and "secret" in out
+
+
+def test_link_targets_are_file_stems_and_cover_heritages(tmp_path):
+    # review: two same-name notes ("Foo", "Foo (2)") both carry name "Foo";
+    # a pulled link must point at the linked note's FILE, and culture links
+    # must resolve to Heritages/ notes
+    from mobrpg import node as _n
+    from mobrpg.commands import sync_cmd as _s
+    for rel, eid in (("Characters/NPCs/Foo.md", "B"), ("Characters/NPCs/Foo (2).md", "A"),
+                     ("Heritages/Hill Folk.md", "C")):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_n.write_node('---\nname: "Foo"\n---\nBody\n', {"element_id": eid}),
+                     encoding="utf-8")
+    assert _s.link_targets(str(tmp_path)) == {"B": "Foo", "A": "Foo (2)", "C": "Hill Folk"}

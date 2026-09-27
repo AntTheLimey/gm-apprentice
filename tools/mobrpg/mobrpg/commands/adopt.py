@@ -145,11 +145,13 @@ def run(argv: list[str]) -> int:
     matched, taken = {}, []
     for ent in candidates:
         matches = _match(ent, live_idx.get(ent["_ek"], {}))
-        free = [m for m in matches if m["id"] not in claimed]
-        if matches and not free:
+        if matches and all(m["id"] in claimed for m in matches):
             taken.append((ent["name"], [(m, claimed[m["id"]]) for m in matches]))
             continue
-        matched[ent["path"]] = free
+        # Several live matches stay ambiguous even when all but one are
+        # claimed: the note may hold the claimed twin's prose, so the one
+        # left over is not a confident match.
+        matched[ent["path"]] = matches
     by_element: dict[str, list] = {}
     for ent in candidates:
         ms = matched.get(ent["path"])

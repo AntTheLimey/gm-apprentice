@@ -123,8 +123,8 @@ def test_write_reports_slug_collisions(tmp_path, capsys):
     assert rc == 0
     # (#254) both reach the vault, each in its own file, and the run says so
     npcs = tmp_path / "vault" / "Characters/NPCs"
-    assert sorted(p.name for p in npcs.glob("*.md")) == ["AB (2).md", "AB.md"]
-    assert "second" in (npcs / "AB (2).md").read_text(encoding="utf-8")
+    assert sorted(p.name for p in npcs.glob("*.md")) == ["AB.md", "AB_(2).md"]
+    assert "second" in (npcs / "AB_(2).md").read_text(encoding="utf-8")
     printed = capsys.readouterr().out
     assert "share a name" in printed and "'AB'" in printed
 
@@ -270,3 +270,61 @@ def test_write_quotes_names_that_contain_double_quotes(tmp_path):
     vault = _run_write(tmp_path, [_ent("p1", "person", 'Jan "Red" Kowal')])
     txt = next((vault / "Characters/NPCs").glob("*.md")).read_text(encoding="utf-8")
     assert 'name: "Jan \\"Red\\" Kowal"' in txt
+
+
+def test_write_skips_an_element_already_linked_in_another_folder(tmp_path, capsys):
+    # review: a PC note linked to a Person must not gain an NPC twin carrying
+    # the same element_id (two linked notes for one element, the #257 hazard)
+    pc = tmp_path / "vault/Characters/PCs/Vela Kesh.md"
+    pc.parent.mkdir(parents=True)
+    pc.write_text(_node.write_node("---\ntype: pc\n---\nBody.\n",
+                                   {"external_ref": "vault:Characters/PCs/Vela Kesh",
+                                    "element_id": "p1"}), encoding="utf-8")
+    other = _ent("o1", "person", "Otto", "Knows [Vela](/world/w1/link/p1).")
+    vault = _run_write(tmp_path, [_ent("p1", "person", "Vela Kesh"), other])
+    assert not (vault / "Characters/NPCs/Vela Kesh.md").exists()
+    assert "Knows [[Vela Kesh|Vela]]." in (vault / "Characters/NPCs/Otto.md").read_text()
+    out = capsys.readouterr().out
+    assert "already linked" in out and "Characters/PCs/Vela Kesh.md" in out
+
+
+def test_write_rerun_does_not_re_report_shared_names(tmp_path, capsys):
+    ents = [_ent("u1", "person", "Urban Baltin"), _ent("u2", "person", "Urban Baltin")]
+    _run_write(tmp_path, ents)
+    capsys.readouterr()
+    _run_write(tmp_path, ents)
+    assert "share a name" not in capsys.readouterr().out
+
+
+def test_write_hand_renamed_unique_note_gets_no_shared_name_callout(tmp_path):
+    # the element is linked to a renamed note; it shares its name with nothing
+    renamed = tmp_path / "vault/Characters/NPCs/Vela the Fox.md"
+    renamed.parent.mkdir(parents=True)
+    renamed.write_text(_node.write_node("---\ntype: npc\n---\nBody.\n",
+                                        {"external_ref": "vault:Characters/NPCs/Vela the Fox",
+                                         "element_id": "p1"}), encoding="utf-8")
+    vault = _run_write(tmp_path, [_ent("p1", "person", "Vela Kesh")], "--overwrite")
+    assert "Shared name" not in (vault / "Characters/NPCs/Vela the Fox.md").read_text()
+
+
+def test_write_plain_style_disambiguates_without_a_space():
+    recs = [{"_key": "a", "kind": "person", "name": "Urban Baltin"},
+            {"_key": "b", "kind": "person", "name": "Urban Baltin"}]
+    paths = write_cmd.plan_paths(recs, {}, "plain")
+    assert paths["b"] == "Characters/NPCs/Urban_Baltin_(2).md"
+
+
+def test_write_unicode_forms_of_one_name_get_distinct_files():
+    # macOS treats NFC and NFD spellings as one file
+    recs = [{"_key": "a", "kind": "person", "name": "José"},
+            {"_key": "b", "kind": "person", "name": "José"}]
+    paths = write_cmd.plan_paths(recs, {}, "space")
+    assert paths["b"] == "Characters/NPCs/José (2).md"
+
+
+def test_write_heritage_keeps_every_template_section(tmp_path):
+    vault = _run_write(tmp_path, [_ent("k1", "culture", "Highland Clans", "Herders.")])
+    txt = (vault / "Heritages/Highland Clans.md").read_text(encoding="utf-8")
+    heads = [l for l in txt.splitlines() if l.startswith("## ")]
+    assert heads[:4] == ["## Biology", "## Culture", "## History", "## Second-Order Notes"]
+    assert "## Culture\n\nHerders." in txt

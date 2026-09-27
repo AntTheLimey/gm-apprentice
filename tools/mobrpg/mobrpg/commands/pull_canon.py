@@ -20,6 +20,7 @@ from mobrpg import links
 from mobrpg import lww
 from mobrpg import node
 from mobrpg.vault import body_of, iter_linked_notes, vault_only_sections
+from mobrpg.commands import map_cmd
 from mobrpg.commands import pull
 from mobrpg.commands import rel_baseline
 from mobrpg.commands import suggest
@@ -395,7 +396,8 @@ def run_reconcile_deletions(world, vault, token, *, execute) -> int:
         return 1
     flagged = 0
     scanned = 0
-    for path, txt, nd in iter_linked_notes(vault):
+    # MIRROR_FOLDERS: whats-new reports a deleted culture/race as GONE too.
+    for path, txt, nd in iter_linked_notes(vault, map_cmd.MIRROR_FOLDERS):
         scanned += 1
         if nd.get("element_id") in live_ids:
             continue

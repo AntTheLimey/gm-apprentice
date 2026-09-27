@@ -15,17 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (#252). Every URL shape mobRPG writes (`/link/<id>`, `/detail.html`,
   `/element/<kind>/<id>`, `/worlds/<w>/search/<id>`, with or without a
   host) resolves to `[[Note]]`, or `[[Note|text]]` when the link text
-  differs. Event ids and unknown ids become plain text. Sync's pull
-  direction reads the same shapes.
+  differs. Event ids and unknown ids become plain text. Links to other
+  sites are left alone.
+- **`sync` pull links to the right file and keeps the link text.** A pulled
+  element link now targets the linked note's file (what a wikilink
+  resolves by), not its `name:`, which pointed a link to `Name (2)` at
+  `Name`. It keeps the text as `[[File|text]]` instead of dropping it, and
+  reads every URL shape `write` does.
 - **`write` imports creatures, cultures and races** (#253). Creatures go
   to `Creatures/`; cultures and races become heritage notes in
-  `Heritages/`. `whats-new` now sees linked heritage notes, so cultures
-  stop showing as new on every run. Heritages are mirrors: `suggest` and
-  `sync` don't push them.
+  `Heritages/`. `whats-new`, `pull-canon --reconcile-deletions`, `images`
+  and link resolution on push all see linked heritage notes, so cultures
+  stop showing as new on every run and links to them survive a push.
+  Heritages are mirrors: `suggest` and `sync` don't push them.
 - **Same-name elements all reach the vault** (#254). The second and
-  later ones get `Name (2).md`, `Name (3).md` in element-id order, with a
-  GM Notes callout naming the element. A re-run keeps each element on
-  the note that already links it. Relationship links follow the target's
+  later ones get `Name (2).md`, `Name (3).md` (`Name_(2).md` in plain
+  style) in element-id order, with a GM Notes callout naming the element.
+  A re-run keeps each element on the note that already links it, and
+  skips an element a note in another folder links (a PC, say). Relationship links follow the target's
   element id, so an edge to one of two same-name people points at the
   right file (for extracts pulled from this version on).
 - **`write` links every note it creates.** Each note gets an `accepted`
@@ -44,7 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`adopt` never links one element to two notes** (#257). An element that
   several notes match (a name and another note's alias) is reported and
   left for the GM, and an element another note already links is
-  skipped.
+  skipped. A name that matches several elements stays ambiguous even
+  when all but one are already linked.
 - **`mobrpg llms` prints the agent guide** (#258). The guide now ships
   inside the package, so a regular `pip install` has it; `--help` points
   to the command instead of a file that wasn't installed.
