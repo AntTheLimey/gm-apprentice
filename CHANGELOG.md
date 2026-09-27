@@ -30,7 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   suggestion on its next edit.
 - **A wikilink resolves to its exact file first on push.** "The Woodland
   Ghost" (a place) and "Woodland Ghost" (a creature) fold to one match
-  key, and the push picked whichever came last.
+  key, and the push picked whichever came last. When two linked notes in
+  different folders share a file name (a place and a culture both called
+  Drageby), `write` and `sync` pull link each by its path
+  (`[[Heritages/Drageby|Drageby]]`), and a bare `[[Drageby]]` resolves to
+  the place, not the heritage.
 - **`write`'s faction notes keep the import note out of mobRPG.** The
   Reconstruction Note sat under `## History` and was pushed with the
   description; it now sits under `## Source References`, as in every

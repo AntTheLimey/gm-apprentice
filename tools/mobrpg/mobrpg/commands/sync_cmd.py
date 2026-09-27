@@ -43,7 +43,8 @@ from mobrpg import lww
 from mobrpg import md as _md
 from mobrpg import node
 from mobrpg import section
-from mobrpg.vault import body_of, iter_linked_notes, linked_element_paths, vault_only_sections
+from mobrpg.vault import (body_of, iter_linked_notes, link_names, linked_element_paths,
+                          vault_only_sections)
 from mobrpg.commands import submit_batch
 from mobrpg.commands import suggest
 from mobrpg.commands import suggestions
@@ -80,12 +81,12 @@ class Action:
 
 
 def link_targets(vault: str) -> dict:
-    """{element_id: file stem} for every linked note, heritages included: the
-    pull-side link map. A wikilink resolves by file, and two same-name
-    elements share a `name:` but not a file, so keying on `name:` pointed a
-    link to `Foo (2)` at `Foo`."""
-    return {eid: os.path.splitext(os.path.basename(rel))[0]
-            for eid, rel in linked_element_paths(vault).items()}
+    """{element_id: wikilink name} for every linked note, heritages included:
+    the pull-side link map (and, inverted, the push side's exact lookup). A
+    wikilink resolves by file, and two same-name elements share a `name:` but
+    not a file, so keying on `name:` pointed a link to `Foo (2)` at `Foo`. A
+    stem two folders share is written as its path (vault.link_names)."""
+    return link_names(linked_element_paths(vault))
 
 
 def _pull_body(old_body: str, description: str | None, desc_type: str | None,

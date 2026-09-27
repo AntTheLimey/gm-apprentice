@@ -1,4 +1,5 @@
 import json
+import re
 import os
 
 from mobrpg import client, links, lww, node as _node, section
@@ -1069,3 +1070,24 @@ def test_strict_compare_tolerates_the_creature_and_heritage_lead_heading():
     for head in ("What the PCs Know", "Biology", "Culture"):
         assert _s._matches_server_strict(f"## {head}\n\nA rock troll.\n", server)
     assert not _s._matches_server_strict("## History\n\nA rock troll.\n", server)
+
+
+def test_same_stem_across_folders_links_by_path_both_ways(tmp_path):
+    # review: pull must not collapse two same-stem notes into one [[Drageby]],
+    # and push must send each path link to its own element
+    from mobrpg import node as _n
+    from mobrpg.commands import sync_cmd as _s, suggest as _sg
+    for rel, eid in (("Locations/Drageby.md", "P1"), ("Heritages/Drageby.md", "C1")):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_n.write_node("---\n---\nBody\n", {"element_id": eid}), encoding="utf-8")
+    targets = _s.link_targets(str(tmp_path))
+    assert targets == {"P1": "Locations/Drageby", "C1": "Heritages/Drageby"}
+    pulled = links.rewrite_md_for_pull(
+        "[Drageby](/world/w/link/P1) [Drageby](/world/w/link/C1)", targets)
+    assert pulled == "[[Locations/Drageby|Drageby]] [[Heritages/Drageby|Drageby]]"
+    files = {name: eid for eid, name in targets.items()}
+    pushed = links.rewrite_md_for_push(pulled + " [[Drageby]]", _sg.link_index(str(tmp_path)),
+                                       "w", links.URL_FMT, files)
+    ids = [u.rsplit("/", 1)[1].rstrip(")") for u in re.findall(r"\(([^)]+)\)", pushed)]
+    assert ids == ["P1", "C1", "P1"]           # a bare stem falls back: push note wins

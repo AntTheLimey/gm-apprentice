@@ -347,3 +347,14 @@ def test_write_keeps_the_import_note_in_a_vault_only_section(tmp_path):
             elif "Reconstruction Note" in line:
                 heads[p.name] = cur
         assert heads[p.name] in section.DEFAULT_VAULT_ONLY, (p.name, heads[p.name])
+
+
+def test_write_path_qualifies_links_to_a_stem_shared_across_folders(tmp_path):
+    # review: Locations/Drageby and Heritages/Drageby both exist; a bare
+    # [[Drageby]] is ambiguous, so the culture link carries its folder
+    body = "From [Drageby](/world/w1/link/P1), of the [Drageby](/world/w1/link/C1) folk."
+    vault = _run_write(tmp_path, [_ent("p1", "person", "Vela", body),
+                                  _ent("P1", "political", "Drageby"),
+                                  _ent("C1", "culture", "Drageby")])
+    txt = (vault / "Characters/NPCs/Vela.md").read_text(encoding="utf-8")
+    assert "From [[Locations/Drageby|Drageby]], of the [[Heritages/Drageby|Drageby]] folk." in txt

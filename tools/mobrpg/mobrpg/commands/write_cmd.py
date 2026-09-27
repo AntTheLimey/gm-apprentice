@@ -351,8 +351,12 @@ def run(argv: list[str]) -> int:
     records = [{**r, "_key": r.get("id") or f"#{i}"}
                for i, r in enumerate(data["entities"]) if r.get("kind") in KIND_MAP]
     unsupported = len(data["entities"]) - len(records)
-    paths = plan_paths(records, vault.linked_element_paths(out), args.name_style)
-    file_by_id = {key: os.path.basename(rel)[:-3] for key, rel in paths.items()}
+    linked = vault.linked_element_paths(out)
+    paths = plan_paths(records, linked, args.name_style)
+    # Link names over every note the vault will hold, so a stem shared across
+    # folders (Locations/Drageby, Heritages/Drageby) links by path.
+    names = vault.link_names({**linked, **paths})
+    file_by_id = {key: names[key] for key in paths}
     files_by_name: dict[str, set] = {}
     for rec in records:
         files_by_name.setdefault(_md.fix_c1(rec["name"]).strip(), set()).add(
@@ -374,7 +378,7 @@ def run(argv: list[str]) -> int:
         for r in rec["relationships"]:
             r["_file"] = _target_file(r, file_by_id, files_by_name, args.name_style)
         md = build(rec, args.campaign, args.source_doc, args.name_style)[1]
-        is_twin = _is_twin_file(file_by_id[rec["_key"]], rec["name"], args.name_style)
+        is_twin = _is_twin_file(os.path.basename(rel_path)[:-3], rec["name"], args.name_style)
         if is_twin:
             md = md.rstrip("\n") + "\n\n" + shared_name_callout(rec) + "\n"
         if rec.get("id"):

@@ -87,6 +87,20 @@ def linked_element_paths(vault: str) -> dict:
     return out
 
 
+def link_names(rel_by_key: dict) -> dict:
+    """{key: the name a wikilink to that note should use}. The file stem, the
+    way Obsidian links, unless another note in the map shares the stem (a
+    place and a culture both called Drageby, in different folders): then the
+    vault-relative path without `.md`, which Obsidian also resolves and which
+    names exactly one file."""
+    stem = {k: os.path.splitext(os.path.basename(rel))[0] for k, rel in rel_by_key.items()}
+    count: dict = {}
+    for s in stem.values():
+        count[s.lower()] = count.get(s.lower(), 0) + 1
+    return {k: (s if count[s.lower()] == 1 else os.path.splitext(rel_by_key[k])[0].replace(os.sep, "/"))
+            for k, s in stem.items()}
+
+
 def body_of(txt: str) -> str:
     """Return the note body below the frontmatter (leading newline included).
 
