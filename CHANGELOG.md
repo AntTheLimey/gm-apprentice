@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.15] — 2026-09-27
+
+### Fixed
+
+- **`mobrpg write` converts mobRPG links in note bodies to wikilinks**
+  (#252). Every URL shape mobRPG writes (`/link/<id>`, `/detail.html`,
+  `/element/<kind>/<id>`, `/worlds/<w>/search/<id>`, with or without a
+  host) resolves to `[[Note]]`, or `[[Note|text]]` when the link text
+  differs. Event ids and unknown ids become plain text. Sync's pull
+  direction reads the same shapes.
+- **`write` imports creatures, cultures and races** (#253). Creatures go
+  to `Creatures/`; cultures and races become heritage notes in
+  `Heritages/`. `whats-new` now sees linked heritage notes, so cultures
+  stop showing as new on every run. Heritages are mirrors: `suggest` and
+  `sync` don't push them.
+- **Same-name elements all reach the vault** (#254). The second and
+  later ones get `Name (2).md`, `Name (3).md` in element-id order, with a
+  GM Notes callout naming the element. A re-run keeps each element on
+  the note that already links it. Relationship links follow the target's
+  element id, so an edge to one of two same-name people points at the
+  right file (for extracts pulled from this version on).
+- **`write` links every note it creates.** Each note gets an `accepted`
+  `mobrpg:` node with its element id, and each edge its event id, so a
+  fresh import needs no `adopt` and `suggest` won't re-create what's
+  already upstream.
+- **No control characters in frontmatter** (#255). `\x91`/`\x92` and the
+  other C1 characters in mobRPG text map through cp1252 to the quotes
+  and dashes they stand for, in `pull` and in `write`.
+- **`--vault .` no longer produces the namespace `.`** (#256). The path is
+  resolved first, and a `.` namespace on existing nodes or in the map is
+  ignored instead of copied forward. `map init` records the absolute
+  vault path. `relink` repairs a note already stamped with a `.:` ref: it
+  swaps in the vault's real namespace and keeps the old ref as
+  `previous_ref`.
+- **`adopt` never links one element to two notes** (#257). An element that
+  several notes match (a name and another note's alias) is reported and
+  left for the GM, and an element another note already links is
+  skipped.
+- **`mobrpg llms` prints the agent guide** (#258). The guide now ships
+  inside the package, so a regular `pip install` has it; `--help` points
+  to the command instead of a file that wasn't installed.
+- **`write` emits `canon_status`**, not the legacy `source_confidence` key,
+  and quotes names that contain double quotes.
+
 ## [1.10.14] — 2026-09-25
 
 ### Added

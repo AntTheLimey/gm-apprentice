@@ -93,7 +93,7 @@ def test_write_reports_unsupported_kinds(tmp_path, capsys):
     extract = {"entities": [
         {"kind": "person", "name": "Vela Kesh", "body_md": "", "relationships": [],
          "altNames": [], "notes_public": [], "notes_gm": [], "classifiers": []},
-        {"kind": "creature", "name": "Void Maw", "body_md": "", "relationships": [],
+        {"kind": "currency", "name": "Imperial Crown", "body_md": "", "relationships": [],
          "altNames": [], "notes_public": [], "notes_gm": [], "classifiers": []},
     ]}
     src = tmp_path / "extract.json"
@@ -121,6 +121,152 @@ def test_write_reports_slug_collisions(tmp_path, capsys):
     rc = write_cmd.run([str(src), "--out", str(tmp_path / "vault")])
 
     assert rc == 0
+    # (#254) both reach the vault, each in its own file, and the run says so
+    npcs = tmp_path / "vault" / "Characters/NPCs"
+    assert sorted(p.name for p in npcs.glob("*.md")) == ["AB (2).md", "AB.md"]
+    assert "second" in (npcs / "AB (2).md").read_text(encoding="utf-8")
     printed = capsys.readouterr().out
-    assert "collision" in printed
-    assert "A/B" in printed and "AB" in printed
+    assert "share a name" in printed and "'AB'" in printed
+
+
+# ---- #252-#255 import fixes -------------------------------------------------
+
+from mobrpg import node as _node
+
+
+def _run_write(tmp_path, entities, *extra, world="w1"):
+    ep = tmp_path / "extract.json"
+    ep.write_text(json.dumps({"worldId": world, "entities": entities}), encoding="utf-8")
+    vault = tmp_path / "vault"
+    rc = write_cmd.run([str(ep), "--out", str(vault), "--name-style", "space", *extra])
+    assert rc == 0
+    return vault
+
+
+def _ent(eid, kind, name, body="", **kw):
+    return {"id": eid, "kind": kind, "name": name, "body_md": body,
+            "altNames": [], "notes_public": [], "notes_gm": [],
+            "classifiers": [], "relationships": [], **kw}
+
+
+def test_write_converts_element_urls_in_bodies_to_wikilinks(tmp_path):
+    # (#252) every URL shape mobRPG emits, with and without a host
+    body = ("Manager of the [Hockhaus](/world/w1/link/h1), "
+            "friend of [Anna](https://www.mobrpg.com/world/w1/link/a1/detail.html), "
+            "rival of [the Dunlap boy](http://localhost:3000/world/w1/element/person/d1), "
+            "at [the fair](/world/w1/link/ev1) and [somewhere](/world/w1/link/zz9).")
+    vault = _run_write(tmp_path, [
+        _ent("p1", "person", "Otto Brandt", body),
+        _ent("h1", "political", "Hockhaus"),
+        _ent("a1", "person", "Anna"),
+        _ent("d1", "person", "Reginald Dunlap"),
+    ])
+    txt = (vault / "Characters/NPCs/Otto Brandt.md").read_text(encoding="utf-8")
+    assert "Manager of the [[Hockhaus]]," in txt
+    assert "friend of [[Anna]]," in txt
+    assert "rival of [[Reginald Dunlap|the Dunlap boy]]," in txt
+    # an event id or an unknown id collapses to its display text
+    assert "at the fair and somewhere." in txt
+    assert "/world/" not in txt
+
+
+def test_write_writes_creatures_and_cultures(tmp_path):
+    # (#253) creature and culture (and race) were dropped as unsupported kinds
+    vault = _run_write(tmp_path, [
+        _ent("c1", "creature", "Mire Lamprey", "Eats boats.",
+             classifiers=[{"kind": "creature/type", "name": "Beast"}]),
+        _ent("k1", "culture", "Highland Clans", "Feuding herders."),
+        _ent("r1", "race", "Selkie", "Seal-folk."),
+    ])
+    cr = (vault / "Creatures/Mire Lamprey.md").read_text(encoding="utf-8")
+    assert "type: creature" in cr and 'creature_type: "Beast"' in cr and "Eats boats." in cr
+    cu = (vault / "Heritages/Highland Clans.md").read_text(encoding="utf-8")
+    assert "type: heritage" in cu and "## Culture\n\nFeuding herders." in cu
+    ra = (vault / "Heritages/Selkie.md").read_text(encoding="utf-8")
+    assert "type: heritage" in ra and "## Biology\n\nSeal-folk." in ra
+    assert _node.read_node(cu)["element_kind"] == "Culture"
+    assert _node.read_node(ra)["element_kind"] == "Race"
+
+
+def test_write_disambiguates_same_name_elements_instead_of_dropping(tmp_path, capsys):
+    # (#254) same-name elements all reach the vault, deterministically named
+    vault = _run_write(tmp_path, [
+        _ent("u2", "person", "Urban Baltin", "Second."),
+        _ent("u1", "person", "Urban Baltin", "First."),
+        _ent("u3", "person", "Urban Baltin", "Third."),
+    ])
+    npcs = vault / "Characters/NPCs"
+    by_id = {_node.read_node(p.read_text(encoding="utf-8"))["element_id"]: p.name
+             for p in npcs.glob("*.md")}
+    assert by_id == {"u1": "Urban Baltin.md", "u2": "Urban Baltin (2).md",
+                     "u3": "Urban Baltin (3).md"}
+    second = (npcs / "Urban Baltin (2).md").read_text(encoding="utf-8")
+    assert 'name: "Urban Baltin"' in second        # the name itself is unchanged
+    assert "`u2`" in second                          # the callout names the element id
+    assert "not written" not in capsys.readouterr().out
+
+
+def test_write_rerun_keeps_each_element_on_its_existing_note(tmp_path):
+    # (#254) a later pull with a new same-name element must not reshuffle files
+    vault = _run_write(tmp_path, [_ent("u5", "person", "James V", "Old.")])
+    vault = _run_write(tmp_path, [_ent("u1", "person", "James V", "New."),
+                                  _ent("u5", "person", "James V", "Old.")])
+    npcs = vault / "Characters/NPCs"
+    assert _node.read_node((npcs / "James V.md").read_text())["element_id"] == "u5"
+    assert _node.read_node((npcs / "James V (2).md").read_text())["element_id"] == "u1"
+
+
+def test_write_stamps_an_accepted_node_so_adopt_is_not_needed(tmp_path):
+    # (#254) write knows every element id, so the node goes on at write time
+    ent = _ent("p1", "person", "Vela Kesh",
+               relationships=[{"target": "Hockhaus", "targetId": "h1",
+                               "predicate": "located_at", "eventType": "Employ",
+                               "eventId": "ev1", "role": None}])
+    vault = _run_write(tmp_path, [ent, _ent("h1", "political", "Hockhaus")], world="w9")
+    nd = _node.read_node((vault / "Characters/NPCs/Vela Kesh.md").read_text())
+    assert nd["world_id"] == "w9"
+    assert nd["element_id"] == "p1"
+    assert nd["element_kind"] == "Person"
+    assert nd["review_state"] == "accepted"
+    assert nd["external_ref"] == "vault:Characters/NPCs/Vela Kesh"
+    assert nd["relationships"] == [{"predicate": "located_at", "target": "Hockhaus",
+                                    "event_type": "Employ", "event_id": "ev1",
+                                    "review_state": "accepted"}]
+
+
+def test_write_relationship_links_follow_the_target_id(tmp_path):
+    # (#254) with two same-name targets, the edge must point at the right file
+    ent = _ent("s1", "person", "Reginald Dunlap Jr",
+               relationships=[{"target": "Reginald Dunlap", "targetId": "d2",
+                               "predicate": "child_of", "eventType": None,
+                               "role": None}])
+    vault = _run_write(tmp_path, [ent, _ent("d1", "person", "Reginald Dunlap"),
+                                  _ent("d2", "person", "Reginald Dunlap")])
+    txt = (vault / "Characters/NPCs/Reginald Dunlap Jr.md").read_text(encoding="utf-8")
+    assert 'target: "[[Reginald Dunlap (2)]]"' in txt
+
+
+def test_write_maps_c1_control_characters_through_cp1252(tmp_path):
+    # (#255) \x92/\x91 are cp1252 quotes mis-decoded as Latin-1; YAML rejects them
+    vault = _run_write(tmp_path, [_ent("p1", "person", "Seachlann O\x92Neill",
+                                       "He said \x93aye\x94 \x96 once.",
+                                       altNames=["Sea\x91chlann"])])
+    p = next((vault / "Characters/NPCs").glob("*.md"))
+    txt = p.read_text(encoding="utf-8")
+    assert not any("\x80" <= ch <= "\x9f" for ch in txt)
+    assert 'name: "Seachlann O’Neill"' in txt
+    assert "He said “aye” – once." in txt
+    assert "Sea‘chlann" in txt
+
+
+def test_write_emits_canon_status_not_the_legacy_key(tmp_path):
+    vault = _run_write(tmp_path, [_ent("p1", "person", "Vela Kesh")])
+    txt = (vault / "Characters/NPCs/Vela Kesh.md").read_text(encoding="utf-8")
+    assert "canon_status: AUTHORITATIVE" in txt
+    assert "source_confidence" not in txt
+
+
+def test_write_quotes_names_that_contain_double_quotes(tmp_path):
+    vault = _run_write(tmp_path, [_ent("p1", "person", 'Jan "Red" Kowal')])
+    txt = next((vault / "Characters/NPCs").glob("*.md")).read_text(encoding="utf-8")
+    assert 'name: "Jan \\"Red\\" Kowal"' in txt

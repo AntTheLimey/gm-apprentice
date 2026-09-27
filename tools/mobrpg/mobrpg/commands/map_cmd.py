@@ -116,6 +116,12 @@ FOLDERS = {"Characters/NPCs": "npc", "Characters/PCs": "pc", "Locations": "locat
            "Factions & Organizations": "faction", "Items & Artifacts": "item",
            "Creatures": "creature"}
 
+# Every folder that can hold a linked note. Heritages hold mobRPG culture and
+# race elements written by `write` (#253). They are mirrors only: suggest and
+# sync have no push route for them, so they stay out of FOLDERS, but anything
+# that asks "which elements does the vault already link?" must see them.
+MIRROR_FOLDERS = {**FOLDERS, "Heritages": "heritage"}
+
 # closed LandFeatureSubType enum (authoritative, from LandFeatureType.java) — lowercased
 LAND_SUBTYPES = {s.lower(): s for s in [
     "Arch", "Archipelago", "Artic", "Atoll", "Beach", "Bluff", "Butte", "Caldera", "Cave", "Cliff",
@@ -326,15 +332,33 @@ def derive_namespace(vault: str) -> str:
     `suggest` can't dedupe against the existing element and risks a duplicate
     create on `--execute`. Prefer the namespace of an existing note's `mobrpg:`
     node `external_ref` (the substring before the first ':'); else fall back to
-    the vault directory basename."""
-    vault = os.path.expanduser(vault)
-    for folder in FOLDERS:
+    the vault directory basename.
+
+    The path is made absolute first: `--vault .` used to yield the namespace
+    ".", which then perpetuated itself through the nodes stamped with it
+    (#256). A "." or ".." prefix on an existing node is that bug's residue,
+    so it is skipped rather than trusted."""
+    vault = os.path.abspath(os.path.expanduser(vault))
+    for folder in MIRROR_FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             nd = node.read_node(open(p, encoding="utf-8").read())
             ref = nd.get("external_ref") if nd else None
-            if ref and ":" in ref:
+            if ref and ":" in ref and valid_namespace(ref.split(":", 1)[0]):
                 return ref.split(":", 1)[0]
-    return os.path.basename(vault.rstrip("/")) or "default"
+    base = os.path.basename(vault)
+    return base if valid_namespace(base) else "default"
+
+
+def valid_namespace(ns) -> bool:
+    return bool(ns) and ns not in (".", "..")
+
+
+def namespace_for(vault: str, mp: dict) -> str:
+    """The map's recorded namespace when it is a real one, else derived. A map
+    written by `map init --vault .` before #256 records ".", and trusting it
+    would keep stamping `.:` external refs."""
+    ns = (mp or {}).get("vaultNamespace")
+    return ns if valid_namespace(ns) else derive_namespace(vault)
 
 
 def _norm(s: str) -> str:
@@ -687,7 +711,7 @@ def build_map(world: str, world_meta: dict, vault: str, disc: dict, vocab: dict,
     return {
         "schema": "mobrpg-vault-map/v1",
         "world": world_meta.get("name"), "worldId": world,
-        "vault": os.path.expanduser(vault), "vaultNamespace": derive_namespace(vault),
+        "vault": os.path.abspath(os.path.expanduser(vault)), "vaultNamespace": derive_namespace(vault),
         "discoveredAt": now,
         "kinds": dict(_derived()["KINDS"]),
         "locationRouting": location_routing,

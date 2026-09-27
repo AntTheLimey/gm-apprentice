@@ -72,6 +72,25 @@ def _element_url_re(url_fmt: str) -> re.Pattern:
 
 _ELEMENT_URL = _element_url_re(URL_FMT)
 
+# Every element URL shape mobRPG itself writes into descriptions (#252), with
+# no host, an empty one (`http:///world/...`), `https://www.mobrpg.com` or a
+# dev host: `/world/<w>/link/<id>`, the same with `/detail.html`,
+# `/world/<w>/element/<kind>/<id>` and `/world/worlds/<w>/search/<id>`.
+# URL_FMT stays the one shape push WRITES; this is what pull and `write` READ.
+_ANY_ELEMENT_URL = re.compile(
+    r"(?:https?://[^/\s)]*)?/world/(?:"
+    r"worlds/[^/\s)]+/search/(?P<eid3>[^/\s)]+)"
+    r"|[^/\s)]+/link/(?P<eid>[^/\s)]+)(?:/detail\.html)?"
+    r"|[^/\s)]+/element/[^/\s)]+/(?P<eid2>[^/\s)]+))/?")
+# write's link pass also takes an empty label: `[](url)` is an invisible anchor.
+_MDLINK_ANY_LABEL = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+
+
+def element_id_of(href: str) -> str | None:
+    """The element id a mobRPG element URL points at, or None for any other href."""
+    um = _ANY_ELEMENT_URL.fullmatch((href or "").strip())
+    return (um.group("eid") or um.group("eid2") or um.group("eid3")) if um else None
+
 
 def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
                         world_id: str, url_fmt: str = URL_FMT) -> str:
@@ -142,15 +161,30 @@ def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> st
 
 
 def rewrite_md_for_pull(md_text: str, path_by_element_id: dict) -> str:
-    """Element URLs (matched against `URL_FMT`) whose id maps to a known vault
-    note -> `[[Name]]`; every other link is left untouched."""
+    """Element URLs (any shape `element_id_of` reads) whose id maps to a known
+    vault note -> `[[Name]]`; every other link is left untouched."""
     def _ml(m: re.Match) -> str:
-        href = m.group(2)
-        um = _ELEMENT_URL.fullmatch(href)
-        if um:
-            name = path_by_element_id.get(um.group("eid"))
-            if name:
-                return f"[[{name}]]"
-        return m.group(0)
+        eid = element_id_of(m.group(2))
+        name = path_by_element_id.get(eid) if eid else None
+        return f"[[{name}]]" if name else m.group(0)
 
     return _MDLINK.sub(_ml, md_text or "")
+
+
+def rewrite_md_for_write(md_text: str, file_by_element_id: dict) -> str:
+    """`write`'s pass (#252): it knows every element's id and filename, so it
+    resolves every element URL. A known id -> `[[File]]`, or `[[File|text]]`
+    when the link text differs; an event id or unknown id -> the bare link
+    text, since a dead mobRPG URL means nothing in the vault. An empty-label
+    element link is invisible in mobRPG, so it goes. Other links are left
+    untouched."""
+    def _ml(m: re.Match) -> str:
+        label, eid = m.group(1), element_id_of(m.group(2))
+        if not eid:
+            return m.group(0)
+        target = file_by_element_id.get(eid)
+        if not target or not label:
+            return label
+        return f"[[{target}]]" if target == label else f"[[{target}|{label}]]"
+
+    return _MDLINK_ANY_LABEL.sub(_ml, md_text or "")

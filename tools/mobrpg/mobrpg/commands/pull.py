@@ -147,7 +147,7 @@ def extract(world: str, token: str) -> dict:
         for it in _list_all(world, kind, token):
             if it.get("id"):
                 index[it["id"]] = {"id": it["id"], "kind": kind,
-                                   "name": it.get("name") or it.get("title") or "?"}
+                                   "name": _md.fix_c1(it.get("name") or it.get("title") or "?")}
 
     # 2. build entity records with full descriptions (skip events + classifiers)
     records: dict[str, dict] = {}
@@ -157,7 +157,7 @@ def extract(world: str, token: str) -> dict:
         full = _get_one(world, meta["kind"], eid, token)
         records[eid] = {
             "id": eid, "kind": meta["kind"], "name": meta["name"],
-            "altNames": full.get("altNames") or [],
+            "altNames": [_md.fix_c1(a) for a in full.get("altNames") or []],
             "body_md": html_to_md(full.get("description")),
             "notes_public": [], "notes_gm": [],
             "classifiers": [], "relationships": [],
@@ -199,9 +199,11 @@ def extract(world: str, token: str) -> dict:
             pred = predicate
             if et == "Employ" and records[obj]["kind"] in ("political", "landfeature"):
                 pred = "located_at"
+            # targetId/eventId let `write` link the right note when two
+            # elements share a name, and stamp the edge as already upstream.
             records[subj]["relationships"].append(
-                {"target": records[obj]["name"], "predicate": pred,
-                 "eventType": et, "role": role})
+                {"target": records[obj]["name"], "targetId": obj,
+                 "predicate": pred, "eventType": et, "eventId": eid, "role": role})
 
     # 4. classifier types (bound or not) from the /type endpoints — so a
     # standalone/new type unreferenced by any entity is still surfaced.

@@ -648,3 +648,30 @@ def test_run_learning_treats_non_dict_listing_as_failure(tmp_path, monkeypatch, 
     data = json.load(open(mp, encoding="utf-8"))
     assert data["locationRouting"]["sun"]["status"] == "canon"
     assert "WARNING" in capsys.readouterr().err
+
+
+def test_derive_namespace_resolves_dot_to_the_directory_name(tmp_path, monkeypatch):
+    # (#256) `--vault .` used to yield the namespace "."
+    d = tmp_path / "imperialia"
+    (d / "Locations").mkdir(parents=True)
+    monkeypatch.chdir(d)
+    assert m.derive_namespace(".") == "imperialia"
+    assert m.derive_namespace("./") == "imperialia"
+
+
+def test_derive_namespace_ignores_a_dot_namespace_on_existing_nodes(tmp_path):
+    # (#256) a "." prefix stamped by the old bug must not perpetuate itself
+    d = tmp_path / "imperialia"
+    p = d / "Locations" / "Drageby.md"
+    p.parent.mkdir(parents=True)
+    p.write_text(node.write_node("---\ntype: location\n---\nbody\n",
+                                 {"external_ref": ".:Locations/Drageby", "element_id": "e1"}),
+                 encoding="utf-8")
+    assert m.derive_namespace(str(d)) == "imperialia"
+
+
+def test_namespace_for_rejects_a_dot_namespace_in_the_map(tmp_path):
+    d = tmp_path / "imperialia"
+    d.mkdir()
+    assert m.namespace_for(str(d), {"vaultNamespace": "."}) == "imperialia"
+    assert m.namespace_for(str(d), {"vaultNamespace": "space_game"}) == "space_game"

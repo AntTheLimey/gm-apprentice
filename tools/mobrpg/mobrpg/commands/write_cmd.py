@@ -12,14 +12,31 @@ import json
 import os
 import re
 
-# mobRPG kind → (vault subfolder, entity type)
+from mobrpg import links
+from mobrpg import md as _md
+from mobrpg import node
+from mobrpg import vault
+from mobrpg.commands import map_cmd
+
+# mobRPG kind → (vault subfolder, entity type). The vault has no culture or
+# race type; a heritage (species, people, culture) is the nearest, and its
+# template already carries Biology and Culture sections (#253).
 KIND_MAP = {
     "person":       ("Characters/NPCs", "npc"),
     "organization": ("Factions & Organizations", "faction"),
     "political":    ("Locations", "location"),
     "landfeature":  ("Locations", "location"),
     "item":         ("Items & Artifacts", "item"),
+    "creature":     ("Creatures", "creature"),
+    "culture":      ("Heritages", "heritage"),
+    "race":         ("Heritages", "heritage"),
 }
+
+# mobRPG kind → the `element_kind` a node records (as suggest.build_node names it)
+ELEMENT_KIND = {"person": "Person", "organization": "Organization",
+                "political": "Political", "landfeature": "LandFeature",
+                "item": "Item", "creature": "Creature", "culture": "Culture",
+                "race": "Race"}
 
 # mobRPG LandFeatureSubType (authoritative) → vault location_type
 LANDFEATURE_SUBTYPE = {
@@ -46,8 +63,9 @@ def slug(name: str, name_style: str) -> str:
     return s if name_style == "space" else s.replace(" ", "_")
 
 
-def wl(name: str, name_style: str) -> str:
-    return f"[[{slug(name, name_style)}]]"
+def _q(s: str) -> str:
+    """A YAML double-quoted scalar (JSON's escaping is valid YAML)."""
+    return json.dumps(s, ensure_ascii=False)
 
 
 def yaml_list(items: list[str]) -> str:
@@ -65,8 +83,11 @@ def rel_block(rels: list[dict], default_pred: str, default_target: str | None,
                      "role": None, "eventType": None}] if default_target else [])
     for r in src:
         desc = r.get("role") or ""
+        # `_file` is the note the edge resolves to (set by run); fall back to
+        # the slugged name for a caller that didn't resolve targets.
+        target = r.get("_file") or slug(r["target"], name_style)
         lines.append(
-            f"  - target: \"{wl(r['target'], name_style)}\"\n"
+            f"  - target: \"[[{target}]]\"\n"
             f"    type: {r['predicate']}\n"
             f"    tone: neutral\n"
             f"    strength: 5\n"
@@ -103,12 +124,38 @@ def classifier_of(rec: dict, kinds: tuple) -> str:
     return ""
 
 
+def _clean(rec: dict, file_by_id: dict | None = None) -> dict:
+    """The record with C1 controls mapped through cp1252 (#255), covering
+    extracts pulled before pull did that itself, and, given the id -> file
+    map, mobRPG element URLs in its prose resolved to wikilinks (#252)."""
+    c = _md.fix_c1
+
+    def prose(t):
+        return c(t) if file_by_id is None else links.rewrite_md_for_write(c(t), file_by_id)
+
+    return {**rec, "name": c(rec["name"]).strip(),
+            "altNames": [c(a) for a in rec.get("altNames") or []],
+            "body_md": prose(rec.get("body_md")),
+            "notes_public": [prose(n) for n in rec.get("notes_public") or []],
+            "notes_gm": [prose(n) for n in rec.get("notes_gm") or []],
+            "classifiers": [{**k, "name": c(k.get("name"))} for k in rec.get("classifiers", [])],
+            "relationships": [{**r, "target": c(r.get("target")),
+                               "role": c(r["role"]) if r.get("role") else r.get("role")}
+                              for r in rec.get("relationships", [])]}
+
+
+def _parent(rels: list[dict], name_style: str) -> str:
+    r = next((r for r in rels if r["predicate"] == "part_of"), None)
+    return f"[[{r.get('_file') or slug(r['target'], name_style)}]]" if r else ""
+
+
 def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[str, str] | None:
     kind = rec["kind"]
     if kind not in KIND_MAP:
         return None
     folder, etype = KIND_MAP[kind]
-    name = rec["name"].strip()
+    rec = _clean(rec)
+    name = rec["name"]
     body = rec.get("body_md") or ""
     rels = rec.get("relationships", [])
     aliases = rec.get("altNames") or []
@@ -124,15 +171,15 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
     role = next((r["role"] for r in rels if r.get("role")), "")
 
     fm_common = (
-        f"name: \"{name}\"\n"
-        f"source_confidence: AUTHORITATIVE\n"   # mobRPG declared canon
+        f"name: {_q(name)}\n"
+        f"canon_status: AUTHORITATIVE\n"       # mobRPG declared canon
         f"source: prep\n"                       # TODO(integration): needs an 'api-import' source enum
         f"createdSession: \"\"\n"
         f"asOfSession: \"\"\n"
         f"lastUpdated: \"\"\n"
         f"aliases: {yaml_list(aliases)}\n"
         f"tags: {yaml_list(['mobrpg-import'])}\n"
-        f"campaign: \"{campaign}\"\n"
+        f"campaign: {_q(campaign)}\n"
     )
 
     if etype == "npc":
@@ -163,7 +210,6 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
         # body) alongside the edge, exactly as location carries parent_location.
         # It used to be emitted hardcoded-empty while the edge was preserved, so
         # a faction with a real parent shipped with the two disagreeing.
-        parent = next((r["target"] for r in rels if r["predicate"] == "part_of"), "")
         fm = (
             f"---\n"
             f"type: faction\n{fm_common}"
@@ -178,7 +224,7 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
             f"alliances: []\n"
             f"recentActions: []\n"
             f"status: active\n"
-            f"part_of: \"{wl(parent, name_style) if parent else ''}\"\n"
+            f"part_of: \"{_parent(rels, name_style)}\"\n"
             f"portrait: \"\"\n"
             f"relationships:{rel_block(rels, 'headquartered_at', None, name_style)}\n"
             f"---\n"
@@ -191,12 +237,11 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
         ltype = (classifier_of(rec, ("political/type",)) or
                  LANDFEATURE_SUBTYPE.get(classifier_of(rec, ("landfeature/subType",)), "") or
                  (landfeature_type(name) if kind == "landfeature" else ""))
-        parent = next((r["target"] for r in rels if r["predicate"] == "part_of"), "")
         fm = (
             f"---\n"
             f"type: location\n{fm_common}"
             f"location_type: {json.dumps(ltype, ensure_ascii=False)}\n"
-            f"parent_location: \"{wl(parent, name_style) if parent else ''}\"\n"
+            f"parent_location: \"{_parent(rels, name_style)}\"\n"
             f"atmosphere: \"\"\n"
             f"inhabitants: []\n"
             f"points_of_interest: []\n"
@@ -225,6 +270,43 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Properties\n\n## Source References\n\n"
               f"- {source_doc}\n\n> [!info] Reconstruction Note\n> Imported from mobRPG (canon).\n\n"
               f"## GM Notes\n")
+
+    elif etype == "creature":
+        ctype = classifier_of(rec, ("creature/type",))
+        lair = next((r for r in rels if r["predicate"] == "located_at"), None)
+        where = f"[[{lair.get('_file') or slug(lair['target'], name_style)}]]" if lair else ""
+        fm = (
+            f"---\n"
+            f"type: creature\n{fm_common}"
+            f"creature_type: {_q(ctype)}\n"
+            f"threat_level: \"\"\n"
+            f"location: \"{where}\"\n"
+            f"portrait: \"\"\n"
+            f"relationships:{rel_block(rels, 'located_at', None, name_style)}\n"
+            f"---\n"
+        )
+        md = (f"{fm}\n## What the PCs Know\n\n{body}\n\n## Encounters\n\n"
+              f"## Source References\n\n- {source_doc}\n\n> [!info] Reconstruction Note\n"
+              f"> Imported from mobRPG (canon). creature_type from mobRPG creature-type.\n\n"
+              f"## GM Notes\n")
+
+    elif etype == "heritage":
+        # A culture's prose is its culture; a race's is its biology.
+        section = "Culture" if kind == "culture" else "Biology"
+        fm = (
+            f"---\n"
+            f"type: heritage\n{fm_common}"
+            f"lifespan_range: []\n"
+            f"maturity_age:\n"
+            f"average_height: \"\"\n"
+            f"notable_traits: []\n"
+            f"portrait: \"\"\n"
+            f"relationships:{rel_block(rels, 'associated_with', None, name_style)}\n"
+            f"---\n"
+        )
+        md = (f"{fm}\n## {section}\n\n{body}\n\n## History\n\n"
+              f"## Source References\n\n- {source_doc}\n\n> [!info] Reconstruction Note\n"
+              f"> Imported from mobRPG (canon): a mobRPG {kind} element.\n\n## GM Notes\n")
     else:
         return None
 
@@ -255,27 +337,38 @@ def run(argv: list[str]) -> int:
     with open(args.extract, encoding="utf-8") as f:
         data = json.load(f)
 
+    out = args.out
+    mp = vault.read_map(out)
+    namespace = map_cmd.namespace_for(out, mp)
+    world = data.get("worldId") or mp.get("worldId", "")
+
+    # `_key` is the element id; a hand-made extract without ids still writes,
+    # keyed by position, but those notes can't be linked to an element.
+    records = [{**r, "_key": r.get("id") or f"#{i}"}
+               for i, r in enumerate(data["entities"]) if r.get("kind") in KIND_MAP]
+    unsupported = len(data["entities"]) - len(records)
+    paths = plan_paths(records, vault.linked_element_paths(out), args.name_style)
+    file_by_id = {key: os.path.basename(rel)[:-3] for key, rel in paths.items()}
+    files_by_name: dict[str, set] = {}
+    for rec in records:
+        files_by_name.setdefault(_md.fix_c1(rec["name"]).strip(), set()).add(
+            file_by_id[rec["_key"]])
+
     written: dict[str, int] = {}
-    skipped = unsupported = 0
-    # Preflight: slug() can map distinct names ("A/B", "AB") onto one file, and
-    # case-insensitive filesystems collapse case variants too. Without this the
-    # later record silently vanished (or replaced the earlier under
-    # --overwrite). First name claims the path; the rest are reported.
-    claimed: dict[str, str] = {}
-    collisions: list[tuple[str, str, str]] = []
-    for rec in data["entities"]:
-        r = build(rec, args.campaign, args.source_doc, args.name_style)
-        if not r:
-            unsupported += 1
-            continue
-        rel_path, md = r
-        key = rel_path.lower()
-        holder = claimed.get(key)
-        if holder is not None and holder != rec["name"]:
-            collisions.append((rec["name"], holder, rel_path))
-            continue
-        claimed[key] = rec["name"]
-        full = os.path.join(args.out, rel_path)
+    skipped = 0
+    shared: list[tuple[str, str, str]] = []
+    for rec in records:
+        rel_path = paths[rec["_key"]]
+        rec = _clean(rec, file_by_id)
+        for r in rec["relationships"]:
+            r["_file"] = _target_file(r, file_by_id, files_by_name, args.name_style)
+        md = build(rec, args.campaign, args.source_doc, args.name_style)[1]
+        if file_by_id[rec["_key"]] != slug(rec["name"], args.name_style):
+            md = md.rstrip("\n") + "\n\n" + shared_name_callout(rec) + "\n"
+            shared.append((rec["name"], rec.get("id") or "no id", rel_path))
+        if rec.get("id"):
+            md = node.write_node(md, import_node(rec, rel_path, world, namespace))
+        full = os.path.join(out, rel_path)
         # An existing note is someone's work — hand-authored prose, GM Notes,
         # play bookkeeping. Replacing it wholesale is the most destructive thing
         # this tool can do, so it only happens on an explicit --overwrite (#186).
@@ -287,15 +380,80 @@ def run(argv: list[str]) -> int:
             f.write(md)
         written.setdefault(rec["kind"], 0)
         written[rec["kind"]] += 1
-    print(f"wrote to {args.out}/:", written, "| total", sum(written.values()))
+    print(f"wrote to {out}/:", written, "| total", sum(written.values()))
     if skipped:
         print(f"skipped {skipped} existing note(s) — pass --overwrite to replace them")
     if unsupported:
         print(f"ignored {unsupported} entit(y/ies) of unsupported kind(s) — "
               f"no vault template maps them")
-    for name, holder, rel_path in collisions:
-        print(f"WARNING: filename collision — {name!r} maps to {rel_path}, "
-              f"already claimed by {holder!r}; not written")
-    if collisions:
-        print(f"{len(collisions)} filename collision(s) — rename to disambiguate")
+    if shared:
+        print(f"{len(shared)} element(s) share a name with another; each got its own "
+              f"note (rename them to tell them apart):")
+        for name, eid, rel_path in shared:
+            print(f"  {rel_path}  ({name!r}, element {eid})")
     return 0
+
+
+def plan_paths(records: list[dict], linked: dict, name_style: str) -> dict:
+    """{record _key: vault-relative path}, one distinct file per element (#254).
+
+    An element a note already links keeps that note, so a re-run never
+    reshuffles files, even after a hand rename. The rest take their name's file
+    in element-id order; when elements share a name (fathers and sons, regnal
+    numbers, true duplicates) the later ones get `Name (2).md`, `Name (3).md`.
+    Paths compare case-insensitively, as case-insensitive filesystems do, and
+    slug() can map distinct names ("A/B", "AB") onto one file too."""
+    paths, taken = {}, set()
+    for rec in records:
+        rel = linked.get(rec["_key"])
+        if rel and os.path.dirname(rel) == KIND_MAP[rec["kind"]][0]:
+            paths[rec["_key"]] = rel
+            taken.add(rel.lower())
+    for rec in sorted(records, key=lambda r: r["_key"]):
+        if rec["_key"] in paths:
+            continue
+        base = f"{KIND_MAP[rec['kind']][0]}/{slug(_md.fix_c1(rec['name']), name_style)}"
+        rel, n = f"{base}.md", 1
+        while rel.lower() in taken:
+            n += 1
+            rel = f"{base} ({n}).md"
+        paths[rec["_key"]] = rel
+        taken.add(rel.lower())
+    return paths
+
+
+def _target_file(rel: dict, file_by_id: dict, files_by_name: dict, name_style: str) -> str:
+    """The note an edge points at: by the target's element id when the extract
+    carries it, else by name when exactly one written note has that name."""
+    if rel.get("targetId") in file_by_id:
+        return file_by_id[rel["targetId"]]
+    files = files_by_name.get((rel.get("target") or "").strip(), set())
+    return next(iter(files)) if len(files) == 1 else slug(rel["target"], name_style)
+
+
+def shared_name_callout(rec: dict) -> str:
+    which = f"This note is element `{rec['id']}`; rename" if rec.get("id") else "Rename"
+    return (f"> [!warning] Shared name\n> Another mobRPG element is also called "
+            f"\"{rec['name']}\". {which} the file to tell them apart.")
+
+
+def import_node(rec: dict, rel_path: str, world: str, namespace: str) -> dict:
+    """The `mobrpg:` node for an imported note (#254). `write` knows the element
+    id, so the note is linked from the start and `adopt` isn't needed on a
+    fresh import. Each edge carries its event id where the extract has one, so
+    suggest sees it as already upstream. `determined` is left for
+    `pull-canon` to fill from the live element."""
+    return {
+        "world_id": world,
+        "external_ref": f"{namespace}:{rel_path[:-3]}",
+        "element_id": rec["id"],
+        "element_kind": ELEMENT_KIND[rec["kind"]],
+        "review_state": "accepted",
+        "last_synced": "",
+        "review_note": "",
+        "relationships": [{"predicate": r["predicate"], "target": r["_file"],
+                           "event_type": r.get("eventType"),
+                           "event_id": r.get("eventId"), "review_state": "accepted"}
+                          for r in rec["relationships"]],
+        "languages": [],
+    }

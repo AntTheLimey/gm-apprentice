@@ -8,7 +8,7 @@ def test_help_lists_native_verbs_and_llms_pointer(capsys):
     assert rc == 0
     for verb in ("whoami", "pull", "suggest", "sync", "write", "images", "link-orphans"):
         assert verb in out
-    assert "llms.txt" in out
+    assert "mobrpg llms" in out
 
 
 def test_help_does_not_list_removed_shellout_verbs(capsys):
@@ -68,3 +68,11 @@ def test_new_native_verbs_are_registered():
     for verb in ("sync", "write", "images", "link-orphans"):
         assert verb in cli.NATIVE, f"{verb} missing from NATIVE"
         assert any(v == verb for v, _ in cli.VERB_HELP), f"{verb} missing from VERB_HELP"
+
+
+def test_llms_verb_prints_the_packaged_guide(capsys):
+    # (#258) the guide is read from inside the installed package, not a path
+    # next to it that a regular pip install never creates
+    assert cli.main(["llms"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("# ") and "mobrpg write" in out

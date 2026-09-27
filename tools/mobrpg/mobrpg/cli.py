@@ -31,6 +31,15 @@ from mobrpg.commands import write_cmd as _write
 from mobrpg.commands import images as _images
 from mobrpg.commands import link_orphans as _link_orphans
 
+
+def _llms(argv: list[str]) -> int:
+    """Print the agent guide. It ships inside the package (#258): the old
+    pointer to a file "next to this package" led nowhere after a regular,
+    non-editable pip install."""
+    from importlib import resources
+    sys.stdout.write(resources.files("mobrpg").joinpath("llms.txt").read_text(encoding="utf-8"))
+    return 0
+
 # Native verbs (all of them — the CLI's whole surface).
 NATIVE: dict = {
     "auth": _auth.run,
@@ -52,6 +61,7 @@ NATIVE: dict = {
     "write": _write.run,
     "images": _images.run,
     "link-orphans": _link_orphans.run,
+    "llms": _llms,
 }
 
 # Ordered help text for `mobrpg --help`.
@@ -75,6 +85,7 @@ VERB_HELP: list[tuple[str, str]] = [
     ("images", "download element images into the vault _attachments"),
     ("link-orphans", "auto-link obvious orphans after an import (report + vault edits)"),
     ("suggest", "build + submit the full datatype graph per entity (types + edges + events)"),
+    ("llms", "print the guide for AI agents: command model, auth, safe-write rules"),
 ]
 
 _HELP = """\
@@ -90,8 +101,8 @@ Target: MOBRPG_ENV=dev|prod (default prod). The resolved target prints to
 stderr on every run.
 
 Run `mobrpg <command> --help` for a command's own options.
-AI agents: read llms.txt (next to this package) for the full command model,
-auth, and safe-write rules.
+AI agents: run `mobrpg llms` for the full command model, auth, and
+safe-write rules.
 """
 
 

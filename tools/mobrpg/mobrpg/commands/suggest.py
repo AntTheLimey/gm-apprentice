@@ -1042,7 +1042,7 @@ def run(argv: list[str]) -> int:
     # Derive the namespace when the map omits it — never silently fall back to
     # "canticle" (an older/foreign map would mint mismatched externalRefs that
     # don't correlate to the vault's own nodes → duplicate-create risk).
-    namespace = mp.get("vaultNamespace") or map_cmd.derive_namespace(args.vault)
+    namespace = map_cmd.namespace_for(args.vault, mp)
     # PCs are player-owned; don't push them to the shared world unless asked.
     exclude_kinds = set() if args.include_pcs else {"pc"}
     only_prov = {s.strip() for s in args.only_provenance.split(",") if s.strip()}

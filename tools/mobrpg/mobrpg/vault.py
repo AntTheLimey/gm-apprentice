@@ -56,6 +56,32 @@ def iter_linked_notes(vault: str):
                 yield path, txt, nd
 
 
+def read_map(vault: str) -> dict:
+    """The vault's `_meta/mobrpg-map.json`, or {} when it is missing or unreadable."""
+    try:
+        with open(os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json"),
+                  encoding="utf-8") as f:
+            mp = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return mp if isinstance(mp, dict) else {}
+
+
+def linked_element_paths(vault: str) -> dict:
+    """{element_id: vault-relative path} for every note a node links, heritages
+    included. The first note (in folder, then path order) wins a duplicate."""
+    vault = os.path.expanduser(vault)
+    out: dict = {}
+    for folder in map_cmd.MIRROR_FOLDERS:
+        for path in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            with open(path, encoding="utf-8") as f:
+                nd = node.read_node(f.read())
+            if nd and nd.get("element_id"):
+                out.setdefault(nd["element_id"],
+                               os.path.relpath(path, vault).replace(os.sep, "/"))
+    return out
+
+
 def body_of(txt: str) -> str:
     """Return the note body below the frontmatter (leading newline included).
 

@@ -32,7 +32,7 @@ Exit codes: 0 ok; 1 API error; 2 bad args / no auth configured.
 
 Three tiers, not two. Read the middle one before calling anything "safe".
 
-Read-only — writes nothing at all: whoami, worlds, whats-new, map check.
+Read-only — writes nothing at all: whoami, worlds, whats-new, map check, llms.
 
 Writes locally, never to mobRPG: pull (writes --out), suggestions (with --out),
 map init and map sync (write _meta/mobrpg-map.json), images (--execute writes
@@ -127,7 +127,10 @@ vault whose entities already exist upstream but carry no node is linked with
                                   same kind by normalized name (aliases too) and
                                   write an `accepted` node with the real
                                   element_id. Ambiguous (several live matches) or
-                                  unmatched notes are reported, never guessed. A
+                                  unmatched notes are reported, never guessed. An
+                                  element one note already links, or that several
+                                  notes match (a name and another note's alias),
+                                  is reported and stamped on none of them. A
                                   location whose exact name exists upstream under
                                   the SIBLING location kind reports as its own
                                   "kind mismatch" outcome (fix locationRouting in
@@ -162,6 +165,15 @@ vault whose entities already exist upstream but carry no node is linked with
                                   Materialize a mobRPG extract (from `pull`)
                                   into vault markdown — one file per entity,
                                   mapped to the correct folder/template/type.
+                                  Culture and race elements become heritage
+                                  notes in Heritages/ (mirrors: suggest and sync
+                                  don't push them). Each note gets an `accepted`
+                                  mobrpg: node with its element_id, so a fresh
+                                  import needs no `adopt`. Elements that share a
+                                  name each get a file (`Name (2).md`, in
+                                  element-id order; a re-run keeps each element
+                                  on the note that already links it). mobRPG
+                                  element URLs in the prose become wikilinks.
                                   Existing notes are SKIPPED unless --overwrite
                                   is given; with it they are replaced wholesale,
                                   hand-authored prose and GM Notes included.
@@ -231,6 +243,7 @@ vault whose entities already exist upstream but carry no node is linked with
                                   there (same bytes); stops at mobRPG's 2-file
                                   limit for non-admins. A direct write: needs
                                   write access, no review queue.
+    mobrpg llms                   Print this guide (it ships inside the package).
 
 Dry-run-by-default applies to the verbs that carry an --execute flag — the
 mobRPG-mutating ones (suggest, submit-batch, update, review, sync,

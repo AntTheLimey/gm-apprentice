@@ -152,3 +152,24 @@ def test_normalize_a_link_to_a_different_element_still_differs():
     a = links.normalize_element_links_for_compare(f'<a href="{EL_URL}">Name</a>', FMT)
     b = links.normalize_element_links_for_compare(f'<a href="{other_url}">Name</a>', FMT)
     assert a != b
+
+
+def test_pull_rewrites_every_element_url_shape():
+    # (#252) relative, /detail.html, /element/<kind>/ and localhost forms
+    paths = {"e1": "Hockhaus"}
+    for url in ("/world/w/link/e1", "/world/w/link/e1/detail.html",
+                "http://localhost:3000/world/w/element/political/e1",
+                "https://www.mobrpg.com/world/w/link/e1/"):
+        assert links.rewrite_md_for_pull(f"at [Hockhaus]({url}).", paths) == "at [[Hockhaus]]."
+
+
+def test_element_id_of_reads_the_search_shape_and_an_empty_host():
+    # seen in the Imperialia import: `http:///world/worlds/<w>/search/<id>`
+    assert links.element_id_of("http:///world/worlds/w/search/e9") == "e9"
+    assert links.element_id_of("https://example.com/other") is None
+
+
+def test_write_rewrite_drops_an_empty_label_element_link():
+    # an empty anchor is invisible in mobRPG; it must not leave `[](url)` behind
+    out = links.rewrite_md_for_write("in [](/world/w/link/b1)[[Bacciz]].", {"b1": "Bacciz"})
+    assert out == "in [[Bacciz]]."
