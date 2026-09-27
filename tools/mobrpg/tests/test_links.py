@@ -194,3 +194,14 @@ def test_element_id_of_edge_cases():
 def test_write_rewrite_never_nests_a_pipe_in_the_alias():
     out = links.rewrite_md_for_write("[a|b](/world/w/link/f2)", {"f2": "Foo (2)"})
     assert out == "[[Foo (2)|a/b]]"
+
+
+def test_push_resolves_the_exact_file_before_the_folded_key():
+    # "The Woodland Ghost" (a place) and "Woodland Ghost" (a creature) fold to
+    # one key; a wikilink names a file, so the exact stem must win
+    idx = {"woodlandghost": "CREATURE"}
+    files = {"The Woodland Ghost": "PLACE", "Woodland Ghost": "CREATURE"}
+    out = links.rewrite_md_for_push("at [[The Woodland Ghost]].", idx, "w", FMT, files)
+    assert out == f"at [The Woodland Ghost]({FMT.format(world='w', eid='PLACE')})."
+    out = links.rewrite_md_for_push("a [[Woodland Ghost|ghost]].", idx, "w", FMT, files)
+    assert f"({FMT.format(world='w', eid='CREATURE')})" in out

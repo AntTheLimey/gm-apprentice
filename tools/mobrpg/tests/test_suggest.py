@@ -1218,13 +1218,31 @@ def test_quoted_gm_aliases_are_decoded():
     assert suggest.unmask_gm_aliases("[[Vane|O'Neil]]", owners) == "[[Vane]]"
 
 
-def test_node_index_resolves_heritage_notes_for_link_rewriting(tmp_path):
+def _heritage(tmp_path, name, eid, fm="type: heritage"):
+    from mobrpg import node as _n
+    p = tmp_path / f"Heritages/{name}.md"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(_n.write_node(f"---\n{fm}\n---\nBody\n", {"element_id": eid}),
+                 encoding="utf-8")
+
+
+def test_link_index_resolves_heritage_notes_for_prose_links(tmp_path):
     # review: a [[Hill Folk]] link in an NPC body must resolve on push, not
     # collapse to bare text, now that write links culture elements
+    _heritage(tmp_path, "Hill Folk", "C")
+    assert suggest.link_index(str(tmp_path)).get(suggest._key("Hill Folk")) == "C"
+
+
+def test_heritages_never_shadow_push_notes_or_hide_new_entities(tmp_path):
+    # review: a place-named culture must not take over [[Drageby]], and a new
+    # faction sharing a heritage's name must still be created by suggest
     from mobrpg import node as _n
-    p = tmp_path / "Heritages/Hill Folk.md"
-    p.parent.mkdir(parents=True)
-    p.write_text(_n.write_node("---\ntype: heritage\n---\nBody\n", {"element_id": "C"}),
-                 encoding="utf-8")
+    loc = tmp_path / "Locations/Drageby.md"
+    loc.parent.mkdir(parents=True)
+    loc.write_text(_n.write_node("---\ntype: location\n---\nBody\n", {"element_id": "P"}),
+                   encoding="utf-8")
+    _heritage(tmp_path, "Drageby", "C")
+    _heritage(tmp_path, "Hill Folk", "H")
+    assert suggest.link_index(str(tmp_path))[suggest._key("Drageby")] == "P"
     idx, _linked, _submitted = suggest.node_index(str(tmp_path))
-    assert idx.get(suggest._key("Hill Folk")) == "C"
+    assert suggest._key("Hill Folk") not in idx

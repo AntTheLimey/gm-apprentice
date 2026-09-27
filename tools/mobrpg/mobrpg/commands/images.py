@@ -52,9 +52,11 @@ from mobrpg import section as _section
 from mobrpg import vault as _vault
 from mobrpg.commands import map_cmd
 
-KINDS = ["person", "organization", "political", "landfeature", "item"]
+KINDS = ["person", "organization", "political", "landfeature", "item",
+         "creature", "culture", "race"]
 FOLDER = {"person": "characters", "organization": "factions",
-          "political": "locations", "landfeature": "locations", "item": "items"}
+          "political": "locations", "landfeature": "locations", "item": "items",
+          "creature": "creatures", "culture": "heritages", "race": "heritages"}
 
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}

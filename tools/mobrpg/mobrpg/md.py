@@ -339,11 +339,15 @@ def normalize_html_for_compare(html: str | None) -> str:
     `normalize_html_for_strict_compare` for that gate."""
     s = _HEADING_TAG.sub(" ", html or "")
     s = _TAG.sub(" ", s)
-    s = _html.unescape(s)
+    s = fix_c1(_html.unescape(s))     # the vault holds the cp1252 characters (#255)
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-_LEADING_OVERVIEW_MD = re.compile(r"^\s*#{1,6}[ \t]*Overview[ \t]*\n+", re.I)
+# The heading `write_cmd.py` scaffolds the canon body under: Overview for
+# most types, What the PCs Know for a creature, Biology or Culture for a
+# heritage.
+_LEADING_OVERVIEW_MD = re.compile(
+    r"^\s*#{1,6}[ \t]*(?:Overview|What the PCs Know|Biology|Culture)[ \t]*\n+", re.I)
 
 
 def normalize_html_for_strict_compare(html: str | None) -> str:
@@ -364,7 +368,8 @@ def normalize_html_for_strict_compare(html: str | None) -> str:
     to HTML shape (tag/attribute order, quoting), since `html_to_md` reads
     attributes by name regardless of their order or quote style. Only
     whitespace is additionally collapsed, with one tolerated asymmetry: the
-    vault's own leading `## Overview` heading. `write_cmd.py` always
+    vault's own leading `## Overview` heading (or the creature/heritage
+    equivalent). `write_cmd.py` always
     scaffolds the canon body under that heading, but mobRPG's element
     description carries the body alone with no heading — a structural
     artifact of vault organization, not content — so it is dropped, but

@@ -117,7 +117,8 @@ def _pull_body(old_body: str, description: str | None, desc_type: str | None,
 
 
 def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
-                    vault_only: tuple, gm_owners: dict | None = None) -> str:
+                    vault_only: tuple, gm_owners: dict | None = None,
+                    id_by_file: dict | None = None) -> str:
     """The markdown mobRPG should hold as this note's description: authored canon
     prose and nothing else. Vault-only sections are sliced off first so they are
     neither rewritten nor pushed (#146/#147), then machine boilerplate is
@@ -129,11 +130,12 @@ def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
     main = _md.strip_boilerplate(main)
     main = section.drop_empty_sections(main)
     main = suggest.unmask_gm_aliases(main, gm_owners or {})
-    main = links.rewrite_md_for_push(main, idx, world, url_fmt)
+    main = links.rewrite_md_for_push(main, idx, world, url_fmt, id_by_file)
     return main.strip()
 
 
-def _matches_server(cand_md: str, detail: dict, url_fmt: str = links.URL_FMT) -> bool:
+def _matches_server(cand_md: str, detail: dict, url_fmt: str = links.URL_FMT,
+                    known_ids: set | None = None) -> bool:
     """True when the push candidate and the live description hold the same
     content, under a LOOSE compare — used only by the push/tie and baseline
     branches, where a false 'differs' just files an extra suggestion for
@@ -148,14 +150,17 @@ def _matches_server(cand_md: str, detail: dict, url_fmt: str = links.URL_FMT) ->
     (#190) — a `[[Target|alias]]` wikilink pushes as `<a href=...>alias</a>`,
     and comparing raw anchor text treats any copy with different display text
     as a content difference, which is noise for a push/tie decision (the
-    alias didn't change what element the link points to)."""
+    alias didn't change what element the link points to). `known_ids` are the
+    elements the vault links: an anchor to any other id (an event, an unlinked
+    element) reads as its text, since pull and `write` flatten those to text."""
     server_desc = detail.get("description") or ""
     if (detail.get("descriptionType") or "").lower() == "markdown":
         server_html = _md.md_to_html(server_desc)
     else:
         server_html = server_desc
-    cand_html = links.normalize_element_links_for_compare(_md.md_to_html(cand_md), url_fmt)
-    server_html = links.normalize_element_links_for_compare(server_html, url_fmt)
+    cand_html = links.normalize_element_links_for_compare(
+        _md.md_to_html(cand_md), url_fmt, known_ids)
+    server_html = links.normalize_element_links_for_compare(server_html, url_fmt, known_ids)
     return (_md.normalize_html_for_compare(cand_html)
             == _md.normalize_html_for_compare(server_html))
 
@@ -173,14 +178,17 @@ def _matches_server_strict(cand_md: str, detail: dict) -> bool:
     attribute order, quoting) are noise, via `normalize_html_for_strict_
     compare`, which also drops the vault's own leading `## Overview`
     heading (a structural artifact of vault organization mobRPG's element
-    description never carries, not content)."""
+    description never carries, not content). So is the SPELLING of an element
+    link's href: mobRPG stores `/world/<w>/link/<id>`, a push writes the
+    absolute URL_FMT form, and both point at the same element."""
     server_desc = detail.get("description") or ""
     if (detail.get("descriptionType") or "").lower() == "markdown":
         server_html = _md.md_to_html(server_desc)
     else:
         server_html = server_desc
-    return (_md.normalize_html_for_strict_compare(_md.md_to_html(cand_md))
-            == _md.normalize_html_for_strict_compare(server_html))
+    canon = links.canonical_element_hrefs
+    return (_md.normalize_html_for_strict_compare(canon(_md.md_to_html(cand_md)))
+            == _md.normalize_html_for_strict_compare(canon(server_html)))
 
 
 def _stamped(path: str, ref: str, decision: str, txt: str, nd: dict,
@@ -250,6 +258,9 @@ def plan(notes, fetch, now: str, skew: float, *,
     rewrite; `vault_only` names the H2 sections that belong to the vault alone;
     `gm_owners` maps GM aliases to their owners' names, so no push carries one."""
     idx = idx or {}
+    # A wikilink names a file: resolve it exactly before the folded name key.
+    id_by_file = {stem: eid for eid, stem in (name_by_eid or {}).items()}
+    known_ids = set(idx.values()) or None      # None: no index, no filtering
     actions: list[Action] = []
     for path, txt, nd, mtime in notes:
         ref = nd.get("external_ref") or path
@@ -277,8 +288,9 @@ def plan(notes, fetch, now: str, skew: float, *,
         # authored body and just adopts a baseline, leaving real drift to surface
         # on the next edit of either side.
         if decision == "baseline":
-            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners)
-            if _matches_server(cand_md, detail, url_fmt):
+            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners,
+                                     id_by_file)
+            if _matches_server(cand_md, detail, url_fmt, known_ids):
                 actions.append(_stamped(path, ref, "in-sync", txt, nd,
                                         old_body, now))
                 continue
@@ -306,7 +318,8 @@ def plan(notes, fetch, now: str, skew: float, *,
         # of the vault's own prose; anything else — including a difference
         # only the loose compare would have missed — genuinely pulls.
         if decision == "pull":
-            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners)
+            cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners,
+                                     id_by_file)
             if _matches_server_strict(cand_md, detail):
                 actions.append(_stamped(path, ref, "in-sync", txt, nd,
                                         old_body, now))
@@ -319,8 +332,9 @@ def plan(notes, fetch, now: str, skew: float, *,
             continue
 
         # Behavior 6: push / tie — compare authored prose to the live description.
-        cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners)
-        if _matches_server(cand_md, detail, url_fmt):
+        cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners,
+                                     id_by_file)
+        if _matches_server(cand_md, detail, url_fmt, known_ids):
             # Already in sync — stamp last_synced only (no suggestion).
             actions.append(_stamped(path, ref, "in-sync", txt, nd, old_body, now))
             continue
@@ -396,7 +410,7 @@ def run(argv: list[str]) -> int:
     # the push rewrite; `name_by_eid` (element_id -> file stem) drives the pull
     # rewrite. Both are built from ALL linked notes — a --only-filtered note can
     # still be a valid link target — so they are populated before the filter.
-    idx, _linked, _submitted = suggest.node_index(args.vault)
+    idx = suggest.link_index(args.vault)
     gm_owners = suggest.gm_alias_owners(args.vault)
     try:
         notes = []

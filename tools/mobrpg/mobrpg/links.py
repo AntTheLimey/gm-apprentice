@@ -26,6 +26,7 @@ this is acceptable; a full CommonMark parser is out of scope for the CLI.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from mobrpg.commands import suggest
 
@@ -104,14 +105,22 @@ def element_id_of(href: str) -> str | None:
 
 
 def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
-                        world_id: str, url_fmt: str = URL_FMT) -> str:
+                        world_id: str, url_fmt: str = URL_FMT,
+                        id_by_file: dict | None = None) -> str:
     """Wikilinks -> element links (resolved via `ent_id_by_key`, keyed by
     `suggest._key`); unresolvable wikilinks and `.md` relative links -> bare
-    display text; `http(s)` links untouched."""
+    display text; `http(s)` links untouched.
+
+    `id_by_file` ({note file stem: element_id}) is consulted first. A wikilink
+    names a file, and the folded key can merge two: "The Woodland Ghost" and
+    "Woodland Ghost" both fold to "woodlandghost"."""
+    files = {unicodedata.normalize("NFC", k): v for k, v in (id_by_file or {}).items()}
+
     def _wl(m: re.Match) -> str:
         name = m.group(1).strip()
         display = (m.group(2) or m.group(1)).strip()   # [[Name|Alias]] shows Alias
-        eid = ent_id_by_key.get(suggest._key(name))    # ...but resolves by Name
+        eid = (files.get(unicodedata.normalize("NFC", name.split("#")[0]))
+               or ent_id_by_key.get(suggest._key(name)))   # ...but resolves by Name
         if eid:
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
         return display
@@ -142,11 +151,38 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
 # representations of identical content that no longer read equal, a
 # regression from the plain full-tag-strip compare this replaced.
 _ANCHOR = re.compile(
-    r'<a\b[^>]*?\bhref\s*=\s*(?P<q>["\'])(?P<href>.*?)(?P=q)[^>]*>.*?</a>',
+    r'<a\b[^>]*?\bhref\s*=\s*(?P<q>["\'])(?P<href>.*?)(?P=q)[^>]*>(?P<text>.*?)</a>',
     re.S | re.I)
+_TAGS = re.compile(r"<[^>]+>")
 
 
-def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> str:
+def _anchor_eid(href: str, eid_re: re.Pattern) -> str | None:
+    """The element id an anchor's href names: the url_fmt shape, or any shape
+    mobRPG itself writes (it stores relative hrefs, #252)."""
+    um = eid_re.fullmatch(href.rstrip("/"))
+    return um.group("eid") if um else element_id_of(href)
+
+
+def canonical_element_hrefs(html: str) -> str:
+    """Rewrite every element anchor's href to one spelling, keeping its text,
+    so the strict compare sees the relative href mobRPG stores and the
+    absolute one a push writes as the same link. An empty-text element anchor
+    is invisible in mobRPG, and pull and `write` drop it, so it goes here too."""
+    def _sub(m: re.Match) -> str:
+        eid = _anchor_eid(m.group("href"), _ELEMENT_URL)
+        if not eid:
+            return m.group(0)
+        if not _TAGS.sub("", m.group("text")).strip():
+            return ""
+        start, end = m.span("href")
+        whole = m.group(0)
+        return whole[:start - m.start()] + f"mobrpg:{eid}" + whole[end - m.start():]
+
+    return _ANCHOR.sub(_sub, html or "")
+
+
+def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT,
+                                        known_ids: set | None = None) -> str:
     """Reduce an mobRPG element-link anchor to a marker keyed on the linked
     element's id, dropping its display TEXT. `sync`'s content compare
     (`_matches_server`) works on plain text, so an aliased wikilink
@@ -158,15 +194,28 @@ def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> st
     retargeted to a different element is a real edit — only the display text
     is insensitive. Anchors that aren't mobRPG element links (external URLs,
     left untouched by the push rewrite) are not touched, since their text can
-    carry real meaning."""
+    carry real meaning.
+
+    Given `known_ids` (the elements the vault links), an anchor to any other
+    element reads as its text: pull and `write` flatten such links (events,
+    unlinked elements) to text, so the server's anchor and the vault's plain
+    words are the same content. An empty-text element anchor reads as
+    nothing, for the same reason."""
     eid_re = _element_url_re(url_fmt)
 
     def _sub(m: re.Match) -> str:
         # A trailing slash is not a different target — tolerate one so a
         # server-normalized URL (many web frameworks append `/`) still
         # resolves to the same eid.
-        um = eid_re.fullmatch(m.group("href").rstrip("/"))
-        return f"[[{um.group('eid')}]]" if um else m.group(0)
+        eid = _anchor_eid(m.group("href"), eid_re)
+        if not eid:
+            return m.group(0)
+        text = _TAGS.sub("", m.group("text"))
+        if not text.strip():
+            return ""
+        if known_ids is not None and eid not in known_ids:
+            return text
+        return f"[[{eid}]]"
 
     return _ANCHOR.sub(_sub, html or "")
 

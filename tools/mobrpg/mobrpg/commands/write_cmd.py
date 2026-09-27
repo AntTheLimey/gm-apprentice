@@ -232,7 +232,8 @@ def build(rec: dict, campaign: str, source_doc: str, name_style: str) -> tuple[s
             f"---\n"
         )
         md = (f"{fm}\n## Overview\n\n{body}\n\n## Goals & Methods\n\n## Resources\n\n"
-              f"## History\n\n> [!info] Reconstruction Note\n> Imported from mobRPG (canon). "
+              f"## History\n\n## Source References\n\n- {source_doc}\n\n"
+              f"> [!info] Reconstruction Note\n> Imported from mobRPG (canon). "
               f"factionType from mobRPG organization-type.\n\n## GM Notes\n")
 
     elif etype == "location":

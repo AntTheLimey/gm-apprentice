@@ -22,10 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolves by), not its `name:`, which pointed a link to `Name (2)` at
   `Name`. It keeps the text as `[[File|text]]` instead of dropping it, and
   reads every URL shape `write` does.
+- **Converted links don't read as edits.** mobRPG stores relative link
+  addresses, and a push writes absolute ones; both of `sync`'s compares
+  now treat the two as the same link, treat a link the vault flattened to
+  text as that text, and ignore mapped control characters. Without this,
+  every imported or pulled note with a link would file a no-op
+  suggestion on its next edit.
+- **A wikilink resolves to its exact file first on push.** "The Woodland
+  Ghost" (a place) and "Woodland Ghost" (a creature) fold to one match
+  key, and the push picked whichever came last.
+- **`write`'s faction notes keep the import note out of mobRPG.** The
+  Reconstruction Note sat under `## History` and was pushed with the
+  description; it now sits under `## Source References`, as in every
+  other template.
 - **`write` imports creatures, cultures and races** (#253). Creatures go
   to `Creatures/`; cultures and races become heritage notes in
   `Heritages/`. `whats-new`, `pull-canon --reconcile-deletions`, `images`
-  and link resolution on push all see linked heritage notes, so cultures
+  (pull and push) and link resolution on push all see linked heritage
+  notes, so cultures
   stop showing as new on every run and links to them survive a push.
   Heritages are mirrors: `suggest` and `sync` don't push them.
 - **Same-name elements all reach the vault** (#254). The second and

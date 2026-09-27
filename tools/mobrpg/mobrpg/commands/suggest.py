@@ -493,9 +493,7 @@ def node_index(vault) -> tuple[dict, set, set]:
     idx, linked, submitted = {}, set(), set()
     aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
-    # MIRROR_FOLDERS: a heritage is never pushed, but a [[link]] to one must
-    # still resolve to its element, or the push flattens it to plain text.
-    for folder in map_cmd.MIRROR_FOLDERS:
+    for folder in map_cmd.FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             txt = open(p, encoding="utf-8").read()
             nd = node.read_node(txt)
@@ -518,6 +516,30 @@ def node_index(vault) -> tuple[dict, set, set]:
     for k, eid in aliases:
         idx.setdefault(k, eid)                       # a real entity name always wins over an alias
     return idx, linked, submitted
+
+
+def link_index(vault) -> dict:
+    """node_index's name-key -> element_id map plus heritage notes, for
+    rewriting prose `[[links]]` on push only. A heritage is never pushed, but
+    a link to one must still resolve, or the push flattens it to plain text.
+    Kept apart from node_index: there a heritage name would count a new
+    same-named faction as already linked, so suggest would never create it.
+    Push-folder names and aliases win a clash, then heritage names, then
+    heritage aliases, so a place-named culture never takes over [[Drageby]]."""
+    idx, _linked, _submitted = node_index(vault)
+    idx = dict(idx)
+    vault = os.path.expanduser(vault)
+    aliases: list[tuple[str, str]] = []
+    for p in sorted(glob.glob(os.path.join(vault, "Heritages", "*.md"))):
+        nd = node.read_node(open(p, encoding="utf-8").read())
+        if not nd or not nd.get("element_id"):
+            continue
+        idx.setdefault(_key(_display_name(p)), nd["element_id"])
+        fm, _ = _read(p)
+        aliases.extend((_key(al), nd["element_id"]) for al in _aliases(fm))
+    for k, eid in aliases:
+        idx.setdefault(k, eid)
+    return idx
 
 
 def _mapped_type(mp, predicate) -> str:

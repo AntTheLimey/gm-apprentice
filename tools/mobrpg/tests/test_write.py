@@ -328,3 +328,22 @@ def test_write_heritage_keeps_every_template_section(tmp_path):
     heads = [l for l in txt.splitlines() if l.startswith("## ")]
     assert heads[:4] == ["## Biology", "## Culture", "## History", "## Second-Order Notes"]
     assert "## Culture\n\nHerders." in txt
+
+
+def test_write_keeps_the_import_note_in_a_vault_only_section(tmp_path):
+    # every template's Reconstruction Note sits under ## Source References, a
+    # vault-only section; the faction one sat under ## History and was pushed
+    from mobrpg import section
+    vault = _run_write(tmp_path, [_ent("f1", "organization", "Ashen Hand", "Cult."),
+                                  _ent("p1", "person", "Vela"), _ent("l1", "political", "Eris"),
+                                  _ent("i1", "item", "Lamp"), _ent("c1", "creature", "Maw"),
+                                  _ent("k1", "culture", "Clans")])
+    for p in vault.rglob("*.md"):
+        body = p.read_text(encoding="utf-8").split("\n---\n", 1)[1]
+        heads, cur = {}, None
+        for line in body.splitlines():
+            if line.startswith("## "):
+                cur = line[3:].strip()
+            elif "Reconstruction Note" in line:
+                heads[p.name] = cur
+        assert heads[p.name] in section.DEFAULT_VAULT_ONLY, (p.name, heads[p.name])

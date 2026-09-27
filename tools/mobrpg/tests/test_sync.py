@@ -1,7 +1,7 @@
 import json
 import os
 
-from mobrpg import client, lww, node as _node, section
+from mobrpg import client, links, lww, node as _node, section
 from mobrpg.commands import sync_cmd, submit_batch
 from mobrpg.vault import body_of, vault_only_sections
 
@@ -1029,3 +1029,43 @@ def test_link_targets_are_file_stems_and_cover_heritages(tmp_path):
         p.write_text(_n.write_node('---\nname: "Foo"\n---\nBody\n', {"element_id": eid}),
                      encoding="utf-8")
     assert _s.link_targets(str(tmp_path)) == {"B": "Foo", "A": "Foo (2)", "C": "Hill Folk"}
+
+
+def test_converted_links_still_match_a_relative_href_server_copy():
+    # review: mobRPG stores relative hrefs; once pull/write turn them into
+    # wikilinks the push candidate carries absolute ones. Neither compare may
+    # read that as a change, or every edit files a no-op suggestion (loose)
+    # and every pull verdict re-pulls (strict).
+    from mobrpg.commands import sync_cmd as _s
+    server = {"description": '<p>At <a href="/world/w1/link/E1">Hockhaus</a>, '
+                             'the <a href="/world/w1/link/ev9">fair</a>.'
+                             '<a href="/world/w1/link/E1"></a></p>'}
+    cand = _s._push_candidate("## Overview\n\nAt [[Hockhaus]], the fair.\n",
+                              {"hockhaus": "E1"}, "w1", links.URL_FMT, [], {})
+    assert _s._matches_server(cand, server, links.URL_FMT, known_ids={"E1"})
+    # strict keeps the unknown event link as a real difference until a pull
+    # restores it, but a converted known link alone is not one
+    server2 = {"description": '<p>At <a href="/world/w1/link/E1">Hockhaus</a>.</p>'}
+    cand2 = _s._push_candidate("## Overview\n\nAt [[Hockhaus]].\n",
+                               {"hockhaus": "E1"}, "w1", links.URL_FMT, [], {})
+    assert _s._matches_server_strict(cand2, server2)
+    # a link retargeted to another element is still a change
+    server3 = {"description": '<p>At <a href="/world/w1/link/E2">Hockhaus</a>.</p>'}
+    assert not _s._matches_server_strict(cand2, server3)
+    assert not _s._matches_server(cand2, server3, links.URL_FMT, known_ids={"E1", "E2"})
+
+
+def test_compares_ignore_c1_characters_the_vault_has_mapped():
+    # pull and write map \x92 to ’; the server copy still holds \x92
+    from mobrpg.commands import sync_cmd as _s
+    server = {"description": "<p>O\x92Neill</p>"}
+    assert _s._matches_server("## Overview\n\nO’Neill\n", server)
+    assert _s._matches_server_strict("## Overview\n\nO’Neill\n", server)
+
+
+def test_strict_compare_tolerates_the_creature_and_heritage_lead_heading():
+    from mobrpg.commands import sync_cmd as _s
+    server = {"description": "<p>A rock troll.</p>"}
+    for head in ("What the PCs Know", "Biology", "Culture"):
+        assert _s._matches_server_strict(f"## {head}\n\nA rock troll.\n", server)
+    assert not _s._matches_server_strict("## History\n\nA rock troll.\n", server)
