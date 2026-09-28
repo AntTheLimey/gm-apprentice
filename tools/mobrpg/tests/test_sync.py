@@ -1091,3 +1091,20 @@ def test_same_stem_across_folders_links_by_path_both_ways(tmp_path):
                                        "w", links.URL_FMT, files)
     ids = [u.rsplit("/", 1)[1].rstrip(")") for u in re.findall(r"\(([^)]+)\)", pushed)]
     assert ids == ["P1", "C1", "P1"]           # a bare stem falls back: push note wins
+
+
+def test_known_ids_cover_an_element_only_the_exact_file_resolves():
+    # CodeRabbit #261: "The Woodland Ghost" (place, T) loses the folded key to
+    # "Woodland Ghost" (creature, W), so T is absent from idx; its links must
+    # still compare by id, not by caption
+    from mobrpg.commands import sync_cmd as _s
+    detail = {"description": '<p><a href="/world/w/link/T">the old inn</a>.</p>',
+              "lastModified": "2026-07-24T00:00:00Z"}
+    body = "## Overview\n\n[[The Woodland Ghost|the inn]].\n"
+    idx = {"woodlandghost": "W"}
+    names = {"T": "The Woodland Ghost", "W": "Woodland Ghost"}
+    files = {n: e for e, n in names.items()}
+    cand = _s._push_candidate(body, idx, "w", links.URL_FMT, [], {}, files)
+    known = _s._known_ids(idx, names)
+    assert "T" in known
+    assert _s._matches_server(cand, detail, links.URL_FMT, known)

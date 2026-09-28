@@ -212,7 +212,17 @@ function buildLinkMap(pages) {
     }
   }
 
-  // Pass 3: add aliases (only if not already claimed by a canonical title)
+  // Pass 3: add vault paths (`[[Folder/Name]]`). A path names exactly one file, so it
+  // goes in before aliases: an alias spelled like a path must not claim it. Titles can't
+  // contain `/`, so none of these collide with pass 1.
+  for (const page of pages) {
+    if (page.vaultPath) {
+      const key = canonicalNfc(page.vaultPath);
+      if (!(key in map)) map[key] = page.outputPath;
+    }
+  }
+
+  // Pass 4: add aliases (only if not already claimed by a canonical title or path)
   for (const page of pages) {
     if (Array.isArray(page.frontmatter.aliases)) {
       for (const alias of page.frontmatter.aliases) {
@@ -221,14 +231,6 @@ function buildLinkMap(pages) {
           map[key] = page.outputPath;
         }
       }
-    }
-  }
-
-  // Pass 4: add vault paths (`[[Folder/Name]]`), which never collide with a title.
-  for (const page of pages) {
-    if (page.vaultPath) {
-      const key = canonicalNfc(page.vaultPath);
-      if (!(key in map)) map[key] = page.outputPath;
     }
   }
 

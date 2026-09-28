@@ -135,6 +135,14 @@ def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
     return main.strip()
 
 
+def _known_ids(idx: dict, name_by_eid: dict | None) -> set | None:
+    """Every element the vault links: link_index's ids plus every linked note's
+    own id. A folded-name clash can leave a note out of link_index while its
+    exact file still resolves it, and its links must still compare by id.
+    None (no index at all) means no filtering."""
+    return (set(idx.values()) | set(name_by_eid or {})) or None
+
+
 def _matches_server(cand_md: str, detail: dict, url_fmt: str = links.URL_FMT,
                     known_ids: set | None = None) -> bool:
     """True when the push candidate and the live description hold the same
@@ -261,7 +269,7 @@ def plan(notes, fetch, now: str, skew: float, *,
     idx = idx or {}
     # A wikilink names a file: resolve it exactly before the folded name key.
     id_by_file = {stem: eid for eid, stem in (name_by_eid or {}).items()}
-    known_ids = set(idx.values()) or None      # None: no index, no filtering
+    known_ids = _known_ids(idx, name_by_eid)
     actions: list[Action] = []
     for path, txt, nd, mtime in notes:
         ref = nd.get("external_ref") or path

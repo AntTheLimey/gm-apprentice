@@ -725,3 +725,14 @@ describe('buildLinkMap resolves Obsidian path links', () => {
     assert.strictEqual(map['Heritages/Drageby'], 'heritages/drageby.html');
   });
 });
+
+describe('buildLinkMap: a vault path beats an alias spelled like one', () => {
+  it('links [[Locations/Drageby]] to that page even if another page aliases it', () => {
+    const pages = [
+      { title: 'Impostor', vaultPath: 'NPCs/Impostor', outputPath: 'npcs/impostor.html',
+        frontmatter: { aliases: ['Locations/Drageby'] } },
+      { title: 'Drageby', vaultPath: 'Locations/Drageby', outputPath: 'locations/drageby.html', frontmatter: {} },
+    ];
+    assert.strictEqual(buildLinkMap(pages)['Locations/Drageby'], 'locations/drageby.html');
+  });
+});
