@@ -65,7 +65,8 @@ the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
 closer (everything above it publishes) or a bold-wrapped excluded
 heading like `### **GM Notes**`; WARNING is an unclosed opener or a
 published heading whose title contains an exclude-list entry or
-Keeper keyword; INFO is a Keeper-facing bold label or callout —
+Keeper keyword, or names a GM Notes subsection of the wrap-up template
+(`World State`, …: the pre-fix 1.8.3 migration left some top-level); INFO is a Keeper-facing bold label or callout —
 prose the GM has to judge, not auto-movable. `--fix` re-nests only
 the bold-wrapped ERROR headings under `## GM Notes`, demoting each
 and its sub-headings a level; keyword WARNINGs, INFO rows and level-1
@@ -1076,6 +1077,15 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
     if _keeper_text(title, excludes):
         return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
                 f"'{title}' publishes — nest it under ## GM Notes or fence it"]
+    if title.casefold() in {t.casefold() for t in WRAP_TEMPLATE_SUBSECTIONS}:
+        # A GM Notes subsection of the wrap-up template (World State, …)
+        # sitting where it publishes. The pre-fix 1.8.3 migration collapsed
+        # exclude_sections to ["GM Notes"] without re-nesting, which left
+        # these at the top level with nothing marking them GM-only (#239).
+        return [f"WARNING\t{rel}:{state.lineno}\tGM-only heading '{title}' "
+                f"publishes — nest it under ## GM Notes; to move every "
+                f"'{title}' at once, add it to publish.exclude_sections and "
+                f"run `vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     return []
 
 
