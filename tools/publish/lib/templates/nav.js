@@ -1,5 +1,6 @@
+const { TOGGLE_BUTTON, MOBILE_TOGGLE } = require('../color-mode');
 const { relativePath, escapeHtml, encodeHref } = require('../processor');
-const { DIR_LABELS } = require('./base');
+const { DIR_LABELS, colorModeEnabled } = require('./base');
 
 const NAV_GROUPS = [
   {
@@ -123,11 +124,13 @@ ${linksHtml}
 ${groupsHtml}
   </nav>
   <button class="nav-search-btn" onclick="openSearch()" aria-label="Search">Search <kbd class="search-kbd">⌘K</kbd></button>
+  ${colorModeEnabled() ? TOGGLE_BUTTON : ''}
   <button class="nav-mobile-toggle" onclick="document.getElementById('mobile-nav').classList.add('open')" aria-label="Menu">&#9776;</button>
 </header>
 <div id="mobile-nav" class="mobile-nav-overlay">
   <button class="mobile-nav-close" onclick="document.getElementById('mobile-nav').classList.remove('open')" aria-label="Close">&times;</button>
 ${mobileLinksHtml}
+  ${colorModeEnabled() ? MOBILE_TOGGLE : ''}
 </div>`;
 }
 

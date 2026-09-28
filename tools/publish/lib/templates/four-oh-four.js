@@ -1,4 +1,5 @@
 const { escapeHtml } = require('../processor');
+const { colorModeHeadHtml } = require('./base');
 
 function fourOhFourTemplate(config) {
   const message = escapeHtml(config.four_oh_four.message);
@@ -30,7 +31,7 @@ function fourOhFourTemplate(config) {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">${colorModeHeadHtml()}
   <title>Not Found — ${siteTitle}</title>
   <link rel="stylesheet" href="${href('css/style.css')}">
   <link rel="stylesheet" href="${href('css/theme.css')}">${genreLinkTag}${overridesLinkTag}

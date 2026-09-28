@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.15"
+current_version: "1.10.16"
 ---
 
 # Vault Migration Registry
@@ -941,3 +941,34 @@ mobrpg import fixes (#252–#258). No file changes shape.
   offer `update-pin --site <site-dir>` (publish-site's build tool).
 - mobrpg: after upgrading, a vault whose notes carry `.:` external refs
   (from `--vault .`) can repair each one with `mobrpg relink`.
+
+## Migration: 1.10.15 → 1.10.16
+
+Publish fixes (#239, #240, #248, #259) and a light/dark toggle on the
+site (#260). No file changes shape.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- If the GM designed the site for one palette, offer to set
+  `publish.theme.default_mode` to `dark` or `light` so every reader
+  starts there. Absent means `system` (follow the reader's OS), as
+  before.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.38: `deploy` runs the site's own
+  `prebuild`/`postbuild` scripts around the build, so a site that
+  worked around that with `npm run build` then `deploy --no-build`
+  can use plain `deploy` again. Presets keep header text readable in
+  light mode, and sites with a genre preset get a light/dark toggle.
+  If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
+  (publish-site's build tool).
+- `vault_check gm-leak` now reads the site's `vault.config.json`
+  `excludeSections` (through `publish.site_dir`) and warns on a
+  published wrap-up GM heading such as a top-level `## World State`,
+  which an early 1.8.3 migration could leave behind. Step 6's
+  `gm-leak` run shows any; the row names the fix.

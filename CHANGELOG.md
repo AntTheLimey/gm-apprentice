@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.16] — 2026-09-27
+
+### Added
+
+- **A light/dark toggle on published sites** (#260). Sites with a genre
+  preset get a ☀/☾ button in the nav and the mobile menu. A reader's
+  choice is remembered per site and applied before the page paints, so
+  there's no flash of the wrong palette. `publish.theme.default_mode`
+  (`system`, `dark` or `light`) sets where readers start; `system`
+  follows their OS, as sites always have. The build rewrites every
+  light-mode rule to answer to the toggle as well as the OS, including
+  the GURPS sheet colours and the site's own `overrides.css`. With
+  JavaScript off, the site follows the OS.
+
+### Fixed
+
+- **`deploy` runs the site's own build steps** (#248). A site's
+  `prebuild` and `postbuild` scripts in `package.json` (image
+  optimisation, CSS folds, extra pages) run around the build, as they
+  do for `npm run build`; a failing one stops the deploy.
+- **Header text is readable in light mode** (#259). Every preset keeps
+  a dark header and hero in both palettes, but its header text turned
+  dark with the rest of the page. Presets now set header text
+  explicitly, and a test checks the contrast of every preset in both
+  modes.
+- **`gm-leak` reads the site's exclusion list** (#240). It unions the
+  site's `vault.config.json` `excludeSections` (found through
+  `publish.site_dir`) with the vault's own, as the publish build does,
+  so a site whose shorter list publishes a section is no longer
+  reported as safe.
+- **`gm-leak` flags a stranded wrap-up GM heading** (#239). A published
+  heading such as a top-level `## World State`, left behind by an early
+  1.8.3 migration, is a WARNING that names the scripted re-nest.
+- Publish tool 1.11.38.
+
 ## [1.10.15] — 2026-09-27
 
 ### Fixed

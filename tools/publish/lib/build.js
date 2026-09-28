@@ -1,3 +1,5 @@
+const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
+const { configureColorMode } = require('./templates/base');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -82,11 +84,13 @@ function build(options = {}) {
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  // Every stylesheet the build writes goes through scopeColorScheme, so its light-mode
+  // rules also answer to the reader's toggle (#260).
   function copyCSS() {
     const src = path.join(__dirname, '../css/style.css');
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
-    fs.copyFileSync(src, dest);
+    fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
   }
 
   // A genre preset's own CSS may hardcode a Google Fonts @import for its default look
@@ -104,16 +108,14 @@ function build(options = {}) {
     const dest = path.join(outputDir, `css/themes/${genrePreset}.css`);
     ensureDir(dest);
     const fontsCfg = publishConfig.theme.fonts || {};
+    let css = fs.readFileSync(src, 'utf8');
     if (fontsCfg.source === 'local') {
-      const raw = fs.readFileSync(src, 'utf8');
-      const stripped = raw
+      css = css
         .split('\n')
         .filter((line) => !GOOGLE_FONTS_IMPORT_RE.test(line.trim()))
         .join('\n');
-      fs.writeFileSync(dest, stripped);
-    } else {
-      fs.copyFileSync(src, dest);
     }
+    fs.writeFileSync(dest, scopeColorScheme(css));
     console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
@@ -125,9 +127,10 @@ function build(options = {}) {
     const src = path.join(configDir, 'css/overrides.css');
     if (!fs.existsSync(src)) return false;
     const dest = path.join(outputDir, 'css/overrides.css');
+    // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
     ensureDir(dest);
-    fs.copyFileSync(src, dest);
+    fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
     console.log('  wrote css/overrides.css');
     return true;
   }
@@ -147,7 +150,7 @@ function build(options = {}) {
   }
 
   function writeThemeCSS() {
-    const css = generateThemeCSS(publishConfig.theme);
+    const css = scopeColorScheme(generateThemeCSS(publishConfig.theme));
     const dest = path.join(outputDir, 'css/theme.css');
     ensureDir(dest);
     fs.writeFileSync(dest, css);
@@ -594,6 +597,11 @@ function build(options = {}) {
   }
 
   cleanOutput();
+  // Only a genre preset ships two palettes; a custom palette has one, so a toggle there
+  // would change next to nothing.
+  configureColorMode(genrePreset
+    ? headScript(publishConfig.theme.default_mode, storageKey(config.siteUrl || config.siteTitle || configDir))
+    : '');
   copyCSS();
   copyJS();
   copyGenreCSS();

@@ -39,6 +39,13 @@ function clientScripts(outputPath) {
   return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
 }
 
+// The color-mode <head> script (#260), set once per build by configureColorMode. It
+// goes first in <head> so data-theme is set before any stylesheet paints.
+let colorModeHead = '';
+function configureColorMode(head) { colorModeHead = head || ''; }
+function colorModeHeadHtml() { return colorModeHead ? `\n  ${colorModeHead}` : ''; }
+function colorModeEnabled() { return Boolean(colorModeHead); }
+
 function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
@@ -62,7 +69,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">${colorModeHeadHtml()}
   <title>${escapeHtml(title)} — ${escapeHtml(siteTitle)}</title>
   <link rel="stylesheet" href="${cssHref}">${genreLinkTag}
   <link rel="stylesheet" href="${themeCssHref}">${overridesLinkTag}
@@ -204,4 +211,7 @@ module.exports = {
   TYPE_BADGE_FIELDS,
   metadataBadgesFor,
   portraitImg,
+  configureColorMode,
+  colorModeHeadHtml,
+  colorModeEnabled,
 };
