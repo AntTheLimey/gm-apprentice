@@ -186,6 +186,9 @@ function generateThemeCSS(config) {
   }
 
   vars.push(`  --accent-dim: ${hexToRgba(accent, isLight ? 0.08 : 0.15)};`);
+  // Browser scrollbars and form controls match a custom palette's own lightness;
+  // style.css's dark-first default would give a light palette dark controls.
+  vars.push(`  color-scheme: ${isLight ? 'light' : 'dark'};`);
 
   const headerIsLight = luminance(primary) > 0.5;
   vars.push(`  --text-on-header: ${headerIsLight ? '#1a1a1a' : '#e0e4e8'};`);

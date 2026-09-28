@@ -1325,10 +1325,12 @@ def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
 
 
 def read_publish_scalar(vault: Path, key: str) -> str | None:
-    """A plain scalar `publish.<key>` from `_meta/vault-config.md`
-    (`site_dir`, say), or None when absent, null or not a plain scalar."""
+    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
+    say), or None when absent, null or not a plain scalar. Only a direct
+    child of `publish:` counts: a same-named key nested deeper, or a line
+    inside a block scalar, is someone else's."""
     try:
-        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
         return None
     lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
@@ -1336,18 +1338,32 @@ def read_publish_scalar(vault: Path, key: str) -> str | None:
                   if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
     if start is None:
         return None
+    indent: int | None = None
     for line in lines[start + 1:]:
-        if line.strip() and not line[:1].isspace():
-            break                                # end of the publish: block
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue                             # blank and comment lines don't end the block
+        depth = len(line) - len(line.lstrip())
+        if depth == 0:
+            break                                # the next top-level key
+        if indent is None:
+            indent = depth
+        if depth != indent:
+            continue                             # nested deeper, or block-scalar text
         m = _KEY_LINE_RE.match(line)
-        if m and m.group(1) and m.group(3) == key:
-            value = _strip_comment(m.group(4) or "")
-            if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
-                return None
+        if not (m and m.group(3) == key):
+            continue
+        value = _strip_comment(m.group(4) or "")
+        if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
+            return None
+        if value.startswith('"'):
             try:
-                return _yaml_item(value) or None
+                return json.loads(value) or None  # YAML double quotes use JSON's escapes
             except ValueError:
                 return None
+        if value.startswith("'"):
+            return value[1:-1].replace("''", "'") or None if value.endswith("'") else None
+        return value
     return None
 
 
@@ -1363,7 +1379,7 @@ def read_site_exclude_sections(vault: Path) -> tuple[list[str] | None, str | Non
         site = vault / site
     config = site / "vault.config.json"
     try:
-        data = json.loads(config.read_text(encoding="utf-8"))
+        data = json.loads(config.read_text(encoding="utf-8-sig"))  # the build's require() takes a BOM
     except FileNotFoundError:
         return None, None
     except (OSError, UnicodeDecodeError, ValueError) as e:

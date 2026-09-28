@@ -86,10 +86,6 @@ const PUBLISH_DEFAULTS = {
   backend: { statusBar: undefined, inbox: undefined },
 };
 
-// Union exclude lists from both config sources (vault-config.md and vault.config.json),
-// case-insensitively de-duplicated, preserving first-seen casing/order. Falls back to
-// `defaults` only when NEITHER source provides a list. A spoiler filter must never strip
-// LESS than either source asked for, so the sources merge rather than shadow each other.
 // A mistyped default_mode falls back to 'system' — say so rather than silently.
 function defaultModeFrom(raw) {
   const mode = normalizeDefaultMode(raw);
@@ -99,6 +95,10 @@ function defaultModeFrom(raw) {
   return mode;
 }
 
+// Union exclude lists from both config sources (vault-config.md and vault.config.json),
+// case-insensitively de-duplicated, preserving first-seen casing/order. Falls back to
+// `defaults` only when NEITHER source provides a list. A spoiler filter must never strip
+// LESS than either source asked for, so the sources merge rather than shadow each other.
 function unionExcludeList(primary, fallback, defaults) {
   const sources = [primary, fallback].filter(Array.isArray);
   if (sources.length === 0) return [...defaults];

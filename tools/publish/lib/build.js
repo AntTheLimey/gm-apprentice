@@ -602,6 +602,10 @@ function build(options = {}) {
   configureColorMode(genrePreset
     ? headScript(publishConfig.theme.default_mode, storageKey(config.siteUrl || config.siteTitle || configDir))
     : '');
+  if (!genrePreset && publishConfig.theme.default_mode !== 'system') {
+    console.warn(`publish.theme.default_mode "${publishConfig.theme.default_mode}" has no effect `
+      + 'without a genre preset (theme.genre): a custom palette has one palette, so there is no toggle');
+  }
   copyCSS();
   copyJS();
   copyGenreCSS();

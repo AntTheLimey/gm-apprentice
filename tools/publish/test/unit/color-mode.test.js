@@ -15,16 +15,24 @@ describe('scopeColorScheme', () => {
     '.after { color: blue; }',
   ].join('\n');
   const out = scopeColorScheme(css);
+  const NOT_DARK_ROOT = ':root:not(:where([data-theme="dark"]))';
+  const NOT_DARK = ':where(:root:not([data-theme="dark"]))';
+  const LIGHT_ROOT = ':root:where([data-theme="light"])';
+  const LIGHT = ':where(:root[data-theme="light"])';
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-  it('keeps the OS rule but switches it off when the reader chose dark', () => {
-    assert.match(out, /@media \(prefers-color-scheme: light\) \{[\s\S]*:root:not\(\[data-theme="dark"\]\) \{ --bg: #fff; \}/);
-    assert.match(out, /:root:not\(\[data-theme="dark"\]\) \.enc \.e0, :root:not\(\[data-theme="dark"\]\) \.wide \.dmg \{/);
+  it('keeps the OS rule on screen, switched off when the reader chose dark', () => {
+    assert.match(out, new RegExp(`@media screen and \\(prefers-color-scheme: light\\) \\{[\\s\\S]*${esc(NOT_DARK_ROOT)} \\{ --bg: #fff; \\}`));
+    assert.ok(out.includes(`${NOT_DARK} .enc .e0, ${NOT_DARK} .wide .dmg {`), out);
   });
 
-  it('adds a forced-light copy outside the media query', () => {
-    const outside = out.split(/@media[^{]*\{[\s\S]*?\n\}/).join('');
-    assert.match(outside, /:root\[data-theme="light"\] \{ --bg: #fff; \}/);
-    assert.match(outside, /:root\[data-theme="light"\] \.enc \.e0, :root\[data-theme="light"\] \.wide \.dmg \{/);
+  it('adds a forced-light copy for screen', () => {
+    assert.ok(out.includes(`@media screen {\n  ${LIGHT_ROOT} { --bg: #fff; }`), out);
+    assert.ok(out.includes(`${LIGHT} .enc .e0, ${LIGHT} .wide .dmg {`), out);
+  });
+
+  it('prints with the light rules whatever the attribute says', () => {
+    assert.ok(out.includes('@media print {\n  :root { --bg: #fff; }'), out);
   });
 
   it('leaves everything else alone and is a no-op without light blocks', () => {
@@ -38,6 +46,32 @@ describe('scopeColorScheme', () => {
     assert.strictEqual(scopeColorScheme(own), own);
   });
 
+  it('keeps each selector\'s specificity, so a later bare :root still wins', () => {
+    // a custom palette (theme.css) or overrides.css after a preset must still win
+    for (const sel of [NOT_DARK_ROOT, LIGHT_ROOT]) assert.ok(out.includes(sel));
+    assert.doesNotMatch(out, /(?<!:where\():root:not\(\[data-theme/);
+    assert.doesNotMatch(out, /(?<!:where\():root\[data-theme="light"\]/);
+  });
+
+  it('copes with the CSS a GM might write in overrides.css', () => {
+    const tricky = [
+      '/* see @media (prefers-color-scheme: light) below */',
+      '@media (prefers-color-scheme: light) {',
+      '  .x:is(h1, h2), a[title="a,b"] { color: red; }',
+      '  @supports (color: lab(0 0 0)) { .y { color: lab(50 0 0); } }',
+      '  html.foo, :root.bar, html-foo, * { color: blue; }',
+      '}',
+    ].join('\n');
+    const o = scopeColorScheme(tricky);
+    assert.ok(o.includes(`${NOT_DARK} .x:is(h1, h2), ${NOT_DARK} a[title="a,b"]`), o);
+    assert.ok(o.includes(`@supports (color: lab(0 0 0)) {`), o);
+    assert.ok(o.includes(`${NOT_DARK} .y`) && o.includes(`${LIGHT} .y`), o);
+    assert.ok(o.includes(`${NOT_DARK_ROOT}.foo`) && o.includes(`${NOT_DARK_ROOT}.bar`), o);
+    assert.ok(o.includes(`${NOT_DARK} html-foo`), o);
+    assert.ok(o.includes(`${NOT_DARK_ROOT}, ${NOT_DARK} *`), o);
+    assert.ok(o.startsWith('/* see @media (prefers-color-scheme: light) below */'), o);
+  });
+
   it('handles every light block the tool ships', () => {
     const files = [path.join(__dirname, '../../css/style.css'),
       ...fs.readdirSync(path.join(__dirname, '../../css/themes')).map(f => path.join(__dirname, '../../css/themes', f))];
@@ -46,7 +80,7 @@ describe('scopeColorScheme', () => {
       const blocks = (src.match(/@media[^{]*prefers-color-scheme[^{]*\{/g) || []);
       for (const b of blocks) assert.match(b, /^@media \(prefers-color-scheme: light\) \{$/, `${f}: ${b}`);
       const scoped = scopeColorScheme(src);
-      assert.strictEqual((scoped.match(/data-theme="light"\]/g) || []).length > 0, blocks.length > 0, f);
+      assert.strictEqual(scoped.includes('data-theme="light"'), blocks.length > 0, f);
     }
   });
 });

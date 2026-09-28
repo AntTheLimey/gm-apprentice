@@ -964,7 +964,10 @@ site (#260). No file changes shape.
   `prebuild`/`postbuild` scripts around the build, so a site that
   worked around that with `npm run build` then `deploy --no-build`
   can use plain `deploy` again. Presets keep header text readable in
-  light mode, and sites with a genre preset get a light/dark toggle.
+  light mode, and sites with a genre preset get a light/dark toggle. A
+  site that added its own toggle in a `postbuild` step should drop that
+  step (and any `data-theme` palette rules in `css/overrides.css` it
+  relied on), or readers get two toggles.
   If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
   (publish-site's build tool).
 - `vault_check gm-leak` now reads the site's `vault.config.json`

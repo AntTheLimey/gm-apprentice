@@ -76,14 +76,24 @@ const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // around the in-process build. Ten minutes: optimising a large image set is slow.
 const HOOK_TIMEOUT_MS = 10 * 60 * 1000;
 
+// { hooks, warning }. No package.json means no hooks. One that won't parse is said out
+// loud: npm would run its hooks, so silently skipping them is #248 all over again. A
+// byte-order mark (Notepad, PowerShell's Out-File) is stripped first, as npm does.
 function buildHooks(siteRoot, readFile) {
+  const pkgPath = path.join(siteRoot, 'package.json');
+  let text;
+  try {
+    text = readFile(pkgPath);
+  } catch {
+    return { hooks: [], warning: null };
+  }
   let scripts;
   try {
-    scripts = JSON.parse(readFile(path.join(siteRoot, 'package.json'))).scripts || {};
-  } catch {
-    return [];                                   // no package.json, or not JSON: no hooks
+    scripts = JSON.parse(String(text).replace(/^\uFEFF/, '')).scripts || {};
+  } catch (err) {
+    return { hooks: [], warning: `${pkgPath} is not valid JSON (${err.message}) — its prebuild/postbuild scripts, if any, were not run.` };
   }
-  return ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim());
+  return { hooks: ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim()), warning: null };
 }
 
 async function runDeploy(options, deps) {
@@ -120,7 +130,9 @@ async function runDeploy(options, deps) {
     ? ['pages', 'deploy']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
-  const hooks = opts.noBuild ? [] : buildHooks(siteRoot, readFile);
+  const hookInfo = opts.noBuild ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
+  const hooks = hookInfo.hooks;
+  const platform = d.platform || process.platform;
 
   if (opts.dryRun) {
     if (hooks.includes('prebuild')) commands.push('npm run prebuild');
@@ -148,6 +160,7 @@ async function runDeploy(options, deps) {
     return 0;
   }
 
+  if (hookInfo.warning) say(hookInfo.warning);
   let built = false;
   const buildFailed = (line) => {
     say(line);
@@ -156,7 +169,14 @@ async function runDeploy(options, deps) {
   };
   const runHook = (hook) => {
     commands.push(`npm run ${hook}`);
-    const res = runCommand('npm', ['run', hook], { cwd: siteRoot, timeoutMs: HOOK_TIMEOUT_MS });
+    // Output streams as it happens (a big image step runs for minutes); under --json it
+    // goes to stderr so stdout stays the JSON payload. A shell on Windows, where npm is
+    // npm.cmd and can't be spawned directly.
+    const res = runCommand('npm', ['run', hook], {
+      cwd: siteRoot, timeoutMs: HOOK_TIMEOUT_MS,
+      stdio: opts.json ? ['ignore', 2, 2] : 'inherit',
+      shell: platform === 'win32',
+    });
     return res.code === 0 ? null : `${hook} failed: ${failureDetail(res)}`;
   };
   if (!opts.noBuild) {

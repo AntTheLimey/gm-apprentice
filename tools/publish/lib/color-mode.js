@@ -4,17 +4,20 @@
 //
 // Every palette switches through `@media (prefers-color-scheme: light)`, so a site
 // silently followed each reader's OS setting and nobody could change it. The build now
-// rewrites each such block so an attribute on <html> can override the OS either way:
+// rewrites each such block into three:
 //
-//   inside the media query   `SEL`  ->  `:root:not([data-theme="dark"]) SEL`
-//                            so a reader who chose dark keeps the dark palette;
-//   a copy outside it        `SEL`  ->  `:root[data-theme="light"] SEL`
-//                            so a reader who chose light gets it whatever the OS says.
+//   @media screen and (prefers-color-scheme: light)  SEL -> :where(:root:not([data-theme="dark"])) SEL
+//       the OS rule, switched off when the reader chose dark;
+//   @media screen                                    SEL -> :where(:root[data-theme="light"]) SEL
+//       a reader who chose light gets it whatever the OS says;
+//   @media print                                     SEL unchanged
+//       print always uses the light rules, whatever was chosen on screen.
 //
+// The prefixes sit inside :where(), so every selector keeps its specificity: a GM's
+// custom palette (theme.css) or overrides.css, loaded later, still wins as it always did.
 // The dark palette is the base (style.css is dark-first), so no dark copy is needed.
-// Doing this as a build transform, not by hand, means every light block — preset
-// palettes, the GURPS sheet chips, encumbrance rows, damage cells, anything added
-// later — gets the attribute version, and the two can never drift apart.
+// Doing this as a build transform means every light block — preset palettes, the GURPS
+// sheet chips, a GM's own overrides — gets the attribute version, and they can't drift.
 //
 // A tiny inline script at the top of <head> sets the attribute before the stylesheets
 // paint, from the reader's saved choice or the site's default, so there is no flash of
@@ -22,101 +25,134 @@
 // before.
 
 const MODES = ['system', 'dark', 'light'];
-const NOT_DARK = ':root:not([data-theme="dark"])';
-const FORCED_LIGHT = ':root[data-theme="light"]';
-const LIGHT_MEDIA = /^@media\s*\(\s*prefers-color-scheme\s*:\s*light\s*\)\s*$/;
+const PREFIX = {
+  notDark: { root: ':root:not(:where([data-theme="dark"]))', any: ':where(:root:not([data-theme="dark"]))' },
+  light: { root: ':root:where([data-theme="light"])', any: ':where(:root[data-theme="light"])' },
+};
+const LIGHT_MEDIA = /^@media\s*\(\s*prefers-color-scheme\s*:\s*light\s*\)$/;
 
 function normalizeDefaultMode(value) {
   const mode = String(value == null ? '' : value).trim().toLowerCase();
   return MODES.includes(mode) ? mode : 'system';
 }
 
+// Past a comment or string starting at `i`, or `i` itself when neither starts there.
+function skipOpaque(css, i) {
+  if (css[i] === '/' && css[i + 1] === '*') {
+    const end = css.indexOf('*/', i + 2);
+    return end === -1 ? css.length : end + 2;
+  }
+  if (css[i] === '"' || css[i] === "'") {
+    let j = i + 1;
+    while (j < css.length && css[j] !== css[i]) j += css[j] === '\\' ? 2 : 1;
+    return j + 1;
+  }
+  return i;
+}
+
 // The index of the `}` closing the `{` at `open`, skipping comments and strings.
 function matchBrace(css, open) {
   let depth = 0;
   for (let i = open; i < css.length; i++) {
-    const ch = css[i];
-    if (ch === '/' && css[i + 1] === '*') {
-      const end = css.indexOf('*/', i + 2);
-      i = end === -1 ? css.length : end + 1;
-    } else if (ch === '"' || ch === "'") {
-      let j = i + 1;
-      while (j < css.length && css[j] !== ch) j += css[j] === '\\' ? 2 : 1;
-      i = j;
-    } else if (ch === '{') {
-      depth++;
-    } else if (ch === '}') {
-      depth--;
-      if (depth === 0) return i;
-    }
+    const past = skipOpaque(css, i);
+    if (past !== i) { i = past - 1; continue; }
+    if (css[i] === '{') depth++;
+    else if (css[i] === '}' && --depth === 0) return i;
   }
   return -1;
 }
 
-function prefixSelector(sel, prefix) {
-  const s = sel.trim();
-  if (s === ':root' || s === 'html') return prefix;
-  if (s.startsWith(':root')) return prefix + s.slice(':root'.length);
-  if (/^html\b/.test(s)) return prefix + s.slice('html'.length);
-  return `${prefix} ${s}`;
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+
+// The statements of a block body at depth 0: { kind: 'rule'|'at'|'raw', prelude, body, text }.
+function statements(css) {
+  const out = [];
+  let start = 0;
+  let i = 0;
+  while (i < css.length) {
+    const past = skipOpaque(css, i);
+    if (past !== i) { i = past; continue; }
+    if (css[i] === ';') {
+      out.push({ kind: 'raw', text: css.slice(start, i + 1) });
+      start = i = i + 1;
+      continue;
+    }
+    if (css[i] === '{') {
+      const close = matchBrace(css, i);
+      if (close === -1) break;
+      const raw = css.slice(start, i);
+      const lead = raw.match(/^(\s*(?:\/\*[\s\S]*?\*\/\s*)*)/)[1];
+      const prelude = stripComments(raw).trim();
+      out.push({ kind: prelude.startsWith('@') ? 'at' : 'rule', lead, prelude,
+                 body: css.slice(i + 1, close), text: css.slice(start, close + 1) });
+      start = i = close + 1;
+      continue;
+    }
+    i++;
+  }
+  if (start < css.length) out.push({ kind: 'raw', text: css.slice(start) });
+  return out;
 }
 
-// The rules of one light block: [{ selectors, body, own }], where `own` marks a rule
-// that already names data-theme (a site's hand-written attribute rule), left alone.
-function parseRules(body) {
-  const rules = [];
-  let i = 0;
-  while (i < body.length) {
-    const open = body.indexOf('{', i);
-    if (open === -1) break;
-    const close = matchBrace(body, open);
-    if (close === -1) break;
-    const selector = body.slice(i, open).replace(/\/\*[\s\S]*?\*\//g, '').trim();
-    if (selector) {
-      rules.push({
-        selectors: selector.split(',').map(s => s.trim()).filter(Boolean),
-        body: body.slice(open, close + 1),
-        own: selector.includes('data-theme'),
-      });
-    }
-    i = close + 1;
+// Split a selector list on its top-level commas only: `:is(h1, h2)` and `[title="a,b"]`
+// hold commas that aren't separators.
+function splitSelectors(list) {
+  const parts = [];
+  let depth = 0;
+  let buf = '';
+  for (let i = 0; i < list.length; i++) {
+    const past = skipOpaque(list, i);
+    if (past !== i) { buf += list.slice(i, past); i = past - 1; continue; }
+    const ch = list[i];
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth--;
+    if (ch === ',' && depth === 0) { parts.push(buf.trim()); buf = ''; } else buf += ch;
   }
-  return rules;
+  if (buf.trim()) parts.push(buf.trim());
+  return parts;
+}
+
+function prefixSelector(sel, p) {
+  const m = sel.match(/^(:root|html)(?![\w-])/);
+  if (m) return p.root + sel.slice(m[1].length);
+  if (sel === '*') return `${p.root}, ${p.any} *`;      // * matched <html> too
+  return `${p.any} ${sel}`;
+}
+
+const namesTheme = (st) => st.kind === 'rule' && st.prelude.includes('data-theme');
+
+// A light block's body rewritten for one prefix. A rule that already names data-theme
+// (a site's hand-written attribute rule) is kept as-is under `notDark` and dropped from
+// the forced copy; nested at-rules (@supports, a width query) are rewritten inside.
+function scopeBody(body, p, keepOwn) {
+  const lines = [];
+  for (const st of statements(body)) {
+    if (st.kind === 'rule') {
+      if (namesTheme(st)) { if (keepOwn) lines.push(`${st.prelude} {${st.body}}`); continue; }
+      lines.push(`${splitSelectors(st.prelude).map(s => prefixSelector(s, p)).join(', ')} {${st.body}}`);
+    } else if (st.kind === 'at') {
+      const inner = scopeBody(st.body, p, keepOwn);
+      if (inner.trim()) lines.push(`${st.prelude} {\n${inner}\n  }`);
+    } else if (st.text.trim() && keepOwn) {
+      lines.push(st.text.trim());
+    }
+  }
+  return lines.map(l => `  ${l}`).join('\n');
 }
 
 function scopeColorScheme(css) {
-  let out = '';
-  let i = 0;
-  while (i < css.length) {
-    const at = css.indexOf('@media', i);
-    if (at === -1) break;
-    const open = css.indexOf('{', at);
-    if (open === -1) break;
-    const prelude = css.slice(at, open);
-    const close = matchBrace(css, open);
-    if (close === -1) break;
-    if (!LIGHT_MEDIA.test(prelude)) {
-      out += css.slice(i, close + 1);
-      i = close + 1;
-      continue;
-    }
-    const rules = parseRules(css.slice(open + 1, close));
-    if (rules.every(r => r.own)) {
-      out += css.slice(i, close + 1);
-      i = close + 1;
-      continue;
-    }
-    const scoped = (prefix) => rules.map(r => (r.own && prefix === NOT_DARK
-      ? `  ${r.selectors.join(', ')} ${r.body}`
-      : `  ${r.selectors.map(s => prefixSelector(s, prefix)).join(', ')} ${r.body}`));
-    const inside = scoped(NOT_DARK).join('\n');
-    const forced = rules.filter(r => !r.own)
-      .map(r => `${r.selectors.map(s => prefixSelector(s, FORCED_LIGHT)).join(', ')} ${r.body}`)
-      .join('\n');
-    out += css.slice(i, at) + `${prelude.trim()} {\n${inside}\n}\n${forced}`;
-    i = close + 1;
-  }
-  return out + css.slice(i);
+  let changed = false;
+  const out = statements(css).map((st) => {
+    if (st.kind !== 'at' || !LIGHT_MEDIA.test(st.prelude)) return st.text;
+    const rules = statements(st.body).filter(s => s.kind !== 'raw');
+    if (rules.every(namesTheme)) return st.text;
+    changed = true;
+    const forced = scopeBody(st.body, PREFIX.light, false);
+    return `${st.lead}@media screen and (prefers-color-scheme: light) {\n${scopeBody(st.body, PREFIX.notDark, true)}\n}`
+      + (forced.trim() ? `\n@media screen {\n${forced}\n}` : '')
+      + `\n@media print {${st.body}}`;
+  });
+  return changed ? out.join('') : css;
 }
 
 // A per-site key: sites on one origin (GitHub Pages project sites) share localStorage.

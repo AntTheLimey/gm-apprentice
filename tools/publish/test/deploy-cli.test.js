@@ -449,3 +449,35 @@ describe('deploy runs the site\'s own build hooks (#248)', () => {
     assert.match(d.text(), /npm run prebuild[\s\S]*gm-publish build[\s\S]*npm run postbuild/);
   });
 });
+
+describe('deploy hooks: the ways they used to slip through (#248 review)', () => {
+  const PKG = path.join(SITE, 'package.json');
+
+  it('reads a package.json that starts with a byte-order mark', async () => {
+    const h = harness({ files: { [PKG]: '﻿' + JSON.stringify({ scripts: { postbuild: 'x' } }) } });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
+    assert.deepStrictEqual(h.commands.map(c => c.args), [['run', 'postbuild']]);
+  });
+
+  it('says so when package.json exists but will not parse', async () => {
+    const h = harness({ files: { [PKG]: '{ "scripts": ' } });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
+    assert.match(h.text(), /package\.json.*not valid JSON.*prebuild\/postbuild/);
+  });
+
+  it('streams hook output and uses a shell on Windows', async () => {
+    const seen = [];
+    const h = harness({ files: { [PKG]: JSON.stringify({ scripts: { postbuild: 'x' } }) } });
+    h.deps.runCommand = (cmd, args, opts) => { seen.push(opts); return { code: 0, stdout: '', stderr: '' }; };
+    h.deps.platform = 'win32';
+    await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(seen[0].stdio, 'inherit');
+    assert.strictEqual(seen[0].shell, true);
+    const j = harness({ files: { [PKG]: JSON.stringify({ scripts: { postbuild: 'x' } }) } });
+    const seenJ = [];
+    j.deps.runCommand = (cmd, args, opts) => { seenJ.push(opts); return { code: 0, stdout: '', stderr: '' }; };
+    await runDeploy({ configPath: CONFIG, json: true }, j.deps);
+    assert.deepStrictEqual(seenJ[0].stdio, ['ignore', 2, 2]);   // never onto the JSON stdout
+    assert.strictEqual(seenJ[0].shell, process.platform === 'win32');
+  });
+});

@@ -113,6 +113,7 @@ roster read.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 from collections import Counter
@@ -158,6 +159,7 @@ from vaultlib import (  # noqa: F401
     parse_publish_list,
     publisher_lines,
     read_publish_list,
+    read_publish_scalar,
     resolve_exclude_sections,
     frontmatter_span,
     get_key,
@@ -1082,10 +1084,16 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
         # sitting where it publishes. The pre-fix 1.8.3 migration collapsed
         # exclude_sections to ["GM Notes"] without re-nesting, which left
         # these at the top level with nothing marking them GM-only (#239).
+        # The pasted list keeps everything hidden today: the re-nest collapses
+        # the list to ["GM Notes"] afterwards, so a list naming only this title
+        # would un-hide every default it replaced.
+        paste = list(excludes) + ([] if title.casefold() in
+                                  {e.casefold() for e in excludes} else [title])
         return [f"WARNING\t{rel}:{state.lineno}\tGM-only heading '{title}' "
-                f"publishes — nest it under ## GM Notes; to move every "
-                f"'{title}' at once, add it to publish.exclude_sections and "
-                f"run `vault_check.py <vault> gm-leak --renest-excludes --fix`"]
+                f"publishes — nest it under ## GM Notes; to move every one at "
+                f"once, set publish.exclude_sections to "
+                f"{json.dumps(paste, ensure_ascii=False)} and run "
+                f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     return []
 
 
@@ -1166,6 +1174,14 @@ def check_gm_leak(vault: Path, folder: str | None,
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
+    own = read_publish_list(vault, "exclude_sections")
+    if ((vault / VAULT_CONFIG).is_file() and not own.error and own.value is None
+            and not read_publish_scalar(vault, "site_dir")):
+        # With no list of its own the vault relies on the site's, which this
+        # check can only read through publish.site_dir (#240).
+        rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
+                    f"assumes the default exclude list; set site_dir so it "
+                    f"reads the site's vault.config.json excludeSections too")
     for rel, text in vault_files(vault, folder):
         fm = extract_frontmatter(text) or {}
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
