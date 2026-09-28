@@ -41,6 +41,9 @@ function clientScripts(outputPath) {
 
 // The color-mode <head> script (#260), set once per build by configureColorMode. It
 // goes first in <head> so data-theme is set before any stylesheet paints.
+// Module state, not a parameter threaded through every template: safe because build()
+// is synchronous and sets it before rendering any page. Pass it explicitly instead if
+// builds ever run concurrently in one process.
 let colorModeHead = '';
 function configureColorMode(head) { colorModeHead = head || ''; }
 function colorModeHeadHtml() { return colorModeHead ? `\n  ${colorModeHead}` : ''; }
