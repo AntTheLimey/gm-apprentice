@@ -399,3 +399,53 @@ describe('deploy: config loading', () => {
     );
   });
 });
+
+describe('deploy runs the site\'s own build hooks (#248)', () => {
+  const PKG = path.join(SITE, 'package.json');
+  const withHooks = (scripts) => ({ [PKG]: JSON.stringify({ scripts }) });
+
+  it('runs prebuild before and postbuild after the build, in the site dir', async () => {
+    const order = [];
+    const h = harness({
+      files: withHooks({ build: 'gm-apprentice-publish build', prebuild: 'x', postbuild: 'y' }),
+      command: (cmd, args) => { order.push(`${cmd} ${args.join(' ')}`); return { code: 0, stdout: '', stderr: '' }; },
+    });
+    const build = h.deps.build;
+    h.deps.build = (o) => { order.push('build'); return build(o); };
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(order, ['npm run prebuild', 'build', 'npm run postbuild']);
+    assert.ok(h.commands.every(c => c.cwd === SITE));
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+  });
+
+  it('runs nothing extra for a site with no hooks or no package.json', async () => {
+    for (const files of [withHooks({ build: 'gm-apprentice-publish build' }), {}]) {
+      const h = harness({ files });
+      assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
+      assert.deepStrictEqual(h.commands, []);
+    }
+  });
+
+  it('a failed postbuild stops the deploy and says why', async () => {
+    const h = harness({
+      files: withHooks({ postbuild: 'node optimise.js' }),
+      command: () => ({ code: 2, stdout: '', stderr: 'sharp: missing' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.text(), /postbuild failed: sharp: missing/);
+    assert.deepStrictEqual(h.wrangler, []);
+  });
+
+  it('--no-build runs no hooks; --dry-run lists them', async () => {
+    const files = withHooks({ prebuild: 'x', postbuild: 'y' });
+    const h = harness({ files });
+    await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);
+    assert.deepStrictEqual(h.commands, []);
+    const d = harness({ files });
+    await runDeploy({ configPath: CONFIG, dryRun: true }, d.deps);
+    assert.deepStrictEqual(d.commands, []);
+    assert.match(d.text(), /npm run prebuild[\s\S]*gm-publish build[\s\S]*npm run postbuild/);
+  });
+});

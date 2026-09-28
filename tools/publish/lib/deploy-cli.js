@@ -69,6 +69,23 @@ function defaultFetchStatus(url, depth = 0) {
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// A site's own post-build work (image optimisation, CSS folds, extra pages) lives in its
+// package.json `prebuild`/`postbuild` scripts, which npm runs around `npm run build`.
+// deploy builds in-process with the plugin's renderer, so npm never sees a build and
+// those steps were silently dropped from what shipped (#248). They run here instead,
+// around the in-process build. Ten minutes: optimising a large image set is slow.
+const HOOK_TIMEOUT_MS = 10 * 60 * 1000;
+
+function buildHooks(siteRoot, readFile) {
+  let scripts;
+  try {
+    scripts = JSON.parse(readFile(path.join(siteRoot, 'package.json'))).scripts || {};
+  } catch {
+    return [];                                   // no package.json, or not JSON: no hooks
+  }
+  return ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim());
+}
+
 async function runDeploy(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -103,8 +120,12 @@ async function runDeploy(options, deps) {
     ? ['pages', 'deploy']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
+  const hooks = opts.noBuild ? [] : buildHooks(siteRoot, readFile);
+
   if (opts.dryRun) {
+    if (hooks.includes('prebuild')) commands.push('npm run prebuild');
     if (!opts.noBuild) commands.push(`gm-publish build --config ${configPath}`);
+    if (hooks.includes('postbuild')) commands.push('npm run postbuild');
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
     } else {
@@ -128,15 +149,32 @@ async function runDeploy(options, deps) {
   }
 
   let built = false;
+  const buildFailed = (line) => {
+    say(line);
+    if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands, messages }, null, 2));
+    return 1;
+  };
+  const runHook = (hook) => {
+    commands.push(`npm run ${hook}`);
+    const res = runCommand('npm', ['run', hook], { cwd: siteRoot, timeoutMs: HOOK_TIMEOUT_MS });
+    return res.code === 0 ? null : `${hook} failed: ${failureDetail(res)}`;
+  };
   if (!opts.noBuild) {
+    if (hooks.includes('prebuild')) {
+      const failed = runHook('prebuild');
+      if (failed) return buildFailed(failed);
+    }
     try {
       build({ configPath });
-      built = true;
     } catch (err) {
-      say(`Build failed: ${err.message}`);
-      if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands, messages }, null, 2));
-      return 1;
+      return buildFailed(`Build failed: ${err.message}`);
     }
+    if (hooks.includes('postbuild')) {
+      // A failed postbuild must not ship: the output is half-processed.
+      const failed = runHook('postbuild');
+      if (failed) return buildFailed(failed);
+    }
+    built = true;
   }
 
   const finish = (payload, rc) => {

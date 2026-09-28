@@ -218,7 +218,9 @@ npx wrangler@4 pages deploy
 wrangler only uploads files that changed, so repeat deploys are fast.
 `gm-publish deploy --verify` runs this same build-then-deploy pair and
 also probes the live URL — the commands above are the fallback for
-running it by hand.
+running it by hand. It runs the site's own `prebuild` and `postbuild`
+scripts from `package.json` around the build, as `npm run build` does,
+and stops without deploying if either fails.
 
 ---
 
