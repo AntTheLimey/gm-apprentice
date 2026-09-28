@@ -2245,9 +2245,13 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
         self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
 
     def test_no_site_dir_and_no_vault_list_is_an_info(self):
-        vault = make_vault(self, "---\ntype: meta\n---\n")
+        vault = make_vault(self, "---\ntype: meta\npublish:\n  mode: player\n---\n")
         rows = vc.check_gm_leak(vault, None)
         self.assertTrue([r for r in rows if r.startswith("INFO\t_meta/vault-config.md")
                          and "site_dir" in r], rows)
         listed = make_vault(self, '---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n')
         self.assertFalse([r for r in vc.check_gm_leak(listed, None) if "site_dir" in r])
+
+    def test_a_vault_that_never_publishes_gets_no_site_dir_info(self):
+        vault = make_vault(self, "---\ntype: meta\nsystem: coc-7e\n---\n")
+        self.assertFalse([r for r in vc.check_gm_leak(vault, None) if "site_dir" in r])

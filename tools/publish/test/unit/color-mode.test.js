@@ -66,10 +66,20 @@ describe('scopeColorScheme', () => {
     assert.ok(o.includes(`${NOT_DARK} .x:is(h1, h2), ${NOT_DARK} a[title="a,b"]`), o);
     assert.ok(o.includes(`@supports (color: lab(0 0 0)) {`), o);
     assert.ok(o.includes(`${NOT_DARK} .y`) && o.includes(`${LIGHT} .y`), o);
-    assert.ok(o.includes(`${NOT_DARK_ROOT}.foo`) && o.includes(`${NOT_DARK_ROOT}.bar`), o);
+    assert.ok(o.includes('html:not(:where([data-theme="dark"])).foo'), o);   // html keeps (0,1,1)
+    assert.ok(o.includes(`${NOT_DARK_ROOT}.bar`), o);
     assert.ok(o.includes(`${NOT_DARK} html-foo`), o);
-    assert.ok(o.includes(`${NOT_DARK_ROOT}, ${NOT_DARK} *`), o);
+    assert.ok(o.includes(`${NOT_DARK}, ${NOT_DARK} *`), o);                     // * keeps zero
     assert.ok(o.startsWith('/* see @media (prefers-color-scheme: light) below */'), o);
+  });
+
+  it('copies @keyframes and @font-face through untouched', () => {
+    const o = scopeColorScheme('@media (prefers-color-scheme: light) {\n  .a { color: red; }\n'
+      + '  @keyframes glow { from { opacity: 0; } to { opacity: 1; } }\n'
+      + '  @font-face { font-family: X; src: url(x.woff2); }\n}');
+    assert.doesNotMatch(o, /:where\([^)]*\)\) (from|to) /);
+    assert.strictEqual((o.match(/@keyframes glow \{ from/g) || []).length, 3, o);   // screen, forced, print
+    assert.strictEqual((o.match(/@font-face \{/g) || []).length, 3, o);
   });
 
   it('handles every light block the tool ships', () => {

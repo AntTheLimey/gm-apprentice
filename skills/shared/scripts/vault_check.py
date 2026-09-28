@@ -1175,10 +1175,11 @@ def check_gm_leak(vault: Path, folder: str | None,
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
     own = read_publish_list(vault, "exclude_sections")
-    if ((vault / VAULT_CONFIG).is_file() and not own.error and own.value is None
+    if (own.publish_line is not None and not own.error and own.value is None
             and not read_publish_scalar(vault, "site_dir")):
-        # With no list of its own the vault relies on the site's, which this
-        # check can only read through publish.site_dir (#240).
+        # A vault that publishes (it has a publish: block) with no list of its
+        # own relies on the site's, which this check can only read through
+        # publish.site_dir (#240). A vault that never publishes isn't told.
         rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
                     f"assumes the default exclude list; set site_dir so it "
                     f"reads the site's vault.config.json excludeSections too")

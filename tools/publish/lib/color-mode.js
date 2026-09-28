@@ -26,9 +26,14 @@
 
 const MODES = ['system', 'dark', 'light'];
 const PREFIX = {
-  notDark: { root: ':root:not(:where([data-theme="dark"]))', any: ':where(:root:not([data-theme="dark"]))' },
-  light: { root: ':root:where([data-theme="light"])', any: ':where(:root[data-theme="light"])' },
+  notDark: { root: ':root:not(:where([data-theme="dark"]))', html: 'html:not(:where([data-theme="dark"]))',
+             any: ':where(:root:not([data-theme="dark"]))' },
+  light: { root: ':root:where([data-theme="light"])', html: 'html:where([data-theme="light"])',
+           any: ':where(:root[data-theme="light"])' },
 };
+// At-rules holding style rules, rewritten inside. Anything else (@keyframes, @font-face)
+// holds no selectors to prefix and is copied through as written.
+const GROUPING_AT_RULE = /^@(media|supports|layer|container)\b/i;
 const LIGHT_MEDIA = /^@media\s*\(\s*prefers-color-scheme\s*:\s*light\s*\)$/;
 
 function normalizeDefaultMode(value) {
@@ -112,10 +117,12 @@ function splitSelectors(list) {
   return parts;
 }
 
+// Specificity is unchanged: `:root` and `html` keep their own weight (the attribute test
+// sits in :where), and `*` gains a zero-weight branch for <html> itself.
 function prefixSelector(sel, p) {
   const m = sel.match(/^(:root|html)(?![\w-])/);
-  if (m) return p.root + sel.slice(m[1].length);
-  if (sel === '*') return `${p.root}, ${p.any} *`;      // * matched <html> too
+  if (m) return (m[1] === 'html' ? p.html : p.root) + sel.slice(m[1].length);
+  if (sel === '*') return `${p.any}, ${p.any} *`;
   return `${p.any} ${sel}`;
 }
 
@@ -130,6 +137,8 @@ function scopeBody(body, p, keepOwn) {
     if (st.kind === 'rule') {
       if (namesTheme(st)) { if (keepOwn) lines.push(`${st.prelude} {${st.body}}`); continue; }
       lines.push(`${splitSelectors(st.prelude).map(s => prefixSelector(s, p)).join(', ')} {${st.body}}`);
+    } else if (st.kind === 'at' && !GROUPING_AT_RULE.test(st.prelude)) {
+      lines.push(`${st.prelude} {${st.body}}`);
     } else if (st.kind === 'at') {
       const inner = scopeBody(st.body, p, keepOwn);
       if (inner.trim()) lines.push(`${st.prelude} {\n${inner}\n  }`);
