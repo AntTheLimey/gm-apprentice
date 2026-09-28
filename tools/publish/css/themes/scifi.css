@@ -11,6 +11,10 @@
   --bg-hero: #070605;
   --text: #e6ddd2;
   --text-muted: #8a8175;
+  /* The header and hero stay dark in both schemes, so their text keeps the
+     dark palette's ink even when light mode darkens --text (#259). */
+  --text-on-header: #e6ddd2;
+  --text-muted-on-header: #8a8175;
   --accent: #f0a23a;
   --accent-dim: rgba(240, 162, 58, 0.12);
   --border: #2e2620;
