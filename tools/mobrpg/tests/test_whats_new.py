@@ -91,3 +91,19 @@ def test_run_reads_extract_file_and_reports(tmp_path, capsys, monkeypatch):
     assert rc == 0
     assert "Widget" in out          # the new entity is reported
     assert "Lamprey" in out         # the new type is reported
+
+
+def test_linked_heritage_notes_are_not_new(tmp_path, capsys):
+    # (#253) culture/race elements live in Heritages/; whats-new must see them
+    (tmp_path / "Heritages").mkdir(parents=True)
+    nd = {"world_id": "w1", "external_ref": "v:Heritages/Clans", "element_id": "k1",
+          "element_kind": "Culture", "review_state": "accepted",
+          "relationships": [], "languages": []}
+    (tmp_path / "Heritages/Clans.md").write_text(
+        "---\ntype: heritage\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+    ex = tmp_path / "extract.json"
+    ex.write_text(json.dumps({"worldId": "w1", "types": {},
+                              "entities": [{"id": "k1", "kind": "culture", "name": "Clans"}]}),
+                  encoding="utf-8")
+    assert whats_new.run(["w1", "--vault", str(tmp_path), "--extract", str(ex)]) == 0
+    assert "0 new" in capsys.readouterr().out

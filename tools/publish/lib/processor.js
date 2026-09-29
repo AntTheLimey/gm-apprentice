@@ -16,14 +16,23 @@ function humanizeName(s) {
   return String(s == null ? '' : s).replace(/_/g, ' ');
 }
 
+// The label for a `[[wikilink]]` target given no alias. A file name can't hold a `/`, so
+// one inside the brackets makes it an Obsidian path link (`[[Locations/Drageby]]`), shown
+// by the note's name. Only for link targets: a plain value keeps its slashes.
+function wikiTargetLabel(target) {
+  return humanizeName(String(target == null ? '' : target).split('/').pop());
+}
+
 // Parse a wiki ref (`[[Target]]` or `[[Target|Alias]]`, brackets optional) into the raw
 // lookup target and a display label. The target keeps its underscores so it still matches
 // linkMap keys; the label is the explicit alias if given, otherwise the humanized target.
 function parseWikiRef(raw) {
-  const inner = String(raw == null ? '' : raw).replace(/\[\[|\]\]/g, '').trim();
+  const str = String(raw == null ? '' : raw);
+  const bracketed = /\[\[[^\]]*\]\]/.test(str);
+  const inner = str.replace(/\[\[|\]\]/g, '').trim();
   if (!inner) return { target: '', label: '' };
   const pipe = inner.indexOf('|');
-  if (pipe === -1) return { target: inner, label: humanizeName(inner) };
+  if (pipe === -1) return { target: inner, label: bracketed ? wikiTargetLabel(inner) : humanizeName(inner) };
   return { target: inner.slice(0, pipe).trim(), label: inner.slice(pipe + 1).trim() };
 }
 
@@ -57,7 +66,7 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   return markdown.replace(/!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, displayText) => {
     // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
     // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
-    const display = displayText || humanizeName(target);
+    const display = displayText || wikiTargetLabel(target);
     const targetPath = linkMap[target];
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
@@ -370,9 +379,9 @@ function renderRelationships(frontmatter, linkMap, currentOutputPath) {
 
   const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
   const items = valid.map(r => {
-    const targetName = String(r.target).replace(/\[\[|\]\]/g, '');
+    const { target: targetName, label } = parseWikiRef(r.target);
     const targetPath = linkMap[targetName];
-    const escapedName = escapeHtml(targetName.replace(/_/g, ' '));
+    const escapedName = escapeHtml(label);
     const link = targetPath
       ? `<a href="${encodeHref(relativePath(currentDir, targetPath))}" class="entity-link">${escapedName}</a>`
       : escapedName;
@@ -814,4 +823,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
+module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };

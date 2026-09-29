@@ -11,7 +11,7 @@ it runs verbs, reads their output, and decides what to show you and what to ask.
 Install the CLI once — `python3 -m pip install -e tools/mobrpg` — which puts a
 `mobrpg` command on PATH; every command below is a bare `mobrpg …`. (If PATH
 isn't picking it up, `python3 -m mobrpg.cli …` is equivalent.) The agent-facing
-CLI guide is `tools/mobrpg/llms.txt` — read it if a verb's behavior is unclear
+CLI guide is `tools/mobrpg/mobrpg/llms.txt` (or run `mobrpg llms`) — read it if a verb's behavior is unclear
 rather than guessing flags.
 
 ## On invocation: orient, then route

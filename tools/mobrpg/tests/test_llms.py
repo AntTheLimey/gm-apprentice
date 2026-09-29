@@ -1,7 +1,7 @@
 from pathlib import Path
 from mobrpg import cli
 
-LLMS = Path(cli.__file__).resolve().parent.parent / "llms.txt"
+LLMS = Path(cli.__file__).resolve().parent / "llms.txt"
 
 
 def test_llms_exists_and_covers_every_verb():

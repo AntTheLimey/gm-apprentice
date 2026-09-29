@@ -128,8 +128,11 @@ Run `mobrpg <command> --help` for a command's own options.
 - `pull <world>` — import a world into a structured JSON extract
   (default `extract.json`); the entry point of the import pipeline.
 - `write <extract.json> --out <out_dir>` — materialize an extract into vault
-  markdown, one file per entity. **Skips notes that already exist** (and says
-  so); `--overwrite` replaces them wholesale, hand-authored prose and
+  markdown, one file per entity, each stamped with an `accepted` `mobrpg:`
+  node (so a fresh import needs no `adopt`). Cultures and races land in
+  `Heritages/`; same-name elements each get a file (`Name (2).md`); mobRPG
+  element URLs in the prose become wikilinks. **Skips notes that already
+  exist** (and says so); `--overwrite` replaces them wholesale, hand-authored prose and
   `## GM Notes` included — intended for a fresh or scratch directory.
 - `link-orphans <extract.json> --vault <path> --out <outdir>` — auto-link obvious
   orphan relationships after an import. Writes the derived `part_of`/`created`
@@ -159,7 +162,9 @@ Run `mobrpg <command> --help` for a command's own options.
 - `sync <world> --vault <path>` — timestamp last-writer-wins sync of each linked
   note's description prose (see "How sync decides" below).
 - `adopt <world> --vault <path>` — stamp `mobrpg:` nodes onto vault notes that
-  already exist upstream but carry no node, matched by name.
+  already exist upstream but carry no node, matched by name. An element
+  another note already links, or that several notes match, is reported and
+  left for the GM.
 - `relink --vault <path> --to <new-rel-path>` — re-point a moved or renamed
   note's external ref so a re-push won't mint a duplicate (vault-only).
 
@@ -254,5 +259,6 @@ kept in sync.
 
 ## For AI agents
 
-`llms.txt` (next to this package) is the agent-facing command guide: the full
-command model, auth precedence, and safe-write rules in one file.
+`mobrpg llms` prints the agent-facing command guide (`mobrpg/llms.txt`, shipped
+inside the package): the full command model, auth precedence, and safe-write
+rules in one file.

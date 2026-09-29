@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.15] — 2026-09-27
+
+### Fixed
+
+- **`mobrpg write` converts mobRPG links in note bodies to wikilinks**
+  (#252). Every URL shape mobRPG writes (`/link/<id>`, `/detail.html`,
+  `/element/<kind>/<id>`, `/worlds/<w>/search/<id>`, with or without a
+  host) resolves to `[[Note]]`, or `[[Note|text]]` when the link text
+  differs. Event ids and unknown ids become plain text. Links to other
+  sites are left alone.
+- **`sync` pull links to the right file and keeps the link text.** A pulled
+  element link now targets the linked note's file (what a wikilink
+  resolves by), not its `name:`, which pointed a link to `Name (2)` at
+  `Name`. It keeps the text as `[[File|text]]` instead of dropping it, and
+  reads every URL shape `write` does.
+- **Converted links don't read as edits.** mobRPG stores relative link
+  addresses, and a push writes absolute ones; both of `sync`'s compares
+  now treat the two as the same link, treat a link the vault flattened to
+  text as that text, and ignore mapped control characters. Without this,
+  every imported or pulled note with a link would file a no-op
+  suggestion on its next edit.
+- **A wikilink resolves to its exact file first on push.** "The Woodland
+  Ghost" (a place) and "Woodland Ghost" (a creature) fold to one match
+  key, and the push picked whichever came last. When two linked notes in
+  different folders share a file name (a place and a culture both called
+  Drageby), `write` and `sync` pull link each by its path
+  (`[[Heritages/Drageby|Drageby]]`), and a bare `[[Drageby]]` resolves to
+  the place, not the heritage.
+- **The published site resolves Obsidian path links** (publish tool
+  1.11.37). `[[Locations/Drageby]]` links to that page and shows
+  "Drageby", in prose and in relationship lists; before, it rendered as
+  unlinked text. A migration entry offers `update-pin`, and a move of
+  hand-made culture notes into `Heritages/`.
+- **`write`'s faction notes keep the import note out of mobRPG.** The
+  Reconstruction Note sat under `## History` and was pushed with the
+  description; it now sits under `## Source References`, as in every
+  other template.
+- **`write` imports creatures, cultures and races** (#253). Creatures go
+  to `Creatures/`; cultures and races become heritage notes in
+  `Heritages/`. `whats-new`, `pull-canon --reconcile-deletions`, `images`
+  (pull and push) and link resolution on push all see linked heritage
+  notes, so cultures
+  stop showing as new on every run and links to them survive a push.
+  Heritages are mirrors: `suggest` and `sync` don't push them.
+- **Same-name elements all reach the vault** (#254). The second and
+  later ones get `Name (2).md`, `Name (3).md` (`Name_(2).md` in plain
+  style) in element-id order, with a GM Notes callout naming the element.
+  A re-run keeps each element on the note that already links it, and
+  skips an element a note in another folder links (a PC, say). Relationship links follow the target's
+  element id, so an edge to one of two same-name people points at the
+  right file (for extracts pulled from this version on).
+- **`write` links every note it creates.** Each note gets an `accepted`
+  `mobrpg:` node with its element id, and each edge its event id, so a
+  fresh import needs no `adopt` and `suggest` won't re-create what's
+  already upstream.
+- **No control characters in frontmatter** (#255). `\x91`/`\x92` and the
+  other C1 characters in mobRPG text map through cp1252 to the quotes
+  and dashes they stand for, in `pull` and in `write`.
+- **`--vault .` no longer produces the namespace `.`** (#256). The path is
+  resolved first, and a `.` namespace on existing nodes or in the map is
+  ignored instead of copied forward. `map init` records the absolute
+  vault path. `relink` repairs a note already stamped with a `.:` ref: it
+  swaps in the vault's real namespace and keeps the old ref as
+  `previous_ref`.
+- **`adopt` never links one element to two notes** (#257). An element that
+  several notes match (a name and another note's alias) is reported and
+  left for the GM, and an element another note already links is
+  skipped. A name that matches several elements stays ambiguous even
+  when all but one are already linked.
+- **`mobrpg llms` prints the agent guide** (#258). The guide now ships
+  inside the package, so a regular `pip install` has it; `--help` points
+  to the command instead of a file that wasn't installed.
+- **`write` emits `canon_status`**, not the legacy `source_confidence` key,
+  and quotes names that contain double quotes.
+
 ## [1.10.14] — 2026-09-25
 
 ### Added

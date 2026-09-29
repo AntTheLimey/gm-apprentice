@@ -518,6 +518,30 @@ def node_index(vault) -> tuple[dict, set, set]:
     return idx, linked, submitted
 
 
+def link_index(vault) -> dict:
+    """node_index's name-key -> element_id map plus heritage notes, for
+    rewriting prose `[[links]]` on push only. A heritage is never pushed, but
+    a link to one must still resolve, or the push flattens it to plain text.
+    Kept apart from node_index: there a heritage name would count a new
+    same-named faction as already linked, so suggest would never create it.
+    Push-folder names and aliases win a clash, then heritage names, then
+    heritage aliases, so a place-named culture never takes over [[Drageby]]."""
+    idx, _linked, _submitted = node_index(vault)
+    idx = dict(idx)
+    vault = os.path.expanduser(vault)
+    aliases: list[tuple[str, str]] = []
+    for p in sorted(glob.glob(os.path.join(vault, "Heritages", "*.md"))):
+        nd = node.read_node(open(p, encoding="utf-8").read())
+        if not nd or not nd.get("element_id"):
+            continue
+        idx.setdefault(_key(_display_name(p)), nd["element_id"])
+        fm, _ = _read(p)
+        aliases.extend((_key(al), nd["element_id"]) for al in _aliases(fm))
+    for k, eid in aliases:
+        idx.setdefault(k, eid)
+    return idx
+
+
 def _mapped_type(mp, predicate) -> str:
     """The mobRPG type for a predicate — a WorldElementRelationType (structural)
     or an Event eventType. The map's relationshipTypes overrides the defaults."""
@@ -1042,7 +1066,7 @@ def run(argv: list[str]) -> int:
     # Derive the namespace when the map omits it — never silently fall back to
     # "canticle" (an older/foreign map would mint mismatched externalRefs that
     # don't correlate to the vault's own nodes → duplicate-create risk).
-    namespace = mp.get("vaultNamespace") or map_cmd.derive_namespace(args.vault)
+    namespace = map_cmd.namespace_for(args.vault, mp)
     # PCs are player-owned; don't push them to the shared world unless asked.
     exclude_kinds = set() if args.include_pcs else {"pc"}
     only_prov = {s.strip() for s in args.only_provenance.split(",") if s.strip()}

@@ -34,6 +34,7 @@ where = ["."]
 include = ["mobrpg*"]
 
 # Ship as package data so it is present in the wheel and resolvable at runtime.
-# The ontology JSON loads via importlib.resources (map_cmd, lazily).
+# The ontology JSON loads via importlib.resources (map_cmd, lazily); the agent
+# guide is printed by `mobrpg llms`.
 [tool.setuptools.package-data]
-mobrpg = ["gm-apprentice-ontology.json"]
+mobrpg = ["gm-apprentice-ontology.json", "llms.txt"]

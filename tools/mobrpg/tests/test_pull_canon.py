@@ -1325,3 +1325,20 @@ def test_deleted_create_ref_still_applies_to_a_note_awaiting_an_upd_row(tmp_path
     out = node.read_node(p.read_text(encoding="utf-8"))
     assert out["review_state"] == "deleted"
     assert out["element_id"] is None
+
+
+def test_reconcile_deletions_covers_heritage_notes(monkeypatch, tmp_path, capsys):
+    # review: whats-new reports a deleted culture as GONE, so its write side
+    # must be able to flag the heritage note too
+    vault = _linked_vault(tmp_path, ("Alive", "el-live"))
+    (vault / "Heritages").mkdir()
+    nd = {"world_id": "w1", "external_ref": "ns:Heritages/Clans", "element_id": "el-gone",
+          "element_kind": "Culture", "review_state": "accepted", "relationships": [],
+          "languages": []}
+    (vault / "Heritages/Clans.md").write_text(
+        "---\ntype: heritage\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+    monkeypatch.setattr(pull_canon.client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(pull_canon.pull, "live_element_ids", lambda w, t: {"el-live"})
+    assert pull_canon.run(["w1", "--vault", str(vault), "--reconcile-deletions",
+                           "--execute"]) == 0
+    assert node.read_node((vault / "Heritages/Clans.md").read_text())["review_state"] == "deleted"

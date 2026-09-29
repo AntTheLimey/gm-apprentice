@@ -113,3 +113,18 @@ def test_run_writes_canonical_ref_for_non_normalized_to(tmp_path):
     assert rc == 0
     assert node.read_node(p.read_text())["external_ref"] == \
         "canticle:Characters/NPCs/Imogen_Rooke"
+
+
+def test_run_repairs_a_dot_namespace(tmp_path, capsys):
+    # (#256) `--vault .` stamped ".:" refs; relink swaps in the real namespace
+    # and keeps the old ref as previous_ref for correlation
+    vault = tmp_path / "imperialia"
+    p = _write(vault, "Locations/Drageby",
+               {**BASE_NODE, "external_ref": ".:Locations/Drageby"})
+    rc = relink.run(["--vault", str(vault), "--to", "Locations/Drageby",
+                     "--from", "Locations/Drageby", "--execute"])
+    assert rc == 0
+    n = node.read_node(p.read_text())
+    assert n["external_ref"] == "imperialia:Locations/Drageby"
+    assert n["previous_ref"] == ".:Locations/Drageby"
+    assert n["element_id"] == "el-1"

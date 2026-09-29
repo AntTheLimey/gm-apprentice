@@ -74,7 +74,7 @@ def _vault_nodes(vault: str) -> dict:
     """{element_id: {name, path}} for every note carrying a mobrpg: node."""
     out = {}
     vault = os.path.expanduser(vault)
-    for folder in map_cmd.FOLDERS:
+    for folder in map_cmd.MIRROR_FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             nd = node.read_node(open(p, encoding="utf-8").read())
             if nd and nd.get("element_id"):

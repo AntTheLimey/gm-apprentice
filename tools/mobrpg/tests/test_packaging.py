@@ -76,6 +76,8 @@ def test_wheel_contains_no_legacy_files(tmp_path):
     assert names, "wheel appears empty"
     legacy_entries = [n for n in names if "_legacy" in n]
     assert not legacy_entries, f"_legacy files leaked into the wheel: {legacy_entries}"
+    # (#258) `mobrpg --help` sends agents to the command guide, so it must ship
+    assert "mobrpg/llms.txt" in names, "llms.txt missing from the wheel"
 
 
 def test_cli_version_flag(capsys):

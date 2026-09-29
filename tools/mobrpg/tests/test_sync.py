@@ -1,7 +1,8 @@
 import json
+import re
 import os
 
-from mobrpg import client, lww, node as _node, section
+from mobrpg import client, links, lww, node as _node, section
 from mobrpg.commands import sync_cmd, submit_batch
 from mobrpg.vault import body_of, vault_only_sections
 
@@ -187,7 +188,9 @@ def test_pull_rewrites_element_url_to_wikilink(tmp_path, monkeypatch):
     _wire(monkeypatch, detail, [])
     sync_cmd.run(["w1", "--vault", str(v), "--execute"])
     txt = (v / "Creatures" / "marsh-hag.md").read_text(encoding="utf-8")
-    assert "[[Marsh Hag]]" in txt
+    # the link targets the FILE (a wikilink resolves by filename) and keeps
+    # the text as its alias
+    assert "[[marsh-hag|Marsh Hag]]" in txt
     assert url not in txt
 
 
@@ -1012,3 +1015,96 @@ def test_pull_keeps_a_campaign_log_only_the_server_holds():
     out = _pull_body("Canon.\n\n## GM Notes\n\nsecret\n",
                      "Canon.\n\n## Campaign Log\n\n- S1 met\n", "Markdown", {})
     assert "- S1 met" in out and out.count("## Campaign Log") == 1 and "secret" in out
+
+
+def test_link_targets_are_file_stems_and_cover_heritages(tmp_path):
+    # review: two same-name notes ("Foo", "Foo (2)") both carry name "Foo";
+    # a pulled link must point at the linked note's FILE, and culture links
+    # must resolve to Heritages/ notes
+    from mobrpg import node as _n
+    from mobrpg.commands import sync_cmd as _s
+    for rel, eid in (("Characters/NPCs/Foo.md", "B"), ("Characters/NPCs/Foo (2).md", "A"),
+                     ("Heritages/Hill Folk.md", "C")):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_n.write_node('---\nname: "Foo"\n---\nBody\n', {"element_id": eid}),
+                     encoding="utf-8")
+    assert _s.link_targets(str(tmp_path)) == {"B": "Foo", "A": "Foo (2)", "C": "Hill Folk"}
+
+
+def test_converted_links_still_match_a_relative_href_server_copy():
+    # review: mobRPG stores relative hrefs; once pull/write turn them into
+    # wikilinks the push candidate carries absolute ones. Neither compare may
+    # read that as a change, or every edit files a no-op suggestion (loose)
+    # and every pull verdict re-pulls (strict).
+    from mobrpg.commands import sync_cmd as _s
+    server = {"description": '<p>At <a href="/world/w1/link/E1">Hockhaus</a>, '
+                             'the <a href="/world/w1/link/ev9">fair</a>.'
+                             '<a href="/world/w1/link/E1"></a></p>'}
+    cand = _s._push_candidate("## Overview\n\nAt [[Hockhaus]], the fair.\n",
+                              {"hockhaus": "E1"}, "w1", links.URL_FMT, [], {})
+    assert _s._matches_server(cand, server, links.URL_FMT, known_ids={"E1"})
+    # strict keeps the unknown event link as a real difference until a pull
+    # restores it, but a converted known link alone is not one
+    server2 = {"description": '<p>At <a href="/world/w1/link/E1">Hockhaus</a>.</p>'}
+    cand2 = _s._push_candidate("## Overview\n\nAt [[Hockhaus]].\n",
+                               {"hockhaus": "E1"}, "w1", links.URL_FMT, [], {})
+    assert _s._matches_server_strict(cand2, server2)
+    # a link retargeted to another element is still a change
+    server3 = {"description": '<p>At <a href="/world/w1/link/E2">Hockhaus</a>.</p>'}
+    assert not _s._matches_server_strict(cand2, server3)
+    assert not _s._matches_server(cand2, server3, links.URL_FMT, known_ids={"E1", "E2"})
+
+
+def test_compares_ignore_c1_characters_the_vault_has_mapped():
+    # pull and write map \x92 to ’; the server copy still holds \x92
+    from mobrpg.commands import sync_cmd as _s
+    server = {"description": "<p>O\x92Neill</p>"}
+    assert _s._matches_server("## Overview\n\nO’Neill\n", server)
+    assert _s._matches_server_strict("## Overview\n\nO’Neill\n", server)
+
+
+def test_strict_compare_tolerates_the_creature_and_heritage_lead_heading():
+    from mobrpg.commands import sync_cmd as _s
+    server = {"description": "<p>A rock troll.</p>"}
+    for head in ("What the PCs Know", "Biology", "Culture"):
+        assert _s._matches_server_strict(f"## {head}\n\nA rock troll.\n", server)
+    assert not _s._matches_server_strict("## History\n\nA rock troll.\n", server)
+
+
+def test_same_stem_across_folders_links_by_path_both_ways(tmp_path):
+    # review: pull must not collapse two same-stem notes into one [[Drageby]],
+    # and push must send each path link to its own element
+    from mobrpg import node as _n
+    from mobrpg.commands import sync_cmd as _s, suggest as _sg
+    for rel, eid in (("Locations/Drageby.md", "P1"), ("Heritages/Drageby.md", "C1")):
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(_n.write_node("---\n---\nBody\n", {"element_id": eid}), encoding="utf-8")
+    targets = _s.link_targets(str(tmp_path))
+    assert targets == {"P1": "Locations/Drageby", "C1": "Heritages/Drageby"}
+    pulled = links.rewrite_md_for_pull(
+        "[Drageby](/world/w/link/P1) [Drageby](/world/w/link/C1)", targets)
+    assert pulled == "[[Locations/Drageby|Drageby]] [[Heritages/Drageby|Drageby]]"
+    files = {name: eid for eid, name in targets.items()}
+    pushed = links.rewrite_md_for_push(pulled + " [[Drageby]]", _sg.link_index(str(tmp_path)),
+                                       "w", links.URL_FMT, files)
+    ids = [u.rsplit("/", 1)[1].rstrip(")") for u in re.findall(r"\(([^)]+)\)", pushed)]
+    assert ids == ["P1", "C1", "P1"]           # a bare stem falls back: push note wins
+
+
+def test_known_ids_cover_an_element_only_the_exact_file_resolves():
+    # CodeRabbit #261: "The Woodland Ghost" (place, T) loses the folded key to
+    # "Woodland Ghost" (creature, W), so T is absent from idx; its links must
+    # still compare by id, not by caption
+    from mobrpg.commands import sync_cmd as _s
+    detail = {"description": '<p><a href="/world/w/link/T">the old inn</a>.</p>',
+              "lastModified": "2026-07-24T00:00:00Z"}
+    body = "## Overview\n\n[[The Woodland Ghost|the inn]].\n"
+    idx = {"woodlandghost": "W"}
+    names = {"T": "The Woodland Ghost", "W": "Woodland Ghost"}
+    files = {n: e for e, n in names.items()}
+    cand = _s._push_candidate(body, idx, "w", links.URL_FMT, [], {}, files)
+    known = _s._known_ids(idx, names)
+    assert "T" in known
+    assert _s._matches_server(cand, detail, links.URL_FMT, known)

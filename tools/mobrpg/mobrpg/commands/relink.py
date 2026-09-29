@@ -19,6 +19,8 @@ import os
 import sys
 
 from mobrpg import node
+from mobrpg import vault
+from mobrpg.commands import map_cmd
 
 
 def relink_node(n: dict, new_ref: str) -> dict:
@@ -77,7 +79,12 @@ def run(argv: list[str]) -> int:
     if not ns:
         print(f"ERROR: external_ref {old_ref!r} has no namespace prefix.", file=sys.stderr)
         return 1
-    new_ref = f"{ns}:{to_rel}"
+    # (#256) a "." or ".." prefix is residue of `--vault .`, not a namespace:
+    # re-point to the vault's real one. previous_ref keeps the old ref, so
+    # suggestions submitted under it still correlate.
+    new_ns = ns if map_cmd.valid_namespace(ns) else map_cmd.namespace_for(
+        args.vault, vault.read_map(args.vault))
+    new_ref = f"{new_ns}:{to_rel}"
 
     if args.from_:
         expected = f"{ns}:{_canonical_rel(args.from_)}"

@@ -169,3 +169,10 @@ def test_tight_heading_does_not_poison_the_compare_key():
     tight = md.md_to_html("## Overview\nSame body.")
     loose = md.md_to_html("## Overview\n\nSame body.")
     assert md.normalize_html_for_compare(tight) == md.normalize_html_for_compare(loose)
+
+
+def test_html_to_md_maps_c1_controls_through_cp1252():
+    # (#255) cp1252 punctuation mis-decoded as Latin-1 lands as C1 controls
+    out = md.html_to_md("<p>O\x92Neill said \x93hi\x94\x85 \x81</p>")
+    assert out == "O’Neill said “hi”…"
+    assert md.fix_c1("a\x96b") == "a–b"

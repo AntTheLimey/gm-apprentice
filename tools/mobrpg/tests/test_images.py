@@ -321,3 +321,10 @@ def test_push_survives_a_signed_url_response_that_is_not_an_object(tmp_path, mon
     assert images.run(["w1", "--vault", str(_push_vault(tmp_path)), "--push", "--execute"]) == 1
     assert not puts
     assert "failed: 2" in capsys.readouterr().out
+
+
+def test_pull_covers_creatures_and_heritages():
+    # review: write now links creature/culture/race notes, so their images pull too
+    from mobrpg.commands import images as _i
+    for k in ("creature", "culture", "race"):
+        assert k in _i.KINDS and k in _i.FOLDER

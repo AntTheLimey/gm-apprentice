@@ -45,15 +45,60 @@ def vault_only_sections(vault: str) -> tuple:
     return out
 
 
-def iter_linked_notes(vault: str):
-    """Yield (path, text, node_dict) for every vault note carrying an element_id."""
+def iter_linked_notes(vault: str, folders=None):
+    """Yield (path, text, node_dict) for every vault note carrying an element_id.
+
+    `folders` defaults to the push folders (map_cmd.FOLDERS). A caller that
+    only reads or reconciles links passes map_cmd.MIRROR_FOLDERS so heritage
+    notes are covered too; sync and suggest must not, since nothing pushes a
+    heritage upstream."""
     vault = os.path.expanduser(vault)
-    for folder in map_cmd.FOLDERS:
+    for folder in (folders or map_cmd.FOLDERS):
         for path in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
             txt = open(path, encoding="utf-8").read()
             nd = node.read_node(txt)
             if nd and nd.get("element_id"):
                 yield path, txt, nd
+
+
+def read_map(vault: str) -> dict:
+    """The vault's `_meta/mobrpg-map.json`, or {} when it is missing or unreadable."""
+    try:
+        with open(os.path.join(os.path.expanduser(vault), "_meta", "mobrpg-map.json"),
+                  encoding="utf-8") as f:
+            mp = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return mp if isinstance(mp, dict) else {}
+
+
+def linked_element_paths(vault: str) -> dict:
+    """{element_id: vault-relative path} for every note a node links, heritages
+    included. The first note (in folder, then path order) wins a duplicate."""
+    vault = os.path.expanduser(vault)
+    out: dict = {}
+    for folder in map_cmd.MIRROR_FOLDERS:
+        for path in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            with open(path, encoding="utf-8") as f:
+                nd = node.read_node(f.read())
+            if nd and nd.get("element_id"):
+                out.setdefault(nd["element_id"],
+                               os.path.relpath(path, vault).replace(os.sep, "/"))
+    return out
+
+
+def link_names(rel_by_key: dict) -> dict:
+    """{key: the name a wikilink to that note should use}. The file stem, the
+    way Obsidian links, unless another note in the map shares the stem (a
+    place and a culture both called Drageby, in different folders): then the
+    vault-relative path without `.md`, which Obsidian also resolves and which
+    names exactly one file."""
+    stem = {k: os.path.splitext(os.path.basename(rel))[0] for k, rel in rel_by_key.items()}
+    count: dict = {}
+    for s in stem.values():
+        count[s.lower()] = count.get(s.lower(), 0) + 1
+    return {k: (s if count[s.lower()] == 1 else os.path.splitext(rel_by_key[k])[0].replace(os.sep, "/"))
+            for k, s in stem.items()}
 
 
 def body_of(txt: str) -> str:

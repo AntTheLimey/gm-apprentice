@@ -177,6 +177,12 @@ describe('scanVault displayTitle', () => {
     assert.ok(pc, 'Underscored_Name page should exist');
     assert.strictEqual(pc.title, 'Underscored_Name');
   });
+
+  it('records the vault path an Obsidian path link targets', () => {
+    const pages = scanVault(config);
+    const pc = pages.find(p => p.title === 'Underscored_Name');
+    assert.strictEqual(pc.vaultPath, 'Characters/PCs/Underscored_Name');
+  });
 });
 
 describe('pairStoryFiles', () => {
@@ -705,5 +711,28 @@ describe('scanVaultReport', () => {
       console.warn = orig;
       fs.rmSync(vault, { recursive: true, force: true });
     }
+  });
+});
+
+describe('buildLinkMap resolves Obsidian path links', () => {
+  it('keys each page by its vault path, so two same-name pages are both reachable', () => {
+    const pages = [
+      { title: 'Drageby', vaultPath: 'Locations/Drageby', outputPath: 'locations/drageby.html', frontmatter: {} },
+      { title: 'Drageby', vaultPath: 'Heritages/Drageby', outputPath: 'heritages/drageby.html', frontmatter: {} },
+    ];
+    const map = buildLinkMap(pages);
+    assert.strictEqual(map['Locations/Drageby'], 'locations/drageby.html');
+    assert.strictEqual(map['Heritages/Drageby'], 'heritages/drageby.html');
+  });
+});
+
+describe('buildLinkMap: a vault path beats an alias spelled like one', () => {
+  it('links [[Locations/Drageby]] to that page even if another page aliases it', () => {
+    const pages = [
+      { title: 'Impostor', vaultPath: 'NPCs/Impostor', outputPath: 'npcs/impostor.html',
+        frontmatter: { aliases: ['Locations/Drageby'] } },
+      { title: 'Drageby', vaultPath: 'Locations/Drageby', outputPath: 'locations/drageby.html', frontmatter: {} },
+    ];
+    assert.strictEqual(buildLinkMap(pages)['Locations/Drageby'], 'locations/drageby.html');
   });
 });

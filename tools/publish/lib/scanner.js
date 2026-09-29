@@ -140,6 +140,10 @@ function scanVaultReport(config) {
 
         pages.push({
           sourcePath: fullPath,
+          // Vault-relative path without `.md`: the target of an Obsidian path
+          // link (`[[Locations/Drageby]]`), which names one page when two
+          // folders hold a note of the same name.
+          vaultPath: relPath.replace(/\.md$/i, ''),
           title: baseName,
           displayTitle,
           slug,
@@ -208,7 +212,17 @@ function buildLinkMap(pages) {
     }
   }
 
-  // Pass 3: add aliases (only if not already claimed by a canonical title)
+  // Pass 3: add vault paths (`[[Folder/Name]]`). A path names exactly one file, so it
+  // goes in before aliases: an alias spelled like a path must not claim it. Titles can't
+  // contain `/`, so none of these collide with pass 1.
+  for (const page of pages) {
+    if (page.vaultPath) {
+      const key = canonicalNfc(page.vaultPath);
+      if (!(key in map)) map[key] = page.outputPath;
+    }
+  }
+
+  // Pass 4: add aliases (only if not already claimed by a canonical title or path)
   for (const page of pages) {
     if (Array.isArray(page.frontmatter.aliases)) {
       for (const alias of page.frontmatter.aliases) {

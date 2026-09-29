@@ -287,11 +287,31 @@ def _install_heading_hook():
 _install_heading_hook()
 
 
+# C1 control characters (U+0080-U+009F) in mobRPG text are cp1252 punctuation
+# mis-decoded as Latin-1: `\x92` is a right single quote, `\x93`/`\x94` curly
+# double quotes, `\x96` an en dash. YAML rejects them outright, so a name or
+# alias carrying one breaks the note's frontmatter (#255). Map each through
+# cp1252; the five bytes cp1252 leaves undefined are dropped.
+def _c1_char(i: int) -> str:
+    try:
+        return bytes([i]).decode("cp1252")
+    except UnicodeDecodeError:
+        return ""
+
+
+_C1_TABLE = {i: _c1_char(i) for i in range(0x80, 0xA0)}
+
+
+def fix_c1(text: str | None) -> str:
+    """Replace C1 control characters with the cp1252 characters they stand for."""
+    return (text or "").translate(_C1_TABLE)
+
+
 def html_to_md(html_str: str | None) -> str:
     if not html_str:
         return ""
     p = _ToMd()
-    p.feed(html_str)
+    p.feed(fix_c1(html_str))
     text = "".join(p.out)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -319,11 +339,15 @@ def normalize_html_for_compare(html: str | None) -> str:
     `normalize_html_for_strict_compare` for that gate."""
     s = _HEADING_TAG.sub(" ", html or "")
     s = _TAG.sub(" ", s)
-    s = _html.unescape(s)
+    s = fix_c1(_html.unescape(s))     # the vault holds the cp1252 characters (#255)
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
-_LEADING_OVERVIEW_MD = re.compile(r"^\s*#{1,6}[ \t]*Overview[ \t]*\n+", re.I)
+# The heading `write_cmd.py` scaffolds the canon body under: Overview for
+# most types, What the PCs Know for a creature, Biology or Culture for a
+# heritage.
+_LEADING_OVERVIEW_MD = re.compile(
+    r"^\s*#{1,6}[ \t]*(?:Overview|What the PCs Know|Biology|Culture)[ \t]*\n+", re.I)
 
 
 def normalize_html_for_strict_compare(html: str | None) -> str:
@@ -344,7 +368,8 @@ def normalize_html_for_strict_compare(html: str | None) -> str:
     to HTML shape (tag/attribute order, quoting), since `html_to_md` reads
     attributes by name regardless of their order or quote style. Only
     whitespace is additionally collapsed, with one tolerated asymmetry: the
-    vault's own leading `## Overview` heading. `write_cmd.py` always
+    vault's own leading `## Overview` heading (or the creature/heritage
+    equivalent). `write_cmd.py` always
     scaffolds the canon body under that heading, but mobRPG's element
     description carries the body alone with no heading — a structural
     artifact of vault organization, not content — so it is dropped, but

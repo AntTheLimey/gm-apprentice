@@ -20,6 +20,7 @@ from mobrpg import links
 from mobrpg import lww
 from mobrpg import node
 from mobrpg.vault import body_of, iter_linked_notes, vault_only_sections
+from mobrpg.commands import map_cmd
 from mobrpg.commands import pull
 from mobrpg.commands import rel_baseline
 from mobrpg.commands import suggest
@@ -395,7 +396,8 @@ def run_reconcile_deletions(world, vault, token, *, execute) -> int:
         return 1
     flagged = 0
     scanned = 0
-    for path, txt, nd in iter_linked_notes(vault):
+    # MIRROR_FOLDERS: whats-new reports a deleted culture/race as GONE too.
+    for path, txt, nd in iter_linked_notes(vault, map_cmd.MIRROR_FOLDERS):
         scanned += 1
         if nd.get("element_id") in live_ids:
             continue
@@ -537,7 +539,8 @@ def run(argv: list[str]) -> int:
     # and vault-only sections `sync` builds its push candidates from, so a
     # candidate rebuilt here from a note's CURRENT body hashes identically to
     # one `sync` would have built from the same body.
-    push_idx, _linked_keys, _submitted_keys = suggest.node_index(args.vault)
+    push_idx = suggest.link_index(args.vault)
+    push_files = {stem: eid for eid, stem in sync_cmd.link_targets(args.vault).items()}
     gm_owners = suggest.gm_alias_owners(args.vault)
     vault_only = vault_only_sections(args.vault)
     # Notes an `upd/` row already answered for THIS run. The upd branch writes
@@ -611,7 +614,7 @@ def run(argv: list[str]) -> int:
                 # silent overwrite) instead of `pull`.
                 cand_md = sync_cmd._push_candidate(
                     body_of(txt), push_idx, args.world, links.URL_FMT, vault_only,
-                    gm_owners)
+                    gm_owners, push_files)
                 pushed_digest = hashlib.sha256(
                     cand_md.encode("utf-8")).hexdigest()[:12]
                 pin_mtime = ext.rsplit("#", 1)[-1] == pushed_digest

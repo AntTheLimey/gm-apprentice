@@ -26,6 +26,7 @@ import sys
 
 from mobrpg import client
 from mobrpg import node
+from mobrpg import vault
 from mobrpg.commands import map_cmd
 from mobrpg.commands import suggest
 
@@ -96,7 +97,7 @@ def run(argv: list[str]) -> int:
         print(f"ERROR reading map: {e}", file=sys.stderr)
         return 2
 
-    namespace = mp.get("vaultNamespace") or map_cmd.derive_namespace(args.vault)
+    namespace = map_cmd.namespace_for(args.vault, mp)
     entities = suggest.collect_entities(args.vault, kind=args.kind, only=args.only)
     if not entities:
         print("No matching vault entities for that --kind/--only.", file=sys.stderr)
@@ -137,9 +138,34 @@ def run(argv: list[str]) -> int:
             print(f"ERROR listing live {ek}: {e}", file=sys.stderr)
             return 1
 
-    stamped, ambiguous, unmatched, kind_mismatch = [], [], [], []
+    # (#257) An element links to one note. One a note already links is off the
+    # table, and one that several candidates match is the GM's pick: two
+    # linked notes for one element would each pull and push it under sync.
+    claimed = vault.linked_element_paths(args.vault)
+    matched, taken = {}, []
     for ent in candidates:
         matches = _match(ent, live_idx.get(ent["_ek"], {}))
+        if matches and all(m["id"] in claimed for m in matches):
+            taken.append((ent["name"], [(m, claimed[m["id"]]) for m in matches]))
+            continue
+        # Several live matches stay ambiguous even when all but one are
+        # claimed: the note may hold the claimed twin's prose, so the one
+        # left over is not a confident match.
+        matched[ent["path"]] = matches
+    by_element: dict[str, list] = {}
+    for ent in candidates:
+        ms = matched.get(ent["path"])
+        if ms is not None and len(ms) == 1:
+            by_element.setdefault(ms[0]["id"], []).append(ent)
+    contested = {eid: ents for eid, ents in by_element.items() if len(ents) > 1}
+
+    stamped, ambiguous, unmatched, kind_mismatch = [], [], [], []
+    for ent in candidates:
+        if ent["path"] not in matched:
+            continue
+        matches = matched[ent["path"]]
+        if len(matches) == 1 and matches[0]["id"] in contested:
+            continue
         if len(matches) == 1:
             elem = matches[0]
             n = suggest.build_node(ent, mp, namespace, args.vault,
@@ -180,8 +206,10 @@ def run(argv: list[str]) -> int:
 
     verb = "stamped" if args.execute else "would stamp"
     mism = f"{len(kind_mismatch)} kind mismatch, " if kind_mismatch else ""
+    cont = f"{len(contested)} claimed by several notes, " if contested else ""
+    tk = f"{len(taken)} matching an already-linked element, " if taken else ""
     print(f"{verb} {len(stamped)} node(s); {len(ambiguous)} ambiguous, "
-          f"{mism}{len(unmatched)} unmatched, {linked} already linked"
+          f"{mism}{cont}{tk}{len(unmatched)} unmatched, {linked} already linked"
           + ("" if args.execute else "  [dry-run — no files changed]"))
     if unroutable:
         print(f"  ({unroutable} entit(y/ies) had no element-kind mapping and "
@@ -191,6 +219,15 @@ def run(argv: list[str]) -> int:
         print(f"  ✓ {name} → {eid}{note}")
     for name, names in ambiguous:
         print(f"  ⚠ ambiguous, skipped: {name} — {len(names)} live matches: {', '.join(names)}")
+    for eid, ents in contested.items():
+        live_name = matched[ents[0]["path"]][0]["name"]
+        print(f"  ⚠ claimed by {len(ents)} notes, skipped: {live_name} ({eid}) — "
+              f"{', '.join(e['name'] for e in ents)}. Link one: drop the matching "
+              f"name or alias from the others and re-run adopt.")
+    for name, hits in taken:
+        for m, path in hits:
+            print(f"  · already linked by {path}: {name} matches {m['name']} ({m['id']}), "
+                  f"skipped")
     for ent, sib, ms in kind_mismatch:
         ids = ", ".join(m["id"] for m in ms)
         print(f"  ⚠ kind mismatch, skipped: {ent['name']} — exists upstream as "

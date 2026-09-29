@@ -50,10 +50,13 @@ from mobrpg import client
 from mobrpg import md as _md
 from mobrpg import section as _section
 from mobrpg import vault as _vault
+from mobrpg.commands import map_cmd
 
-KINDS = ["person", "organization", "political", "landfeature", "item"]
+KINDS = ["person", "organization", "political", "landfeature", "item",
+         "creature", "culture", "race"]
 FOLDER = {"person": "characters", "organization": "factions",
-          "political": "locations", "landfeature": "locations", "item": "items"}
+          "political": "locations", "landfeature": "locations", "item": "items",
+          "creature": "creatures", "culture": "heritages", "race": "heritages"}
 
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
@@ -116,7 +119,7 @@ def _node_paths(vault_dir: str) -> dict:
     """mobRPG element_id -> vault-relative path, read from the vault's own
     `mobrpg:` nodes (the single source of truth)."""
     return {nd["element_id"]: os.path.relpath(path, vault_dir)
-            for path, _txt, nd in _vault.iter_linked_notes(vault_dir)
+            for path, _txt, nd in _vault.iter_linked_notes(vault_dir, map_cmd.MIRROR_FOLDERS)
             if nd.get("element_id")}
 
 
@@ -151,7 +154,8 @@ _EMBED = re.compile(r"!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 _PORTRAIT = re.compile(r'^portrait:\s*"?([^"\n]*?)"?\s*$', re.M)
 # node element_kind -> API endpoint segment.
 _KIND_EP = {"person": "person", "organization": "organization", "political": "political",
-            "landfeature": "landfeature", "item": "item", "creature": "creature"}
+            "landfeature": "landfeature", "item": "item", "creature": "creature",
+            "culture": "culture", "race": "race"}
 
 
 def _attachment_index(vault_dir: str) -> dict:
@@ -237,7 +241,7 @@ def run_push(args, token: str) -> int:
     index = _attachment_index(vault_dir)
     vault_only = _vault.vault_only_sections(vault_dir)
     uploaded = present = capped = denied = failed = 0
-    for path, txt, nd in _vault.iter_linked_notes(vault_dir):
+    for path, txt, nd in _vault.iter_linked_notes(vault_dir, map_cmd.MIRROR_FOLDERS):
         name = os.path.splitext(os.path.basename(path))[0].replace("_", " ")
         if args.only and args.only.lower() not in name.lower():
             continue

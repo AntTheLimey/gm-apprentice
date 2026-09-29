@@ -26,6 +26,7 @@ this is acceptable; a full CommonMark parser is out of scope for the CLI.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from mobrpg.commands import suggest
 
@@ -72,16 +73,54 @@ def _element_url_re(url_fmt: str) -> re.Pattern:
 
 _ELEMENT_URL = _element_url_re(URL_FMT)
 
+# Every element URL shape mobRPG itself writes into descriptions (#252), with
+# no host, an empty one (`http:///world/...`), a mobRPG host or a local dev
+# host: `/world/<w>/link/<id>`, the same with `/detail.html`,
+# `/world/<w>/element/<kind>/<id>` and `/world/worlds/<w>/search/<id>`. A
+# query or fragment after the id is not part of it. Other hosts are not
+# mobRPG, so their links are left alone. URL_FMT stays the one shape push
+# WRITES; this is what pull and `write` READ.
+_ID = r"(?!detail\.html\b)[^/?#\s)]+"
+_ANY_ELEMENT_URL = re.compile(
+    r"(?:https?://(?:[\w.-]*mobrpg\.com|localhost|127\.0\.0\.1)?(?::\d+)?)?/world/(?:"
+    rf"worlds/[^/\s)]+/search/(?P<eid3>{_ID})"
+    rf"|[^/\s)]+/link/(?P<eid>{_ID})(?:/detail\.html)?"
+    rf"|[^/\s)]+/element/[^/\s)]+/(?P<eid2>{_ID}))/?(?:[?#][^\s)]*)?")
+# The pull and write passes also take an empty label: `[](url)` is an
+# invisible anchor.
+_MDLINK_ANY_LABEL = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _wikilink(target: str, label: str) -> str:
+    """`[[target]]`, or `[[target|label]]` when the text differs. A `|` in the
+    label would end the alias early, so it becomes `/`."""
+    label = label.replace("|", "/")
+    return f"[[{target}]]" if target == label else f"[[{target}|{label}]]"
+
+
+def element_id_of(href: str) -> str | None:
+    """The element id a mobRPG element URL points at, or None for any other href."""
+    um = _ANY_ELEMENT_URL.fullmatch((href or "").strip())
+    return (um.group("eid") or um.group("eid2") or um.group("eid3")) if um else None
+
 
 def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
-                        world_id: str, url_fmt: str = URL_FMT) -> str:
+                        world_id: str, url_fmt: str = URL_FMT,
+                        id_by_file: dict | None = None) -> str:
     """Wikilinks -> element links (resolved via `ent_id_by_key`, keyed by
     `suggest._key`); unresolvable wikilinks and `.md` relative links -> bare
-    display text; `http(s)` links untouched."""
+    display text; `http(s)` links untouched.
+
+    `id_by_file` ({note file stem: element_id}) is consulted first. A wikilink
+    names a file, and the folded key can merge two: "The Woodland Ghost" and
+    "Woodland Ghost" both fold to "woodlandghost"."""
+    files = {unicodedata.normalize("NFC", k): v for k, v in (id_by_file or {}).items()}
+
     def _wl(m: re.Match) -> str:
         name = m.group(1).strip()
         display = (m.group(2) or m.group(1)).strip()   # [[Name|Alias]] shows Alias
-        eid = ent_id_by_key.get(suggest._key(name))    # ...but resolves by Name
+        eid = (files.get(unicodedata.normalize("NFC", name.split("#")[0]))
+               or ent_id_by_key.get(suggest._key(name)))   # ...but resolves by Name
         if eid:
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
         return display
@@ -112,11 +151,38 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
 # representations of identical content that no longer read equal, a
 # regression from the plain full-tag-strip compare this replaced.
 _ANCHOR = re.compile(
-    r'<a\b[^>]*?\bhref\s*=\s*(?P<q>["\'])(?P<href>.*?)(?P=q)[^>]*>.*?</a>',
+    r'<a\b[^>]*?\bhref\s*=\s*(?P<q>["\'])(?P<href>.*?)(?P=q)[^>]*>(?P<text>.*?)</a>',
     re.S | re.I)
+_TAGS = re.compile(r"<[^>]+>")
 
 
-def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> str:
+def _anchor_eid(href: str, eid_re: re.Pattern) -> str | None:
+    """The element id an anchor's href names: the url_fmt shape, or any shape
+    mobRPG itself writes (it stores relative hrefs, #252)."""
+    um = eid_re.fullmatch(href.rstrip("/"))
+    return um.group("eid") if um else element_id_of(href)
+
+
+def canonical_element_hrefs(html: str) -> str:
+    """Rewrite every element anchor's href to one spelling, keeping its text,
+    so the strict compare sees the relative href mobRPG stores and the
+    absolute one a push writes as the same link. An empty-text element anchor
+    is invisible in mobRPG, and pull and `write` drop it, so it goes here too."""
+    def _sub(m: re.Match) -> str:
+        eid = _anchor_eid(m.group("href"), _ELEMENT_URL)
+        if not eid:
+            return m.group(0)
+        if not _TAGS.sub("", m.group("text")).strip():
+            return ""
+        start, end = m.span("href")
+        whole = m.group(0)
+        return whole[:start - m.start()] + f"mobrpg:{eid}" + whole[end - m.start():]
+
+    return _ANCHOR.sub(_sub, html or "")
+
+
+def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT,
+                                        known_ids: set | None = None) -> str:
     """Reduce an mobRPG element-link anchor to a marker keyed on the linked
     element's id, dropping its display TEXT. `sync`'s content compare
     (`_matches_server`) works on plain text, so an aliased wikilink
@@ -128,29 +194,63 @@ def normalize_element_links_for_compare(html: str, url_fmt: str = URL_FMT) -> st
     retargeted to a different element is a real edit — only the display text
     is insensitive. Anchors that aren't mobRPG element links (external URLs,
     left untouched by the push rewrite) are not touched, since their text can
-    carry real meaning."""
+    carry real meaning.
+
+    Given `known_ids` (the elements the vault links), an anchor to any other
+    element reads as its text: pull and `write` flatten such links (events,
+    unlinked elements) to text, so the server's anchor and the vault's plain
+    words are the same content. An empty-text element anchor reads as
+    nothing, for the same reason."""
     eid_re = _element_url_re(url_fmt)
 
     def _sub(m: re.Match) -> str:
         # A trailing slash is not a different target — tolerate one so a
         # server-normalized URL (many web frameworks append `/`) still
         # resolves to the same eid.
-        um = eid_re.fullmatch(m.group("href").rstrip("/"))
-        return f"[[{um.group('eid')}]]" if um else m.group(0)
+        eid = _anchor_eid(m.group("href"), eid_re)
+        if not eid:
+            return m.group(0)
+        text = _TAGS.sub("", m.group("text"))
+        if not text.strip():
+            return ""
+        if known_ids is not None and eid not in known_ids:
+            return text
+        return f"[[{eid}]]"
 
     return _ANCHOR.sub(_sub, html or "")
 
 
-def rewrite_md_for_pull(md_text: str, path_by_element_id: dict) -> str:
-    """Element URLs (matched against `URL_FMT`) whose id maps to a known vault
-    note -> `[[Name]]`; every other link is left untouched."""
+def rewrite_md_for_pull(md_text: str, file_by_element_id: dict) -> str:
+    """Element URLs (any shape `element_id_of` reads) whose id maps to a linked
+    vault note -> `[[File]]`, or `[[File|text]]` when the link text differs.
+    Keyed by the note's FILE stem, which is what a wikilink resolves: two
+    same-name elements have two files but one `name:`. An empty-label link to
+    a known note goes (it is invisible in mobRPG). Every other link is left
+    untouched."""
     def _ml(m: re.Match) -> str:
-        href = m.group(2)
-        um = _ELEMENT_URL.fullmatch(href)
-        if um:
-            name = path_by_element_id.get(um.group("eid"))
-            if name:
-                return f"[[{name}]]"
-        return m.group(0)
+        label, eid = m.group(1), element_id_of(m.group(2))
+        target = file_by_element_id.get(eid) if eid else None
+        if not target:
+            return m.group(0)
+        return _wikilink(target, label) if label else ""
 
-    return _MDLINK.sub(_ml, md_text or "")
+    return _MDLINK_ANY_LABEL.sub(_ml, md_text or "")
+
+
+def rewrite_md_for_write(md_text: str, file_by_element_id: dict) -> str:
+    """`write`'s pass (#252): it knows every element's id and filename, so it
+    resolves every element URL. A known id -> `[[File]]`, or `[[File|text]]`
+    when the link text differs; an event id or unknown id -> the bare link
+    text, since a dead mobRPG URL means nothing in the vault. An empty-label
+    element link is invisible in mobRPG, so it goes. Other links are left
+    untouched."""
+    def _ml(m: re.Match) -> str:
+        label, eid = m.group(1), element_id_of(m.group(2))
+        if not eid:
+            return m.group(0)
+        target = file_by_element_id.get(eid)
+        if not target or not label:
+            return label
+        return _wikilink(target, label)
+
+    return _MDLINK_ANY_LABEL.sub(_ml, md_text or "")

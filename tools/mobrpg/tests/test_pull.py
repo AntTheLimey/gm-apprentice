@@ -59,6 +59,9 @@ def test_extract_builds_relationship(monkeypatch):
     assert holger["body_md"] == "Guard"
     rels = holger["relationships"]
     assert any(r["target"] == "Station Security" and r["predicate"] == "leads" for r in rels)
+    # write needs the ids to link the right note and stamp the edge (#254)
+    lead = next(r for r in rels if r["predicate"] == "leads")
+    assert lead["targetId"] == "o1" and lead["eventId"] == "e1"
 
 
 def test_run_writes_json(monkeypatch, tmp_path):

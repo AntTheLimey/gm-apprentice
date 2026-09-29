@@ -152,3 +152,56 @@ def test_normalize_a_link_to_a_different_element_still_differs():
     a = links.normalize_element_links_for_compare(f'<a href="{EL_URL}">Name</a>', FMT)
     b = links.normalize_element_links_for_compare(f'<a href="{other_url}">Name</a>', FMT)
     assert a != b
+
+
+def test_pull_rewrites_every_element_url_shape():
+    # (#252) relative, /detail.html, /element/<kind>/ and localhost forms
+    paths = {"e1": "Hockhaus"}
+    for url in ("/world/w/link/e1", "/world/w/link/e1/detail.html",
+                "http://localhost:3000/world/w/element/political/e1",
+                "https://www.mobrpg.com/world/w/link/e1/"):
+        assert links.rewrite_md_for_pull(f"at [Hockhaus]({url}).", paths) == "at [[Hockhaus]]."
+
+
+def test_element_id_of_reads_the_search_shape_and_an_empty_host():
+    # seen in the Imperialia import: `http:///world/worlds/<w>/search/<id>`
+    assert links.element_id_of("http:///world/worlds/w/search/e9") == "e9"
+    assert links.element_id_of("https://example.com/other") is None
+
+
+def test_write_rewrite_drops_an_empty_label_element_link():
+    # an empty anchor is invisible in mobRPG; it must not leave `[](url)` behind
+    out = links.rewrite_md_for_write("in [](/world/w/link/b1)[[Bacciz]].", {"b1": "Bacciz"})
+    assert out == "in [[Bacciz]]."
+
+
+def test_pull_keeps_the_link_text_as_the_display_alias():
+    # review: pull used to drop "his father" for the note name; keep it, as
+    # write does, so an aliased link survives the round trip
+    out = links.rewrite_md_for_pull("met [his father](/world/w/link/A).", {"A": "Foo (2)"})
+    assert out == "met [[Foo (2)|his father]]."
+
+
+def test_element_id_of_edge_cases():
+    assert links.element_id_of("/world/w/link/abc#x") == "abc"
+    assert links.element_id_of("/world/w/link/abc?tab=2") == "abc"
+    assert links.element_id_of("/world/w/link/detail.html") is None
+    assert links.element_id_of("https://example.com/world/w/link/abc") is None
+    assert links.element_id_of("https://dev.mobrpg.com/world/w/link/abc") == "abc"
+    assert links.element_id_of("http://127.0.0.1:8080/world/w/link/abc") == "abc"
+
+
+def test_write_rewrite_never_nests_a_pipe_in_the_alias():
+    out = links.rewrite_md_for_write("[a|b](/world/w/link/f2)", {"f2": "Foo (2)"})
+    assert out == "[[Foo (2)|a/b]]"
+
+
+def test_push_resolves_the_exact_file_before_the_folded_key():
+    # "The Woodland Ghost" (a place) and "Woodland Ghost" (a creature) fold to
+    # one key; a wikilink names a file, so the exact stem must win
+    idx = {"woodlandghost": "CREATURE"}
+    files = {"The Woodland Ghost": "PLACE", "Woodland Ghost": "CREATURE"}
+    out = links.rewrite_md_for_push("at [[The Woodland Ghost]].", idx, "w", FMT, files)
+    assert out == f"at [The Woodland Ghost]({FMT.format(world='w', eid='PLACE')})."
+    out = links.rewrite_md_for_push("a [[Woodland Ghost|ghost]].", idx, "w", FMT, files)
+    assert f"({FMT.format(world='w', eid='CREATURE')})" in out

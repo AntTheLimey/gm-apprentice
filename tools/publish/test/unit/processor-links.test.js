@@ -69,3 +69,32 @@ describe('encodeHref', () => {
     assert.strictEqual(encodeHref, encodeImageUrl);
   });
 });
+
+describe('path-form wikilinks show the note name, not the folder', () => {
+  const linkMap = { 'Locations/Drageby': 'locations/drageby.html' };
+  it('resolves [[Folder/Name]] in prose and labels it with the basename', () => {
+    const out = resolveWikiLinks('From [[Locations/Drageby]].', linkMap, 'characters/x.html');
+    assert.strictEqual(out, 'From [Drageby](../locations/drageby.html).');
+  });
+  it('resolves and labels a path target in a relationship list, alias or not', () => {
+    const html = renderRelationships({ relationships: [
+      { target: '[[Locations/Drageby]]', type: 'located_at' },
+      { target: '[[Locations/Drageby|the town]]', type: 'part_of' },
+    ] }, linkMap, 'characters/x.html');
+    assert.match(html, /href="\.\.\/locations\/drageby\.html" class="entity-link">Drageby</);
+    assert.match(html, /class="entity-link">the town</);
+    assert.doesNotMatch(html, /Locations\//);
+  });
+});
+
+describe('plain values keep their slashes; only link targets drop the folder', () => {
+  const { parseWikiRef, humanizeName, wikiTargetLabel } = require('../../lib/processor');
+  it('leaves a plain value intact', () => {
+    assert.strictEqual(parseWikiRef('The Crown / the Order').label, 'The Crown / the Order');
+    assert.strictEqual(humanizeName('Road to Arkham/Kingsport'), 'Road to Arkham/Kingsport');
+  });
+  it('labels a bracketed path target by its note name', () => {
+    assert.strictEqual(parseWikiRef('[[Locations/Drageby]]').label, 'Drageby');
+    assert.strictEqual(wikiTargetLabel('Locations/Old_Mill'), 'Old Mill');
+  });
+});
