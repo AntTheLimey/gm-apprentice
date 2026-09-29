@@ -53,6 +53,14 @@ describe('font family safety', () => {
   });
 });
 
+describe('presetFamiliesFor', () => {
+  it('reports the scifi preset font even with a custom palette (the preset CSS still ships)', () => {
+    const { presetFamiliesFor } = require('../../lib/fonts');
+    assert.deepStrictEqual(presetFamiliesFor({ genre: 'scifi' }), presetFamiliesFor({ genre: 'scifi', palette: { bg: '#000' } }));
+    assert.ok(presetFamiliesFor({ genre: 'scifi', palette: { bg: '#000' } }).includes('Rajdhani'));
+  });
+});
+
 describe('parseFontFaces', () => {
   it('keeps unicode-range and drops non-gstatic hosts', () => {
     const text = css('Foo', [

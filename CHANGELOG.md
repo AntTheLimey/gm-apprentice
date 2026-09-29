@@ -37,9 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mangled. The index format changed; rebuild rather than patch a
   deployed site.
 - **The Party Status board leaves out PCs who are out of play** (#265).
-  Retired, dead, deceased, KIA, departed, missing and unknown PCs keep
-  their sheet pages but no longer sit on the board, and the landing
-  page sorts the same statuses into its fallen list.
+  Retired, dead, deceased, KIA, departed, missing, unknown, inactive
+  and NPC-status PCs keep their sheet pages but no longer sit on the
+  board, and the landing page sorts the same statuses into its fallen
+  list.
 - **The 404 page uses the site's palette** (#268). It linked the genre
   preset after `theme.css`, so the preset won.
 - **The landing recap shows emphasis, not asterisks** (#269). Italics,

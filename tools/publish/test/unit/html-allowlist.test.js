@@ -209,6 +209,10 @@ describe('plain-text consumers never carry raw tags', () => {
   it('stripTags keeps a bare < in prose', () => {
     assert.strictEqual(stripTags('a < b and c > d').trim(), 'a < b and c > d');
   });
+
+  it('stripTags keeps angle-bracket prose and autolinks that are not element names', () => {
+    assert.strictEqual(stripTags('Met <Grim> at <https://x.com>, <b>bold</b>.'), 'Met <Grim> at <https://x.com>, bold.');
+  });
 });
 
 describe('publish.allow_html config', () => {

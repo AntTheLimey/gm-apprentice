@@ -234,7 +234,9 @@ function selfHostedFontFaces(vaultPath, families, warn = console.warn) {
 function presetFamiliesFor(theme) {
   const { resolveGenrePreset } = require('./theme');
   const preset = resolveGenrePreset(theme.genre);
-  if (!preset || theme.palette) return [];
+  // The preset CSS is linked and copied even when a custom palette is set, so its
+  // font imports ship either way.
+  if (!preset) return [];
   try {
     return presetImportFamilies(fs.readFileSync(path.join(__dirname, `../css/themes/${preset}.css`), 'utf8'));
   } catch {

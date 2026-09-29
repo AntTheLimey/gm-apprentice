@@ -174,10 +174,27 @@ const TAG_RE = /<\/?([A-Za-z][\w:-]*)[^<>]*>/g;
 const INLINE_TAGS = new Set(['a', 'abbr', 'b', 'cite', 'code', 'del', 'em', 'i', 'ins', 'kbd',
   'mark', 'q', 's', 'small', 'span', 'strong', 'sub', 'sup', 'u', 'tspan']);
 
+// Only real element names count as tags, so prose like "<Grim> said" or an autolink
+// "<https://…>" survives in search and the recap, as it does on the page when
+// allow_html is off.
+const KNOWN_ELEMENTS = new Set([...HTML_TAGS, ...SVG_TAGS].map(t => t.toLowerCase()).concat([
+  'script', 'style', 'template', 'noscript', 'textarea', 'foreignobject', 'iframe', 'object',
+  'embed', 'form', 'input', 'button', 'select', 'option', 'label', 'link', 'meta', 'base',
+  'html', 'head', 'body', 'main', 'nav', 'video', 'audio', 'source', 'track', 'picture',
+  'canvas', 'center', 'font', 'big', 'tt', 'wbr', 'time', 'var', 'samp', 'dfn', 'bdi', 'bdo',
+  'ruby', 'rt', 'rp', 'data', 'output', 'progress', 'meter', 'fieldset', 'legend', 'map',
+  'area', 'dialog', 'slot', 'address', 'hgroup', 'search', 'animate', 'set', 'image',
+  'marker', 'pattern', 'filter', 'switch', 'textpath', 'animatetransform', 'animatemotion',
+]));
+
 function stripTags(text) {
   return String(text || '')
     .replace(NON_PROSE_ELEMENT_RE, ' ')
-    .replace(TAG_RE, (m, name) => (INLINE_TAGS.has(name.toLowerCase()) ? '' : ' '));
+    .replace(TAG_RE, (m, name) => {
+      const tag = name.toLowerCase();
+      if (!KNOWN_ELEMENTS.has(tag)) return m;
+      return INLINE_TAGS.has(tag) ? '' : ' ';
+    });
 }
 
 module.exports = {
