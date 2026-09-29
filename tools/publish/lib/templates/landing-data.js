@@ -1,5 +1,6 @@
 const { canonicalNfc, graphemes } = require('../unicode');
 const { parseWikiRef } = require('../processor');
+const { stripTags } = require('../html-allowlist');
 
 function getLatestSession(pages) {
   const played = pages.filter(
@@ -22,6 +23,14 @@ function stripWikiLinks(text) {
     .replace(/\[\[([^\]]+)\]\]/g, (m, target) => target.replace(/_/g, ' '));
 }
 
+// The recap is printed as escaped plain text, so raw HTML (publish.allow_html, #266) is
+// reduced to its text first; a paragraph that was only markup (an inline SVG) drops out.
+function recapParagraphs(text) {
+  return text.split(/\n\n+/)
+    .map(p => stripTags(p).replace(/[ \t]{2,}/g, ' ').trim())
+    .filter(Boolean);
+}
+
 function extractRecap(page) {
   if (!page) return null;
   // Prefer the published view (gm-only blocks + excluded sections stripped) so the
@@ -38,13 +47,13 @@ function extractRecap(page) {
     const after = md.slice(recapMatch.index + recapMatch[0].length);
     const nextHeading = after.search(/^## /m);
     const section = nextHeading === -1 ? after : after.slice(0, nextHeading);
-    const paragraphs = section.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    const paragraphs = recapParagraphs(section);
     paragraph = paragraphs.find(p => !/^#{1,6}\s/.test(p) && !p.startsWith('>')) || null;
   } else {
     // Tolerate blank lines before the H1, and never surface a bare heading or a
     // blockquote as "the recap" — take the first real prose paragraph.
     const withoutH1 = md.replace(/^\s*# .+\n+/, '');
-    const paragraphs = withoutH1.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    const paragraphs = recapParagraphs(withoutH1);
     paragraph = paragraphs.find(p => !/^#{1,6}\s/.test(p) && !p.startsWith('>')) || null;
   }
 

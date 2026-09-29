@@ -6,7 +6,7 @@ const path = require('path');
 const { scanVault, scanAllNotes, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { configureRenderer, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -38,6 +38,9 @@ function build(options = {}) {
   }
 
   const publishConfig = loadPublishConfig(config.vaultPath, config);
+  // Every build sets the body renderer explicitly, so one build's allow_html can never
+  // leak into the next in the same process (#266).
+  configureRenderer({ allowHtml: publishConfig.allow_html });
   // Merge explicit flags (Task 1) with legacy auto-detect, keyed off the site
   // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
   // publishConfig.backend, so this must run before any page renders.

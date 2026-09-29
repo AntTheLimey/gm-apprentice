@@ -1,6 +1,4 @@
-const { createRenderer } = require('../markdown');
-const mdRenderer = createRenderer();
-const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref } = require('../processor');
+const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -733,7 +731,9 @@ function renderCampaignDeepDive(pages, indexDir, publishConfig) {
   if (!overview) return '<p class="text-muted">No campaign overview found.</p>';
 
   const fm = overview.frontmatter;
-  const rawSections = extractMdSections(overview.markdown);
+  // The published view, not the raw file: the raw markdown still carries gm-only and
+  // spoiler blocks and HTML comments, which this page used to print verbatim (#266).
+  const rawSections = extractMdSections(publishedSource(overview));
   const linkMap = (publishConfig && publishConfig._linkMap) || {};
   const outputPath = indexDir + '/index.html';
 
@@ -774,22 +774,22 @@ function renderCampaignDeepDive(pages, indexDir, publishConfig) {
 
   const premiseMd = sections['Premise'] || '';
   const premiseHtml = premiseMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Premise</h2><div class="cdd-prose">${mdRenderer.render(premiseMd)}</div></section>`
+    ? `<section class="cdd-section"><h2 class="cdd-section-title">Premise</h2><div class="cdd-prose">${renderMarkdown(premiseMd)}</div></section>`
     : '';
 
   const settingMd = sections['Setting'] || '';
   const settingHtml = settingMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Setting</h2><div class="cdd-prose">${mdRenderer.render(settingMd)}</div></section>`
+    ? `<section class="cdd-section"><h2 class="cdd-section-title">Setting</h2><div class="cdd-prose">${renderMarkdown(settingMd)}</div></section>`
     : '';
 
   const themesMd = sections['Key Themes'] || '';
   const themesHtml = themesMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Themes</h2><div class="cdd-themes">${mdRenderer.render(themesMd)}</div></section>`
+    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Themes</h2><div class="cdd-themes">${renderMarkdown(themesMd)}</div></section>`
     : '';
 
   const factionsMd = sections['Key Factions'] || '';
   const factionsHtml = factionsMd
-    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Factions</h2><div class="cdd-prose">${mdRenderer.render(factionsMd)}</div></section>`
+    ? `<section class="cdd-section"><h2 class="cdd-section-title">Key Factions</h2><div class="cdd-prose">${renderMarkdown(factionsMd)}</div></section>`
     : '';
 
   const overviewHref = relHref(overview, indexDir);
