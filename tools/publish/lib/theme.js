@@ -46,6 +46,14 @@ function googleFontsImport(fonts) {
   return `@import url('https://fonts.googleapis.com/css2?${families}&display=swap');\n\n`;
 }
 
+// Non-generic families the Google import would name (source: google), for the build warning.
+function googleFontNames(fonts) {
+  return ['heading', 'body']
+    .map(k => fonts[k])
+    .filter(f => f && !GENERIC_FAMILIES.has(f))
+    .filter((v, i, a) => a.indexOf(v) === i);
+}
+
 const FONT_FORMATS = { woff2: 'woff2', woff: 'woff', ttf: 'truetype', otf: 'opentype' };
 
 // Normalizes a theme.fonts.files[].path into the path used both as the @font-face src
@@ -94,7 +102,10 @@ function localFontFaceCSS(files) {
 // Chooses the Google import or the local @font-face rules, or neither (`source: local`
 // with no `files`, or nothing custom configured at all). Shared by both generateThemeCSS
 // branches so a genre preset with a custom font honours the same setting as a full palette.
-function fontsPreamble(fonts) {
+function fontsPreamble(fonts, selfHostCss) {
+  // self-host (#270): the build resolved the vault's font cache into local @font-face
+  // rules (selfHostCss, possibly empty). Never falls through to the Google import.
+  if (fonts.source === 'self-host') return selfHostCss || '';
   if (fonts.source === 'local') return localFontFaceCSS(fonts.files);
   return googleFontsImport(fonts);
 }
@@ -131,7 +142,8 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function generateThemeCSS(config) {
+function generateThemeCSS(config, opts = {}) {
+  const selfHostCss = opts.selfHostCss || '';
   const palette = config.palette;
   const fonts = config.fonts || {};
 
@@ -150,7 +162,7 @@ function generateThemeCSS(config) {
     // rule supplying the real file is the only thing left standing between that name
     // and a silent fallback (CodeRabbit review, PR #234). Returning before this ran
     // meant a files entry with no matching heading/body override never got emitted.
-    const fontsImport = fontsPreamble(fonts);
+    const fontsImport = fontsPreamble(fonts, selfHostCss);
     if (fontVars.length === 0) {
       return fontsImport
         ? `${fontsImport}/* Genre preset active — no --font-heading/--font-body overrides */\n`
@@ -197,9 +209,9 @@ function generateThemeCSS(config) {
   if (fonts.heading) vars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
   if (fonts.body) vars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
 
-  const fontsImport = fontsPreamble(fonts);
+  const fontsImport = fontsPreamble(fonts, selfHostCss);
 
   return `${fontsImport}:root {\n${vars.join('\n')}\n}\n`;
 }
 
-module.exports = { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };
+module.exports = { generateThemeCSS, googleFontNames, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };

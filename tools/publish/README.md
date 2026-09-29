@@ -312,8 +312,31 @@ all, in either mode.
 `publish.theme.fonts.heading`/`.body` name Google Fonts families by
 default, and the build emits a `fonts.googleapis.com` `@import` at the
 top of `css/theme.css` — every visitor's browser then requests the font
-directly from Google. Set `source: local` to opt out and self-host
-instead:
+directly from Google, and the build prints a warning saying so. Two ways
+to opt out:
+
+**`source: self-host`** (the setting new vaults get) downloads each
+non-generic heading/body family from Google Fonts at build time, once,
+and serves it from your site. Regular and bold, roman and italic are
+fetched, with Google's `unicode-range` subsets kept, and the files are
+served unmodified (they are OFL-licensed). They are cached in the vault
+at `_meta/font-cache/<family>/` (`_meta/` is never published), so later
+builds work offline and produce the same site. If a font is not cached
+and the download fails, the build warns and the family falls back to
+its CSS stack; it never falls back to a Google import. Existing vaults
+keep `source: google` until you change it. The scifi preset's Rajdhani
+is self-hosted too.
+
+```yaml
+publish:
+  theme:
+    fonts:
+      heading: IM Fell English
+      body: Cormorant Garamond
+      source: self-host    # 'google' (code default) | 'self-host' | 'local'
+```
+
+**`source: local`** self-hosts font files you supply:
 
 ```yaml
 publish:
@@ -321,7 +344,7 @@ publish:
     fonts:
       heading: Cinzel
       body: Inter
-      source: local        # 'google' (default) | 'local'
+      source: local
       files:
         - family: Cinzel
           path: _attachments/fonts/Cinzel-Regular.woff2

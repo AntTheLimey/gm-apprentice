@@ -87,7 +87,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const runWrangler = deps.runWrangler || defaultRunWrangler;
   const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
-  const build = deps.build || ((opts) => require('./build').build(opts));
+  const build = deps.build || (async (opts) => { await require('./fonts').prefetchForConfig(opts.configPath); return require('./build').build(opts); });
   const syncFunctions = deps.syncFunctions || ((root) => require('./sync-functions').syncScaffoldFunctions(root));
 
   const flagKey = FLAG_KEY[feature];
@@ -123,7 +123,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot);
-  build({ configPath });
+  await build({ configPath });
   const dep = runWranglerAt(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${failureDetail(dep)}`); return 1; }
 

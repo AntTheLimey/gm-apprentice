@@ -397,13 +397,19 @@ if (command === 'build') {
   }
 
   const { build } = loadBuild();
-  try {
-    build({ configPath });
-  } catch (err) {
-    console.error(`Build failed: ${err.message}`);
-    process.exit(1);
-  }
-  process.exit(0);
+  (async () => {
+    try {
+      // theme.fonts.source: self-host fills the vault's font cache first (network); the
+      // build itself only reads the cache (#270).
+      await require('../lib/fonts').prefetchForConfig(configPath);
+      build({ configPath });
+    } catch (err) {
+      console.error(`Build failed: ${err.message}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  })();
+  return;
 }
 
 if (command === 'inbox') {
