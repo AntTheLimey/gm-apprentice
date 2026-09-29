@@ -10,8 +10,14 @@ const { spawnSync } = require('child_process');
 // have to fetch the package before it does any work.
 const WRANGLER_TIMEOUT_MS = 60000;
 
-function runCommand(cmd, args, { timeoutMs = 30000, cwd } = {}) {
-  const res = spawnSync(cmd, args, { encoding: 'utf8', timeout: timeoutMs, ...(cwd ? { cwd } : {}) });
+// `stdio`, `shell` and `maxBuffer` pass through for a long-running child whose output a
+// person should see as it happens (deploy's build hooks): with stdio inherited, stdout and
+// stderr come back empty and a failure is described by its exit code.
+function runCommand(cmd, args, { timeoutMs = 30000, cwd, stdio, shell, maxBuffer } = {}) {
+  const res = spawnSync(cmd, args, {
+    encoding: 'utf8', timeout: timeoutMs, ...(cwd ? { cwd } : {}),
+    ...(stdio ? { stdio } : {}), ...(shell ? { shell } : {}), ...(maxBuffer ? { maxBuffer } : {}),
+  });
   return {
     code: res.status == null ? 1 : res.status,
     stdout: res.stdout || '',

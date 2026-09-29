@@ -245,3 +245,13 @@ describe('generateThemeCSS — theme.fonts.source: local (#211)', () => {
     assert.ok(!css.includes('family=google'));
   });
 });
+
+describe('generateThemeCSS color-scheme (#260 review)', () => {
+  const { generateThemeCSS } = require('../../lib/theme');
+  it('matches a custom palette\'s own lightness', () => {
+    const light = generateThemeCSS({ palette: { primary: '#1a2f3a', accent: '#3d8a7a', background: '#e8f0f3', text: '#1a1a1a' }, fonts: {} });
+    const dark = generateThemeCSS({ palette: { primary: '#111111', accent: '#3d8a7a', background: '#101010', text: '#dddddd' }, fonts: {} });
+    assert.match(light, /color-scheme: light;/);
+    assert.match(dark, /color-scheme: dark;/);
+  });
+});

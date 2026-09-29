@@ -1,3 +1,4 @@
+const { normalizeDefaultMode } = require('./color-mode');
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
@@ -53,6 +54,10 @@ const PUBLISH_DEFAULTS = {
       files: [],
     },
     campaign_image: null,
+    // Which palette a reader starts in (#260): 'system' follows their OS, as sites
+    // always have; 'dark' or 'light' starts everyone there. A reader's own choice from
+    // the nav toggle overrides it and is remembered.
+    default_mode: 'system',
   },
   four_oh_four: {
     style: 'in-world',
@@ -80,6 +85,15 @@ const PUBLISH_DEFAULTS = {
   // is authoritative. Both default off for new sites (set in the init scaffold).
   backend: { statusBar: undefined, inbox: undefined },
 };
+
+// A mistyped default_mode falls back to 'system' — say so rather than silently.
+function defaultModeFrom(raw) {
+  const mode = normalizeDefaultMode(raw);
+  if (raw != null && String(raw).trim().toLowerCase() !== mode) {
+    console.warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
+  }
+  return mode;
+}
 
 // Union exclude lists from both config sources (vault-config.md and vault.config.json),
 // case-insensitively de-duplicated, preserving first-seen casing/order. Falls back to
@@ -322,6 +336,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
         ...PUBLISH_DEFAULTS.theme.fonts,
         ...(publish.theme && publish.theme.fonts),
       },
+      default_mode: defaultModeFrom(publish.theme && publish.theme.default_mode),
     },
     four_oh_four: {
       ...PUBLISH_DEFAULTS.four_oh_four,

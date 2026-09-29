@@ -553,6 +553,6 @@ Under `publish:`:
 | `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes"]`) |
 | `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
-| `theme` | object | `genre`, `palette`, `fonts`, `campaign_image` |
+| `theme` | object | `genre`, `palette`, `fonts`, `campaign_image`, `default_mode` (`system`, `dark` or `light`; default `system`) |
 | `four_oh_four` | object | Custom 404 page: `style`, `message` |
 | `overrides` | object | Per-file include/exclude/field overrides |

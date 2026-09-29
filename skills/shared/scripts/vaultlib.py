@@ -1324,6 +1324,77 @@ def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
     return parse_publish_list(fm, key)
 
 
+def read_publish_scalar(vault: Path, key: str) -> str | None:
+    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
+    say), or None when absent, null or not a plain scalar. Only a direct
+    child of `publish:` counts: a same-named key nested deeper, or a line
+    inside a block scalar, is someone else's."""
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
+    start = next((i for i, line in enumerate(lines)
+                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
+    if start is None:
+        return None
+    indent: int | None = None
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue                             # blank and comment lines don't end the block
+        depth = len(line) - len(line.lstrip())
+        if depth == 0:
+            break                                # the next top-level key
+        if indent is None:
+            indent = depth
+        if depth != indent:
+            continue                             # nested deeper, or block-scalar text
+        m = _KEY_LINE_RE.match(line)
+        if not (m and m.group(3) == key):
+            continue
+        raw = (m.group(4) or "").strip()
+        if raw[:1] in ("'", '"'):
+            value = _strip_comment(raw)
+        else:
+            # A plain scalar: a comment starts at whitespace + '#', and an
+            # apostrophe ("GM's Site") is just a character.
+            value = re.split(r"\s#", raw, maxsplit=1)[0].strip()
+        if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
+            return None
+        if value.startswith('"'):
+            try:
+                return json.loads(value) or None  # YAML double quotes use JSON's escapes
+            except ValueError:
+                return None
+        if value.startswith("'"):
+            return value[1:-1].replace("''", "'") or None if value.endswith("'") else None
+        return value
+    return None
+
+
+def read_site_exclude_sections(vault: Path) -> tuple[list[str] | None, str | None]:
+    """(the site's vault.config.json `excludeSections`, error). The site is
+    found through `publish.site_dir`; with none set, or no JSON there, the
+    list is None (not set). A JSON file that doesn't parse is an error."""
+    site_dir = read_publish_scalar(vault, "site_dir")
+    if not site_dir:
+        return None, None
+    site = Path(site_dir).expanduser()
+    if not site.is_absolute():
+        site = vault / site
+    config = site / "vault.config.json"
+    try:
+        data = json.loads(config.read_text(encoding="utf-8-sig"))  # the build's require() takes a BOM
+    except FileNotFoundError:
+        return None, None
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        return None, f"{config} not readable ({e.__class__.__name__})"
+    value = data.get("excludeSections") if isinstance(data, dict) else None
+    # config.js keeps only an array; anything else counts as not set.
+    return ([str(v) for v in value] if isinstance(value, list) else None), None
+
+
 # The publish pipeline's own defaults (tools/publish/lib/config.js
 # PUBLISH_DEFAULTS.exclude_sections). Keep the two in step: a section the
 # site drops but a check treats as published is a leak waiting to happen.
@@ -1333,20 +1404,21 @@ DEFAULT_EXCLUDE_SECTIONS: tuple[str, ...] = (
 )
 
 
-def resolve_exclude_sections(vault_list: list[str] | None) -> list[str]:
-    """config.js `unionExcludeList` for the vault-config source: the
-    vault's own list when it sets one — the defaults are NOT added — and
-    the defaults only when it sets none. De-duplicated
+def resolve_exclude_sections(vault_list: list[str] | None,
+                             site_list: list[str] | None = None) -> list[str]:
+    """config.js `unionExcludeList`: the union of the vault's own list and
+    the site's `vault.config.json` `excludeSections`, whichever are set, and
+    the defaults only when neither is. The defaults are a fallback, not a
+    floor: a vault with no list whose site sets a shorter one publishes
+    everything that shorter list leaves out (#240). De-duplicated
     case-insensitively, first casing wins.
-
-    The site's `vault.config.json` `excludeSections` is unioned in by the
-    publisher too; it is not read here. That only ever adds exclusions,
-    so ignoring it errs toward reporting a line as published.
     """
-    source = list(DEFAULT_EXCLUDE_SECTIONS) if vault_list is None else vault_list
+    sources = [s for s in (vault_list, site_list) if s is not None]
+    if not sources:
+        sources = [list(DEFAULT_EXCLUDE_SECTIONS)]
     result: list[str] = []
     seen: set[str] = set()
-    for value in source:
+    for value in (v for s in sources for v in s):
         if value and value.casefold() not in seen:
             seen.add(value.casefold())
             result.append(value)
@@ -1356,10 +1428,10 @@ def resolve_exclude_sections(vault_list: list[str] | None) -> list[str]:
 def effective_exclude_sections(vault: Path) -> list[str]:
     """The exclude list the publisher actually applies to this vault.
 
-    Matches tools/publish/lib/config.js exactly: a vault that sets
-    `publish.exclude_sections` gets that list and nothing else (the
-    defaults are a fallback, not a floor); a vault that sets none gets
-    the defaults. Treating the defaults as always-on told the checks
+    Matches tools/publish/lib/config.js exactly: the vault's
+    `publish.exclude_sections` unioned with the site's `vault.config.json`
+    `excludeSections` (found through `publish.site_dir`); the defaults
+    only when neither is set. Treating the defaults as always-on told the checks
     Player Notes and Source References were hidden on sites that
     publish them.
     """
@@ -1372,7 +1444,12 @@ def effective_exclude_sections(vault: Path) -> list[str]:
               f"not understood ({cfg.error}) — treating nothing as "
               f"excluded", file=sys.stderr)
         return []
-    return resolve_exclude_sections(cfg.value)
+    site_list, site_error = read_site_exclude_sections(vault)
+    if site_error:
+        print(f"warning: site config {site_error} — treating nothing as "
+              f"excluded", file=sys.stderr)
+        return []
+    return resolve_exclude_sections(cfg.value, site_list)
 
 
 # --------------------------------------------------------------------------

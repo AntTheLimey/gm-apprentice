@@ -28,6 +28,7 @@ each other — see § Precedence.
 | Theme palette | `publish.theme.palette` | Colour scheme (primary, accent, background, text) |
 | Theme fonts | `publish.theme.fonts` | Heading and body font families. `fonts.source: google` (default) pulls custom families from Google Fonts; `local` self-hosts instead — `fonts.files` lists `{family, path, weight?, style?}` entries copied into the site's `fonts/` (`path` must be `.woff2`/`.woff`/`.ttf`/`.otf`) and referenced with `@font-face` |
 | Theme genre | `publish.theme.genre` | Genre tag for theming hints |
+| Default light/dark mode | `publish.theme.default_mode` | Which palette a reader starts in: `system` (follow their OS, the default), `dark` or `light`. Readers switch with the ☀/☾ button in the nav, and their choice is remembered per site. The button appears only with a genre preset and no custom `theme.palette`, the themes that ship both palettes |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
 | Per-file field overrides | `publish.overrides.fields` | Re-admit an excluded frontmatter field for one named file (see § Per-file field overrides) |
 | Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |

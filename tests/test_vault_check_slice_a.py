@@ -529,10 +529,9 @@ class GmLeakCommandTests(unittest.TestCase):
             self.rows)
 
     def test_keeper_facing_sibling_heading_warns(self):
-        self.assertIn(
-            f"WARNING\t{LEAKY}:14\tKeeper-facing heading 'Keeper Checklist' "
-            f"publishes — nest it under ## GM Notes or fence it",
-            self.rows)
+        # A wrap-template GM heading: the row carries the re-nest advice.
+        self.assertTrue(rows_for(self.rows, f"WARNING\t{LEAKY}:14\tGM-only heading "
+                                 f"'Keeper Checklist' publishes"), self.rows)
 
     def test_bold_label_is_an_info(self):
         self.assertIn(
@@ -2127,3 +2126,147 @@ class WrapupCommandTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
+    """#240: the site's vault.config.json `excludeSections` joins the list,
+    exactly as config.js `unionExcludeList` does."""
+
+    def vault(self, vault_list=None, site_list=None, site_json=None):
+        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        if site_json is not None:
+            (site / "vault.config.json").write_text(site_json, encoding="utf-8")
+        elif site_list is not None:
+            (site / "vault.config.json").write_text(
+                json.dumps({"excludeSections": site_list}), encoding="utf-8")
+        lines = ["---", "type: meta", "publish:", f'  site_dir: "{site}"']
+        if vault_list is not None:
+            lines.append(f"  exclude_sections: {json.dumps(vault_list)}")
+        return make_vault(self, "\n".join(lines + ["---", ""]))
+
+    def test_a_shorter_site_list_replaces_the_defaults(self):
+        # the leak #240 describes: no vault list, so the site uses ONLY its
+        # JSON list, and Player Notes publishes
+        vault = self.vault(site_list=["GM Notes"])
+        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
+
+    def test_both_lists_are_unioned(self):
+        vault = self.vault(vault_list=["GM Notes"], site_list=["gm notes", "Secrets"])
+        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes", "Secrets"])
+
+    def test_no_site_list_keeps_todays_answer(self):
+        self.assertEqual(vc.effective_exclude_sections(self.vault()),
+                         list(__import__("vaultlib").DEFAULT_EXCLUDE_SECTIONS))
+        self.assertEqual(vc.effective_exclude_sections(self.vault(vault_list=["GM Notes"])),
+                         ["GM Notes"])
+
+    def test_unreadable_site_json_fails_closed(self):
+        vault = self.vault(site_json="{not json")
+        self.assertEqual(vc.effective_exclude_sections(vault), [])
+
+
+class GmLeakCollapsedWorldStateTests(unittest.TestCase):
+    """#239: a vault collapsed to ["GM Notes"] by the pre-fix migration,
+    with `## World State` left at the top level, publishing."""
+
+    CONFIG = ('---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n')
+    BOB = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+           "## World State\n\nThe harbour burns in week 3.\n")
+
+    def test_a_published_gm_template_heading_warns_with_the_fix(self):
+        vault = make_vault(self, self.CONFIG)
+        (vault / "Bob.md").write_text(self.BOB, encoding="utf-8")
+        rows = rows_for(vc.check_gm_leak(vault, None), "Bob.md")
+        warn = [r for r in rows if "'World State'" in r]
+        self.assertEqual(len(warn), 1, rows)
+        self.assertTrue(warn[0].startswith("WARNING\tBob.md:9\t"), warn)
+        self.assertIn("--renest-excludes", warn[0])
+
+    def test_the_named_fix_hides_it(self):
+        vault = make_vault(self, self.CONFIG.replace('["GM Notes"]', '["GM Notes", "World State"]'))
+        (vault / "Bob.md").write_text(self.BOB, encoding="utf-8")
+        vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertIn("The harbour burns in week 3.",
+                      vc.hidden_lines(read(vault, "Bob.md"), ["GM Notes"], {"type": "npc"}))
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "'World State'"))
+
+    def test_under_gm_notes_it_is_quiet(self):
+        vault = make_vault(self, self.CONFIG)
+        (vault / "Bob.md").write_text(self.BOB.replace("## World State", "## GM Notes\n\n### World State"),
+                                      encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "'World State'"))
+
+
+class GmLeakReviewFollowupTests(unittest.TestCase):
+    """Review of #239/#240: the advice mustn't un-hide the defaults, and the
+    site_dir reader reads only publish's own key."""
+
+    def test_advice_pastes_the_whole_effective_list(self):
+        # a vault with no list relies on the defaults; adding only World State
+        # would replace them, and the collapse would then un-hide the rest
+        vault = make_vault(self, "---\ntype: meta\n---\n")
+        (vault / "Bob.md").write_text("---\ntype: npc\n---\n\n# Bob\n\n## World State\n\nx\n",
+                                      encoding="utf-8")
+        row = next(r for r in vc.check_gm_leak(vault, None) if "'World State'" in r)
+        self.assertIn('"World State"', row)
+        self.assertIn('"Handoff to Reconcile"', row)
+        self.assertIn('"GM Notes"', row)
+
+    def test_following_the_pasted_list_hides_every_default_section(self):
+        vault = make_vault(self, "---\ntype: meta\n---\n")
+        bob = ("---\ntype: npc\n---\n\n# Bob\n\n## World State\n\nburns\n\n"
+               "## Handoff to Reconcile\n\nsecret handoff\n")
+        (vault / "Bob.md").write_text(bob, encoding="utf-8")
+        row = next(r for r in vc.check_gm_leak(vault, None) if "'World State'" in r)
+        pasted = row[row.index("["):row.index("]") + 1]
+        (vault / "_meta" / "vault-config.md").write_text(
+            f"---\ntype: meta\npublish:\n  exclude_sections: {pasted}\n---\n", encoding="utf-8")
+        vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        hidden = vc.hidden_lines(read(vault, "Bob.md"), ["GM Notes"], {"type": "npc"})
+        self.assertIn("burns", hidden)
+        self.assertIn("secret handoff", hidden)
+
+    def test_site_dir_is_read_only_as_publishs_direct_child(self):
+        import vaultlib
+        vault = make_vault(self, (
+            "---\ntype: meta\npublish:\n  deploy:\n    site_dir: /wrong\n"
+            "# a column-0 comment inside the block\n  notes: |\n    site_dir: /also-wrong\n"
+            '  site_dir: "C:\\\\Sites\\\\x"\n---\n'))
+        self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "C:\\Sites\\x")
+
+    def test_a_bom_site_json_is_read(self):
+        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text(
+            "\ufeff" + json.dumps({"excludeSections": ["GM Notes"]}), encoding="utf-8")
+        vault = make_vault(self, f'---\ntype: meta\npublish:\n  site_dir: "{site}"\n---\n')
+        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
+
+    def test_no_site_dir_and_no_vault_list_is_an_info(self):
+        vault = make_vault(self, "---\ntype: meta\npublish:\n  mode: player\n---\n")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue([r for r in rows if r.startswith("INFO\t_meta/vault-config.md")
+                         and "site_dir" in r], rows)
+        listed = make_vault(self, '---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n')
+        self.assertFalse([r for r in vc.check_gm_leak(listed, None) if "site_dir" in r])
+
+    def test_a_vault_that_never_publishes_gets_no_site_dir_info(self):
+        vault = make_vault(self, "---\ntype: meta\nsystem: coc-7e\n---\n")
+        self.assertFalse([r for r in vc.check_gm_leak(vault, None) if "site_dir" in r])
+
+
+class GmLeakCodeRabbitTests(unittest.TestCase):
+    """CodeRabbit on #263."""
+
+    def test_keeper_checklist_gets_the_renest_advice(self):
+        vault = make_vault(self, '---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n')
+        (vault / "Bob.md").write_text("---\ntype: npc\n---\n\n# Bob\n\n## Keeper Checklist\n\n- x\n",
+                                      encoding="utf-8")
+        row = next(r for r in vc.check_gm_leak(vault, None) if "Keeper Checklist" in r)
+        self.assertIn("--renest-excludes", row)
+
+    def test_an_apostrophe_in_a_plain_site_dir_is_not_a_quote(self):
+        import vaultlib
+        vault = make_vault(self, "---\ntype: meta\npublish:\n  site_dir: /sites/GM's Site # player site\n---\n")
+        self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "/sites/GM's Site")
