@@ -201,10 +201,9 @@ describe('extractRecapHtml (#269)', () => {
     assert.strictEqual(html, 'They read the letter and <code>rolled 42</code>.');
   });
 
-  it('escapes raw HTML in the paragraph', () => {
+  it('never emits raw HTML from the paragraph', () => {
     const html = extractRecapHtml(recapOf('A <script>alert(1)</script> & a <b>tag</b>.'));
-    assert.ok(!html.includes('<script>') && !html.includes('<b>'), html);
-    assert.ok(html.includes('&lt;script&gt;') && html.includes('&amp;'), html);
+    assert.strictEqual(html, 'A &amp; a tag.');
   });
 
   it('truncates by visible text and closes open tags', () => {

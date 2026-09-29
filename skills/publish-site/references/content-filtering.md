@@ -95,6 +95,9 @@ within a section.
 **Edge cases:**
 - Unclosed marker: content stripped to end of file (safe default)
 - Marker inside a code block: ignored (treated as literal)
+- Inside raw HTML (with `publish.allow_html: true`): markers work the
+  same, on their own lines inside the markup. They and every other
+  HTML comment are stripped before the HTML is rendered
 
 ## Inline Spoiler Markers
 

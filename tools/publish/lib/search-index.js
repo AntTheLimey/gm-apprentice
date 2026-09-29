@@ -1,9 +1,10 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const lunr = require('lunr');
+const { stripTags } = require('./html-allowlist');
 
 function stripMarkdown(md) {
-  return (md || '')
+  return stripTags(md)  // raw HTML is markup, not searchable prose (#266)
     .replace(/^#+\s+.*/gm, '')
     .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, d) => d || t)
     .replace(/!\[.*?\]\(.*?\)/g, '')

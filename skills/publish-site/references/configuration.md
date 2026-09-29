@@ -34,6 +34,7 @@ each other — see § Precedence.
 | Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Image optimization | `publish.images` | Opt-in WebP re-encoding of copied images (default: off) |
+| Raw HTML | `publish.allow_html` | Render raw HTML in page bodies through a sanitising allowlist (default: `false` — HTML shows as literal text). See § Raw HTML in page bodies |
 | Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
 | Locations grouping | `publish.locations` | Pivot the Locations index on a `location_type` (default: genre-derived) |
 | CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists. Campaign-wide — there is no per-PC override |
@@ -98,6 +99,33 @@ missing encoder never breaks a build. Images that would grow when
 re-encoded keep their original bytes; SVG, GIF, WebP and AVIF are always
 passed through. On a portrait-heavy campaign this is the biggest single
 weight on the site — one real vault went from 164 MB to 11 MB.
+
+### Raw HTML in page bodies
+
+Off by default — raw HTML in a page body is escaped and shows up as
+literal tags. For handouts that don't map to markdown (a styled letter,
+a layout, an inline SVG seal), turn it on:
+
+```yaml
+publish:
+  allow_html: true    # default false; only a YAML true enables it
+```
+
+The rendered body then passes through an allowlist. Kept: structural
+and text tags (`div`, `span`, `p`, headings, lists, tables, `figure`,
+`aside`, `details`/`summary`, `img`, `a`, …), inline SVG shapes, text
+and gradients, `class`/`id`/`style` (presentational CSS only, no
+`url()`). Removed: `script`, `style` elements, `iframe`, `object`,
+`embed`, forms, `link`, `meta`, `base`, SVG `foreignObject`, every
+`on…` handler, `data-*` attributes, and `javascript:`/`data:` URLs (a
+base64 raster image in `<img src>` is the one exception). The list
+lives in `tools/publish/lib/html-allowlist.js`.
+
+GM content is stripped before any HTML is let through: `<!-- gm-only
+-->` and spoiler blocks, excluded sections and all HTML comments go
+first, so wrapping secret text in markup never publishes it. The markers
+still have to sit on their own lines — inside a `<div>` is fine. Search,
+excerpts and the landing recap use the text only.
 
 ### Section index banners
 

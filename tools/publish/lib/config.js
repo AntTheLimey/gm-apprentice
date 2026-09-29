@@ -85,6 +85,9 @@ const PUBLISH_DEFAULTS = {
     fields: {},
   },
   section_titles: {},
+  // Raw HTML in page bodies (#266). Off: HTML is escaped and shows as literal text, as it
+  // always has. On: it renders, through the allowlist sanitiser in html-allowlist.js.
+  allow_html: false,
   // Backend-capability gates. undefined = "not set" (the build's resolver then
   // auto-detects from deployed Functions for legacy sites); an explicit boolean
   // is authoritative. Both default off for new sites (set in the init scaffold).
@@ -98,6 +101,14 @@ function defaultModeFrom(raw) {
     console.warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
   }
   return mode;
+}
+
+// publish.allow_html (#266) is on only for a real YAML `true`. Anything else set there
+// (`"true"`, `yes`, `1`) keeps HTML inert — and says so, since the GM clearly meant something.
+function allowHtmlFrom(raw) {
+  if (raw === undefined || raw === null || typeof raw === 'boolean') return raw === true;
+  console.warn(`publish.allow_html "${raw}" is not true or false — raw HTML stays off`);
+  return false;
 }
 
 // Union exclude lists from both config sources (vault-config.md and vault.config.json),
@@ -369,6 +380,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
+    // Strictly `true`: anything else — absent, a typo, the string "yes" — keeps HTML inert.
+    // Publish block only; vault.config.json has no say in it.
+    allow_html: allowHtmlFrom(publish.allow_html),
     // Explicit flags win, publish block over json fallback; absent stays undefined.
     backend: {
       statusBar: (publish.backend && publish.backend.statusBar)

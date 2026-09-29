@@ -1,0 +1,86 @@
+{
+    "name": "htmlparser2",
+    "version": "12.0.0",
+    "description": "Fast & forgiving HTML/XML parser",
+    "keywords": [
+        "html",
+        "parser",
+        "streams",
+        "xml",
+        "dom",
+        "rss",
+        "feed",
+        "atom"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/fb55/htmlparser2.git"
+    },
+    "funding": [
+        "https://github.com/fb55/htmlparser2?sponsor=1",
+        {
+            "type": "github",
+            "url": "https://github.com/sponsors/fb55"
+        }
+    ],
+    "license": "MIT",
+    "author": "Felix Boehm <me@feedic.com>",
+    "sideEffects": false,
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        },
+        "./WebWritableStream": {
+            "types": "./dist/WebWritableStream.d.ts",
+            "default": "./dist/WebWritableStream.js"
+        },
+        "./WritableStream": {
+            "types": "./dist/WritableStream.d.ts",
+            "default": "./dist/WritableStream.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist",
+        "src",
+        "!**/*.spec.ts",
+        "!src/**/__tests__/**",
+        "!src/**/__fixtures__/**",
+        "!src/**/__snapshots__/**"
+    ],
+    "scripts": {
+        "build": "tsc",
+        "format": "npm run format:es && npm run format:biome",
+        "format:biome": "biome check --write .",
+        "format:es": "npm run lint:es -- --fix",
+        "lint": "npm run lint:es && npm run lint:ts && npm run lint:biome",
+        "lint:biome": "biome check .",
+        "lint:es": "eslint .",
+        "lint:ts": "tsc --noEmit",
+        "prepublishOnly": "npm run build",
+        "test": "npm run test:vi && npm run lint",
+        "test:vi": "vitest run"
+    },
+    "dependencies": {
+        "domelementtype": "^3.0.0",
+        "domhandler": "^6.0.0",
+        "domutils": "^4.0.2",
+        "entities": "^8.0.0"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.4.8",
+        "@feedic/eslint-config": "^0.3.1",
+        "@types/node": "^25.5.0",
+        "eslint": "^10.0.3",
+        "eslint-config-biome": "^2.1.3",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.57.1",
+        "vitest": "^4.1.0"
+    },
+    "engines": {
+        "node": ">=20.19.0"
+    }
+}
