@@ -728,3 +728,56 @@ describe('CRLF line endings', () => {
     assert.ok(!filterSections(cr, ['GM Notes']).includes('SECRET'));
   });
 });
+
+describe('inline gm-only / spoiler markers (#266 review)', () => {
+  const both = { gm: stripGmOnly, spoiler: stripSpoiler };
+  const txt = (r) => (typeof r === 'string' ? r : r.text);
+  for (const [name, strip] of Object.entries(both)) {
+    const o = `<!-- ${name === 'gm' ? 'gm-only' : 'spoiler'} -->`;
+    const c = `<!-- /${name === 'gm' ? 'gm-only' : 'spoiler'} -->`;
+    it(`${name}: strips a same-line pair and keeps the text around it`, () => {
+      const out = txt(strip(`a ${o}SECRET${c} b`));
+      assert.doesNotMatch(out, /SECRET/);
+      assert.match(out, /^a\s+b$/);
+    });
+    it(`${name}: strips two inline pairs on one line independently`, () => {
+      const out = txt(strip(`x ${o}S1${c} y ${o}S2${c} z`));
+      assert.doesNotMatch(out, /S1|S2/);
+      assert.match(out, /x\s+y\s+z/);
+    });
+    it(`${name}: strips inline markers wrapped around lines inside a div`, () => {
+      const out = txt(strip(`<div>${o}\nSECRET\n${c}</div>\nAfter`));
+      assert.doesNotMatch(out, /SECRET/);
+      assert.match(out, /<div>/);
+      assert.match(out, /After/);
+    });
+    it(`${name}: an inline opener with no closer strips to the end and warns`, () => {
+      const r = strip(`keep ${o}SECRET\nSECRET too`);
+      assert.ok(r.warnings && r.warnings.length === 1, JSON.stringify(r));
+      assert.doesNotMatch(r.text, /SECRET/);
+      assert.match(r.text, /keep/);
+    });
+    it(`${name}: markers inside a code fence stay literal`, () => {
+      const src = '```\n' + `a ${o}X${c} b\n` + '```';
+      assert.strictEqual(txt(strip(src)), src);
+    });
+  }
+
+  it('does not let an inline closer end a block opened on its own line', () => {
+    const out = txt(stripGmOnly('<!-- gm-only -->\n<div><!-- /gm-only --></div>\nSECRET\n<!-- /gm-only -->\nAfter'));
+    assert.doesNotMatch(out, /SECRET/);
+    assert.match(out, /After/);
+  });
+
+  for (const allowHtml of [true, false]) {
+    it(`processContent hides inline secrets with allow_html ${allowHtml}`, () => {
+      const { configureRenderer, processContent } = require('../../lib/processor');
+      configureRenderer({ allowHtml });
+      const page = { markdown: 'Pub a <!-- gm-only -->SECRET<!-- /gm-only --> b\n\n<div><!-- spoiler -->\nSECRET\n<!-- /spoiler --></div>\n', frontmatter: {}, outputPath: 'x.html' };
+      const { html } = processContent(page, {}, []);
+      configureRenderer({ allowHtml: false });
+      assert.doesNotMatch(html, /SECRET/);
+      assert.match(html, /Pub a/);
+    });
+  }
+});

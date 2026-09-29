@@ -843,10 +843,10 @@ def scan_body(text: str,
     """
     excludes = {s.casefold() for s in exclude_sections}
     marker_res = {
-        name: (re.compile(rf"^<!--\s*{re.escape(word)}\s*-->"),
-               re.compile(rf"^<!--\s*/{re.escape(word)}\s*-->"))
+        name: re.compile(rf"<!--\s*(/?){re.escape(word)}\s*-->")
         for name, word in _MARKERS
     }
+    stacks: dict[str, list[tuple[bool, int]]] = {n: [] for n, _ in _MARKERS}
     depths = {name: 0 for name, _ in _MARKERS}
     open_lines: dict[str, list[int]] = {name: [] for name, _ in _MARKERS}
     words = dict(_MARKERS)
@@ -879,27 +879,37 @@ def scan_body(text: str,
         heading: tuple[int, str] | None = None
 
         if not in_code:
-            stripped = line.strip()
+            # Markers count wherever they sit on the line (inline, inside an
+            # HTML wrapper, several per line), exactly as stripMarkedBlocks
+            # does. `marker` is only set for a line that STARTS with one — the
+            # own-line shape the wrap-up structure fixes reason about.
+            found = []
             for name, _word in _MARKERS:
-                open_re, close_re = marker_res[name]
-                if open_re.match(stripped):
+                for mm in marker_res[name].finditer(line):
+                    found.append((mm.start(), name, mm.group(1) == "/"))
+            found.sort()
+            for idx, (pos, name, is_close) in enumerate(found):
+                inline = line[:pos].strip() != ""
+                if idx == 0 and not inline:
+                    marker = f"{'close' if is_close else 'open'}-{name}"
+                stack = stacks[name]
+                if not is_close:
+                    stack.append((inline, lineno))
                     depths[name] += 1
                     open_lines[name].append(lineno)
-                    marker = f"open-{name}"
-                    break
-                if close_re.match(stripped):
-                    marker = f"close-{name}"
-                    if depths[name] == 0:
-                        # A closer with nothing open. Don't let it drive depth
-                        # negative — that would make a LATER opener fail to
-                        # strip. Record it instead.
-                        problems.append(
-                            f"line {lineno}: <!-- /{words[name]} --> "
-                            f"with no opener")
-                    else:
+                elif not stack:
+                    # A closer with nothing open. Don't let it drive depth
+                    # negative — that would make a LATER opener fail to
+                    # strip. Record it instead.
+                    problems.append(
+                        f"line {lineno}: <!-- /{words[name]} --> "
+                        f"with no opener")
+                else:
+                    top_inline, top_line = stack[-1]
+                    if not inline or top_inline or top_line == lineno:
+                        stack.pop()
                         depths[name] -= 1
                         open_lines[name].pop()
-                    break
 
             if marker is None:
                 hm = HEADING_RE.match(line)
@@ -988,12 +998,11 @@ def _js_keep_only_sections(lines: list[str],
 
 
 def _js_strip_marked(lines: list[str], word: str) -> list[str]:
-    open_re = re.compile(rf"^<!--\s*{re.escape(word)}\s*-->")
-    close_re = re.compile(rf"^<!--\s*/{re.escape(word)}\s*-->")
+    marker_re = re.compile(rf"<!--\s*(/?){re.escape(word)}\s*-->")
     out: list[str] = []
-    depth = 0
+    stack: list[tuple[bool, int]] = []
     fence: str | None = None
-    for line in lines:
+    for i, line in enumerate(lines):
         m = _JS_FENCE_RE.match(line)
         is_fence_line = False
         if m:
@@ -1005,20 +1014,34 @@ def _js_strip_marked(lines: list[str], word: str) -> list[str]:
                   and not info.strip()):
                 fence, is_fence_line = None, True
         if fence is not None or is_fence_line:
-            if depth == 0:
+            if not stack:
                 out.append(line)
             continue
-        if open_re.match(line.strip()):
-            depth += 1
-            if depth == 1:
-                out.append("")
+        found = list(marker_re.finditer(line))
+        if not found:
+            if not stack:
+                out.append(line)
             continue
-        if close_re.match(line.strip()):
-            if depth:
-                depth -= 1
-            continue
-        if depth == 0:
-            out.append(line)
+        kept, last, opened = "", 0, False
+        for mm in found:
+            if not stack:
+                kept += line[last:mm.start()]
+            last = mm.end()
+            inline = line[:mm.start()].strip() != ""
+            if mm.group(1) == "":
+                if not stack:
+                    opened = True
+                stack.append((inline, i))
+            elif stack:
+                top_inline, top_line = stack[-1]
+                if not inline or top_inline or top_line == i:
+                    stack.pop()
+        if not stack:
+            kept += line[last:]
+        if kept.strip():
+            out.append(kept)
+        elif opened:
+            out.append("")
     return out
 
 

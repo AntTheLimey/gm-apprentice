@@ -2270,3 +2270,45 @@ class GmLeakCodeRabbitTests(unittest.TestCase):
         import vaultlib
         vault = make_vault(self, "---\ntype: meta\npublish:\n  site_dir: /sites/GM's Site # player site\n---\n")
         self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "/sites/GM's Site")
+
+
+import vaultlib  # noqa: E402
+
+
+class InlineMarkerTests(unittest.TestCase):
+    """Markers not on their own line (#266 review): the exact port and
+    scan_body must agree with stripMarkedBlocks."""
+
+    def strip(self, text, word="gm-only"):
+        return "\n".join(vaultlib._js_strip_marked(text.split("\n"), word))
+
+    def test_same_line_pair(self):
+        out = self.strip("a <!-- gm-only -->SECRET<!-- /gm-only --> b")
+        self.assertNotIn("SECRET", out)
+        self.assertIn("a", out)
+
+    def test_two_pairs_one_line(self):
+        out = self.strip("x <!-- spoiler -->S1<!-- /spoiler --> y "
+                         "<!-- spoiler -->S2<!-- /spoiler --> z", "spoiler")
+        self.assertNotIn("S1", out)
+        self.assertNotIn("S2", out)
+        self.assertIn("y", out)
+
+    def test_inline_in_div_multiline(self):
+        out = self.strip("<div><!-- gm-only -->\nSECRET\n<!-- /gm-only --></div>\nAfter")
+        self.assertNotIn("SECRET", out)
+        self.assertIn("After", out)
+
+    def test_fenced_markers_stay(self):
+        text = "```\na <!-- gm-only -->X<!-- /gm-only --> b\n```"
+        self.assertEqual(self.strip(text), text)
+
+    def test_scan_body_tracks_inline_markers(self):
+        states, problems = vc.scan_body(
+            "<div><!-- gm-only -->\nSECRET\n<!-- /gm-only --></div>\nAfter", ())
+        self.assertEqual(problems, [])
+        self.assertEqual([s.gm_depth for s in states], [1, 1, 0, 0])
+
+    def test_scan_body_unclosed_inline_reports(self):
+        _states, problems = vc.scan_body("a <!-- gm-only -->SECRET", ())
+        self.assertTrue(any("never closed" in p for p in problems))
