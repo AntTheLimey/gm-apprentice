@@ -1,7 +1,7 @@
 const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
 const {
-  getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
+  getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
 const { canonicalNfc } = require('../unicode');
@@ -87,14 +87,14 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
   let recapZone = '';
   if (latestSession) {
     const recapSource = latestWrapUp || latestSession;
-    const recap = extractRecap(recapSource);
+    const recap = extractRecapHtml(recapSource);
     const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const linkTarget = latestWrapUp || latestSession;
     const recapLink = `<a class="recap-link" href="${escapeHtml(encodeHref(linkTarget.outputPath))}">Read full session &rarr;</a>`;
     recapZone = `<div class="dashboard-section">
   <h2>Latest Session${dateBadge}</h2>
-  <div class="recap">${recap ? escapeHtml(recap) : '<em>No recap available.</em>'}
+  <div class="recap">${recap || '<em>No recap available.</em>'}
     <br>${recapLink}
   </div>
 </div>`;
