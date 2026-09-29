@@ -107,7 +107,7 @@ async function runDeploy(options, deps) {
   const exists = d.exists || ((p) => fs.existsSync(p));
   const runCommand = d.runCommand || require('./run-command').runCommand;
   const runWrangler = d.runWrangler || require('./setup-backend').defaultRunWrangler;
-  const build = d.build || ((o) => require('./build').build(o));
+  const build = d.build || (async (o) => { await require('./fonts').prefetchForConfig(o.configPath); return require('./build').build(o); });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
   const sleep = d.sleep || defaultSleep;
   const now = d.now || (() => new Date());
@@ -188,7 +188,7 @@ async function runDeploy(options, deps) {
       if (failed) return buildFailed(failed);
     }
     try {
-      build({ configPath });
+      await build({ configPath });
     } catch (err) {
       return buildFailed(`Build failed: ${err.message}`);
     }

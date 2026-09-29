@@ -11,7 +11,8 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { generateThemeCSS, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
+const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
+const fontsLib = require('./fonts');
 const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -110,7 +111,7 @@ function build(options = {}) {
     ensureDir(dest);
     const fontsCfg = publishConfig.theme.fonts || {};
     let css = fs.readFileSync(src, 'utf8');
-    if (fontsCfg.source === 'local') {
+    if (fontsCfg.source === 'local' || fontsCfg.source === 'self-host') {
       css = css
         .split('\n')
         .filter((line) => !GOOGLE_FONTS_IMPORT_RE.test(line.trim()))
@@ -150,8 +151,45 @@ function build(options = {}) {
     }
   }
 
+  // theme.fonts.source: 'self-host' (#270): read the vault's font cache (filled by the async
+  // prefetch before build()) into @font-face rules and a list of files to copy. Includes a
+  // genre preset's own Google font (scifi's Rajdhani), whose @import copyGenreCSS strips.
+  // A cache miss warns and leaves the family on its fallback stack — never a Google import.
+  let selfHosted = null;
+  function selfHostedFonts() {
+    if (selfHosted) return selfHosted;
+    const fonts = publishConfig.theme.fonts || {};
+    selfHosted = { css: '', files: [] };
+    if (fonts.source === 'self-host') {
+      const families = fontsLib.selfHostFamilies(fonts, fontsLib.presetFamiliesFor(publishConfig.theme));
+      selfHosted = fontsLib.selfHostedFontFaces(config.vaultPath, families);
+    }
+    return selfHosted;
+  }
+
+  // Source 'google' means every visitor's browser calls Google on page load. Say so, once
+  // per build, whenever an import is actually emitted (#270).
+  function warnGoogleFonts() {
+    const fonts = publishConfig.theme.fonts || {};
+    if (fonts.source === 'local' || fonts.source === 'self-host') return;
+    const names = [...googleFontNames(fonts), ...fontsLib.presetFamiliesFor(publishConfig.theme)]
+      .filter((v, i, a) => a.indexOf(v) === i);
+    if (names.length === 0) return;
+    console.warn(`  WARNING: ${fontsLib.GOOGLE_WARNING(names.join(', '))}`);
+  }
+
+  function copySelfHostedFonts() {
+    for (const f of selfHostedFonts().files) {
+      const dest = path.join(outputDir, 'fonts', f.rel);
+      ensureDir(dest);
+      fs.copyFileSync(f.from, dest);
+      console.log(`  wrote fonts/${f.rel}`);
+    }
+  }
+
   function writeThemeCSS() {
-    const css = scopeColorScheme(generateThemeCSS(publishConfig.theme));
+    warnGoogleFonts();
+    const css = scopeColorScheme(generateThemeCSS(publishConfig.theme, { selfHostCss: selfHostedFonts().css }));
     const dest = path.join(outputDir, 'css/theme.css');
     ensureDir(dest);
     fs.writeFileSync(dest, css);
@@ -170,6 +208,7 @@ function build(options = {}) {
   // into the public site.
   function copyThemeFonts() {
     const fontsCfg = publishConfig.theme.fonts || {};
+    copySelfHostedFonts();
     const files = Array.isArray(fontsCfg.files) ? fontsCfg.files : [];
     if (files.length === 0) return;
     const vaultRoot = path.resolve(config.vaultPath);

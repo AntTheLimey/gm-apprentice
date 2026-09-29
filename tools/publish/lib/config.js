@@ -47,6 +47,11 @@ const PUBLISH_DEFAULTS = {
       heading: 'system-ui',
       body: 'system-ui',
       // 'google' (default): custom fonts pull from fonts.googleapis.com, as always.
+      // 'self-host' (#270): the build downloads the Google-hosted families once into the
+      // vault's _meta/font-cache/ and serves them from the site (no request to Google
+      // from visitors). Offline builds reuse the cache; a miss warns and uses the
+      // fallback stack, never a Google import. New vaults are set up with this; the code
+      // default stays 'google' so existing sites don't change look silently.
       // 'local': no Google import; the build copies theme.fonts.files into the site's
       // fonts/ and emits @font-face for them instead (#211). No files under 'local'
       // means no import at all — the fonts are whatever stack cssFontValue falls back to.

@@ -368,9 +368,13 @@ pairing based on the genre:
 > Does that look right, or would you like to adjust?"
 
 Store confirmed values in `_meta/vault-config.md` under
-`publish.theme.palette` and `publish.theme.fonts`. If the GM wants to
-skip theming, use the defaults (system-ui fonts, neutral blue-grey
-palette).
+`publish.theme.palette` and `publish.theme.fonts`. Always write
+`source: self-host` inside `publish.theme.fonts` for a new vault: the
+build downloads the chosen Google fonts once into the vault's
+`_meta/font-cache/` and serves them from the site, so players' browsers
+never contact Google (an IP-address and GDPR concern). If the GM wants
+to skip theming, use the defaults (system-ui fonts, neutral blue-grey
+palette) — no font is fetched then.
 
 ---
 
