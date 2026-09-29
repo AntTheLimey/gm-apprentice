@@ -994,7 +994,9 @@ changes shape; two new optional publish settings.
   among them, require consent for that). Offer to set
   `publish.theme.fonts.source: self-host`: the next build downloads the
   fonts once into `_meta/font-cache/` and serves them from the site.
-  The look doesn't change. Skip it when the vault already uses
+  The look doesn't change. Also offer it when the vault uses the
+  `scifi` genre preset even with no custom fonts: its heading font
+  (Rajdhani) comes from Google. Skip it when the vault already uses
   `source: local` or only system fonts. Ask; apply only on a yes.
 - A GM who ships handouts as images because raw HTML never rendered can
   now set `publish.allow_html: true`. Mention it only if the vault has

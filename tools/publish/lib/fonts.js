@@ -121,8 +121,20 @@ function googleCssUrl(family, axes) {
   return `https://fonts.googleapis.com/css2?family=${fam}&display=swap`;
 }
 
-function fetchWithTimeout(fetchImpl, url, timeoutMs) {
-  return fetchImpl(url, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(timeoutMs) });
+const CSS_HOST = 'fonts.googleapis.com';
+
+// Fetches `url` and enforces, AFTER redirects, that the response still comes from
+// `expectedHost` (response.url is the final URL; a mock with no url is not checked).
+async function fetchWithTimeout(fetchImpl, url, timeoutMs, expectedHost) {
+  const res = await fetchImpl(url, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(timeoutMs) });
+  if (expectedHost && res.url) {
+    let host = null;
+    try { host = new URL(res.url).hostname; } catch { /* unparseable: refuse below */ }
+    if (host !== expectedHost) {
+      throw new Error(`response for ${url} was redirected to ${host || 'an unparseable URL'}, not ${expectedHost}`);
+    }
+  }
+  return res;
 }
 
 // Reads a family's cache, or null when absent or incomplete (a missing file = a miss).
@@ -147,7 +159,7 @@ async function downloadFamily(vaultPath, family, { fetch: fetchImpl, timeoutMs }
   let faces = [];
   let lastErr = null;
   for (const axes of AXIS_CANDIDATES) {
-    const res = await fetchWithTimeout(fetchImpl, googleCssUrl(family, axes), timeoutMs);
+    const res = await fetchWithTimeout(fetchImpl, googleCssUrl(family, axes), timeoutMs, CSS_HOST);
     if (res.status === 400 || res.status === 404) {
       lastErr = new Error(`Google Fonts has no ${axes || 'default'} styles for "${family}" (HTTP ${res.status})`);
       continue;
@@ -166,8 +178,11 @@ async function downloadFamily(vaultPath, family, { fetch: fetchImpl, timeoutMs }
     let file = byUrl.get(face.url);
     if (!file) {
       file = crypto.createHash('sha1').update(face.url).digest('hex').slice(0, 16) + '.woff2';
-      const res = await fetchWithTimeout(fetchImpl, face.url, timeoutMs);
+      const res = await fetchWithTimeout(fetchImpl, face.url, timeoutMs, GSTATIC_HOST);
       if (!res.ok) throw new Error(`font download failed (HTTP ${res.status}) for "${family}"`);
+      // Refuse before buffering: a declared length over the cap never gets read.
+      const declared = Number(res.headers && res.headers.get && res.headers.get('content-length'));
+      if (declared > MAX_FONT_BYTES) throw new Error(`font file for "${family}" is too large (${declared} bytes)`);
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length === 0 || buf.length > MAX_FONT_BYTES || buf.subarray(0, 4).toString('latin1') !== 'wOF2') {
         throw new Error(`downloaded file for "${family}" is not a woff2 font`);

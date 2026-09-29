@@ -115,7 +115,12 @@ The rendered body then passes through an allowlist. Kept: structural
 and text tags (`div`, `span`, `p`, headings, lists, tables, `figure`,
 `aside`, `details`/`summary`, `img`, `a`, …), inline SVG shapes, text
 and gradients, `class`/`id`/`style` (presentational CSS only, no
-`url()`). Removed: `script`, `style` elements, `iframe`, `object`,
+`url()`). Every `id` you write is prefixed with `u-` (`id="seal"` becomes
+`id="u-seal"`) so it can never collide with the site's own ids; `#seal`
+links, `<use href>`, `url(#seal)` paints and `aria-labelledby` are
+rewritten to match. Style with classes; an `overrides.css` rule that
+targets an id must use `#u-seal`. SVG `url()` paints must be local
+(`url(#id)`); external ones are dropped. Removed: `script`, `style` elements, `iframe`, `object`,
 `embed`, forms, `link`, `meta`, `base`, SVG `foreignObject`, every
 `on…` handler, `data-*` attributes, and `javascript:`/`data:` URLs (a
 base64 raster image in `<img src>` is the one exception). The list
@@ -124,7 +129,9 @@ lives in `tools/publish/lib/html-allowlist.js`.
 GM content is stripped before any HTML is let through: `<!-- gm-only
 -->` and spoiler blocks, excluded sections and all HTML comments go
 first, so wrapping secret text in markup never publishes it. The markers
-still have to sit on their own lines — inside a `<div>` is fine. Search,
+may sit anywhere, own line or inline (`a <!-- gm-only -->x<!-- /gm-only -->`);
+an opener with no closer hides everything to the end of the page and
+warns. Search,
 excerpts and the landing recap use the text only.
 
 ### Section index banners

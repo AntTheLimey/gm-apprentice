@@ -429,7 +429,12 @@ structural and text tags (`div`, `span`, `p`, headings, lists, tables,
 `figure`, `aside`, `details`/`summary`, `img`, `a`, …), inline SVG
 (shapes, `text`, gradients, `clipPath`, `mask`, `symbol`, and `use` with
 `#id` references only), `class`/`id`/`title`/`lang`/`dir`, and a `style`
-attribute filtered to presentational properties with no `url()`. It
+attribute filtered to presentational properties with no `url()`. Every
+author `id` is rewritten to `u-<id>` (so it cannot shadow the site's own
+ids, such as its JSON data islands) and same-page references (`href="#x"`,
+`<use>`, `url(#x)`, `aria-labelledby`) follow; a CSS rule in `overrides.css`
+that targets an id must use `#u-<id>`, or better, a class. SVG `url()`
+paints are limited to local `url(#id)`. It
 removes `script`, `style`, `iframe`, `object`/`embed`, forms, `link`,
 `meta`, `base`, SVG `foreignObject`, every `on*` handler, `data-*`
 attributes, and `javascript:`/`data:` URLs (a base64 PNG/JPEG/GIF/WebP/AVIF

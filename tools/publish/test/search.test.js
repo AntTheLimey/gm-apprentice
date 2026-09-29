@@ -66,3 +66,15 @@ test('buildSearchIndex: an NFD-authored page is findable by the folded (NFC) que
   assert.strictEqual(hits.length, 1, 'folded query found nothing in an NFD-authored index');
   assert.strictEqual(documents[hits[0].ref].href, 'characters/npcs/gonzalez.html');
 });
+
+test('tabTarget traps Tab and Shift+Tab inside the search panel', () => {
+  const [a, b, c] = ['a', 'b', 'c'];
+  const list = [a, b, c];
+  assert.strictEqual(search.tabTarget(list, c, false), a);
+  assert.strictEqual(search.tabTarget(list, a, true), c);
+  assert.strictEqual(search.tabTarget(list, b, false), null);
+  assert.strictEqual(search.tabTarget(list, b, true), null);
+  assert.strictEqual(search.tabTarget(list, 'outside', false), a);
+  assert.strictEqual(search.tabTarget(list, 'outside', true), c);
+  assert.strictEqual(search.tabTarget([], a, false), null);
+});

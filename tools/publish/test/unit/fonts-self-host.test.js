@@ -112,6 +112,67 @@ describe('ensureFontCache', () => {
   });
 });
 
+describe('fetch hardening', () => {
+  const withUrl = (res, url) => { Object.defineProperty(res, 'url', { value: url }); return res; };
+
+  it('rejects a font whose content-length exceeds the cap before buffering it', async () => {
+    const vault = tmp();
+    const warnings = [];
+    const base = mockFetch([]);
+    const fetchImpl = async (url) => {
+      const res = await base(url);
+      if (new URL(url).hostname !== 'fonts.gstatic.com') return res;
+      return new Response(WOFF2, { status: 200, headers: { 'content-length': String(6 * 1024 * 1024) } });
+    };
+    await fonts.ensureFontCache(vault, ['Cinzel'], { fetch: fetchImpl, warn: (m) => warnings.push(m), log: () => {} });
+    assert.match(warnings.join('\n'), /too large/);
+    assert.strictEqual(fonts.readFamilyCache(vault, 'Cinzel'), null);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('rejects a font response redirected off fonts.gstatic.com', async () => {
+    const vault = tmp();
+    const warnings = [];
+    const base = mockFetch([]);
+    const fetchImpl = async (url) => {
+      const res = await base(url);
+      return new URL(url).hostname === 'fonts.gstatic.com' ? withUrl(res, 'https://evil.example.com/x.woff2') : res;
+    };
+    await fonts.ensureFontCache(vault, ['Cinzel'], { fetch: fetchImpl, warn: (m) => warnings.push(m), log: () => {} });
+    assert.match(warnings.join('\n'), /redirected to evil\.example\.com/);
+    assert.strictEqual(fonts.readFamilyCache(vault, 'Cinzel'), null);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('rejects a CSS response redirected off fonts.googleapis.com', async () => {
+    const vault = tmp();
+    const warnings = [];
+    const base = mockFetch([]);
+    const fetchImpl = async (url) => {
+      const res = await base(url);
+      return new URL(url).hostname === 'fonts.googleapis.com' ? withUrl(res, 'https://evil.example.com/css') : res;
+    };
+    await fonts.ensureFontCache(vault, ['Cinzel'], { fetch: fetchImpl, warn: (m) => warnings.push(m), log: () => {} });
+    assert.match(warnings.join('\n'), /redirected to evil\.example\.com/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('accepts responses whose final URL stays on the expected hosts', async () => {
+    const vault = tmp();
+    const base = mockFetch([]);
+    const fetchImpl = async (url) => withUrl(await base(url), String(url));
+    await fonts.ensureFontCache(vault, ['Cinzel'], { fetch: fetchImpl, warn: () => {}, log: () => {} });
+    assert.ok(fonts.readFamilyCache(vault, 'Cinzel'));
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+describe('index exports', () => {
+  it('exposes buildWithFonts', () => {
+    assert.strictEqual(typeof require('../../lib/index').buildWithFonts, 'function');
+  });
+});
+
 describe('build with source: self-host', () => {
   function setup(fontsYaml, genre) {
     const work = tmp();

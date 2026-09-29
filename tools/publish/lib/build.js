@@ -1155,6 +1155,10 @@ function build(options = {}) {
 module.exports = { build };
 
 // Allow running directly: node lib/build.js
+// Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.
 if (require.main === module) {
-  build();
+  fontsLib.buildWithFonts().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }

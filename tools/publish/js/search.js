@@ -65,11 +65,24 @@
     }
   }
 
+  // Focus trap for the modal panel. Given the focusable elements in DOM order, the active
+  // element and Shift state, returns the element Tab should move to, or null to let the
+  // browser move focus normally (focus is inside the list and not on an end). Focus that is
+  // outside the list entirely is pulled back in, so Tab can never reach the page behind.
+  function tabTarget(list, active, shift) {
+    if (!list.length) return null;
+    var i = list.indexOf(active);
+    if (i === -1) return shift ? list[list.length - 1] : list[0];
+    if (shift && i === 0) return list[list.length - 1];
+    if (!shift && i === list.length - 1) return list[0];
+    return null;
+  }
+
   if (typeof document === 'undefined') {
     if (typeof module !== 'undefined' && module.exports) {
       module.exports = {
         esc: esc, encodeHref: encodeHref, normalizeQuery: normalizeQuery,
-        queryTerms: queryTerms, runSearch: runSearch, MIN_FUZZY_LENGTH: MIN_FUZZY_LENGTH
+        queryTerms: queryTerms, runSearch: runSearch, tabTarget: tabTarget, MIN_FUZZY_LENGTH: MIN_FUZZY_LENGTH
       };
     }
     return;
@@ -164,6 +177,14 @@
 
   var triggers = document.querySelectorAll('.nav-search-btn, .nav-search-icon-btn');
   var lastTrigger = null;
+  var clickedTrigger = null;
+
+  // Safari does not focus a button on click, so document.activeElement is <body> when
+  // openSearch runs. Remember the clicked trigger explicitly (capture phase, so it is set
+  // before the inline onclick calls openSearch) and restore focus to it on close.
+  Array.prototype.forEach.call(triggers, function(b) {
+    b.addEventListener('click', function() { clickedTrigger = b; }, true);
+  });
 
   function setExpanded(open) {
     Array.prototype.forEach.call(triggers, function(b) { b.setAttribute('aria-expanded', open ? 'true' : 'false'); });
@@ -178,7 +199,9 @@
   }
 
   window.openSearch = function() {
-    lastTrigger = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+    lastTrigger = clickedTrigger ||
+      (document.activeElement && document.activeElement !== document.body ? document.activeElement : null);
+    clickedTrigger = null;
     searchOverlay.classList.add('open');
     setExpanded(true);
     input.value = '';
@@ -194,6 +217,15 @@
   });
 
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && searchOverlay.classList.contains('open')) closeSearch();
+    if (!searchOverlay.classList.contains('open')) return;
+    if (e.key === 'Escape') { closeSearch(); return; }
+    if (e.key !== 'Tab') return;
+    var panel = searchOverlay.querySelector('.search-modal');
+    var list = Array.prototype.filter.call(
+      panel.querySelectorAll('input, button, a[href], [tabindex]'),
+      function(el) { return !el.disabled && el.getAttribute('tabindex') !== '-1' && el.offsetParent !== null; });
+    var target = tabTarget(list, document.activeElement, e.shiftKey);
+    if (target) { e.preventDefault(); target.focus(); }
+    else if (!list.length) e.preventDefault();
   });
 })();

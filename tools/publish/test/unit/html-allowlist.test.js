@@ -13,6 +13,42 @@ const path = require('path');
 
 // #266: publish.allow_html lets raw HTML in page bodies render, through an allowlist.
 
+describe('html allowlist sanitiser: author ids are namespaced', () => {
+  it('prefixes an id that would hijack a site data island', () => {
+    const out = sanitizeBodyHtml('<div id="gurps-live-data">{"x":1}</div>');
+    assert.match(out, /id="u-gurps-live-data"/);
+    assert.doesNotMatch(out, /id="gurps-live-data"/);
+  });
+  it('keeps in-page anchors linked', () => {
+    const out = sanitizeBodyHtml('<a href="#seal">go</a><svg><g id="seal"></g></svg><a href="#">top</a>');
+    assert.match(out, /href="#u-seal"/);
+    assert.match(out, /<g id="u-seal">/);
+    assert.match(out, /href="#"/);
+  });
+  it('keeps <use> references working', () => {
+    const out = sanitizeBodyHtml('<svg><symbol id="s"></symbol><use href="#s"></use><use xlink:href="#s"></use></svg>');
+    assert.match(out, /<symbol id="u-s">/);
+    assert.match(out, /<use href="#u-s">/);
+    assert.match(out, /<use xlink:href="#u-s">/);
+  });
+  it('rewrites local url() references and drops external ones', () => {
+    const out = sanitizeBodyHtml('<svg><rect fill="url(#g)" stroke="url(https://evil.example/x.svg#p)" mask="url(//evil.example/m)" clip-path="url(#c)"/></svg>');
+    assert.match(out, /fill="url\(#u-g\)"/);
+    assert.match(out, /clip-path="url\(#u-c\)"/);
+    assert.doesNotMatch(out, /evil|stroke=|mask=/);
+  });
+  it('rewrites aria idrefs and table headers', () => {
+    const out = sanitizeBodyHtml('<div aria-labelledby="a b" aria-describedby="c" role="region">x</div><table><tr><th id="h1">H</th><td headers="h1">v</td></tr></table>');
+    assert.match(out, /aria-labelledby="u-a u-b"/);
+    assert.match(out, /aria-describedby="u-c"/);
+    assert.match(out, /<th id="u-h1">/);
+    assert.match(out, /headers="u-h1"/);
+  });
+  it('prefixes named anchors', () => {
+    assert.match(sanitizeBodyHtml('<a name="x" href="#x">t</a>'), /name="u-x" href="#u-x"/);
+  });
+});
+
 describe('html allowlist sanitiser: never allowed', () => {
   const cases = {
     'script element and its content': ['<p>ok</p><script>alert(1)</script>', /script|alert/i],
@@ -50,7 +86,7 @@ describe('html allowlist sanitiser: never allowed', () => {
 describe('html allowlist sanitiser: survives', () => {
   it('keeps a styled handout div', () => {
     const out = sanitizeBodyHtml('<div class="handout" id="letter" style="border: 1px solid #333; font-family: Georgia, serif; color: var(--accent)">Dear <em>sir</em></div>');
-    assert.match(out, /<div class="handout" id="letter" style="border:1px solid #333;font-family:Georgia, serif;color:var\(--accent\)">Dear <em>sir<\/em><\/div>/);
+    assert.match(out, /<div class="handout" id="u-letter" style="border:1px solid #333;font-family:Georgia, serif;color:var\(--accent\)">Dear <em>sir<\/em><\/div>/);
   });
 
   it('keeps inline SVG with gradients, local <use> and text', () => {
@@ -59,8 +95,8 @@ describe('html allowlist sanitiser: survives', () => {
       + '<symbol id="s"><circle cx="5" cy="5" r="4"/></symbol></defs>'
       + '<rect width="100" height="50" fill="url(#g)"/><use href="#s" x="10"/><path d="M0 0 L10 10" stroke="#000"/>'
       + '<text x="50" y="25" text-anchor="middle">Seal of <tspan>Thoth</tspan></text></svg>');
-    for (const re of [/<svg viewbox="0 0 100 50" width="100">/, /<linearGradient id="g">/, /<stop offset="0" stop-color="#900">/,
-      /<symbol id="s">/, /<rect width="100" height="50" fill="url\(#g\)">/, /<use href="#s" x="10">/,
+    for (const re of [/<svg viewbox="0 0 100 50" width="100">/, /<linearGradient id="u-g">/, /<stop offset="0" stop-color="#900">/,
+      /<symbol id="u-s">/, /<rect width="100" height="50" fill="url\(#u-g\)">/, /<use href="#u-s" x="10">/,
       /<path d="M0 0 L10 10" stroke="#000">/, /text-anchor="middle">Seal of <tspan>Thoth<\/tspan><\/text>/]) {
       assert.match(out, re, out);
     }
@@ -78,7 +114,7 @@ describe('html allowlist sanitiser: survives', () => {
 
   it('keeps ordinary links', () => {
     const out = sanitizeBodyHtml('<a href="../npcs/vex.html">Vex</a> <a href="https://example.com">site</a> <a href="#top">top</a>');
-    assert.strictEqual(out, '<a href="../npcs/vex.html">Vex</a> <a href="https://example.com">site</a> <a href="#top">top</a>');
+    assert.strictEqual(out, '<a href="../npcs/vex.html">Vex</a> <a href="https://example.com">site</a> <a href="#u-top">top</a>');
   });
 });
 

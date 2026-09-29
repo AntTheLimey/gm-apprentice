@@ -24,7 +24,8 @@ function stripWikiLinks(text) {
 }
 
 // The recap is printed as escaped plain text, so raw HTML (publish.allow_html, #266) is
-// reduced to its text first; a paragraph that was only markup (an inline SVG) drops out.
+// reduced to its text first. Only a paragraph with no text left (empty markup, an SVG made
+// of shapes) drops out; an SVG's <text> content counts as text and is kept.
 function recapParagraphs(text) {
   return text.split(/\n\n+/)
     .map(p => stripTags(p).replace(/[ \t]{2,}/g, ' ').trim())

@@ -117,6 +117,45 @@ const DROP_WITH_CONTENT = [
 // Both spellings of every name: the parser's casing depends on context.
 const bothCases = (list) => [...new Set(list.flatMap((s) => [s, s.toLowerCase()]))];
 
+// Author ids live in their own namespace. The site's scripts find their JSON data
+// islands and mount points with document.getElementById, and page-body HTML precedes
+// those islands in the document — so an author `id="gurps-live-data"` would win the
+// lookup. Every author id becomes `u-<id>`, and every same-document reference to one
+// is rewritten to match, so anchors, <use>, gradients, masks and ARIA still resolve.
+const ID_PREFIX = 'u-';
+const prefixId = (id) => ID_PREFIX + String(id).trim();
+// Attributes holding space-separated id lists.
+const IDREF_LIST_ATTRIBUTES = ['aria-labelledby', 'aria-describedby', 'aria-controls', 'aria-owns',
+  'aria-details', 'aria-flowto', 'aria-activedescendant', 'headers', 'for'];
+// SVG presentation attributes that may reference a paint server, mask, clip or filter.
+const URL_REF_ATTRIBUTES = ['fill', 'stroke', 'mask', 'clip-path', 'filter',
+  'marker-start', 'marker-mid', 'marker-end'];
+// Only a local reference: url(#id), optionally quoted, optionally followed by a fallback paint.
+const LOCAL_URL_RE = /^\s*url\(\s*(['"]?)#([\w-]+)\1\s*\)(\s+[\w#(),.%\s-]*)?$/i;
+
+function namespaceIds(tagName, attribs) {
+  const out = { ...attribs };
+  if (typeof out.id === 'string') out.id = prefixId(out.id);
+  if (tagName === 'a' && typeof out.name === 'string') out.name = prefixId(out.name);
+  for (const a of ['href', 'xlink:href']) {
+    const v = out[a];
+    if (typeof v === 'string' && /^\s*#./.test(v)) out[a] = '#' + prefixId(v.trim().slice(1));
+  }
+  for (const a of IDREF_LIST_ATTRIBUTES) {
+    if (typeof out[a] === 'string') {
+      out[a] = out[a].split(/\s+/).filter(Boolean).map(prefixId).join(' ');
+    }
+  }
+  for (const a of URL_REF_ATTRIBUTES) {
+    const v = out[a];
+    if (typeof v !== 'string' || !/url\s*\(/i.test(v)) continue;
+    const m = LOCAL_URL_RE.exec(v);
+    if (m) out[a] = v.replace(LOCAL_URL_RE, (_, q, id, rest) => `url(#${prefixId(id)})${rest || ''}`);
+    else delete out[a];
+  }
+  return { tagName, attribs: out };
+}
+
 function buildOptions() {
   const svgTags = bothCases(SVG_TAGS);
   const svgAttrs = bothCases(SVG_ATTRIBUTES);
@@ -142,6 +181,7 @@ function buildOptions() {
     // sanitize-html also drops any that survive, which is the backstop.
     parser: { lowerCaseTags: true, lowerCaseAttributeNames: true },
     transformTags: {
+      '*': namespaceIds,
       img: (tagName, attribs) => {
         const out = { ...attribs };
         if (/^\s*data:/i.test(out.src || '') && !DATA_IMAGE_RE.test(out.src)) delete out.src;
@@ -200,6 +240,7 @@ function stripTags(text) {
 module.exports = {
   sanitizeBodyHtml,
   stripTags,
+  ID_PREFIX,
   HTML_TAGS,
   SVG_TAGS,
   GLOBAL_ATTRIBUTES,
