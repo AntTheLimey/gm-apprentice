@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.17] — 2026-09-29
+
+### Added
+
+- **Self-hosted Google fonts** (#270). `publish.theme.fonts.source:
+  self-host` downloads each named heading and body font from Google
+  once into `_meta/font-cache/`, serves the files from the site, and
+  keeps working offline after that. No reader's browser contacts
+  Google. A preset's own Google font (the sci-fi preset's Rajdhani) is
+  served locally too. New sites from the setup wizard start on
+  `self-host`; existing sites keep `google` until the GM switches, and
+  the build and `site doctor` now warn whenever a Google import ships.
+- **Opt-in raw HTML in page bodies** (#266). With
+  `publish.allow_html: true`, handouts, styled callouts and inline SVG
+  render instead of showing as escaped tags. Everything passes through
+  an allowlist sanitiser: no scripts, event handlers, iframes, forms or
+  `<style>` elements, `style=""` limited to presentational properties,
+  and gm-only stripping still runs first. Off by default.
+- **Search on phones** (#267). A search icon in the header opens a
+  full-screen search panel at phone width.
+
+### Fixed
+
+- **Search finds typos and whole pages** (#267). A one-letter misspelling
+  of a name of four or more letters still finds the page, with exact
+  and prefix matches ranked first, and the whole page body is indexed
+  instead of its first 500 characters. Stemming is off so names aren't
+  mangled. The index format changed; rebuild rather than patch a
+  deployed site.
+- **The Party Status board leaves out PCs who are out of play** (#265).
+  Retired, dead, deceased, KIA, departed, missing and unknown PCs keep
+  their sheet pages but no longer sit on the board, and the landing
+  page sorts the same statuses into its fallen list.
+- **The 404 page uses the site's palette** (#268). It linked the genre
+  preset after `theme.css`, so the preset won.
+- **The landing recap shows emphasis, not asterisks** (#269). Italics,
+  bold and inline code render; link text stays and URLs, images and
+  raw tags drop out.
+- **The campaign index no longer prints gm-only overview text.** Its
+  deep-dive sections read the overview's raw markdown, so a gm-only
+  block in Premise, Setting, Themes or Factions reached
+  `campaign/index.html` in `mode: full`.
+
 ## [1.10.16] — 2026-09-27
 
 ### Added

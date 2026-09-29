@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.16"
+current_version: "1.10.17"
 ---
 
 # Vault Migration Registry
@@ -975,3 +975,41 @@ site (#260). No file changes shape.
   published wrap-up GM heading such as a top-level `## World State`,
   which an early 1.8.3 migration could leave behind. Step 6's
   `gm-leak` run shows any; the row names the fix.
+
+## Migration: 1.10.16 → 1.10.17
+
+Publish fixes from the Scriptorium field reports (#265–#270). No file
+changes shape; two new optional publish settings.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- If `publish.theme.fonts` in `_meta/vault-config.md` names a heading
+  or body font that isn't a system font and sets no `source`, the site
+  loads that font from Google on every page view, which sends each
+  reader's IP address to Google (some jurisdictions, the EU under GDPR
+  among them, require consent for that). Offer to set
+  `publish.theme.fonts.source: self-host`: the next build downloads the
+  fonts once into `_meta/font-cache/` and serves them from the site.
+  The look doesn't change. Skip it when the vault already uses
+  `source: local` or only system fonts. Ask; apply only on a yes.
+- A GM who ships handouts as images because raw HTML never rendered can
+  now set `publish.allow_html: true`. Mention it only if the vault has
+  such handouts; don't set it unasked.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.39: the Party Status board leaves out
+  retired, dead, departed and missing PCs; the 404 page uses the
+  site's palette; the landing recap renders emphasis instead of
+  asterisks; search finds one-letter typos, indexes whole pages and
+  works on phones; opt-in sanitised raw HTML; Google font self-hosting
+  with a build warning when a Google import is emitted. The search
+  index format changed, so rebuild rather than patch a deployed site.
+  A site that strips retired PCs from the board in a `postbuild` step
+  can drop that step.
+  If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
+  (publish-site's build tool).
