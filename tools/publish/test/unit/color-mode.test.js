@@ -82,6 +82,21 @@ describe('scopeColorScheme', () => {
     assert.strictEqual((o.match(/@font-face \{/g) || []).length, 3, o);
   });
 
+  it('finds a light query nested in @supports or @layer', () => {
+    const o = scopeColorScheme('@supports (display: grid) {\n  @media (prefers-color-scheme: light) {\n    .a { color: red; }\n  }\n}');
+    assert.ok(o.startsWith('@supports (display: grid) {'), o);
+    assert.ok(o.includes(`${NOT_DARK} .a`) && o.includes(`${LIGHT} .a`), o);
+  });
+
+  it('rewrites a compound light query and keeps its other conditions', () => {
+    const o = scopeColorScheme('@media screen and (prefers-color-scheme: light) and (min-width: 600px) {\n  .a { color: red; }\n}');
+    assert.ok(o.includes('@media screen and (min-width: 600px) and (prefers-color-scheme: light) {'), o);
+    assert.ok(o.includes(`@media screen and (min-width: 600px) {\n  ${LIGHT} .a`), o);
+    assert.ok(!o.includes('@media print'), o);                   // a screen-only query never printed
+    const p = scopeColorScheme('@media (prefers-color-scheme: light) and (min-width: 600px) {\n  .a { color: red; }\n}');
+    assert.ok(p.includes('@media print and (min-width: 600px) {'), p);
+  });
+
   it('handles every light block the tool ships', () => {
     const files = [path.join(__dirname, '../../css/style.css'),
       ...fs.readdirSync(path.join(__dirname, '../../css/themes')).map(f => path.join(__dirname, '../../css/themes', f))];

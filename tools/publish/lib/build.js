@@ -597,14 +597,15 @@ function build(options = {}) {
   }
 
   cleanOutput();
-  // Only a genre preset ships two palettes; a custom palette has one, so a toggle there
-  // would change next to nothing.
-  configureColorMode(genrePreset
+  // Only a genre preset ships two palettes. A custom palette has one, and theme.css writes
+  // it after the preset, so with one set a toggle would change nothing visible.
+  const twoPalettes = Boolean(genrePreset) && !publishConfig.theme.palette;
+  configureColorMode(twoPalettes
     ? headScript(publishConfig.theme.default_mode, storageKey(config.siteUrl || config.siteTitle || configDir))
     : '');
-  if (!genrePreset && publishConfig.theme.default_mode !== 'system') {
-    console.warn(`publish.theme.default_mode "${publishConfig.theme.default_mode}" has no effect `
-      + 'without a genre preset (theme.genre): a custom palette has one palette, so there is no toggle');
+  if (!twoPalettes && publishConfig.theme.default_mode !== 'system') {
+    console.warn(`publish.theme.default_mode "${publishConfig.theme.default_mode}" has no effect: `
+      + 'it needs a genre preset (theme.genre) and no custom theme.palette, the themes with two palettes');
   }
   copyCSS();
   copyJS();

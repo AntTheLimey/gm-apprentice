@@ -1353,7 +1353,13 @@ def read_publish_scalar(vault: Path, key: str) -> str | None:
         m = _KEY_LINE_RE.match(line)
         if not (m and m.group(3) == key):
             continue
-        value = _strip_comment(m.group(4) or "")
+        raw = (m.group(4) or "").strip()
+        if raw[:1] in ("'", '"'):
+            value = _strip_comment(raw)
+        else:
+            # A plain scalar: a comment starts at whitespace + '#', and an
+            # apostrophe ("GM's Site") is just a character.
+            value = re.split(r"\s#", raw, maxsplit=1)[0].strip()
         if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
             return None
         if value.startswith('"'):

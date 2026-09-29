@@ -84,8 +84,10 @@ function buildHooks(siteRoot, readFile) {
   let text;
   try {
     text = readFile(pkgPath);
-  } catch {
-    return { hooks: [], warning: null };
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { hooks: [], warning: null };
+    // It exists but can't be read (EACCES, …): its build steps may matter, so stop.
+    return { hooks: [], warning: null, error: `Could not read ${pkgPath} (${err.code || err.message}) — its prebuild/postbuild scripts can't be checked, so nothing was deployed.` };
   }
   let scripts;
   try {
@@ -180,6 +182,7 @@ async function runDeploy(options, deps) {
     return res.code === 0 ? null : `${hook} failed: ${failureDetail(res)}`;
   };
   if (!opts.noBuild) {
+    if (hookInfo.error) return buildFailed(hookInfo.error);
     if (hooks.includes('prebuild')) {
       const failed = runHook('prebuild');
       if (failed) return buildFailed(failed);

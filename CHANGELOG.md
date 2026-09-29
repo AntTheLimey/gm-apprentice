@@ -18,8 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`system`, `dark` or `light`) sets where readers start; `system`
   follows their OS, as sites always have. The build rewrites every
   light-mode rule to answer to the toggle as well as the OS, including
-  the GURPS sheet colours and the site's own `overrides.css`. With
-  JavaScript off, the site follows the OS.
+  the GURPS sheet colours and the site's own `overrides.css` (compound
+  and nested light queries included). With JavaScript off, the site
+  follows the OS. A preset site with a custom palette has one palette,
+  so it gets no toggle.
 
 ### Fixed
 

@@ -481,3 +481,18 @@ describe('deploy hooks: the ways they used to slip through (#248 review)', () =>
     assert.strictEqual(seenJ[0].shell, process.platform === 'win32');
   });
 });
+
+describe('deploy hooks: an unreadable package.json (CodeRabbit #263)', () => {
+  it('stops rather than silently skipping the site\'s build steps', async () => {
+    const h = harness();
+    const read = h.deps.readFile;
+    h.deps.readFile = (p) => {
+      if (p.endsWith('package.json')) { const e = new Error('EACCES: permission denied'); e.code = 'EACCES'; throw e; }
+      return read(p);
+    };
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.text(), /package\.json.*EACCES/);
+    assert.deepStrictEqual(h.wrangler, []);
+  });
+});

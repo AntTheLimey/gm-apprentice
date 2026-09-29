@@ -34,7 +34,29 @@ const PREFIX = {
 // At-rules holding style rules, rewritten inside. Anything else (@keyframes, @font-face)
 // holds no selectors to prefix and is copied through as written.
 const GROUPING_AT_RULE = /^@(media|supports|layer|container)\b/i;
-const LIGHT_MEDIA = /^@media\s*\(\s*prefers-color-scheme\s*:\s*light\s*\)$/;
+const LIGHT_FEATURE = /\(\s*prefers-color-scheme\s*:\s*light\s*\)/i;
+
+// A `@media` prelude that tests for a light preference, as { type, features }: the rest
+// of its conditions, so a compound query (`screen and (prefers-color-scheme: light) and
+// (min-width: 600px)`) keeps them. Null for anything else, including a query list (a
+// comma) or a `not` query, which are left as written.
+function lightQuery(prelude) {
+  const m = prelude.match(/^@media\s+([\s\S]*)$/i);
+  if (!m || !LIGHT_FEATURE.test(m[1]) || m[1].includes(',') || /^\s*not\b/i.test(m[1])) return null;
+  const parts = m[1].replace(/^\s*only\s+/i, '').split(/\s+and\s+/i).map(s => s.trim()).filter(Boolean);
+  let type = null;
+  const features = [];
+  for (const p of parts) {
+    if (LIGHT_FEATURE.test(p)) continue;
+    if (p.startsWith('(')) features.push(p); else type = p.toLowerCase();
+  }
+  return { type, features };
+}
+
+// `@media <type> and <features>`; `extra` goes last.
+function mediaPrelude(type, features, extra) {
+  return '@media ' + [type, ...features, ...(extra ? [extra] : [])].filter(Boolean).join(' and ');
+}
 
 function normalizeDefaultMode(value) {
   const mode = String(value == null ? '' : value).trim().toLowerCase();
@@ -152,14 +174,29 @@ function scopeBody(body, p, keepOwn) {
 function scopeColorScheme(css) {
   let changed = false;
   const out = statements(css).map((st) => {
-    if (st.kind !== 'at' || !LIGHT_MEDIA.test(st.prelude)) return st.text;
+    if (st.kind !== 'at') return st.text;
+    const q = lightQuery(st.prelude);
+    if (!q) {
+      // A light query can sit inside @supports or @layer; rewrite it there.
+      if (!GROUPING_AT_RULE.test(st.prelude) || /^@media/i.test(st.prelude)) return st.text;
+      const inner = scopeColorScheme(st.body);
+      if (inner === st.body) return st.text;
+      changed = true;
+      return `${st.lead}${st.prelude} {${inner}}`;
+    }
     const rules = statements(st.body).filter(s => s.kind !== 'raw');
     if (rules.every(namesTheme)) return st.text;
     changed = true;
+    const onScreen = q.type === null || q.type === 'all' || q.type === 'screen';
+    const onPrint = q.type === null || q.type === 'all' || q.type === 'print';
     const forced = scopeBody(st.body, PREFIX.light, false);
-    return `${st.lead}@media screen and (prefers-color-scheme: light) {\n${scopeBody(st.body, PREFIX.notDark, true)}\n}`
-      + (forced.trim() ? `\n@media screen {\n${forced}\n}` : '')
-      + `\n@media print {${st.body}}`;
+    const blocks = [];
+    if (onScreen) {
+      blocks.push(`${mediaPrelude('screen', q.features, '(prefers-color-scheme: light)')} {\n${scopeBody(st.body, PREFIX.notDark, true)}\n}`);
+      if (forced.trim()) blocks.push(`${mediaPrelude('screen', q.features)} {\n${forced}\n}`);
+    }
+    if (onPrint) blocks.push(`${mediaPrelude('print', q.features)} {${st.body}}`);
+    return blocks.length ? st.lead + blocks.join('\n') : st.text;
   });
   return changed ? out.join('') : css;
 }

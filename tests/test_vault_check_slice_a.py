@@ -529,10 +529,9 @@ class GmLeakCommandTests(unittest.TestCase):
             self.rows)
 
     def test_keeper_facing_sibling_heading_warns(self):
-        self.assertIn(
-            f"WARNING\t{LEAKY}:14\tKeeper-facing heading 'Keeper Checklist' "
-            f"publishes — nest it under ## GM Notes or fence it",
-            self.rows)
+        # A wrap-template GM heading: the row carries the re-nest advice.
+        self.assertTrue(rows_for(self.rows, f"WARNING\t{LEAKY}:14\tGM-only heading "
+                                 f"'Keeper Checklist' publishes"), self.rows)
 
     def test_bold_label_is_an_info(self):
         self.assertIn(
@@ -2255,3 +2254,19 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
     def test_a_vault_that_never_publishes_gets_no_site_dir_info(self):
         vault = make_vault(self, "---\ntype: meta\nsystem: coc-7e\n---\n")
         self.assertFalse([r for r in vc.check_gm_leak(vault, None) if "site_dir" in r])
+
+
+class GmLeakCodeRabbitTests(unittest.TestCase):
+    """CodeRabbit on #263."""
+
+    def test_keeper_checklist_gets_the_renest_advice(self):
+        vault = make_vault(self, '---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n')
+        (vault / "Bob.md").write_text("---\ntype: npc\n---\n\n# Bob\n\n## Keeper Checklist\n\n- x\n",
+                                      encoding="utf-8")
+        row = next(r for r in vc.check_gm_leak(vault, None) if "Keeper Checklist" in r)
+        self.assertIn("--renest-excludes", row)
+
+    def test_an_apostrophe_in_a_plain_site_dir_is_not_a_quote(self):
+        import vaultlib
+        vault = make_vault(self, "---\ntype: meta\npublish:\n  site_dir: /sites/GM's Site # player site\n---\n")
+        self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "/sites/GM's Site")

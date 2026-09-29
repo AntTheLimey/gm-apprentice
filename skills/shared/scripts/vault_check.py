@@ -1076,9 +1076,8 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
         return [f"ERROR\t{rel}:{state.lineno}\tbold-wrapped heading "
                 f"'{title}' defeats the exclude list and publishes — "
                 f"{remedy}"]
-    if _keeper_text(title, excludes):
-        return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
-                f"'{title}' publishes — nest it under ## GM Notes or fence it"]
+    # Before the keyword check: "Keeper Checklist" is a wrap-template heading
+    # and must get the re-nest advice, not the generic keyword row.
     if title.casefold() in {t.casefold() for t in WRAP_TEMPLATE_SUBSECTIONS}:
         # A GM Notes subsection of the wrap-up template (World State, …)
         # sitting where it publishes. The pre-fix 1.8.3 migration collapsed
@@ -1094,6 +1093,9 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
                 f"once, set publish.exclude_sections to "
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
                 f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
+    if _keeper_text(title, excludes):
+        return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
+                f"'{title}' publishes — nest it under ## GM Notes or fence it"]
     return []
 
 
