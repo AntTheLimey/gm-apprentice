@@ -19,6 +19,7 @@ const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { resolveBackendFlags } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
+const { isOutOfPlay } = require('./pc-status');
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
@@ -731,7 +732,9 @@ function build(options = {}) {
           if (systemOut.warnings && systemOut.warnings.length) {
             logWarnings(page.outputPath, systemOut.warnings);
           }
-          if (systemOut.liveData) {
+          // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
+          // off the roster's Party Status board (#265).
+          if (systemOut.liveData && !isOutOfPlay(page.frontmatter)) {
             // Root-relative output path of the PC portrait, for the party-board
             // thumbnail. Resolved the same way portraitImg does (imageMap keyed
             // by bare basename → the scanner's relPath under images/).

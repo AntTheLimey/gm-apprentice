@@ -5,6 +5,7 @@ const {
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
 const { canonicalNfc } = require('../unicode');
+const { isOutOfPlay } = require('../pc-status');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -18,7 +19,6 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
 
 function statusLabel(status) {
   if (!status) return 'Active';
@@ -102,8 +102,8 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
 
   // --- Zone 3: The Team (active PCs) ---
   const allPCs = getPCs(pages);
-  const activePCs = allPCs.filter(p => !FALLEN_STATUSES.has(String(p.frontmatter.status || '').toLowerCase()));
-  const fallenPCs = allPCs.filter(p => FALLEN_STATUSES.has(String(p.frontmatter.status || '').toLowerCase()));
+  const activePCs = allPCs.filter(p => !isOutOfPlay(p.frontmatter));
+  const fallenPCs = allPCs.filter(p => isOutOfPlay(p.frontmatter));
 
   let teamZone = '';
   if (activePCs.length > 0) {
