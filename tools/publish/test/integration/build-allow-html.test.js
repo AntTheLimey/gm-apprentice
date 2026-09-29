@@ -44,6 +44,15 @@ SECRET_COMMENT
 <div>SECRET_SECTION</div>
 `;
 
+// Saved with Windows line endings: a closer shown inside a fenced example must not end
+// the gm-only block early (review finding: `.` never matches \r, so the fence was
+// missed and SECRET_AFTER_FENCE reached the search index).
+const KEEP_CRLF = [
+  '---', 'type: location', '---', '# The Keep', '', 'Public keep text.', '',
+  '<!-- gm-only -->', 'How to hide a note:', '', '```', '<!-- /gm-only -->', '```', '',
+  'SECRET_AFTER_FENCE lives in the cellar.', '<!-- /gm-only -->', '', 'More public text.', '',
+].join('\r\n');
+
 const OVERVIEW = `---
 type: campaign_overview
 ---
@@ -68,6 +77,7 @@ function buildVault(work, allowHtml) {
   write('_meta/vault-config.md', `---\npublish:\n  mode: full\n  allow_html: ${allowHtml}\n---\n`);
   write('Characters/NPCs/Vex.md', NPC);
   write('_Campaign/Overview.md', OVERVIEW);
+  write('Locations/Keep.md', KEEP_CRLF);
   const configPath = path.join(work, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({
     siteTitle: 'Allow HTML',
@@ -75,7 +85,7 @@ function buildVault(work, allowHtml) {
     vaultPath: vault,
     outputDir: path.join(work, 'docs'),
     excludeDirs: ['_meta', '_Templates'],
-    folderMap: { 'Characters/NPCs': 'characters/npcs', _Campaign: 'campaign' },
+    folderMap: { 'Characters/NPCs': 'characters/npcs', _Campaign: 'campaign', Locations: 'locations' },
   }, null, 2));
   const log = console.log;
   console.log = () => {};
@@ -110,8 +120,16 @@ for (const allowHtml of [true, false]) {
     it('emits no gm-only, commented or excluded content in any output file', () => {
       for (const file of walk(docs).filter(f => /\.(html|json|js)$/.test(f))) {
         const text = fs.readFileSync(file, 'utf8');
-        assert.doesNotMatch(text, /SECRET_/, `${path.relative(docs, file)} leaks: ${(text.match(/.{0,80}SECRET_\w+/) || [])[0]}`);
+        assert.doesNotMatch(text, /SECRET_/i, `${path.relative(docs, file)} leaks: ${(text.match(/.{0,80}SECRET_\w+/) || [])[0]}`);
       }
+    });
+
+    it('keeps a CRLF page\'s gm-only text out of the search index', () => {
+      // The index stores lowercased tokens, so check a plain secret-only word too.
+      const index = fs.readFileSync(path.join(docs, 'search-index.json'), 'utf8');
+      assert.ok(fs.existsSync(path.join(docs, 'locations/keep.html')));
+      assert.match(index, /"public"/);
+      assert.doesNotMatch(index, /cellar|secret_/i);
     });
 
     it('never emits a script from a page body or an event handler', () => {

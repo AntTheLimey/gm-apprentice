@@ -139,7 +139,12 @@ function namespaceIds(tagName, attribs) {
   if (tagName === 'a' && typeof out.name === 'string') out.name = prefixId(out.name);
   for (const a of ['href', 'xlink:href']) {
     const v = out[a];
-    if (typeof v === 'string' && /^\s*#./.test(v)) out[a] = '#' + prefixId(v.trim().slice(1));
+    if (typeof v !== 'string' || !/^\s*#./.test(v)) continue;
+    const target = v.trim().slice(1);
+    // A link to an id the author didn't define in this body (e.g. a PC page's
+    // generated accordion, #background) points at the site's own markup: leave it.
+    if (tagName === 'a' && !authorIds.has(target)) continue;
+    out[a] = '#' + prefixId(target);
   }
   for (const a of IDREF_LIST_ATTRIBUTES) {
     if (typeof out[a] === 'string') {
@@ -200,8 +205,20 @@ function buildOptions() {
 
 const OPTIONS = buildOptions();
 
+// Ids and anchor names the author defines in the body being sanitised; namespaceIds
+// only rewrites an <a href="#x"> that points at one of them. Set per call (sanitising
+// is synchronous, so there is no interleaving).
+let authorIds = new Set();
+const AUTHOR_ID_RE = /\s(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/gi;
+
 function sanitizeBodyHtml(html) {
-  return sanitizeHtml(html, OPTIONS);
+  authorIds = new Set();
+  for (const m of String(html || '').matchAll(AUTHOR_ID_RE)) authorIds.add(String(m[1] ?? m[2] ?? m[3]).trim());
+  try {
+    return sanitizeHtml(html, OPTIONS);
+  } finally {
+    authorIds = new Set();
+  }
 }
 
 // Plain text for the derived views (search index, landing recap) that read a page's

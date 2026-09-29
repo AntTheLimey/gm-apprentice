@@ -114,7 +114,7 @@ describe('html allowlist sanitiser: survives', () => {
 
   it('keeps ordinary links', () => {
     const out = sanitizeBodyHtml('<a href="../npcs/vex.html">Vex</a> <a href="https://example.com">site</a> <a href="#top">top</a>');
-    assert.strictEqual(out, '<a href="../npcs/vex.html">Vex</a> <a href="https://example.com">site</a> <a href="#u-top">top</a>');
+    assert.strictEqual(out, '<a href="../npcs/vex.html">Vex</a> <a href="https://example.com">site</a> <a href="#top">top</a>');
   });
 });
 
@@ -240,6 +240,13 @@ describe('plain-text consumers never carry raw tags', () => {
     const recap = extractRecap({ frontmatter: {}, publishedMarkdown: '## Narrative Recap\n\n<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>\n\n<div class="handout">The <b>party</b> fled.</div>\n' });
     assert.doesNotMatch(recap, /[<>]/);
     assert.match(recap, /The party fled\./);
+  });
+
+  it('leaves links to ids the author did not define (site accordions) unprefixed', () => {
+    const html = sanitizeBodyHtml('<a href="#background">Background</a> <a href="#seal">Seal</a><div id="seal">x</div>');
+    assert.match(html, /href="#background"/);
+    assert.match(html, /href="#u-seal"/);
+    assert.match(html, /id="u-seal"/);
   });
 
   it('stripTags keeps a bare < in prose', () => {

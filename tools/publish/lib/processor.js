@@ -184,7 +184,10 @@ function stripDataview(markdown) {
 function stripMarkedBlocks(markdown, markerName) {
   // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
   const markerRe = new RegExp(`<!--\\s*(/?)${markerName}\\s*-->`, 'g');
-  const lines = markdown.split('\n');
+  // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
+  // closer shown inside a fenced example would end the block early. Callers that
+  // pass raw gray-matter content (build.js's published view) keep CRLF.
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const result = [];
   const warnings = [];
   const stack = [];

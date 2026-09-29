@@ -34,12 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `allow_html` on, every author `id` is published as `u-<id>` and
   same-page links, `<use>`, `url(#x)` paints and `aria-*` references
   follow, so a handout can't shadow a live-sheet data island. Style
-  with classes, or target `#u-<id>` in `overrides.css`. SVG `url()`
+  with classes, or target `#u-<id>` in `overrides.css`. Links to the
+  site's own anchors (a PC page's `#background`) are left alone. SVG `url()`
   paints must now be local.
 - **Inline gm-only and spoiler markers hide their content.** Markers
   used to count only on their own line, so `a <!-- gm-only -->X<!--
   /gm-only --> b` published X. They now strip wherever they sit, and
-  `vault_check` reads them the same way.
+  `vault_check` reads them the same way. In a vault saved with Windows
+  (CRLF) line endings, a closer shown inside a fenced example no
+  longer ends the block early, which had put the rest of the block
+  into the search index.
 - Font self-hosting refuses oversized or redirected downloads;
   `buildWithFonts` is exported and `node lib/build.js` prefetches
   fonts. The phone search panel traps Tab focus and returns focus to

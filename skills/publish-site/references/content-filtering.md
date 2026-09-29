@@ -83,7 +83,9 @@ A notice board hangs near the door.
 ~~~
 
 **Rules:**
-- Markers must be on their own lines
+- Put markers on their own lines where you can; a marker mid-line
+  (`a <!-- gm-only -->X<!-- /gm-only --> b`) also works, and strips
+  just the marked text
 - Can appear anywhere in body text (not in frontmatter)
 - Can span multiple paragraphs
 - The processor strips markers and everything between them
@@ -94,18 +96,22 @@ within a section.
 
 **Edge cases:**
 - Unclosed marker: content stripped to end of file (safe default)
-- Marker inside a code block: ignored (treated as literal)
+- Marker inside a fenced code block: ignored (treated as literal),
+  with LF or CRLF line endings
+- Marker inside inline code (backticks): **not** ignored. It still
+  opens or closes a block, so to show one mid-sentence, use a fenced
+  block instead. This errs towards hiding, and the build warns
 - Inside raw HTML (with `publish.allow_html: true`): markers work the
-  same, on their own lines inside the markup. They and every other
-  HTML comment are stripped before the HTML is rendered
+  same inside the markup. They and every other HTML comment are
+  stripped before the HTML is rendered
 
 ## Inline Spoiler Markers
 
 For narrative content that's hidden only because the story hasn't
 reached it yet — not permanently secret — use `<!-- spoiler -->` /
 `<!-- /spoiler -->` instead of `<!-- gm-only -->`. Mechanically
-identical (same open/close-pair rules: own lines, body text only, can
-span paragraphs, code-fence-literal), but semantically and
+identical (same open/close-pair rules: own line or mid-line, body text
+only, can span paragraphs, code-fence-literal), but semantically and
 operationally different:
 
 ~~~markdown
