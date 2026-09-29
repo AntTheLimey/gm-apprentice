@@ -123,8 +123,9 @@ ${linksHtml}
   <nav class="nav-groups">
 ${groupsHtml}
   </nav>
-  <button class="nav-search-btn" onclick="openSearch()" aria-label="Search">Search <kbd class="search-kbd">⌘K</kbd></button>
+  <button class="nav-search-btn" onclick="openSearch()" aria-label="Search" aria-haspopup="dialog" aria-expanded="false">Search <kbd class="search-kbd">⌘K</kbd></button>
   ${colorModeEnabled() ? TOGGLE_BUTTON : ''}
+  <button class="nav-search-icon-btn" onclick="openSearch()" aria-label="Search" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button>
   <button class="nav-mobile-toggle" onclick="document.getElementById('mobile-nav').classList.add('open')" aria-label="Menu">&#9776;</button>
 </header>
 <div id="mobile-nav" class="mobile-nav-overlay">

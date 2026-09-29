@@ -289,10 +289,31 @@ img {
   .nav-color-mode-btn .to-dark, .mobile-color-mode-btn .to-dark { display: inline; }
 }
 
+/* Phone-width search trigger (#267): the text button above is desktop-only. */
+.nav-search-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-on-header, var(--text));
+  cursor: pointer;
+  padding: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+.nav-search-icon-btn:hover,
+.nav-search-icon-btn[aria-expanded="true"] {
+  color: var(--accent);
+}
+.nav-search-icon-btn + .nav-mobile-toggle { margin-left: 0.25rem; }
+
 /* Desktop responsive */
 @media (min-width: 768px) {
   .nav-groups { display: flex; }
   .nav-mobile-toggle { display: none; }
+  .nav-search-icon-btn { display: none; }
   .nav-search-btn { display: block; }
   .nav-color-mode-btn { display: block; }
 }
@@ -1694,6 +1715,19 @@ tr:nth-child(even) {
 .search-input::placeholder {
   color: var(--text-muted);
 }
+.search-close {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  margin: -0.5rem -0.75rem -0.5rem 0;
+}
+.search-close:hover { color: var(--accent); }
 .search-kbd {
   font-size: 0.7rem;
   background: var(--bg);
@@ -1737,6 +1771,30 @@ tr:nth-child(even) {
   color: var(--accent);
   border-radius: 0.125rem;
   padding: 0 0.125rem;
+}
+
+/* Phone width: the search box becomes a full-screen panel (#267). */
+@media (max-width: 767px) {
+  .search-overlay {
+    padding: 0;
+    background: var(--bg);
+    backdrop-filter: none;
+  }
+  .search-modal {
+    max-width: none;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .search-input-wrap { padding: 0.5rem 1rem; }
+  .search-input { min-height: 44px; }
+  .search-kbd { display: none; }
+  .search-close { display: block; }
+  .search-results { flex: 1; max-height: none; }
+  .search-result-item { padding: 0.75rem 1rem; min-height: 44px; }
 }
 
 /* ===== LIGHTBOX ===== */
@@ -3763,6 +3821,7 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   .top-nav,
   .mobile-nav-overlay,
   .nav-search-btn,
+  .nav-search-icon-btn,
   .nav-color-mode-btn,
   .section-nav,
   .site-footer,

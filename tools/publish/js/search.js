@@ -29,9 +29,48 @@
     return q.normalize ? q.normalize('NFC') : q;
   }
 
+  // Typo-tolerant search (#267). Each term is matched three ways and the scores add up:
+  // exact (boost 10), prefix `term*` (boost 5) and fuzzy edit-distance 1 (boost 1), so exact
+  // and prefix hits always outrank fuzzy ones. Fuzzy only applies from MIN_FUZZY_LENGTH
+  // characters: at edit distance 1 a 3-letter word matches most other 3-letter words
+  // ("cat" ~ "bat", "cap", "car") and floods the list with junk, while from 4 characters a
+  // one-letter slip in a name ("Aldric" for "Alderic") lands on very few unrelated terms.
+  // Built with lunr's query builder rather than a query string, so no user input is ever
+  // parsed as lunr syntax; a stray `foo:` or `~` cannot throw.
+  var MIN_FUZZY_LENGTH = 4;
+
+  function queryTerms(rawQuery, lunrLib) {
+    var tokens = lunrLib.tokenizer(normalizeQuery(rawQuery)).map(function(t) { return t.toString(); });
+    var terms = [];
+    tokens.forEach(function(t) {
+      var term = t.replace(/[*~^:+]/g, '').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+      if (term && terms.indexOf(term) === -1) terms.push(term);
+    });
+    return terms;
+  }
+
+  function runSearch(idx, rawQuery, lunrLib) {
+    var terms = queryTerms(rawQuery, lunrLib);
+    if (terms.length === 0) return [];
+    try {
+      return idx.query(function(q) {
+        terms.forEach(function(term) {
+          q.term(term, { boost: 10 });
+          q.term(term, { boost: 5, usePipeline: false, wildcard: lunrLib.Query.wildcard.TRAILING });
+          if (term.length >= MIN_FUZZY_LENGTH) q.term(term, { boost: 1, editDistance: 1 });
+        });
+      });
+    } catch (e) {
+      return [];
+    }
+  }
+
   if (typeof document === 'undefined') {
     if (typeof module !== 'undefined' && module.exports) {
-      module.exports = { esc: esc, encodeHref: encodeHref, normalizeQuery: normalizeQuery };
+      module.exports = {
+        esc: esc, encodeHref: encodeHref, normalizeQuery: normalizeQuery,
+        queryTerms: queryTerms, runSearch: runSearch, MIN_FUZZY_LENGTH: MIN_FUZZY_LENGTH
+      };
     }
     return;
   }
@@ -39,12 +78,13 @@
   var searchOverlay = document.createElement('div');
   searchOverlay.className = 'search-overlay';
   searchOverlay.innerHTML =
-    '<div class="search-modal">' +
+    '<div class="search-modal" role="dialog" aria-modal="true" aria-label="Search">' +
       '<div class="search-input-wrap">' +
-        '<input type="text" class="search-input" placeholder="Search..." autocomplete="off">' +
+        '<input type="search" class="search-input" placeholder="Search..." aria-label="Search" autocomplete="off" autocapitalize="off" spellcheck="false">' +
         '<kbd class="search-kbd">Esc</kbd>' +
+        '<button type="button" class="search-close" aria-label="Close search">&times;</button>' +
       '</div>' +
-      '<div class="search-results"></div>' +
+      '<div class="search-results" aria-live="polite"></div>' +
     '</div>';
   document.body.appendChild(searchOverlay);
 
@@ -81,12 +121,7 @@
       return;
     }
 
-    var results;
-    try {
-      results = idx.search(query + '*');
-    } catch(e) {
-      results = idx.search(query);
-    }
+    var results = runSearch(idx, query, lunr);
 
     if (results.length === 0) {
       resultsDiv.innerHTML = '<div class="search-results-empty">No results found</div>';
@@ -127,23 +162,38 @@
     }, 150);
   });
 
+  var triggers = document.querySelectorAll('.nav-search-btn, .nav-search-icon-btn');
+  var lastTrigger = null;
+
+  function setExpanded(open) {
+    Array.prototype.forEach.call(triggers, function(b) { b.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+  }
+
+  function closeSearch() {
+    if (!searchOverlay.classList.contains('open')) return;
+    searchOverlay.classList.remove('open');
+    setExpanded(false);
+    if (lastTrigger && lastTrigger.offsetParent !== null) lastTrigger.focus();
+    lastTrigger = null;
+  }
+
   window.openSearch = function() {
+    lastTrigger = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     searchOverlay.classList.add('open');
+    setExpanded(true);
     input.value = '';
     resultsDiv.innerHTML = '';
     input.focus();
     loadIndex(function() {});
   };
 
+  searchOverlay.querySelector('.search-close').addEventListener('click', closeSearch);
+
   searchOverlay.addEventListener('click', function(e) {
-    if (e.target === searchOverlay) {
-      searchOverlay.classList.remove('open');
-    }
+    if (e.target === searchOverlay) closeSearch();
   });
 
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && searchOverlay.classList.contains('open')) {
-      searchOverlay.classList.remove('open');
-    }
+    if (e.key === 'Escape' && searchOverlay.classList.contains('open')) closeSearch();
   });
 })();
