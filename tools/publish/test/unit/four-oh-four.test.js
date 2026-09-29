@@ -30,6 +30,20 @@ describe('fourOhFourTemplate', () => {
     );
   });
 
+  it('links stylesheets in the same order as every other page (#268)', () => {
+    const { baseShell } = require('../../lib/templates/base');
+    const sheetOrder = html => [...html.matchAll(/<link rel="stylesheet" href="[^"]*\/(css\/[^"]+)"/g)]
+      .map(m => m[1]);
+    const notFound = fourOhFourTemplate({ ...baseConfig, genrePreset: 'horror', overridesCss: true });
+    const page = baseShell({
+      title: 'T', siteTitle: 'S', cssHref: '/css/style.css', navHtml: '', rootHref: '/',
+      content: '', footer: '', genrePreset: 'horror', overridesCss: true,
+    });
+    const expected = ['css/style.css', 'css/themes/horror.css', 'css/theme.css', 'css/overrides.css'];
+    assert.deepStrictEqual(sheetOrder(page), expected);
+    assert.deepStrictEqual(sheetOrder(notFound), expected);
+  });
+
   it('omits the genre theme link when no preset', () => {
     const html = fourOhFourTemplate(baseConfig);
     assert.ok(!html.includes('css/themes/'), 'no genre link without a preset');
