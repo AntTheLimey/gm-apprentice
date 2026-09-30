@@ -23,6 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a packed tarball and `SHA256SUMS` (this release is
   `publish-v1.11.40`), and `update-pin --tag publish-vX.Y.Z` pins a
   site outside the plugin to one.
+- **`publish.wrap_up.player_sections`** in `_meta/vault-config.md`: a
+  list of extra H2 titles on a Wrap-Up that count as player-facing, for
+  vaults whose recaps carry sections such as "What the Party Learned".
+  `vault_check wrapup` never flags a listed H2, and `--fix` keeps it
+  after Memorable Moments instead of re-nesting it under GM Notes.
+  Absent or empty changes nothing.
+- Session index pages are built from their Wrap-Up starting with plugin
+  1.10.18 and publish tool 1.11.40 (`publish-v1.11.40`); the `session:`
+  and `documents.wrap_up` keys are unchanged. A vault that keeps recaps
+  in session index bodies can move them to Wrap-Ups: set `type:
+  session_wrap`, link `session:` on the Wrap-Up and `documents.wrap_up`
+  on the index, and list any extra player-facing sections in
+  `publish.wrap_up.player_sections`.
 
 ### Changed
 
