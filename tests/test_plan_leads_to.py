@@ -50,9 +50,15 @@ check("empty array", leads_to_errors("leads_to: []"), False)
 check("non-wiki-link entry rejected", leads_to_errors("leads_to:\n  - Plan B"), True)
 check("scalar (non-array) rejected", leads_to_errors("leads_to: 7"), True)
 
-if FAILURES:
-    print(f"{len(FAILURES)} FAILURE(S):", file=sys.stderr)
-    for f in FAILURES:
-        print(f"  {f}", file=sys.stderr)
-    sys.exit(1)
-print("All plan leads_to validation tests passed.")
+def test_no_failures():
+    """pytest entry point: the checks above ran when this module loaded."""
+    assert not FAILURES, "\n".join(FAILURES)
+
+
+if __name__ == "__main__":
+    if FAILURES:
+        print(f"{len(FAILURES)} FAILURE(S):", file=sys.stderr)
+        for f in FAILURES:
+            print(f"  {f}", file=sys.stderr)
+        sys.exit(1)
+    print("All plan leads_to validation tests passed.")
