@@ -1,6 +1,6 @@
 const { canonicalNfc, graphemes } = require('../unicode');
 const { parseWikiRef, escapeHtml } = require('../processor');
-const { stripTags } = require('../html-allowlist');
+const { stripTags } = require('../strip-tags');
 
 function getLatestSession(pages) {
   const played = pages.filter(
@@ -23,7 +23,7 @@ function stripWikiLinks(text) {
     .replace(/\[\[([^\]]+)\]\]/g, (m, target) => target.replace(/_/g, ' '));
 }
 
-// The recap is printed as escaped plain text, so raw HTML (publish.allow_html, #266) is
+// The recap is printed as escaped plain text, so any raw HTML typed in the body is
 // reduced to its text first. Only a paragraph with no text left (empty markup, an SVG made
 // of shapes) drops out; an SVG's <text> content counts as text and is kept.
 function recapParagraphs(text) {

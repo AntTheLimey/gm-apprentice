@@ -2276,7 +2276,7 @@ import vaultlib  # noqa: E402
 
 
 class InlineMarkerTests(unittest.TestCase):
-    """Markers not on their own line (#266 review): the exact port and
+    """Markers not on their own line: the exact port and
     scan_body must agree with stripMarkedBlocks."""
 
     def strip(self, text, word="gm-only"):

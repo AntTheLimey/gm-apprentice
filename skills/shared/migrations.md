@@ -978,8 +978,8 @@ site (#260). No file changes shape.
 
 ## Migration: 1.10.16 → 1.10.17
 
-Publish fixes from the Scriptorium field reports (#265–#270). No file
-changes shape; two new optional publish settings.
+Publish fixes from the Scriptorium field reports (#265, #267–#270). No file
+changes shape; one new optional publish setting.
 
 ### Structural
 
@@ -998,9 +998,6 @@ changes shape; two new optional publish settings.
   `scifi` genre preset even with no custom fonts: its heading font
   (Rajdhani) comes from Google. Skip it when the vault already uses
   `source: local` or only system fonts. Ask; apply only on a yes.
-- A GM who ships handouts as images because raw HTML never rendered can
-  now set `publish.allow_html: true`. Mention it only if the vault has
-  such handouts; don't set it unasked.
 
 ### Tooling
 
@@ -1008,9 +1005,8 @@ changes shape; two new optional publish settings.
   retired, dead, departed and missing PCs; the 404 page uses the
   site's palette; the landing recap renders emphasis instead of
   asterisks; search finds one-letter typos, indexes whole pages and
-  works on phones; opt-in sanitised raw HTML; Google font self-hosting
-  with a build warning when a Google import is emitted. The search
-  index format changed, so rebuild rather than patch a deployed site.
+  works on phones; Google font self-hosting with a build warning when
+  a Google import is emitted. The search index format changed, so rebuild rather than patch a deployed site.
   A site that strips retired PCs from the board in a `postbuild` step
   can drop that step.
   If `publish.site_dir` is set, offer `update-pin --site <site-dir>`

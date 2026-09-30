@@ -19,24 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   served locally too. New sites from the setup wizard start on
   `self-host`; existing sites keep `google` until the GM switches, and
   the build and `site doctor` now warn whenever a Google import ships.
-- **Opt-in raw HTML in page bodies** (#266). With
-  `publish.allow_html: true`, handouts, styled callouts and inline SVG
-  render instead of showing as escaped tags. Everything passes through
-  an allowlist sanitiser: no scripts, event handlers, iframes, forms or
-  `<style>` elements, `style=""` limited to presentational properties,
-  and gm-only stripping still runs first. Off by default.
 - **Search on phones** (#267). A search icon in the header opens a
   full-screen search panel at phone width.
 
 ### Fixed
 
-- **Page-body ids can no longer hijack the site** (#266). With
-  `allow_html` on, every author `id` is published as `u-<id>` and
-  same-page links, `<use>`, `url(#x)` paints and `aria-*` references
-  follow, so a handout can't shadow a live-sheet data island. Style
-  with classes, or target `#u-<id>` in `overrides.css`. Links to the
-  site's own anchors (a PC page's `#background`) are left alone. SVG `url()`
-  paints must now be local.
 - **Inline gm-only and spoiler markers hide their content.** Markers
   used to count only on their own line, so `a <!-- gm-only -->X<!--
   /gm-only --> b` published X. They now strip wherever they sit, and

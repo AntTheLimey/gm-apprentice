@@ -1,15 +1,6 @@
 const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
-// The body renderer. One per process, swapped by configureRenderer() at the start of
-// every build so publish.allow_html (#266) reaches every body render — processContent,
-// extractSections, and the story spine and landing sections that call through them.
-// A build always sets it, so one build's setting can never carry into the next.
-let md = createRenderer();
-
-function configureRenderer({ allowHtml = false } = {}) {
-  if (!!md.allowHtml === !!allowHtml) return;
-  md = createRenderer({ allowHtml });
-}
+const md = createRenderer();
 
 function renderMarkdown(markdown) {
   return md.render(markdown);
@@ -234,7 +225,7 @@ function stripMarkedBlocks(markdown, markerName) {
       continue;
     }
 
-    // Markers are honoured wherever they sit on the line (#266 review): inline
+    // Markers are honoured wherever they sit on the line: inline
     // ("a <!-- gm-only -->X<!-- /gm-only --> b"), inside HTML wrappers, or several
     // per line. Text outside every block is kept; a line that held only markers
     // and blank leftovers collapses (one blank stands in for a whole block).
@@ -336,11 +327,9 @@ function stripCallouts(markdown, exclude) {
 
 // Remove every `<!-- ... -->` comment, including multi-line ones, outside fenced code
 // blocks. Authors keep private notes (UNVERIFIED flags, change logs, import provenance)
-// as comments; with the default `html: false` renderer anything left here is escaped and
-// printed as visible body text, and with publish.allow_html (#266) it would survive into
-// the page source. Must run AFTER stripGmOnly/stripSpoiler, whose block markers are
-// themselves comments, and BEFORE any render — the sanitiser also drops comments, but
-// only as a backstop.
+// as comments; the renderer runs with `html: false`, so anything left here is escaped and
+// printed as visible body text. Must run AFTER stripGmOnly/stripSpoiler, whose block
+// markers are themselves comments.
 //
 // A line that holds nothing but a comment is dropped rather than blanked: a blank line
 // would split the paragraph the comment was sitting inside.
@@ -860,4 +849,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { configureRenderer, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
+module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };

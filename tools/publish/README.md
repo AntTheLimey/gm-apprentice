@@ -12,7 +12,7 @@ Node 22 or later. Check with `node --version`.
 ## Vendored dependencies
 
 This tool's runtime dependencies (`gray-matter`, `lunr`,
-`markdown-it`, `sanitize-html`, and their transitive deps) are **committed** under
+`markdown-it`, and their transitive deps) are **committed** under
 `node_modules/` — an exception to the usual rule, enforced by a
 negation at the bottom of the repo's root `.gitignore`.
 
@@ -411,40 +411,6 @@ rewrites `src` attributes after the fact has to string-match paths the
 tool URL-encodes (`images/Rock%20Lavey.jpg`), and silently misses every
 filename containing a space.
 
-### Raw HTML in page bodies
-
-Off by default: raw HTML in a page body is escaped and shows up on the
-site as literal tags. Turn it on in `_meta/vault-config.md` and it
-renders, so a handout that doesn't map to markdown can ship as real,
-searchable, reflowing text instead of an image:
-
-```yaml
-publish:
-  allow_html: true    # default false; only a YAML true turns it on
-```
-
-Every rendered body then goes through an allowlist sanitiser
-(`lib/html-allowlist.js`, the one place to extend it). It keeps
-structural and text tags (`div`, `span`, `p`, headings, lists, tables,
-`figure`, `aside`, `details`/`summary`, `img`, `a`, …), inline SVG
-(shapes, `text`, gradients, `clipPath`, `mask`, `symbol`, and `use` with
-`#id` references only), `class`/`id`/`title`/`lang`/`dir`, and a `style`
-attribute filtered to presentational properties with no `url()`. Every
-author `id` is rewritten to `u-<id>` (so it cannot shadow the site's own
-ids, such as its JSON data islands) and same-page references (`href="#x"`,
-`<use>`, `url(#x)`, `aria-labelledby`) follow; a CSS rule in `overrides.css`
-that targets an id must use `#u-<id>`, or better, a class. SVG `url()`
-paints are limited to local `url(#id)`. It
-removes `script`, `style`, `iframe`, `object`/`embed`, forms, `link`,
-`meta`, `base`, SVG `foreignObject`, every `on*` handler, `data-*`
-attributes, and `javascript:`/`data:` URLs (a base64 PNG/JPEG/GIF/WebP/AVIF
-in `<img src>` is the one `data:` exception).
-
-`<!-- gm-only -->` / `<!-- spoiler -->` blocks, excluded sections and
-every HTML comment are stripped *before* the markdown is rendered, so
-none of it can reach the page even hidden inside markup. Search, excerpts
-and the landing recap index the text only, never the tags.
-
 ---
 
 ## Library API
@@ -522,13 +488,6 @@ track which image basenames were referenced during rendering.
 
 Returns an array of `{ title, id, html }` objects split on H2 headings.
 Used by the PC template for accordion panels.
-
-**`configureRenderer({ allowHtml })`**
-
-Selects the body renderer used by `processContent` and `extractSections`:
-the default escapes raw HTML; `allowHtml: true` renders it through the
-sanitiser in `lib/html-allowlist.js`. `build()` calls it from
-`publish.allow_html` on every run.
 
 **`resolveWikiLinks(markdown, linkMap, currentOutputPath)`**
 

@@ -101,9 +101,6 @@ within a section.
 - Marker inside inline code (backticks): **not** ignored. It still
   opens or closes a block, so to show one mid-sentence, use a fenced
   block instead. This errs towards hiding, and the build warns
-- Inside raw HTML (with `publish.allow_html: true`): markers work the
-  same inside the markup. They and every other HTML comment are
-  stripped before the HTML is rendered
 
 ## Inline Spoiler Markers
 

@@ -732,7 +732,7 @@ function renderCampaignDeepDive(pages, indexDir, publishConfig) {
 
   const fm = overview.frontmatter;
   // The published view, not the raw file: the raw markdown still carries gm-only and
-  // spoiler blocks and HTML comments, which this page used to print verbatim (#266).
+  // spoiler blocks and HTML comments, which this page used to print verbatim.
   const rawSections = extractMdSections(publishedSource(overview));
   const linkMap = (publishConfig && publishConfig._linkMap) || {};
   const outputPath = indexDir + '/index.html';

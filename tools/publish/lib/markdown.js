@@ -70,23 +70,8 @@ function calloutPlugin(md) {
   });
 }
 
-// `allowHtml` (publish.allow_html, #266) lets raw HTML in a page body render. The whole
-// rendered body then goes through the allowlist sanitiser in html-allowlist.js, so a
-// script, event handler or iframe never reaches the page. Off (the default) is the
-// historical renderer, untouched: raw HTML is escaped and shows as literal text.
-//
-// Callers must strip gm-only/spoiler blocks and HTML comments BEFORE rendering — with
-// HTML on, a surviving comment would hide text in the page source rather than on screen.
-function createRenderer({ allowHtml = false } = {}) {
-  const md = new MarkdownIt({ html: false, typographer: true }).use(calloutPlugin);
-  if (!allowHtml) return md;
-
-  const { sanitizeBodyHtml } = require('./html-allowlist');
-  md.set({ html: true });
-  const render = md.render.bind(md);
-  md.render = (src, env) => sanitizeBodyHtml(render(src, env));
-  md.allowHtml = true;
-  return md;
+function createRenderer() {
+  return new MarkdownIt({ html: false, typographer: true }).use(calloutPlugin);
 }
 
 module.exports = { createRenderer, calloutPlugin };

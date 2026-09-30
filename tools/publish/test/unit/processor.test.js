@@ -729,7 +729,7 @@ describe('CRLF line endings', () => {
   });
 });
 
-describe('inline gm-only / spoiler markers (#266 review)', () => {
+describe('inline gm-only / spoiler markers', () => {
   const both = { gm: stripGmOnly, spoiler: stripSpoiler };
   const txt = (r) => (typeof r === 'string' ? r : r.text);
   for (const [name, strip] of Object.entries(both)) {
@@ -769,15 +769,11 @@ describe('inline gm-only / spoiler markers (#266 review)', () => {
     assert.match(out, /After/);
   });
 
-  for (const allowHtml of [true, false]) {
-    it(`processContent hides inline secrets with allow_html ${allowHtml}`, () => {
-      const { configureRenderer, processContent } = require('../../lib/processor');
-      configureRenderer({ allowHtml });
-      const page = { markdown: 'Pub a <!-- gm-only -->SECRET<!-- /gm-only --> b\n\n<div><!-- spoiler -->\nSECRET\n<!-- /spoiler --></div>\n', frontmatter: {}, outputPath: 'x.html' };
-      const { html } = processContent(page, {}, []);
-      configureRenderer({ allowHtml: false });
-      assert.doesNotMatch(html, /SECRET/);
-      assert.match(html, /Pub a/);
-    });
-  }
+  it('processContent hides inline secrets', () => {
+    const { processContent } = require('../../lib/processor');
+    const page = { markdown: 'Pub a <!-- gm-only -->SECRET<!-- /gm-only --> b\n\n<div><!-- spoiler -->\nSECRET\n<!-- /spoiler --></div>\n', frontmatter: {}, outputPath: 'x.html' };
+    const { html } = processContent(page, {}, []);
+    assert.doesNotMatch(html, /SECRET/);
+    assert.match(html, /Pub a/);
+  });
 });
