@@ -41,7 +41,7 @@ this skill's own cache path). One-off commands run from the cache:
 ```bash
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
 node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
-node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site
+node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
 node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the manifest
 node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # edit the manifest
 node "$TOOL" manifest publish-played --config <dir>/vault.config.json  # register played sessions

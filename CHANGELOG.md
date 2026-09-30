@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once, about any unclear sessions. Excluded entries are never touched.
 - **A session index template** (#276), `_Template_Session.md`:
   frontmatter plus an optional fenced `## GM Notes` dashboard.
+- **Publish tool releases are tagged `publish-v<version>`** (#274), each
+  with a packed tarball and `SHA256SUMS` (this release is
+  `publish-v1.11.40`), and `update-pin --tag publish-vX.Y.Z` pins a
+  site outside the plugin to one.
 
 ### Changed
 

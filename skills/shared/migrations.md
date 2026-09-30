@@ -1052,7 +1052,9 @@ own (#277). No frontmatter changes.
   with one line naming played sessions that are not published yet.
   session-wrapup, reconcile and publish-site now run `manifest
   publish-played` themselves. If `publish.site_dir` is set, offer
-  `update-pin --site <site-dir>` (publish-site's build tool).
+  `update-pin --site <site-dir>` (publish-site's build tool). For a
+  site outside the plugin, `update-pin --site <site-dir> --tag
+  publish-v1.11.40` pins the tagged release tarball instead.
 - `vault_check sessions` warns on played sessions missing from
   Publishing and notes bookkeeping in index bodies the site withholds;
   `vault_check gm-leak` no longer reports those withheld bodies.
