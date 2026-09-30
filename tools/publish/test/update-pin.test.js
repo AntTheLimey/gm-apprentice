@@ -253,3 +253,129 @@ describe('update-pin', () => {
     assert.deepStrictEqual(h.writes, {});
   });
 });
+
+describe('update-pin --tag', () => {
+  const crypto = require('crypto');
+  const TAG = 'publish-v1.11.40';
+  const NAME = 'gm-apprentice-publish-1.11.40.tgz';
+  const BASE = 'https://github.com/AntTheLimey/gm-apprentice/releases/download/publish-v1.11.40';
+  const body = Buffer.from('fake tarball bytes');
+  const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
+
+  // A fetch that serves from a url -> Buffer|status map and records calls.
+  function fakeFetch(routes, calls) {
+    return async (url, init) => {
+      calls.push({ url, hasSignal: !!(init && init.signal) });
+      const r = routes[url];
+      if (r === undefined) return { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
+      if (r instanceof Error) throw r;
+      return { ok: true, status: 200, arrayBuffer: async () => r.buffer.slice(r.byteOffset, r.byteOffset + r.byteLength) };
+    };
+  }
+
+  function tagHarness({ sums, tarball = body, spec = 'file:/x/1.11.30/tools/publish', installed = '1.11.30', routes }) {
+    const h = harness({
+      files: siteFiles(spec, installed),
+      detect: null,
+      npm: (store) => {
+        store[path.resolve('/site/node_modules/gm-apprentice-publish/package.json')] = installedPkg('1.11.40');
+        return { code: 0, stdout: '', stderr: '' };
+      },
+    });
+    const calls = [];
+    const bin = {};
+    h.deps.fetch = fakeFetch(routes || {
+      [`${BASE}/SHA256SUMS`]: Buffer.from(sums === undefined ? `${sha(body)}  ${NAME}\n` : sums),
+      [`${BASE}/${NAME}`]: tarball,
+    }, calls);
+    h.deps.mkdirp = () => {};
+    h.deps.writeFile = (p, c) => { const k = path.resolve(p); h.store[k] = c; h.writes[k] = c; bin[k] = c; };
+    h.deps.unlink = (p) => { h.writes[`unlink:${path.resolve(p)}`] = true; };
+    return Object.assign(h, { calls });
+  }
+
+  it('downloads, verifies, vendors the tarball and pins to it', async () => {
+    const h = tagHarness({});
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.calls.map((c) => c.url), [`${BASE}/SHA256SUMS`, `${BASE}/${NAME}`]);
+    assert.ok(h.calls.every((c) => c.hasSignal), 'every request carries a timeout signal');
+    assert.ok(h.writes[path.resolve(`/site/vendor/${NAME}`)].equals(body));
+    const pkg = JSON.parse(h.writes[path.resolve('/site/package.json')]);
+    assert.strictEqual(pkg.dependencies['gm-apprentice-publish'], `file:vendor/${NAME}`);
+    assert.deepStrictEqual(h.runs.map((r) => r.cmd + ' ' + r.args.join(' ')), ['npm install']);
+    assert.match(h.out.join('\n'), /Updated gm-apprentice-publish from 1\.11\.30 to 1\.11\.40 \(publish-v1\.11\.40, checksum verified\)/);
+  });
+
+  it('fails loudly on a checksum mismatch and writes nothing', async () => {
+    const h = tagHarness({ tarball: Buffer.from('tampered') });
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.out.join('\n'), /CHECKSUM MISMATCH/);
+    assert.deepStrictEqual(h.writes, {});
+    assert.deepStrictEqual(h.runs, []);
+  });
+
+  it('fails when SHA256SUMS has no entry for the tarball', async () => {
+    const h = tagHarness({ sums: `${sha(body)}  other.tgz\n` });
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.out.join('\n'), /no entry for gm-apprentice-publish-1\.11\.40\.tgz/);
+    assert.deepStrictEqual(h.writes, {});
+  });
+
+  it('reports a network failure and writes nothing', async () => {
+    const h = tagHarness({ routes: { [`${BASE}/SHA256SUMS`]: new Error('network down') } });
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.out.join('\n'), /Could not fetch publish-v1\.11\.40: network down/);
+    assert.deepStrictEqual(h.writes, {});
+  });
+
+  it('reports an HTTP 404 for an unknown tag', async () => {
+    const h = tagHarness({ routes: {} });
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.out.join('\n'), /HTTP 404/);
+  });
+
+  it('rejects a malformed tag before any network call', async () => {
+    const h = tagHarness({});
+    const rc = await runUpdatePin({ siteDir: '/site', tag: 'v1.9.11' }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.out.join('\n'), /--tag must look like publish-vX\.Y\.Z/);
+    assert.deepStrictEqual(h.calls, []);
+  });
+
+  it('is a no-op when already pinned and installed', async () => {
+    const h = tagHarness({ spec: `file:vendor/${NAME}`, installed: '1.11.40' });
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.calls, []);
+    assert.match(h.out.join('\n'), /1\.11\.40 is current/);
+  });
+
+  it('--check reports drift without touching the network', async () => {
+    const h = tagHarness({});
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG, check: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(h.calls, []);
+    assert.deepStrictEqual(h.writes, {});
+  });
+
+  it('removes the tarball an earlier --tag pin vendored', async () => {
+    const h = tagHarness({ spec: 'file:vendor/gm-apprentice-publish-1.11.39.tgz', installed: '1.11.39' });
+    const rc = await runUpdatePin({ siteDir: '/site', tag: TAG }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.ok(h.writes[`unlink:${path.resolve('/site/vendor/gm-apprentice-publish-1.11.39.tgz')}`]);
+  });
+
+  it('emits JSON with --json', async () => {
+    const h = tagHarness({});
+    await runUpdatePin({ siteDir: '/site', tag: TAG, json: true }, h.deps);
+    const payload = JSON.parse(h.out.join('\n'));
+    assert.strictEqual(payload.desired, '1.11.40');
+    assert.strictEqual(payload.ok, true);
+    assert.strictEqual(payload.changed, true);
+  });
+});

@@ -166,7 +166,7 @@ wrangler.toml's project name), "github-pages" commits docs/ and pushes.
   --help, -h         Show this help
 `,
   'update-pin': `
-gm-apprentice-publish update-pin [--site <dir>] [--check] [--json]
+gm-apprentice-publish update-pin [--site <dir>] [--tag publish-vX.Y.Z] [--check] [--json]
 
 Repoints this site's gm-apprentice-publish dependency at the newest version in
 the plugin cache and runs npm install. A "/plugin update" installs a new version
@@ -176,6 +176,11 @@ building with the old renderer until this runs. Pair it with "deploy".
   --site <dir>       The site directory holding package.json (default: the
                      directory of --config, i.e. the current directory)
   --config <path>    Path to vault.config.json — names the site directory
+  --tag <tag>        Pin to the tarball of a tagged release (publish-vX.Y.Z)
+                     instead of the plugin cache: downloads the .tgz and
+                     SHA256SUMS from GitHub, verifies the checksum (a mismatch
+                     aborts), vendors the .tgz under vendor/ and pins to it.
+                     For sites outside the plugin.
   --check            Report the drift and exit 1; change nothing
   --json             Emit { pinnedBefore, pinnedAfter, installedBefore,
                      installedAfter, desired, changed, ok }
@@ -563,7 +568,7 @@ if (command === 'update-pin') {
   const parsed = parseSubcommandArgs(
     args.slice(1),
     { '--check': 'check', '--json': 'json' },
-    { '--site': 'site' },
+    { '--site': 'site', '--tag': 'tag' },
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
@@ -572,7 +577,7 @@ if (command === 'update-pin') {
   }
   const siteDir = parsed.flags.site || path.dirname(path.resolve(parsed.configPath));
   const { runUpdatePin } = require('../lib/update-pin.js');
-  runUpdatePin({ siteDir, check: !!parsed.flags.check, json: !!parsed.flags.json })
+  runUpdatePin({ siteDir, tag: parsed.flags.tag, check: !!parsed.flags.check, json: !!parsed.flags.json })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;

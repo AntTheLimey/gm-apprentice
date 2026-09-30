@@ -1,7 +1,8 @@
 'use strict';
 
 // `update-pin` command: repoint a site's `gm-apprentice-publish` dependency at the
-// newest version in the plugin cache, and install it.
+// newest version in the plugin cache, and install it. With `--tag publish-vX.Y.Z`
+// it pins to a GitHub release tarball instead (see runUpdatePinTag).
 //
 // A `/plugin update` drops a new `<version>/` next to the old one and never touches
 // the site's package.json, so the site keeps building with the OLD renderer while
@@ -14,6 +15,7 @@
 // no cache, no site and no npm.
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const DEP = 'gm-apprentice-publish';
 
@@ -35,9 +37,142 @@ function tail(text, lines = 6) {
   return String(text || '').trimEnd().split('\n').slice(-lines).join('\n');
 }
 
+const RELEASE_BASE = 'https://github.com/AntTheLimey/gm-apprentice/releases/download';
+const TAG_RE = /^publish-v(\d+\.\d+\.\d+)$/;
+const FETCH_TIMEOUT_MS = 30000;
+
+// The hex digest SHA256SUMS records for `name`, or null. Lines are
+// `<64 hex>  <name>` (text mode) or `<64 hex> *<name>` (binary mode).
+function checksumFor(sums, name) {
+  for (const line of String(sums).split(/\r?\n/)) {
+    const m = /^([0-9a-fA-F]{64}) [ *](.+)$/.exec(line.trim());
+    if (m && m[2] === name) return m[1].toLowerCase();
+  }
+  return null;
+}
+
+async function download(fetchFn, url) {
+  const res = await fetchFn(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), redirect: 'follow' });
+  if (!res.ok) throw new Error(`GET ${url} failed: HTTP ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// `update-pin --tag publish-vX.Y.Z`: pin the site to a tagged release tarball
+// instead of a plugin-cache path, for sites that live outside the plugin. The
+// tarball is downloaded, checked against the release's SHA256SUMS, vendored into
+// the site under vendor/, and referenced by a file: dependency. A checksum
+// mismatch aborts before anything is written.
+async function runUpdatePinTag(opts, d) {
+  const out = d.out || console.log;
+  const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
+  const writeFile = d.writeFile || ((p, c) => fs.writeFileSync(p, c));
+  const mkdirp = d.mkdirp || ((p) => fs.mkdirSync(p, { recursive: true }));
+  const unlink = d.unlink || ((p) => { try { fs.unlinkSync(p); } catch { /* already gone */ } });
+  const fetchFn = d.fetch || globalThis.fetch;
+  const runCommand = d.runCommand || require('./run-command').runCommand;
+  const siteDir = path.resolve(opts.siteDir || '.');
+  const asJson = !!opts.json;
+  const say = (line) => { if (!asJson) out(line); };
+
+  const m = TAG_RE.exec(String(opts.tag));
+  const desired = m ? m[1] : null;
+  const result = (fields, rc) => {
+    const payload = Object.assign({
+      tag: opts.tag, pinnedBefore: null, pinnedAfter: null, installedBefore: null,
+      installedAfter: null, desired, changed: false, ok: rc === 0,
+    }, fields);
+    if (asJson) out(JSON.stringify(payload, null, 2));
+    return rc;
+  };
+  if (!m) {
+    say(`--tag must look like publish-vX.Y.Z (got "${opts.tag}").`);
+    return result({}, 1);
+  }
+
+  const sitePkgPath = path.join(siteDir, 'package.json');
+  let sitePkg;
+  try {
+    sitePkg = JSON.parse(readFile(sitePkgPath));
+  } catch (err) {
+    say(`Could not read ${sitePkgPath} — no package.json there, or it is not valid JSON (${err.message}).`);
+    say('Point --site at the directory holding your vault.config.json.');
+    return result({}, 1);
+  }
+  const dependencies = sitePkg.dependencies || {};
+  const before = dependencies[DEP] ? String(dependencies[DEP]) : null;
+  const tarName = `${DEP}-${desired}.tgz`;
+  const newSpec = `file:vendor/${tarName}`;
+  const installedOf = () => {
+    try {
+      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
+    } catch {
+      return null;
+    }
+  };
+  const installedBefore = installedOf();
+  const pinnedBefore = before && /-(\d+\.\d+\.\d+)\.tgz$/.exec(before.replace(/\\/g, '/'));
+  const pinnedVersion = pinnedBefore ? pinnedBefore[1] : null;
+
+  if (before === newSpec && installedBefore === desired) {
+    say(`${DEP} ${desired} is current`);
+    return result({ pinnedBefore: pinnedVersion, pinnedAfter: desired, installedBefore, installedAfter: installedBefore }, 0);
+  }
+  if (opts.check) {
+    say(`${DEP} is not pinned to ${opts.tag}.`);
+    say(`  pinned:    ${before || 'none'}`);
+    say(`  installed: ${installedBefore || 'none'}`);
+    return result({ pinnedBefore: pinnedVersion, installedBefore, installedAfter: installedBefore }, 1);
+  }
+
+  let tgz;
+  try {
+    const sumsBuf = await download(fetchFn, `${RELEASE_BASE}/${opts.tag}/SHA256SUMS`);
+    const sums = sumsBuf.toString('utf8');
+    const expected = checksumFor(sums, tarName);
+    if (!expected) throw new Error(`SHA256SUMS in ${opts.tag} has no entry for ${tarName}`);
+    tgz = await download(fetchFn, `${RELEASE_BASE}/${opts.tag}/${tarName}`);
+    const actual = crypto.createHash('sha256').update(tgz).digest('hex');
+    if (actual !== expected) {
+      say(`CHECKSUM MISMATCH for ${tarName}: SHA256SUMS says ${expected}, the download is ${actual}.`);
+      say('Refusing to pin. Nothing was written. Try again; if it persists, do not use this release.');
+      return result({ pinnedBefore: pinnedVersion, installedBefore, installedAfter: installedBefore, error: 'checksum mismatch' }, 1);
+    }
+    const vendorDir = path.join(siteDir, 'vendor');
+    mkdirp(vendorDir);
+    writeFile(path.join(vendorDir, tarName), tgz);
+    writeFile(path.join(vendorDir, `${tarName}.SHA256SUMS`), `${expected}  ${tarName}\n`);
+  } catch (err) {
+    say(`Could not fetch ${opts.tag}: ${err.message}`);
+    return result({ pinnedBefore: pinnedVersion, installedBefore, installedAfter: installedBefore, error: err.message }, 1);
+  }
+
+  sitePkg.dependencies = Object.assign({}, dependencies, { [DEP]: newSpec });
+  writeFile(sitePkgPath, JSON.stringify(sitePkg, null, 2) + '\n');
+  // Drop the tarball an earlier --tag pin vendored, so vendor/ holds only the live one.
+  const oldName = before && /^file:vendor\/(gm-apprentice-publish-\d+\.\d+\.\d+\.tgz)$/.exec(before.replace(/\\/g, '/'));
+  if (oldName && oldName[1] !== tarName) {
+    unlink(path.join(siteDir, 'vendor', oldName[1]));
+    unlink(path.join(siteDir, 'vendor', `${oldName[1]}.SHA256SUMS`));
+  }
+
+  const install = runCommand('npm', ['install'], { cwd: siteDir });
+  const installedAfter = installedOf();
+  const ok = installedAfter === desired;
+  if (ok) {
+    say(`Updated ${DEP} from ${installedBefore || 'none'} to ${installedAfter} (${opts.tag}, checksum verified)`);
+  } else {
+    say(`Pinned ${sitePkgPath} to ${opts.tag}, but npm install left ${installedAfter || 'nothing'} in node_modules.`);
+    const detail = tail(install.stderr) || tail(install.stdout);
+    if (detail) say(detail);
+    say(`Run \`npm install\` in ${siteDir} by hand to see the whole log.`);
+  }
+  return result({ pinnedBefore: pinnedVersion, pinnedAfter: desired, installedBefore, installedAfter, changed: true }, ok ? 0 : 1);
+}
+
 async function runUpdatePin(options, deps) {
   const opts = options || {};
   const d = deps || {};
+  if (opts.tag) return runUpdatePinTag(opts, d);
   const out = d.out || console.log;
   const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = d.writeFile || ((p, c) => fs.writeFileSync(p, c));
@@ -161,4 +296,4 @@ async function runUpdatePin(options, deps) {
   }, ok ? 0 : 1);
 }
 
-module.exports = { runUpdatePin, pinnedVersionOf };
+module.exports = { runUpdatePin, pinnedVersionOf, checksumFor };
