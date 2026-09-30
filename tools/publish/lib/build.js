@@ -22,6 +22,8 @@ const { resolveBackendFlags } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
 
+const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
@@ -311,6 +313,9 @@ function build(options = {}) {
 
   // A Publishing entry that matches no scanned file silently removes nothing and publishes
   // nothing — the page just never appears. Say so, so a typo can't blackhole a page.
+  // Played sessions the manifest would withhold (#277): reported once, at the end of the
+  // build, because the per-file warning drowns in a real build's log.
+  const unpublishedPlayedSessions = [];
   if (manifest) {
     const scanned = new Set(corpus.map(vaultRelPathOf));
     for (const entry of manifest.publishing) {
@@ -335,6 +340,10 @@ function build(options = {}) {
         if (!REGISTRABLE_TYPES.has(type)) continue;
         const rel = vaultRelPathOf(page);
         if (!registered.has(rel)) {
+          if (type === 'session' && PLAYED_SESSION_STATUSES.has(String(page.frontmatter.status || '').toLowerCase())) {
+            unpublishedPlayedSessions.push(page.title || path.basename(rel, '.md'));
+            continue;
+          }
           const kind = type === 'chapter' ? 'chapter' : 'session';
           console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not in the publish manifest — this ${kind} will NOT publish. Add it to _meta/publish-manifest.md.`);
         }
@@ -1139,6 +1148,13 @@ function build(options = {}) {
   const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
+
+  // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
+  // is a decision and never lands here; one in Needs Decision or in no section does.
+  if (unpublishedPlayedSessions.length > 0) {
+    const n = unpublishedPlayedSessions.length;
+    console.warn(`  WARNING: ${n} played session${n === 1 ? ' is' : 's are'} not published (in Needs Decision): ${unpublishedPlayedSessions.join(', ')}. Tick ${n === 1 ? 'it' : 'them'} under Publishing in _meta/publish-manifest.md.`);
+  }
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);

@@ -773,6 +773,52 @@ describe('build integration', () => {
         'a deliberately excluded session must not warn');
     });
 
+    it('ends the build with one summary line naming unpublished played sessions (#277)', () => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-played-'));
+      const vault = path.join(tmp, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 09 - The Table.md'),
+        '---\ntype: session\nsession_number: 9\nstatus: reviewed\naliases: []\ntags: []\n---\n\n## Recap\n\nDone.\n');
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 10 - Next.md'),
+        '---\ntype: session\nsession_number: 10\nstatus: prepped\naliases: []\ntags: []\n---\n\n## Recap\n\nSoon.\n');
+
+      const configPath = path.join(tmp, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: vault,
+        outputDir: path.join(tmp, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Played',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
+      }, null, 2));
+
+      const lines = [];
+      const realWarn = console.warn;
+      const realLog = console.log;
+      console.warn = (...args) => lines.push(args.join(' '));
+      console.log = (...args) => lines.push(args.join(' '));
+      try {
+        build({ configPath });
+      } finally {
+        console.warn = realWarn;
+        console.log = realLog;
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+
+      const summary = lines.filter(l => l.includes('played session'));
+      assert.equal(summary.length, 1, JSON.stringify(summary));
+      assert.match(summary[0], /1 played session is not published \(in Needs Decision\): .*Session 09/);
+      assert.ok(!summary[0].includes('Session 10'), 'a prepped session is not "played"');
+      assert.match(summary[0], /Tick it under Publishing in _meta\/publish-manifest\.md/);
+      // It is the last warning-level line before the closing "Done!".
+      assert.ok(lines.indexOf(summary[0]) > lines.findIndex(l => l.includes('wrote index.html')),
+        'summary must come after the per-file output');
+      // The played session no longer gets a separate mid-log warning.
+      assert.ok(!lines.some(l => l.includes('Session 09') && l.includes('not in the publish manifest')));
+    });
+
     it('does NOT warn about an unregistered session in full/GM mode (manifest not enforced)', () => {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-full-'));
       const vault = path.join(tmp, 'vault');

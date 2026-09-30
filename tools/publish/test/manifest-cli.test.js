@@ -264,6 +264,23 @@ describe('manifest apply', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('moves an entry from Needs Decision to Publishing (#277)', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
+      '---', 'mode: player', '---', '',
+      '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', '',
+    ].join('\n'));
+    const { configPath } = siteFor(vault);
+    const c = capture();
+
+    await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
+    const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
+    assert.match(written, /## Publishing \(1 files\)\n\n- \[x\] Sessions\/Played Session\.md\n/);
+    assert.match(written, /## Needs Decision \(0 files\)\n/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('preserves the annotation on an entry it was not asked to move', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
