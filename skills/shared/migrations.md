@@ -1038,21 +1038,27 @@ own (#277). No frontmatter changes.
   anything left under a fenced `## GM Notes` on the index. Show the diff
   before moving anything.
 - If the vault publishes in player mode, run `manifest publish-played`
-  once. It ticks every played session that has a Wrap-Up (and the
-  Wrap-Up) under Publishing; report what it ticked. For played sessions
-  it lists as unclear (no Wrap-Up yet), ask the GM once, in one
-  question, and tick only what they approve. Never touch Excluded.
+  once. It ticks a played session under Publishing only together with a
+  linked Wrap-Up that will publish; report what it ticked. For played
+  sessions it lists as unclear (no Wrap-Up, or one that is Excluded or
+  won't publish), ask the GM once, in one question listing the reasons,
+  and tick only what they approve. Never touch Excluded.
 
 ### Tooling
 
 - `gm-apprentice-publish` 1.11.40: session pages with a published
   Wrap-Up are built from the index's frontmatter and the Wrap-Up's recap
   (badges, title and page wrapper unchanged); previous/next session links
-  follow story order; `manifest publish-played` is new; the build ends
-  with one line naming played sessions that are not published yet.
-  session-wrapup, reconcile and publish-site now run `manifest
-  publish-played` themselves. If `publish.site_dir` is set, offer
-  `update-pin --site <site-dir>` (publish-site's build tool).
+  group by chapter; `manifest publish-played` and `explain --all
+  --json` are new; the build ends by naming played sessions that are
+  not published yet. Reconcile and publish-site now run `manifest
+  publish-played` themselves, and session-wrapup does after reconcile.
+  If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
+  (publish-site's build tool).
 - `vault_check sessions` warns on played sessions missing from
   Publishing and notes bookkeeping in index bodies the site withholds;
-  `vault_check gm-leak` no longer reports those withheld bodies.
+  `vault_check gm-leak` no longer reports those withheld bodies. Both
+  now ask the publish tool (`explain --all --json`, through
+  `publish.site_dir`) which bodies it withholds, and fall back to
+  scanning every index body, with an INFO row saying so, when they
+  can't ask.

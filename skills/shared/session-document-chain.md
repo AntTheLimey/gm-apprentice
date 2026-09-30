@@ -62,7 +62,8 @@ run for the GM.
 reconcile step 6.5 once world evolution has run for it, so it is not
 offered twice. Null until then.
 
-**Body:** the H1 title, nothing else. The hub is metadata only by
+**Body:** the H1 title, nothing else outside an optional fenced
+`## GM Notes`. The hub is metadata only by
 design. Once the session has a published Wrap-Up (linked by
 `documents.wrap_up` or by the Wrap-Up's own `session:`), the site
 withholds the hub body — from the page, search, backlinks and the

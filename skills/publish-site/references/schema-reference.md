@@ -267,8 +267,10 @@ too.
 
 The session index is metadata only by design. Once its Wrap-Up
 publishes — linked by the index's `documents.wrap_up` or the Wrap-Up's
-own `session:` — the index body is withheld from the page and from
-search, backlinks and the landing. The page then shows, under the
+own `session:`, each resolved like any `[[link]]` on the site (exact
+name, vault path or alias; between same-named Wrap-Ups, the one in the
+session's folder or chapter) — the index body is withheld from the page
+and from search, backlinks and the landing. The page then shows, under the
 title and badges: the chapter (linked, if its page publishes), the
 `in_game_date`, the opening of the Wrap-Up's recap and a "Read the
 full session" link to the Wrap-Up. Its "NPCs Appearing" and "Events"

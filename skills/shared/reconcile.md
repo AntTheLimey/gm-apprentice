@@ -136,21 +136,23 @@ Only if `_meta/publish-manifest.md` exists and `publish.mode` in
 `_meta/vault-config.md` is `player` or unset; otherwise skip. A
 played session left in the manifest's Needs Decision never reaches
 the player site (#277). Run it yourself, unconditionally, and
-report the paths it ticked. Never ask the GM to tick anything:
+report the paths it ticked. Don't ask the GM about the ones it ticks:
 
 ```bash
 node "$TOOL" manifest publish-played --config <site_dir>/vault.config.json
 ```
 
 `$TOOL` and `<site_dir>` (`publish.site_dir`) are as in
-`publish-site/SKILL.md`. The verb ticks every played session index
-that has a Wrap-Up, and that Wrap-Up, not yet under Publishing. The
-session you just wrapped or reconciled is always in that set, so no
-question is needed. Excluded entries are left alone, and any other
-played session with no Wrap-Up is reported as "unclear" and not
-ticked (mention it in the report; publish-site asks about it). A hub's body never
-publishes; the site builds the session page from its frontmatter
-and the Wrap-Up, so registering it is always safe.
+`publish-site/SKILL.md`. The verb registers a played session index
+only together with a Wrap-Up that is linked to it (`documents.wrap_up`
+or the Wrap-Up's `session:`) and will publish. Then the site withholds
+the hub body and builds the session page from its frontmatter and the
+Wrap-Up. Any other played session is listed as "unclear", with the
+reason (no Wrap-Up, or it is Excluded or won't publish), and is not
+ticked, because its hub body would publish. If the session you just
+reconciled is among them, ask the GM once whether to publish it as it
+stands (`manifest apply --publish`) or fix the link first. Report the
+others; publish-site asks about them. Excluded entries are left alone.
 
 ### 6.5. World evolution (conditional)
 

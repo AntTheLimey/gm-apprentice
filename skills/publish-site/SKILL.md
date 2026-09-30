@@ -55,12 +55,14 @@ node "$TOOL" --help
 **Before any build or deploy this skill runs**, run
 `node "$TOOL" manifest publish-played --config <dir>/vault.config.json`
 yourself, so a site never ships missing a played session (#277). It
-ticks each played session index that has a Wrap-Up, plus the
-Wrap-Up, skips Excluded ones, and does nothing without a manifest in
-player mode. Report the paths it ticked. It also lists "unclear"
-sessions (played, no Wrap-Up yet): ask the GM once, in one question
-listing them, and tick only the approved ones with `manifest apply
---publish`. Don't tick them silently; if the GM says "not yet",
+ticks a played session index only together with a linked Wrap-Up
+that will publish, so the site withholds the hub body. It skips
+Excluded entries and does nothing without a manifest in player mode.
+Report the paths it ticked. Every other played session is listed as
+"unclear" with its reason (no Wrap-Up, or one that is Excluded or
+won't publish), because its hub body would publish. Ask the GM once,
+in one question listing them with their reasons, and tick only the
+approved ones with `manifest apply --publish`. Don't tick them silently; if the GM says "not yet",
 leave them and don't ask again in this run. The build itself stays read-only
 on the vault, so this lives in the skill, not in `build`/`deploy`.
 
