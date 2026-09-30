@@ -21,7 +21,8 @@ section not marked optional/conditional is required; omit empty
 optional ones, and leave `### Reconciliation Context` to
 reconcile. Keeper-facing content goes only at `###` under the
 fenced `## GM Notes` — never a new H2 (a sibling H2 publishes to
-player sites). Filename `Chapter_CC_Session_NN_Wrap_Up.md` in the
+player sites; only the recap, Memorable Moments and the vault's
+`publish.wrap_up.player_sections` are player-facing). Filename `Chapter_CC_Session_NN_Wrap_Up.md` in the
 session's own directory — the chapter number is required.
 
 **Session index:** stamp it (dry-run, then `--write` on

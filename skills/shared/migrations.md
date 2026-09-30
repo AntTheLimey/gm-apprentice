@@ -1030,6 +1030,14 @@ own (#277). No frontmatter changes.
   `session:`) and published no longer publishes its body. Indexes
   without a Wrap-Up publish exactly as before; some vaults keep their
   recaps there.
+- Optional, only if the GM asks; no automated step: a vault that keeps
+  recaps in session index bodies can move them to Wrap-Ups by setting
+  `type: session_wrap`, linking `session:` (on the Wrap-Up) and
+  `documents.wrap_up` (on the index), and listing any extra
+  player-facing sections in `publish.wrap_up.player_sections`.
+- New optional setting `publish.wrap_up.player_sections` (list of H2
+  titles): extra Wrap-Up sections `vault_check wrapup` treats as
+  player-facing. Absent means the recap and Memorable Moments only.
 - Optional tidy, one index at a time and only on the GM's yes: run
   `vault_check.py <vault> sessions`, and for each "session index body"
   INFO row show the body and propose where each part belongs: document
