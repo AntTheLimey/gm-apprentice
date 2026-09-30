@@ -1,0 +1,121 @@
+name: Publish Tool Release
+
+# Tags the publish tool separately from the plugin: publish-v<version>, taken from
+# tools/publish/package.json. Each release carries the packed tarball and a
+# SHA256SUMS so an outside project can pin the tool precisely (#274). It is never
+# marked latest, so the plugin's own v* release stays the repo's latest release.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/publish/package.json'
+
+permissions:
+  contents: write
+
+# Two pushes must not race to create the same tag.
+concurrency:
+  group: publish-tool-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version from tools/publish/package.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' tools/publish/package.json)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tools/publish/package.json version is not X.Y.Z: $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=publish-v$VERSION" >> "$GITHUB_OUTPUT"
+
+      # A tag is never moved or reused: an existing one means this version shipped.
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ steps.version.outputs.tag }}" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.version.outputs.tag }} already exists; nothing to release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check_tag.outputs.exists == 'false'
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: tools/publish/package-lock.json
+
+      # Never pack from a red tree.
+      - name: Install dependencies
+        if: steps.check_tag.outputs.exists == 'false'
+        working-directory: tools/publish
+        run: npm ci
+
+      - name: Run tests
+        if: steps.check_tag.outputs.exists == 'false'
+        working-directory: tools/publish
+        run: npm test
+
+      - name: Pack the tool
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          mkdir -p dist-publish
+          (cd tools/publish && npm pack --pack-destination "$GITHUB_WORKSPACE/dist-publish")
+          cd dist-publish
+          TGZ="gm-apprentice-publish-${{ steps.version.outputs.version }}.tgz"
+          test -f "$TGZ"
+          # The vendored runtime deps must travel inside the tarball.
+          for dep in gray-matter lunr markdown-it; do
+            tar -tzf "$TGZ" | grep -q "^package/node_modules/$dep/package.json$" \
+              || { echo "::error::$dep is missing from $TGZ"; exit 1; }
+          done
+          sha256sum "$TGZ" > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          ls -l
+
+      - name: Write release notes
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          PREV=$(git tag --list 'publish-v*' --sort=-version:refname | head -1)
+          {
+            echo "Publish tool ${{ steps.version.outputs.version }}, packed with \`npm pack\`."
+            echo
+            echo "Pin with the attached .tgz and verify it with \`SHA256SUMS\`."
+            echo
+            echo "## Changes to tools/publish"
+            echo
+            if [[ -n "$PREV" ]]; then
+              echo "Since \`$PREV\`:"
+              echo
+              git log --no-merges --format='- %s (%h)' "$PREV..HEAD" -- tools/publish
+            else
+              echo "Initial tagged release."
+            fi
+          } > notes.md
+          cat notes.md
+
+      # gh creates the tag at this commit. --latest=false keeps the plugin's own
+      # v* release as the repo's latest.
+      - name: Create release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            "dist-publish/gm-apprentice-publish-${{ steps.version.outputs.version }}.tgz" \
+            dist-publish/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "Publish tool ${{ steps.version.outputs.version }}" \
+            --notes-file notes.md \
+            --latest=false

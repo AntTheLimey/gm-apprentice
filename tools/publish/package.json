@@ -23,6 +23,11 @@
   ],
   "author": "AntTheLimey",
   "license": "MIT",
+  "bundleDependencies": [
+    "gray-matter",
+    "lunr",
+    "markdown-it"
+  ],
   "dependencies": {
     "gray-matter": "^4.0.3",
     "lunr": "^2.3.9",
