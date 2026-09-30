@@ -10,6 +10,9 @@ on:
     branches: [main]
     paths:
       - 'tools/publish/package.json'
+  # Retry a failed pack or release by hand. The tag check below still skips a
+  # version that already shipped, so a re-run never moves a tag.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,6 +24,8 @@ concurrency:
 
 jobs:
   release:
+    # A manual run from another branch must not tag an unmerged tree.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
