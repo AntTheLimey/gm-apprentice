@@ -124,7 +124,7 @@ excluded versus missing is the GM's call.
                      Move paths between the three sections and rewrite the file.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
-  manifest publish-played [--dry-run] [--config <path>] [--json]
+  manifest publish-played [--dry-run] [--config <path>] [--vault <dir>] [--json]
                      Move every reviewed session to Publishing together
                      with its Wrap-Up, but only when that Wrap-Up is linked
                      (documents.wrap_up or its session:) and will publish,
@@ -570,7 +570,9 @@ if (command === 'manifest') {
     args.slice(2),
     Object.assign({ '--prune': 'prune', '--json': 'json' },
       verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun' } : {}),
-    {},
+    // --vault: vault_check asks about the vault it is checking, which need not be the
+    // one the site's vaultPath names (explain --all takes it for the same reason).
+    verb === 'publish-played' ? { '--vault': 'vault' } : {},
     verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' } : {},
   );
   if (parsed.error) {
@@ -582,6 +584,7 @@ if (command === 'manifest') {
   runManifest({
     verb,
     configPath: parsed.configPath,
+    vaultPath: parsed.flags.vault,
     publish: parsed.flags.publish,
     exclude: parsed.flags.exclude,
     decide: parsed.flags.decide,

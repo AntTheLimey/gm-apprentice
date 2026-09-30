@@ -99,7 +99,11 @@ are never automatic.
 `sessions` derives each session's status from its chain documents. For
 a session index whose Wrap-Up is explicitly linked (so the site
 withholds the index body), it also reports body lines outside a gm-only
-fence as INFO, naming the document each kind belongs in.
+fence as INFO, naming the document each kind belongs in. In a player-mode
+vault it warns on played sessions missing from the manifest's Publishing
+section, saying what `manifest publish-played` will do with each. Both
+answers come from the site's installed publish tool (the plugin's when
+the site has none), never from a reading of its rules here.
 
 `wrapup` and `gm-leak` are the commands that can write. Each prints
 its findings first and then a repair row per action — `WOULD-FIX` on
@@ -129,7 +133,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -931,34 +935,88 @@ def read_manifest_sections(vault: Path) -> dict[str, set[str]] | None:
     return sections
 
 
-def manifest_rows(vault: Path, played: list[tuple[str, str | None]]
-                  ) -> list[str]:
+def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     """WARNING rows for played sessions (and their Wrap-Ups) that
     `_meta/publish-manifest.md` does not list under Publishing (#277).
 
     Silent unless the vault has a manifest and publishes in player mode —
     the only mode where the manifest is an allowlist, matching
     publish-decision.js. A file under Excluded is a decision, not an
-    oversight, so it is not reported."""
+    oversight, so it is not reported.
+
+    What happens next is the publish tool's call, not this script's: it is
+    asked (`manifest publish-played --dry-run --json`, the site's tool first,
+    as for `explain`). A session it would tick "publish-played will register
+    it"; one it lists as unclear "publish-site will ask the GM", with its
+    reason. The Wrap-Up rows come from the same answer. When it can't be
+    asked, the rows promise nothing about what happens next.
+    """
     sections = read_manifest_sections(vault)
     if sections is None:
         return []
     if (read_publish_scalar(vault, "mode") or "player").casefold() != "player":
         return []
+
+    def unlisted(rel: str) -> str | None:
+        canon = unicodedata.normalize("NFC", rel)
+        if canon in sections["publishing"] or canon in sections["excluded"]:
+            return None
+        return ("Needs Decision" if canon in sections["needs_decision"]
+                else "no manifest section")
+
+    waiting = [rel for rel in played if unlisted(rel)]
+    if not waiting:
+        return []
+    answer = ask_publish_tool(vault, ["manifest", "publish-played",
+                                      "--dry-run"])
+    ticks: set[str] = set()
+    asks: dict[str, str] = {}
+    wraps: dict[str, str] = {}
+    known = answer.data is not None
+    if known:
+        try:
+            data = answer.data
+            ticks = {unicodedata.normalize("NFC", str(p))
+                     for p in data.get("published", [])}
+            for u in data.get("unclear", []):
+                path = unicodedata.normalize("NFC", str(u["path"]))
+                asks[path] = str(u.get("reason") or "unclear")
+                if u.get("wrapUp"):
+                    wraps[unicodedata.normalize("NFC", str(u["wrapUp"]))] = (
+                        asks[path])
+        except (AttributeError, KeyError, TypeError):
+            known = False
     rows: list[str] = []
-    for index, wrap in played:
-        for rel, kind in ((index, "played session"), (wrap, "Wrap-Up")):
-            if not rel:
-                continue
-            canon = unicodedata.normalize("NFC", rel)
-            if canon in sections["publishing"] or canon in sections["excluded"]:
-                continue
-            where = ("Needs Decision" if canon in sections["needs_decision"]
-                     else "no manifest section")
-            rows.append(
-                f"WARNING\t{rel}\t{kind} is not under Publishing in "
-                f"_meta/publish-manifest.md ({where}) — it will not publish; "
-                f"gm-publish manifest publish-played")
+    if not known:
+        rows.append(_publish_tool_row(
+            answer.why or "manifest publish-played did not return the "
+            "expected JSON", "the rows below don't say what publish-site "
+            "will do with each session", answer.used))
+    else:
+        rows.extend(_tool_used_row(answer.used))
+
+    def row(rel: str, kind: str) -> str:
+        where = unlisted(rel)
+        head = (f"WARNING\t{rel}\t{kind} is not under Publishing in "
+                f"_meta/publish-manifest.md ({where}) — it will not publish")
+        canon = unicodedata.normalize("NFC", rel)
+        if not known:
+            return (f"{head} until it is listed there (publish-site runs "
+                    f"gm-publish manifest publish-played before every build)")
+        if canon in ticks:
+            return f"{head} yet; publish-played will register it"
+        reason = asks.get(canon) or wraps.get(canon)
+        if reason:
+            return f"{head}; publish-site will ask the GM ({reason})"
+        return (f"{head}; publish-played won't register it, so publish it "
+                f"with gm-publish manifest apply --publish if it should")
+
+    for rel in waiting:
+        rows.append(row(rel, "played session"))
+    for rel in sorted((ticks | set(wraps)) - {unicodedata.normalize("NFC", r)
+                                               for r in played}):
+        if unlisted(rel):
+            rows.append(row(rel, "Wrap-Up"))
     return rows
 
 
@@ -1055,25 +1113,24 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
 PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
                 / "tools" / "publish" / "bin" / "gm-publish.js")
 PUBLISH_TOOL_TIMEOUT = 120
+# The site builds with the tool installed in its own node_modules (update-pin
+# reads it there too), so that is the renderer whose answer counts. The first
+# release that withholds a paired hub's body, and has `explain --all --json`
+# and `manifest publish-played --dry-run --json --vault`:
+PUBLISH_PACKAGE = "gm-apprentice-publish"
+WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
 
 
-def hub_bodies_withheld(vault: Path) -> tuple[set[str] | None, str | None]:
-    """(session indexes whose body the site withholds, why the publish tool
-    could not be asked).
+def _site_config(vault: Path) -> tuple[Path | None, str | None]:
+    """(the site's vault.config.json, why there is none).
 
-    The answer comes from the publish tool itself (`explain --all --json`,
-    its `bodyWithheld`), never a second reading of its rules here: #276's
-    Python copy of the pairing drifted from session-hub.js within a day.
-    A vault with no `publish:` block publishes nothing, so nothing is
-    withheld: (empty set, None). Otherwise any failure — no site_dir, no
-    vault.config.json, no node, no tool, an error, a timeout, output that
-    isn't the expected JSON — is (None, reason), and the caller withholds
-    nothing: a check that can't ask scans every hub body rather than guess.
-    """
+    (None, None) means the vault publishes nothing — no `publish:` block —
+    so there is nothing to ask about. A relative `publish.site_dir` is
+    relative to the vault."""
     site_dir = read_publish_scalar(vault, "site_dir")
     if not site_dir:
         if read_publish_list(vault, "exclude_sections").publish_line is None:
-            return set(), None
+            return None, None
         return None, "publish.site_dir is not set in _meta/vault-config.md"
     site = Path(site_dir).expanduser()
     if not site.is_absolute():
@@ -1081,36 +1138,134 @@ def hub_bodies_withheld(vault: Path) -> tuple[set[str] | None, str | None]:
     config = site / "vault.config.json"
     if not config.is_file():
         return None, f"no vault.config.json in publish.site_dir ({site})"
+    return config, None
+
+
+def _version_tuple(text: str) -> tuple[int, int, int] | None:
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)", str(text or ""))
+    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+
+
+def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
+    """(tool script, which tool it is, why it can't answer).
+
+    The site's installed tool when it has one — its answer is the site's.
+    One too old to withhold hub bodies, or unreadable, can't answer: the
+    caller fails safe. The plugin's own tool stands in only for a site with
+    no installed tool at all."""
+    installed = site / "node_modules" / PUBLISH_PACKAGE
+    if installed.exists():
+        try:
+            version = json.loads((installed / "package.json").read_text(
+                encoding="utf-8")).get("version")
+        except (OSError, ValueError, AttributeError):
+            version = None
+        found = _version_tuple(version)
+        label = f"the site's installed publish tool {version or '(unknown version)'}"
+        if found is None:
+            return None, label, (f"the site's installed {PUBLISH_PACKAGE} "
+                                 f"has no readable version")
+        if found < WITHHOLDS_HUB_BODIES_SINCE:
+            return None, label, (f"site pinned to {version} predates body "
+                                 f"withholding — run update-pin")
+        script = installed / "bin" / "gm-publish.js"
+        if not script.is_file():
+            return None, label, f"{script} is missing"
+        return script, label, None
+    label = "the plugin's publish tool (the site has none installed)"
+    if not PUBLISH_TOOL.is_file():
+        return None, label, f"the publish tool is not at {PUBLISH_TOOL}"
+    return PUBLISH_TOOL, label, None
+
+
+@dataclass
+class ToolAnswer:
+    """What the publish tool said, or why it couldn't: `data` is its JSON
+    (None on any failure), `why` the failure, `used` which tool answered
+    (None when the site's own tool did — the normal case, not worth a
+    row)."""
+    data: Any = None
+    why: str | None = None
+    used: str | None = None
+
+
+def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
+    """Run the site's publish tool with `args` plus `--json`, `--config`
+    and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
+    reason means the vault publishes nothing."""
+    config, why = _site_config(vault)
+    if config is None:
+        return ToolAnswer(why=why)
+    tool, label, why = _publish_tool_for(config.parent)
+    used = label if tool == PUBLISH_TOOL else None
+    if tool is None:
+        return ToolAnswer(why=why, used=label)
     node = shutil.which("node")
     if not node:
-        return None, "node is not on PATH"
-    if not PUBLISH_TOOL.is_file():
-        return None, f"the publish tool is not at {PUBLISH_TOOL}"
+        return ToolAnswer(why="node is not on PATH", used=label)
+    name = " ".join(args[:2])
     try:
         proc = subprocess.run(
-            [node, str(PUBLISH_TOOL), "explain", "--all", "--json",
+            [node, str(tool), *args, "--json",
              "--config", str(config), "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
-        return None, f"explain timed out after {PUBLISH_TOOL_TIMEOUT}s"
+        return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
+                          used=label)
     except OSError as e:
-        return None, f"node could not run ({e.__class__.__name__})"
+        return ToolAnswer(why=f"node could not run ({e.__class__.__name__})",
+                          used=label)
     if proc.returncode != 0:
         detail = (proc.stderr or "").strip().splitlines()
-        return None, (f"explain exited {proc.returncode}"
-                      + (f": {detail[-1]}" if detail else ""))
+        return ToolAnswer(why=(f"{name} exited {proc.returncode}"
+                               + (f": {detail[-1]}" if detail else "")),
+                          used=label)
     try:
-        pages = json.loads(proc.stdout)["pages"]
+        return ToolAnswer(data=json.loads(proc.stdout), used=used)
+    except ValueError:
+        return ToolAnswer(why=f"{name} did not return the expected JSON",
+                          used=label)
+
+
+def hub_bodies_withheld(vault: Path
+                        ) -> tuple[set[str] | None, str | None, str | None]:
+    """(session indexes whose body the site withholds, why the publish tool
+    could not be asked, which tool answered when it wasn't the site's own).
+
+    The answer comes from the publish tool itself (`explain --all --json`,
+    its `bodyWithheld`), never a second reading of its rules here: #276's
+    Python copy of the pairing drifted from session-hub.js within a day.
+    It is the SITE's installed tool that answers, since that is what builds
+    the site; the plugin's stands in only when the site has none installed.
+    A vault with no `publish:` block publishes nothing, so nothing is
+    withheld: (empty set, None, None). Otherwise any failure — no site_dir,
+    no vault.config.json, a site pinned below 1.11.40 (it publishes every
+    hub body), no node, an error, a timeout, output that isn't the expected
+    JSON — is (None, reason, …), and the caller withholds nothing: a check
+    that can't ask scans every hub body rather than guess.
+    """
+    answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer.data is None:
+        return (set(), None, None) if answer.why is None else (
+            None, answer.why, answer.used)
+    try:
+        pages = answer.data["pages"]
         return {unicodedata.normalize("NFC", str(p["path"]))
-                for p in pages if p["bodyWithheld"] is True}, None
-    except (ValueError, KeyError, TypeError):
-        return None, "explain did not return the expected JSON"
+                for p in pages if p["bodyWithheld"] is True}, None, answer.used
+    except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON", answer.used
 
 
-def _publish_tool_row(why: str, consequence: str) -> str:
+def _tool_used_row(used: str | None) -> list[str]:
+    return ([f"INFO\t(vault)\tasked {used}"] if used else [])
+
+
+def _publish_tool_row(why: str, consequence: str,
+                      used: str | None = None) -> str:
+    asked = f"; asked {used}" if used else ""
     return (f"INFO\t(vault)\tthe publish tool could not be consulted "
-            f"({why}), so {consequence}")
+            f"({why}{asked}), so {consequence}")
 
 
 def check_sessions(vault: Path) -> list[str]:
@@ -1135,14 +1290,16 @@ def check_sessions(vault: Path) -> list[str]:
     if not indexes:
         return ["INFO\t(vault)\tno session indexes found"]
 
-    found, why = hub_bodies_withheld(vault)
+    found, why, used = hub_bodies_withheld(vault)
     withheld = found if found is not None else set()
     rows: list[str] = []
     if found is None:
         rows.append(_publish_tool_row(
             why or "unknown", "no hub-bookkeeping rows are shown — they "
-            "apply only where the site withholds the hub's body"))
-    played: list[tuple[str, str | None]] = []
+            "apply only where the site withholds the hub's body", used))
+    else:
+        rows.extend(_tool_used_row(used))
+    played: list[str] = []
     for rel, text, fm in indexes:
         stem = Path(rel).stem
         number = parse_session_number(fm.get("session_number"))
@@ -1198,7 +1355,7 @@ def check_sessions(vault: Path) -> list[str]:
         if unicodedata.normalize("NFC", rel) in withheld:
             rows.extend(_hub_body_rows(rel, text))
         if declared.casefold() in PLAYED_STATUSES:
-            played.append((rel, wrap))
+            played.append(rel)
     rows.extend(manifest_rows(vault, played))
     return rows
 
@@ -1416,13 +1573,14 @@ def check_gm_leak(vault: Path, folder: str | None,
              for rel, text in vault_files(vault, folder)]
     withheld: set[str] = set()
     if any(fm.get("type") == "session" for _r, _t, fm in notes):
-        answer, why = hub_bodies_withheld(vault)
+        answer, why, used = hub_bodies_withheld(vault)
         if answer is not None:
             withheld = answer
+            rows.extend(_tool_used_row(used))
         else:
             rows.append(_publish_tool_row(
                 why or "unknown", "every session index body was scanned, "
-                "including any the site withholds"))
+                "including any the site withholds", used))
     for rel, text, fm in notes:
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
@@ -2414,9 +2572,9 @@ def _gm_pair_plan(states: list[LineState],
         for j, state in enumerate(group):
             if state.line.strip() and state.marker not in GM_MARKERS:
                 core = j
-        player = kind in PLAYER_BLOCK_KINDS
+        in_player = kind in PLAYER_BLOCK_KINDS
         for j, state in enumerate(group):
-            region[state.lineno] = (index, player and j <= core)
+            region[state.lineno] = (index, in_player and j <= core)
 
     keep: set[int] = set()
     crossing: list[int] = []
