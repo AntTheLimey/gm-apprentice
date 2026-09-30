@@ -16,6 +16,7 @@ const { loadPublishConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = requ
 const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
+const { getCanonStatus } = require('./templates/base');
 
 const SECTIONS = [
   { key: 'publishing', title: 'Publishing', checked: true },
@@ -186,7 +187,7 @@ function surveyVault(options, deps) {
       }));
   }
 
-  return { config, configPath, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report };
+  return { config, configPath, siteDir: configDir, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report };
 }
 
 async function runDiff(options, deps, survey) {
@@ -326,6 +327,51 @@ async function runApply(options, deps, survey) {
 
 const PLAYED_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
+// The first publish tool that withholds a paired hub's body (#276). A site whose
+// installed tool is older publishes every hub body in full.
+const WITHHOLDS_HUB_BODIES_SINCE = '1.11.40';
+const PKG = 'gm-apprentice-publish';
+
+function semverBelow(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10));
+  const pb = String(b).split('.').map((n) => parseInt(n, 10));
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
+  }
+  return false;
+}
+
+// Why the site's own build would publish a ticked hub's body, or null. The site builds
+// with the tool installed in its node_modules (update-pin reads it the same way), not
+// with whichever tool is running this command. No installed tool at all is null: that
+// site is built by the running tool. One that can't be read, or predates withholding,
+// is a reason — fail safe.
+function staleSitePin(siteDir) {
+  const pkgPath = path.join(siteDir, 'node_modules', PKG, 'package.json');
+  let text;
+  try {
+    text = fs.readFileSync(pkgPath, 'utf8');
+  } catch (err) {
+    return err.code === 'ENOENT' ? null : `the site's installed ${PKG} can't be read (${err.code || err.message}); update the pin before publishing sessions`;
+  }
+  let version = null;
+  try { version = JSON.parse(text).version || null; } catch { /* reported below */ }
+  if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
+    return `the site's installed ${PKG} has no readable version; update the pin before publishing sessions`;
+  }
+  return semverBelow(version, WITHHOLDS_HUB_BODIES_SINCE)
+    ? `site is pinned to ${version}; update the pin before publishing sessions`
+    : null;
+}
+
+// A session is reviewed once reconcile has run on it: reconcile promotes the Wrap-Up to
+// AUTHORITATIVE and sets the index's status to `reviewed` (shared/reconcile.md step 6),
+// and vault_check derives `reviewed` from the Wrap-Up alone. Either counts.
+function isReviewed(hub, wrapUp) {
+  if (String((hub.frontmatter || {}).status || '').toLowerCase() === 'reviewed') return true;
+  return !!(wrapUp && wrapUp.frontmatter && getCanonStatus(wrapUp.frontmatter) === 'AUTHORITATIVE');
+}
+
 // The pages that would publish if `extra` were added to the manifest's Publishing
 // section: the build's own verdicts (decidePage) under that hypothetical manifest.
 function publishedWith(survey, extra) {
@@ -351,8 +397,10 @@ function pairsWith(survey, published) {
 }
 
 // What publish-played would do, without doing it: `ticks` maps each played hub it would
-// tick to its paired Wrap-Up (both vault-relative), `unclear` lists the played hubs it
-// would not, with the reason. Shared with build.js's end-of-run summary so the build
+// tick to its paired Wrap-Up (both vault-relative), `wrapsOnly` lists reviewed Wrap-Ups
+// it would tick without their hub (the site's pin predates body withholding), and
+// `unclear` lists the played hubs it would not tick, each with the reason and the
+// Wrap-Up it pairs with, if any. Shared with build.js's end-of-run summary so the build
 // promises only what publish-played will actually do.
 function planPublishPlayed(survey) {
   const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
@@ -395,10 +443,28 @@ function planPublishPlayed(survey) {
     pending = next.filter((rel) => !unsupported.includes(rel));
   }
 
+  // Clear means reviewed: an unreviewed Wrap-Up is still a DRAFT the GM may not want
+  // on the site (session-wrapup's "after reconcile"), so it waits for publish-site to
+  // ask. And a site pinned below WITHHOLDS_HUB_BODIES_SINCE would publish a ticked hub's
+  // body, so no hub is ticked there; its reviewed Wrap-Up still can be.
   const unclear = [];
+  const pinReason = survey.siteDir ? staleSitePin(survey.siteDir) : null;
+  const wrapOnly = [];
+  for (const [rel, wrapRel] of [...ticks]) {
+    const reason = !isReviewed(pagesByRel.get(rel), pagesByRel.get(wrapRel))
+      ? `Wrap-Up not reviewed yet (${wrapRel})`
+      : pinReason;
+    if (!reason) continue;
+    ticks.delete(rel);
+    if (reason === pinReason) wrapOnly.push(wrapRel);
+    unclear.push({ path: rel, reason, wrapUp: wrapRel });
+  }
+  const stillTicked = new Set(ticks.values());
+  const wrapsOnly = [...new Set(wrapOnly)].filter((w) => !stillTicked.has(w));
+
   const ifAllPublished = pairsWith(survey, allPages);
   for (const { rel, page } of hubs) {
-    if (ticks.has(rel) || sectionOf(rel) === 'publishing') continue;
+    if (ticks.has(rel) || sectionOf(rel) === 'publishing' || unclear.some((u) => u.path === rel)) continue;
     // Why not: the Wrap-Up the hub would pair with if every Wrap-Up published.
     const wouldBe = ifAllPublished.get(page) || null;
     const wrapRel = wouldBe ? relOf.get(wouldBe) : null;
@@ -419,19 +485,20 @@ function planPublishPlayed(survey) {
     } else {
       reason = `status ${fm.status} but no Wrap-Up linked to it`;
     }
-    unclear.push({ path: rel, reason });
+    unclear.push({ path: rel, reason, wrapUp: wrapRel });
   }
-  return { ticks, unclear, sectionOf };
+  return { ticks, wrapsOnly, unclear, sectionOf };
 }
 
-// `manifest publish-played` (#277): a played session index is ticked under Publishing
+// `manifest publish-played` (#277): a reviewed session index is ticked under Publishing
 // only together with a Wrap-Up that will publish and that session-hub.js pairs with it —
 // i.e. only when pairHubs pairs the hub on the pages as they will publish
 // after this call, so the hub's body is withheld and its session page is built from
 // frontmatter plus the Wrap-Up. There is no matcher here: pairing is session-hub.js's.
-// Every other played session is "unclear" with a reason — no Wrap-Up linked, or the
-// linked one is Excluded / `publish: none` / otherwise not publishing — and is listed,
-// never ticked: its body would publish, so the skill asks the GM. Files under Excluded
+// Every other played session is "unclear" with a reason — no Wrap-Up linked, the Wrap-Up
+// not reviewed yet, the linked one Excluded / `publish: none` / otherwise not publishing,
+// or a site pinned to a tool that predates withholding — and is listed, never ticked, so
+// the skill asks the GM. Files under Excluded
 // are a deliberate GM decision and are left alone. Only meaningful in player mode with a
 // manifest, the one place the manifest is an allowlist; elsewhere a no-op.
 async function runPublishPlayed(options, deps, survey) {
@@ -445,12 +512,10 @@ async function runPublishPlayed(options, deps, survey) {
     return 0;
   }
 
-  const { ticks, unclear, sectionOf } = planPublishPlayed(Object.assign({ readFile: deps.readFile }, survey));
+  const { ticks, wrapsOnly, unclear, sectionOf } = planPublishPlayed(Object.assign({ readFile: deps.readFile }, survey));
   const wanted = [];
-  for (const [hub, wrap] of ticks) {
-    for (const rel of [hub, wrap]) {
-      if (!wanted.includes(rel) && sectionOf(rel) !== 'publishing') wanted.push(rel);
-    }
+  for (const rel of [...ticks].flat().concat(wrapsOnly)) {
+    if (!wanted.includes(rel) && sectionOf(rel) !== 'publishing') wanted.push(rel);
   }
 
   if (wanted.length > 0 && !options.dryRun) {

@@ -817,7 +817,7 @@ describe('build integration', () => {
       // Split by what publish-played will do (#276/#277 review): it ticks Session 11, whose
       // Wrap-Up pairs and will publish; it only lists Session 09, which has no Wrap-Up.
       assert.match(summary[0], /1 played session with a Wrap-Up isn't published yet: Session 11 - Docks — `manifest publish-played`.*will publish it/);
-      assert.match(summary[1], /1 played session has no Wrap-Up that will publish, so it isn't published: Session 09 - The Table — publish-site asks the GM about it/);
+      assert.match(summary[1], /1 played session isn't published yet and needs the GM's say: Session 09 - The Table \(status reviewed but no Wrap-Up linked to it\) — publish-site asks the GM about it/);
       assert.ok(!summary[1].includes('publish-played'), 'no promise to publish a session it will only ask about');
       assert.ok(!summary.join('').includes('Session 10'), 'a prepped session is not "played"');
       // They are the last warning-level lines before the closing "Done!".

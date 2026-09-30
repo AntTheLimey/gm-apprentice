@@ -125,16 +125,19 @@ excluded versus missing is the GM's call.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
   manifest publish-played [--dry-run] [--config <path>] [--json]
-                     Move every played session (status played, wrap-up or
-                     reviewed) to Publishing together with its Wrap-Up, but
-                     only when that Wrap-Up is linked (documents.wrap_up or
-                     its session:) and will publish, so the session's body is
-                     withheld. Any other played session is listed as
-                     "unclear" with the reason (no Wrap-Up, or it is
-                     Excluded or does not publish) and not ticked: its body
-                     would publish, so that is the GM's call (manifest
-                     apply). Leaves Excluded entries alone. Player mode with
-                     a manifest only; otherwise does nothing.
+                     Move every reviewed session to Publishing together
+                     with its Wrap-Up, but only when that Wrap-Up is linked
+                     (documents.wrap_up or its session:) and will publish,
+                     so the session's body is withheld. Reviewed means the
+                     index's status is reviewed or the Wrap-Up is
+                     AUTHORITATIVE. Any other played session (status played,
+                     wrap-up or reviewed) is listed as "unclear" with the
+                     reason (no Wrap-Up, Wrap-Up not reviewed yet, Excluded
+                     or not publishing, or a site pinned to a tool too old
+                     to withhold the body) and not ticked: that is the GM's
+                     call (manifest apply). Leaves Excluded entries alone.
+                     Player mode with a manifest only; otherwise does
+                     nothing.
   --help, -h         Show this help
 `,
   explain: `

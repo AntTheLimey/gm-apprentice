@@ -1173,18 +1173,21 @@ function build(options = {}) {
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
   // is a decision and never lands here; one in Needs Decision or in no section does.
   // Split by what publish-played will do with each (its own plan, so this never promises
-  // to publish a session it will only list as unclear): one with a Wrap-Up that pairs and
-  // publishes gets ticked; the rest — no Wrap-Up at all (recap-in-hub vaults), or one that
-  // is Excluded or will not publish — are asked about.
+  // to publish a session it will only list as unclear): a reviewed one with a Wrap-Up
+  // that pairs and publishes gets ticked; the rest — no Wrap-Up at all (recap-in-hub
+  // vaults), a Wrap-Up not reviewed yet or not publishing, a stale site pin — are asked
+  // about, each with publish-played's own reason.
   if (unpublishedPlayedSessions.length > 0) {
-    let ticked = null;
+    let plan = null;
     try {
       const { planPublishPlayed, surveyVault } = require('./manifest-cli');
-      ticked = planPublishPlayed(surveyVault({ configPath: resolvedConfigPath }, {})).ticks;
+      plan = planPublishPlayed(surveyVault({ configPath: resolvedConfigPath }, {}));
     } catch (_) { /* no plan: promise nothing */ }
+    const reasons = new Map(plan ? plan.unclear.map((u) => [u.path, u.reason]) : []);
     const titles = (list) => list.map((s) => s.title).join(', ');
+    const why = (list) => list.map((s) => (reasons.has(s.rel) ? `${s.title} (${reasons.get(s.rel)})` : s.title)).join(', ');
     const plural = (n, one, many) => (n === 1 ? one : many);
-    const withWrap = ticked ? unpublishedPlayedSessions.filter((s) => ticked.has(s.rel)) : [];
+    const withWrap = plan ? unpublishedPlayedSessions.filter((s) => plan.ticks.has(s.rel)) : [];
     const without = unpublishedPlayedSessions.filter((s) => !withWrap.includes(s));
     if (withWrap.length > 0) {
       const n = withWrap.length;
@@ -1192,7 +1195,7 @@ function build(options = {}) {
     }
     if (without.length > 0) {
       const n = without.length;
-      console.warn(`  WARNING: ${n} played session${plural(n, ' has', 's have')} no Wrap-Up that will publish, so ${plural(n, "it isn't", "they aren't")} published: ${titles(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
+      console.warn(`  WARNING: ${n} played session${plural(n, " isn't", "s aren't")} published yet and need${plural(n, 's', '')} the GM's say: ${why(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
     }
   }
 

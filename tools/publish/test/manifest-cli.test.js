@@ -533,6 +533,109 @@ describe('manifest publish-played (#277)', () => {
   });
 });
 
+// Final review of #276/#277: clear means reviewed. A DRAFT Wrap-Up the GM deferred ("after
+// reconcile") must not be published silently by the next publish-site or reconcile run.
+describe('manifest publish-played ticks only reviewed sessions (#277 final review)', () => {
+  function vaultWith(hubStatus, canonStatus) {
+    const vault = copyVault('auto-exclude');
+    const hubPath = path.join(vault, 'Sessions', 'Played Session.md');
+    fs.writeFileSync(hubPath, fs.readFileSync(hubPath, 'utf8').replace('status: played', `status: ${hubStatus}`));
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
+      `---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: ${canonStatus}\n---\n\n## Recap\n\nDone.\n`);
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', ''].join('\n'));
+    return vault;
+  }
+  async function plan(vault, site) {
+    const { configPath } = site || siteFor(vault);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath, json: true }, c.deps);
+    return { payload: JSON.parse(c.text()), writes: c.writes };
+  }
+
+  for (const status of ['played', 'wrap-up']) {
+    it(`a ${status} session with a DRAFT Wrap-Up is unclear, not ticked`, async () => {
+      const vault = vaultWith(status, 'DRAFT');
+      const { payload, writes } = await plan(vault);
+      assert.deepStrictEqual(writes, {});
+      assert.deepStrictEqual(payload.published, []);
+      assert.strictEqual(payload.unclear.length, 1);
+      assert.match(payload.unclear[0].reason, /^Wrap-Up not reviewed yet/);
+      assert.strictEqual(payload.unclear[0].wrapUp, 'Sessions/Session 06 - Wrap-Up.md');
+      fs.rmSync(vault, { recursive: true, force: true });
+    });
+  }
+
+  it('a reviewed index is clear even while its Wrap-Up is DRAFT', async () => {
+    const vault = vaultWith('reviewed', 'DRAFT');
+    const { payload } = await plan(vault);
+    assert.deepStrictEqual(payload.published, ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('an AUTHORITATIVE Wrap-Up counts as reviewed, as reconcile promotes it', async () => {
+    const vault = vaultWith('wrap-up', 'AUTHORITATIVE');
+    const { payload } = await plan(vault);
+    assert.deepStrictEqual(payload.published, ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+// Final review of #277: the site builds with the tool in its own node_modules. One pinned
+// below 1.11.40 publishes every hub body, so publish-played must not tick hubs for it.
+describe('manifest publish-played answers for the site\'s pinned tool (#277 final review)', () => {
+  function pinnedSite(vault, version) {
+    const site = siteFor(vault);
+    const pkg = path.join(site.dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version }));
+    return site;
+  }
+  function reviewedVault() {
+    const vault = copyVault('auto-exclude');
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
+      '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', ''].join('\n'));
+    return vault;
+  }
+
+  it('a site pinned below 1.11.40 gets no hub ticked, only the Wrap-Up', async () => {
+    const vault = reviewedVault();
+    const site = pinnedSite(vault, '1.11.39');
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath: site.configPath, json: true, dryRun: true }, c.deps);
+    const payload = JSON.parse(c.text());
+    assert.deepStrictEqual(payload.published, ['Sessions/Session 06 - Wrap-Up.md']);
+    assert.strictEqual(payload.unclear.length, 1);
+    assert.strictEqual(payload.unclear[0].path, 'Sessions/Played Session.md');
+    assert.strictEqual(payload.unclear[0].reason, 'site is pinned to 1.11.39; update the pin before publishing sessions');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a site pinned at 1.11.40 ticks both', async () => {
+    const vault = reviewedVault();
+    const site = pinnedSite(vault, '1.11.40');
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath: site.configPath, json: true, dryRun: true }, c.deps);
+    assert.deepStrictEqual(JSON.parse(c.text()).published, ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('an installed tool with no readable version fails safe', async () => {
+    const vault = reviewedVault();
+    const site = pinnedSite(vault, '');
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath: site.configPath, json: true, dryRun: true }, c.deps);
+    const payload = JSON.parse(c.text());
+    assert.deepStrictEqual(payload.published, ['Sessions/Session 06 - Wrap-Up.md']);
+    assert.match(payload.unclear[0].reason, /no readable version/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
 // Review of #276/#277: publish-played ticks a hub only when session-hub.js pairs it with
 // a Wrap-Up that will publish — the one pairing rule — so a ticked hub's body is always
 // withheld. Each variant is a way the old loose matcher ticked a hub whose body then
