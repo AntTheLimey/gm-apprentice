@@ -15,7 +15,7 @@ const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
-const { extractSections, publishMode } = require('./processor');
+const { strippedSectionTitles, publishMode } = require('./processor');
 const { getCanonStatus } = require('./templates/base');
 const { nearestNames } = require('./site-doctor');
 
@@ -122,8 +122,9 @@ async function runExplain(options, deps) {
       })();
 
   const excludeSections = publishConfig.exclude_sections || [];
-  const present = frontmatterError ? [] : extractSections(markdown).map((s) => s.title);
-  const stripped = frontmatterError ? null : excludeSections.filter((title) => present.includes(title));
+  // The strip's own walk, so a document's Keeper sections (#280) are named here too.
+  const stripped = frontmatterError ? null
+    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter))];
   const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
@@ -234,6 +235,12 @@ async function runExplainAll(options, deps) {
       code: verdict.code,
       bodyWithheld: withheld,
       bodyPublishes: publishes && !withheld,
+      // The headings the site withholds from this file's body, as written; null when
+      // the scanner produced no page for it. gm-leak reads these rather than keep a
+      // second copy of the rules (#280).
+      strippedSections: page
+        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter))]
+        : null,
     };
   });
   out(JSON.stringify({ vaultPath: survey.vaultPath, pages }, null, 2));

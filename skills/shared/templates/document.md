@@ -55,6 +55,10 @@ drop an empty group. The skills write both together; a tie marked
 {A cipher, a forged signature, a second hand, a page missing, and what
 uncovers it.}
 
+### Prop Notes
+
+{Paper, ageing, packaging, and when and how the players find it.}
+
 ### Game Effects
 
 {For a tome or spell: reading time, what it teaches, the cost (SAN,

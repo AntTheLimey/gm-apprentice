@@ -73,6 +73,7 @@ function playerSafeBody(page, publishConfig, warnings) {
   const result = playerSafeMarkdown(markdown, {
     excludeCallouts: publishConfig.exclude_callouts,
     excludeSections: publishConfig.exclude_sections,
+    frontmatter: page.frontmatter,
   });
   warnings.push(...result.warnings);
   return result.text;

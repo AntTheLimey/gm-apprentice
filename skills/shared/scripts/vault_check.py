@@ -1348,7 +1348,7 @@ def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
                           used=label)
 
 
-def hub_bodies_withheld(vault: Path
+def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
                         ) -> tuple[set[str] | None, str | None, str | None]:
     """(session indexes whose body the site withholds, why the publish tool
     could not be asked, which tool answered when it wasn't the site's own).
@@ -1363,9 +1363,11 @@ def hub_bodies_withheld(vault: Path
     no vault.config.json, a site pinned below 1.11.40 (it publishes every
     hub body), no node, an error, a timeout, output that isn't the expected
     JSON — is (None, reason, …), and the caller withholds nothing: a check
-    that can't ask scans every hub body rather than guess.
+    that can't ask scans every hub body rather than guess. `answer` is an
+    `explain --all` the caller already has, so one run serves two checks.
     """
-    answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer is None:
+        answer = ask_publish_tool(vault, ["explain", "--all"])
     if answer.data is None:
         return (set(), None, None) if answer.why is None else (
             None, answer.why, answer.used)
@@ -1375,6 +1377,38 @@ def hub_bodies_withheld(vault: Path
                 for p in pages if p["bodyWithheld"] is True}, None, answer.used
     except (KeyError, TypeError):
         return None, "explain did not return the expected JSON", answer.used
+
+
+# The first release whose `explain --all` names each file's stripped sections,
+# and the first that withholds a handout's Keeper sections (#280).
+STRIPPED_SECTIONS_SINCE = "1.11.41"
+
+
+def sections_withheld(answer: ToolAnswer
+                      ) -> tuple[dict[str, set[str]] | None, str | None]:
+    """(per file, the casefolded headings the site withholds; why not).
+
+    Read from `explain --all --json`'s `strippedSections`, the tool's own
+    walk of its section filter — never a copy of its rules here. That
+    covers the vault's exclude list and whatever the tool withholds by
+    itself (a handout's Context, Clues and Prop Notes, #280). An answer
+    without the field comes from a tool older than
+    STRIPPED_SECTIONS_SINCE, which publishes those handout sections.
+    """
+    if answer.data is None:
+        return None, answer.why
+    try:
+        pages = answer.data["pages"]
+        if any("strippedSections" not in p for p in pages):
+            return None, (f"the site's publish tool predates "
+                          f"{STRIPPED_SECTIONS_SINCE}, so a handout's "
+                          f"Context, Clues and Prop Notes sections publish "
+                          f"— run update-pin")
+        return {unicodedata.normalize("NFC", str(p["path"])):
+                {str(t).strip().casefold() for t in p["strippedSections"]}
+                for p in pages if p["strippedSections"]}, None
+    except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON"
 
 
 def _tool_used_row(used: str | None) -> list[str]:
@@ -1692,15 +1726,32 @@ def check_gm_leak(vault: Path, folder: str | None,
     notes = [(rel, text, extract_frontmatter(text) or {})
              for rel, text in vault_files(vault, folder)]
     withheld: set[str] = set()
-    if any(fm.get("type") == "session" for _r, _t, fm in notes):
-        answer, why, used = hub_bodies_withheld(vault)
-        if answer is not None:
-            withheld = answer
-            rows.extend(_tool_used_row(used))
-        else:
+    # Headings only the tool withholds (not on the exclude list), per file.
+    tool_stripped: dict[str, set[str]] = {}
+    if notes:
+        tool = ask_publish_tool(vault, ["explain", "--all"])
+        rows.extend(_tool_used_row(tool.used if tool.data is not None
+                                   else None))
+        if any(fm.get("type") == "session" for _r, _t, fm in notes):
+            answer, why, used = hub_bodies_withheld(vault, tool)
+            if answer is not None:
+                withheld = answer
+            else:
+                rows.append(_publish_tool_row(
+                    why or "unknown", "every session index body was scanned, "
+                    "including any the site withholds", used))
+        stripped, why = sections_withheld(tool)
+        if stripped is not None:
+            tool_stripped = {rel: titles - match
+                             for rel, titles in stripped.items()}
+        elif tool.data is not None:
+            rows.append(f"WARNING\t(vault)\t{why}")
+        elif why is not None and any(entity_type(fm) == "document"
+                                     for _r, _t, fm in notes):
             rows.append(_publish_tool_row(
-                why or "unknown", "every session index body was scanned, "
-                "including any the site withholds", used))
+                why, "headings the site withholds on its own, like a "
+                "handout's Context, Clues and Prop Notes, were not checked",
+                tool.used))
     for rel, text, fm in notes:
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
@@ -1715,6 +1766,7 @@ def check_gm_leak(vault: Path, folder: str | None,
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
+        own_strips = tool_stripped.get(unicodedata.normalize("NFC", rel), set())
         heading_leak = False
         prev_excluded: str | None = None
         for state in states:
@@ -1735,6 +1787,18 @@ def check_gm_leak(vault: Path, folder: str | None,
                 continue
             if state.heading is not None:
                 found = _heading_leak(rel, state, excludes)
+                title = state.heading[1].strip()
+                if (not found and state.heading[0] >= 2
+                        and title.casefold() in own_strips):
+                    # The site withholds it by its own rule (a handout's
+                    # Keeper sections, #280), so it is safe there today —
+                    # but only there: a site pinned before the rule, and
+                    # every other reader of the vault, sees it. Its home
+                    # is under GM Notes, and moving it is mechanical.
+                    found = [f"WARNING\t{rel}:{state.lineno}\t'{title}' "
+                             f"is Keeper material outside ## GM Notes — the "
+                             f"site withholds it, but nest it under "
+                             f"## GM Notes"]
                 rows.extend(found)
                 heading_leak = heading_leak or bool(found)
                 continue
@@ -1756,7 +1820,7 @@ def check_gm_leak(vault: Path, folder: str | None,
         if not heading_leak or renest_excludes:
             continue
         moved, new_text, refusal = _plan_gm_leak_fix(
-            vault, rel, fm, excludes, excludes, match, excludes)
+            vault, rel, fm, excludes, excludes, match | own_strips, excludes)
         if refusal:
             rows.append(f"ERROR\t{rel}\tre-nest refused: {refusal} — "
                         f"nothing written")

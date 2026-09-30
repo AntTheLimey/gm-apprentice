@@ -363,6 +363,7 @@ describe('explain --all (#276)', () => {
     assert.deepStrictEqual(pages.get('Sessions/Session_07.md'), {
       path: 'Sessions/Session_07.md', type: 'session', publishes: true,
       code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
+      strippedSections: ['GM Notes', 'Reconciliation Context'],
     });
     assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
     assert.strictEqual(pages.get('Sessions/Session_08.md').publishes, false);
@@ -383,6 +384,34 @@ describe('explain --all (#276)', () => {
     const hub = byPath(json).get('Sessions/Session_07.md');
     assert.strictEqual(hub.bodyWithheld, false);
     assert.strictEqual(hub.bodyPublishes, true);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it("names a handout's Keeper sections among the stripped ones (#280)", async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Chit.md', [
+      '---', 'type: document', '---', '', '## Content', '', 'The chit.', '',
+      '## Context', '', 'Why.', '', '## Clues, if Katherine walks', '', 'Route.', '',
+      '## Prop Notes', '', 'Paper.', '',
+    ].join('\n'));
+    const { json } = await all(siteFor(vault));
+    assert.deepStrictEqual(byPath(json).get('Sessions/Chit.md').strippedSections,
+      ['Context', 'Clues, if Katherine walks', 'Prop Notes']);
+    assert.deepStrictEqual(byPath(json).get('Sessions/Session_08.md').strippedSections, []);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('pipes JSON larger than the 64 KB pipe buffer whole (#279)', async () => {
+    const vault = makeVault();
+    for (let i = 0; i < 700; i++) {
+      write(vault, `Sessions/Filler_${String(i).padStart(4, '0')}_with_a_long_name.md`,
+        `---\ntype: session\nsession_number: ${100 + i}\nstatus: played\n---\n`);
+    }
+    const { stdout } = await promisify(execFile)(process.execPath,
+      [CLI, 'explain', '--all', '--json', '--config', siteFor(vault), '--vault', vault],
+      { maxBuffer: 16 * 1024 * 1024 });
+    assert.ok(stdout.length > 65536, `only ${stdout.length} bytes: the fixture is too small to test the pipe`);
+    assert.strictEqual(JSON.parse(stdout).pages.length, 702);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

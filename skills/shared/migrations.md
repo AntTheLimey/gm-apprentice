@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.18"
+current_version: "1.10.19"
 ---
 
 # Vault Migration Registry
@@ -1085,3 +1085,41 @@ own (#277). No frontmatter changes.
   `publish.site_dir`), or the plugin's when the site has none. When
   they can't ask, or the site is pinned below 1.11.40, they scan every
   index body and promise nothing, with an INFO row saying why.
+
+## Migration: 1.10.18 → 1.10.19
+
+Handout Keeper sections stop publishing (#280), and the publish tool's
+JSON output no longer truncates when piped (#279). No frontmatter
+changes.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- After the site's pin is updated (Tooling, below), run
+  `vault_check.py <vault> gm-leak --fix` and report what it moved. It
+  nests each handout section the site withholds on its own (Context,
+  Clues…, Prop Notes, Delivery) under the file's fenced `## GM Notes`,
+  so the vault matches what the site does. No wording changes; only
+  the section's place and heading level. Nothing to ask: the site
+  already withholds these sections, so moving them changes nothing a
+  player sees.
+- If the GM wants one of those sections on the site (a handout whose
+  Context is meant for players), rename its heading instead, for
+  example `## Background`.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.41: on a `type: document` page the
+  build withholds `Context`, headings starting `Clues`, `Prop Notes`,
+  `Physical Prop Notes`, `Delivery` and `Delivery Notes`; `explain
+  --all --json` reports each file's `strippedSections`; piped JSON is
+  no longer cut off at 64 KB. If `publish.site_dir` is set, offer
+  `update-pin --site <site-dir>` (publish-site's build tool) before
+  the gm-leak step, then rebuild and redeploy: a deployed site keeps
+  publishing those sections until it is rebuilt. For a site outside
+  the plugin, `update-pin --site <site-dir> --tag publish-v1.11.41`.
+- `vault_check gm-leak` warns when the site's publish tool predates
+  1.11.41, since those sections still publish there.

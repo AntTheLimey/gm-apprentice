@@ -497,7 +497,7 @@ function build(options = {}) {
     const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections);
+    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.frontmatter);
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -752,7 +752,7 @@ function build(options = {}) {
         case 'pc': {
           // Warnings are dropped here, not ignored: processContent above ran this same
           // strip chain over the same markdown and already reported them.
-          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections }).text;
+          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: page.frontmatter }).text;
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {

@@ -65,6 +65,35 @@ SECRET_PREMISE
 <!-- /gm-only -->
 `;
 
+// A handout in the layout the handout workflow used to produce (#280): the
+// Keeper's analysis in top-level sections beside the handout text.
+const HANDOUT = `---
+type: document
+doc_type: letter
+---
+# The Chit
+
+## Content
+
+> Public handout wording.
+
+## Context
+
+SECRET_CONTEXT the man they came to stop.
+
+## Clues Embedded
+
+- SECRET_CLUE
+
+## Clues, if Katherine walks the servants' course
+
+SECRET_ROUTE
+
+## Prop Notes
+
+SECRET_PROP Keeper-only until delivered.
+`;
+
 function buildVault(work) {
   const vault = path.join(work, 'vault');
   const write = (rel, body) => {
@@ -76,6 +105,7 @@ function buildVault(work) {
   write('Characters/NPCs/Vex.md', NPC);
   write('_Campaign/Overview.md', OVERVIEW);
   write('Locations/Keep.md', KEEP_CRLF);
+  write('Documents/Chit.md', HANDOUT);
   const configPath = path.join(work, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({
     siteTitle: 'Leaks',
@@ -83,7 +113,7 @@ function buildVault(work) {
     vaultPath: vault,
     outputDir: path.join(work, 'docs'),
     excludeDirs: ['_meta', '_Templates'],
-    folderMap: { 'Characters/NPCs': 'characters/npcs', _Campaign: 'campaign', Locations: 'locations' },
+    folderMap: { 'Characters/NPCs': 'characters/npcs', _Campaign: 'campaign', Locations: 'locations', Documents: 'documents' },
   }, null, 2));
   const log = console.log;
   console.log = () => {};
@@ -146,6 +176,12 @@ describe('build leaks', () => {
     assert.match(html, /&lt;div class=.handout. style=.border: 1px solid #333.&gt;/);
     assert.match(html, /&lt;details&gt;&lt;summary&gt;Rumour/);
     assert.doesNotMatch(html, /<div class="handout"/);
+  });
+
+  it("withholds a handout's Keeper sections and keeps its text (#280)", () => {
+    const html = fs.readFileSync(path.join(docs, 'documents/chit.html'), 'utf8');
+    assert.match(html, /Public handout wording/);
+    assert.doesNotMatch(html, /Context|Clues|Prop Notes/);
   });
 
   it('keeps the campaign deep-dive free of gm-only premise text', () => {

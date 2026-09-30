@@ -82,14 +82,47 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   });
 }
 
+// A handout's own analysis, written as top-level headings beside the handout
+// text rather than under `## GM Notes` (#280): the handout workflow used to ask
+// for Prop Notes as its own section, and handouts grew Context and Clues
+// Embedded the same way. On a `type: document` page these are Keeper-facing by
+// construction, so they are withheld whatever exclude_sections says. `Clues` is a
+// prefix: "Clues, if Katherine walks the servants' course" is the same section.
+// A GM who wants one of these on the site renames the heading.
+const DOCUMENT_KEEPER_SECTION_RE = /^(context|clues\b.*|(physical )?prop notes|delivery( notes)?)$/i;
+
+function isDocumentPage(frontmatter) {
+  return !!frontmatter && String(frontmatter.type || '').trim().toLowerCase() === 'document';
+}
+
+// Whether a heading title is withheld: on the exclude list, or (on a document
+// page) one of the handout's Keeper sections. filterSections and explain both
+// ask this, so the explanation cannot drift from the strip.
+function isExcludedSection(title, excludeSections = [], frontmatter = null) {
+  const lower = String(title).trim().toLowerCase();
+  if ((excludeSections || []).some(s => lower === String(s).toLowerCase())) return true;
+  return isDocumentPage(frontmatter) && DOCUMENT_KEEPER_SECTION_RE.test(lower);
+}
+
 // Line endings are normalized first: the heading pattern below ends in `$`,
 // and `.` does not match `\r`, so on a CRLF vault NO heading matched and
 // nothing was ever excluded. processContent strips \r before rendering, which
 // kept the page itself safe and hid the bug — but publishedMarkdown does not,
 // and that is what feeds the search index, backlinks and recency.
-function filterSections(markdown, excludeSections = []) {
+function filterSections(markdown, excludeSections = [], frontmatter = null) {
+  return walkSections(markdown, excludeSections, frontmatter).kept.join('\n');
+}
+
+// The headings filterSections withholds, each with everything under it — the
+// titles as written. explain reports these, so what it names is what the strip did.
+function strippedSectionTitles(markdown, excludeSections = [], frontmatter = null) {
+  return walkSections(markdown, excludeSections, frontmatter).stripped;
+}
+
+function walkSections(markdown, excludeSections, frontmatter) {
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
-  const result = [];
+  const kept = [];
+  const stripped = [];
   let excluding = false;
   let excludeLevel = 0;
 
@@ -108,20 +141,21 @@ function filterSections(markdown, excludeSections = []) {
       // excluded heading (`## GM Notes` / `### Player Notes`) used to reset
       // excludeLevel to 3, so the next `### Secrets` ended the exclusion and
       // published the rest of GM Notes (#228).
-      if (!excluding && excludeSections.some(s => title.toLowerCase() === s.toLowerCase())) {
+      if (!excluding && isExcludedSection(title, excludeSections, frontmatter)) {
         excluding = true;
         excludeLevel = level;
+        stripped.push(title);
         continue;
       }
 
     }
 
     if (!excluding) {
-      result.push(line);
+      kept.push(line);
     }
   }
 
-  return result.join('\n');
+  return { kept, stripped };
 }
 
 // The inverse of filterSections: keep ONLY the named headings and their
@@ -576,7 +610,7 @@ function playerSafeMarkdown(markdown, options = {}) {
     }
   }
   text = stripCallouts(text, options.excludeCallouts);
-  text = filterSections(text, options.excludeSections);
+  text = filterSections(text, options.excludeSections, options.frontmatter);
   return { text, warnings };
 }
 
@@ -607,7 +641,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   markdown = stripLeadingH1(markdown);
   markdown = stripCallouts(markdown, options.excludeCallouts);
-  markdown = filterSections(markdown, excludeSections);
+  markdown = filterSections(markdown, excludeSections, page.frontmatter);
   markdown = separateBoldLabelLines(markdown);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
     portraitBasename: portraitBasename(page.frontmatter),
@@ -855,4 +889,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
+module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
