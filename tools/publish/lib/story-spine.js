@@ -124,6 +124,39 @@ function unitRefs(unit) {
   };
 }
 
+function sortedChapters(pages) {
+  return pages
+    .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
+    .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
+      || String(a.title).localeCompare(String(b.title)));
+}
+
+function bySessionNumber(a, b) {
+  return (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0)
+    || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0));
+}
+
+// Every session page in story order: chapters by sort_order, then each chapter's sessions
+// by session_number (play_date breaks ties) — the order buildStorySpine walks. Numbering
+// restarts per chapter, so session_number alone would interleave them. A session no
+// chapter owns follows, in number order. Cached per `pages` array.
+const sessionOrders = new WeakMap();
+function orderedSessions(pages) {
+  let order = sessionOrders.get(pages);
+  if (order) return order;
+  const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
+  const seen = new Set();
+  order = [];
+  for (const chapter of sortedChapters(pages)) {
+    for (const s of sessions.filter(x => chapterOwnsSession(chapter, x)).sort(bySessionNumber)) {
+      if (!seen.has(s)) { seen.add(s); order.push(s); }
+    }
+  }
+  order.push(...sessions.filter(s => !seen.has(s)).sort(bySessionNumber));
+  sessionOrders.set(pages, order);
+  return order;
+}
+
 function buildStorySpine(pages, linkMap) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
@@ -131,10 +164,7 @@ function buildStorySpine(pages, linkMap) {
   const resolverFor = linkMap
     ? (outputPath) => (md) => resolveWikiLinks(md, linkMap, outputPath)
     : () => undefined;
-  const chapters = pages
-    .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
-    .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
-      || String(a.title).localeCompare(String(b.title)));
+  const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
   const wrapUps = pages.filter(p => p.frontmatter && WRAP_UP_TYPES.has(p.frontmatter.type));
   const idx = buildWrapUpIndex(pages);
@@ -151,8 +181,7 @@ function buildStorySpine(pages, linkMap) {
 
     const chapterSessions = sessions
       .filter(s => chapterOwnsSession(chapter, s))
-      .sort((a, b) => (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0)
-        || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0)));
+      .sort(bySessionNumber);
 
     const sessionUnits = [];
     for (const s of chapterSessions) {
@@ -206,4 +235,4 @@ function characterStoryGroup(frontmatter) {
   return 'current';
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, unitRefs, characterStoryGroup };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, orderedSessions, unitRefs, characterStoryGroup };

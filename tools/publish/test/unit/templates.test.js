@@ -422,6 +422,41 @@ describe('displayTitle usage', () => {
   });
 });
 
+describe('session prev/next links follow story order (#276)', () => {
+  const { wikiTemplate } = require('../../lib/templates/wiki');
+  const cfg = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+  const processed = { html: '<p>x</p>', relationships: '' };
+  const chapter = (name, order) => ({
+    title: name, displayTitle: name, outputPath: `chapters/${name}.html`,
+    sourcePath: `/v/${name}/${name}.md`, frontmatter: { type: 'chapter', sort_order: order },
+  });
+  const session = (ch, n) => ({
+    title: `${ch} S${n}`, displayTitle: `${ch} S${n}`, outputPath: `sessions/${ch}-s${n}.html`,
+    sourcePath: `/v/${ch}/${ch} S${n}.md`, frontmatter: { type: 'session', session_number: n },
+  });
+  const links = (page, pages) => {
+    const html = wikiTemplate(page, processed, () => '', cfg, {}, { pages, publishConfig: {}, linkMap: {} });
+    const nav = html.match(/<div class="story-nav">(.*?)<\/div>/);
+    return nav ? [...nav[1].matchAll(/>([^<]*?)<\/a>/g)].map(m => m[1].replace(/[←→]/g, '').replace(/&[lr]arr;/g, '').trim()) : [];
+  };
+
+  it('chains Ch1 S1 -> Ch1 S2 -> Ch2 S1 -> Ch2 S2 when numbering restarts', () => {
+    const ss = [session('Ch2', 2), session('Ch1', 1), session('Ch2', 1), session('Ch1', 2)];
+    const pages = [chapter('Ch1', 1), chapter('Ch2', 2), ...ss];
+    const byTitle = t => ss.find(s => s.title === t);
+    assert.deepStrictEqual(links(byTitle('Ch1 S1'), pages), ['Ch1 S2']);
+    assert.deepStrictEqual(links(byTitle('Ch1 S2'), pages), ['Ch1 S1', 'Ch2 S1']);
+    assert.deepStrictEqual(links(byTitle('Ch2 S1'), pages), ['Ch1 S2', 'Ch2 S2']);
+    assert.deepStrictEqual(links(byTitle('Ch2 S2'), pages), ['Ch2 S1']);
+  });
+
+  it('a single-chapter vault chains by session_number as before', () => {
+    const ss = [session('Ch1', 3), session('Ch1', 1), session('Ch1', 2)];
+    const pages = [chapter('Ch1', 1), ...ss];
+    assert.deepStrictEqual(links(ss[2], pages), ['Ch1 S1', 'Ch1 S3']);
+  });
+});
+
 describe('PC template tabbed layout', () => {
   const { pcTemplate } = require('../../lib/templates/pc');
 
