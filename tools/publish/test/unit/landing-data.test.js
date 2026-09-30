@@ -81,6 +81,25 @@ describe('getLatestWrapUp', () => {
     assert.strictEqual(result.title, 'Session_05_Wrap_Up');
   });
 
+  it('in a flat folder of wrap-ups, the session ref wins over folder proximity (#276)', () => {
+    // Every wrap-up sits in Sessions/ beside every hub. Grabbing the first one in the
+    // folder handed Session 2 the Session 1 recap on the landing.
+    const s2 = { title: 'Session 2', sourcePath: '/v/Sessions/Session 2.md', frontmatter: { type: 'session', session_number: 2 } };
+    const pages = [
+      { title: 'Session 1 Wrap-Up', sourcePath: '/v/Sessions/Session 1 Wrap-Up.md', frontmatter: { type: 'session_wrap', session: '[[Session 1]]' } },
+      { title: 'Session 2 Wrap-Up', sourcePath: '/v/Sessions/Session 2 Wrap-Up.md', frontmatter: { type: 'session_wrap', session: '[[Session 2]]' } },
+    ];
+    assert.strictEqual(getLatestWrapUp(pages, s2).title, 'Session 2 Wrap-Up');
+  });
+
+  it('uses the same-folder wrap-up only when the folder holds exactly one', () => {
+    const s = { title: 'Session 07', sourcePath: '/v/S07/Session 07.md', frontmatter: { type: 'session' } };
+    const pages = [
+      { title: 'Chapter_02_Session_07_Wrap_Up', sourcePath: '/v/S07/Chapter_02_Session_07_Wrap_Up.md', frontmatter: { type: 'session_wrap' } },
+    ];
+    assert.strictEqual(getLatestWrapUp(pages, s).title, 'Chapter_02_Session_07_Wrap_Up');
+  });
+
   it('returns null when no wrap-up matches', () => {
     const pages = [
       { frontmatter: { type: 'session_wrap', session_number: 3 }, title: 'Session_03_Wrap_Up' },
@@ -219,6 +238,13 @@ describe('extractRecapHtml (#269)', () => {
 });
 
 describe('extractRecap', () => {
+  it('an empty published view is final, not a cue to read the raw markdown (#276)', () => {
+    // build.js empties a session index's body; `publishedMarkdown || markdown` treated
+    // that '' as missing and quoted the raw text instead.
+    const page = { publishedMarkdown: '', markdown: '## Narrative Recap\n\nKeeper-only forecast.\n' };
+    assert.strictEqual(extractRecap(page), null);
+  });
+
   it('extracts first paragraph from Narrative Recap section', () => {
     const page = {
       markdown: '# Session 1\n\nSome intro.\n\n## Narrative Recap\n\nThe party arrived at the castle. They were weary from travel.\n\nThen they fought a dragon.\n\n## Loot\n\nSword',

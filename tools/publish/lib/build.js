@@ -7,13 +7,14 @@ const { scanVault, scanAllNotes, buildLinkMap, scanAttachments, pairStoryFiles }
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
+const { suppressHubBody, publishedWrapUpFor } = require('./session-hub');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
-const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, chapterOwnsSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
@@ -444,7 +445,20 @@ function build(options = {}) {
   // the search-index subtitle. The link map is built above and is what redirect
   // resolution actually consults, so `aliases`/`canon_status` are safe to strip
   // from here on.
+  //
+  // A session index with a published Wrap-Up has its body withheld (#276; the rule is
+  // session-hub.js's). Decided for every page before this loop reduces any frontmatter,
+  // and the body emptied inside it, before the published view is computed, so search,
+  // backlinks, recency, the relationship graph and the landing fallback agree with the
+  // page. A hub linking a prepped NPC who never appeared must not become that NPC's
+  // "Mentioned in".
+  const hubWrapUps = new Map();
   for (const page of pages) {
+    const wrapUp = publishedWrapUpFor(page, pages);
+    if (wrapUp && suppressHubBody(page, pages)) hubWrapUps.set(page, wrapUp);
+  }
+  for (const page of pages) {
+    if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,
     // but keep only the sections the GM explicitly named. Applied to
     // page.markdown itself, before the published view is computed, so every
@@ -837,17 +851,26 @@ function build(options = {}) {
         default: {
           let extraSidebar = {};
           if (page.frontmatter.type === 'session') {
+            // A hub whose body is withheld (#276) takes its NPCs and events from the
+            // Wrap-Up — who actually appeared — since its own links were prep, not play.
+            const wrapUp = hubWrapUps.get(page);
+            const source = wrapUp || page;
             const sessionMentionedNPCs = (pages || []).filter(p =>
               p.frontmatter.type === 'npc' &&
-              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === source.title)
             ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
 
             const sessionEvents = (pages || []).filter(p =>
               p.frontmatter.type === 'event' &&
-              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === source.title)
             ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
 
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
+            if (wrapUp) {
+              // The page shell stays the wiki page's; only the article body is generated.
+              const chapter = pages.find(p => p.frontmatter.type === 'chapter' && chapterOwnsSession(p, page));
+              processed.html = sessionBodyHtml(page, { wrapUp, chapter });
+            }
           }
           if (page.frontmatter.type === 'chapter') {
             // All three comparisons below are author-typed `chapter:` ref vs filename-derived

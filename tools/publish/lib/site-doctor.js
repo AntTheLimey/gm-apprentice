@@ -17,6 +17,7 @@ const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
+const { suppressHubBody } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { pinnedVersionOf } = require('./update-pin');
 
@@ -273,8 +274,9 @@ async function runSiteDoctor(options, deps) {
     }
 
     // Only the body a reader will actually get: a dead link inside a GM Notes
-    // section is not on the site and is not the GM's problem today.
-    const body = playerSafeMarkdown(page.markdown || '', {
+    // section is not on the site and is not the GM's problem today. Nor is anything
+    // in a session index's body once the site withholds it (#276).
+    const body = suppressHubBody(page, published) ? '' : playerSafeMarkdown(page.markdown || '', {
       excludeCallouts: publishConfig.exclude_callouts,
       excludeSections: publishConfig.exclude_sections,
     }).text;

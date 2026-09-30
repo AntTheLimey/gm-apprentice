@@ -115,6 +115,27 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  // #276: once a session has a published Wrap-Up its index body is withheld, so a dead
+  // link in it (a plan in _inbox/, a prepped scene never written) is not on the site.
+  // Without a Wrap-Up the body publishes and the link is reported as before.
+  it('reports a dead link in a session index body only while that body publishes', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-hub-'));
+    write(vault, 'Sessions/Session 01.md',
+      '---\ntype: session\nstatus: played\n---\n\n- Plan: [[Session 01 - Plan That Never Publishes]]\n');
+    const { configPath } = siteFor(vault);
+    const dead = async () => {
+      const c = capture();
+      await runSiteDoctor({ configPath, json: true }, c.deps);
+      return JSON.parse(c.out.join('')).findings.filter(f => f.code === 'LINK_UNRESOLVED');
+    };
+
+    assert.strictEqual((await dead()).length, 1);
+    write(vault, 'Sessions/Session 01 Wrap-Up.md',
+      '---\ntype: session_wrap\nsession: "[[Session 01]]"\n---\n\n## Narrative Recap\n\nThey came home.\n');
+    assert.strictEqual((await dead()).length, 0);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   // Review follow-up: `doctor --site` used to scan with the raw vault.config.json
   // excludeDirs only, so a folder excluded exclusively via vault-config.md's
   // publish.exclude_dirs still got walked and reported FOLDER_UNMAPPED — a false

@@ -16,6 +16,7 @@ const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXC
 const { surveyVault } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { extractSections, publishMode } = require('./processor');
+const { suppressHubBody } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
 const { nearestNames } = require('./site-doctor');
 
@@ -127,6 +128,11 @@ async function runExplain(options, deps) {
   const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
+  // Whether this is a session index whose body the site withholds (#276).
+  const publishedPages = [...pagesByRel.entries()]
+    .filter(([rel]) => verdicts.has(rel) && publishesPage(verdicts.get(rel)))
+    .map(([, p]) => p);
+  const hubBodyUnpublished = suppressHubBody(page || { frontmatter }, publishedPages);
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
@@ -156,6 +162,7 @@ async function runExplain(options, deps) {
       frontmatterError,
       strippedSections: stripped,
       gmOnlyBlocks,
+      bodyPublishes: !hubBodyUnpublished,
     }, null, 2));
     return 0;
   }
@@ -182,6 +189,9 @@ async function runExplain(options, deps) {
   out(`  sections stripped on publish: ${
     stripped == null ? 'unknown — frontmatter could not be parsed' : (stripped.length ? stripped.join(', ') : 'none')}`);
   out(`  gm-only blocks: ${gmOnlyBlocks == null ? 'unknown' : gmOnlyBlocks}`);
+  if (hubBodyUnpublished) {
+    out('  body: not published — a session index is metadata only, and this session has a published Wrap-Up; its page is built from frontmatter and the Wrap-Up');
+  }
   return 0;
 }
 

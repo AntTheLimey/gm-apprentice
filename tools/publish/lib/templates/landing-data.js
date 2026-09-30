@@ -1,5 +1,5 @@
 const { canonicalNfc, graphemes } = require('../unicode');
-const { parseWikiRef, escapeHtml } = require('../processor');
+const { parseWikiRef, escapeHtml, publishedSource } = require('../processor');
 const { stripTags } = require('../strip-tags');
 
 function getLatestSession(pages) {
@@ -36,7 +36,7 @@ function recapParagraph(page) {
   if (!page) return null;
   // Prefer the published view (gm-only blocks + excluded sections stripped) so the
   // landing recap can never quote Keeper-only content.
-  const md = page.publishedMarkdown || page.markdown;
+  const md = publishedSource(page);
   if (!md) return null;
 
   // Wrap-ups title this section in variants — "Narrative Recap", "What Happened —
@@ -245,31 +245,32 @@ function getLatestWrapUp(pages, session) {
   const wrapTypes = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
   const wrapUps = pages.filter(p => wrapTypes.has(p.frontmatter.type));
 
-  // Chapters restart session numbering, so a bare session_number match can return
-  // ANOTHER chapter's wrap-up (Vienna Session 4 shadowing Calcutta Session 4). A
-  // wrap-up lives in the same session folder as its index file — prefer that match
-  // before falling back to session_number.
-  const sessionDir = session.sourcePath
-    ? String(session.sourcePath).replace(/[^\\/]+$/, '')
-    : null;
-  if (sessionDir) {
-    for (const wu of wrapUps) {
-      if (wu.sourcePath && String(wu.sourcePath).startsWith(sessionDir)) return wu;
-    }
-  }
-
   // NFC both sides (#139): the wrap-up's session ref is author-typed, the session title is a
-  // filename. A mismatch drops the landing page's narrative recap back to the session body.
+  // filename. A mismatch drops the landing page's narrative recap.
   const sessionTitle = canonicalNfc(session.title || '');
   const refOf = (wu) =>
     canonicalNfc(parseWikiRef(wu.frontmatter.session || wu.title || '').target);
 
-  // An explicit `session:` ref names one session, so it outranks session_number, which
-  // chapters make ambiguous by restarting the count.
+  // An explicit `session:` ref names one session, so it outranks everything below.
   if (sessionTitle) {
     for (const wu of wrapUps) {
       if (refOf(wu) === sessionTitle) return wu;
     }
+  }
+
+  // Chapters restart session numbering, so a bare session_number match can return
+  // ANOTHER chapter's wrap-up (Vienna Session 4 shadowing Calcutta Session 4). A
+  // wrap-up lives in the same session folder as its index file — prefer that match
+  // before falling back to session_number. Only when the folder holds exactly one
+  // wrap-up, though: in a flat Sessions/ folder a first-match grab hands every session
+  // the same wrap-up (the rule story-spine's wrapUpForUnit follows too).
+  const sessionDir = session.sourcePath
+    ? String(session.sourcePath).replace(/[^\\/]+$/, '')
+    : null;
+  if (sessionDir) {
+    const sameFolder = wrapUps.filter(wu => wu.sourcePath
+      && String(wu.sourcePath).replace(/[^\\/]+$/, '') === sessionDir);
+    if (sameFolder.length === 1) return sameFolder[0];
   }
 
   const num = session.frontmatter.session_number;

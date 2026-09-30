@@ -10,6 +10,7 @@ const { eventTemplate } = require('./event');
 const { heritageTemplate } = require('./heritage');
 const { worldDomainTemplate } = require('./world-domain');
 const { wikiTemplate } = require('./wiki');
+const { sessionBodyHtml } = require('./session');
 const { indexTemplate } = require('./index-page');
 const { landingTemplate } = require('./landing');
 const { fourOhFourTemplate } = require('./four-oh-four');
@@ -35,6 +36,7 @@ module.exports = {
   heritageTemplate,
   worldDomainTemplate,
   wikiTemplate,
+  sessionBodyHtml,
   indexTemplate,
   landingTemplate,
   fourOhFourTemplate,

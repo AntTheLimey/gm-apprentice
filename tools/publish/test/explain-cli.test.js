@@ -78,6 +78,29 @@ describe('explain', () => {
     assert.match(text, /^ {2}VERDICT: publishes at docs\/sessions\/session-07\.html$/m);
     assert.match(text, /^ {2}sections stripped on publish: GM Notes, Reconciliation Context$/m);
     assert.match(text, /^ {2}gm-only blocks: 1$/m);
+    // #276: no Wrap-Up, so the hub body is the session's record and publishes.
+    assert.doesNotMatch(text, /^ {2}body: /m);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('says a session index body is withheld once a Wrap-Up publishes (#276)', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Session_07_Wrap_Up.md',
+      '---\ntype: session_wrap\nsession: "[[Session_07]]"\n---\n\n## Narrative Recap\n\nDocks.\n');
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_07.md' }, c.deps);
+    assert.match(c.text(), /^ {2}body: not published — a session index is metadata only/m);
+    const j = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_07.md', json: true }, j.deps);
+    assert.strictEqual(JSON.parse(j.out.join('')).bodyPublishes, false);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--json says a session index body publishes when there is no Wrap-Up (#276)', async () => {
+    const vault = makeVault();
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_07.md', json: true }, c.deps);
+    assert.strictEqual(JSON.parse(c.out.join('')).bodyPublishes, true);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
