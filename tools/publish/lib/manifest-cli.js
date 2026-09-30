@@ -319,6 +319,84 @@ async function runApply(options, deps, survey) {
   return 0;
 }
 
+const PLAYED_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+const WRAP_UP_TYPES = new Set(['session_wrap', 'session-wrap-up', 'session-wrapup']);
+
+function linkStem(value) {
+  const m = /\[\[([^\]|#]+)/.exec(String(value == null ? '' : value));
+  const raw = (m ? m[1] : String(value == null ? '' : value)).trim();
+  return raw.split('/').pop().replace(/\.md$/i, '').normalize('NFC').toLowerCase();
+}
+
+// `manifest publish-played` (#277): every played session index that has a Wrap-Up, and
+// that Wrap-Up, not yet under Publishing moves there. A played session with no Wrap-Up is
+// "unclear": listed, never ticked (the skill asks the GM). A hub's body never publishes (the site builds the
+// session page from frontmatter plus the Wrap-Up), so registering it is always safe. Files
+// under Excluded are a deliberate GM decision and are left alone. Only meaningful in
+// player mode with a manifest, the one place the manifest is an allowlist; elsewhere a
+// no-op.
+async function runPublishPlayed(options, deps, survey) {
+  const out = deps.out || console.log;
+  const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
+  const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
+
+  const report = (payload, line) => out(options.json ? JSON.stringify(payload, null, 2) : line);
+  if (!manifest || publishConfig.mode !== 'player') {
+    report({ applicable: false, mode: publishConfig.mode, manifestExists: !!manifest, published: [] },
+      'manifest publish-played: nothing to do (needs a manifest and player mode)');
+    return 0;
+  }
+
+  const listed = parseAnnotatedManifest(readFile(path.join(vaultPath, '_meta', 'publish-manifest.md')));
+  const onDisk = new Set(files);
+  const wraps = [...pagesByRel].filter(([, p]) => WRAP_UP_TYPES.has(p.frontmatter && p.frontmatter.type));
+  const wanted = [];
+  const unclear = [];
+  const add = (rel) => {
+    if (!rel || !onDisk.has(rel) || wanted.includes(rel)) return;
+    const entry = listed.get(rel);
+    if (entry && (entry.section === 'publishing' || entry.section === 'excluded')) return;
+    wanted.push(rel);
+  };
+  for (const [rel, page] of pagesByRel) {
+    const fm = page.frontmatter || {};
+    if (fm.type !== 'session' || !PLAYED_STATUSES.has(String(fm.status || '').toLowerCase())) continue;
+    const stem = linkStem(path.posix.basename(rel));
+    const linked = fm.documents && fm.documents.wrap_up ? linkStem(fm.documents.wrap_up) : null;
+    const found = wraps.filter(([wrapRel, wrap]) => {
+      const wfm = wrap.frontmatter || {};
+      return (linked && linkStem(path.posix.basename(wrapRel)) === linked)
+        || (wfm.session && linkStem(wfm.session) === stem);
+    }).map(([wrapRel]) => wrapRel);
+    // Clear: the Wrap-Up exists, so the session is finished. Unclear: played but no
+    // Wrap-Up yet, which the GM may not want on the site. Never ticked here.
+    if (found.length > 0) {
+      add(rel);
+      found.forEach(add);
+    } else {
+      const entry = listed.get(rel);
+      if (!(entry && (entry.section === 'publishing' || entry.section === 'excluded'))) {
+        unclear.push({ path: rel, reason: `status ${fm.status} but no Wrap-Up found` });
+      }
+    }
+  }
+
+  if (wanted.length > 0 && !options.dryRun) {
+    const rc = await runApply(Object.assign({}, options, { publish: wanted, exclude: [], decide: [], json: false }),
+      Object.assign({}, deps, { out: () => {} }), survey);
+    if (rc !== 0) return rc;
+  }
+  const verb = options.dryRun ? 'would publish' : 'published';
+  const lines = [wanted.length === 0
+    ? 'manifest publish-played: no finished session needed publishing'
+    : `manifest publish-played: ${verb} ${wanted.length} file(s)\n${wanted.map((w) => `  ${w}`).join('\n')}`];
+  if (unclear.length > 0) {
+    lines.push(`Unclear, not ticked (${unclear.length}):`, ...unclear.map((u) => `  ${u.path} — ${u.reason}`));
+  }
+  report({ applicable: true, dryRun: !!options.dryRun, published: wanted, unclear }, lines.join('\n'));
+  return 0;
+}
+
 async function runManifest(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -326,6 +404,7 @@ async function runManifest(options, deps) {
   const survey = surveyVault(opts, d);
   if (opts.verb === 'diff') return runDiff(opts, d, survey);
   if (opts.verb === 'apply') return runApply(opts, d, survey);
+  if (opts.verb === 'publish-played') return runPublishPlayed(opts, d, survey);
   out(`Unknown manifest command: ${opts.verb}`);
   return 1;
 }

@@ -809,9 +809,9 @@ describe('build integration', () => {
 
       const summary = lines.filter(l => l.includes('played session'));
       assert.equal(summary.length, 1, JSON.stringify(summary));
-      assert.match(summary[0], /1 played session is not published \(in Needs Decision\): .*Session 09/);
+      assert.match(summary[0], /1 played session is not published yet .*Session 09/);
       assert.ok(!summary[0].includes('Session 10'), 'a prepped session is not "played"');
-      assert.match(summary[0], /Tick it under Publishing in _meta\/publish-manifest\.md/);
+      assert.match(summary[0], /manifest publish-played.*will publish it/);
       // It is the last warning-level line before the closing "Done!".
       assert.ok(lines.indexOf(summary[0]) > lines.findIndex(l => l.includes('wrote index.html')),
         'summary must come after the per-file output');

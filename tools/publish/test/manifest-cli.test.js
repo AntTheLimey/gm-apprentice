@@ -442,3 +442,92 @@ describe('manifest apply', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 });
+
+describe('manifest publish-played (#277)', () => {
+  function playedVault(manifestBody) {
+    const vault = copyVault('auto-exclude');
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
+      '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    if (manifestBody != null) {
+      fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+        ['---', 'mode: player', '---', '', manifestBody, ''].join('\n'));
+    }
+    return vault;
+  }
+  const manifestFile = (vault) => path.join(vault, '_meta', 'publish-manifest.md');
+
+  it('moves a played session and its Wrap-Up from Needs Decision to Publishing', async () => {
+    const vault = playedVault('## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const rc = await runManifest({ verb: 'publish-played', configPath }, c.deps);
+    assert.strictEqual(rc, 0);
+    const written = c.writes[manifestFile(vault)];
+    assert.match(written, /- \[x\] Sessions\/Played Session\.md\n/);
+    assert.match(written, /- \[x\] Sessions\/Session 06 - Wrap-Up\.md\n/);
+    assert.match(written, /## Needs Decision \(0 files\)/);
+    assert.match(c.text(), /published 2 file\(s\)/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('leaves Excluded entries and unplayed sessions alone', async () => {
+    const vault = playedVault('## Excluded (1 files)\n\n- [x] Sessions/Played Session.md — private');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath }, c.deps);
+    const written = c.writes[manifestFile(vault)];
+    // The wrap-up is still registered; the excluded index and the prepped session are not.
+    assert.match(written, /## Excluded \(1 files\)\n\n- \[x\] Sessions\/Played Session\.md — private/);
+    assert.doesNotMatch(written, /Planned Session\.md/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--dry-run reports without writing, --json emits the paths', async () => {
+    const vault = playedVault('## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md');
+    const before = fs.readFileSync(manifestFile(vault), 'utf8');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath, dryRun: true, json: true }, c.deps);
+    assert.deepStrictEqual(c.writes, {});
+    assert.strictEqual(fs.readFileSync(manifestFile(vault), 'utf8'), before);
+    const payload = JSON.parse(c.text());
+    assert.deepStrictEqual(payload.published, ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('lists a played session with no Wrap-Up as unclear and does not tick it', async () => {
+    const vault = playedVault('## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md');
+    fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath, json: true }, c.deps);
+    assert.deepStrictEqual(c.writes, {});
+    const payload = JSON.parse(c.text());
+    assert.deepStrictEqual(payload.published, []);
+    assert.strictEqual(payload.unclear.length, 1);
+    assert.strictEqual(payload.unclear[0].path, 'Sessions/Played Session.md');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('does nothing without a manifest', async () => {
+    const vault = playedVault(null);
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const rc = await runManifest({ verb: 'publish-played', configPath }, c.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(c.writes, {});
+    assert.match(c.text(), /nothing to do/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('is idempotent', async () => {
+    const vault = playedVault('## Publishing (2 files)\n\n- [x] Sessions/Played Session.md\n- [x] Sessions/Session 06 - Wrap-Up.md');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath }, c.deps);
+    assert.deepStrictEqual(c.writes, {});
+    assert.match(c.text(), /no finished session needed publishing/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});

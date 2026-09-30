@@ -949,9 +949,7 @@ def manifest_rows(vault: Path, played: list[tuple[str, str | None]]
             rows.append(
                 f"WARNING\t{rel}\t{kind} is not under Publishing in "
                 f"_meta/publish-manifest.md ({where}) — it will not publish; "
-                f'gm-publish manifest apply --publish "{rel}" '
-                f"(after confirming the hub's Keeper bookkeeping is fenced "
-                f"under <!-- gm-only -->)")
+                f"gm-publish manifest publish-played")
     return rows
 
 

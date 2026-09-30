@@ -529,8 +529,8 @@ class SessionsManifestTests(unittest.TestCase):
         self.assertTrue(all(r.startswith("WARNING\t") for r in rows), rows)
         index_row = rows_for(rows, f"\t{self.INDEX}\t")[0]
         self.assertIn("(Needs Decision)", index_row)
-        self.assertIn(f'gm-publish manifest apply --publish "{self.INDEX}"',
-                      index_row)
+        self.assertIn("gm-publish manifest publish-played", index_row)
+        self.assertNotIn("gm-only", index_row)
         self.assertIn("(no manifest section)",
                       rows_for(rows, f"\t{self.WRAP}\t")[0])
 

@@ -44,12 +44,25 @@ node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this
 node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site
 node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the manifest
 node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # edit the manifest
+node "$TOOL" manifest publish-played --config <dir>/vault.config.json  # register played sessions
 node "$TOOL" deploy --verify --config <dir>/vault.config.json  # build, deploy, probe the URL
 node "$TOOL" doctor --site --config <dir>/vault.config.json    # audit the vault for publish defects
 node "$TOOL" explain "<vault-relative path>" --config <dir>/vault.config.json  # one file's publish chain
 node "$TOOL" --version
 node "$TOOL" --help
 ```
+
+**Before any build or deploy this skill runs**, run
+`node "$TOOL" manifest publish-played --config <dir>/vault.config.json`
+yourself, so a site never ships missing a played session (#277). It
+ticks each played session index that has a Wrap-Up, plus the
+Wrap-Up, skips Excluded ones, and does nothing without a manifest in
+player mode. Report the paths it ticked. It also lists "unclear"
+sessions (played, no Wrap-Up yet): ask the GM once, in one question
+listing them, and tick only the approved ones with `manifest apply
+--publish`. Don't tick them silently; if the GM says "not yet",
+leave them and don't ask again in this run. The build itself stays read-only
+on the vault, so this lives in the skill, not in `build`/`deploy`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
 from the scaffold's `file:` pin — no registry, no network):

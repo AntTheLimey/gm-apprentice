@@ -135,21 +135,22 @@ campaign-organizer if entity filing is needed.
 Only if `_meta/publish-manifest.md` exists and `publish.mode` in
 `_meta/vault-config.md` is `player` or unset; otherwise skip. A
 played session left in the manifest's Needs Decision never reaches
-the player site (#277). Tick the session index and its Wrap-Up
-under Publishing:
+the player site (#277). Run it yourself, unconditionally, and
+report the paths it ticked. Never ask the GM to tick anything:
 
 ```bash
-node "$TOOL" manifest apply --config <site_dir>/vault.config.json \
-  --publish "<index>" --publish "<wrap-up>"
+node "$TOOL" manifest publish-played --config <site_dir>/vault.config.json
 ```
 
 `$TOOL` and `<site_dir>` (`publish.site_dir`) are as in
-`publish-site/SKILL.md`. Tick the index only after confirming the
-hub's Keeper bookkeeping is fenced under `<!-- gm-only -->` (the
-fence convention in `shared/entity-schema.md`); if it is not,
-fence it first or leave the index unticked and say so. Name both
-paths in the run's report. `vault_check.py <vault> sessions` lists
-any played session or Wrap-Up still missing from Publishing.
+`publish-site/SKILL.md`. The verb ticks every played session index
+that has a Wrap-Up, and that Wrap-Up, not yet under Publishing. The
+session you just wrapped or reconciled is always in that set, so no
+question is needed. Excluded entries are left alone, and any other
+played session with no Wrap-Up is reported as "unclear" and not
+ticked (mention it in the report; publish-site asks about it). A hub's body never
+publishes; the site builds the session page from its frontmatter
+and the Wrap-Up, so registering it is always safe.
 
 ### 6.5. World evolution (conditional)
 

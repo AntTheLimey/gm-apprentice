@@ -1153,7 +1153,7 @@ function build(options = {}) {
   // is a decision and never lands here; one in Needs Decision or in no section does.
   if (unpublishedPlayedSessions.length > 0) {
     const n = unpublishedPlayedSessions.length;
-    console.warn(`  WARNING: ${n} played session${n === 1 ? ' is' : 's are'} not published (in Needs Decision): ${unpublishedPlayedSessions.join(', ')}. Tick ${n === 1 ? 'it' : 'them'} under Publishing in _meta/publish-manifest.md.`);
+    console.warn(`  WARNING: ${n} played session${n === 1 ? ' is' : 's are'} not published yet (${n === 1 ? 'it is' : 'they are'} in Needs Decision or unlisted): ${unpublishedPlayedSessions.join(', ')} — \`manifest publish-played\` (run by publish-site before every build) will publish ${n === 1 ? 'it' : 'them'}.`);
   }
 
   if (errorCount > 0) {

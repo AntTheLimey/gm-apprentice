@@ -262,5 +262,5 @@ notes show, never awards.
 Run `shared/reconcile.md`; on approval it promotes the session to
 `reviewed` and the Wrap-Up to AUTHORITATIVE. If the GM defers,
 leave status `wrap-up` — session-prep runs reconcile as a fallback.
-Either way, do reconcile step 6.1 (publish registration) and
-report the paths it ticked.
+Either way, run reconcile step 6.1 (publish registration) yourself
+and report the paths it ticked.

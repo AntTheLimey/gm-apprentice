@@ -107,7 +107,7 @@ the GM.
   --help, -h         Show this help
 `,
   manifest: `
-gm-apprentice-publish manifest <diff|apply> [options]
+gm-apprentice-publish manifest <diff|apply|publish-played> [options]
 
 Compares the publish manifest (_meta/publish-manifest.md) with what is actually
 in the vault, and edits it. "diff" classifies every vault file with the same
@@ -124,6 +124,13 @@ excluded versus missing is the GM's call.
                      Move paths between the three sections and rewrite the file.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
+  manifest publish-played [--dry-run] [--config <path>] [--json]
+                     Move every played session (status played, wrap-up or
+                     reviewed) that has a Wrap-Up, plus that Wrap-Up, to
+                     Publishing. A played session with no Wrap-Up is listed as
+                     "unclear" and not ticked (tick it with manifest apply).
+                     Leaves Excluded entries alone. Player mode with a manifest
+                     only; otherwise does nothing.
   --help, -h         Show this help
 `,
   explain: `
@@ -516,8 +523,8 @@ if (command === 'deploy') {
 
 if (command === 'manifest') {
   const verb = args[1];
-  if (verb !== 'diff' && verb !== 'apply') {
-    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff or apply)');
+  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played') {
+    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply or publish-played)');
     printSubcommandHelp('manifest');
     process.exit(1);
   }
@@ -526,7 +533,8 @@ if (command === 'manifest') {
   // --publish X` was accepted and silently did nothing (#M8).
   const parsed = parseSubcommandArgs(
     args.slice(2),
-    { '--prune': 'prune', '--json': 'json' },
+    Object.assign({ '--prune': 'prune', '--json': 'json' },
+      verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun' } : {}),
     {},
     verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' } : {},
   );
@@ -543,6 +551,7 @@ if (command === 'manifest') {
     exclude: parsed.flags.exclude,
     decide: parsed.flags.decide,
     prune: !!parsed.flags.prune,
+    dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
   })
     .then((rc) => process.exit(rc))
