@@ -1099,16 +1099,15 @@ changes.
 ### Content
 
 - After the site's pin is updated (Tooling, below), run
-  `vault_check.py <vault> gm-leak --fix` and report what it moved. It
-  nests each handout section the site withholds on its own (Context,
-  Clues…, Prop Notes, Delivery) under the file's fenced `## GM Notes`,
-  so the vault matches what the site does. No wording changes; only
-  the section's place and heading level. Nothing to ask: the site
-  already withholds these sections, so moving them changes nothing a
-  player sees.
-- If the GM wants one of those sections on the site (a handout whose
-  Context is meant for players), rename its heading instead, for
-  example `## Background`.
+  `vault_check.py <vault> gm-leak --fix`. It nests each handout `##`
+  section the new tool withholds on its own (Context, Clues…, Prop
+  Notes, Delivery) under the file's `## GM Notes`, so the vault matches
+  the site. No wording changes; only the section's place and heading
+  level. Report every file and heading it moved (its FIXED rows), and
+  say in the same report: these sections no longer publish from this
+  release on; if one was meant for players (a clipping's Context, say),
+  move it back out of GM Notes and rename its heading, for example
+  `## Background`. Do that for any the GM names.
 
 ### Tooling
 
@@ -1121,5 +1120,6 @@ changes.
   the gm-leak step, then rebuild and redeploy: a deployed site keeps
   publishing those sections until it is rebuilt. For a site outside
   the plugin, `update-pin --site <site-dir> --tag publish-v1.11.41`.
-- `vault_check gm-leak` warns when the site's publish tool predates
-  1.11.41, since those sections still publish there.
+- `vault_check gm-leak` warns when the site's publish tool, installed
+  or pinned, predates 1.11.41, since those sections still publish
+  there.

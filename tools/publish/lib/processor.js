@@ -86,22 +86,29 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
 // text rather than under `## GM Notes` (#280): the handout workflow used to ask
 // for Prop Notes as its own section, and handouts grew Context and Clues
 // Embedded the same way. On a `type: document` page these are Keeper-facing by
-// construction, so they are withheld whatever exclude_sections says. `Clues` is a
-// prefix: "Clues, if Katherine walks the servants' course" is the same section.
-// A GM who wants one of these on the site renames the heading.
+// construction, so they are withheld whatever exclude_sections says — as `##`
+// sections only: a `### Delivery` inside `## The Text` is part of the handout.
+// `Clues` is a prefix: "Clues, if Katherine walks the servants' course" is the
+// same section. A GM who wants one of these on the site renames the heading.
 const DOCUMENT_KEEPER_SECTION_RE = /^(context|clues\b.*|(physical )?prop notes|delivery( notes)?)$/i;
 
+// `handout` is the alias index_build.py accepts for `document`.
 function isDocumentPage(frontmatter) {
-  return !!frontmatter && String(frontmatter.type || '').trim().toLowerCase() === 'document';
+  const type = frontmatter ? String(frontmatter.type || '').trim().toLowerCase() : '';
+  return type === 'document' || type === 'handout';
 }
 
-// Whether a heading title is withheld: on the exclude list, or (on a document
-// page) one of the handout's Keeper sections. filterSections and explain both
-// ask this, so the explanation cannot drift from the strip.
-function isExcludedSection(title, excludeSections = [], frontmatter = null) {
+// Whether a heading is withheld: on the exclude list (any level), or (on a
+// document page, at level 2) one of the handout's Keeper sections. filterSections
+// and explain both ask this, so the explanation cannot drift from the strip.
+function isExcludedSection(title, excludeSections = [], frontmatter = null, level = 2) {
   const lower = String(title).trim().toLowerCase();
   if ((excludeSections || []).some(s => lower === String(s).toLowerCase())) return true;
-  return isDocumentPage(frontmatter) && DOCUMENT_KEEPER_SECTION_RE.test(lower);
+  if (level !== 2 || !isDocumentPage(frontmatter)) return false;
+  // `## **Context**` and `## Clues:` are the same sections; a spelling must not
+  // be the way one reaches the site.
+  const bare = lower.replace(/^(\*\*|\*|__|_)(.+)\1$/, '$2').trim().replace(/:$/, '').trim();
+  return DOCUMENT_KEEPER_SECTION_RE.test(bare);
 }
 
 // Line endings are normalized first: the heading pattern below ends in `$`,
@@ -141,7 +148,7 @@ function walkSections(markdown, excludeSections, frontmatter) {
       // excluded heading (`## GM Notes` / `### Player Notes`) used to reset
       // excludeLevel to 3, so the next `### Secrets` ended the exclusion and
       // published the rest of GM Notes (#228).
-      if (!excluding && isExcludedSection(title, excludeSections, frontmatter)) {
+      if (!excluding && isExcludedSection(title, excludeSections, frontmatter, level)) {
         excluding = true;
         excludeLevel = level;
         stripped.push(title);
@@ -641,7 +648,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   markdown = stripLeadingH1(markdown);
   markdown = stripCallouts(markdown, options.excludeCallouts);
-  markdown = filterSections(markdown, excludeSections, page.frontmatter);
+  markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter);
   markdown = separateBoldLabelLines(markdown);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
     portraitBasename: portraitBasename(page.frontmatter),

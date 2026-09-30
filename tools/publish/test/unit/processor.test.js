@@ -132,6 +132,23 @@ describe("filterSections on a handout's Keeper sections (#280)", () => {
     assert.strictEqual(filterSections(md, []), md);
   });
 
+  it('withholds them as ## sections only (review: ### Delivery inside The Text is handout text)', () => {
+    const nested = '# Clues from Arkham\n\n## The Text\n\nDear sir.\n\n### Delivery\n\nBy hand.\n';
+    assert.strictEqual(filterSections(nested, [], { type: 'document' }), nested);
+    assert.strictEqual(isExcludedSection('Context', [], { type: 'document' }, 3), false);
+    assert.strictEqual(isExcludedSection('GM Notes', ['GM Notes'], null, 3), true);
+  });
+
+  it('sees through emphasis and a trailing colon', () => {
+    for (const t of ['**Context**', '*Prop Notes*', 'Clues:', '__Context:__']) {
+      assert.strictEqual(isExcludedSection(t, [], { type: 'document' }), true, t);
+    }
+  });
+
+  it("treats type: handout as a document", () => {
+    assert.strictEqual(isExcludedSection('Prop Notes', [], { type: 'handout' }), true);
+  });
+
   it('matches whole titles, not words inside them', () => {
     assert.strictEqual(isExcludedSection('Historical Context', [], { type: 'document' }), false);
     assert.strictEqual(isExcludedSection('Clueless', [], { type: 'document' }), false);

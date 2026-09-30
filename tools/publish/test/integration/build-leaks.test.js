@@ -94,6 +94,27 @@ SECRET_ROUTE
 SECRET_PROP Keeper-only until delivered.
 `;
 
+// Review: `type` removed from the reader-facing frontmatter, and a wrapped
+// heading, must not let the Keeper sections through.
+const HANDOUT_HIDDEN_TYPE = `---
+type: document
+publish_exclude_fields: [type]
+---
+# The Card
+
+## Content
+
+Public card wording.
+
+## **Context**
+
+SECRET_WRAPPED_CONTEXT
+
+## Prop Notes:
+
+SECRET_COLON_PROP
+`;
+
 function buildVault(work) {
   const vault = path.join(work, 'vault');
   const write = (rel, body) => {
@@ -106,6 +127,7 @@ function buildVault(work) {
   write('_Campaign/Overview.md', OVERVIEW);
   write('Locations/Keep.md', KEEP_CRLF);
   write('Documents/Chit.md', HANDOUT);
+  write('Documents/Card.md', HANDOUT_HIDDEN_TYPE);
   const configPath = path.join(work, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({
     siteTitle: 'Leaks',

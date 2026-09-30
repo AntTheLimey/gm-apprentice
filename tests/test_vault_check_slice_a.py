@@ -2691,6 +2691,46 @@ class GmLeakHandoutSectionTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
                                        "tool predates 1.11.41"), rows)
 
+    def test_a_pin_below_the_rule_warns_even_when_the_plugin_answers(self):
+        # Review: the site pins 1.11.40 but hasn't installed it, so the
+        # plugin's 1.11.41 answers — yet the site will build with 1.11.40.
+        vault = self.vault()
+        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        (site / "package.json").write_text(json.dumps({"dependencies": {
+            "gm-apprentice-publish": "1.11.40"}}), encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
+                                       "tool 1.11.40 predates 1.11.41"), rows)
+
+    def test_a_site_too_old_to_ask_is_a_warning_not_a_note(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, installed="1.11.39")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
+                                       "tool 1.11.39 predates 1.11.41"), rows)
+
+    def test_an_emphasis_wrapped_heading_is_named_and_moved(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(self.CHIT.replace(
+            "## Context", "## **Context**"), encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={
+            "Chit.md": ["**Context**", "Clues, if Katherine walks",
+                        "Prop Notes"]})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 3, rows)
+        self.assertIn("### **Context**", read(vault, "Chit.md"))
+
+    def test_only_level_two_sections_are_named(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(
+            "---\ntype: document\n---\n\n## The Text\n\nDear sir.\n\n"
+            "### Context\n\nPart of the letter.\n", encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={"Chit.md": ["Context"]})
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
+                                  "Keeper material"))
+
     def test_no_tool_says_what_went_unchecked(self):
         vault = self.vault()
         stub_publish_tool(self, vault, which=None)

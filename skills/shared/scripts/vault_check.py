@@ -1384,6 +1384,19 @@ def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
 STRIPPED_SECTIONS_SINCE = "1.11.41"
 
 
+def _pin_below(vault: Path, version: str) -> str | None:
+    """The site's pinned publish tool version when it is below `version`
+    (installed, or pinned in package.json and not yet installed), else
+    None. A site with no pin of its own builds with the plugin's tool."""
+    config, _why = _site_config(vault)
+    if config is None:
+        return None
+    pin = site_pin(config.parent)
+    if pin.version is None or parse_semver(pin.version) is None:
+        return None
+    return pin.version if semver_below(pin.version, version) else None
+
+
 def sections_withheld(answer: ToolAnswer
                       ) -> tuple[dict[str, set[str]] | None, str | None]:
     """(per file, the casefolded headings the site withholds; why not).
@@ -1699,9 +1712,10 @@ def check_gm_leak(vault: Path, folder: str | None,
     it is the first thing to read, not the fifth.
 
     Every call also plans the heading re-nest (`WOULD-FIX` rows); `fix`
-    writes it (`FIXED`). Only the ERROR bold-wrapped exclude matches
-    move — keyword-only WARNING headings and INFO rows are the GM's
-    call and are never moved.
+    writes it (`FIXED`). What moves: the ERROR bold-wrapped exclude
+    matches, and `##` sections the publish tool withholds by its own rule
+    (`explain --all`'s `strippedSections`, #280). Keyword-only WARNING
+    headings and INFO rows are the GM's call and are never moved.
 
     `renest_excludes` appends `renest_excludes_migration`'s rows (the
     1.8.3 migration) instead of planning the plain re-nest.
@@ -1742,12 +1756,24 @@ def check_gm_leak(vault: Path, folder: str | None,
                     "including any the site withholds", used))
         stripped, why = sections_withheld(tool)
         if stripped is not None:
-            tool_stripped = {rel: titles - match
-                             for rel, titles in stripped.items()}
-        elif tool.data is not None:
+            # The tool reports titles as written; the re-nest matches them
+            # with emphasis unwrapped, so carry both spellings.
+            tool_stripped = {rel: {v for t in titles
+                                   for v in (t, _plain_title(t).casefold())}
+                             - match for rel, titles in stripped.items()}
+        has_documents = any(entity_type(fm) in ("document", "handout")
+                            for _r, _t, fm in notes)
+        old_pin = _pin_below(vault, STRIPPED_SECTIONS_SINCE)
+        if has_documents and old_pin is not None:
+            # The answer may be the plugin's newer tool standing in for a
+            # site whose pin (installed or not) publishes these sections.
+            rows.append(f"WARNING\t(vault)\tthe site's publish tool "
+                        f"{old_pin} predates {STRIPPED_SECTIONS_SINCE}, so a "
+                        f"handout's Context, Clues and Prop Notes sections "
+                        f"publish — run update-pin")
+        elif stripped is None and tool.data is not None:
             rows.append(f"WARNING\t(vault)\t{why}")
-        elif why is not None and any(entity_type(fm) == "document"
-                                     for _r, _t, fm in notes):
+        elif stripped is None and why is not None and has_documents:
             rows.append(_publish_tool_row(
                 why, "headings the site withholds on its own, like a "
                 "handout's Context, Clues and Prop Notes, were not checked",
@@ -1788,17 +1814,18 @@ def check_gm_leak(vault: Path, folder: str | None,
             if state.heading is not None:
                 found = _heading_leak(rel, state, excludes)
                 title = state.heading[1].strip()
-                if (not found and state.heading[0] >= 2
+                if (not found and state.heading[0] == 2
                         and title.casefold() in own_strips):
-                    # The site withholds it by its own rule (a handout's
-                    # Keeper sections, #280), so it is safe there today —
-                    # but only there: a site pinned before the rule, and
-                    # every other reader of the vault, sees it. Its home
-                    # is under GM Notes, and moving it is mechanical.
+                    # The publish tool withholds it by its own rule (a
+                    # handout's Keeper sections, #280) — from 1.11.41 on;
+                    # an older pin publishes it, and the (vault) row says
+                    # so. Its home is under GM Notes, and moving it is
+                    # mechanical.
                     found = [f"WARNING\t{rel}:{state.lineno}\t'{title}' "
-                             f"is Keeper material outside ## GM Notes — the "
-                             f"site withholds it, but nest it under "
-                             f"## GM Notes"]
+                             f"is Keeper material outside ## GM Notes — "
+                             f"nest it under ## GM Notes (publish "
+                             f"{STRIPPED_SECTIONS_SINCE}+ withholds it; to "
+                             f"publish it, rename the heading)"]
                 rows.extend(found)
                 heading_leak = heading_leak or bool(found)
                 continue

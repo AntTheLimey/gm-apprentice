@@ -385,19 +385,22 @@ function warnIfVersionDrift() {
 
 if (command === '--help' || command === '-h' || !command) {
   printHelp();
-  process.exit(0);
+  exitAfterFlush(0);
+  return;
 }
 
 if (command === '--version' || command === '-v') {
   printVersion();
-  process.exit(0);
+  exitAfterFlush(0);
+  return;
 }
 
 // `--help` on any subcommand prints usage and exits 0 with no side effects (#178).
 const wantsHelp = args.slice(1).some((a) => a === '--help' || a === '-h');
 if (wantsHelp) {
   if (Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, command)) printSubcommandHelp(command); else printHelp();
-  process.exit(0);
+  exitAfterFlush(0);
+  return;
 }
 
 
