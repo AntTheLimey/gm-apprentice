@@ -1143,38 +1143,156 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     return config, None
 
 
-def _version_tuple(text: str) -> tuple[int, int, int] | None:
-    m = re.match(r"(\d+)\.(\d+)\.(\d+)", str(text or ""))
-    return (int(m[1]), int(m[2]), int(m[3])) if m else None
+_SEMVER = re.compile(
+    r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+
+
+def parse_semver(text: object) -> tuple[tuple[int, int, int], list[str]] | None:
+    """(core, prerelease identifiers) of a strict semver string, or None."""
+    m = _SEMVER.fullmatch(str(text) if text is not None else "")
+    if not m:
+        return None
+    return ((int(m[1]), int(m[2]), int(m[3])),
+            m[4].split(".") if m[4] else [])
+
+
+def semver_below(a: str, b: str) -> bool:
+    """Semver precedence, as tools/publish/lib/site-pin.js semverBelow: a
+    prerelease sorts below its release (1.11.40-rc.1 < 1.11.40). Both must
+    be valid; an invalid one raises ValueError."""
+    pa, pb = parse_semver(a), parse_semver(b)
+    if pa is None or pb is None:
+        raise ValueError(f"not a semver version: {a if pa is None else b}")
+    if pa[0] != pb[0]:
+        return pa[0] < pb[0]
+    xa, xb = pa[1], pb[1]
+    if not xa or not xb:
+        return bool(xa) and not xb
+    for i in range(max(len(xa), len(xb))):
+        if i >= len(xa):
+            return True
+        if i >= len(xb):
+            return False
+        x, y = xa[i], xb[i]
+        if x == y:
+            continue
+        nx, ny = x.isdigit(), y.isdigit()
+        if nx and ny:
+            return int(x) < int(y)
+        if nx != ny:
+            return nx
+        return x < y
+    return False
+
+
+def _spec_version(spec: str) -> str | None:
+    """The least version a package.json spec for the tool can install, or
+    None when that can't be read for sure (site-pin.js specVersion)."""
+    text = str(spec).strip()
+    if text.startswith("file:"):
+        target = text[len("file:"):].replace("\\", "/").rstrip("/")
+        cached = re.search(r"/(\d+\.\d+\.\d+)/tools/publish$", target)
+        if cached:
+            return cached[1]
+        tarball = re.search(r"-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.tgz$",
+                            target)
+        return tarball[1] if tarball and parse_semver(tarball[1]) else None
+    m = re.fullmatch(r"(?:\^|~|>=|=)?\s*v?(\S+)", text)
+    return m[1] if m and parse_semver(m[1]) else None
+
+
+def _read_json(path: Path) -> tuple[bool, object, str | None]:
+    """(missing, parsed data, error). A dangling symlink is missing."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return True, None, None
+    except NotADirectoryError:
+        return True, None, None
+    except (OSError, UnicodeDecodeError) as e:
+        return False, None, e.__class__.__name__
+    try:
+        return False, json.loads(text), None
+    except ValueError:
+        return False, None, "invalid JSON"
+
+
+@dataclass
+class SitePin:
+    source: str  # "installed", "package.json" or "none"
+    version: str | None
+    stale: str | None
+
+
+def _stale_reason(version: str) -> str | None:
+    since = ".".join(str(n) for n in WITHHOLDS_HUB_BODIES_SINCE)
+    return (f"site pinned to {version} predates body withholding — run "
+            f"update-pin" if semver_below(version, since) else None)
+
+
+def site_pin(site: Path) -> SitePin:
+    """Which gm-apprentice-publish the site builds with, by the rules of
+    tools/publish/lib/site-pin.js (same test vectors): a usable installed
+    tool answers; with nothing installed (or a dangling symlink) the
+    site's package.json dependency does, since the next `npm install`
+    installs it; a spec whose least version can't be read, or an
+    installed tool with no readable version, is stale; no dependency on
+    the tool at all is source "none"."""
+    missing, data, error = _read_json(
+        site / "node_modules" / PUBLISH_PACKAGE / "package.json")
+    if not missing:
+        version = data.get("version") if isinstance(data, dict) else None
+        if not isinstance(version, str) or parse_semver(version) is None:
+            return SitePin("installed", None,
+                           f"the site's installed {PUBLISH_PACKAGE} has no "
+                           f"readable version")
+        return SitePin("installed", version, _stale_reason(version))
+    missing, data, error = _read_json(site / "package.json")
+    if missing:
+        return SitePin("none", None, None)
+    if not isinstance(data, dict):
+        return SitePin("package.json", None,
+                       f"the site's package.json can't be read "
+                       f"({error or 'not an object'})")
+    def dep(key: str) -> object:
+        table = data.get(key)
+        return table.get(PUBLISH_PACKAGE) if isinstance(table, dict) else None
+    spec = dep("dependencies") or dep("devDependencies")
+    if not spec:
+        return SitePin("none", None, None)
+    version = _spec_version(str(spec))
+    if version is None:
+        return SitePin("package.json", None,
+                       f"the site pins {PUBLISH_PACKAGE} as \"{spec}\", which "
+                       f"isn't a version this can check")
+    return SitePin("package.json", version, _stale_reason(version))
 
 
 def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
     """(tool script, which tool it is, why it can't answer).
 
     The site's installed tool when it has one — its answer is the site's.
-    One too old to withhold hub bodies, or unreadable, can't answer: the
-    caller fails safe. The plugin's own tool stands in only for a site with
-    no installed tool at all."""
-    installed = site / "node_modules" / PUBLISH_PACKAGE
-    if installed.exists():
-        try:
-            version = json.loads((installed / "package.json").read_text(
-                encoding="utf-8")).get("version")
-        except (OSError, ValueError, AttributeError):
-            version = None
-        found = _version_tuple(version)
-        label = f"the site's installed publish tool {version or '(unknown version)'}"
-        if found is None:
-            return None, label, (f"the site's installed {PUBLISH_PACKAGE} "
-                                 f"has no readable version")
-        if found < WITHHOLDS_HUB_BODIES_SINCE:
-            return None, label, (f"site pinned to {version} predates body "
-                                 f"withholding — run update-pin")
-        script = installed / "bin" / "gm-publish.js"
+    A site whose tool (installed, or pinned in package.json and not yet
+    installed) predates hub-body withholding, or can't be read, can't
+    answer: the caller fails safe. The plugin's own tool stands in for a
+    site with nothing installed, and says so."""
+    pin = site_pin(site)
+    if pin.source == "installed":
+        label = (f"the site's installed publish tool "
+                 f"{pin.version or '(unknown version)'}")
+        if pin.stale:
+            return None, label, pin.stale
+        script = site / "node_modules" / PUBLISH_PACKAGE / "bin" / "gm-publish.js"
         if not script.is_file():
             return None, label, f"{script} is missing"
         return script, label, None
-    label = "the plugin's publish tool (the site has none installed)"
+    if pin.stale:
+        return None, f"the site's pinned publish tool {pin.version or ''}".rstrip(), pin.stale
+    label = ("the plugin's publish tool (the site has none installed)"
+             if pin.source == "none" else
+             f"the plugin's publish tool (the site pins {pin.version}, not "
+             f"installed yet)")
     if not PUBLISH_TOOL.is_file():
         return None, label, f"the publish tool is not at {PUBLISH_TOOL}"
     return PUBLISH_TOOL, label, None

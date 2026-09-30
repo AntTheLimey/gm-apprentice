@@ -1,0 +1,41 @@
+{
+  "_comment": "Shared by tools/publish/test/site-pin.test.js and tests/test_site_pin.py: the JS gate (lib/site-pin.js) and vault_check's copy must agree on every row. `installed` is the version in <site>/node_modules/gm-apprentice-publish/package.json (\"BROKEN_SYMLINK\" = a dangling link there, \"UNPARSEABLE\" = invalid JSON); `package` is <site>/package.json (\"UNPARSEABLE\" = invalid JSON). `expect.stale` true means the site would publish hub bodies in full, or can't be told apart from one that would; `version` is the version the gate reads (null when none).",
+  "below": [
+    ["1.11.40-rc.1", "1.11.40", true],
+    ["1.11.40-alpha", "1.11.40-beta", true],
+    ["1.11.40", "1.11.40", false],
+    ["1.11.39", "1.11.40", true],
+    ["1.11.41-rc.1", "1.11.40", false],
+    ["1.12.0", "1.11.40", false],
+    ["2.0.0", "1.11.40", false],
+    ["1.11.40+build.5", "1.11.40", false],
+    ["0.99.99", "1.11.40", true]
+  ],
+  "invalid": ["40-rc", "1.11", "1.11.40.1", "v1.11.40", "1.11.40-", " 1.11.40", "", "banana"],
+  "sites": [
+    {"name": "installed current", "installed": "1.11.40", "package": null, "expect": {"stale": false, "version": "1.11.40", "source": "installed"}},
+    {"name": "installed old", "installed": "1.11.39", "package": null, "expect": {"stale": true, "version": "1.11.39", "source": "installed"}},
+    {"name": "installed prerelease", "installed": "1.11.40-rc.1", "package": null, "expect": {"stale": true, "version": "1.11.40-rc.1", "source": "installed"}},
+    {"name": "installed garbage version", "installed": "banana", "package": null, "expect": {"stale": true, "version": null, "source": "installed"}},
+    {"name": "installed unparseable", "installed": "UNPARSEABLE", "package": null, "expect": {"stale": true, "version": null, "source": "installed"}},
+    {"name": "installed wins over the spec", "installed": "1.11.40", "package": {"dependencies": {"gm-apprentice-publish": "file:vendor/gm-apprentice-publish-1.11.39.tgz"}}, "expect": {"stale": false, "version": "1.11.40", "source": "installed"}},
+    {"name": "no tool, no package.json", "installed": null, "package": null, "expect": {"stale": false, "version": null, "source": "none"}},
+    {"name": "no dependency on the tool", "installed": null, "package": {"dependencies": {"lunr": "^2.3.9"}}, "expect": {"stale": false, "version": null, "source": "none"}},
+    {"name": "unparseable package.json", "installed": null, "package": "UNPARSEABLE", "expect": {"stale": true, "version": null, "source": "package.json"}},
+    {"name": "vendored tarball old", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "file:vendor/gm-apprentice-publish-1.11.39.tgz"}}, "expect": {"stale": true, "version": "1.11.39", "source": "package.json"}},
+    {"name": "vendored tarball current", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "file:vendor/gm-apprentice-publish-1.11.40.tgz"}}, "expect": {"stale": false, "version": "1.11.40", "source": "package.json"}},
+    {"name": "vendored tarball prerelease", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "file:vendor/gm-apprentice-publish-1.11.40-rc.1.tgz"}}, "expect": {"stale": true, "version": "1.11.40-rc.1", "source": "package.json"}},
+    {"name": "broken symlink falls to the spec", "installed": "BROKEN_SYMLINK", "package": {"dependencies": {"gm-apprentice-publish": "file:vendor/gm-apprentice-publish-1.11.39.tgz"}}, "expect": {"stale": true, "version": "1.11.39", "source": "package.json"}},
+    {"name": "broken symlink, no dependency", "installed": "BROKEN_SYMLINK", "package": null, "expect": {"stale": false, "version": null, "source": "none"}},
+    {"name": "plugin cache pin old", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "file:/Users/x/.claude/plugins/cache/gm-apprentice/gm-apprentice/1.11.39/tools/publish"}}, "expect": {"stale": true, "version": "1.11.39", "source": "package.json"}},
+    {"name": "plugin cache pin current", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "file:/Users/x/.claude/plugins/cache/gm-apprentice/gm-apprentice/1.11.41/tools/publish"}}, "expect": {"stale": false, "version": "1.11.41", "source": "package.json"}},
+    {"name": "exact version", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "1.11.40"}}, "expect": {"stale": false, "version": "1.11.40", "source": "package.json"}},
+    {"name": "exact prerelease", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "1.11.40-rc.1"}}, "expect": {"stale": true, "version": "1.11.40-rc.1", "source": "package.json"}},
+    {"name": "caret range in devDependencies", "installed": null, "package": {"devDependencies": {"gm-apprentice-publish": "^1.11.40"}}, "expect": {"stale": false, "version": "1.11.40", "source": "package.json"}},
+    {"name": "tilde range allowing an old one", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "~1.11.39"}}, "expect": {"stale": true, "version": "1.11.39", "source": "package.json"}},
+    {"name": ">= range", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": ">=1.11.40"}}, "expect": {"stale": false, "version": "1.11.40", "source": "package.json"}},
+    {"name": "wildcard", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "*"}}, "expect": {"stale": true, "version": null, "source": "package.json"}},
+    {"name": "compound range", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": ">=1.11.40 <2 || 1.0.0"}}, "expect": {"stale": true, "version": null, "source": "package.json"}},
+    {"name": "a checkout path", "installed": null, "package": {"dependencies": {"gm-apprentice-publish": "file:../gm-apprentice/tools/publish"}}, "expect": {"stale": true, "version": null, "source": "package.json"}}
+  ]
+}

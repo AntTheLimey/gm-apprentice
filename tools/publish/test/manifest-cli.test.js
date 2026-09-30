@@ -639,6 +639,29 @@ describe('manifest publish-played answers for the site\'s pinned tool (#277 fina
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('a site whose package.json pins 1.11.39 but has nothing installed ticks no hub (re-check)', async () => {
+    // The next `npm install && build` installs 1.11.39, which publishes the body.
+    const vault = reviewedVault();
+    const site = siteFor(vault);
+    fs.writeFileSync(path.join(site.dir, 'package.json'), JSON.stringify({
+      dependencies: { 'gm-apprentice-publish': 'file:vendor/gm-apprentice-publish-1.11.39.tgz' } }));
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath: site.configPath, json: true, dryRun: true }, c.deps);
+    const payload = JSON.parse(c.text());
+    assert.deepStrictEqual(payload.published, ['Sessions/Session 06 - Wrap-Up.md']);
+    assert.strictEqual(payload.unclear[0].reason, 'site is pinned to 1.11.39; update the pin before publishing sessions');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a prerelease of 1.11.40 is below 1.11.40 (re-check)', async () => {
+    const vault = reviewedVault();
+    const site = pinnedSite(vault, '1.11.40-rc.1');
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath: site.configPath, json: true, dryRun: true }, c.deps);
+    assert.deepStrictEqual(JSON.parse(c.text()).published, ['Sessions/Session 06 - Wrap-Up.md']);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('a site pinned at 1.11.40 ticks both', async () => {
     const vault = reviewedVault();
     const site = pinnedSite(vault, '1.11.40');

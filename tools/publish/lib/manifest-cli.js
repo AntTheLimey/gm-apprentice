@@ -17,6 +17,7 @@ const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
+const { sitePin } = require('./site-pin');
 
 const SECTIONS = [
   { key: 'publishing', title: 'Publishing', checked: true },
@@ -327,41 +328,9 @@ async function runApply(options, deps, survey) {
 
 const PLAYED_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
-// The first publish tool that withholds a paired hub's body (#276). A site whose
-// installed tool is older publishes every hub body in full.
-const WITHHOLDS_HUB_BODIES_SINCE = '1.11.40';
-const PKG = 'gm-apprentice-publish';
-
-function semverBelow(a, b) {
-  const pa = String(a).split('.').map((n) => parseInt(n, 10));
-  const pb = String(b).split('.').map((n) => parseInt(n, 10));
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) < (pb[i] || 0);
-  }
-  return false;
-}
-
-// Why the site's own build would publish a ticked hub's body, or null. The site builds
-// with the tool installed in its node_modules (update-pin reads it the same way), not
-// with whichever tool is running this command. No installed tool at all is null: that
-// site is built by the running tool. One that can't be read, or predates withholding,
-// is a reason — fail safe.
+// Why the site's own build would publish a ticked hub's body, or null (site-pin.js).
 function staleSitePin(siteDir) {
-  const pkgPath = path.join(siteDir, 'node_modules', PKG, 'package.json');
-  let text;
-  try {
-    text = fs.readFileSync(pkgPath, 'utf8');
-  } catch (err) {
-    return err.code === 'ENOENT' ? null : `the site's installed ${PKG} can't be read (${err.code || err.message}); update the pin before publishing sessions`;
-  }
-  let version = null;
-  try { version = JSON.parse(text).version || null; } catch { /* reported below */ }
-  if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
-    return `the site's installed ${PKG} has no readable version; update the pin before publishing sessions`;
-  }
-  return semverBelow(version, WITHHOLDS_HUB_BODIES_SINCE)
-    ? `site is pinned to ${version}; update the pin before publishing sessions`
-    : null;
+  return sitePin(siteDir).stale;
 }
 
 // A session is reviewed once reconcile has run on it: reconcile promotes the Wrap-Up to
@@ -445,7 +414,7 @@ function planPublishPlayed(survey) {
 
   // Clear means reviewed: an unreviewed Wrap-Up is still a DRAFT the GM may not want
   // on the site (session-wrapup's "after reconcile"), so it waits for publish-site to
-  // ask. And a site pinned below WITHHOLDS_HUB_BODIES_SINCE would publish a ticked hub's
+  // ask. And a site pinned below 1.11.40 (site-pin.js) would publish a ticked hub's
   // body, so no hub is ticked there; its reviewed Wrap-Up still can be.
   const unclear = [];
   const pinReason = survey.siteDir ? staleSitePin(survey.siteDir) : null;

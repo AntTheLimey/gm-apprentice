@@ -18,9 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Wrap-Up is AUTHORITATIVE, as reconcile leaves them. Every other
   played session is listed as unclear, with the reason (no Wrap-Up,
   Wrap-Up not reviewed yet, one that is Excluded or won't publish), and
-  not ticked. On a site whose installed publish tool predates 1.11.40,
-  which publishes every index body, no index is ticked; its reviewed
-  Wrap-Up still is. Reconcile runs it and reports the unclear list;
+  not ticked. On a site whose publish tool predates 1.11.40 (the one
+  installed, else the one its `package.json` pins; a prerelease of
+  1.11.40 counts as older), which publishes every index body, no index
+  is ticked; its reviewed Wrap-Up still is. Reconcile runs it and reports the unclear list;
   publish-site runs it before every build and asks the GM, once, about
   unclear sessions. When the GM publishes a Wrap-Up before a deferred
   reconcile, session-wrapup ticks it with `manifest apply --publish`.

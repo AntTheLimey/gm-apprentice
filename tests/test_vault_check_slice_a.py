@@ -2542,6 +2542,31 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertIn("site pinned to 1.11.39 predates body withholding",
                       note[0])
 
+    def test_a_pin_not_yet_installed_is_still_the_sites_tool(self):
+        # Re-check: package.json pins a vendored 1.11.39 and nothing is
+        # installed. The next npm install brings in 1.11.39, which publishes
+        # every hub body, so the plugin's tool must not answer for it.
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        (site / "package.json").write_text(json.dumps({"dependencies": {
+            "gm-apprentice-publish":
+                "file:vendor/gm-apprentice-publish-1.11.39.tgz"}}),
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(self.hub_rows(rows))
+        self.assertTrue(rows_for(rows, "site pinned to 1.11.39 predates "
+                                       "body withholding"), rows)
+
+    def test_an_installed_prerelease_is_below_the_release(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
+                                  installed="1.11.40-rc.1")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(self.hub_rows(rows))
+
     def test_an_unreadable_site_tool_scans_every_hub(self):
         vault = self.vault()
         stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
