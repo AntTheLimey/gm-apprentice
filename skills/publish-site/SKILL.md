@@ -55,15 +55,17 @@ node "$TOOL" --help
 **Before any build or deploy this skill runs**, run
 `node "$TOOL" manifest publish-played --config <dir>/vault.config.json`
 yourself, so a site never ships missing a played session (#277). It
-ticks a played session index only together with a linked Wrap-Up
+ticks a reviewed session index only together with a linked Wrap-Up
 that will publish, so the site withholds the hub body. It skips
 Excluded entries and does nothing without a manifest in player mode.
 Report the paths it ticked. Every other played session is listed as
-"unclear" with its reason (no Wrap-Up, or one that is Excluded or
-won't publish), because its hub body would publish. Ask the GM once,
-in one question listing them with their reasons, and tick only the
-approved ones with `manifest apply --publish`. Don't tick them silently; if the GM says "not yet",
-leave them and don't ask again in this run. The build itself stays read-only
+"unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
+that is Excluded or won't publish, or a stale site pin). Ask the GM
+once, in one question listing them with their reasons, and tick only
+the approved ones with `manifest apply --publish`. Don't tick them
+silently; if the GM says "not yet", leave them and don't ask again in
+this run. When a reason says the site is pinned to an older tool,
+offer `update-pin --site <dir>` first. The build itself stays read-only
 on the vault, so this lives in the skill, not in `build`/`deploy`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
@@ -80,8 +82,10 @@ Node 22+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
 **Site directory:** capabilities 2 and 4 read `publish.site_dir`
-from `_meta/vault-config.md`. If unset, ask for the absolute path
-to the site repo and offer to save it there.
+from `_meta/vault-config.md`; a relative value is relative to the
+vault. If unset, ask for the absolute path to the site repo and offer
+to save it there. With no site at all there is nothing to register,
+so skip `publish-played`.
 
 ## Nine Capabilities
 

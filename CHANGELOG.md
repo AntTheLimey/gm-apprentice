@@ -11,14 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`manifest publish-played`** (#277). It ticks a played session under
-  Publishing in `_meta/publish-manifest.md` only together with a linked
-  Wrap-Up that will publish, so the session's index body is withheld.
-  Every other played session is listed as unclear, with the reason (no
-  Wrap-Up, or one that is Excluded or won't publish), and not ticked.
-  Reconcile runs it; session-wrapup runs it after reconcile, or when
-  the GM says to publish before a deferred reconcile; publish-site runs
-  it before every build and asks the GM, once, about unclear sessions.
+- **`manifest publish-played`** (#277). It ticks a reviewed session
+  under Publishing in `_meta/publish-manifest.md` only together with a
+  linked Wrap-Up that will publish, so the session's index body is
+  withheld. Reviewed means the index's status is `reviewed` or the
+  Wrap-Up is AUTHORITATIVE, as reconcile leaves them. Every other
+  played session is listed as unclear, with the reason (no Wrap-Up,
+  Wrap-Up not reviewed yet, one that is Excluded or won't publish), and
+  not ticked. On a site whose installed publish tool predates 1.11.40,
+  which publishes every index body, no index is ticked; its reviewed
+  Wrap-Up still is. Reconcile runs it and reports the unclear list;
+  publish-site runs it before every build and asks the GM, once, about
+  unclear sessions. When the GM publishes a Wrap-Up before a deferred
+  reconcile, session-wrapup ticks it with `manifest apply --publish`.
   Excluded entries are never touched.
 - **`explain --all --json`** lists every vault file with whether it
   publishes and whether its body does, in one run.
@@ -27,7 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Publish tool releases are tagged `publish-v<version>`** (#274), each
   with a packed tarball and `SHA256SUMS` (this release is
   `publish-v1.11.40`), and `update-pin --tag publish-vX.Y.Z` pins a
-  site outside the plugin to one.
+  site outside the plugin to one. A failed pack can be re-run by hand,
+  and the plugin's own release notes start from the previous `v*` tag,
+  never a `publish-v*` one.
 - **`publish.wrap_up.player_sections`** in `_meta/vault-config.md`: a
   list of extra H2 titles on a Wrap-Up that count as player-facing, for
   vaults whose recaps carry sections such as "What the Party Learned".
@@ -52,8 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrapper are unchanged. An index with no Wrap-Up publishes its body as
   before, since some vaults keep their recaps there. The index and its
   Wrap-Up pair through `documents.wrap_up` or the Wrap-Up's `session:`,
-  each resolved the way the site resolves any link. When two Wrap-Ups
-  share a name, the one in the session's folder or chapter wins.
+  each resolved the way the site resolves any link, against every
+  session index and Wrap-Up in the vault, published or not. When two
+  share a name, the one in the session's folder or chapter wins, and a
+  link that stays ambiguous, or a `session:` claim from a Wrap-Up whose
+  `chapter:` names another chapter, pairs with nothing. The session
+  page, the Story section, the landing recap and the landing's recent
+  NPCs and locations all use that one pairing, made before any field
+  is excluded.
 - session-prep, session-play and session-wrapup no longer write
   bookkeeping into the session index. Document links go in its
   frontmatter; scene prep, key prep and image prompts go in the Plan;
@@ -63,10 +76,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sort_order` is still honoured, a session no chapter owns keeps its
   place, and a vault without chapters keeps its old order.
 - `vault_check sessions` warns on played sessions missing from
-  Publishing and notes bookkeeping in index bodies the site withholds.
-  `vault_check gm-leak` skips those withheld bodies. Both ask the
-  publish tool which bodies it withholds, and when they can't ask they
-  scan every index body and say so.
+  Publishing, saying whether publish-played will register each or
+  publish-site will ask the GM and why, and notes bookkeeping in index
+  bodies the site withholds. `vault_check gm-leak` skips those withheld
+  bodies. Both ask the site's installed publish tool (the plugin's only
+  when the site has none). When they can't ask, or the site is pinned
+  below 1.11.40, they scan every index body, promise nothing and say
+  why.
 
 ### Fixed
 
@@ -75,8 +91,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build now ends by naming any played session that isn't published
   yet, split into those `manifest publish-played` will publish and
   those publish-site will ask the GM about.
-- **The landing page's latest-session recap:** with several Wrap-Ups
-  in one flat folder, an explicit `session:` link now wins.
+- **The landing page's latest-session recap** uses the pairing rule, so
+  an unlinked Wrap-Up in a flat folder no longer stands in for a
+  different session. A Wrap-Up linked to one session never stands in
+  for another; one linked to no session is still used when it is the
+  only Wrap-Up in the session's folder, or matches its number or
+  title.
 - The publish tool's `package-lock.json` carried a stale version.
 
 ## [1.10.17] — 2026-09-29

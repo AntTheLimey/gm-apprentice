@@ -1045,12 +1045,14 @@ own (#277). No frontmatter changes.
   premise into the Plan, handoffs into the Wrap-Up's fenced GM Notes,
   anything left under a fenced `## GM Notes` on the index. Show the diff
   before moving anything.
-- If the vault publishes in player mode, run `manifest publish-played`
-  once. It ticks a played session under Publishing only together with a
-  linked Wrap-Up that will publish; report what it ticked. For played
-  sessions it lists as unclear (no Wrap-Up, or one that is Excluded or
-  won't publish), ask the GM once, in one question listing the reasons,
-  and tick only what they approve. Never touch Excluded.
+- If the vault publishes in player mode and `publish.site_dir` is set,
+  run `manifest publish-played` once, after the site's pin is updated
+  (Tooling, below). It ticks a reviewed session under Publishing only
+  together with a linked Wrap-Up that will publish; report what it
+  ticked. For played sessions it lists as unclear (no Wrap-Up, Wrap-Up
+  not reviewed yet, one that is Excluded or won't publish, or a site
+  still pinned below 1.11.40), ask the GM once, in one question listing
+  the reasons, and tick only what they approve. Never touch Excluded.
 
 ### Tooling
 
@@ -1060,15 +1062,21 @@ own (#277). No frontmatter changes.
   group by chapter; `manifest publish-played` and `explain --all
   --json` are new; the build ends by naming played sessions that are
   not published yet. Reconcile and publish-site now run `manifest
-  publish-played` themselves, and session-wrapup does after reconcile.
-  If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
-  (publish-site's build tool). For a site outside the plugin,
+  publish-played` themselves; it ticks only reviewed sessions, so a
+  Wrap-Up the GM chose to publish before reconcile is ticked with
+  `manifest apply --publish` instead. A site pinned below 1.11.40
+  publishes every index body, so publish-played ticks no index for it.
+  If `publish.site_dir` is set (relative to the vault if relative),
+  offer `update-pin --site <site-dir>` (publish-site's build tool)
+  before anything else. For a site outside the plugin,
   `update-pin --site <site-dir> --tag publish-v1.11.40` pins the tagged
   release tarball instead.
 - `vault_check sessions` warns on played sessions missing from
-  Publishing and notes bookkeeping in index bodies the site withholds;
-  `vault_check gm-leak` no longer reports those withheld bodies. Both
-  now ask the publish tool (`explain --all --json`, through
-  `publish.site_dir`) which bodies it withholds, and fall back to
-  scanning every index body, with an INFO row saying so, when they
-  can't ask.
+  Publishing, saying whether publish-played will register each or
+  publish-site will ask, and notes bookkeeping in index bodies the site
+  withholds; `vault_check gm-leak` no longer reports those withheld
+  bodies. Both ask the site's installed publish tool (`explain --all
+  --json` and `manifest publish-played --dry-run --json`, through
+  `publish.site_dir`), or the plugin's when the site has none. When
+  they can't ask, or the site is pinned below 1.11.40, they scan every
+  index body and promise nothing, with an INFO row saying why.
