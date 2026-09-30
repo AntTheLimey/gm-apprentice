@@ -781,6 +781,11 @@ describe('build integration', () => {
         '---\ntype: session\nsession_number: 9\nstatus: reviewed\naliases: []\ntags: []\n---\n\n## Recap\n\nDone.\n');
       fs.writeFileSync(path.join(vault, 'Sessions', 'Session 10 - Next.md'),
         '---\ntype: session\nsession_number: 10\nstatus: prepped\naliases: []\ntags: []\n---\n\n## Recap\n\nSoon.\n');
+      // Played with a Wrap-Up: publish-played will tick it, so the build may say so.
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 11 - Docks.md'),
+        '---\ntype: session\nsession_number: 11\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Session 11 Wrap-Up]]"\n---\n\nHub.\n');
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 11 Wrap-Up.md'),
+        '---\ntype: session_wrap\nsession: "[[Session 11 - Docks]]"\n---\n\n## Narrative Recap\n\nDocks.\n');
 
       const configPath = path.join(tmp, 'config.json');
       fs.writeFileSync(configPath, JSON.stringify({
@@ -808,11 +813,14 @@ describe('build integration', () => {
       }
 
       const summary = lines.filter(l => l.includes('played session'));
-      assert.equal(summary.length, 1, JSON.stringify(summary));
-      assert.match(summary[0], /1 played session is not published yet .*Session 09/);
-      assert.ok(!summary[0].includes('Session 10'), 'a prepped session is not "played"');
-      assert.match(summary[0], /manifest publish-played.*will publish it/);
-      // It is the last warning-level line before the closing "Done!".
+      assert.equal(summary.length, 2, JSON.stringify(summary));
+      // Split by what publish-played will do (#276/#277 review): it ticks Session 11, whose
+      // Wrap-Up pairs and will publish; it only lists Session 09, which has no Wrap-Up.
+      assert.match(summary[0], /1 played session with a Wrap-Up isn't published yet: Session 11 - Docks — `manifest publish-played`.*will publish it/);
+      assert.match(summary[1], /1 played session has no Wrap-Up that will publish, so it isn't published: Session 09 - The Table — publish-site asks the GM about it/);
+      assert.ok(!summary[1].includes('publish-played'), 'no promise to publish a session it will only ask about');
+      assert.ok(!summary.join('').includes('Session 10'), 'a prepped session is not "played"');
+      // They are the last warning-level lines before the closing "Done!".
       assert.ok(lines.indexOf(summary[0]) > lines.findIndex(l => l.includes('wrote index.html')),
         'summary must come after the per-file output');
       // The played session no longer gets a separate mid-log warning.

@@ -3,11 +3,11 @@ const { configureColorMode } = require('./templates/base');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVault, scanAllNotes, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
-const { suppressHubBody, publishedWrapUpFor } = require('./session-hub');
+const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
@@ -342,7 +342,7 @@ function build(options = {}) {
         const rel = vaultRelPathOf(page);
         if (!registered.has(rel)) {
           if (type === 'session' && PLAYED_SESSION_STATUSES.has(String(page.frontmatter.status || '').toLowerCase())) {
-            unpublishedPlayedSessions.push(page.title || path.basename(rel, '.md'));
+            unpublishedPlayedSessions.push({ rel, title: page.title || path.basename(rel, '.md') });
             continue;
           }
           const kind = type === 'chapter' ? 'chapter' : 'session';
@@ -423,16 +423,10 @@ function build(options = {}) {
   // frontmatter, before anything renders or derives from them. Owners come
   // from the whole vault; the rewrite runs over the corpus, not just `pages`,
   // because the landing page also reads unpublished pages.
-  const scannedPaths = new Set(corpus.map(p => p.sourcePath));
-  const gmAliases = gmAliasRewriter(corpus.concat(
-    scanAllNotes(config.vaultPath).filter(n => !scannedPaths.has(n.sourcePath))), pages);
-  if (gmAliases) {
-    for (const page of corpus) {
-      page.markdown = gmAliases.markdown(page.markdown || '');
-      if (page.storyMarkdown) page.storyMarkdown = gmAliases.markdown(page.storyMarkdown);
-      page.frontmatter = gmAliases.frontmatter(page.frontmatter);
-    }
-  }
+  // pairHubs does that rewrite (in place, `apply`) and then pairs each session index with
+  // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
+  // take too, so all three pair on the same frontmatter (#276).
+  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
@@ -454,8 +448,7 @@ function build(options = {}) {
   // "Mentioned in".
   const hubWrapUps = new Map();
   for (const page of pages) {
-    const wrapUp = publishedWrapUpFor(page, pages);
-    if (wrapUp && suppressHubBody(page, pages)) hubWrapUps.set(page, wrapUp);
+    if (hubPairs.has(page)) hubWrapUps.set(page, hubPairs.get(page));
   }
   for (const page of pages) {
     if (hubWrapUps.has(page)) page.markdown = '';
@@ -1174,9 +1167,28 @@ function build(options = {}) {
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
   // is a decision and never lands here; one in Needs Decision or in no section does.
+  // Split by what publish-played will do with each (its own plan, so this never promises
+  // to publish a session it will only list as unclear): one with a Wrap-Up that pairs and
+  // publishes gets ticked; the rest — no Wrap-Up at all (recap-in-hub vaults), or one that
+  // is Excluded or will not publish — are asked about.
   if (unpublishedPlayedSessions.length > 0) {
-    const n = unpublishedPlayedSessions.length;
-    console.warn(`  WARNING: ${n} played session${n === 1 ? ' is' : 's are'} not published yet (${n === 1 ? 'it is' : 'they are'} in Needs Decision or unlisted): ${unpublishedPlayedSessions.join(', ')} — \`manifest publish-played\` (run by publish-site before every build) will publish ${n === 1 ? 'it' : 'them'}.`);
+    let ticked = null;
+    try {
+      const { planPublishPlayed, surveyVault } = require('./manifest-cli');
+      ticked = planPublishPlayed(surveyVault({ configPath: resolvedConfigPath }, {})).ticks;
+    } catch (_) { /* no plan: promise nothing */ }
+    const titles = (list) => list.map((s) => s.title).join(', ');
+    const plural = (n, one, many) => (n === 1 ? one : many);
+    const withWrap = ticked ? unpublishedPlayedSessions.filter((s) => ticked.has(s.rel)) : [];
+    const without = unpublishedPlayedSessions.filter((s) => !withWrap.includes(s));
+    if (withWrap.length > 0) {
+      const n = withWrap.length;
+      console.warn(`  WARNING: ${n} played session${plural(n, '', 's')} with a Wrap-Up ${plural(n, "isn't", "aren't")} published yet: ${titles(withWrap)} — \`manifest publish-played\` (run by publish-site before every build) will publish ${plural(n, 'it', 'them')}.`);
+    }
+    if (without.length > 0) {
+      const n = without.length;
+      console.warn(`  WARNING: ${n} played session${plural(n, ' has', 's have')} no Wrap-Up that will publish, so ${plural(n, "it isn't", "they aren't")} published: ${titles(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
+    }
   }
 
   if (errorCount > 0) {

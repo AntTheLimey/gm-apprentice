@@ -11,9 +11,10 @@ Create it from `_Templates/_Template_Session.md` (else
 `shared/session-document-chain.md` §1) when the GM first plans a
 session. `in_game_date` may be an array for a multi-day session.
 
-The body is the H1 title and nothing else. Plan and Play Notes links
-go in `documents:`; the Scene Index, prep states, key prep, image
-prompts and any pre-play premise go in the Plan. A played session's
+The body is the H1 title and nothing else outside an optional
+fenced `## GM Notes`. Plan and Play Notes links go in `documents:`;
+the Scene Index, prep states, key prep, image prompts and any
+pre-play premise go in the Plan. A played session's
 hub publishes its body until the Wrap-Up does, so prep written there
 reaches the players.
 

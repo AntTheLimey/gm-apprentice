@@ -121,6 +121,8 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 from collections import Counter
 import sys
 from dataclasses import dataclass, field
@@ -1048,92 +1050,67 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
     return linked or found, broken, unlinked
 
 
-def _explicit_wrap_up_link(stem: str, wrap: str, documents: dict[str, str],
-                           by_rel: dict[str, dict]) -> bool:
-    """Is the session index's Wrap-Up paired by an explicit link?
+# The publish tool, beside skills/ in both the repo and the installed plugin
+# (<plugin>/skills/shared/scripts/vault_check.py, <plugin>/tools/publish/...).
+PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
+                / "tools" / "publish" / "bin" / "gm-publish.js")
+PUBLISH_TOOL_TIMEOUT = 120
 
-    The site withholds the hub body only for a Wrap-Up it can pair by
-    `documents.wrap_up` or the Wrap-Up's own `session:` — never by
-    number (tools/publish/lib/session-hub.js `publishedWrapUpFor`).
-    Shared by `sessions` and `gm-leak` so the pairing lives once.
+
+def hub_bodies_withheld(vault: Path) -> tuple[set[str] | None, str | None]:
+    """(session indexes whose body the site withholds, why the publish tool
+    could not be asked).
+
+    The answer comes from the publish tool itself (`explain --all --json`,
+    its `bodyWithheld`), never a second reading of its rules here: #276's
+    Python copy of the pairing drifted from session-hub.js within a day.
+    A vault with no `publish:` block publishes nothing, so nothing is
+    withheld: (empty set, None). Otherwise any failure — no site_dir, no
+    vault.config.json, no node, no tool, an error, a timeout, output that
+    isn't the expected JSON — is (None, reason), and the caller withholds
+    nothing: a check that can't ask scans every hub body rather than guess.
     """
-    said = wikilink_target(by_rel.get(wrap, {}).get("session"))
-    doc_link = wikilink_target(documents.get("wrap_up"))
-    return bool((doc_link and doc_link.casefold() not in YAML_NULLS)
-                or (said and link_target(said) == normalize(stem)))
+    site_dir = read_publish_scalar(vault, "site_dir")
+    if not site_dir:
+        if read_publish_list(vault, "exclude_sections").publish_line is None:
+            return set(), None
+        return None, "publish.site_dir is not set in _meta/vault-config.md"
+    site = Path(site_dir).expanduser()
+    if not site.is_absolute():
+        site = vault / site
+    config = site / "vault.config.json"
+    if not config.is_file():
+        return None, f"no vault.config.json in publish.site_dir ({site})"
+    node = shutil.which("node")
+    if not node:
+        return None, "node is not on PATH"
+    if not PUBLISH_TOOL.is_file():
+        return None, f"the publish tool is not at {PUBLISH_TOOL}"
+    try:
+        proc = subprocess.run(
+            [node, str(PUBLISH_TOOL), "explain", "--all", "--json",
+             "--config", str(config), "--vault", str(vault.resolve())],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired:
+        return None, f"explain timed out after {PUBLISH_TOOL_TIMEOUT}s"
+    except OSError as e:
+        return None, f"node could not run ({e.__class__.__name__})"
+    if proc.returncode != 0:
+        detail = (proc.stderr or "").strip().splitlines()
+        return None, (f"explain exited {proc.returncode}"
+                      + (f": {detail[-1]}" if detail else ""))
+    try:
+        pages = json.loads(proc.stdout)["pages"]
+        return {unicodedata.normalize("NFC", str(p["path"]))
+                for p in pages if p["bodyWithheld"] is True}, None
+    except (ValueError, KeyError, TypeError):
+        return None, "explain did not return the expected JSON"
 
 
-def _wrap_ups_by_hub(files: list[tuple[str, str, dict]]) -> dict[str, str]:
-    """Session index path -> its explicitly paired Wrap-Up path."""
-    stems = {normalize(Path(rel).stem): rel for rel, _t, _f in files}
-    by_stem: dict[str, list[str]] = {}
-    for rel, _t, _f in files:
-        by_stem.setdefault(normalize(Path(rel).stem), []).append(rel)
-    by_rel = {rel: fm for rel, _t, fm in files}
-    paired: dict[str, str] = {}
-    for rel, text, fm in files:
-        if fm.get("type") != "session":
-            continue
-        stem = Path(rel).stem
-        number = parse_session_number(fm.get("session_number"))
-        if number is None:
-            number = parse_session_number(stem)
-        documents = nested_mapping(text, "documents")
-        wrap, _b, _u = _resolve_chain_key(
-            "wrap_up", rel, stem, number, chapter_key(rel, fm), documents,
-            files, stems, by_stem, by_rel)
-        if wrap and _explicit_wrap_up_link(stem, wrap, documents, by_rel):
-            paired[rel] = wrap
-    return paired
-
-
-_ALWAYS_EXCLUDE_DIRS = {"_meta", "_Templates", "_templates", "personal"}
-
-
-def _page_publishes(vault: Path, rel: str, fm: dict,
-                    manifest: dict[str, set[str]] | None,
-                    mode: str, exclude_drafts: bool) -> bool:
-    """Would the site build a page for this file? Mirrors the order of
-    tools/publish/lib/publish-decision.js `decidePage` closely enough for
-    a Wrap-Up: always-excluded folders, `exclude_drafts`, the prep-state
-    heuristics, the player-mode manifest allowlist, then `publish: none`.
-    """
-    if any(seg in _ALWAYS_EXCLUDE_DIRS for seg in rel.split("/")[:-1]):
-        return False
-    if not fm.get("type"):
-        return False
-    canon = unicodedata.normalize("NFC", rel)
-    listed = bool(manifest and canon in manifest["publishing"])
-    if exclude_drafts and str(fm.get("canon_status", "")).upper() == "DRAFT":
-        return False
-    if mode != "full" and not listed:
-        if (str(fm.get("status", "")).casefold() in ("planned", "prepped")
-                or str(fm.get("stage", "")).casefold()
-                in ("outline", "draft", "ready")
-                or str(fm.get("source", "")).casefold() == "prep"):
-            return False
-    if manifest and mode == "player" and not listed:
-        return False
-    return publish_mode(fm) != "none"
-
-
-def hub_bodies_withheld(vault: Path) -> set[str]:
-    """Session indexes whose body the site withholds (#276): an explicitly
-    paired Wrap-Up that itself publishes. The `gm-leak` counterpart of
-    session-hub.js `suppressHubBody`."""
-    files = [(rel, text, extract_frontmatter(text) or {})
-             for rel, text in vault_files(vault)]
-    paired = _wrap_ups_by_hub(files)
-    if not paired:
-        return set()
-    by_rel = {rel: fm for rel, _t, fm in files}
-    manifest = read_manifest_sections(vault)
-    mode = (read_publish_scalar(vault, "mode") or "player").casefold()
-    drafts = (read_publish_scalar(vault, "exclude_drafts")
-              or "").casefold() == "true"
-    return {hub for hub, wrap in paired.items()
-            if _page_publishes(vault, wrap, by_rel[wrap], manifest, mode,
-                               drafts)}
+def _publish_tool_row(why: str, consequence: str) -> str:
+    return (f"INFO\t(vault)\tthe publish tool could not be consulted "
+            f"({why}), so {consequence}")
 
 
 def check_sessions(vault: Path) -> list[str]:
@@ -1158,8 +1135,13 @@ def check_sessions(vault: Path) -> list[str]:
     if not indexes:
         return ["INFO\t(vault)\tno session indexes found"]
 
-    withheld = hub_bodies_withheld(vault)
+    found, why = hub_bodies_withheld(vault)
+    withheld = found if found is not None else set()
     rows: list[str] = []
+    if found is None:
+        rows.append(_publish_tool_row(
+            why or "unknown", "no hub-bookkeeping rows are shown — they "
+            "apply only where the site withholds the hub's body"))
     played: list[tuple[str, str | None]] = []
     for rel, text, fm in indexes:
         stem = Path(rel).stem
@@ -1213,7 +1195,7 @@ def check_sessions(vault: Path) -> list[str]:
         # Only where the site really withholds the body (a paired Wrap-Up
         # that itself publishes); otherwise the body is live and prose is
         # the session's published record.
-        if rel in withheld:
+        if unicodedata.normalize("NFC", rel) in withheld:
             rows.extend(_hub_body_rows(rel, text))
         if declared.casefold() in PLAYED_STATUSES:
             played.append((rel, wrap))
@@ -1430,14 +1412,23 @@ def check_gm_leak(vault: Path, folder: str | None,
         rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
                     f"assumes the default exclude list; set site_dir so it "
                     f"reads the site's vault.config.json excludeSections too")
-    withheld = hub_bodies_withheld(vault)
-    for rel, text in vault_files(vault, folder):
-        fm = extract_frontmatter(text) or {}
+    notes = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault, folder)]
+    withheld: set[str] = set()
+    if any(fm.get("type") == "session" for _r, _t, fm in notes):
+        answer, why = hub_bodies_withheld(vault)
+        if answer is not None:
+            withheld = answer
+        else:
+            rows.append(_publish_tool_row(
+                why or "unknown", "every session index body was scanned, "
+                "including any the site withholds"))
+    for rel, text, fm in notes:
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
         if publish_mode(fm) == "none":
             continue
-        if rel in withheld:
+        if unicodedata.normalize("NFC", rel) in withheld:
             # session-hub.js suppressHubBody: the site publishes the
             # frontmatter and the Wrap-Up's recap, not this body.
             continue

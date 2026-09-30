@@ -455,6 +455,45 @@ describe('session prev/next links follow story order (#276)', () => {
     const pages = [chapter('Ch1', 1), ...ss];
     assert.deepStrictEqual(links(ss[2], pages), ['Ch1 S1', 'Ch1 S3']);
   });
+
+  // Review of #276: keep the old order everywhere it was not wrong.
+  const { orderedSessions } = require('../../lib/story-spine');
+  const oldOrder = pages => pages.filter(p => p.frontmatter.type === 'session')
+    .sort((a, b) => (a.frontmatter.sort_order || a.frontmatter.session_number || 0)
+      - (b.frontmatter.sort_order || b.frontmatter.session_number || 0));
+  const flat = (title, fm) => ({ title, displayTitle: title, outputPath: `sessions/${title}.html`,
+    sourcePath: `/v/Sessions/${title}.md`, frontmatter: { type: 'session', ...fm } });
+
+  it('honours sort_order within a chapter, as the old order did', () => {
+    const ss = [session('Ch1', 1), session('Ch1', 2), session('Ch1', 3)];
+    ss[0].frontmatter.sort_order = 3; ss[1].frontmatter.sort_order = 1; ss[2].frontmatter.sort_order = 2;
+    const pages = [chapter('Ch1', 1), ...ss];
+    assert.deepStrictEqual(orderedSessions(pages).map(s => s.title), ['Ch1 S2', 'Ch1 S3', 'Ch1 S1']);
+  });
+
+  it('keeps a Session 0 prologue no chapter owns first, and unowned sessions in their old slots', () => {
+    const prologue = flat('Session 0 - Prologue', { session_number: 0 });
+    const interlude = flat('Interlude', { session_number: 2 });
+    const ss = [session('Ch2', 1), session('Ch1', 1), session('Ch1', 2), session('Ch2', 2)];
+    const pages = [chapter('Ch1', 1), chapter('Ch2', 2), interlude, ...ss, prologue];
+    assert.deepStrictEqual(oldOrder(pages).map(s => s.title),
+      ['Session 0 - Prologue', 'Ch2 S1', 'Ch1 S1', 'Interlude', 'Ch1 S2', 'Ch2 S2']);
+    assert.deepStrictEqual(orderedSessions(pages).map(s => s.title),
+      ['Session 0 - Prologue', 'Ch1 S1', 'Ch1 S2', 'Interlude', 'Ch2 S1', 'Ch2 S2']);
+    assert.deepStrictEqual(links(prologue, pages), ['Ch1 S1']);
+  });
+
+  it('a vault with no chapters keeps exactly the old order, ties and all', () => {
+    const variants = [
+      [flat('A', { session_number: 1 }), flat('B', { session_number: 1 }), flat('C', {})],
+      [flat('S1', { session_number: 1, sort_order: 3 }), flat('S2', { session_number: 2, sort_order: 1 }),
+        flat('S3', { session_number: 3, sort_order: 2 })],
+      [flat('S3', { session_number: 3 }), flat('S1', { session_number: 1 }), flat('S2', { session_number: 2 })],
+    ];
+    for (const pages of variants) {
+      assert.deepStrictEqual(orderedSessions(pages), oldOrder(pages));
+    }
+  });
 });
 
 describe('PC template tabbed layout', () => {

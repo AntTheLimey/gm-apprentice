@@ -476,10 +476,11 @@ describe('manifest publish-played (#277)', () => {
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'publish-played', configPath }, c.deps);
-    const written = c.writes[manifestFile(vault)];
-    // The wrap-up is still registered; the excluded index and the prepped session are not.
-    assert.match(written, /## Excluded \(1 files\)\n\n- \[x\] Sessions\/Played Session\.md — private/);
-    assert.doesNotMatch(written, /Planned Session\.md/);
+    // Nothing is ticked: the excluded index stays excluded, the prepped session is not
+    // played, and the Wrap-Up of a session the GM excluded is not published behind the
+    // GM's back — its recap is that session's record.
+    assert.deepStrictEqual(c.writes, {});
+    assert.match(c.text(), /no finished session needed publishing/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -529,5 +530,149 @@ describe('manifest publish-played (#277)', () => {
     assert.deepStrictEqual(c.writes, {});
     assert.match(c.text(), /no finished session needed publishing/);
     fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+// Review of #276/#277: publish-played ticks a hub only when session-hub.js pairs it with
+// a Wrap-Up that will publish — the one pairing rule — so a ticked hub's body is always
+// withheld. Each variant is a way the old loose matcher ticked a hub whose body then
+// published ("Conspiracy wall: KEEPERONLYSECRET").
+describe('manifest publish-played ticks only hubs the site will withhold (#276/#277)', () => {
+  const { build } = require('../lib/build');
+
+  function run(variant) {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'publish-played-'));
+    const vault = path.join(work, 'vault');
+    const w = (rel, body) => {
+      const f = path.join(vault, rel);
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, body);
+    };
+    let wrapLink = '[[Session 01 Wrap-Up]]';
+    let wrapSession = 'session: "[[Session 01 - Arrival]]"\n';
+    let wrapExtra = '';
+    let manifestExtra = '';
+    if (variant === 'excluded') manifestExtra = '## Excluded (1 files)\n\n- [x] Sessions/Session 01 Wrap-Up.md — secrets\n\n';
+    if (variant === 'case') { wrapLink = '[[session 01 wrap-up]]'; wrapSession = ''; }
+    if (variant === 'heading') { wrapLink = '[[Session 01 Wrap-Up#Narrative Recap]]'; wrapSession = ''; }
+    if (variant === 'folder') { wrapLink = '[[Sessions/Session 01 Wrap-Up]]'; wrapSession = ''; }
+    if (variant === 'sesscase') { wrapSession = 'session: "[[session 01 - arrival]]"\n'; wrapLink = ''; }
+    if (variant === 'pubnone') wrapExtra = 'publish: none\n';
+    w('Sessions/Session 01 - Arrival.md', `---\ntype: session\nsession_number: 1\nstatus: reviewed\n${
+      wrapLink ? `documents:\n  wrap_up: "${wrapLink}"\n` : ''}---\n\n# Session 01 - Arrival\n\n- Conspiracy wall: KEEPERONLYSECRET the Baron appears at the ball\n`);
+    w('Sessions/Session 01 Wrap-Up.md', `---\ntype: session_wrap\n${wrapSession}${wrapExtra}---\n\n# Session 01 Wrap-Up\n\n## Narrative Recap\n\nThey arrived at dusk.\n`);
+    w('_meta/publish-manifest.md', `---\nmode: player\n---\n\n## Publishing (0 files)\n\n${manifestExtra}## Needs Decision (2 files)\n\n- [ ] Sessions/Session 01 - Arrival.md\n${
+      variant === 'excluded' ? '' : '- [ ] Sessions/Session 01 Wrap-Up.md\n'}`);
+    w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+    return { work, vault, configPath };
+  }
+
+  async function publishPlayedThenBuild(variant) {
+    const site = run(variant);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath: site.configPath, json: true }, c.deps);
+    const payload = JSON.parse(c.text());
+    const log = console.log; const warn = console.warn;
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath: site.configPath }); } finally { console.log = log; console.warn = warn; }
+    const page = path.join(site.work, 'docs', 'sessions', 'session-01-arrival.html');
+    const html = fs.existsSync(page) ? fs.readFileSync(page, 'utf8') : null;
+    const search = fs.readFileSync(path.join(site.work, 'docs', 'search-index.json'), 'utf8');
+    fs.rmSync(site.work, { recursive: true, force: true });
+    return { payload, html, search };
+  }
+
+  const HUB = 'Sessions/Session 01 - Arrival.md';
+  const WRAP = 'Sessions/Session 01 Wrap-Up.md';
+
+  for (const variant of ['baseline', 'folder']) {
+    it(`ticks the hub and its Wrap-Up when the link resolves (${variant}), and the body is withheld`, async () => {
+      const { payload, html, search } = await publishPlayedThenBuild(variant);
+      assert.deepStrictEqual(payload.published, [HUB, WRAP]);
+      assert.deepStrictEqual(payload.unclear, []);
+      assert.ok(html, 'the session page is built');
+      assert.doesNotMatch(html, /KEEPERONLYSECRET/);
+      assert.doesNotMatch(search, /keeperonlysecret/i);
+    });
+  }
+
+  const UNCLEAR = {
+    excluded: /^Wrap-Up is Excluded \(Sessions\/Session 01 Wrap-Up\.md\)$/,
+    pubnone: /^Wrap-Up Sessions\/Session 01 Wrap-Up\.md does not publish: publish: none$/,
+    case: /^documents\.wrap_up \[\[session 01 wrap-up\]\] names no Wrap-Up/,
+    heading: /^documents\.wrap_up \[\[Session 01 Wrap-Up#Narrative Recap\]\] names no Wrap-Up/,
+    sesscase: /^status reviewed but no Wrap-Up linked to it$/,
+  };
+  for (const [variant, reason] of Object.entries(UNCLEAR)) {
+    it(`lists the hub as unclear, not ticked, when its Wrap-Up will not pair (${variant})`, async () => {
+      const { payload, html, search } = await publishPlayedThenBuild(variant);
+      assert.ok(!payload.published.includes(HUB), payload.published.join(', '));
+      assert.strictEqual(payload.unclear.length, 1);
+      assert.strictEqual(payload.unclear[0].path, HUB);
+      assert.match(payload.unclear[0].reason, reason);
+      assert.strictEqual(html, null, 'the hub is not on the site');
+      assert.doesNotMatch(search, /keeperonlysecret/i);
+    });
+  }
+
+  it('ticks nothing for a hub whose paired Wrap-Up cannot be ticked', async () => {
+    const { payload } = await publishPlayedThenBuild('excluded');
+    assert.deepStrictEqual(payload.published, []);
+  });
+});
+
+// Review of #276: build, `explain --all` and publish-played pair on the same frontmatter,
+// GM aliases rewritten first (session-hub.js pairHubs). A documents.wrap_up written as the
+// Wrap-Up's GM alias pairs in all three, or the tools disagree about a leak.
+describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#276 review)', () => {
+  const { build } = require('../lib/build');
+  const { runExplainAll } = require('../lib/explain-cli');
+
+  it('build, explain --all and publish-played all pair it', async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-alias-pair-'));
+    const vault = path.join(work, 'vault');
+    const w = (rel, body) => {
+      const f = path.join(vault, rel);
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, body);
+    };
+    const HUB = 'Sessions/Session 01 - Arrival.md';
+    const WRAP = 'Sessions/Session 01 Wrap-Up.md';
+    w(HUB, '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[The Sealed Ledger]]"\n---\n\n# Session 01 - Arrival\n\nKEEPERONLYSECRET the Baron appears at the ball\n');
+    w(WRAP, '---\ntype: session_wrap\ngm_aliases:\n  - The Sealed Ledger\n---\n\n## Narrative Recap\n\nThey arrived at dusk.\n');
+    w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+    w('_meta/publish-manifest.md', `---\nmode: player\n---\n\n## Publishing (0 files)\n\n## Needs Decision (2 files)\n\n- [ ] ${HUB}\n- [ ] ${WRAP}\n`);
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+
+    try {
+      // publish-played pairs it, so ticks both.
+      const c = capture();
+      await runManifest({ verb: 'publish-played', configPath, json: true }, c.deps);
+      const played = JSON.parse(c.text());
+      assert.deepStrictEqual(played.published, [HUB, WRAP]);
+      assert.deepStrictEqual(played.unclear, []);
+
+      // explain --all, on the manifest publish-played wrote, says the body is withheld.
+      const e = capture();
+      await runExplainAll({ configPath }, e.deps);
+      const hub = JSON.parse(e.out.join('')).pages.find((p) => p.path === HUB);
+      assert.strictEqual(hub.publishes, true);
+      assert.strictEqual(hub.bodyWithheld, true);
+
+      // The build withholds it too: the page carries the Wrap-Up's recap, not the body.
+      const log = console.log; const warn = console.warn;
+      console.log = () => {}; console.warn = () => {};
+      try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+      const html = fs.readFileSync(path.join(work, 'docs', 'sessions', 'session-01-arrival.html'), 'utf8');
+      assert.doesNotMatch(html, /KEEPERONLYSECRET/);
+      assert.match(html, /They arrived at dusk/);
+    } finally {
+      fs.rmSync(work, { recursive: true, force: true });
+    }
   });
 });

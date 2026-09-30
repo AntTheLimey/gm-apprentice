@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`manifest publish-played`** (#277). It ticks every played session
-  that has a Wrap-Up, and the Wrap-Up, under Publishing in
-  `_meta/publish-manifest.md`, and lists sessions it can't decide on
-  (played, no Wrap-Up yet). session-wrapup and reconcile run it
-  themselves; publish-site runs it before every build and asks the GM,
-  once, about any unclear sessions. Excluded entries are never touched.
+- **`manifest publish-played`** (#277). It ticks a played session under
+  Publishing in `_meta/publish-manifest.md` only together with a linked
+  Wrap-Up that will publish, so the session's index body is withheld.
+  Every other played session is listed as unclear, with the reason (no
+  Wrap-Up, or one that is Excluded or won't publish), and not ticked.
+  Reconcile runs it; session-wrapup runs it after reconcile, or when
+  the GM says to publish before a deferred reconcile; publish-site runs
+  it before every build and asks the GM, once, about unclear sessions.
+  Excluded entries are never touched.
+- **`explain --all --json`** lists every vault file with whether it
+  publishes and whether its body does, in one run.
 - **A session index template** (#276), `_Template_Session.md`:
   frontmatter plus an optional fenced `## GM Notes` dashboard.
 - **Publish tool releases are tagged `publish-v<version>`** (#274), each
@@ -45,26 +50,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in-game date, the Wrap-Up's recap opening and a link to the full
   session, with the NPCs the Wrap-Up names. Badges, title and page
   wrapper are unchanged. An index with no Wrap-Up publishes its body as
-  before, since some vaults keep their recaps there.
+  before, since some vaults keep their recaps there. The index and its
+  Wrap-Up pair through `documents.wrap_up` or the Wrap-Up's `session:`,
+  each resolved the way the site resolves any link. When two Wrap-Ups
+  share a name, the one in the session's folder or chapter wins.
 - session-prep, session-play and session-wrapup no longer write
   bookkeeping into the session index. Document links go in its
   frontmatter; scene prep, key prep and image prompts go in the Plan;
   handoffs go in the Wrap-Up's GM Notes.
-- **Previous/next session links follow story order,** so chapters that
-  restart their session numbers no longer interleave.
+- **Previous/next session links group sessions by chapter,** so
+  chapters that restart their session numbers no longer interleave.
+  `sort_order` is still honoured, a session no chapter owns keeps its
+  place, and a vault without chapters keeps its old order.
 - `vault_check sessions` warns on played sessions missing from
   Publishing and notes bookkeeping in index bodies the site withholds.
-  `vault_check gm-leak` skips those withheld bodies.
+  `vault_check gm-leak` skips those withheld bodies. Both ask the
+  publish tool which bodies it withholds, and when they can't ask they
+  scan every index body and say so.
 
 ### Fixed
 
 - **Played sessions no longer sit unpublished** (#277). A session could
-  stay in Needs Decision indefinitely, and its page returned 404; the
-  build now ends with one line naming any played session that isn't
-  published yet.
-- **The landing page's latest-session recap picks the right Wrap-Up.**
-  In a flat `Sessions/` folder it took the first Wrap-Up in the folder;
-  an explicit `session:` link now wins.
+  stay in Needs Decision indefinitely, and its page returned 404. The
+  build now ends by naming any played session that isn't published
+  yet, split into those `manifest publish-played` will publish and
+  those publish-site will ask the GM about.
+- **The landing page's latest-session recap:** with several Wrap-Ups
+  in one flat folder, an explicit `session:` link now wins.
 - The publish tool's `package-lock.json` carried a stale version.
 
 ## [1.10.17] — 2026-09-29

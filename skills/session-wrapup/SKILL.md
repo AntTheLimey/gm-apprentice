@@ -263,7 +263,10 @@ notes show, never awards.
 ### 6. Review (Reconcile)
 
 Run `shared/reconcile.md`; on approval it promotes the session to
-`reviewed` and the Wrap-Up to AUTHORITATIVE. If the GM defers,
-leave status `wrap-up` — session-prep runs reconcile as a fallback.
-Either way, run reconcile step 6.1 (publish registration) yourself
-and report the paths it ticked.
+`reviewed` and the Wrap-Up to AUTHORITATIVE, and its step 6.1
+(publish registration) runs without asking. If the GM defers, leave
+status `wrap-up` (session-prep runs reconcile as a fallback), and
+don't publish an unreviewed Wrap-Up silently. In a vault where step
+6.1 applies, ask once: "Publish the Wrap-Up now, or after
+reconcile?" Only on "now", run step 6.1 yourself and report the
+paths it ticked.

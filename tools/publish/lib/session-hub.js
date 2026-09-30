@@ -1,5 +1,6 @@
-const { isSessionHub, parseWikiRef } = require('./processor');
-const { buildWrapUpIndex, WRAP_UP_TYPES } = require('./story-spine');
+const path = require('path');
+const { isSessionHub, parseWikiRef, gmAliasRewriter } = require('./processor');
+const { linkKeys, scanAllNotes } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
 
 // The session index (hub) is metadata only by design, and GMs use its body as a working
@@ -9,25 +10,65 @@ const { canonicalNfc } = require('./unicode');
 // Without one, the hub body is the only record the site has — some vaults write their
 // recaps there and have no Wrap-Ups at all — so it publishes exactly as it always has.
 //
-// Every reader goes through suppressHubBody: build.js empties the body before the
-// published view is computed (so search, backlinks, recency, the relationship graph and
-// the landing fallback agree with the page), the session page swaps in the generated
-// recap, and `doctor --site` / `explain` report from it. Change the rule here only.
+// This file is the ONE pairing rule. Every reader goes through publishedWrapUpFor /
+// suppressHubBody: build.js empties the body before the published view is computed (so
+// search, backlinks, recency, the relationship graph and the landing fallback agree with
+// the page), the session page swaps in the generated recap, the story spine takes the
+// session's recap from the same Wrap-Up, `manifest publish-played` ticks a hub only when
+// this says its body will be withheld, `doctor --site` and `explain` report from it, and
+// vault_check asks `explain --all --json` rather than re-implementing it. Change the rule
+// here only.
+
+const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
+
+function isWrapUp(page) {
+  return !!(page && page.frontmatter && WRAP_UP_TYPES.has(page.frontmatter.type));
+}
+
+// The target a frontmatter link names, as a `[[link]]` in a page body names it: the part
+// before `|`, NFC — no case folding, and `#heading` kept, because the site's own link
+// resolution (buildLinkMap) does neither. A pairing link that would not resolve as a link
+// on the site does not pair.
+function linkTarget(value) {
+  if (value == null || value === '') return '';
+  return canonicalNfc(parseWikiRef(String(value)).target);
+}
+
+function folderOf(page) {
+  return page && page.sourcePath ? path.dirname(page.sourcePath) : null;
+}
+
+function chapterOf(page) {
+  return linkTarget(page && page.frontmatter && page.frontmatter.chapter);
+}
+
+// One page out of several a link could name: the only candidate, else the one sharing
+// `near`'s folder, else the one sharing its `chapter:`. Two same-named Wrap-Ups (Ch1 and
+// Ch2 each with "Session 01 Wrap-Up") pair with their own chapter's hub. Still ambiguous
+// is null: a wrong guess would hide a hub's real record behind another session's recap.
+function nearest(near, candidates) {
+  if (candidates.length <= 1) return candidates[0] || null;
+  const dir = folderOf(near);
+  const sameFolder = dir ? candidates.filter((c) => folderOf(c) === dir) : [];
+  if (sameFolder.length === 1) return sameFolder[0];
+  const chapter = chapterOf(near);
+  const pool = sameFolder.length > 1 ? sameFolder : candidates;
+  const sameChapter = chapter ? pool.filter((c) => chapterOf(c) === chapter) : [];
+  return sameChapter.length === 1 ? sameChapter[0] : null;
+}
+
+function named(target, pages) {
+  if (!target) return [];
+  return pages.filter((p) => linkKeys(p).includes(target));
+}
 
 const contexts = new WeakMap();
 
-// Published Wrap-Ups keyed two ways, built once per `pages` array.
+// Published Wrap-Ups and session indexes, gathered once per `pages` array.
 function contextFor(pages) {
   let ctx = contexts.get(pages);
   if (!ctx) {
-    const byTitle = new Map();
-    for (const p of pages) {
-      if (p && p.frontmatter && WRAP_UP_TYPES.has(p.frontmatter.type)) {
-        const key = canonicalNfc(p.title);
-        if (!byTitle.has(key)) byTitle.set(key, p);
-      }
-    }
-    ctx = { byTitle, idx: buildWrapUpIndex(pages) };
+    ctx = { wrapUps: pages.filter(isWrapUp), hubs: pages.filter(isSessionHub) };
     contexts.set(pages, ctx);
   }
   return ctx;
@@ -36,17 +77,23 @@ function contextFor(pages) {
 // The published Wrap-Up paired with this session index, or null. Only an explicit link
 // counts — the hub's `documents.wrap_up`, or the Wrap-Up's own `session:` — never folder
 // proximity or session_number: a wrong guess would hide a hub's real recap behind some
-// other session's.
+// other session's. Both links resolve the way the site resolves `[[links]]` (title, vault
+// path or alias), and a link that names several pages takes the nearest (see nearest).
+// A `session:` link counts only when, resolved from the Wrap-Up, it lands on THIS hub.
+// `pages` is the set of pages that publish; the hub itself need not be among them.
 function publishedWrapUpFor(page, pages) {
   if (!isSessionHub(page) || !Array.isArray(pages)) return null;
   const ctx = contextFor(pages);
   const docs = page.frontmatter.documents;
-  const linked = docs && typeof docs === 'object' ? docs.wrap_up : null;
-  if (linked) {
-    const hit = ctx.byTitle.get(canonicalNfc(parseWikiRef(String(linked)).target));
-    if (hit) return hit;
-  }
-  return ctx.idx.bySession.get(canonicalNfc(page.title)) || null;
+  const linked = docs && typeof docs === 'object' ? linkTarget(docs.wrap_up) : '';
+  const byLink = nearest(page, named(linked, ctx.wrapUps));
+  if (byLink) return byLink;
+  const hubs = ctx.hubs.includes(page) ? ctx.hubs : ctx.hubs.concat([page]);
+  const claiming = ctx.wrapUps.filter((w) => {
+    const said = linkTarget(w.frontmatter.session);
+    return said && linkKeys(page).includes(said) && nearest(w, named(said, hubs)) === page;
+  });
+  return nearest(page, claiming);
 }
 
 // `pages` is the set of pages that actually publish.
@@ -54,4 +101,45 @@ function suppressHubBody(page, pages) {
   return publishedWrapUpFor(page, pages) !== null;
 }
 
-module.exports = { suppressHubBody, publishedWrapUpFor };
+// The build's alias-rewrite-then-pair step, the one path the build, `explain` and
+// `manifest publish-played` all take (#212, #276). GM aliases are rewritten to their
+// owners' titles with the rewriter the build uses (owners from every note in the vault;
+// only `published` pages claim a name), and every session index in `corpus` is then
+// paired against the published Wrap-Ups. A `documents.wrap_up` written as a GM alias
+// therefore pairs the same way everywhere.
+//
+// Returns Map(hub page -> published Wrap-Up page) for every paired hub in `corpus`,
+// keyed and valued with the caller's own page objects.
+//   options.vaultPath  where scanAllNotes finds the notes the scan skipped
+//   options.allNotes   scanAllNotes(vaultPath), when the caller already has it
+//   options.apply      rewrite `corpus` in place (markdown, storyMarkdown, frontmatter),
+//                      as the build does before anything renders; otherwise the
+//                      rewrite is applied to copies used only for pairing, so a caller
+//                      can pair against several hypothetical `published` sets.
+function pairHubs(corpus, published, options) {
+  const opts = options || {};
+  const scanned = new Set(corpus.map((p) => p.sourcePath));
+  const notes = opts.allNotes || scanAllNotes(opts.vaultPath);
+  const rewriter = gmAliasRewriter(corpus.concat(notes.filter((n) => !scanned.has(n.sourcePath))), published);
+  let view = (p) => p;
+  if (rewriter && opts.apply) {
+    for (const page of corpus) {
+      page.markdown = rewriter.markdown(page.markdown || '');
+      if (page.storyMarkdown) page.storyMarkdown = rewriter.markdown(page.storyMarkdown);
+      page.frontmatter = rewriter.frontmatter(page.frontmatter);
+    }
+  } else if (rewriter) {
+    const views = new Map(corpus.map((p) => [p, Object.assign({}, p, { frontmatter: rewriter.frontmatter(p.frontmatter) })]));
+    view = (p) => views.get(p) || p;
+  }
+  const viewPublished = published.map(view);
+  const original = new Map(viewPublished.map((v, i) => [v, published[i]]));
+  const pairs = new Map();
+  for (const page of corpus) {
+    const wrap = publishedWrapUpFor(view(page), viewPublished);
+    if (wrap) pairs.set(page, original.get(wrap) || wrap);
+  }
+  return pairs;
+}
+
+module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, WRAP_UP_TYPES, isWrapUp };
