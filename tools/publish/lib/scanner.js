@@ -338,6 +338,8 @@ function pairStoryFiles(pages, vaultPath) {
 // excludeDirs, folderMap and `type:` (#212). GM aliases are resolved against
 // this, because Obsidian resolves a link to any note in the vault, and a
 // GM-only folder the site never scans is the likeliest home for a secret.
+const SESSION_TYPE_LINE = /^type:\s*["']?(session|session_wrap|session-wrap-up|session-wrapup)["']?\s*$/m;
+
 function scanAllNotes(vaultPath) {
   const out = [];
   (function walk(dir) {
@@ -353,8 +355,10 @@ function scanAllNotes(vaultPath) {
       let text = '';
       try {
         text = fs.readFileSync(full, 'utf8');
-        // Only a note that declares aliases needs its frontmatter parsed.
-        if (/^(gm_)?aliases:/m.test(text)) frontmatter = matter(text).data || {};
+        // Only a note that declares aliases needs its frontmatter parsed — or a session
+        // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
+        // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
+        if (/^(gm_)?aliases:/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = matter(text).data || {};
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
@@ -363,7 +367,10 @@ function scanAllNotes(vaultPath) {
             + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
         }
       }
-      out.push({ title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full });
+      out.push({
+        title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full,
+        vaultPath: toPosix(path.relative(vaultPath, full)).replace(/\.md$/i, ''),
+      });
     }
   })(vaultPath);
   return out;

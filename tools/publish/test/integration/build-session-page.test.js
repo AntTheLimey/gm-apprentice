@@ -233,3 +233,65 @@ describe('same-titled Wrap-Ups in two chapters (#276 review)', () => {
     fs.rmSync(work, { recursive: true, force: true });
   });
 });
+
+// Final review of #276: the Saga, the landing recap and recency re-paired AFTER build.js
+// had reduced every page's frontmatter to its published view, so excluding the very
+// fields that pair a session (`documents`, `session`) dropped the Story unit, the landing
+// recap and the recent-NPC mentions while the session page itself paired fine. The build
+// now pairs once and hands the map to all of them.
+describe('pairing survives excluded pairing fields (#276 final review)', () => {
+  it('the Saga, landing recap and recency use the pair the page used', () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-excluded-pair-'));
+    const vault = path.join(work, 'vault');
+    const docs = path.join(work, 'docs');
+    write(vault, 'Chapters/Ch1/Ch1.md', '---\ntype: chapter\nsort_order: 1\n---\n\n# Ch1\n');
+    write(vault, 'Chapters/Ch1/Session 01.md', '---\ntype: session\nsession_number: 1\nchapter: "[[Ch1]]"\nstatus: reviewed\nplay_date: "2026-01-17"\ndocuments:\n  wrap_up: "[[S1 Recap]]"\n---\n\nHUBBODY\n');
+    write(vault, 'Chapters/Ch1/Wraps/S1 Recap.md', '---\ntype: session_wrap\nsession: "[[Session 01]]"\nchapter: "[[Ch1]]"\n---\n\n## Narrative Recap\n\nWRAPRECAP with [[Mrs Hale]].\n');
+    write(vault, 'Characters/NPCs/Mrs Hale.md', '---\ntype: npc\n---\n\n# Mrs Hale\n\nThe innkeeper.\n');
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], excludeFields: ['documents', 'session', 'aliases'],
+      folderMap: { Chapters: 'chapters', 'Characters/NPCs': 'characters/npcs' } }));
+    const log = console.log; const warn = console.warn;
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+    const page = fs.readFileSync(path.join(docs, 'chapters/Ch1/session-01.html'), 'utf8');
+    assert.match(page, /WRAPRECAP/, 'the session page pairs');
+    assert.doesNotMatch(page, /HUBBODY/);
+    const story = walk(path.join(docs, 'story')).map(f => fs.readFileSync(f, 'utf8')).join('\n');
+    assert.match(story, /WRAPRECAP/, 'the Saga keeps the session unit');
+    const index = fs.readFileSync(path.join(docs, 'index.html'), 'utf8');
+    const recap = index.slice(index.indexOf('Latest Session'));
+    assert.match(recap, /WRAPRECAP/, 'the landing quotes the paired Wrap-Up');
+    assert.match(index, /mrs-hale\.html/, 'recency counts the Wrap-Up\'s mentions');
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+});
+
+// Final review of #276: a Wrap-Up's `session:` claim resolved against published hubs only,
+// so Ch1's Wrap-Up (its own hub `publish: false`) took over Ch2's same-titled session.
+describe('a claim on an unpublished hub never lands on another chapter (#276 final review)', () => {
+  it("Ch2's session keeps its prose and never shows the Ch1 recap", () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-cross-chapter-'));
+    const vault = path.join(work, 'vault');
+    const docs = path.join(work, 'docs');
+    write(vault, 'Chapters/Ch1/Ch1.md', '---\ntype: chapter\nsort_order: 1\n---\n\n# Ch1\n');
+    write(vault, 'Chapters/Ch2/Ch2.md', '---\ntype: chapter\nsort_order: 2\n---\n\n# Ch2\n');
+    write(vault, 'Chapters/Ch1/Session 01.md', '---\ntype: session\nsession_number: 1\nchapter: "[[Ch1]]"\nstatus: reviewed\npublish: false\n---\n\nCH1HUB\n');
+    write(vault, 'Chapters/Ch1/Session 01 Wrap-Up.md', '---\ntype: session_wrap\nsession: "[[Session 01]]"\nchapter: "[[Ch1]]"\nsession_number: 1\n---\n\n## Narrative Recap\n\nCH1RECAP\n');
+    write(vault, 'Chapters/Ch2/Session 01.md', '---\ntype: session\nsession_number: 1\nchapter: "[[Ch2]]"\nstatus: played\nplay_date: "2026-03-01"\n---\n\n## Narrative Recap\n\nCH2PROSE\n');
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Chapters: 'chapters' } }));
+    const log = console.log; const warn = console.warn;
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+    const page = fs.readFileSync(path.join(docs, 'chapters/Ch2/session-01.html'), 'utf8');
+    assert.match(page, /CH2PROSE/);
+    assert.doesNotMatch(page, /CH1RECAP/);
+    const index = fs.readFileSync(path.join(docs, 'index.html'), 'utf8');
+    const recap = index.slice(index.indexOf('Latest Session'));
+    assert.doesNotMatch(recap.slice(0, 2000), /CH1RECAP/, 'the landing does not borrow the Ch1 recap');
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+});

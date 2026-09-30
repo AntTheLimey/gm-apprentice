@@ -6,6 +6,7 @@ const path = require('path');
 const { buildLinkMap, scanAttachments } = require('../../lib/scanner');
 const { resolveWikiLinks, renderRelationships, renderMetaValue, resolveImageEmbeds } = require('../../lib/processor');
 const { portraitImg } = require('../../lib/templates/base');
+const { pairHubs } = require('../../lib/session-hub');
 
 // The two lookup tables the whole renderer indexes into — linkMap (keyed by page title
 // and alias) and imageMap (keyed by attachment basename) — are queried with author-typed
@@ -272,7 +273,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
       frontmatter: { type: 'session_wrap', session: `[[${SESSION_NFD}]]` },
       markdown: `The recap names [[${NFC}]] throughout.`,
     };
-    const scored = scoreByRecency([npcPage()], [session], [], { type: 'npc', wrapUps: [wrapUp] });
+    const scored = scoreByRecency([npcPage()], [session], [], { type: 'npc', wrapUpFor: pairHubs([session, wrapUp], [session, wrapUp], { allNotes: [] }) });
     assert.strictEqual(scored.length, 1, 'wrap-up never pairs with its session, so its mentions are lost');
   });
 
@@ -284,7 +285,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
       { title: SESSION_NFC, displayTitle: SESSION_NFC, sourcePath: '/v/Chapters/Chapter_1/S1.md', frontmatter: { type: 'session', session_number: 1 }, markdown: '' },
       { title: 'S1_Wrap', displayTitle: 'S1 Wrap', sourcePath: '/v/Wrapups/S1_Wrap.md', frontmatter: { type: 'session_wrap', session: `[[${SESSION_NFD}]]` }, markdown: '## Narrative Recap\n\nThe vault burned.\n' },
     ];
-    const units = buildStorySpine(pages);
+    const units = buildStorySpine(pages, null, pairHubs(pages, pages, { allNotes: [] }));
     assert.ok(
       units.some(u => u.kind === 'session' && u.recapHtml.includes('vault burned')),
       `session recap missing from story spine: ${JSON.stringify(units.map(u => u.kind))}`,
@@ -297,7 +298,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
       { title: CHAPTER_NFC, displayTitle: CHAPTER_NFC, sourcePath: '/v/Chapters/Chapter.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' },
       { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Sessions/S1.md', frontmatter: { type: 'session', session_number: 1, chapter: `[[${CHAPTER_NFD}]]` }, markdown: '## Narrative Recap\n\nThe bridge fell.\n' },
     ];
-    const units = buildStorySpine(pages);
+    const units = buildStorySpine(pages, null, pairHubs(pages, pages, { allNotes: [] }));
     assert.ok(
       units.some(u => u.kind === 'session' && u.chapterTitle === CHAPTER_NFC),
       `session not grouped under its chapter: ${JSON.stringify(units.map(u => [u.kind, u.chapterTitle]))}`,

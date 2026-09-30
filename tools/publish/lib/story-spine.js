@@ -2,7 +2,7 @@ const path = require('path');
 const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
-const { publishedWrapUpFor, WRAP_UP_TYPES } = require('./session-hub');
+const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
@@ -92,18 +92,21 @@ function chapterOwnsSession(chapter, session) {
   return chapterMatchesSession(chapter, session);
 }
 
-// The wrap-up for a unit (chapter or session). For a session it is first the Wrap-Up
-// session-hub.js pairs with it — the one rule that also decides whether the hub body is
-// withheld, so the Saga and the session page tell the same story; for a chapter, a
-// Wrap-Up whose chapter: ref names it. The same-folder fallback (chapter wrap-up in the
-// chapter folder; session wrap-up in the session's subfolder) only applies when that
-// folder holds exactly ONE wrap-up — in flat vaults every session shares one Sessions/
-// folder, and a first-match grab there would hand the same wrap-up to every session.
-// `pages` is the published set publishedWrapUpFor resolves against.
-function wrapUpForUnit(unitPage, wrapUps, idx, pages) {
+// The wrap-up for a unit (chapter or session). For a session it is the Wrap-Up the build
+// paired with it (`pairs`, session-hub.js pairHubs — the one rule that also decides
+// whether the hub body is withheld, so the Saga and the session page tell the same
+// story); the Saga never pairs a session on its own. For a chapter, a Wrap-Up whose
+// chapter: ref names it. The same-folder fallback (chapter wrap-up in the chapter folder;
+// session wrap-up in the session's subfolder) only applies when that folder holds exactly
+// ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and a
+// first-match grab there would hand the same wrap-up to every session — and, for a
+// session, only when that Wrap-Up is linked to no session at all (isLinkedWrapUp): a
+// Wrap-Up linked to one session never stands in for another.
+function wrapUpForUnit(unitPage, wrapUps, idx, pairs) {
   const title = canonicalNfc(unitPage.title);
-  const byRef = isSessionHub(unitPage)
-    ? publishedWrapUpFor(unitPage, pages || wrapUps)
+  const hub = isSessionHub(unitPage);
+  const byRef = hub
+    ? (pairs && pairs.get(unitPage)) || null
     : idx.bySession.get(title)
       || idx.byChapter.get(title)
       || idx.byChapter.get(title.replace(/_/g, ' '));
@@ -111,7 +114,7 @@ function wrapUpForUnit(unitPage, wrapUps, idx, pages) {
   const dir = folderOf(unitPage);
   if (dir) {
     const sameFolder = wrapUps.filter(w => folderOf(w) === dir);
-    if (sameFolder.length === 1) return sameFolder[0];
+    if (sameFolder.length === 1 && !(hub && isLinkedWrapUp(sameFolder[0], pairs))) return sameFolder[0];
   }
   return null;
 }
@@ -173,7 +176,9 @@ function orderedSessions(pages) {
   return order;
 }
 
-function buildStorySpine(pages, linkMap) {
+// `pairs` is the build's hub -> Wrap-Up map (session-hub.js pairHubs), computed once on
+// the unreduced frontmatter; without it no session pairs with a Wrap-Up.
+function buildStorySpine(pages, linkMap, pairs) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
@@ -190,7 +195,7 @@ function buildStorySpine(pages, linkMap) {
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
     const chSlug = slugify(chapter.displayTitle || chapter.title);
-    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx, pages);
+    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx, pairs);
     // The chapter recap lands on either story/<chSlug>-intro.html or story/<chSlug>.html;
     // both live in story/, so either path yields the same relative link resolution.
     const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)));
@@ -202,7 +207,7 @@ function buildStorySpine(pages, linkMap) {
     const sessionUnits = [];
     for (const s of chapterSessions) {
       const id = `${chSlug}-${slugify(s.title)}`;
-      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pages), resolverFor(unitOutputPath(id)));
+      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pairs), resolverFor(unitOutputPath(id)));
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),

@@ -44,7 +44,9 @@ function resolveSessionLink(link, pages) {
   return pages.find(p => p.frontmatter.type === 'session' && canonicalNfc(p.title) === target) || null;
 }
 
-function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus) {
+// `pairs` is the build's hub -> Wrap-Up map (session-hub.js pairHubs); the latest-session
+// recap takes its Wrap-Up from it rather than pairing on the reduced frontmatter.
+function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, pairs) {
   const outputPath = 'index.html';
   const theme = (publishConfig && publishConfig.theme) || {};
   const campaignImage = theme.campaign_image || null;
@@ -87,7 +89,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
   // pages so the "Read full session" link always targets a rendered page. Fall back to scanning
   // when last_session is absent or points to a page that isn't itself published.
   const latestSession = resolveSessionLink(overviewFm.last_session, pages) || getLatestSession(pages);
-  const latestWrapUp = getLatestWrapUp(pages, latestSession);
+  const latestWrapUp = getLatestWrapUp(pages, latestSession, pairs);
   let recapZone = '';
   if (latestSession) {
     const recapSource = latestWrapUp || latestSession;

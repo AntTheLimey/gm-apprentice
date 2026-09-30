@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { suppressHubBody, publishedWrapUpFor } = require('../../lib/session-hub');
+const { suppressHubBody, publishedWrapUpFor, pairHubs } = require('../../lib/session-hub');
 const { sessionBodyHtml } = require('../../lib/templates/session');
 
 const hub = (title, fm = {}) => ({ title, frontmatter: { type: 'session', ...fm } });
@@ -102,6 +102,55 @@ describe('publishedWrapUpFor resolves links as the site does (#276 review)', () 
     const pages = [h1, h2, w1];
     assert.strictEqual(publishedWrapUpFor(h1, pages), w1);
     assert.strictEqual(publishedWrapUpFor(h2, pages), null);
+  });
+});
+
+// Final review of #276: a claim resolved against published hubs only let a same-titled
+// hub in another chapter win whenever the real hub stayed unpublished.
+describe('a session: claim resolves against every session index in the vault (#276 final review)', () => {
+  const at = (page, sourcePath, vaultPath) => Object.assign(page, { sourcePath, vaultPath });
+  function repro() {
+    const ch1Hub = at(hub('Session 01', { publish: false, chapter: '[[Ch1]]' }), '/v/Ch1/Session 01.md', 'Ch1/Session 01');
+    const ch1Wrap = at(wrap('Session 01 Wrap-Up', { session: '[[Session 01]]', chapter: '[[Ch1]]' }), '/v/Ch1/Session 01 Wrap-Up.md', 'Ch1/Session 01 Wrap-Up');
+    const ch2Hub = at(hub('Session 01', { chapter: '[[Ch2]]' }), '/v/Ch2/Session 01.md', 'Ch2/Session 01');
+    return { ch1Hub, ch1Wrap, ch2Hub };
+  }
+
+  it("Ch1's Wrap-Up does not pair with Ch2's hub when Ch1's hub does not publish", () => {
+    const { ch1Hub, ch1Wrap, ch2Hub } = repro();
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], [ch1Wrap, ch2Hub], { allNotes: [] });
+    assert.strictEqual(pairs.has(ch2Hub), false);
+  });
+
+  it('an unpublished hub the scan skipped still makes the claim ambiguous', () => {
+    const { ch1Wrap, ch2Hub } = repro();
+    // Ch1's hub lives outside the scan (an excluded folder): only scanAllNotes sees it.
+    const skipped = { title: 'Session 01', frontmatter: { type: 'session' }, sourcePath: '/v/Elsewhere/Session 01.md', vaultPath: 'Elsewhere/Session 01' };
+    const pairs = pairHubs([ch1Wrap, ch2Hub], [ch1Wrap, ch2Hub], { allNotes: [skipped] });
+    assert.strictEqual(pairs.has(ch2Hub), false);
+  });
+
+  it("rejects a claim whose Wrap-Up names a different chapter from the hub's", () => {
+    const h = at(hub('Session 01', { chapter: '[[Ch2]]' }), '/v/S/Session 01.md', 'S/Session 01');
+    const w = at(wrap('W', { session: '[[Session 01]]', chapter: '[[Chapters/Ch1]]' }), '/v/S/W.md', 'S/W');
+    assert.strictEqual(publishedWrapUpFor(h, [h, w]), null);
+    const same = at(wrap('W2', { session: '[[Session 01]]', chapter: '[[Chapters/Ch2]]' }), '/v/S/W2.md', 'S/W2');
+    assert.strictEqual(publishedWrapUpFor(h, [h, same]), same);
+  });
+
+  it('a documents.wrap_up naming an unpublished Wrap-Up does not fall to a same-titled one elsewhere', () => {
+    const h = at(hub('Session 01', { documents: { wrap_up: '[[Session 01 Wrap-Up]]' } }), '/v/Ch2/Session 01.md', 'Ch2/Session 01');
+    const own = at(wrap('Session 01 Wrap-Up', { publish: false }), '/v/Ch2/Session 01 Wrap-Up.md', 'Ch2/Session 01 Wrap-Up');
+    const other = at(wrap('Session 01 Wrap-Up'), '/v/Ch1/Session 01 Wrap-Up.md', 'Ch1/Session 01 Wrap-Up');
+    const pairs = pairHubs([h, own, other], [h, other], { allNotes: [] });
+    assert.strictEqual(pairs.has(h), false);
+  });
+
+  it('still pairs the real hub when it publishes', () => {
+    const { ch1Hub, ch1Wrap, ch2Hub } = repro();
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], [ch1Hub, ch1Wrap, ch2Hub], { allNotes: [] });
+    assert.strictEqual(pairs.get(ch1Hub), ch1Wrap);
+    assert.strictEqual(pairs.has(ch2Hub), false);
   });
 });
 

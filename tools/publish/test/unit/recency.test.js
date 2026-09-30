@@ -1,6 +1,10 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { scoreByRecency } = require('../../lib/recency');
+const { pairHubs } = require('../../lib/session-hub');
+
+// The build's hub -> Wrap-Up map (session-hub.js pairHubs): recency never pairs on its own.
+const pairsOf = (sessions, wrapUps) => pairHubs(sessions.concat(wrapUps), sessions.concat(wrapUps), { allNotes: [] });
 
 describe('scoreByRecency', () => {
   const sessions = [
@@ -92,7 +96,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Dragoman', frontmatter: { type: 'npc', status: 'alive' } },
       { title: 'Thibault', frontmatter: { type: 'npc', status: 'alive' } },
     ];
-    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc', wrapUps }).map(s => s.page.title);
+    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc', wrapUpFor: pairsOf(sessions, wrapUps) }).map(s => s.page.title);
     assert.ok(titles.includes('Dragoman'), 'aliased mention in the wrap-up is counted');
     assert.ok(titles.includes('Thibault'), 'bare mention in the wrap-up is counted');
   });
@@ -137,7 +141,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Wrong_NPC', frontmatter: { type: 'npc', status: 'alive' } },
       { title: 'Right_NPC', frontmatter: { type: 'npc', status: 'alive' } },
     ];
-    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc', wrapUps }).map(s => s.page.title);
+    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc', wrapUpFor: pairsOf(sessions, wrapUps) }).map(s => s.page.title);
     assert.ok(titles.includes('Right_NPC'), 'pairs by the session wiki-link');
     assert.ok(!titles.includes('Wrong_NPC'), 'ignores the same-numbered wrap-up from another chapter');
   });

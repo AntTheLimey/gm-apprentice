@@ -446,10 +446,16 @@ function build(options = {}) {
   // backlinks, recency, the relationship graph and the landing fallback agree with the
   // page. A hub linking a prepped NPC who never appeared must not become that NPC's
   // "Mentioned in".
+  //
+  // The pairs are computed HERE, once, on the unreduced frontmatter, and handed to every
+  // reader — the session page, the Saga, the landing recap and recency. None of them
+  // pairs on its own: excluding `documents`, `session` or `aliases` below would leave a
+  // late re-pairing blind to the very links that paired the page (#276 final review).
   const hubWrapUps = new Map();
   for (const page of pages) {
     if (hubPairs.has(page)) hubWrapUps.set(page, hubPairs.get(page));
   }
+  hubWrapUps.linked = hubPairs.linked;
   for (const page of pages) {
     if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,
@@ -497,7 +503,7 @@ function build(options = {}) {
   // Whether a Story section will exist. Computed early (pure function of pages) so the
   // top nav — threaded into every page, including story pages built later — can point
   // the Story group at story.html. Must match what buildStory() emits below.
-  const hasStory = buildStorySpine(pages).length > 0
+  const hasStory = buildStorySpine(pages, null, hubWrapUps).length > 0
     || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
 
   // Build-time data pipeline
@@ -508,7 +514,6 @@ function build(options = {}) {
   const chapters = pages.filter(p => p.frontmatter.type === 'chapter');
   const npcs = pages.filter(p => p.frontmatter.type === 'npc');
   const locations = pages.filter(p => p.frontmatter.type === 'location');
-  const wrapUps = pages.filter(p => ['session-wrap-up', 'session_wrap', 'session-wrapup'].includes(p.frontmatter.type));
 
   const landingConfig = (publishConfig.landing || {});
   const recencyWindow = landingConfig.recency_window || 3;
@@ -546,13 +551,13 @@ function build(options = {}) {
 
   const recentNPCs = withFeatured(
     scoreByRecency(npcs, sessions, chapters, {
-      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUps,
+      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUpFor: hubWrapUps,
     }),
     npcs, landingConfig.featured_npcs, maxNPCs, 'featured_npcs');
 
   const recentLocations = withFeatured(
     scoreByRecency(locations, sessions, chapters, {
-      window: recencyWindow, max: maxLocations, type: 'location', wrapUps,
+      window: recencyWindow, max: maxLocations, type: 'location', wrapUpFor: hubWrapUps,
     }),
     locations, landingConfig.featured_locations, maxLocations, 'featured_locations');
 
@@ -1138,7 +1143,7 @@ function build(options = {}) {
   }
 
   function buildStory() {
-    const spine = buildStorySpine(pages, linkMap);
+    const spine = buildStorySpine(pages, linkMap, hubWrapUps);
     for (const unit of spine) {
       unit.refsHtml = renderRefsHtml(unit);
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
@@ -1161,7 +1166,7 @@ function build(options = {}) {
   buildStory();
 
   // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);
+  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
 
