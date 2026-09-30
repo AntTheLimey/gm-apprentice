@@ -1157,6 +1157,7 @@ def check_sessions(vault: Path) -> list[str]:
     if not indexes:
         return ["INFO\t(vault)\tno session indexes found"]
 
+    withheld = hub_bodies_withheld(vault)
     rows: list[str] = []
     played: list[tuple[str, str | None]] = []
     for rel, text, fm in indexes:
@@ -1208,7 +1209,10 @@ def check_sessions(vault: Path) -> list[str]:
                         f"--set status={derived}")
         rows.extend(broken)
         rows.extend(unlinked)
-        if wrap and _explicit_wrap_up_link(stem, wrap, documents, by_rel):
+        # Only where the site really withholds the body (a paired Wrap-Up
+        # that itself publishes); otherwise the body is live and prose is
+        # the session's published record.
+        if rel in withheld:
             rows.extend(_hub_body_rows(rel, text))
         if declared.casefold() in PLAYED_STATUSES:
             played.append((rel, wrap))

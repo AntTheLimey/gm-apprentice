@@ -529,6 +529,17 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_sessions(vault),
                                   "session index body"))
 
+    def test_hub_whose_wrap_up_does_not_publish_is_not_flagged(self):
+        # A linked Wrap-Up that is itself unpublished leaves the hub body
+        # live, so it is not "withheld" and the row does not apply.
+        vault = self.hub_vault("- Plan: [[Session 01 - Lone - Plan]]\n")
+        (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+            self.WRAP.replace("canon_status: DRAFT\n",
+                              "canon_status: DRAFT\npublish: none\n"),
+            encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_sessions(vault),
+                                  "session index body"))
+
     def test_hub_without_a_wrap_up_is_not_flagged(self):
         # No Wrap-Up: the hub body is the session's published record.
         hub = "---\ntype: session\nsession_number: 1\nstatus: played\n---\n\n"
