@@ -35,7 +35,7 @@ On yes:
 - `stamp_entities.py <vault> <entity files> --promote` — this
   session's DRAFT entities
 - `stamp_entities.py <vault> "<index>" --set status=reviewed`
-- Go to step 6.5.
+- Do step 6.1, then go to step 6.5.
 
 Otherwise run the full procedure.
 
@@ -129,6 +129,27 @@ On GM approval:
 
 Do the bookkeeping now rather than leaving the GM a list. Hand off to
 campaign-organizer if entity filing is needed.
+
+### 6.1. Publish registration (conditional)
+
+Only if `_meta/publish-manifest.md` exists and `publish.mode` in
+`_meta/vault-config.md` is `player` or unset; otherwise skip. A
+played session left in the manifest's Needs Decision never reaches
+the player site (#277). Tick the session index and its Wrap-Up
+under Publishing:
+
+```bash
+node "$TOOL" manifest apply --config <site_dir>/vault.config.json \
+  --publish "<index>" --publish "<wrap-up>"
+```
+
+`$TOOL` and `<site_dir>` (`publish.site_dir`) are as in
+`publish-site/SKILL.md`. Tick the index only after confirming the
+hub's Keeper bookkeeping is fenced under `<!-- gm-only -->` (the
+fence convention in `shared/entity-schema.md`); if it is not,
+fence it first or leave the index unticked and say so. Name both
+paths in the run's report. `vault_check.py <vault> sessions` lists
+any played session or Wrap-Up still missing from Publishing.
 
 ### 6.5. World evolution (conditional)
 
