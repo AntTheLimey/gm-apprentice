@@ -293,7 +293,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
   });
 
   it('groups a flat-vault session under a chapter whose ref differs in normal form', () => {
-    // Separate folders, so chapterOwnsSession falls through to the title/ref match.
+    // Separate folders, so only the session's chapter: ref can place it (chapterOfSession).
     const pages = [
       { title: CHAPTER_NFC, displayTitle: CHAPTER_NFC, sourcePath: '/v/Chapters/Chapter.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' },
       { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Sessions/S1.md', frontmatter: { type: 'session', session_number: 1, chapter: `[[${CHAPTER_NFD}]]` }, markdown: '## Narrative Recap\n\nThe bridge fell.\n' },

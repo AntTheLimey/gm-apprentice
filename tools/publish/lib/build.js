@@ -14,7 +14,7 @@ const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
-const { buildStorySpine, chapterOwnsSession, unitRefs, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
@@ -866,7 +866,7 @@ function build(options = {}) {
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
             if (wrapUp) {
               // The page shell stays the wiki page's; only the article body is generated.
-              const chapter = pages.find(p => p.frontmatter.type === 'chapter' && chapterOwnsSession(p, page));
+              const chapter = chapterOfSession(page, pages);
               processed.html = sessionBodyHtml(page, { wrapUp, chapter });
             }
           }

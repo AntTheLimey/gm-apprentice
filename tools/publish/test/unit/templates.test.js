@@ -483,6 +483,19 @@ describe('session prev/next links follow story order (#276)', () => {
     assert.deepStrictEqual(links(prologue, pages), ['Ch1 S1']);
   });
 
+  // Review of #278: every chapter page in one folder, sessions below it. Folder
+  // containment alone gave every session to Ch1, so prev/next never regrouped.
+  it('regroups by each session\'s chapter: ref when all chapters share a folder', () => {
+    const flatChapter = (name, order) => ({ title: name, displayTitle: name, outputPath: `campaign/${name}.html`,
+      sourcePath: `/v/Campaign/${name}.md`, frontmatter: { type: 'chapter', sort_order: order } });
+    const s = (ch, n) => ({ title: `${ch} S${n}`, displayTitle: `${ch} S${n}`, outputPath: `campaign/${ch}-s${n}.html`,
+      sourcePath: `/v/Campaign/Sessions/${ch} S${n}.md`,
+      frontmatter: { type: 'session', session_number: n, chapter: `[[${ch}]]` } });
+    const ss = [s('Ch2', 1), s('Ch1', 1), s('Ch2', 2), s('Ch1', 2)];
+    const pages = [flatChapter('Ch1', 1), flatChapter('Ch2', 2), ...ss];
+    assert.deepStrictEqual(orderedSessions(pages).map(x => x.title), ['Ch1 S1', 'Ch1 S2', 'Ch2 S1', 'Ch2 S2']);
+  });
+
   it('a vault with no chapters keeps exactly the old order, ties and all', () => {
     const variants = [
       [flat('A', { session_number: 1 }), flat('B', { session_number: 1 }), flat('C', {})],

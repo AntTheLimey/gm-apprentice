@@ -85,11 +85,30 @@ function isUnder(childPath, dir) {
   return c === a || c.startsWith(a + path.sep);
 }
 
-// A session belongs to a chapter if its file lives under the chapter's folder,
-// falling back to the title/ref match for flat-structured vaults.
-function chapterOwnsSession(chapter, session) {
-  if (isUnder(session.sourcePath, folderOf(chapter))) return true;
-  return chapterMatchesSession(chapter, session);
+// The chapter a session belongs to, or null: the one rule for the Saga, the prev/next
+// regrouping and the session page's "Chapter:" line. The session's own `chapter:` ref
+// decides first (an exact title match over a display-title substring; ties go to the
+// first chapter in sort order). A session whose ref names no chapter falls back to the
+// chapter whose folder holds it, the deepest one; two chapter pages in that same folder
+// say nothing about which, so none. Folder-first would give every session to Ch1
+// wherever all chapter pages share a folder.
+function chapterOfSession(session, pages) {
+  const chapters = sortedChapters(pages);
+  const byRef = chapters.filter(c => chapterMatchesSession(c, session));
+  if (byRef.length > 0) {
+    const ref = refTarget(session.frontmatter.chapter);
+    const exact = byRef.find(c => {
+      const title = canonicalNfc(c.title);
+      return ref === title || ref === title.replace(/_/g, ' ');
+    });
+    return exact || byRef[0];
+  }
+  const holders = chapters.filter(c => isUnder(session.sourcePath, folderOf(c)));
+  if (holders.length === 0) return null;
+  const depth = c => path.resolve(folderOf(c)).length;
+  const deepest = Math.max(...holders.map(depth));
+  const at = holders.filter(c => depth(c) === deepest);
+  return at.length === 1 ? at[0] : null;
 }
 
 // The wrap-up for a unit (chapter or session). For a session it is the Wrap-Up the build
@@ -162,13 +181,11 @@ function orderedSessions(pages) {
   if (order) return order;
   const old = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session')
     .sort((a, b) => sessionNavKey(a) - sessionNavKey(b));
-  const seen = new Set();
+  const owner = new Map(old.map(s => [s, chapterOfSession(s, pages)]));
+  const seen = new Set(old.filter(s => owner.get(s)));
   const chaptered = [];
   for (const chapter of sortedChapters(pages)) {
-    for (const s of old.filter(x => !seen.has(x) && chapterOwnsSession(chapter, x))) {
-      seen.add(s);
-      chaptered.push(s);
-    }
+    chaptered.push(...old.filter(s => owner.get(s) === chapter));
   }
   let next = 0;
   order = old.map(s => (seen.has(s) ? chaptered[next++] : s));
@@ -201,7 +218,7 @@ function buildStorySpine(pages, linkMap, pairs) {
     const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)));
 
     const chapterSessions = sessions
-      .filter(s => chapterOwnsSession(chapter, s))
+      .filter(s => chapterOfSession(s, pages) === chapter)
       .sort(bySessionNumber);
 
     const sessionUnits = [];
@@ -256,4 +273,4 @@ function characterStoryGroup(frontmatter) {
   return 'current';
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, orderedSessions, unitRefs, characterStoryGroup };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, orderedSessions, unitRefs, characterStoryGroup };

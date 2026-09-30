@@ -295,3 +295,36 @@ describe('a claim on an unpublished hub never lands on another chapter (#276 fin
     fs.rmSync(work, { recursive: true, force: true });
   });
 });
+
+// Review of #278: every chapter page sits in one folder with the sessions below it, so
+// folder containment says every chapter holds every session. The withheld-body page's
+// "Chapter:" line named Ch1 for a Ch2 session. The session's own `chapter:` decides first.
+describe('a session names its own chapter when every chapter shares a folder (#278 review)', () => {
+  it('the Chapter: line, the Saga and prev/next follow the session\'s chapter: ref', () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-flat-chapters-'));
+    const vault = path.join(work, 'vault');
+    const docs = path.join(work, 'docs');
+    for (const c of [1, 2]) {
+      write(vault, `Campaign/Chapter ${c}.md`, `---\ntype: chapter\nsort_order: ${c}\n---\n\n# Chapter ${c}\n`);
+      write(vault, `Campaign/Sessions/Ch${c} Session 01.md`, `---\ntype: session\nsession_number: 1\nchapter: "[[Chapter ${c}]]"\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Ch${c} S1 Wrap-Up]]"\n---\n\nhub body\n`);
+      write(vault, `Campaign/Sessions/Ch${c} S1 Wrap-Up.md`, `---\ntype: session_wrap\nsession: "[[Ch${c} Session 01]]"\nchapter: "[[Chapter ${c}]]"\n---\n\n## Narrative Recap\n\nRECAP-${c}.\n`);
+    }
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Campaign: 'campaign' } }));
+    const log = console.log; const warn = console.warn;
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+    const page = c => fs.readFileSync(walk(docs).find(f => path.basename(f) === `ch${c}-session-01.html`), 'utf8');
+    for (const c of [1, 2]) {
+      const chapterLine = page(c).match(/<span class="session-chapter">Chapter: <a [^>]*>([^<]*)<\/a>/);
+      assert.ok(chapterLine, `Ch${c} session page has no Chapter: line`);
+      assert.strictEqual(chapterLine[1], `Chapter ${c}`);
+    }
+    // One Saga unit per session, each under its own chapter (not both under Chapter 1).
+    const story = walk(path.join(docs, 'story')).map(f => path.basename(f)).sort();
+    assert.deepStrictEqual(story.filter(f => /session/.test(f)),
+      ['chapter-1-ch1-session-01.html', 'chapter-2-ch2-session-01.html']);
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+});
