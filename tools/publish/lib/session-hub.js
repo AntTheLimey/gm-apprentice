@@ -1,6 +1,6 @@
 const path = require('path');
-const { isSessionHub, parseWikiRef } = require('./processor');
-const { linkKeys } = require('./scanner');
+const { isSessionHub, parseWikiRef, gmAliasRewriter } = require('./processor');
+const { linkKeys, scanAllNotes } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
 
 // The session index (hub) is metadata only by design, and GMs use its body as a working
@@ -101,4 +101,45 @@ function suppressHubBody(page, pages) {
   return publishedWrapUpFor(page, pages) !== null;
 }
 
-module.exports = { suppressHubBody, publishedWrapUpFor, WRAP_UP_TYPES, isWrapUp };
+// The build's alias-rewrite-then-pair step, the one path the build, `explain` and
+// `manifest publish-played` all take (#212, #276). GM aliases are rewritten to their
+// owners' titles with the rewriter the build uses (owners from every note in the vault;
+// only `published` pages claim a name), and every session index in `corpus` is then
+// paired against the published Wrap-Ups. A `documents.wrap_up` written as a GM alias
+// therefore pairs the same way everywhere.
+//
+// Returns Map(hub page -> published Wrap-Up page) for every paired hub in `corpus`,
+// keyed and valued with the caller's own page objects.
+//   options.vaultPath  where scanAllNotes finds the notes the scan skipped
+//   options.allNotes   scanAllNotes(vaultPath), when the caller already has it
+//   options.apply      rewrite `corpus` in place (markdown, storyMarkdown, frontmatter),
+//                      as the build does before anything renders; otherwise the
+//                      rewrite is applied to copies used only for pairing, so a caller
+//                      can pair against several hypothetical `published` sets.
+function pairHubs(corpus, published, options) {
+  const opts = options || {};
+  const scanned = new Set(corpus.map((p) => p.sourcePath));
+  const notes = opts.allNotes || scanAllNotes(opts.vaultPath);
+  const rewriter = gmAliasRewriter(corpus.concat(notes.filter((n) => !scanned.has(n.sourcePath))), published);
+  let view = (p) => p;
+  if (rewriter && opts.apply) {
+    for (const page of corpus) {
+      page.markdown = rewriter.markdown(page.markdown || '');
+      if (page.storyMarkdown) page.storyMarkdown = rewriter.markdown(page.storyMarkdown);
+      page.frontmatter = rewriter.frontmatter(page.frontmatter);
+    }
+  } else if (rewriter) {
+    const views = new Map(corpus.map((p) => [p, Object.assign({}, p, { frontmatter: rewriter.frontmatter(p.frontmatter) })]));
+    view = (p) => views.get(p) || p;
+  }
+  const viewPublished = published.map(view);
+  const original = new Map(viewPublished.map((v, i) => [v, published[i]]));
+  const pairs = new Map();
+  for (const page of corpus) {
+    const wrap = publishedWrapUpFor(view(page), viewPublished);
+    if (wrap) pairs.set(page, original.get(wrap) || wrap);
+  }
+  return pairs;
+}
+
+module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, WRAP_UP_TYPES, isWrapUp };

@@ -13,10 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
-const { surveyVault } = require('./manifest-cli');
+const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { extractSections, publishMode } = require('./processor');
-const { suppressHubBody } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
 const { nearestNames } = require('./site-doctor');
 
@@ -129,7 +128,9 @@ async function runExplain(options, deps) {
 
   const publishes = publishesPage(verdict);
   // Whether this is a session index whose body the site withholds (#276).
-  const hubBodyUnpublished = suppressHubBody(page || { frontmatter }, publishedPagesOf(survey));
+  // Paired the way the build pairs (GM aliases rewritten first); a file the scanner
+  // produced no page for is no session index the build could pair.
+  const hubBodyUnpublished = !!page && pairsWith(survey, publishedPagesOf(survey)).has(page);
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
@@ -197,10 +198,12 @@ async function runExplain(options, deps) {
   return 0;
 }
 
-// The scanner pages that publish: the `pages` suppressHubBody expects.
+// The scanner pages that publish, as the build holds them: a story companion folds
+// into its PC's page and is not a page of its own.
 function publishedPagesOf(survey) {
   return [...survey.pagesByRel.entries()]
-    .filter(([rel]) => survey.verdicts.has(rel) && publishesPage(survey.verdicts.get(rel)))
+    .filter(([rel]) => survey.verdicts.has(rel) && publishesPage(survey.verdicts.get(rel))
+      && survey.verdicts.get(rel).code !== 'STORY_COMPANION')
     .map(([, p]) => p);
 }
 
@@ -211,19 +214,19 @@ function publishedPagesOf(survey) {
 //   type           frontmatter `type`, or null
 //   publishes      the build makes a page for it (a story companion merges into its PC)
 //   code           the verdict code decidePage returned
-//   bodyWithheld   a session index whose body the site withholds (suppressHubBody)
+//   bodyWithheld   a session index whose body the site withholds (session-hub pairHubs)
 //   bodyPublishes  publishes && !bodyWithheld
 async function runExplainAll(options, deps) {
   const opts = options || {};
   const d = deps || {};
   const out = d.out || console.log;
   const survey = surveyVault(opts, d);
-  const published = publishedPagesOf(survey);
+  const pairs = pairsWith(survey, publishedPagesOf(survey));
   const pages = survey.files.map((rel) => {
     const page = survey.pagesByRel.get(rel);
     const verdict = survey.verdicts.get(rel);
     const publishes = publishesPage(verdict);
-    const withheld = page ? suppressHubBody(page, published) : false;
+    const withheld = !!page && pairs.has(page);
     return {
       path: rel,
       type: (page && page.frontmatter && page.frontmatter.type) || null,

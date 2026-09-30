@@ -623,3 +623,56 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     assert.deepStrictEqual(payload.published, []);
   });
 });
+
+// Review of #276: build, `explain --all` and publish-played pair on the same frontmatter,
+// GM aliases rewritten first (session-hub.js pairHubs). A documents.wrap_up written as the
+// Wrap-Up's GM alias pairs in all three, or the tools disagree about a leak.
+describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#276 review)', () => {
+  const { build } = require('../lib/build');
+  const { runExplainAll } = require('../lib/explain-cli');
+
+  it('build, explain --all and publish-played all pair it', async () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-alias-pair-'));
+    const vault = path.join(work, 'vault');
+    const w = (rel, body) => {
+      const f = path.join(vault, rel);
+      fs.mkdirSync(path.dirname(f), { recursive: true });
+      fs.writeFileSync(f, body);
+    };
+    const HUB = 'Sessions/Session 01 - Arrival.md';
+    const WRAP = 'Sessions/Session 01 Wrap-Up.md';
+    w(HUB, '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[The Sealed Ledger]]"\n---\n\n# Session 01 - Arrival\n\nKEEPERONLYSECRET the Baron appears at the ball\n');
+    w(WRAP, '---\ntype: session_wrap\ngm_aliases:\n  - The Sealed Ledger\n---\n\n## Narrative Recap\n\nThey arrived at dusk.\n');
+    w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+    w('_meta/publish-manifest.md', `---\nmode: player\n---\n\n## Publishing (0 files)\n\n## Needs Decision (2 files)\n\n- [ ] ${HUB}\n- [ ] ${WRAP}\n`);
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+
+    try {
+      // publish-played pairs it, so ticks both.
+      const c = capture();
+      await runManifest({ verb: 'publish-played', configPath, json: true }, c.deps);
+      const played = JSON.parse(c.text());
+      assert.deepStrictEqual(played.published, [HUB, WRAP]);
+      assert.deepStrictEqual(played.unclear, []);
+
+      // explain --all, on the manifest publish-played wrote, says the body is withheld.
+      const e = capture();
+      await runExplainAll({ configPath }, e.deps);
+      const hub = JSON.parse(e.out.join('')).pages.find((p) => p.path === HUB);
+      assert.strictEqual(hub.publishes, true);
+      assert.strictEqual(hub.bodyWithheld, true);
+
+      // The build withholds it too: the page carries the Wrap-Up's recap, not the body.
+      const log = console.log; const warn = console.warn;
+      console.log = () => {}; console.warn = () => {};
+      try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+      const html = fs.readFileSync(path.join(work, 'docs', 'sessions', 'session-01-arrival.html'), 'utf8');
+      assert.doesNotMatch(html, /KEEPERONLYSECRET/);
+      assert.match(html, /They arrived at dusk/);
+    } finally {
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  });
+});

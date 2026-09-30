@@ -11,11 +11,11 @@
 // keeping the annotations on the entries it was not asked to touch.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport, dirIsExcluded } = require('./scanner');
+const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { loadPublishConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
-const { publishedWrapUpFor, suppressHubBody, isWrapUp } = require('./session-hub');
+const { pairHubs, isWrapUp } = require('./session-hub');
 
 const SECTIONS = [
   { key: 'publishing', title: 'Publishing', checked: true },
@@ -336,9 +336,18 @@ function publishedWith(survey, extra) {
   const published = [];
   for (const [rel, page] of pagesByRel) {
     const verdict = decidePage(page, { rel, publishConfig, manifest: hypothetical, pageIndex: pagesByRel });
-    if (publishesPage(verdict)) published.push(page);
+    // A story companion folds into its PC's page; the build never holds it as a page.
+    if (publishesPage(verdict) && verdict.code !== 'STORY_COMPANION') published.push(page);
   }
   return published;
+}
+
+// Hub -> Wrap-Up pairs on `published`, through the build's own alias-rewrite-then-pair
+// step (session-hub.js pairHubs), so `explain` and publish-played pair on exactly the
+// frontmatter the build does. The whole-vault note list is read once per survey.
+function pairsWith(survey, published) {
+  if (!survey.allNotes) survey.allNotes = scanAllNotes(survey.vaultPath);
+  return pairHubs([...survey.pagesByRel.values()], published, { allNotes: survey.allNotes });
 }
 
 // What publish-played would do, without doing it: `ticks` maps each played hub it would
@@ -373,24 +382,25 @@ function planPublishPlayed(survey) {
   // Each round drops at least one hub from `pending`, so this ends.
   let ticks;
   for (;;) {
-    const published = publishedWith(survey, pending);
+    const pairs = pairsWith(survey, publishedWith(survey, pending));
     ticks = new Map();
     for (const { rel, page } of hubs.filter((h) => pending.includes(h.rel))) {
-      const wrap = publishedWrapUpFor(page, published);
+      const wrap = pairs.get(page);
       if (wrap) ticks.set(rel, relOf.get(wrap));
     }
     const next = [...ticks.keys()].concat([...ticks.values()]);
-    const after = publishedWith(survey, next);
-    const unsupported = [...ticks.keys()].filter((rel) => !suppressHubBody(pagesByRel.get(rel), after));
+    const after = pairsWith(survey, publishedWith(survey, next));
+    const unsupported = [...ticks.keys()].filter((rel) => !after.has(pagesByRel.get(rel)));
     if (unsupported.length === 0) break;
     pending = next.filter((rel) => !unsupported.includes(rel));
   }
 
   const unclear = [];
+  const ifAllPublished = pairsWith(survey, allPages);
   for (const { rel, page } of hubs) {
     if (ticks.has(rel) || sectionOf(rel) === 'publishing') continue;
     // Why not: the Wrap-Up the hub would pair with if every Wrap-Up published.
-    const wouldBe = publishedWrapUpFor(page, allPages);
+    const wouldBe = ifAllPublished.get(page) || null;
     const wrapRel = wouldBe ? relOf.get(wouldBe) : null;
     const fm = page.frontmatter;
     const docs = fm.documents && typeof fm.documents === 'object' ? fm.documents : {};
@@ -416,7 +426,7 @@ function planPublishPlayed(survey) {
 
 // `manifest publish-played` (#277): a played session index is ticked under Publishing
 // only together with a Wrap-Up that will publish and that session-hub.js pairs with it —
-// i.e. only when suppressHubBody holds for the hub on the pages as they will publish
+// i.e. only when pairHubs pairs the hub on the pages as they will publish
 // after this call, so the hub's body is withheld and its session page is built from
 // frontmatter plus the Wrap-Up. There is no matcher here: pairing is session-hub.js's.
 // Every other played session is "unclear" with a reason — no Wrap-Up linked, or the
@@ -473,4 +483,4 @@ async function runManifest(options, deps) {
 
 // surveyVault is shared with explain-cli so both commands see one vault the same
 // way: the same file list, the same verdicts, the same config resolution.
-module.exports = { runManifest, surveyVault, planPublishPlayed, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };
+module.exports = { runManifest, surveyVault, planPublishPlayed, pairsWith, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };
