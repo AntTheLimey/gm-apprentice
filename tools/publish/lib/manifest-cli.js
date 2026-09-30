@@ -145,8 +145,12 @@ function splitReason(arg) {
 function surveyVault(options, deps) {
   const configPath = path.resolve(options.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const config = loadVaultConfig(configPath, deps, { requireVaultPath: true });
-  const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
+  // options.vaultPath (`--vault`) reads another vault through this site's rules —
+  // vault_check asks about the vault it is checking, which need not be the one the
+  // site's own vaultPath names (a working copy, say).
+  const config = loadVaultConfig(configPath, deps, { requireVaultPath: !options.vaultPath });
+  const vaultPath = options.vaultPath ? path.resolve(options.vaultPath)
+    : deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
   const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
   const manifest = loadManifest(vaultPath);
 

@@ -145,8 +145,16 @@ rather than the whole vault.
 
   gm-apprentice-publish explain "Sessions/Session 7.md"
 
+With --all, prints one JSON object for every file the vault walk sees:
+{ vaultPath, pages: [{ path, type, publishes, code, bodyWithheld,
+bodyPublishes }] }. bodyWithheld marks a session index whose body the site
+withholds because its Wrap-Up publishes.
+
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --json             Emit the whole chain as an object
+  --all              Every file at once (needs --json)
+  --vault <dir>      With --all: read this vault through the site's rules
+                     instead of the vault the config names
   --help, -h         Show this help
 `,
   deploy: `
@@ -470,6 +478,20 @@ if (command === 'sheet') {
     playerSafe: !!parsed.flags.playerSafe,
     json: !!parsed.flags.json,
   })
+    .then((rc) => process.exit(rc))
+    .catch((err) => { console.error(err.message); process.exit(1); });
+  return;
+}
+
+if (command === 'explain' && args[1] === '--all') {
+  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, { '--vault': 'vault' });
+  if (parsed.error || !parsed.flags.json) {
+    console.error(`Error: ${parsed.error || 'explain --all needs --json'}`);
+    printSubcommandHelp('explain');
+    process.exit(1);
+  }
+  const { runExplainAll } = require('../lib/explain-cli.js');
+  runExplainAll({ configPath: parsed.configPath, vaultPath: parsed.flags.vault })
     .then((rc) => process.exit(rc))
     .catch((err) => { console.error(err.message); process.exit(1); });
   return;
