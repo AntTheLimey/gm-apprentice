@@ -92,7 +92,9 @@ jobs:
       - name: Write release notes
         if: steps.check_tag.outputs.exists == 'false'
         run: |
-          PREV=$(git tag --list 'publish-v*' --sort=-version:refname | head -1)
+          # The greatest exact publish-vX.Y.Z below this version: never this
+          # release's own tag on a re-run, never a prerelease or suffixed tag.
+          PREV=$(git tag --list 'publish-v*' | scripts/prev-publish-tag.sh "${{ steps.version.outputs.version }}")
           {
             echo "Publish tool ${{ steps.version.outputs.version }}, packed with \`npm pack\`."
             echo
