@@ -567,6 +567,30 @@ describe('manifest publish-played ticks only reviewed sessions (#277 final revie
     });
   }
 
+  it('an unreviewed session already published with its Wrap-Up is left alone', async () => {
+    const vault = vaultWith('wrap-up', 'DRAFT');
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Publishing (2 files)', '',
+        '- [x] Sessions/Played Session.md', '- [x] Sessions/Session 06 - Wrap-Up.md', ''].join('\n'));
+    const { payload, writes } = await plan(vault);
+    assert.deepStrictEqual(writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.deepStrictEqual(payload.unclear, []);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('an unreviewed published hub does not get its DRAFT Wrap-Up ticked', async () => {
+    const vault = vaultWith('wrap-up', 'DRAFT');
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Publishing (1 files)', '',
+        '- [x] Sessions/Played Session.md', ''].join('\n'));
+    const { payload, writes } = await plan(vault);
+    assert.deepStrictEqual(writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.match(payload.unclear[0].reason, /^Wrap-Up not reviewed yet/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('a reviewed index is clear even while its Wrap-Up is DRAFT', async () => {
     const vault = vaultWith('reviewed', 'DRAFT');
     const { payload } = await plan(vault);

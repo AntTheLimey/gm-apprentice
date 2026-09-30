@@ -451,6 +451,9 @@ function planPublishPlayed(survey) {
   const pinReason = survey.siteDir ? staleSitePin(survey.siteDir) : null;
   const wrapOnly = [];
   for (const [rel, wrapRel] of [...ticks]) {
+    // Both already published (the GM said "publish now" at wrap-up): nothing to tick,
+    // nothing to ask.
+    if (sectionOf(rel) === 'publishing' && sectionOf(wrapRel) === 'publishing') continue;
     const reason = !isReviewed(pagesByRel.get(rel), pagesByRel.get(wrapRel))
       ? `Wrap-Up not reviewed yet (${wrapRel})`
       : pinReason;
