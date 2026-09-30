@@ -161,9 +161,10 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
     });
 
     it('the search index carries none of it', () => {
-      const index = read('search-index.json').toLowerCase();
+      // Whole index terms, not substrings: the Wrap-Up's own "innkeeper" is fine.
+      const terms = new Set(JSON.parse(read('search-index.json')).index.invertedIndex.map(e => e[0]));
       for (const term of ['keeper', 'standing', 'churchyard', 'contingency', 'baron']) {
-        assert.ok(!index.includes(term), `search index leaked "${term}"`);
+        assert.ok(![...terms].some(t => t === term || t.startsWith(term + '-')), `search index leaked "${term}"`);
       }
     });
 
