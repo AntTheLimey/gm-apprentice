@@ -15,7 +15,7 @@ Usage:
   vault_check.py VAULT timeline
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
-  vault_check.py VAULT sessions
+  vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
   vault_check.py VAULT pc-body [--folder SUB] [--file REL ...] [--newer-than REL]
@@ -880,6 +880,81 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
     return None, hits[0]
 
 
+PLAYED_STATUSES = {"played", "wrap-up", "reviewed"}
+_MANIFEST_ENTRY_RE = re.compile(r"^\s*-\s+(?:\[[ xX]\]\s+)?(.+)$")
+_MANIFEST_PATH_RE = re.compile(r"^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$")
+
+
+def read_manifest_sections(vault: Path) -> dict[str, set[str]] | None:
+    """Vault-relative paths of `_meta/publish-manifest.md`, by section
+    (`publishing`, `excluded`, `needs_decision`), or None when the vault
+    has no manifest. Mirrors tools/publish/lib/manifest.js: an inline
+    ` — note` is dropped, paths are NFC-normalised, and only checked
+    entries count under Publishing."""
+    try:
+        text = (vault / "_meta" / "publish-manifest.md").read_text(
+            encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    sections: dict[str, set[str]] = {
+        "publishing": set(), "excluded": set(), "needs_decision": set()}
+    current: str | None = None
+    for line in text.replace("\r", "").split("\n"):
+        heading = re.match(r"^## (.+)", line)
+        if heading:
+            title = heading.group(1).strip()
+            current = ("publishing" if title.startswith("Publishing")
+                       else "needs_decision" if title.startswith("Needs Decision")
+                       else "excluded" if title.startswith("Excluded")
+                       else None)
+            continue
+        if current is None:
+            continue
+        m = _MANIFEST_ENTRY_RE.match(line)
+        if not m or re.match(r"(?i)reason:", m.group(1).strip()):
+            continue
+        if current == "publishing" and not re.match(r"^- \[[xX]\]", line):
+            continue
+        raw = m.group(1).strip()
+        split = _MANIFEST_PATH_RE.match(raw)
+        sections[current].add(unicodedata.normalize(
+            "NFC", split.group(1) if split else raw))
+    return sections
+
+
+def manifest_rows(vault: Path, played: list[tuple[str, str | None]]
+                  ) -> list[str]:
+    """WARNING rows for played sessions (and their Wrap-Ups) that
+    `_meta/publish-manifest.md` does not list under Publishing (#277).
+
+    Silent unless the vault has a manifest and publishes in player mode —
+    the only mode where the manifest is an allowlist, matching
+    publish-decision.js. A file under Excluded is a decision, not an
+    oversight, so it is not reported."""
+    sections = read_manifest_sections(vault)
+    if sections is None:
+        return []
+    if (read_publish_scalar(vault, "mode") or "player").casefold() != "player":
+        return []
+    rows: list[str] = []
+    for index, wrap in played:
+        for rel, kind in ((index, "played session"), (wrap, "Wrap-Up")):
+            if not rel:
+                continue
+            canon = unicodedata.normalize("NFC", rel)
+            if canon in sections["publishing"] or canon in sections["excluded"]:
+                continue
+            where = ("Needs Decision" if canon in sections["needs_decision"]
+                     else "no manifest section")
+            rows.append(
+                f"WARNING\t{rel}\t{kind} is not under Publishing in "
+                f"_meta/publish-manifest.md ({where}) — it will not publish; "
+                f'gm-publish manifest apply --publish "{rel}" '
+                f"(after confirming the hub's Keeper bookkeeping is fenced "
+                f"under <!-- gm-only -->)")
+    return rows
+
+
 def check_sessions(vault: Path) -> list[str]:
     """Derive each session's status from the documents that exist.
 
@@ -903,6 +978,7 @@ def check_sessions(vault: Path) -> list[str]:
         return ["INFO\t(vault)\tno session indexes found"]
 
     rows: list[str] = []
+    played: list[tuple[str, str | None]] = []
     for rel, text, fm in indexes:
         stem = Path(rel).stem
         number = parse_session_number(fm.get("session_number"))
@@ -973,6 +1049,9 @@ def check_sessions(vault: Path) -> list[str]:
                         f"--set status={derived}")
         rows.extend(broken)
         rows.extend(unlinked)
+        if declared.casefold() in PLAYED_STATUSES:
+            played.append((rel, wrap))
+    rows.extend(manifest_rows(vault, played))
     return rows
 
 

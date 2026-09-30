@@ -496,6 +496,78 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertIn("## sessions", run_cli(FIXTURES / "sessions", "all").stdout)
 
 
+class SessionsManifestTests(unittest.TestCase):
+    """`vault_check.py VAULT sessions` — played sessions and their Wrap-Ups
+    missing from the publish manifest's Publishing section (#277)."""
+
+    INDEX = "Session 01 - Lone.md"
+    WRAP = "Chapter_01_Session_01_Wrap_Up.md"
+
+    def vault(self, manifest, config="---\npublish:\n  mode: player\n---\n",
+              status="reviewed"):
+        vault = make_vault(self, config=config)
+        (vault / self.INDEX).write_text(
+            f"---\ntype: session\nsession_number: 1\nstatus: {status}\n---\n",
+            encoding="utf-8")
+        (vault / self.WRAP).write_text(
+            "---\ntype: session_wrap\nsession: \"[[Session 01 - Lone]]\"\n"
+            "canon_status: AUTHORITATIVE\n---\n", encoding="utf-8")
+        if manifest is not None:
+            (vault / "_meta" / "publish-manifest.md").write_text(
+                manifest, encoding="utf-8")
+        return vault
+
+    def missing(self, vault):
+        return [r for r in vc.check_sessions(vault)
+                if "publish-manifest.md" in r]
+
+    def test_unlisted_session_and_wrap_up_each_get_a_warning(self):
+        rows = self.missing(self.vault(
+            "## Publishing (0 files)\n\n## Needs Decision (1 files)\n\n"
+            f"- [ ] {self.INDEX}\n"))
+        self.assertEqual(len(rows), 2, rows)
+        self.assertTrue(all(r.startswith("WARNING\t") for r in rows), rows)
+        index_row = rows_for(rows, f"\t{self.INDEX}\t")[0]
+        self.assertIn("(Needs Decision)", index_row)
+        self.assertIn(f'gm-publish manifest apply --publish "{self.INDEX}"',
+                      index_row)
+        self.assertIn("(no manifest section)",
+                      rows_for(rows, f"\t{self.WRAP}\t")[0])
+
+    def test_listed_under_publishing_is_silent(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Publishing (2 files)\n\n"
+            f"- [x] {self.INDEX}\n- [x] {self.WRAP} — recap\n")), [])
+
+    def test_unchecked_publishing_entry_does_not_count(self):
+        rows = self.missing(self.vault(
+            f"## Publishing (2 files)\n\n- [ ] {self.INDEX}\n"
+            f"- [x] {self.WRAP}\n"))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn(f"\t{self.INDEX}\t", rows[0])
+
+    def test_excluded_is_a_decision_not_a_finding(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Excluded (2 files)\n\n"
+            f"- [x] {self.INDEX} — private\n- [x] {self.WRAP}\n")), [])
+
+    def test_no_manifest_is_silent(self):
+        self.assertEqual(self.missing(self.vault(None)), [])
+
+    def test_full_mode_is_silent(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Publishing (0 files)\n",
+            config="---\npublish:\n  mode: full\n---\n")), [])
+
+    def test_mode_defaults_to_player(self):
+        self.assertEqual(len(self.missing(self.vault(
+            "## Publishing (0 files)\n", config=None))), 2)
+
+    def test_unplayed_session_is_silent(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Publishing (0 files)\n", status="prepped")), [])
+
+
 LEAK = FIXTURES / "leak"
 GOOD = "Characters/NPCs/Good.md"
 LEAKY = "Characters/NPCs/Leaky.md"
