@@ -2333,6 +2333,43 @@ class GmLeakCollapsedWorldStateTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "'World State'"))
 
 
+class GmLeakWithheldHubTests(unittest.TestCase):
+    """#276: gm-leak skips a session hub body the site withholds."""
+    HUB = SessionsCommandTests.HUB
+    WRAP = SessionsCommandTests.WRAP
+    BODY = "## Scene Index\n\n**Keeper only:** the vicar is the cultist.\n"
+
+    def vault(self, wrap=True, wrap_text=None, config=None):
+        vault = make_vault(self, config)
+        (vault / "Session 01 - Lone.md").write_text(self.HUB + self.BODY,
+                                                    encoding="utf-8")
+        if wrap:
+            (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+                wrap_text or self.WRAP, encoding="utf-8")
+        return vault
+
+    def hub_rows(self, vault):
+        return [r for r in vc.check_gm_leak(vault, None)
+                if "Session 01 - Lone.md" in r]
+
+    def test_hub_with_published_wrap_up_has_no_body_rows(self):
+        self.assertEqual(self.hub_rows(self.vault()), [])
+
+    def test_hub_without_wrap_up_still_reports(self):
+        self.assertTrue(self.hub_rows(self.vault(wrap=False)))
+
+    def test_unpublished_wrap_up_does_not_withhold(self):
+        wrap = self.WRAP.replace("canon_status: DRAFT",
+                                 "canon_status: DRAFT\npublish: none")
+        self.assertTrue(self.hub_rows(self.vault(wrap_text=wrap)))
+
+    def test_wrap_up_missing_from_player_manifest_does_not_withhold(self):
+        vault = self.vault(config="---\ntype: meta\npublish:\n  mode: player\n---\n")
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            "## Publishing\n\n- [x] Overview.md\n", encoding="utf-8")
+        self.assertTrue(self.hub_rows(vault))
+
+
 class GmLeakReviewFollowupTests(unittest.TestCase):
     """Review of #239/#240: the advice mustn't un-hide the defaults, and the
     site_dir reader reads only publish's own key."""

@@ -1008,6 +1008,133 @@ def _hub_body_rows(rel: str, text: str) -> list[str]:
             f"metadata only: {'; '.join(homes)}"]
 
 
+def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
+                       chapter: str | None, documents: dict[str, str],
+                       files: list[tuple[str, str, dict]],
+                       stems: dict[str, str],
+                       by_stem: dict[str, list[str]],
+                       by_rel: dict[str, dict],
+                       ) -> tuple[str | None, list[str], list[str]]:
+    """One chain document of a session index: (path or None, broken-link
+    rows, unlinked-document rows)."""
+    kind, types = SESSION_DOC_TYPES[key]
+    broken: list[str] = []
+    unlinked: list[str] = []
+    target = wikilink_target(documents.get(key))
+    if target.casefold() in YAML_NULLS:
+        # `plan: null` is the schema's own placeholder for "this
+        # document does not exist yet" — reporting it as a broken
+        # link would fire on nearly every index in a live vault.
+        target = ""
+    linked, elsewhere = (
+        _resolve_document_link(target, by_stem, by_rel, chapter, rel)
+        if target else (None, None))
+    if elsewhere:
+        broken.append(
+            f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]' "
+            f"but the only note by that name is in another chapter "
+            f"({elsewhere}) — not counted for this session")
+    elif target and linked is None:
+        broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
+                      f"'[[{target}]]' but no such note exists")
+    found = _chain_document(files, stems, types, stem, number, chapter)
+    if found and not linked:
+        unlinked.append(
+            f"INFO\t{rel}\t{kind} exists ({found}) but "
+            f"documents.{key} does not link it — stamp_entities.py "
+            f'VAULT "{rel}" --set '
+            f'documents.{key}="[[{Path(found).stem}]]"')
+    return linked or found, broken, unlinked
+
+
+def _explicit_wrap_up_link(stem: str, wrap: str, documents: dict[str, str],
+                           by_rel: dict[str, dict]) -> bool:
+    """Is the session index's Wrap-Up paired by an explicit link?
+
+    The site withholds the hub body only for a Wrap-Up it can pair by
+    `documents.wrap_up` or the Wrap-Up's own `session:` — never by
+    number (tools/publish/lib/session-hub.js `publishedWrapUpFor`).
+    Shared by `sessions` and `gm-leak` so the pairing lives once.
+    """
+    said = wikilink_target(by_rel.get(wrap, {}).get("session"))
+    doc_link = wikilink_target(documents.get("wrap_up"))
+    return bool((doc_link and doc_link.casefold() not in YAML_NULLS)
+                or (said and link_target(said) == normalize(stem)))
+
+
+def _wrap_ups_by_hub(files: list[tuple[str, str, dict]]) -> dict[str, str]:
+    """Session index path -> its explicitly paired Wrap-Up path."""
+    stems = {normalize(Path(rel).stem): rel for rel, _t, _f in files}
+    by_stem: dict[str, list[str]] = {}
+    for rel, _t, _f in files:
+        by_stem.setdefault(normalize(Path(rel).stem), []).append(rel)
+    by_rel = {rel: fm for rel, _t, fm in files}
+    paired: dict[str, str] = {}
+    for rel, text, fm in files:
+        if fm.get("type") != "session":
+            continue
+        stem = Path(rel).stem
+        number = parse_session_number(fm.get("session_number"))
+        if number is None:
+            number = parse_session_number(stem)
+        documents = nested_mapping(text, "documents")
+        wrap, _b, _u = _resolve_chain_key(
+            "wrap_up", rel, stem, number, chapter_key(rel, fm), documents,
+            files, stems, by_stem, by_rel)
+        if wrap and _explicit_wrap_up_link(stem, wrap, documents, by_rel):
+            paired[rel] = wrap
+    return paired
+
+
+_ALWAYS_EXCLUDE_DIRS = {"_meta", "_Templates", "_templates", "personal"}
+
+
+def _page_publishes(vault: Path, rel: str, fm: dict,
+                    manifest: dict[str, set[str]] | None,
+                    mode: str, exclude_drafts: bool) -> bool:
+    """Would the site build a page for this file? Mirrors the order of
+    tools/publish/lib/publish-decision.js `decidePage` closely enough for
+    a Wrap-Up: always-excluded folders, `exclude_drafts`, the prep-state
+    heuristics, the player-mode manifest allowlist, then `publish: none`.
+    """
+    if any(seg in _ALWAYS_EXCLUDE_DIRS for seg in rel.split("/")[:-1]):
+        return False
+    if not fm.get("type"):
+        return False
+    canon = unicodedata.normalize("NFC", rel)
+    listed = bool(manifest and canon in manifest["publishing"])
+    if exclude_drafts and str(fm.get("canon_status", "")).upper() == "DRAFT":
+        return False
+    if mode != "full" and not listed:
+        if (str(fm.get("status", "")).casefold() in ("planned", "prepped")
+                or str(fm.get("stage", "")).casefold()
+                in ("outline", "draft", "ready")
+                or str(fm.get("source", "")).casefold() == "prep"):
+            return False
+    if manifest and mode == "player" and not listed:
+        return False
+    return publish_mode(fm) != "none"
+
+
+def hub_bodies_withheld(vault: Path) -> set[str]:
+    """Session indexes whose body the site withholds (#276): an explicitly
+    paired Wrap-Up that itself publishes. The `gm-leak` counterpart of
+    session-hub.js `suppressHubBody`."""
+    files = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault)]
+    paired = _wrap_ups_by_hub(files)
+    if not paired:
+        return set()
+    by_rel = {rel: fm for rel, _t, fm in files}
+    manifest = read_manifest_sections(vault)
+    mode = (read_publish_scalar(vault, "mode") or "player").casefold()
+    drafts = (read_publish_scalar(vault, "exclude_drafts")
+              or "").casefold() == "true"
+    return {hub for hub, wrap in paired.items()
+            if _page_publishes(vault, wrap, by_rel[wrap], manifest, mode,
+                               drafts)}
+
+
 def check_sessions(vault: Path) -> list[str]:
     """Derive each session's status from the documents that exist.
 
@@ -1043,33 +1170,12 @@ def check_sessions(vault: Path) -> list[str]:
         chain: dict[str, str | None] = {}
         broken: list[str] = []
         unlinked: list[str] = []
-        for key, (kind, types) in SESSION_DOC_TYPES.items():
-            target = wikilink_target(documents.get(key))
-            if target.casefold() in YAML_NULLS:
-                # `plan: null` is the schema's own placeholder for "this
-                # document does not exist yet" — reporting it as a broken
-                # link would fire on nearly every index in a live vault.
-                target = ""
-            linked, elsewhere = (
-                _resolve_document_link(
-                    target, by_stem, by_rel, chapter, rel)
-                if target else (None, None))
-            if elsewhere:
-                broken.append(
-                    f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]' "
-                    f"but the only note by that name is in another chapter "
-                    f"({elsewhere}) — not counted for this session")
-            elif target and linked is None:
-                broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
-                              f"'[[{target}]]' but no such note exists")
-            found = _chain_document(files, stems, types, stem, number, chapter)
-            chain[key] = linked or found
-            if found and not linked:
-                unlinked.append(
-                    f"INFO\t{rel}\t{kind} exists ({found}) but "
-                    f"documents.{key} does not link it — stamp_entities.py "
-                    f'VAULT "{rel}" --set '
-                    f'documents.{key}="[[{Path(found).stem}]]"')
+        for key in SESSION_DOC_TYPES:
+            chain[key], b, u = _resolve_chain_key(
+                key, rel, stem, number, chapter, documents,
+                files, stems, by_stem, by_rel)
+            broken.extend(b)
+            unlinked.extend(u)
 
         wrap = chain["wrap_up"]
         if wrap:
@@ -1102,13 +1208,7 @@ def check_sessions(vault: Path) -> list[str]:
                         f"--set status={derived}")
         rows.extend(broken)
         rows.extend(unlinked)
-        # The site withholds the hub body only for a Wrap-Up it can pair by
-        # an explicit link — `documents.wrap_up`, or the Wrap-Up's own
-        # `session:` — never by number (tools/publish/lib/session-hub.js).
-        said = wikilink_target(by_rel.get(wrap, {}).get("session")) if wrap else ""
-        doc_link = wikilink_target(documents.get("wrap_up"))
-        if wrap and ((doc_link and doc_link.casefold() not in YAML_NULLS)
-                     or (said and link_target(said) == normalize(stem))):
+        if wrap and _explicit_wrap_up_link(stem, wrap, documents, by_rel):
             rows.extend(_hub_body_rows(rel, text))
         if declared.casefold() in PLAYED_STATUSES:
             played.append((rel, wrap))
@@ -1325,11 +1425,16 @@ def check_gm_leak(vault: Path, folder: str | None,
         rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
                     f"assumes the default exclude list; set site_dir so it "
                     f"reads the site's vault.config.json excludeSections too")
+    withheld = hub_bodies_withheld(vault)
     for rel, text in vault_files(vault, folder):
         fm = extract_frontmatter(text) or {}
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
         if publish_mode(fm) == "none":
+            continue
+        if rel in withheld:
+            # session-hub.js suppressHubBody: the site publishes the
+            # frontmatter and the Wrap-Up's recap, not this body.
             continue
         states, problems = scan_body(text, excludes)
         kept = _published_linenos(states, fm)
