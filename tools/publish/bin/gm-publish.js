@@ -126,15 +126,20 @@ excluded versus missing is the GM's call.
                      matches no vault file is an error and nothing is written.
   manifest publish-played [--dry-run] [--config <path>] [--json]
                      Move every played session (status played, wrap-up or
-                     reviewed) that has a Wrap-Up, plus that Wrap-Up, to
-                     Publishing. A played session with no Wrap-Up is listed as
-                     "unclear" and not ticked (tick it with manifest apply).
-                     Leaves Excluded entries alone. Player mode with a manifest
-                     only; otherwise does nothing.
+                     reviewed) to Publishing together with its Wrap-Up, but
+                     only when that Wrap-Up is linked (documents.wrap_up or
+                     its session:) and will publish, so the session's body is
+                     withheld. Any other played session is listed as
+                     "unclear" with the reason (no Wrap-Up, or it is
+                     Excluded or does not publish) and not ticked: its body
+                     would publish, so that is the GM's call (manifest
+                     apply). Leaves Excluded entries alone. Player mode with
+                     a manifest only; otherwise does nothing.
   --help, -h         Show this help
 `,
   explain: `
 gm-apprentice-publish explain <vault-relative path> [--config <path>] [--json]
+gm-apprentice-publish explain --all --json [--config <path>] [--vault <dir>]
 
 Prints the chain the build walks for one file — directory, type, publish mode,
 auto-exclusion, canon status, manifest section — and then the build's own
