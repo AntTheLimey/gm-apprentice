@@ -76,7 +76,11 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
       : pages
         .filter(p => p.frontmatter.type === fm.type)
         .sort((a, b) => (a.frontmatter.sort_order || a.frontmatter.session_number || 0) - (b.frontmatter.sort_order || b.frontmatter.session_number || 0));
-    const idx = sameType.findIndex(p => p.title === page.title);
+    // By identity: two chapters can each have a "Session 01", and a title lookup gave
+    // Ch2's page Ch1's neighbours. outputPath is unique per page, for a caller whose
+    // `pages` holds copies rather than this very object.
+    let idx = sameType.indexOf(page);
+    if (idx === -1) idx = sameType.findIndex(p => p.outputPath === page.outputPath);
     const prev = idx > 0 ? sameType[idx - 1] : null;
     const next = idx < sameType.length - 1 ? sameType[idx + 1] : null;
     const prevLink = prev ? `<a href="${encodeHref(relativeHref(page.outputPath, prev.outputPath))}">&larr; ${escapeHtml(prev.displayTitle)}</a>` : '<span></span>';

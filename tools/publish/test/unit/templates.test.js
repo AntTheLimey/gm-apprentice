@@ -496,6 +496,24 @@ describe('session prev/next links follow story order (#276)', () => {
     assert.deepStrictEqual(orderedSessions(pages).map(x => x.title), ['Ch1 S1', 'Ch1 S2', 'Ch2 S1', 'Ch2 S2']);
   });
 
+  // Review of #278: two chapters each with a "Session 01". The Ch2 page looked itself up
+  // by title, found Ch1's, and showed Ch1's prev/next.
+  it('a same-titled session in another chapter gets its own prev/next', () => {
+    const same = (ch, n) => ({ title: `Session 0${n}`, displayTitle: `Session 0${n}`,
+      outputPath: `chapters/${ch}/session-0${n}.html`, sourcePath: `/v/${ch}/Session 0${n}.md`,
+      frontmatter: { type: 'session', session_number: n, chapter: `[[${ch}]]` } });
+    const ch1s1 = same('Ch1', 1); const ch1s2 = same('Ch1', 2);
+    const ch2s1 = same('Ch2', 1); const ch2s2 = same('Ch2', 2);
+    const pages = [chapter('Ch1', 1), chapter('Ch2', 2), ch1s1, ch1s2, ch2s1, ch2s2];
+    const hrefs = page => {
+      const html = wikiTemplate(page, processed, () => '', cfg, {}, { pages, publishConfig: {}, linkMap: {} });
+      const nav = html.match(/<div class="story-nav">(.*?)<\/div>/);
+      return [...nav[1].matchAll(/href="([^"]*)"/g)].map(m => m[1]);
+    };
+    assert.deepStrictEqual(hrefs(ch2s1), ['../Ch1/session-02.html', 'session-02.html']);
+    assert.deepStrictEqual(hrefs(ch1s1), ['session-02.html']);
+  });
+
   it('a vault with no chapters keeps exactly the old order, ties and all', () => {
     const variants = [
       [flat('A', { session_number: 1 }), flat('B', { session_number: 1 }), flat('C', {})],
