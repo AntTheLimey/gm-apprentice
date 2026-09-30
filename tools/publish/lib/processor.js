@@ -107,7 +107,9 @@ function isExcludedSection(title, excludeSections = [], frontmatter = null, leve
   if (level !== 2 || !isDocumentPage(frontmatter)) return false;
   // `## **Context**` and `## Clues:` are the same sections; a spelling must not
   // be the way one reaches the site.
-  const bare = lower.replace(/^(\*\*|\*|__|_)(.+)\1$/, '$2').trim().replace(/:$/, '').trim();
+  const unwrap = (t) => t.replace(/^(\*\*|\*|__|_)(.+)\1$/, '$2').trim();
+  const unColon = (t) => t.replace(/:$/, '').trim();
+  const bare = unColon(unwrap(unColon(lower)));
   return DOCUMENT_KEEPER_SECTION_RE.test(bare);
 }
 

@@ -140,7 +140,7 @@ describe("filterSections on a handout's Keeper sections (#280)", () => {
   });
 
   it('sees through emphasis and a trailing colon', () => {
-    for (const t of ['**Context**', '*Prop Notes*', 'Clues:', '__Context:__']) {
+    for (const t of ['**Context**', '*Prop Notes*', 'Clues:', '__Context:__', '**Context**:', '*Prop Notes*:']) {
       assert.strictEqual(isExcludedSection(t, [], { type: 'document' }), true, t);
     }
   });
