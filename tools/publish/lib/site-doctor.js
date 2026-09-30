@@ -27,7 +27,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
-  'CONFIG_INVALID', 'VAULT_MISSING', 'VERSION_DRIFT', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
+  'CONFIG_INVALID', 'VAULT_MISSING', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
 ];
 
@@ -207,6 +207,22 @@ async function runSiteDoctor(options, deps) {
         'VERSION_DRIFT', 'warning', pkgPath,
         `site pinned to ${sitePin || drift.pinned}, newest installed is ${drift.latest} — the site builds with the old renderer`,
         'run `gm-publish update-pin`',
+      ));
+    }
+  }
+
+  // --- fonts fetched from Google at page load (#270) ------------------------
+  const fontsCfg = publishConfig.theme.fonts || {};
+  if (fontsCfg.source !== 'local' && fontsCfg.source !== 'self-host') {
+    const { googleFontNames } = require('./theme');
+    const { presetFamiliesFor } = require('./fonts');
+    const names = [...googleFontNames(fontsCfg), ...presetFamiliesFor(publishConfig.theme)]
+      .filter((v, i, a) => a.indexOf(v) === i);
+    if (names.length > 0) {
+      findings.push(finding(
+        'FONTS_GOOGLE', 'warning', '_meta/vault-config.md',
+        `custom fonts ${names.join(', ')} are loaded from Google Fonts at page load — visitors' IP addresses are sent to Google, and some jurisdictions (e.g. the EU under GDPR) require consent for that`,
+        'set publish.theme.fonts.source: self-host to serve them from your site instead, or use a system font',
       ));
     }
   }

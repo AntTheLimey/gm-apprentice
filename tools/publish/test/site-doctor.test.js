@@ -344,3 +344,28 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 });
+
+describe('runSiteDoctor Google Fonts finding (#270)', () => {
+  async function findingsFor(fontsYaml) {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-fonts-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    write(vault, '_meta/vault-config.md', `---\npublish:\n  theme:\n    fonts:\n${fontsYaml}\n---\n`);
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    await runSiteDoctor({ configPath, json: true }, c.deps);
+    fs.rmSync(vault, { recursive: true, force: true });
+    return JSON.parse(c.out.join('')).findings.filter((f) => f.code === 'FONTS_GOOGLE');
+  }
+
+  it('warns when a custom font loads from Google', async () => {
+    const found = await findingsFor('      heading: Cinzel\n      body: Inter');
+    assert.strictEqual(found.length, 1);
+    assert.match(found[0].detail, /Cinzel, Inter/);
+    assert.match(found[0].fix, /self-host/);
+  });
+
+  it('is quiet for self-host and for system fonts', async () => {
+    assert.strictEqual((await findingsFor('      heading: Cinzel\n      source: self-host')).length, 0);
+    assert.strictEqual((await findingsFor('      heading: serif')).length, 0);
+  });
+});

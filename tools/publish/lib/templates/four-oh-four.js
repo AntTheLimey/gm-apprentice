@@ -12,7 +12,8 @@ function fourOhFourTemplate(config) {
   const href = p => `${basePath}${p}`;
 
   // Match the rest of the site: load the genre theme overlay when one is configured,
-  // otherwise the 404 falls back to the default (e.g. blue) accents.
+  // otherwise the 404 falls back to the default (e.g. blue) accents. It goes BEFORE
+  // theme.css, as in base.js, so the vault's own palette wins over the preset's (#268).
   const genreLinkTag = config.genrePreset
     ? `\n  <link rel="stylesheet" href="${href(`css/themes/${config.genrePreset}.css`)}">`
     : '';
@@ -33,8 +34,8 @@ function fourOhFourTemplate(config) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">${colorModeHeadHtml()}
   <title>Not Found — ${siteTitle}</title>
-  <link rel="stylesheet" href="${href('css/style.css')}">
-  <link rel="stylesheet" href="${href('css/theme.css')}">${genreLinkTag}${overridesLinkTag}
+  <link rel="stylesheet" href="${href('css/style.css')}">${genreLinkTag}
+  <link rel="stylesheet" href="${href('css/theme.css')}">${overridesLinkTag}
   <style>
     .four-oh-four-hero {
       text-align: center;

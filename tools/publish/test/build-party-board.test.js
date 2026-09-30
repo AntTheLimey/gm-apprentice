@@ -91,6 +91,15 @@ test('build() wires the live party board on the roster when backend.statusBar is
   assert.match(html, /js\/gurps-party\.js/);
 });
 
+test('build() leaves out-of-play PCs off the party board (#265)', () => {
+  // Otto Weiss has a full sheet (so live vitals) but `status: Retired`.
+  for (const statusBar of [false, true]) {
+    const html = buildRosterHtml(statusBar);
+    assert.match(html, /karl-brenner/, 'active PC is on the board');
+    assert.doesNotMatch(html, /otto-weiss/, 'retired PC is not on the board or in the data island');
+  }
+});
+
 test('CoC roster injects the coc board, coc-party-data island, and ordered scripts', () => {
   const board = boardFor('coc-7e');
   const entries = [{ name: 'Emma Wentworth', outputPath: 'characters/pcs/emma-wentworth.html', portrait: null, data: {

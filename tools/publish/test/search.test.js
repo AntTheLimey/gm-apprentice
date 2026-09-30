@@ -54,7 +54,7 @@ test('buildSearchIndex: an NFD-authored page is findable by the folded (NFC) que
   // because matching is the behaviour that matters.
   const lunr = require('lunr');
   const { buildSearchIndex } = require('../lib/search-index');
-  const { index } = buildSearchIndex([{
+  const { index, documents } = buildSearchIndex([{
     outputPath: 'characters/npcs/gonzalez.html',
     displayTitle: Q_NFD,
     title: Q_NFD,
@@ -64,5 +64,17 @@ test('buildSearchIndex: an NFD-authored page is findable by the folded (NFC) que
   const idx = lunr.Index.load(index);
   const hits = idx.search(search.normalizeQuery(Q_NFD));
   assert.strictEqual(hits.length, 1, 'folded query found nothing in an NFD-authored index');
-  assert.strictEqual(hits[0].ref, 'characters/npcs/gonzalez.html');
+  assert.strictEqual(documents[hits[0].ref].href, 'characters/npcs/gonzalez.html');
+});
+
+test('tabTarget traps Tab and Shift+Tab inside the search panel', () => {
+  const [a, b, c] = ['a', 'b', 'c'];
+  const list = [a, b, c];
+  assert.strictEqual(search.tabTarget(list, c, false), a);
+  assert.strictEqual(search.tabTarget(list, a, true), c);
+  assert.strictEqual(search.tabTarget(list, b, false), null);
+  assert.strictEqual(search.tabTarget(list, b, true), null);
+  assert.strictEqual(search.tabTarget(list, 'outside', false), a);
+  assert.strictEqual(search.tabTarget(list, 'outside', true), c);
+  assert.strictEqual(search.tabTarget([], a, false), null);
 });

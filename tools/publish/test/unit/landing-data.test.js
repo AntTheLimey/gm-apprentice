@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
+const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -185,6 +185,36 @@ describe('getLatestWrapUp', () => {
     };
     const result = getLatestWrapUp(pages, calcuttaSession);
     assert.strictEqual(result.title, 'Chapter_04_Session_04_Wrap_Up');
+  });
+});
+
+describe('extractRecapHtml (#269)', () => {
+  const recapOf = para => ({ markdown: `# Session 3\n\n## Narrative Recap\n\n${para}\n` });
+
+  it('renders emphasis instead of showing asterisks', () => {
+    const html = extractRecapHtml(recapOf('*Recorded Thursday. 3h 53m.* The crew **finally** met.'));
+    assert.strictEqual(html, '<em>Recorded Thursday. 3h 53m.</em> The crew <strong>finally</strong> met.');
+  });
+
+  it('keeps link text, drops the URL, drops images, keeps inline code', () => {
+    const html = extractRecapHtml(recapOf('They read [the letter](letters/x.md) ![map](m.png) and `rolled 42`.'));
+    assert.strictEqual(html, 'They read the letter and <code>rolled 42</code>.');
+  });
+
+  it('never emits raw HTML from the paragraph', () => {
+    const html = extractRecapHtml(recapOf('A <script>alert(1)</script> & a <b>tag</b>.'));
+    assert.strictEqual(html, 'A &amp; a tag.');
+  });
+
+  it('truncates by visible text and closes open tags', () => {
+    const html = extractRecapHtml(recapOf('*' + 'word '.repeat(200).trim() + '* after'));
+    assert.ok(html.startsWith('<em>word'), html.slice(0, 20));
+    assert.ok(html.endsWith('…</em>'), html.slice(-20));
+    assert.ok(html.replace(/<[^>]+>/g, '').length <= 501);
+  });
+
+  it('plain extractRecap strips the same markdown syntax', () => {
+    assert.strictEqual(extractRecap(recapOf('*Recorded.* **Bold** [link](x).')), 'Recorded. Bold link.');
   });
 });
 
@@ -439,5 +469,20 @@ describe('getExploreDescriptions', () => {
     const d = getExploreDescriptions('scifi', {});
     assert.ok(d.locations.includes('Stations'));
     assert.ok(d.factions.includes('Corporations'));
+  });
+});
+
+describe('statusLabel (In Memoriam labels)', () => {
+  const { statusLabel } = require('../../lib/templates/landing');
+  const { OUT_OF_PLAY_STATUSES } = require('../../lib/pc-status');
+  it('never labels an out-of-play status "Active"', () => {
+    for (const s of OUT_OF_PLAY_STATUSES) {
+      assert.notStrictEqual(statusLabel(s), 'Active', s);
+      assert.notStrictEqual(statusLabel(` ${s.toUpperCase()} `), 'Active', s);
+    }
+  });
+  it('labels in-play and absent statuses "Active"', () => {
+    assert.strictEqual(statusLabel('active'), 'Active');
+    assert.strictEqual(statusLabel(undefined), 'Active');
   });
 });

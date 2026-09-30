@@ -1,10 +1,11 @@
 const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
 const {
-  getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs,
+  getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,
 } = require('./landing-data');
 const { canonicalNfc } = require('../unicode');
+const { isOutOfPlay } = require('../pc-status');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -18,14 +19,17 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-const FALLEN_STATUSES = new Set(['dead', 'deceased', 'retired', 'unknown', 'missing']);
 
+// Label for an In Memoriam card. Every out-of-play status (lib/pc-status.js) gets one, so a
+// fallen PC is never labelled "Active".
 function statusLabel(status) {
-  if (!status) return 'Active';
-  const s = String(status).toLowerCase();
-  if (s === 'dead' || s === 'deceased') return 'KIA';
+  const s = String(status || '').trim().toLowerCase();
+  if (s === 'dead' || s === 'deceased' || s === 'kia') return 'KIA';
   if (s === 'missing' || s === 'unknown') return 'MIA';
   if (s === 'retired') return 'Retired';
+  if (s === 'departed') return 'Departed';
+  if (s === 'inactive') return 'Inactive';
+  if (s === 'npc') return 'Now an NPC';
   return 'Active';
 }
 
@@ -87,14 +91,14 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
   let recapZone = '';
   if (latestSession) {
     const recapSource = latestWrapUp || latestSession;
-    const recap = extractRecap(recapSource);
+    const recap = extractRecapHtml(recapSource);
     const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const linkTarget = latestWrapUp || latestSession;
     const recapLink = `<a class="recap-link" href="${escapeHtml(encodeHref(linkTarget.outputPath))}">Read full session &rarr;</a>`;
     recapZone = `<div class="dashboard-section">
   <h2>Latest Session${dateBadge}</h2>
-  <div class="recap">${recap ? escapeHtml(recap) : '<em>No recap available.</em>'}
+  <div class="recap">${recap || '<em>No recap available.</em>'}
     <br>${recapLink}
   </div>
 </div>`;
@@ -102,8 +106,8 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
 
   // --- Zone 3: The Team (active PCs) ---
   const allPCs = getPCs(pages);
-  const activePCs = allPCs.filter(p => !FALLEN_STATUSES.has(String(p.frontmatter.status || '').toLowerCase()));
-  const fallenPCs = allPCs.filter(p => FALLEN_STATUSES.has(String(p.frontmatter.status || '').toLowerCase()));
+  const activePCs = allPCs.filter(p => !isOutOfPlay(p.frontmatter));
+  const fallenPCs = allPCs.filter(p => isOutOfPlay(p.frontmatter));
 
   let teamZone = '';
   if (activePCs.length > 0) {
@@ -285,4 +289,4 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
   });
 }
 
-module.exports = { landingTemplate, formatDate };
+module.exports = { landingTemplate, formatDate, statusLabel };

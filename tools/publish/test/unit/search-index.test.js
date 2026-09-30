@@ -29,13 +29,14 @@ describe('buildSearchIndex', () => {
 
   it('includes all pages in documents map', () => {
     const result = buildSearchIndex(pages);
-    assert.ok(result.documents['characters/npcs/herr-gruber.html']);
-    assert.ok(result.documents['locations/vienna.html']);
+    const hrefs = Object.values(result.documents).map(d => d.href);
+    assert.ok(hrefs.includes('characters/npcs/herr-gruber.html'));
+    assert.ok(hrefs.includes('locations/vienna.html'));
   });
 
   it('document entries include display info', () => {
     const result = buildSearchIndex(pages);
-    const doc = result.documents['characters/npcs/herr-gruber.html'];
+    const doc = Object.values(result.documents).find(d => d.href === 'characters/npcs/herr-gruber.html');
     assert.strictEqual(doc.title, 'Herr Gruber');
     assert.strictEqual(doc.type, 'npc');
     assert.ok(doc.subtitle);
@@ -55,7 +56,7 @@ describe('buildSearchIndex', () => {
     const idx = lunr.Index.load(result.index);
     const results = idx.search('intrigue');
     assert.ok(results.length > 0);
-    assert.strictEqual(results[0].ref, 'locations/vienna.html');
+    assert.strictEqual(result.documents[results[0].ref].href, 'locations/vienna.html');
   });
 
   it('search finds results by alias', () => {

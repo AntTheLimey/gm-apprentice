@@ -1,5 +1,6 @@
 const { canonicalNfc, graphemes } = require('../unicode');
-const { parseWikiRef } = require('../processor');
+const { parseWikiRef, escapeHtml } = require('../processor');
+const { stripTags } = require('../strip-tags');
 
 function getLatestSession(pages) {
   const played = pages.filter(
@@ -22,7 +23,16 @@ function stripWikiLinks(text) {
     .replace(/\[\[([^\]]+)\]\]/g, (m, target) => target.replace(/_/g, ' '));
 }
 
-function extractRecap(page) {
+// The recap is printed as escaped plain text, so any raw HTML typed in the body is
+// reduced to its text first. Only a paragraph with no text left (empty markup, an SVG made
+// of shapes) drops out; an SVG's <text> content counts as text and is kept.
+function recapParagraphs(text) {
+  return text.split(/\n\n+/)
+    .map(p => stripTags(p).replace(/[ \t]{2,}/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function recapParagraph(page) {
   if (!page) return null;
   // Prefer the published view (gm-only blocks + excluded sections stripped) so the
   // landing recap can never quote Keeper-only content.
@@ -38,27 +48,80 @@ function extractRecap(page) {
     const after = md.slice(recapMatch.index + recapMatch[0].length);
     const nextHeading = after.search(/^## /m);
     const section = nextHeading === -1 ? after : after.slice(0, nextHeading);
-    const paragraphs = section.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    const paragraphs = recapParagraphs(section);
     paragraph = paragraphs.find(p => !/^#{1,6}\s/.test(p) && !p.startsWith('>')) || null;
   } else {
     // Tolerate blank lines before the H1, and never surface a bare heading or a
     // blockquote as "the recap" — take the first real prose paragraph.
     const withoutH1 = md.replace(/^\s*# .+\n+/, '');
-    const paragraphs = withoutH1.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+    const paragraphs = recapParagraphs(withoutH1);
     paragraph = paragraphs.find(p => !/^#{1,6}\s/.test(p) && !p.startsWith('>')) || null;
   }
 
-  if (!paragraph) return null;
+  return paragraph ? stripWikiLinks(paragraph) : null;
+}
 
-  paragraph = stripWikiLinks(paragraph);
+const RECAP_MAX_CHARS = 500;
+const RECAP_TAGS = { em_open: '<em>', em_close: '</em>', strong_open: '<strong>', strong_close: '</strong>', s_open: '<s>', s_close: '</s>' };
 
-  if (paragraph.length > 500) {
-    const truncated = paragraph.slice(0, 500);
-    const lastSpace = truncated.lastIndexOf(' ');
-    paragraph = (lastSpace > 0 ? truncated.slice(0, lastSpace) : truncated) + '…';
+// Walks the paragraph's inline markdown tokens, keeping the words and dropping the
+// syntax (#269): emphasis markers, link URLs and images never show as literal text.
+// With `html`, emphasis, strikethrough and inline code keep their markup (escaped
+// text, a fixed tag set, no links). Truncates to ~RECAP_MAX_CHARS visible characters
+// at a word boundary and closes any tags still open.
+function renderRecap(paragraph, html) {
+  const tokens = (inlineRenderer().parseInline(paragraph, {})[0] || {}).children || [];
+  let out = '';
+  let visible = 0;
+  let truncated = false;
+  const open = [];
+  const esc = t => (html ? escapeHtml(t) : t);
+  const addText = (text, wrap) => {
+    if (truncated) return;
+    let t = text;
+    if (visible + t.length > RECAP_MAX_CHARS) {
+      t = t.slice(0, RECAP_MAX_CHARS - visible);
+      const lastSpace = t.lastIndexOf(' ');
+      if (lastSpace > 0) t = t.slice(0, lastSpace);
+      truncated = true;
+    }
+    visible += t.length;
+    out += wrap && html ? `<code>${esc(t)}</code>` : esc(t);
+    if (truncated) out = out.replace(/\s+$/, '') + '…';
+  };
+  for (const tok of tokens) {
+    if (truncated) break;
+    if (tok.type === 'text') addText(tok.content);
+    else if (tok.type === 'code_inline') addText(tok.content, true);
+    else if (tok.type === 'softbreak' || tok.type === 'hardbreak') addText(' ');
+    else if (RECAP_TAGS[tok.type] && html) {
+      if (tok.nesting === 1) open.push(tok.type.replace('_open', '_close'));
+      else open.pop();
+      out += RECAP_TAGS[tok.type];
+    }
+    // link_open/link_close, image, html_inline: dropped (a link keeps its text).
   }
+  if (html) while (open.length) out += RECAP_TAGS[open.pop()];
+  out = out.replace(/ {2,}/g, ' ').trim();
+  return out || null;
+}
 
-  return paragraph;
+let cachedRenderer = null;
+function inlineRenderer() {
+  if (!cachedRenderer) cachedRenderer = require('../markdown').createRenderer();
+  return cachedRenderer;
+}
+
+// Plain-text teaser of the latest session's recap (first prose paragraph).
+function extractRecap(page) {
+  const paragraph = recapParagraph(page);
+  return paragraph ? renderRecap(paragraph, false) : null;
+}
+
+// Same teaser as HTML, with emphasis rendered rather than shown as asterisks (#269).
+function extractRecapHtml(page) {
+  const paragraph = recapParagraph(page);
+  return paragraph ? renderRecap(paragraph, true) : null;
 }
 
 function getInitials(name) {
@@ -227,4 +290,4 @@ function getLatestWrapUp(pages, session) {
   return null;
 }
 
-module.exports = { getLatestSession, getLatestWrapUp, extractRecap, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
+module.exports = { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };

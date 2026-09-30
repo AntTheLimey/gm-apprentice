@@ -2,6 +2,10 @@ const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
 const md = createRenderer();
 
+function renderMarkdown(markdown) {
+  return md.render(markdown);
+}
+
 function escapeHtml(str) {
   return String(str || '')
     .replace(/&/g, '&amp;')
@@ -169,11 +173,15 @@ function stripDataview(markdown) {
 // one primitive whose entire job is hiding things — so an inner block now
 // closes only itself, and the outer block survives it.
 function stripMarkedBlocks(markdown, markerName) {
-  const openRe = new RegExp(`^<!--\\s*${markerName}\\s*-->`);
-  const closeRe = new RegExp(`^<!--\\s*/${markerName}\\s*-->`);
-  const lines = markdown.split('\n');
+  // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
+  const markerRe = new RegExp(`<!--\\s*(/?)${markerName}\\s*-->`, 'g');
+  // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
+  // closer shown inside a fenced example would end the block early. Callers that
+  // pass raw gray-matter content (build.js's published view) keep CRLF.
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const result = [];
   const warnings = [];
+  const stack = [];
   let depth = 0;
   let orphanClosers = 0;
   // The open fence's delimiter, or null outside a fence. Tracking the actual
@@ -217,26 +225,44 @@ function stripMarkedBlocks(markdown, markerName) {
       continue;
     }
 
-    if (openRe.test(line.trim())) {
-      depth += 1;
-      if (depth === 1) result.push('');   // one blank stands in for the whole block
+    // Markers are honoured wherever they sit on the line: inline
+    // ("a <!-- gm-only -->X<!-- /gm-only --> b"), inside HTML wrappers, or several
+    // per line. Text outside every block is kept; a line that held only markers
+    // and blank leftovers collapses (one blank stands in for a whole block).
+    if (!markerRe.test(line)) {
+      if (depth === 0) result.push(line);
       continue;
     }
-
-    if (closeRe.test(line.trim())) {
-      if (depth === 0) {
+    markerRe.lastIndex = 0;
+    let kept = '';
+    let last = 0;
+    let opened = false;
+    let m;
+    while ((m = markerRe.exec(line)) !== null) {
+      if (depth === 0) kept += line.slice(last, m.index);
+      last = m.index + m[0].length;
+      const inline = line.slice(0, m.index).trim() !== '';
+      if (m[1] === '') {
+        if (depth === 0) opened = true;
+        stack.push({ inline, line: i });
+      } else if (stack.length === 0) {
         // A closer with nothing open. Don't let it drive depth negative — that
         // would make a LATER opener fail to strip. Count it and warn instead.
         orphanClosers += 1;
-        continue;
+      } else {
+        // A closer tucked after other content ("<div><!-- /gm-only --></div>")
+        // may only end a block opened the same way or on this same line; against
+        // a block opened on its own line it is ignored, so the block stays open
+        // (over-strips, never under-strips).
+        const top = stack[stack.length - 1];
+        if (!inline || top.inline || top.line === i) stack.pop();
       }
-      depth -= 1;
-      continue;
+      depth = stack.length;
     }
-
-    if (depth === 0) {
-      result.push(line);
-    }
+    if (depth === 0) kept += line.slice(last);
+    markerRe.lastIndex = 0;
+    if (kept.trim() !== '') result.push(kept);
+    else if (opened) result.push('');
   }
 
   if (depth > 0) {
@@ -823,4 +849,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
+module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
