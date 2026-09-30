@@ -339,6 +339,15 @@ describe('update-pin --tag', () => {
     assert.match(h.out.join('\n'), /HTTP 404/);
   });
 
+  it('rejects an empty --tag instead of falling through to a cache repoint (#274 final review)', async () => {
+    const h = tagHarness({});
+    const rc = await runUpdatePin({ siteDir: '/site', tag: '' }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.out.join('\n'), /--tag must look like publish-vX\.Y\.Z \(got ""\)/);
+    assert.deepStrictEqual(h.calls, []);
+    assert.deepStrictEqual(h.writes, {});
+  });
+
   it('rejects a malformed tag before any network call', async () => {
     const h = tagHarness({});
     const rc = await runUpdatePin({ siteDir: '/site', tag: 'v1.9.11' }, h.deps);

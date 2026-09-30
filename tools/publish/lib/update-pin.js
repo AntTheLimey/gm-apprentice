@@ -172,7 +172,9 @@ async function runUpdatePinTag(opts, d) {
 async function runUpdatePin(options, deps) {
   const opts = options || {};
   const d = deps || {};
-  if (opts.tag) return runUpdatePinTag(opts, d);
+  // Any --tag at all, even an empty one, is a tag pin: `--tag ""` falling through to a
+  // plugin-cache repoint would silently do the opposite of what was asked.
+  if (opts.tag !== undefined && opts.tag !== null && opts.tag !== false) return runUpdatePinTag(opts, d);
   const out = d.out || console.log;
   const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = d.writeFile || ((p, c) => fs.writeFileSync(p, c));
