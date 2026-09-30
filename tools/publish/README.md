@@ -12,7 +12,7 @@ Node 22 or later. Check with `node --version`.
 ## Vendored dependencies
 
 This tool's runtime dependencies (`gray-matter`, `lunr`,
-`markdown-it`, `sanitize-html`, and their transitive deps) are **committed** under
+`markdown-it`, and their transitive deps) are **committed** under
 `node_modules/` — an exception to the usual rule, enforced by a
 negation at the bottom of the repo's root `.gitignore`.
 
@@ -42,6 +42,33 @@ rm -rf node_modules && npm ci --omit=dev
 rm -rf node_modules/.bin node_modules/.package-lock.json
 git add node_modules
 ```
+
+### Bundled dependency: sanitize-html
+
+`sanitize-html` (used by `lib/html-allowlist.js` for the opt-in
+`publish.allow_html` setting) is **not** vendored under `node_modules/`.
+Vendored that way it added 806 tracked files (`dayjs` alone is 451, pulled
+in by `launder`). Instead it ships as one esbuild bundle,
+`vendor/sanitize-html.js`, with sanitize-html and all its dependencies
+inlined, unminified so it stays diffable, and with every bundled package's
+licence text at the end of the file. The bundled version is recorded in
+`package.json` under `vendoredBundles`. It is deliberately not listed in
+`dependencies`, so `npm install`/`npm ci` never pulls it back into
+`node_modules/`.
+
+**Regenerating or upgrading it:**
+
+```bash
+cd tools/publish
+scripts/vendor-sanitize-html.sh            # rebuild the pinned version
+scripts/vendor-sanitize-html.sh 2.18.0     # upgrade to another version
+```
+
+The script installs sanitize-html and a pinned esbuild into a temp dir,
+bundles, and writes `vendor/sanitize-html.js`; nothing lands in
+`node_modules/`. Rebuilding the same version is byte-for-byte
+reproducible. After an upgrade, update the version in `package.json`
+(`vendoredBundles`) and run the tests. Never edit the bundle by hand.
 
 The `runtime-deps` test fails if a declared dependency is not both
 requireable and git-tracked, and the `clean-install` integration

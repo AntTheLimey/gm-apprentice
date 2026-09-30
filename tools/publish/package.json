@@ -26,7 +26,13 @@
   "dependencies": {
     "gray-matter": "^4.0.3",
     "lunr": "^2.3.9",
-    "markdown-it": "^14.1.0",
-    "sanitize-html": "^2.17.7"
+    "markdown-it": "^14.1.0"
+  },
+  "vendoredBundles": {
+    "sanitize-html": {
+      "version": "2.17.7",
+      "file": "vendor/sanitize-html.js",
+      "regenerate": "scripts/vendor-sanitize-html.sh"
+    }
   }
 }

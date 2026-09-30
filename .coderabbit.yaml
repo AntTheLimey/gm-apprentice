@@ -2,3 +2,4 @@
 reviews:
   path_filters:
     - "!tests/fixtures/**"
+    - "!tools/publish/vendor/**"

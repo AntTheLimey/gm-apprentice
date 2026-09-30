@@ -10,7 +10,7 @@
 // foreignObject, any on* handler attribute, or a URL scheme that can execute
 // (javascript:, vbscript:, data: outside <img>). The tests in
 // test/unit/html-allowlist.test.js pin those exclusions.
-const sanitizeHtml = require('sanitize-html');
+const sanitizeHtml = require('../vendor/sanitize-html');
 
 // Structural and text markup, plus everything markdown-it itself emits (the whole
 // rendered body passes through the sanitiser, not just the raw-HTML fragments).
