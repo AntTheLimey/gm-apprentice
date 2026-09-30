@@ -103,6 +103,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      # vault_check asks the publish tool (node) whether the site withholds a
+      # session hub's body (#276); its end-to-end tests need node, and the
+      # env var makes them fail rather than skip if node goes missing.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Validate campaign entity schemas
         run: python scripts/validate_schema.py tests/benchmark-campaign
 
@@ -140,6 +147,8 @@ jobs:
         run: python tests/test_relationship_predicates.py
 
       - name: vault_check Slice A tests
+        env:
+          VAULT_CHECK_REQUIRE_NODE: '1'
         run: python tests/test_vault_check_slice_a.py
 
       - name: vault_check --file/--folder scope tests
