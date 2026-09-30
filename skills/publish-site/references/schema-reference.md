@@ -265,6 +265,17 @@ and the "NPCs/Locations in Play" widgets. The wrap-up
 unless the session — and, for the Campaign Saga, its chapter — publish
 too.
 
+The session index is metadata only by design. Once its Wrap-Up
+publishes — linked by the index's `documents.wrap_up` or the Wrap-Up's
+own `session:` — the index body is withheld from the page and from
+search, backlinks and the landing. The page then shows, under the
+title and badges: the chapter (linked, if its page publishes), the
+`in_game_date`, the opening of the Wrap-Up's recap and a "Read the
+full session" link to the Wrap-Up. Its "NPCs Appearing" and "Events"
+sidebar lists come from the Wrap-Up. It never lists `scenes:`. With
+no published Wrap-Up the index body publishes as written.
+`explain <session index>` says which applies.
+
 ### Scene
 
 `type: scene`

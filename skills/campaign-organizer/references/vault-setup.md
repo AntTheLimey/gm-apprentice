@@ -49,6 +49,7 @@ can read `_Templates/_Template_{Type}.md`.
 | `world-domain.md` | `_Template_World_Domain.md` |
 | `plan.md` | `_Template_Plan.md` |
 | `campaign-overview.md` | `_Template_Campaign_Overview.md` |
+| `session.md` | `_Template_Session.md` |
 | `session-plan.md` | `_Template_Session_Plan.md` |
 | `session-wrap.md` | `_Template_Session_WrapUp.md` |
 | `pc-{system}.md` for the vault's system (below), else `pc-generic.md` | same name |
