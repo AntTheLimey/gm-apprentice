@@ -796,6 +796,77 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  // Some vaults keep the recap in the index body and have no Wrap-Ups: there the body
+  // is what the GM wants published, and --publish-body is the GM's yes to exactly that.
+  it('--publish-body registers an index no Wrap-Up pairs, and says its body publishes', async () => {
+    const vault = draftVault();
+    fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
+    const { configPath } = siteFor(vault);
+    const { rc, payload } = await run(configPath, { session, publishBody: true });
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(payload.published, [session]);
+    assert.deepStrictEqual(payload.bodyPublished, [session]);
+    assert.deepStrictEqual(payload.unclear, []);
+    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8');
+    assert.match(written, /- \[x\] Sessions\/Played Session\.md/);
+    assert.doesNotMatch(written, /Other Session/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--publish-body says so in the text report', async () => {
+    const vault = draftVault();
+    fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    await runManifest({ verb: 'publish-played', configPath, session, publishBody: true }, c.deps);
+    assert.match(c.text(), /body publishes as written[^\n]*\n  Sessions\/Played Session\.md/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--publish-body leaves a paired session to the normal checks', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session, publishBody: true });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.deepStrictEqual(payload.bodyPublished, []);
+    assert.match(payload.unclear[0].reason, /^Wrap-Up not reviewed yet/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--publish-body refuses a path that is not a played session index', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session: 'Sessions/Planned Session.md', publishBody: true });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.match(payload.unclear[0].reason, /not a played session/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--publish-body never touches an Excluded index', async () => {
+    const vault = draftVault();
+    fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Excluded (1 files)', '', '- [x] Sessions/Played Session.md — private', ''].join('\n'));
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session, publishBody: true });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.strictEqual(payload.unclear[0].reason, 'the session index is Excluded');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--publish-body without --session is an error', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { rc, c } = await run(configPath, { publishBody: true });
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(c.writes, {});
+    assert.match(c.text(), /--publish-body needs --session/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('--include-unreviewed without --session is an error', async () => {
     const vault = draftVault();
     const { configPath } = siteFor(vault);

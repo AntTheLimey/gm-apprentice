@@ -375,8 +375,11 @@ function pairsWith(survey, published) {
 // `only` (`--session`) plans that one vault-relative session index and nothing else;
 // `includeUnreviewed` waives the review check for it (session-wrapup's "Publish now?").
 // Every other check holds: the hub is ticked only with a Wrap-Up that pairs with it and
-// will publish, and never on a stale site pin.
-function planPublishPlayed(survey, { only = null, includeUnreviewed = false } = {}) {
+// will publish, and never on a stale site pin. `publishBody` is the GM's yes to publishing
+// the named index's body as written when no Wrap-Up pairs with it (vaults that keep the
+// recap in the index): it lands in `bodyTicks` instead of `unclear`. A hub that does pair
+// is left to the checks above, and Excluded or non-session paths are still refused.
+function planPublishPlayed(survey, { only = null, includeUnreviewed = false, publishBody = false } = {}) {
   const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
   const readFile = survey.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const listed = parseAnnotatedManifest(readFile(path.join(vaultPath, '_meta', 'publish-manifest.md')));
@@ -441,6 +444,7 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false } = 
   const wrapsOnly = [...new Set(wrapOnly)].filter((w) => !stillTicked.has(w));
 
   const ifAllPublished = pairsWith(survey, allPages);
+  const bodyTicks = [];
   for (const { rel, page } of hubs) {
     // A named session is always answered for, even one already under Publishing.
     if (ticks.has(rel) || (only === null && sectionOf(rel) === 'publishing')
@@ -465,7 +469,8 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false } = 
     } else {
       reason = `status ${fm.status} but no Wrap-Up linked to it`;
     }
-    unclear.push({ path: rel, reason, wrapUp: wrapRel });
+    if (only !== null && publishBody) bodyTicks.push(rel);
+    else unclear.push({ path: rel, reason, wrapUp: wrapRel });
   }
   // The named path is not a played session index this call could tick: say which.
   if (only !== null && hubs.length === 0) {
@@ -474,7 +479,7 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false } = 
       : `not a played session index (type ${fm.type || 'none'}, status ${fm.status || 'none'})`;
     unclear.push({ path: only, reason, wrapUp: null });
   }
-  return { ticks, wrapsOnly, unclear, sectionOf };
+  return { ticks, wrapsOnly, unclear, bodyTicks, sectionOf };
 }
 
 // `manifest publish-played` (#277): a reviewed session index is ticked under Publishing
@@ -486,7 +491,8 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false } = 
 // not reviewed yet, the linked one Excluded / `publish: none` / otherwise not publishing,
 // or a site pinned to a tool that predates withholding — and is listed, never ticked, so
 // the skill asks the GM. `--session <index>` narrows the run to that one session and
-// `--include-unreviewed` (only with --session) lets it through before reconcile. Files under Excluded
+// `--include-unreviewed` (only with --session) lets it through before reconcile;
+// `--publish-body` (only with --session) registers an index no Wrap-Up pairs with, body and all. Files under Excluded
 // are a deliberate GM decision and are left alone. Only meaningful in player mode with a
 // manifest, the one place the manifest is an allowlist; elsewhere a no-op.
 async function runPublishPlayed(options, deps, survey) {
@@ -509,11 +515,11 @@ async function runPublishPlayed(options, deps, survey) {
       return 1;
     }
   }
-  const { ticks, wrapsOnly, unclear, sectionOf } = planPublishPlayed(
+  const { ticks, wrapsOnly, unclear, bodyTicks, sectionOf } = planPublishPlayed(
     Object.assign({ readFile: deps.readFile }, survey),
-    { only, includeUnreviewed: !!options.includeUnreviewed });
+    { only, includeUnreviewed: !!options.includeUnreviewed, publishBody: !!options.publishBody });
   const wanted = [];
-  for (const rel of [...ticks].flat().concat(wrapsOnly)) {
+  for (const rel of [...ticks].flat().concat(wrapsOnly, bodyTicks)) {
     if (!wanted.includes(rel) && sectionOf(rel) !== 'publishing') wanted.push(rel);
   }
 
@@ -526,10 +532,15 @@ async function runPublishPlayed(options, deps, survey) {
   const lines = [wanted.length === 0
     ? 'manifest publish-played: no finished session needed publishing'
     : `manifest publish-played: ${verb} ${wanted.length} file(s)\n${wanted.map((w) => `  ${w}`).join('\n')}`];
+  const bodyPublished = bodyTicks.filter((rel) => wanted.includes(rel));
+  if (bodyPublished.length > 0) {
+    lines.push(`No Wrap-Up withholds it, so its body publishes as written (--publish-body):`,
+      ...bodyPublished.map((rel) => `  ${rel}`));
+  }
   if (unclear.length > 0) {
     lines.push(`Unclear, not ticked (${unclear.length}):`, ...unclear.map((u) => `  ${u.path} — ${u.reason}`));
   }
-  report({ applicable: true, dryRun: !!options.dryRun, published: wanted, unclear }, lines.join('\n'));
+  report({ applicable: true, dryRun: !!options.dryRun, published: wanted, bodyPublished, unclear }, lines.join('\n'));
   return 0;
 }
 
@@ -537,9 +548,15 @@ async function runManifest(options, deps) {
   const opts = options || {};
   const d = deps || {};
   const out = d.out || console.log;
-  if (opts.verb === 'publish-played' && opts.includeUnreviewed && opts.session == null) {
-    out('--include-unreviewed needs --session: it publishes one session the GM chose, never every draft');
-    return 1;
+  if (opts.verb === 'publish-played' && opts.session == null) {
+    if (opts.includeUnreviewed) {
+      out('--include-unreviewed needs --session: it publishes one session the GM chose, never every draft');
+      return 1;
+    }
+    if (opts.publishBody) {
+      out('--publish-body needs --session: it publishes one index body the GM said yes to, never every body');
+      return 1;
+    }
   }
   const survey = surveyVault(opts, d);
   if (opts.verb === 'diff') return runDiff(opts, d, survey);

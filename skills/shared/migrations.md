@@ -1053,8 +1053,9 @@ own (#277). No frontmatter changes.
   not reviewed yet, one that is Excluded or won't publish, or a site
   still pinned below 1.11.40), ask the GM once, in one question listing
   the reasons, and register only what they approve with `manifest
-  publish-played --session "<index>" --include-unreviewed` (as
-  publish-site does). Never touch Excluded.
+  publish-played --session "<index>"` and `--include-unreviewed`, or
+  `--publish-body` for a session with no Wrap-Up (as publish-site
+  does). Never touch Excluded.
 
 ### Tooling
 

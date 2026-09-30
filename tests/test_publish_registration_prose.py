@@ -6,9 +6,10 @@ unclear: publishing an unclear hub publishes its body, so asking the GM is
 publish-site's job alone. session-wrapup's "publish now" path, and
 publish-site's approved unclear sessions, go through `manifest
 publish-played --session "<index>" --include-unreviewed`, which waives only
-the review check and keeps pairing and the site-pin gate (#278). No skill
-may tick a session index with `manifest apply --publish`: that bypasses
-both and publishes the index body. Structural, not behavioral: proves the
+the review check and keeps pairing and the site-pin gate (#278). For an
+approved session with no Wrap-Up, publish-site says the body publishes as
+written and uses `--publish-body`, the GM's explicit yes. No skill may tick
+a session index with `manifest apply --publish`: that bypasses all of it. Structural, not behavioral: proves the
 wording, not a run.
 
 Run: python tests/test_publish_registration_prose.py
@@ -69,8 +70,15 @@ class PublishSiteRegistrationTests(unittest.TestCase):
 
     def test_approved_unclear_sessions_go_through_publish_played(self):
         self.assertRegex(self.text, r"manifest publish-played --config\s+"
-                                    r"<dir>/vault\.config\.json --session "
-                                    r"\"<index>\" --include-unreviewed")
+                                    r"<dir>/vault\.config\.json\s+"
+                                    r"--session \"<index>\"` plus\s+"
+                                    r"`--include-unreviewed` when it has a "
+                                    r"Wrap-Up")
+        self.assertRegex(self.text, r"`--publish-body` when it has none")
+
+    def test_the_question_says_the_body_publishes_as_written(self):
+        self.assertRegex(self.text, r"index body will publish as written")
+        self.assertRegex(self.text, r"fencing any Keeper notes first")
         self.assertRegex(self.text, r"Never tick\s+a session index with\s+"
                                     r"`manifest apply`")
 

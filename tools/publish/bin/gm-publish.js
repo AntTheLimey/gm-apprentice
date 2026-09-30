@@ -125,7 +125,7 @@ excluded versus missing is the GM's call.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
   manifest publish-played [--dry-run] [--config <path>] [--vault <dir>] [--json]
-                          [--session <index> [--include-unreviewed]]
+                          [--session <index> [--include-unreviewed] [--publish-body]]
                      Move every reviewed session to Publishing together
                      with its Wrap-Up, but only when that Wrap-Up is linked
                      (documents.wrap_up or its session:) and will publish,
@@ -143,7 +143,11 @@ excluded versus missing is the GM's call.
                      --session) ticks it before reconcile, as session-wrapup's
                      "Publish now?" does. The pairing and site-pin checks
                      still apply: if either fails, the index is not ticked
-                     and the reason is listed.
+                     and the reason is listed. --publish-body (only with
+                     --session) is the GM's yes to publishing the index body
+                     as written when no Wrap-Up pairs with it; a session
+                     that pairs keeps the checks above. Excluded and
+                     non-session paths are still refused.
   --help, -h         Show this help
 `,
   explain: `
@@ -575,7 +579,7 @@ if (command === 'manifest') {
   const parsed = parseSubcommandArgs(
     args.slice(2),
     Object.assign({ '--prune': 'prune', '--json': 'json' },
-      verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed' } : {}),
+      verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed', '--publish-body': 'publishBody' } : {}),
     // --vault: vault_check asks about the vault it is checking, which need not be the
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' } : {},
@@ -593,6 +597,7 @@ if (command === 'manifest') {
     vaultPath: parsed.flags.vault,
     session: parsed.flags.session,
     includeUnreviewed: !!parsed.flags.includeUnreviewed,
+    publishBody: !!parsed.flags.publishBody,
     publish: parsed.flags.publish,
     exclude: parsed.flags.exclude,
     decide: parsed.flags.decide,

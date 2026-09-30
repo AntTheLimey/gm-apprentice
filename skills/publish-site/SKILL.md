@@ -61,17 +61,19 @@ Excluded entries and does nothing without a manifest in player mode.
 Report the paths it ticked. Every other played session is listed as
 "unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
 that is Excluded or won't publish, or a stale site pin). Ask the GM
-once, in one question listing them with their reasons. Register each
-approved one with `manifest publish-played --config
-<dir>/vault.config.json --session "<index>" --include-unreviewed`: it
-waives only the review check, so a session with no Wrap-Up that will
-publish, or on a stale pin, stays unclear and you relay why. Never tick
-a session index with `manifest apply`: that publishes its body. If an
-approved session's Wrap-Up is Excluded, `manifest apply --publish
-"<wrap-up>"` first. Don't tick them silently; if the GM says "not yet",
-leave them and don't ask again in this run. When a reason says the site
-is pinned to an older tool, offer `update-pin --site <dir>` first. The build itself stays read-only
-on the vault, so this lives in the skill, not in `build`/`deploy`.
+once, in one question listing them with their reasons. For one with no
+Wrap-Up that will publish, say its index body will publish as written
+and suggest fencing any Keeper notes first. Register each approved one
+with `manifest publish-played --config <dir>/vault.config.json
+--session "<index>"` plus `--include-unreviewed` when it has a Wrap-Up
+(unreviewed, or a stale pin: it waives only the review check, so relay
+any reason it still gives) or `--publish-body` when it has none.
+Never tick a session index with `manifest apply`. Don't tick them
+silently; if the GM says "not yet", leave them and don't ask again in
+this run. When a reason says the site is pinned to an older tool,
+offer `update-pin --site <dir>` first. The build itself stays
+read-only on the vault, so this lives in the skill, not in
+`build`/`deploy`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
 from the scaffold's `file:` pin — no registry, no network):
