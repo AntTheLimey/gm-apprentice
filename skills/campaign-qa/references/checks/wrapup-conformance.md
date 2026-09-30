@@ -68,7 +68,11 @@ default** — including names no list anticipates
 faster than any enumeration tracks, and a novel heading is in
 nobody's `exclude_sections` list. If a flagged heading is
 genuinely player-facing, the GM dismisses the finding — that is
-what the fix-or-dismiss walkthrough is for.
+what the fix-or-dismiss walkthrough is for. A vault can declare
+extra player-facing H2s in `publish.wrap_up.player_sections`
+(case-insensitive); those are never flagged or re-nested, and are
+hoisted after `## Memorable Moments` in their original order. One
+the GM fenced inside `<!-- gm-only -->` stays fenced.
 
 `vault_check.py wrapup` finds and (with `--fix`) re-nests
 Keeper-facing sibling H2s under `## GM Notes` — hoisting the

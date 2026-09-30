@@ -551,6 +551,7 @@ Under `publish:`:
 | `site_dir` | string | Absolute path to the site repo, so publish-site needn't ask each session. Optional. |
 | `mode` | string | `"player"` or `"full"` — GM-only content visibility |
 | `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes"]`) |
+| `wrap_up` | object | `player_sections`: extra H2 titles on a Wrap-Up that `vault_check wrapup` treats as player-facing (default none) |
 | `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
 | `theme` | object | `genre`, `palette`, `fonts`, `campaign_image`, `default_mode` (`system`, `dark` or `light`; default `system`) |

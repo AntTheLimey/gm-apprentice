@@ -26,8 +26,9 @@ function extractMentions(markdown) {
 
 // All entity names mentioned "in" a session: its own body, its frontmatter participants/location,
 // and — because the narrative recap lives in the wrap-up, not the thin index stub — the body of
-// its paired wrap-up.
-function sessionMentions(session, wrapUpByTitle) {
+// its paired wrap-up. `wrapUpFor` is the build's hub -> Wrap-Up map (session-hub.js pairHubs);
+// recency never pairs on its own.
+function sessionMentions(session, wrapUpFor) {
   const names = extractMentions(publishedText(session));
   const fm = session.frontmatter || {};
   if (Array.isArray(fm.participants)) {
@@ -40,7 +41,7 @@ function sessionMentions(session, wrapUpByTitle) {
     const m = String(fm.location).match(/\[\[([^\]|]+)/);
     if (m) names.add(canonicalNfc(m[1].trim()));
   }
-  const wu = wrapUpByTitle.get(canonicalNfc(session.title));
+  const wu = wrapUpFor.get(session);
   if (wu) {
     for (const n of extractMentions(publishedText(wu))) names.add(n);
   }
@@ -51,7 +52,7 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
   const window = options.window || 3;
   const max = options.max || 6;
   const type = options.type;
-  const wrapUps = options.wrapUps || [];
+  const wrapUpFor = options.wrapUpFor || new Map();
 
   // Most recently *played* first. session_number restarts per chapter, so it can't identify the
   // recent sessions — sort by play_date and fall back to session_number only when dates tie/absent.
@@ -67,20 +68,9 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
   const recentSessions = played.slice(0, window);
   if (recentSessions.length === 0) return [];
 
-  // Pair each session with its wrap-up via the wrap-up's `session` wiki-link. session_number is
-  // not unique once a chapter restarts numbering, so it can't key the pairing.
-  const wrapUpByTitle = new Map();
-  for (const w of wrapUps) {
-    const ref = w.frontmatter && w.frontmatter.session;
-    if (!ref) continue;
-    // Keyed NFC: the ref is author-typed, the `get` above uses the session's filename.
-    const target = canonicalNfc(String(ref).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
-    if (target && !wrapUpByTitle.has(target)) wrapUpByTitle.set(target, w);
-  }
-
   // Mentions per recent session, recency-weighted (the most recent session counts most).
   const recent = recentSessions.map((session, i) => ({
-    mentions: sessionMentions(session, wrapUpByTitle),
+    mentions: sessionMentions(session, wrapUpFor),
     weight: window - i,
   }));
   const latestMentions = recent[0].mentions;

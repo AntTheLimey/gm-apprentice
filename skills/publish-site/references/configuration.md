@@ -15,6 +15,7 @@ each other — see § Precedence.
 |---------|----------|-------------|
 | Publish mode | `publish.mode` | `player` or `full` |
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
+| Wrap-Up player sections | `publish.wrap_up.player_sections` | Extra H2 titles on a Wrap-Up that count as player-facing, next to `## Narrative Recap` and `## Memorable Moments` (default: none). Read by `vault_check wrapup` only; see below |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`). Spelling is normalized (trailing `/`, leading `./`, backslashes, an absolute path inside the vault) and matched case-insensitively, so `"NPCs/Hidden/"` and `"npcs/hidden"` exclude the same folder |
@@ -233,6 +234,26 @@ display settings that are specific to the generated site.
 | Exclude fields | `excludeFields` | Unioned with `publish.exclude_fields` in `vault-config.md` (see § Precedence) |
 | Exclude callouts | `excludeCallouts` | Fallback if `vault-config.md` doesn't set `publish.exclude_callouts`. `true` strips all callouts, or an array of types |
 | Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
+
+### Extra player-facing Wrap-Up sections
+
+`vault_check wrapup` treats every Wrap-Up H2 except the recap and
+`## Memorable Moments` as Keeper-facing and, with `--fix`, re-nests it
+under the fenced `## GM Notes`. A vault whose recaps carry more
+player-facing sections lists their titles:
+
+```yaml
+publish:
+  wrap_up:
+    player_sections: ["What the Party Learned", "Where We Left Off"]
+```
+
+Titles match case-insensitively, ignoring bold or italic wrapping. A
+listed H2 is never flagged or moved, and `--fix` keeps it after
+Memorable Moments in its original order; one the GM already fenced
+stays fenced. The list does not change what the site strips: hide
+sections with `exclude_sections` as before. Absent or empty means
+only the two default sections are player-facing.
 
 ## Precedence
 

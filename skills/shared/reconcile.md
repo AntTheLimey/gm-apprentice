@@ -35,7 +35,7 @@ On yes:
 - `stamp_entities.py <vault> <entity files> --promote` — this
   session's DRAFT entities
 - `stamp_entities.py <vault> "<index>" --set status=reviewed`
-- Go to step 6.5.
+- Do step 6.1, then go to step 6.5.
 
 Otherwise run the full procedure.
 
@@ -129,6 +129,31 @@ On GM approval:
 
 Do the bookkeeping now rather than leaving the GM a list. Hand off to
 campaign-organizer if entity filing is needed.
+
+### 6.1. Publish registration (conditional)
+
+Only if `_meta/publish-manifest.md` exists and `publish.mode` in
+`_meta/vault-config.md` is `player` or unset; otherwise skip. If
+`publish.site_dir` is unset the vault has no site, so skip this step
+too; a relative `site_dir` is relative to the vault. A played session
+left in the manifest's Needs Decision never reaches the player site
+(#277). Run it yourself, unconditionally, and report the paths it
+ticked:
+
+```bash
+node "$TOOL" manifest publish-played --config <site_dir>/vault.config.json
+```
+
+`$TOOL` is as in `publish-site/SKILL.md`. The verb registers a
+reviewed session index only together with a Wrap-Up that is linked to
+it (`documents.wrap_up` or the Wrap-Up's `session:`) and will publish.
+Then the site withholds the hub body and builds the session page from
+its frontmatter and the Wrap-Up. Any other played session is listed
+as "unclear", with the reason (no Wrap-Up, Wrap-Up not reviewed yet,
+Excluded or won't publish, or a stale site pin), and is not ticked.
+Report the unclear list as it stands. Don't ask about it and don't
+tick anything yourself: publish-site asks the GM. Excluded entries are
+left alone.
 
 ### 6.5. World evolution (conditional)
 

@@ -65,6 +65,58 @@ exact version that matches your installed plugin. There is nothing to
 > node "<plugin-cache>/gm-apprentice/<version>/tools/publish/bin/gm-publish.js" <command>
 > ```
 
+## Releases and pinning from outside the plugin
+
+Every version of this tool is tagged `publish-v<version>` (the version in
+`package.json`, for example `publish-v1.11.40`) with a release that carries:
+
+- `gm-apprentice-publish-<version>.tgz`, the `npm pack` output. The
+  vendored runtime dependencies are bundled inside it
+  (`bundleDependencies`), so it installs and builds with no registry
+  access.
+- `SHA256SUMS`, the checksum of that tarball.
+- Notes listing only the `tools/publish` changes since the previous
+  `publish-v*` tag.
+
+These releases are never marked latest; the plugin's `v*` release stays the
+repo's latest. A `publish-v*` tag is created once and never moved.
+The workflow is `.github/workflows/publish-tool-release.yml`. It runs when
+`tools/publish/package.json` changes on `main`, runs this tool's tests,
+then packs, tags and releases.
+
+A project outside the plugin (a site with no plugin cache) pins like this:
+
+```bash
+gm-apprentice-publish update-pin --site <site-dir> --tag publish-v1.11.40
+```
+
+That downloads the `.tgz` and `SHA256SUMS` from the release, verifies the
+checksum (a mismatch aborts before anything is written), keeps the tarball
+in `<site-dir>/vendor/`, points the site's `gm-apprentice-publish`
+dependency at it (`file:vendor/gm-apprentice-publish-1.11.40.tgz`) and runs
+`npm install`. `--check` reports whether the site is on that tag without
+touching the network. To do it by hand, download both files from
+`https://github.com/AntTheLimey/gm-apprentice/releases/tag/publish-v1.11.40`, run
+`sha256sum -c SHA256SUMS` (`shasum -a 256 -c SHA256SUMS` on macOS), and use
+the `.tgz` as a `file:` dependency. To see what a repin brings, diff tag to
+tag: `git log publish-vOLD..publish-vNEW -- tools/publish`.
+
+### Backfilling older tags (maintainer)
+
+Run by the repo owner after the release workflow has merged; CI never
+does. Each command creates a local annotated tag at the commit whose
+`package.json` carries that version, and prints the push command. The
+script refuses a wrong version or an existing tag.
+
+```bash
+scripts/backfill-publish-tag.sh 1.11.30 5779522
+scripts/backfill-publish-tag.sh 1.11.39 95bdd0cf
+git push origin refs/tags/publish-v1.11.30 refs/tags/publish-v1.11.39
+```
+
+Backfilled tags exist for tag-to-tag diffs only. They have no release or
+tarball, so `update-pin --tag` works from `publish-v1.11.40` onwards.
+
 ## Quick start
 
 **1. Scaffold a new site repo** (run the tool from the plugin cache; the
@@ -204,7 +256,8 @@ The `type` frontmatter field determines which template renders each page.
 | `creature` | Creature | Combat stat block + body |
 | `item` | Item | Stat block + body |
 | `faction` / `organization` | Faction | Goals, leadership, auto-generated member list |
-| `event`, `clue`, `document`, `chapter`, `session`, `scene` | Smart wiki | Frontmatter badges + body |
+| `event`, `clue`, `document`, `chapter`, `scene` | Smart wiki | Frontmatter badges + body |
+| `session` | Smart wiki | Frontmatter badges + body; once the session's Wrap-Up publishes, the body is withheld everywhere and replaced by the chapter, in-game date and the opening of the Wrap-Up's recap, linked to it |
 | anything else | Smart wiki | All frontmatter shown as badges |
 
 Pages with `canon_status: SUPERSEDED` resolve wiki-links to the

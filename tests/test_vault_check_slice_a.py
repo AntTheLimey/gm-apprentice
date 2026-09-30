@@ -15,12 +15,14 @@ Run: python3 tests/test_vault_check_slice_a.py
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
@@ -48,6 +50,49 @@ def plugin_version_string():
 
 def rows_for(rows, needle):
     return [r for r in rows if needle in r]
+
+
+def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
+                      run=None, plan=None, installed=None, mode=None):
+    """Point the vault at a site and stand in for the publish tool's
+    `explain --all --json`: `withheld` lists the hub paths it reports with
+    `bodyWithheld: true`; `plan` is what `manifest publish-played
+    --dry-run --json` answers. `which=None` means no node on PATH; `run`
+    replaces subprocess.run outright; `installed` is the version of a
+    gm-apprentice-publish in the site's node_modules. Returns the recorded
+    calls."""
+    site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+    case.addCleanup(shutil.rmtree, site, ignore_errors=True)
+    (site / "vault.config.json").write_text("{}", encoding="utf-8")
+    if installed is not None:
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "package.json").write_text(json.dumps({"version": installed}),
+                                          encoding="utf-8")
+        (pkg / "bin" / "gm-publish.js").write_text("", encoding="utf-8")
+    (vault / "_meta").mkdir(exist_ok=True)
+    mode_line = f"  mode: {mode}\n" if mode else ""
+    (vault / "_meta" / "vault-config.md").write_text(
+        f"---\npublish:\n{mode_line}  site_dir: {site}\n---\n",
+        encoding="utf-8")
+    calls = []
+
+    def fake(cmd, **kwargs):
+        calls.append(cmd)
+        if "publish-played" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(
+                plan or {"applicable": True, "published": [], "unclear": []}),
+                "")
+        pages = [{"path": p, "bodyWithheld": True} for p in withheld]
+        return subprocess.CompletedProcess(
+            cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
+
+    patches = [mock.patch.object(vc.shutil, "which", return_value=which),
+               mock.patch.object(vc.subprocess, "run", run or fake)]
+    for patch in patches:
+        patch.start()
+        case.addCleanup(patch.stop)
+    return calls
 
 
 def make_vault(case, config=None, meta=True):
@@ -488,12 +533,231 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertEqual(vc.check_sessions(vault),
                          ["INFO\t(vault)\tno session indexes found"])
 
+    # #276: once a session has a Wrap-Up the site withholds the hub body, so
+    # bookkeeping there leaks nothing — but it is in the wrong document.
+    HUB = ("---\ntype: session\nsession_number: 1\nstatus: wrap-up\n"
+           "documents:\n  wrap_up: \"[[Chapter_01_Session_01_Wrap_Up]]\"\n"
+           "---\n\n# Session 01 - Lone\n\n")
+    WRAP = ("---\ntype: session_wrap\nsession: \"[[Session 01 - Lone]]\"\n"
+            "canon_status: DRAFT\n---\n")
+
+    def hub_vault(self, body, wrap=True, hub=None, withheld=True):
+        """`withheld`: what the (stubbed) publish tool says of the hub."""
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(
+            (hub or self.HUB) + body, encoding="utf-8")
+        if wrap:
+            (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+                self.WRAP, encoding="utf-8")
+        stub_publish_tool(self, vault,
+                          ["Session 01 - Lone.md"] if withheld else [])
+        return vault
+
+    def test_hub_bookkeeping_is_an_info_naming_where_it_belongs(self):
+        vault = self.hub_vault(
+            "- Plan: [[Session 01 - Lone - Plan]]\n\n## Scene Index\n\n"
+            "| Scene | State |\n|---|---|\n| [[Churchyard]] | contingency |\n")
+        rows = [r for r in vc.check_sessions(vault)
+                if "session index body" in r]
+        self.assertEqual(len(rows), 1, rows)
+        row = rows[0]
+        self.assertTrue(row.startswith("INFO\tSession 01 - Lone.md:11\t"), row)
+        self.assertIn("5 line(s) outside a gm-only fence", row)
+        self.assertIn("frontmatter `documents:`", row)
+        self.assertIn("go in the Plan", row)
+        self.assertIn("fenced ## GM Notes", row)
+        self.assertNotIn("handoffs", row)
+
+    def test_template_shaped_hub_is_clean(self):
+        # H1, the template's comment, and a fenced GM Notes dashboard.
+        vault = self.hub_vault(
+            "<!-- Metadata only. -->\n\n<!-- gm-only -->\n## GM Notes\n\n"
+            "- Key prep: [[Standing_Situations]] — Keeper-only\n"
+            "<!-- /gm-only -->\n")
+        self.assertFalse(rows_for(vc.check_sessions(vault),
+                                  "session index body"))
+
+    def test_hub_the_site_does_not_withhold_is_not_flagged(self):
+        # The publish tool decides (#276): no Wrap-Up it pairs and
+        # publishes, no row — the body is the session's published record.
+        vault = self.hub_vault("- Plan: [[Session 01 - Lone - Plan]]\n",
+                               withheld=False)
+        self.assertFalse(rows_for(vc.check_sessions(vault),
+                                  "session index body"))
+
+    def test_publish_tool_unavailable_hides_the_row_and_says_so(self):
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(
+            self.HUB + "- Plan: [[Session 01 - Lone - Plan]]\n",
+            encoding="utf-8")
+        (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+            self.WRAP, encoding="utf-8")
+        stub_publish_tool(self, vault, ["Session 01 - Lone.md"], which=None)
+        rows = vc.check_sessions(vault)
+        self.assertFalse(rows_for(rows, "session index body"), rows)
+        note = rows_for(rows, "publish tool could not be consulted")
+        self.assertEqual(len(note), 1, rows)
+        self.assertIn("node is not on PATH", note[0])
+
     def test_cli_emits_the_section_and_all_includes_it(self):
         proc = run_cli(FIXTURES / "sessions", "sessions")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("## sessions", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
         self.assertIn("## sessions", run_cli(FIXTURES / "sessions", "all").stdout)
+
+
+class SessionsManifestTests(unittest.TestCase):
+    """`vault_check.py VAULT sessions` — played sessions and their Wrap-Ups
+    missing from the publish manifest's Publishing section (#277). What
+    happens to each is the publish tool's answer (`manifest publish-played
+    --dry-run --json`), stubbed here."""
+
+    INDEX = "Session 01 - Lone.md"
+    WRAP = "Chapter_01_Session_01_Wrap_Up.md"
+
+    def vault(self, manifest, config="---\npublish:\n  mode: player\n---\n",
+              status="reviewed"):
+        vault = make_vault(self, config=config)
+        (vault / self.INDEX).write_text(
+            f"---\ntype: session\nsession_number: 1\nstatus: {status}\n---\n",
+            encoding="utf-8")
+        (vault / self.WRAP).write_text(
+            "---\ntype: session_wrap\nsession: \"[[Session 01 - Lone]]\"\n"
+            "canon_status: AUTHORITATIVE\n---\n", encoding="utf-8")
+        if manifest is not None:
+            (vault / "_meta" / "publish-manifest.md").write_text(
+                manifest, encoding="utf-8")
+        return vault
+
+    def missing(self, vault):
+        return [r for r in vc.check_sessions(vault)
+                if "publish-manifest.md" in r]
+
+    NEEDS = ("## Publishing (0 files)\n\n## Needs Decision (1 files)\n\n"
+             "- [ ] Session 01 - Lone.md\n")
+
+    def test_without_the_tool_the_row_promises_nothing(self):
+        rows = self.missing(self.vault(self.NEEDS))
+        self.assertEqual(len(rows), 1, rows)
+        row = rows_for(rows, f"\t{self.INDEX}\t")[0]
+        self.assertTrue(row.startswith("WARNING\t"), row)
+        self.assertIn("(Needs Decision)", row)
+        self.assertIn("gm-publish manifest publish-played", row)
+        self.assertNotIn("will register", row)
+        self.assertNotIn("will ask", row)
+        self.assertNotIn("gm-only", row)
+
+    def test_a_session_the_tool_would_tick_says_publish_played_registers_it(self):
+        vault = self.vault(self.NEEDS)
+        calls = stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [self.INDEX, self.WRAP],
+            "unclear": []})
+        rows = self.missing(vault)
+        self.assertEqual(len(rows), 2, rows)
+        self.assertIn("publish-played will register it",
+                      rows_for(rows, f"\t{self.INDEX}\t")[0])
+        wrap = rows_for(rows, f"\t{self.WRAP}\t")[0]
+        self.assertIn("Wrap-Up is not under Publishing", wrap)
+        self.assertIn("(no manifest section)", wrap)
+        played = [c for c in calls if "publish-played" in c][0]
+        self.assertEqual(played[2:6], ["manifest", "publish-played",
+                                       "--dry-run", "--json"])
+        self.assertEqual(played[played.index("--vault") + 1],
+                         str(vault.resolve()))
+
+    def test_an_unclear_session_says_publish_site_will_ask(self):
+        vault = self.vault(self.NEEDS, status="wrap-up")
+        reason = f"Wrap-Up not reviewed yet ({self.WRAP})"
+        stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [],
+            "unclear": [{"path": self.INDEX, "reason": reason,
+                         "wrapUp": self.WRAP}]})
+        rows = self.missing(vault)
+        self.assertEqual(len(rows), 2, rows)
+        for row in rows:
+            self.assertIn(f"publish-site will ask the GM ({reason})", row)
+            self.assertNotIn("will register", row)
+
+    def test_a_session_the_tool_neither_ticks_nor_asks_about_points_at_session(self):
+        # Review of #278: the fallback never says to `manifest apply --publish` a
+        # session index, which would bypass pairing and the site-pin gate.
+        vault = self.vault(self.NEEDS)
+        stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [], "unclear": []})
+        row = rows_for(self.missing(vault), f"\t{self.INDEX}\t")[0]
+        self.assertNotIn("manifest apply", row)
+        self.assertIn(f'manifest publish-played --session "{self.INDEX}"',
+                      row)
+
+    def test_the_python_heuristic_no_longer_names_a_wrap_up(self):
+        # The folder/number guess named this Wrap-Up; the tool, asked, pairs
+        # nothing and ticks nothing, so there is no Wrap-Up row.
+        vault = self.vault(self.NEEDS)
+        stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [], "unclear": [
+                {"path": self.INDEX, "reason": "status reviewed but no "
+                 "Wrap-Up linked to it", "wrapUp": None}]})
+        rows = self.missing(vault)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("no Wrap-Up linked", rows[0])
+
+    def test_a_stale_site_pin_is_not_asked(self):
+        vault = self.vault(self.NEEDS)
+        calls = stub_publish_tool(self, vault, mode="player",
+                                  installed="1.11.39")
+        rows = vc.check_sessions(vault)
+        self.assertFalse([c for c in calls if "publish-played" in c], calls)
+        self.assertTrue(rows_for(rows, "site pinned to 1.11.39 predates "
+                                       "body withholding"), rows)
+        row = rows_for(rows, f"\t{self.INDEX}\t")
+        self.assertNotIn("will register", "".join(row))
+
+    def test_the_wrap_up_of_a_published_session_is_still_reported(self):
+        vault = self.vault(f"## Publishing (1 files)\n\n- [x] {self.INDEX}\n",
+                           status="wrap-up")
+        reason = f"Wrap-Up not reviewed yet ({self.WRAP})"
+        stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [],
+            "unclear": [{"path": self.INDEX, "reason": reason,
+                         "wrapUp": self.WRAP}]})
+        rows = self.missing(vault)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn(f"\t{self.WRAP}\tWrap-Up", rows[0])
+        self.assertIn(f"publish-site will ask the GM ({reason})", rows[0])
+
+    def test_listed_under_publishing_is_silent(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Publishing (2 files)\n\n"
+            f"- [x] {self.INDEX}\n- [x] {self.WRAP} — recap\n")), [])
+
+    def test_unchecked_publishing_entry_does_not_count(self):
+        rows = self.missing(self.vault(
+            f"## Publishing (2 files)\n\n- [ ] {self.INDEX}\n"
+            f"- [x] {self.WRAP}\n"))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn(f"\t{self.INDEX}\t", rows[0])
+
+    def test_excluded_is_a_decision_not_a_finding(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Excluded (2 files)\n\n"
+            f"- [x] {self.INDEX} — private\n- [x] {self.WRAP}\n")), [])
+
+    def test_no_manifest_is_silent(self):
+        self.assertEqual(self.missing(self.vault(None)), [])
+
+    def test_full_mode_is_silent(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Publishing (0 files)\n",
+            config="---\npublish:\n  mode: full\n---\n")), [])
+
+    def test_mode_defaults_to_player(self):
+        self.assertEqual(len(self.missing(self.vault(
+            "## Publishing (0 files)\n", config=None))), 1)
+
+    def test_unplayed_session_is_silent(self):
+        self.assertEqual(self.missing(self.vault(
+            "## Publishing (0 files)\n", status="prepped")), [])
 
 
 LEAK = FIXTURES / "leak"
@@ -2196,6 +2460,261 @@ class GmLeakCollapsedWorldStateTests(unittest.TestCase):
         (vault / "Bob.md").write_text(self.BOB.replace("## World State", "## GM Notes\n\n### World State"),
                                       encoding="utf-8")
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "'World State'"))
+
+
+class GmLeakWithheldHubTests(unittest.TestCase):
+    """#276: gm-leak skips a session hub body the site withholds — as the
+    publish tool itself reports it (`explain --all --json`), stubbed here."""
+    HUB = SessionsCommandTests.HUB
+    WRAP = SessionsCommandTests.WRAP
+    BODY = "## Scene Index\n\n**Keeper only:** the vicar is the cultist.\n"
+
+    def vault(self):
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(self.HUB + self.BODY,
+                                                    encoding="utf-8")
+        (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+            self.WRAP, encoding="utf-8")
+        return vault
+
+    def hub_rows(self, rows):
+        return [r for r in rows if "Session 01 - Lone.md" in r]
+
+    def test_withheld_hub_body_is_skipped(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(self.hub_rows(rows), [])
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertEqual(len(calls), 1)
+        cmd = calls[0]
+        self.assertEqual(cmd[2:5], ["explain", "--all", "--json"])
+        self.assertEqual(cmd[cmd.index("--vault") + 1], str(vault.resolve()))
+        self.assertTrue(cmd[cmd.index("--config") + 1].endswith(
+            "vault.config.json"))
+
+    def test_hub_body_the_tool_does_not_withhold_is_scanned(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, [])
+        self.assertTrue(self.hub_rows(vc.check_gm_leak(vault, None)))
+
+    def test_no_node_scans_every_hub_and_says_so(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, ["Session 01 - Lone.md"], which=None)
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(self.hub_rows(rows))
+        note = rows_for(rows, "publish tool could not be consulted")
+        self.assertEqual(len(note), 1, rows)
+        self.assertIn("every session index body was scanned", note[0])
+
+    def test_tool_failures_scan_every_hub(self):
+        def failing(result):
+            def run(cmd, **kwargs):
+                if isinstance(result, Exception):
+                    raise result
+                return subprocess.CompletedProcess(cmd, *result)
+            return run
+        cases = {
+            "timed out": subprocess.TimeoutExpired("node", 120),
+            "exited 1: boom": (1, "", "trace\nboom\n"),
+            "expected JSON": (0, "not json", ""),
+            "could not run": OSError("exec format error"),
+        }
+        for reason, result in cases.items():
+            with self.subTest(reason=reason):
+                vault = self.vault()
+                stub_publish_tool(self, vault, run=failing(result))
+                rows = vc.check_gm_leak(vault, None)
+                self.assertTrue(self.hub_rows(rows))
+                self.assertIn(reason, "".join(
+                    rows_for(rows, "could not be consulted")))
+                mock.patch.stopall()
+
+    def test_the_sites_installed_tool_answers(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
+                                  installed="1.11.40")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(self.hub_rows(rows), [])
+        self.assertIn("node_modules", calls[0][1])
+        self.assertFalse(rows_for(rows, "asked the plugin"), rows)
+
+    def test_a_site_pinned_below_withholding_scans_every_hub(self):
+        # Its renderer publishes every hub body in full, whatever the
+        # plugin's tool would say.
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
+                                  installed="1.11.39")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(self.hub_rows(rows))
+        note = rows_for(rows, "could not be consulted")
+        self.assertEqual(len(note), 1, rows)
+        self.assertIn("site pinned to 1.11.39 predates body withholding",
+                      note[0])
+
+    def test_a_pin_not_yet_installed_is_still_the_sites_tool(self):
+        # Re-check: package.json pins a vendored 1.11.39 and nothing is
+        # installed. The next npm install brings in 1.11.39, which publishes
+        # every hub body, so the plugin's tool must not answer for it.
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        (site / "package.json").write_text(json.dumps({"dependencies": {
+            "gm-apprentice-publish":
+                "file:vendor/gm-apprentice-publish-1.11.39.tgz"}}),
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(self.hub_rows(rows))
+        self.assertTrue(rows_for(rows, "site pinned to 1.11.39 predates "
+                                       "body withholding"), rows)
+
+    def test_an_installed_prerelease_is_below_the_release(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
+                                  installed="1.11.40-rc.1")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(self.hub_rows(rows))
+
+    def test_an_unreadable_site_tool_scans_every_hub(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
+                          installed="not-a-version")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(self.hub_rows(rows))
+        self.assertTrue(rows_for(rows, "no readable version"), rows)
+
+    def test_the_plugins_tool_stands_in_only_without_a_site_tool_and_says_so(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(calls[0][1], str(vc.PUBLISH_TOOL))
+        self.assertEqual(rows_for(rows, "asked the plugin's publish tool "
+                                        "(the site has none installed)"),
+                         ["INFO\t(vault)\tasked the plugin's publish tool "
+                          "(the site has none installed)"])
+
+    def test_missing_site_config_scans_every_hub(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish:\n  site_dir: /no/such/site\n---\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(self.hub_rows(rows))
+        self.assertTrue(rows_for(rows, "no vault.config.json"), rows)
+
+    def test_vault_that_never_publishes_does_not_ask(self):
+        # No publish: block, so no site: nothing is withheld, nothing to say.
+        vault = self.vault()
+        with mock.patch.object(vc.subprocess, "run") as run:
+            rows = vc.check_gm_leak(vault, None)
+        run.assert_not_called()
+        self.assertTrue(self.hub_rows(rows))
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+
+    def test_vault_without_session_indexes_does_not_ask(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, [])
+        vc.check_gm_leak(vault, None)
+        self.assertEqual(calls, [])
+
+
+# CI sets VAULT_CHECK_REQUIRE_NODE so a runner without node fails here
+# instead of skipping the only proof that vault_check and the site agree.
+@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                     or (shutil.which("node") and (
+                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                     "node and the publish tool's node_modules are needed")
+class PublishToolEndToEndTests(unittest.TestCase):
+    """vault_check asks the real publish tool (#276 review): the withheld
+    decision is the site's, including cases a re-implementation got wrong."""
+
+    BARON = "**Keeper-only:** the Baron appears in scene 3.\n"
+
+    def site_vault(self, hub_fm, wrap_fm, wrap_name="Session 01 Wrap-Up.md"):
+        vault = make_vault(self)
+        site = Path(tempfile.mkdtemp(prefix="vc-e2e-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text(json.dumps({
+            "siteTitle": "T", "vaultPath": str(vault), "outputDir": "./docs",
+            "excludeDirs": ["_meta"],
+            "folderMap": {"Sessions": "sessions"}}), encoding="utf-8")
+        (vault / "_meta" / "vault-config.md").write_text(
+            f"---\npublish:\n  mode: player\n  site_dir: {site}\n---\n",
+            encoding="utf-8")
+        (vault / "Sessions").mkdir()
+        (vault / "Sessions" / "Session 01 - Arrival.md").write_text(
+            f"---\ntype: session\nsession_number: 1\nstatus: played\n"
+            f"{hub_fm}---\n\n# Session 01 - Arrival\n\n{self.BARON}",
+            encoding="utf-8")
+        (vault / "Sessions" / wrap_name).write_text(
+            f"---\ntype: session_wrap\n{wrap_fm}---\n\n## Narrative Recap"
+            f"\n\nThey arrived.\n", encoding="utf-8")
+        return vault
+
+    def baron_rows(self, vault):
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        return rows_for(rows, "Session 01 - Arrival.md")
+
+    def test_explicitly_linked_published_wrap_up_withholds_the_body(self):
+        vault = self.site_vault(
+            'documents:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n', "")
+        self.assertEqual(self.baron_rows(vault), [])
+
+    def test_broken_link_and_number_match_leave_the_body_published(self):
+        # The reviewer's case: Python treated this hub as withheld and
+        # reported nothing, while the site published the Baron line.
+        vault = self.site_vault(
+            'documents:\n  wrap_up: "[[No Such Wrap-Up]]"\n',
+            "session_number: 1\n")
+        self.assertTrue(self.baron_rows(vault))
+
+    def test_unpublished_wrap_up_does_not_withhold(self):
+        vault = self.site_vault(
+            'documents:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n',
+            "publish: none\n")
+        self.assertTrue(self.baron_rows(vault))
+
+    def test_sessions_row_follows_the_same_answer(self):
+        vault = self.site_vault(
+            'documents:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n', "")
+        self.assertTrue(rows_for(vc.check_sessions(vault),
+                                 "session index body"))
+        broken = self.site_vault(
+            'documents:\n  wrap_up: "[[No Such Wrap-Up]]"\n',
+            "session_number: 1\n")
+        self.assertFalse(rows_for(vc.check_sessions(broken),
+                                  "session index body"))
+
+
+    def test_manifest_rows_follow_publish_played(self):
+        # The real `manifest publish-played --dry-run --json --vault`: a
+        # reviewed session with its linked Wrap-Up will be registered; one
+        # whose Wrap-Up is a DRAFT and whose index isn't reviewed is asked.
+        for status, canon, expect in (
+                ("reviewed", "AUTHORITATIVE", "publish-played will register it"),
+                ("wrap-up", "DRAFT", "publish-site will ask the GM (Wrap-Up "
+                 "not reviewed yet")):
+            with self.subTest(status=status):
+                vault = self.site_vault(
+                    'documents:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n',
+                    f"canon_status: {canon}\n")
+                hub = vault / "Sessions" / "Session 01 - Arrival.md"
+                hub.write_text(hub.read_text(encoding="utf-8").replace(
+                    "status: played", f"status: {status}"), encoding="utf-8")
+                (vault / "_meta" / "publish-manifest.md").write_text(
+                    "## Publishing (0 files)\n\n## Needs Decision (1 files)"
+                    "\n\n- [ ] Sessions/Session 01 - Arrival.md\n",
+                    encoding="utf-8")
+                rows = vc.check_sessions(vault)
+                self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+                row = rows_for(rows, "Session 01 - Arrival.md\tplayed session")
+                self.assertEqual(len(row), 1, rows)
+                self.assertIn(expect, row[0])
 
 
 class GmLeakReviewFollowupTests(unittest.TestCase):

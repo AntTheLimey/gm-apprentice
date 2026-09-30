@@ -15,7 +15,7 @@ Usage:
   vault_check.py VAULT timeline
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
-  vault_check.py VAULT sessions
+  vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
   vault_check.py VAULT pc-body [--folder SUB] [--file REL ...] [--newer-than REL]
@@ -96,6 +96,15 @@ player-facing section boundary gets its frontmatter backfilled and
 its body left alone, for the GM to fix by hand; filename renames
 are never automatic.
 
+`sessions` derives each session's status from its chain documents. For
+a session index whose Wrap-Up is explicitly linked (so the site
+withholds the index body), it also reports body lines outside a gm-only
+fence as INFO, naming the document each kind belongs in. In a player-mode
+vault it warns on played sessions missing from the manifest's Publishing
+section, saying what `manifest publish-played` will do with each. Both
+answers come from the site's installed publish tool (the plugin's when
+the site has none), never from a reading of its rules here.
+
 `wrapup` and `gm-leak` are the commands that can write. Each prints
 its findings first and then a repair row per action — `WOULD-FIX` on
 a dry run, `FIXED` when `--fix` applies them; `wrapup` also prints
@@ -116,13 +125,15 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 from collections import Counter
 import sys
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -158,8 +169,10 @@ from vaultlib import (  # noqa: F401
     body_text,
     parse_publish_list,
     publisher_lines,
+    strip_comment_spans,
     read_publish_list,
     read_publish_scalar,
+    read_wrap_up_player_sections,
     resolve_exclude_sections,
     frontmatter_span,
     get_key,
@@ -880,6 +893,501 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
     return None, hits[0]
 
 
+PLAYED_STATUSES = {"played", "wrap-up", "reviewed"}
+_MANIFEST_ENTRY_RE = re.compile(r"^\s*-\s+(?:\[[ xX]\]\s+)?(.+)$")
+_MANIFEST_PATH_RE = re.compile(r"^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$")
+
+
+def read_manifest_sections(vault: Path) -> dict[str, set[str]] | None:
+    """Vault-relative paths of `_meta/publish-manifest.md`, by section
+    (`publishing`, `excluded`, `needs_decision`), or None when the vault
+    has no manifest. Mirrors tools/publish/lib/manifest.js: an inline
+    ` — note` is dropped, paths are NFC-normalised, and only checked
+    entries count under Publishing."""
+    try:
+        text = (vault / "_meta" / "publish-manifest.md").read_text(
+            encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    sections: dict[str, set[str]] = {
+        "publishing": set(), "excluded": set(), "needs_decision": set()}
+    current: str | None = None
+    for line in text.replace("\r", "").split("\n"):
+        heading = re.match(r"^## (.+)", line)
+        if heading:
+            title = heading.group(1).strip()
+            current = ("publishing" if title.startswith("Publishing")
+                       else "needs_decision" if title.startswith("Needs Decision")
+                       else "excluded" if title.startswith("Excluded")
+                       else None)
+            continue
+        if current is None:
+            continue
+        m = _MANIFEST_ENTRY_RE.match(line)
+        if not m or re.match(r"(?i)reason:", m.group(1).strip()):
+            continue
+        if current == "publishing" and not re.match(r"^- \[[xX]\]", line):
+            continue
+        raw = m.group(1).strip()
+        split = _MANIFEST_PATH_RE.match(raw)
+        sections[current].add(unicodedata.normalize(
+            "NFC", split.group(1) if split else raw))
+    return sections
+
+
+def manifest_rows(vault: Path, played: list[str]) -> list[str]:
+    """WARNING rows for played sessions (and their Wrap-Ups) that
+    `_meta/publish-manifest.md` does not list under Publishing (#277).
+
+    Silent unless the vault has a manifest and publishes in player mode —
+    the only mode where the manifest is an allowlist, matching
+    publish-decision.js. A file under Excluded is a decision, not an
+    oversight, so it is not reported.
+
+    What happens next is the publish tool's call, not this script's: it is
+    asked (`manifest publish-played --dry-run --json`, the site's tool first,
+    as for `explain`). A session it would tick "publish-played will register
+    it"; one it lists as unclear "publish-site will ask the GM", with its
+    reason. The Wrap-Up rows come from the same answer. When it can't be
+    asked, the rows promise nothing about what happens next.
+    """
+    sections = read_manifest_sections(vault)
+    if sections is None:
+        return []
+    if (read_publish_scalar(vault, "mode") or "player").casefold() != "player":
+        return []
+
+    def unlisted(rel: str) -> str | None:
+        canon = unicodedata.normalize("NFC", rel)
+        if canon in sections["publishing"] or canon in sections["excluded"]:
+            return None
+        return ("Needs Decision" if canon in sections["needs_decision"]
+                else "no manifest section")
+
+    waiting = [rel for rel in played if unlisted(rel)]
+    if not played:
+        return []
+    answer = ask_publish_tool(vault, ["manifest", "publish-played",
+                                      "--dry-run"])
+    ticks: set[str] = set()
+    asks: dict[str, str] = {}
+    wraps: dict[str, str] = {}
+    known = answer.data is not None
+    if known:
+        try:
+            data = answer.data
+            ticks = {unicodedata.normalize("NFC", str(p))
+                     for p in data.get("published", [])}
+            for u in data.get("unclear", []):
+                path = unicodedata.normalize("NFC", str(u["path"]))
+                asks[path] = str(u.get("reason") or "unclear")
+                if u.get("wrapUp"):
+                    wraps[unicodedata.normalize("NFC", str(u["wrapUp"]))] = (
+                        asks[path])
+        except (AttributeError, KeyError, TypeError):
+            known = False
+    rows: list[str] = []
+    if not known and not waiting:
+        return []
+    if not known:
+        rows.append(_publish_tool_row(
+            answer.why or "manifest publish-played did not return the "
+            "expected JSON", "the rows below don't say what publish-site "
+            "will do with each session", answer.used))
+    else:
+        rows.extend(_tool_used_row(answer.used))
+
+    def row(rel: str, kind: str) -> str:
+        where = unlisted(rel)
+        head = (f"WARNING\t{rel}\t{kind} is not under Publishing in "
+                f"_meta/publish-manifest.md ({where}) — it will not publish")
+        canon = unicodedata.normalize("NFC", rel)
+        if not known:
+            return (f"{head} until it is listed there (publish-site runs "
+                    f"gm-publish manifest publish-played before every build)")
+        if canon in ticks:
+            return f"{head} yet; publish-played will register it"
+        reason = asks.get(canon) or wraps.get(canon)
+        if reason:
+            return f"{head}; publish-site will ask the GM ({reason})"
+        return (f"{head}; publish-played won't register it — run gm-publish "
+                f"manifest publish-played --session \"{rel}\" to see why")
+
+    for rel in waiting:
+        rows.append(row(rel, "played session"))
+    for rel in sorted((ticks | set(wraps)) - {unicodedata.normalize("NFC", r)
+                                               for r in played}):
+        if unlisted(rel):
+            rows.append(row(rel, "Wrap-Up"))
+    return rows
+
+
+HUB_HOMES = (
+    (re.compile(r"plan\s*\]\]|play[ _-]?notes|wrap[ _-]?up", re.IGNORECASE),
+     "document links go in frontmatter `documents:`"),
+    (re.compile(r"scene index|key prep|image prompt|contingency|premise",
+                re.IGNORECASE),
+     "scene prep, key prep and image prompts go in the Plan"),
+    (re.compile(r"handoff", re.IGNORECASE),
+     "handoffs go in the Wrap-Up's fenced ## GM Notes"),
+)
+
+
+def _hub_body_rows(rel: str, text: str) -> list[str]:
+    """An INFO row when a session index that has a Wrap-Up holds anything
+    in its body but the H1 title outside a gm-only fence (#276).
+
+    INFO, not WARNING: once the session has a published Wrap-Up the site
+    withholds the hub body, so nothing leaks. It is still bookkeeping in
+    the wrong document — the skills that need it read the Plan and the
+    Wrap-Up, not the hub — so the row names where each kind belongs.
+    Comments are read as the publisher reads them (`strip_comment_spans`),
+    so the template's own comment line is not prose. The caller gates on
+    the Wrap-Up: without one the body is the session's only published
+    record, and prose there is expected.
+    """
+    states, _problems = scan_body(text, ())
+    loose: list[LineState] = []
+    in_comment = False
+    for s in states:
+        if s.gm_depth or s.spoiler_depth or s.marker is not None:
+            continue
+        if s.in_code:
+            if s.line.strip():
+                loose.append(s)
+            continue
+        kept, in_comment = strip_comment_spans(s.line, in_comment)
+        if kept.strip() and not (s.heading is not None and s.heading[0] == 1):
+            loose.append(s)
+    if not loose:
+        return []
+    body = "\n".join(s.line for s in loose)
+    homes = [home for pattern, home in HUB_HOMES if pattern.search(body)]
+    homes.append("anything the Keeper keeps on the hub goes under a fenced "
+                 "## GM Notes (see _Templates/_Template_Session.md)")
+    return [f"INFO\t{rel}:{loose[0].lineno}\tsession index body has "
+            f"{len(loose)} line(s) outside a gm-only fence — the site "
+            f"withholds it now the session has a Wrap-Up, and the hub is "
+            f"metadata only: {'; '.join(homes)}"]
+
+
+def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
+                       chapter: str | None, documents: dict[str, str],
+                       files: list[tuple[str, str, dict]],
+                       stems: dict[str, str],
+                       by_stem: dict[str, list[str]],
+                       by_rel: dict[str, dict],
+                       ) -> tuple[str | None, list[str], list[str]]:
+    """One chain document of a session index: (path or None, broken-link
+    rows, unlinked-document rows)."""
+    kind, types = SESSION_DOC_TYPES[key]
+    broken: list[str] = []
+    unlinked: list[str] = []
+    target = wikilink_target(documents.get(key))
+    if target.casefold() in YAML_NULLS:
+        # `plan: null` is the schema's own placeholder for "this
+        # document does not exist yet" — reporting it as a broken
+        # link would fire on nearly every index in a live vault.
+        target = ""
+    linked, elsewhere = (
+        _resolve_document_link(target, by_stem, by_rel, chapter, rel)
+        if target else (None, None))
+    if elsewhere:
+        broken.append(
+            f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]' "
+            f"but the only note by that name is in another chapter "
+            f"({elsewhere}) — not counted for this session")
+    elif target and linked is None:
+        broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
+                      f"'[[{target}]]' but no such note exists")
+    found = _chain_document(files, stems, types, stem, number, chapter)
+    if found and not linked:
+        unlinked.append(
+            f"INFO\t{rel}\t{kind} exists ({found}) but "
+            f"documents.{key} does not link it — stamp_entities.py "
+            f'VAULT "{rel}" --set '
+            f'documents.{key}="[[{Path(found).stem}]]"')
+    return linked or found, broken, unlinked
+
+
+# The publish tool, beside skills/ in both the repo and the installed plugin
+# (<plugin>/skills/shared/scripts/vault_check.py, <plugin>/tools/publish/...).
+PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
+                / "tools" / "publish" / "bin" / "gm-publish.js")
+PUBLISH_TOOL_TIMEOUT = 120
+# The site builds with the tool installed in its own node_modules (update-pin
+# reads it there too), so that is the renderer whose answer counts. The first
+# release that withholds a paired hub's body, and has `explain --all --json`
+# and `manifest publish-played --dry-run --json --vault`:
+PUBLISH_PACKAGE = "gm-apprentice-publish"
+WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
+
+
+def _site_config(vault: Path) -> tuple[Path | None, str | None]:
+    """(the site's vault.config.json, why there is none).
+
+    (None, None) means the vault publishes nothing — no `publish:` block —
+    so there is nothing to ask about. A relative `publish.site_dir` is
+    relative to the vault."""
+    site_dir = read_publish_scalar(vault, "site_dir")
+    if not site_dir:
+        if read_publish_list(vault, "exclude_sections").publish_line is None:
+            return None, None
+        return None, "publish.site_dir is not set in _meta/vault-config.md"
+    site = Path(site_dir).expanduser()
+    if not site.is_absolute():
+        site = vault / site
+    config = site / "vault.config.json"
+    if not config.is_file():
+        return None, f"no vault.config.json in publish.site_dir ({site})"
+    return config, None
+
+
+_SEMVER = re.compile(
+    r"(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+
+
+def parse_semver(text: object) -> tuple[tuple[int, int, int], list[str]] | None:
+    """(core, prerelease identifiers) of a strict semver string, or None."""
+    m = _SEMVER.fullmatch(str(text) if text is not None else "")
+    if not m:
+        return None
+    return ((int(m[1]), int(m[2]), int(m[3])),
+            m[4].split(".") if m[4] else [])
+
+
+def semver_below(a: str, b: str) -> bool:
+    """Semver precedence, as tools/publish/lib/site-pin.js semverBelow: a
+    prerelease sorts below its release (1.11.40-rc.1 < 1.11.40). Both must
+    be valid; an invalid one raises ValueError."""
+    pa, pb = parse_semver(a), parse_semver(b)
+    if pa is None or pb is None:
+        raise ValueError(f"not a semver version: {a if pa is None else b}")
+    if pa[0] != pb[0]:
+        return pa[0] < pb[0]
+    xa, xb = pa[1], pb[1]
+    if not xa or not xb:
+        return bool(xa) and not xb
+    for i in range(max(len(xa), len(xb))):
+        if i >= len(xa):
+            return True
+        if i >= len(xb):
+            return False
+        x, y = xa[i], xb[i]
+        if x == y:
+            continue
+        nx, ny = x.isdigit(), y.isdigit()
+        if nx and ny:
+            return int(x) < int(y)
+        if nx != ny:
+            return nx
+        return x < y
+    return False
+
+
+def _spec_version(spec: str) -> str | None:
+    """The least version a package.json spec for the tool can install, or
+    None when that can't be read for sure (site-pin.js specVersion)."""
+    text = str(spec).strip()
+    if text.startswith("file:"):
+        target = text[len("file:"):].replace("\\", "/").rstrip("/")
+        cached = re.search(r"/(\d+\.\d+\.\d+)/tools/publish$", target)
+        if cached:
+            return cached[1]
+        tarball = re.search(r"-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.tgz$",
+                            target)
+        return tarball[1] if tarball and parse_semver(tarball[1]) else None
+    m = re.fullmatch(r"(?:\^|~|>=|=)?\s*v?(\S+)", text)
+    return m[1] if m and parse_semver(m[1]) else None
+
+
+def _read_json(path: Path) -> tuple[bool, object, str | None]:
+    """(missing, parsed data, error). A dangling symlink is missing."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return True, None, None
+    except NotADirectoryError:
+        return True, None, None
+    except (OSError, UnicodeDecodeError) as e:
+        return False, None, e.__class__.__name__
+    try:
+        return False, json.loads(text), None
+    except ValueError:
+        return False, None, "invalid JSON"
+
+
+@dataclass
+class SitePin:
+    source: str  # "installed", "package.json" or "none"
+    version: str | None
+    stale: str | None
+
+
+def _stale_reason(version: str) -> str | None:
+    since = ".".join(str(n) for n in WITHHOLDS_HUB_BODIES_SINCE)
+    return (f"site pinned to {version} predates body withholding — run "
+            f"update-pin" if semver_below(version, since) else None)
+
+
+def site_pin(site: Path) -> SitePin:
+    """Which gm-apprentice-publish the site builds with, by the rules of
+    tools/publish/lib/site-pin.js (same test vectors): a usable installed
+    tool answers; with nothing installed (or a dangling symlink) the
+    site's package.json dependency does, since the next `npm install`
+    installs it; a spec whose least version can't be read, or an
+    installed tool with no readable version, is stale; no dependency on
+    the tool at all is source "none"."""
+    missing, data, error = _read_json(
+        site / "node_modules" / PUBLISH_PACKAGE / "package.json")
+    if not missing:
+        version = data.get("version") if isinstance(data, dict) else None
+        if not isinstance(version, str) or parse_semver(version) is None:
+            return SitePin("installed", None,
+                           f"the site's installed {PUBLISH_PACKAGE} has no "
+                           f"readable version")
+        return SitePin("installed", version, _stale_reason(version))
+    missing, data, error = _read_json(site / "package.json")
+    if missing:
+        return SitePin("none", None, None)
+    if not isinstance(data, dict):
+        return SitePin("package.json", None,
+                       f"the site's package.json can't be read "
+                       f"({error or 'not an object'})")
+    def dep(key: str) -> object:
+        table = data.get(key)
+        return table.get(PUBLISH_PACKAGE) if isinstance(table, dict) else None
+    spec = dep("dependencies") or dep("devDependencies")
+    if not spec:
+        return SitePin("none", None, None)
+    version = _spec_version(str(spec))
+    if version is None:
+        return SitePin("package.json", None,
+                       f"the site pins {PUBLISH_PACKAGE} as \"{spec}\", which "
+                       f"isn't a version this can check")
+    return SitePin("package.json", version, _stale_reason(version))
+
+
+def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
+    """(tool script, which tool it is, why it can't answer).
+
+    The site's installed tool when it has one — its answer is the site's.
+    A site whose tool (installed, or pinned in package.json and not yet
+    installed) predates hub-body withholding, or can't be read, can't
+    answer: the caller fails safe. The plugin's own tool stands in for a
+    site with nothing installed, and says so."""
+    pin = site_pin(site)
+    if pin.source == "installed":
+        label = (f"the site's installed publish tool "
+                 f"{pin.version or '(unknown version)'}")
+        if pin.stale:
+            return None, label, pin.stale
+        script = site / "node_modules" / PUBLISH_PACKAGE / "bin" / "gm-publish.js"
+        if not script.is_file():
+            return None, label, f"{script} is missing"
+        return script, label, None
+    if pin.stale:
+        return None, f"the site's pinned publish tool {pin.version or ''}".rstrip(), pin.stale
+    label = ("the plugin's publish tool (the site has none installed)"
+             if pin.source == "none" else
+             f"the plugin's publish tool (the site pins {pin.version}, not "
+             f"installed yet)")
+    if not PUBLISH_TOOL.is_file():
+        return None, label, f"the publish tool is not at {PUBLISH_TOOL}"
+    return PUBLISH_TOOL, label, None
+
+
+@dataclass
+class ToolAnswer:
+    """What the publish tool said, or why it couldn't: `data` is its JSON
+    (None on any failure), `why` the failure, `used` which tool answered
+    (None when the site's own tool did — the normal case, not worth a
+    row)."""
+    data: Any = None
+    why: str | None = None
+    used: str | None = None
+
+
+def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
+    """Run the site's publish tool with `args` plus `--json`, `--config`
+    and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
+    reason means the vault publishes nothing."""
+    config, why = _site_config(vault)
+    if config is None:
+        return ToolAnswer(why=why)
+    tool, label, why = _publish_tool_for(config.parent)
+    used = label if tool == PUBLISH_TOOL else None
+    if tool is None:
+        return ToolAnswer(why=why, used=label)
+    node = shutil.which("node")
+    if not node:
+        return ToolAnswer(why="node is not on PATH", used=label)
+    name = " ".join(args[:2])
+    try:
+        proc = subprocess.run(
+            [node, str(tool), *args, "--json",
+             "--config", str(config), "--vault", str(vault.resolve())],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired:
+        return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
+                          used=label)
+    except OSError as e:
+        return ToolAnswer(why=f"node could not run ({e.__class__.__name__})",
+                          used=label)
+    if proc.returncode != 0:
+        detail = (proc.stderr or "").strip().splitlines()
+        return ToolAnswer(why=(f"{name} exited {proc.returncode}"
+                               + (f": {detail[-1]}" if detail else "")),
+                          used=label)
+    try:
+        return ToolAnswer(data=json.loads(proc.stdout), used=used)
+    except ValueError:
+        return ToolAnswer(why=f"{name} did not return the expected JSON",
+                          used=label)
+
+
+def hub_bodies_withheld(vault: Path
+                        ) -> tuple[set[str] | None, str | None, str | None]:
+    """(session indexes whose body the site withholds, why the publish tool
+    could not be asked, which tool answered when it wasn't the site's own).
+
+    The answer comes from the publish tool itself (`explain --all --json`,
+    its `bodyWithheld`), never a second reading of its rules here: #276's
+    Python copy of the pairing drifted from session-hub.js within a day.
+    It is the SITE's installed tool that answers, since that is what builds
+    the site; the plugin's stands in only when the site has none installed.
+    A vault with no `publish:` block publishes nothing, so nothing is
+    withheld: (empty set, None, None). Otherwise any failure — no site_dir,
+    no vault.config.json, a site pinned below 1.11.40 (it publishes every
+    hub body), no node, an error, a timeout, output that isn't the expected
+    JSON — is (None, reason, …), and the caller withholds nothing: a check
+    that can't ask scans every hub body rather than guess.
+    """
+    answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer.data is None:
+        return (set(), None, None) if answer.why is None else (
+            None, answer.why, answer.used)
+    try:
+        pages = answer.data["pages"]
+        return {unicodedata.normalize("NFC", str(p["path"]))
+                for p in pages if p["bodyWithheld"] is True}, None, answer.used
+    except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON", answer.used
+
+
+def _tool_used_row(used: str | None) -> list[str]:
+    return ([f"INFO\t(vault)\tasked {used}"] if used else [])
+
+
+def _publish_tool_row(why: str, consequence: str,
+                      used: str | None = None) -> str:
+    asked = f"; asked {used}" if used else ""
+    return (f"INFO\t(vault)\tthe publish tool could not be consulted "
+            f"({why}{asked}), so {consequence}")
+
+
 def check_sessions(vault: Path) -> list[str]:
     """Derive each session's status from the documents that exist.
 
@@ -902,7 +1410,16 @@ def check_sessions(vault: Path) -> list[str]:
     if not indexes:
         return ["INFO\t(vault)\tno session indexes found"]
 
+    found, why, used = hub_bodies_withheld(vault)
+    withheld = found if found is not None else set()
     rows: list[str] = []
+    if found is None:
+        rows.append(_publish_tool_row(
+            why or "unknown", "no hub-bookkeeping rows are shown — they "
+            "apply only where the site withholds the hub's body", used))
+    else:
+        rows.extend(_tool_used_row(used))
+    played: list[str] = []
     for rel, text, fm in indexes:
         stem = Path(rel).stem
         number = parse_session_number(fm.get("session_number"))
@@ -914,33 +1431,12 @@ def check_sessions(vault: Path) -> list[str]:
         chain: dict[str, str | None] = {}
         broken: list[str] = []
         unlinked: list[str] = []
-        for key, (kind, types) in SESSION_DOC_TYPES.items():
-            target = wikilink_target(documents.get(key))
-            if target.casefold() in YAML_NULLS:
-                # `plan: null` is the schema's own placeholder for "this
-                # document does not exist yet" — reporting it as a broken
-                # link would fire on nearly every index in a live vault.
-                target = ""
-            linked, elsewhere = (
-                _resolve_document_link(
-                    target, by_stem, by_rel, chapter, rel)
-                if target else (None, None))
-            if elsewhere:
-                broken.append(
-                    f"WARNING\t{rel}\tdocuments.{key} links '[[{target}]]' "
-                    f"but the only note by that name is in another chapter "
-                    f"({elsewhere}) — not counted for this session")
-            elif target and linked is None:
-                broken.append(f"WARNING\t{rel}\tdocuments.{key} links "
-                              f"'[[{target}]]' but no such note exists")
-            found = _chain_document(files, stems, types, stem, number, chapter)
-            chain[key] = linked or found
-            if found and not linked:
-                unlinked.append(
-                    f"INFO\t{rel}\t{kind} exists ({found}) but "
-                    f"documents.{key} does not link it — stamp_entities.py "
-                    f'VAULT "{rel}" --set '
-                    f'documents.{key}="[[{Path(found).stem}]]"')
+        for key in SESSION_DOC_TYPES:
+            chain[key], b, u = _resolve_chain_key(
+                key, rel, stem, number, chapter, documents,
+                files, stems, by_stem, by_rel)
+            broken.extend(b)
+            unlinked.extend(u)
 
         wrap = chain["wrap_up"]
         if wrap:
@@ -973,6 +1469,14 @@ def check_sessions(vault: Path) -> list[str]:
                         f"--set status={derived}")
         rows.extend(broken)
         rows.extend(unlinked)
+        # Only where the site really withholds the body (a paired Wrap-Up
+        # that itself publishes); otherwise the body is live and prose is
+        # the session's published record.
+        if unicodedata.normalize("NFC", rel) in withheld:
+            rows.extend(_hub_body_rows(rel, text))
+        if declared.casefold() in PLAYED_STATUSES:
+            played.append(rel)
+    rows.extend(manifest_rows(vault, played))
     return rows
 
 
@@ -1185,11 +1689,26 @@ def check_gm_leak(vault: Path, folder: str | None,
         rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
                     f"assumes the default exclude list; set site_dir so it "
                     f"reads the site's vault.config.json excludeSections too")
-    for rel, text in vault_files(vault, folder):
-        fm = extract_frontmatter(text) or {}
+    notes = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault, folder)]
+    withheld: set[str] = set()
+    if any(fm.get("type") == "session" for _r, _t, fm in notes):
+        answer, why, used = hub_bodies_withheld(vault)
+        if answer is not None:
+            withheld = answer
+            rows.extend(_tool_used_row(used))
+        else:
+            rows.append(_publish_tool_row(
+                why or "unknown", "every session index body was scanned, "
+                "including any the site withholds", used))
+    for rel, text, fm in notes:
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
         if publish_mode(fm) == "none":
+            continue
+        if unicodedata.normalize("NFC", rel) in withheld:
+            # session-hub.js suppressHubBody: the site publishes the
+            # frontmatter and the Wrap-Up's recap, not this body.
             continue
         states, problems = scan_body(text, excludes)
         kept = _published_linenos(states, fm)
@@ -1513,6 +2032,18 @@ def is_recap_title(title: str) -> bool:
     """A recap H2 under any of its spellings."""
     low = title.casefold().strip()
     return "narrative recap" in low or low in RECAP_TITLES
+
+
+def player_section_key(title: str) -> str:
+    """How a `publish.wrap_up.player_sections` entry and an H2 title are
+    compared: emphasis unwrapped, whitespace collapsed, case folded."""
+    return " ".join(_plain_title(title).split()).casefold()
+
+
+def wrap_player_sections(vault: Path) -> frozenset[str]:
+    """The vault's extra player-facing Wrap-Up H2s, as comparison keys."""
+    return frozenset(k for k in map(player_section_key,
+                                    read_wrap_up_player_sections(vault)) if k)
 
 
 def decorated_heading(title: str) -> tuple[str, str] | None:
@@ -1891,11 +2422,15 @@ def _reconciled_findings(rel: str, text: str,
 
 
 def wrapup_structure_findings(rel: str, text: str,
-                              exclude: list[str]) -> list[Finding]:
+                              exclude: list[str],
+                              player: frozenset[str] = frozenset()
+                              ) -> list[Finding]:
     """Step 3 — publish safety. Every H2 is Keeper-facing by default.
 
-    Player-facing H2s are exactly the recap and `## Memorable Moments`;
-    anything else beside them is drift the re-nest repairs. The level
+    Player-facing H2s are exactly the recap and `## Memorable Moments`,
+    plus any the vault lists in `publish.wrap_up.player_sections`
+    (`player`, as comparison keys); anything else beside them is drift
+    the re-nest repairs. The level
     says what it costs today: an ERROR publishes, a WARNING is already
     hidden by a fence or by the vault's effective exclude list and is
     structure drift only. A heading quoted inside a code fence is
@@ -1908,7 +2443,7 @@ def wrapup_structure_findings(rel: str, text: str,
     that never closes or closes without an opener.
     """
     states, problems = scan_body(text, exclude)
-    preserved, crossing = _gm_pair_plan(states)
+    preserved, crossing = _gm_pair_plan(states, player)
     infos = _fence_infos(states)
     out: list[Finding] = []
     for lineno in crossing:
@@ -1956,7 +2491,7 @@ def wrapup_structure_findings(rel: str, text: str,
         if state.heading is None:
             if state.in_code:
                 out.extend(_fenced_heading_finding(
-                    rel, state, infos.get(state.lineno, "")))
+                    rel, state, infos.get(state.lineno, ""), player))
             continue
         level, title = state.heading
         where = f"{rel}:{state.lineno}"
@@ -1968,7 +2503,7 @@ def wrapup_structure_findings(rel: str, text: str,
                     f"as-is — merge by hand"))
                 continue
             has_recap = has_recap or is_recap_title(title)
-            out.extend(_wrap_h2_finding(rel, state, where, title))
+            out.extend(_wrap_h2_finding(rel, state, where, title, player))
         found = decorated_heading(title)
         if found:
             name, qualifier = found
@@ -1993,7 +2528,9 @@ def wrapup_structure_findings(rel: str, text: str,
 
 
 def _fenced_heading_finding(rel: str, state: LineState,
-                            info: str) -> list[Finding]:
+                            info: str,
+                            player: frozenset[str] = frozenset()
+                            ) -> list[Finding]:
     """A Keeper-facing H2 quoted inside a code fence — never re-nested.
 
     `scan_body` leaves `heading` unset inside a fence precisely so that
@@ -2014,13 +2551,17 @@ def _fenced_heading_finding(rel: str, state: LineState,
     if is_recap_title(title) or title.casefold() in (MEMORABLE_MOMENTS,
                                                      GM_NOTES):
         return []
+    if player_section_key(title) in player:
+        return []
     return [Finding("WARNING", f"{rel}:{state.lineno}",
                     f"Keeper-facing H2 '## {title}' is inside a code fence — "
                     f"quoted, not re-nested")]
 
 
 def _wrap_h2_finding(rel: str, state: LineState, where: str,
-                     title: str) -> list[Finding]:
+                     title: str,
+                     player: frozenset[str] = frozenset()
+                     ) -> list[Finding]:
     """One H2, classified. Player, GM Notes, or Keeper-facing drift."""
     if is_recap_title(title):
         if title != NARRATIVE_RECAP:
@@ -2030,6 +2571,10 @@ def _wrap_h2_finding(rel: str, state: LineState, where: str,
         return []
     low = title.casefold()
     if low == MEMORABLE_MOMENTS:
+        return []
+    if player_section_key(title) in player:
+        # The vault declared it player-facing; one the GM fenced is
+        # deliberately hidden and stays where it is.
         return []
     if low == GM_NOTES:
         if state.gm_depth:
@@ -2064,14 +2609,18 @@ def wrapup_filename_findings(rel: str) -> list[Finding]:
                     f"needs every inbound link updated")]
 
 
-def _wrap_blocks(states: list[LineState]) -> list[tuple[str, str,
-                                                        list[LineState]]]:
+def _wrap_blocks(states: list[LineState],
+                 player: frozenset[str] = frozenset()
+                 ) -> list[tuple[str, str, list[LineState]]]:
     """(kind, title, lines) for the preamble and every H2 block.
 
     Kinds are the four the template knows — `preamble`, `recap`,
     `moments`, `gm` — plus `second-recap` and `keeper` for everything
     else, `keeper` being the default because real vaults invent
-    Keeper-facing headings faster than any enumeration tracks. A heading
+    Keeper-facing headings faster than any enumeration tracks. A title
+    the vault lists in `player` is `player` (published, hoisted after
+    Memorable Moments), or `gm-listed` when the GM fenced it: hidden,
+    kept as an H2 inside the rebuilt fence. A heading
     inside a code fence never starts a block: `scan_body` leaves
     `heading` unset there.
 
@@ -2096,6 +2645,8 @@ def _wrap_blocks(states: list[LineState]) -> list[tuple[str, str,
                 kind = "moments"
             elif low == GM_NOTES:
                 kind = "gm"
+            elif player_section_key(title) in player:
+                kind = "gm-listed" if _depth(state) else "player"
             else:
                 kind = "keeper"
             blocks.append((kind, title, [state]))
@@ -2108,11 +2659,17 @@ def _wrap_blocks(states: list[LineState]) -> list[tuple[str, str,
 # and are kept exactly where they are. Everything else — a Keeper block,
 # the existing `## GM Notes` block, and the top-level gap between blocks,
 # where the canonical pair's own markers live — is rebuilt.
-PLAYER_BLOCK_KINDS = ("preamble", "recap", "second-recap", "moments")
+PLAYER_BLOCK_KINDS = ("preamble", "recap", "second-recap", "moments",
+                      "player")
 
 
-def _gm_pair_plan(states: list[LineState]) -> tuple[set[int], list[int]]:
+def _gm_pair_plan(states: list[LineState], player: frozenset[str]
+                  ) -> tuple[set[int], list[int]]:
     """(marker lines to keep verbatim, marker lines that cross a boundary).
+
+    `player` has no default: the findings and the re-nest must read the
+    vault's listed sections the same way, or one reports a crossing (or a
+    second opener) the other never acts on.
 
     The re-nest rebuilds one `<!-- gm-only -->` pair around the GM
     region, and stripping *every* marker first would republish a fenced
@@ -2133,14 +2690,14 @@ def _gm_pair_plan(states: list[LineState]) -> tuple[set[int], list[int]]:
     publishes either way, so the file is reported and left alone.
     """
     region: dict[int, tuple[int, bool]] = {}
-    for index, (kind, _title, group) in enumerate(_wrap_blocks(states)):
+    for index, (kind, _title, group) in enumerate(_wrap_blocks(states, player)):
         core = -1
         for j, state in enumerate(group):
             if state.line.strip() and state.marker not in GM_MARKERS:
                 core = j
-        player = kind in PLAYER_BLOCK_KINDS
+        in_player = kind in PLAYER_BLOCK_KINDS
         for j, state in enumerate(group):
-            region[state.lineno] = (index, player and j <= core)
+            region[state.lineno] = (index, in_player and j <= core)
 
     keep: set[int] = set()
     crossing: list[int] = []
@@ -2221,7 +2778,8 @@ def _trim(lines: list[str]) -> list[str]:
     return out
 
 
-def renest_wrapup(text: str) -> str:
+def renest_wrapup(text: str,
+                  player: frozenset[str] = frozenset()) -> str:
     """The 1.9.5 migration's structural step, as a pure transform.
 
     Player-facing sections are hoisted above the GM block first — real
@@ -2235,12 +2793,14 @@ def renest_wrapup(text: str) -> str:
     leak caused by the repair. Content is never reordered inside a
     block and never reworded; a conformant file comes back
     byte-identical, and a file whose fences cross a section boundary
-    comes back untouched.
+    comes back untouched. Sections the vault lists in `player` are
+    hoisted after Memorable Moments in their original order, or, when
+    the GM fenced one, kept as an H2 inside the rebuilt fence.
     """
     states, _problems = scan_body(text, ())
     if not states:
         return text
-    preserved, crossing = _gm_pair_plan(states)
+    preserved, crossing = _gm_pair_plan(states, player)
     if crossing:
         return text
     raw = text.splitlines(keepends=True)
@@ -2250,10 +2810,11 @@ def renest_wrapup(text: str) -> str:
     recap: list[list[str]] = []
     extra_recaps: list[list[str]] = []
     moments: list[list[str]] = []
+    listed: list[list[str]] = []
     preamble: list[str] = []
     gm_content: list[str] = []
     keeper: list[list[str]] = []
-    for kind, _title, block_states in _wrap_blocks(states):
+    for kind, _title, block_states in _wrap_blocks(states, player):
         group = [s for s in block_states
                  if s.marker not in GM_MARKERS or s.lineno in preserved]
         if kind == "preamble":
@@ -2265,12 +2826,16 @@ def renest_wrapup(text: str) -> str:
             extra_recaps.append([s.line for s in group])
         elif kind == "moments":
             moments.append([s.line for s in group])
+        elif kind == "player":
+            listed.append([s.line for s in group])
         elif kind == "gm":
             gm_content.extend(_trim([s.line for s in group[1:]]))
+        elif kind == "gm-listed":
+            keeper.append([s.line for s in group])
         else:
             keeper.append([_demoted(s) for s in group])
 
-    ordered = (preamble, *recap, *extra_recaps, *moments)
+    ordered = (preamble, *recap, *extra_recaps, *moments, *listed)
     parts = [t for t in (_trim(p) for p in ordered) if t]
     if gm_content or keeper:
         block = [GM_ONLY_OPEN, "", "## GM Notes"] + _trim(gm_content)
@@ -2750,6 +3315,7 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
     ordinary vault of ingested back-history would fail every run.
     """
     excludes = effective_exclude_sections(vault)
+    player = wrap_player_sections(vault)
     entries = [(rel, text, extract_frontmatter(text) or {})
                for rel, text in vault_files(vault)]
     rows: list[str] = []
@@ -2760,7 +3326,8 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
         if file is not None and rel != file:
             continue
         matched = True
-        rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes, fix))
+        rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes, fix,
+                                     player))
     if file is not None and not matched:
         rows.append(f"INFO\t{file}\tno wrap-up with that path — `type:` must "
                     f"be one of {', '.join(sorted(WRAP_TYPES))}")
@@ -2769,7 +3336,8 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
 
 def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       entries: list[tuple[str, str, dict]],
-                      excludes: list[str], fix: bool) -> list[str]:
+                      excludes: list[str], fix: bool,
+                      player: frozenset[str] = frozenset()) -> list[str]:
     """One wrap-up: findings, then the plan, then a single write."""
     path = vault / rel
     try:
@@ -2788,7 +3356,7 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
 
     ctx = _wrap_context(rel, fm, entries)
     fm_findings = wrapup_frontmatter_findings(rel, text, ctx)
-    structure = wrapup_structure_findings(rel, text, excludes)
+    structure = wrapup_structure_findings(rel, text, excludes, player)
     if publish_mode(fm) == "none":
         structure = [Finding("WARNING" if f.level == "ERROR" else f.level,
                              f.where, f.message, f.kind, f.data)
@@ -2809,13 +3377,13 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
     if not any(f.kind in ("fence-crosses", "fence-unbalanced")
                for f in structure):
         if any(f.kind in ("keeper-h2", "recap", "renest") for f in structure):
-            renested = renest_wrapup(new_text)
+            renested = renest_wrapup(new_text, player)
             # Structure-only defects — an unfenced `## GM Notes`, a
             # second opener — carry no per-finding action, so what the
             # re-nest did is read back off the two texts rather than
             # predicted from the findings that triggered it.
             if renested != new_text:
-                actions.extend(_renest_actions(new_text, renested))
+                actions.extend(_renest_actions(new_text, renested, player))
                 new_text = renested
         if any(f.kind == "decorated" for f in structure):
             new_text, renamed = rename_decorated_headings(new_text)
@@ -2838,7 +3406,8 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
     return rows
 
 
-def _renest_actions(before: str, after: str) -> list[str]:
+def _renest_actions(before: str, after: str,
+                    player: frozenset[str] = frozenset()) -> list[str]:
     """What the re-nest did, as fix rows — read off the two texts.
 
     Derived, never predicted. The rows worded from the *findings* claimed
@@ -2847,7 +3416,7 @@ def _renest_actions(before: str, after: str) -> list[str]:
     approving the write. A fix row must describe the bytes the repair
     produced, or it is worse than no row at all.
     """
-    before_blocks = _wrap_blocks(scan_body(before, ())[0])
+    before_blocks = _wrap_blocks(scan_body(before, ())[0], player)
     after_states, _ = scan_body(after, ())
     after_h2 = [s.heading[1] for s in after_states
                 if s.heading is not None and s.heading[0] == 2]

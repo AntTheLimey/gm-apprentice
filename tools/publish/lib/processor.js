@@ -539,6 +539,12 @@ function publishedSource(page) {
   return page.publishedMarkdown != null ? page.publishedMarkdown : (page.markdown || '');
 }
 
+// A session index (`type: session`), the hub of the session document chain. Whether its
+// body publishes is session-hub.js's call (#276).
+function isSessionHub(page) {
+  return !!(page && page.frontmatter && page.frontmatter.type === 'session');
+}
+
 function portraitBasename(frontmatter) {
   const portrait = frontmatter && frontmatter.portrait;
   return portrait ? String(portrait).split('/').pop() : null;
@@ -849,4 +855,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };
+module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections };

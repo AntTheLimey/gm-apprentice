@@ -4,7 +4,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { runExplain } = require('../lib/explain-cli');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const { runExplain, runExplainAll } = require('../lib/explain-cli');
+
+const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 
 function write(root, rel, body) {
   const full = path.join(root, rel);
@@ -78,6 +83,29 @@ describe('explain', () => {
     assert.match(text, /^ {2}VERDICT: publishes at docs\/sessions\/session-07\.html$/m);
     assert.match(text, /^ {2}sections stripped on publish: GM Notes, Reconciliation Context$/m);
     assert.match(text, /^ {2}gm-only blocks: 1$/m);
+    // #276: no Wrap-Up, so the hub body is the session's record and publishes.
+    assert.doesNotMatch(text, /^ {2}body: /m);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('says a session index body is withheld once a Wrap-Up publishes (#276)', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Session_07_Wrap_Up.md',
+      '---\ntype: session_wrap\nsession: "[[Session_07]]"\n---\n\n## Narrative Recap\n\nDocks.\n');
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_07.md' }, c.deps);
+    assert.match(c.text(), /^ {2}body: not published — a session index is metadata only/m);
+    const j = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_07.md', json: true }, j.deps);
+    assert.strictEqual(JSON.parse(j.out.join('')).bodyPublishes, false);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--json says a session index body publishes when there is no Wrap-Up (#276)', async () => {
+    const vault = makeVault();
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_07.md', json: true }, c.deps);
+    assert.strictEqual(JSON.parse(c.out.join('')).bodyPublishes, true);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -294,5 +322,93 @@ describe('explain', () => {
         return true;
       },
     );
+  });
+});
+
+describe('explain on a session index that does not publish (#276)', () => {
+  it('says the page itself does not publish, not that it is built from the Wrap-Up', async () => {
+    const vault = makeVault();
+    // Session 08 is prepped (auto-excluded); give it a published Wrap-Up.
+    write(vault, 'Sessions/Session_08_Wrap_Up.md',
+      '---\ntype: session_wrap\nsession: "[[Session_08]]"\n---\n\n## Narrative Recap\n\nAmbush.\n');
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_08.md' }, c.deps);
+    assert.match(c.text(), /^ {2}body: not published — the page itself does not publish/m);
+    assert.doesNotMatch(c.text(), /built from frontmatter/);
+    const j = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_08.md', json: true }, j.deps);
+    const parsed = JSON.parse(j.out.join(''));
+    assert.strictEqual(parsed.publishes, false);
+    assert.strictEqual(parsed.bodyPublishes, false);
+    assert.strictEqual(parsed.bodyWithheld, true);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+describe('explain --all (#276)', () => {
+  function all(configPath, extra) {
+    const c = capture();
+    return runExplainAll(Object.assign({ configPath }, extra || {}), c.deps)
+      .then((rc) => ({ rc, json: JSON.parse(c.out.join('')) }));
+  }
+  const byPath = (json) => new Map(json.pages.map((p) => [p.path, p]));
+
+  it('reports publishes and body status for every file in one run', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Session_07_Wrap_Up.md',
+      '---\ntype: session_wrap\nsession: "[[Session_07]]"\n---\n\n## Narrative Recap\n\nDocks.\n');
+    const { rc, json } = await all(siteFor(vault));
+    assert.strictEqual(rc, 0);
+    const pages = byPath(json);
+    assert.deepStrictEqual(pages.get('Sessions/Session_07.md'), {
+      path: 'Sessions/Session_07.md', type: 'session', publishes: true,
+      code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
+    });
+    assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
+    assert.strictEqual(pages.get('Sessions/Session_08.md').publishes, false);
+    assert.strictEqual(pages.get('Sessions/Session_08.md').code, 'AUTO_EXCLUDED_STATUS');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a broken documents.wrap_up plus a number-matched Wrap-Up leaves the body published', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Session_07.md', [
+      '---', 'type: session', 'session_number: 7', 'status: played',
+      'documents:', '  wrap_up: "[[No Such Wrap Up]]"', '---', '',
+      'Keeper-only: the Baron appears in scene 3.', '',
+    ].join('\n'));
+    write(vault, 'Sessions/Session_07_Wrap_Up.md',
+      '---\ntype: session_wrap\nsession_number: 7\n---\n\n## Narrative Recap\n\nDocks.\n');
+    const { json } = await all(siteFor(vault));
+    const hub = byPath(json).get('Sessions/Session_07.md');
+    assert.strictEqual(hub.bodyWithheld, false);
+    assert.strictEqual(hub.bodyPublishes, true);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--vault reads another vault through the site config', async () => {
+    const vault = makeVault();
+    const other = makeVault();
+    write(other, 'Sessions/Only_Here.md', '---\ntype: session\nsession_number: 9\nstatus: played\n---\n');
+    const { json } = await all(siteFor(vault), { vaultPath: other });
+    assert.strictEqual(json.vaultPath, path.resolve(other));
+    assert.ok(byPath(json).has('Sessions/Only_Here.md'));
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
+  });
+
+  it('runs from the CLI and refuses --all without --json', async () => {
+    const vault = makeVault();
+    const configPath = siteFor(vault);
+    const run = (args) => promisify(execFile)(process.execPath, [CLI, ...args])
+      .then((r) => ({ code: 0, ...r }))
+      .catch((err) => ({ code: err.code, stdout: err.stdout || '', stderr: err.stderr || '' }));
+    const ok = await run(['explain', '--all', '--json', '--config', configPath, '--vault', vault]);
+    assert.strictEqual(ok.code, 0, ok.stderr);
+    assert.ok(JSON.parse(ok.stdout).pages.some((p) => p.path === 'Sessions/Session_07.md'));
+    const bad = await run(['explain', '--all', '--config', configPath]);
+    assert.strictEqual(bad.code, 1);
+    assert.match(bad.stderr, /explain --all needs --json/);
+    fs.rmSync(vault, { recursive: true, force: true });
   });
 });

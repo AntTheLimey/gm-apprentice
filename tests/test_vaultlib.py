@@ -717,5 +717,24 @@ class PublishModeTests(unittest.TestCase):
         self.assertEqual(fm["publish_include_sections"], ["Background"])
 
 
+class StripCommentSpansTests(unittest.TestCase):
+    """The per-line step of the stripHtmlComments port, shared with
+    `vault_check sessions` so it reads comments as the publisher does."""
+
+    def test_inline_comment_is_removed(self):
+        self.assertEqual(vl.strip_comment_spans("a <!-- x --> b", False),
+                         ("a  b", False))
+
+    def test_open_comment_carries_to_the_next_line(self):
+        kept, open_ = vl.strip_comment_spans("keep <!-- start", False)
+        self.assertEqual((kept, open_), ("keep ", True))
+        self.assertEqual(vl.strip_comment_spans("end --> tail", True),
+                         (" tail", False))
+
+    def test_matches_the_whole_list_port(self):
+        lines = ["one <!-- a", "b --> two", "<!-- c -->", "three"]
+        self.assertEqual(vl._js_strip_comments(lines), ["one ", " two", "three"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

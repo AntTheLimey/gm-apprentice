@@ -41,15 +41,39 @@ this skill's own cache path). One-off commands run from the cache:
 ```bash
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
 node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
-node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site
+node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
 node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the manifest
 node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # edit the manifest
+node "$TOOL" manifest publish-played --config <dir>/vault.config.json  # register played sessions
 node "$TOOL" deploy --verify --config <dir>/vault.config.json  # build, deploy, probe the URL
 node "$TOOL" doctor --site --config <dir>/vault.config.json    # audit the vault for publish defects
 node "$TOOL" explain "<vault-relative path>" --config <dir>/vault.config.json  # one file's publish chain
 node "$TOOL" --version
 node "$TOOL" --help
 ```
+
+**Before any build or deploy this skill runs**, run
+`node "$TOOL" manifest publish-played --config <dir>/vault.config.json`
+yourself, so a site never ships missing a played session (#277). It
+ticks a reviewed session index only together with a linked Wrap-Up
+that will publish, so the site withholds the hub body. It skips
+Excluded entries and does nothing without a manifest in player mode.
+Report the paths it ticked. Every other played session is listed as
+"unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
+that is Excluded or won't publish, or a stale site pin). Ask the GM
+once, in one question listing them with their reasons. For one with no
+Wrap-Up that will publish, say its index body will publish as written
+and suggest fencing any Keeper notes first. Register each approved one
+with `manifest publish-played --config <dir>/vault.config.json
+--session "<index>"` plus `--include-unreviewed` when it has a Wrap-Up
+(unreviewed, or a stale pin: it waives only the review check, so relay
+any reason it still gives) or `--publish-body` when it has none.
+Never tick a session index with `manifest apply`. Don't tick them
+silently; if the GM says "not yet", leave them and don't ask again in
+this run. When a reason says the site is pinned to an older tool,
+offer `update-pin --site <dir>` first. The build itself stays
+read-only on the vault, so this lives in the skill, not in
+`build`/`deploy`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
 from the scaffold's `file:` pin — no registry, no network):
@@ -65,8 +89,10 @@ Node 22+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
 **Site directory:** capabilities 2 and 4 read `publish.site_dir`
-from `_meta/vault-config.md`. If unset, ask for the absolute path
-to the site repo and offer to save it there.
+from `_meta/vault-config.md`; a relative value is relative to the
+vault. If unset, ask for the absolute path to the site repo and offer
+to save it there. With no site at all there is nothing to register,
+so skip `publish-played`.
 
 ## Nine Capabilities
 
@@ -86,6 +112,8 @@ from `publish.setup_progress`). Don't improvise or skip steps.
 3. `node "$TOOL" manifest diff --config <dir>/vault.config.json`.
    If it lists New/Removed files, present them; after the GM
    confirms, `node "$TOOL" manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"... --prune`.
+   Leave played session indexes out of `--publish`: `publish-played`
+   (above) registers them.
 4. `node "$TOOL" deploy --verify --config <dir>/vault.config.json`
    — relay its final line verbatim. On a non-zero exit, go to
    capability 3. Missing Cloudflare credentials are explained

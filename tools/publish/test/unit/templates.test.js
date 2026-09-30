@@ -422,6 +422,111 @@ describe('displayTitle usage', () => {
   });
 });
 
+describe('session prev/next links follow story order (#276)', () => {
+  const { wikiTemplate } = require('../../lib/templates/wiki');
+  const cfg = { siteTitle: 'Test', attachmentsDir: '_attachments' };
+  const processed = { html: '<p>x</p>', relationships: '' };
+  const chapter = (name, order) => ({
+    title: name, displayTitle: name, outputPath: `chapters/${name}.html`,
+    sourcePath: `/v/${name}/${name}.md`, frontmatter: { type: 'chapter', sort_order: order },
+  });
+  const session = (ch, n) => ({
+    title: `${ch} S${n}`, displayTitle: `${ch} S${n}`, outputPath: `sessions/${ch}-s${n}.html`,
+    sourcePath: `/v/${ch}/${ch} S${n}.md`, frontmatter: { type: 'session', session_number: n },
+  });
+  const links = (page, pages) => {
+    const html = wikiTemplate(page, processed, () => '', cfg, {}, { pages, publishConfig: {}, linkMap: {} });
+    const nav = html.match(/<div class="story-nav">(.*?)<\/div>/);
+    return nav ? [...nav[1].matchAll(/>([^<]*?)<\/a>/g)].map(m => m[1].replace(/[←→]/g, '').replace(/&[lr]arr;/g, '').trim()) : [];
+  };
+
+  it('chains Ch1 S1 -> Ch1 S2 -> Ch2 S1 -> Ch2 S2 when numbering restarts', () => {
+    const ss = [session('Ch2', 2), session('Ch1', 1), session('Ch2', 1), session('Ch1', 2)];
+    const pages = [chapter('Ch1', 1), chapter('Ch2', 2), ...ss];
+    const byTitle = t => ss.find(s => s.title === t);
+    assert.deepStrictEqual(links(byTitle('Ch1 S1'), pages), ['Ch1 S2']);
+    assert.deepStrictEqual(links(byTitle('Ch1 S2'), pages), ['Ch1 S1', 'Ch2 S1']);
+    assert.deepStrictEqual(links(byTitle('Ch2 S1'), pages), ['Ch1 S2', 'Ch2 S2']);
+    assert.deepStrictEqual(links(byTitle('Ch2 S2'), pages), ['Ch2 S1']);
+  });
+
+  it('a single-chapter vault chains by session_number as before', () => {
+    const ss = [session('Ch1', 3), session('Ch1', 1), session('Ch1', 2)];
+    const pages = [chapter('Ch1', 1), ...ss];
+    assert.deepStrictEqual(links(ss[2], pages), ['Ch1 S1', 'Ch1 S3']);
+  });
+
+  // Review of #276: keep the old order everywhere it was not wrong.
+  const { orderedSessions } = require('../../lib/story-spine');
+  const oldOrder = pages => pages.filter(p => p.frontmatter.type === 'session')
+    .sort((a, b) => (a.frontmatter.sort_order || a.frontmatter.session_number || 0)
+      - (b.frontmatter.sort_order || b.frontmatter.session_number || 0));
+  const flat = (title, fm) => ({ title, displayTitle: title, outputPath: `sessions/${title}.html`,
+    sourcePath: `/v/Sessions/${title}.md`, frontmatter: { type: 'session', ...fm } });
+
+  it('honours sort_order within a chapter, as the old order did', () => {
+    const ss = [session('Ch1', 1), session('Ch1', 2), session('Ch1', 3)];
+    ss[0].frontmatter.sort_order = 3; ss[1].frontmatter.sort_order = 1; ss[2].frontmatter.sort_order = 2;
+    const pages = [chapter('Ch1', 1), ...ss];
+    assert.deepStrictEqual(orderedSessions(pages).map(s => s.title), ['Ch1 S2', 'Ch1 S3', 'Ch1 S1']);
+  });
+
+  it('keeps a Session 0 prologue no chapter owns first, and unowned sessions in their old slots', () => {
+    const prologue = flat('Session 0 - Prologue', { session_number: 0 });
+    const interlude = flat('Interlude', { session_number: 2 });
+    const ss = [session('Ch2', 1), session('Ch1', 1), session('Ch1', 2), session('Ch2', 2)];
+    const pages = [chapter('Ch1', 1), chapter('Ch2', 2), interlude, ...ss, prologue];
+    assert.deepStrictEqual(oldOrder(pages).map(s => s.title),
+      ['Session 0 - Prologue', 'Ch2 S1', 'Ch1 S1', 'Interlude', 'Ch1 S2', 'Ch2 S2']);
+    assert.deepStrictEqual(orderedSessions(pages).map(s => s.title),
+      ['Session 0 - Prologue', 'Ch1 S1', 'Ch1 S2', 'Interlude', 'Ch2 S1', 'Ch2 S2']);
+    assert.deepStrictEqual(links(prologue, pages), ['Ch1 S1']);
+  });
+
+  // Review of #278: every chapter page in one folder, sessions below it. Folder
+  // containment alone gave every session to Ch1, so prev/next never regrouped.
+  it('regroups by each session\'s chapter: ref when all chapters share a folder', () => {
+    const flatChapter = (name, order) => ({ title: name, displayTitle: name, outputPath: `campaign/${name}.html`,
+      sourcePath: `/v/Campaign/${name}.md`, frontmatter: { type: 'chapter', sort_order: order } });
+    const s = (ch, n) => ({ title: `${ch} S${n}`, displayTitle: `${ch} S${n}`, outputPath: `campaign/${ch}-s${n}.html`,
+      sourcePath: `/v/Campaign/Sessions/${ch} S${n}.md`,
+      frontmatter: { type: 'session', session_number: n, chapter: `[[${ch}]]` } });
+    const ss = [s('Ch2', 1), s('Ch1', 1), s('Ch2', 2), s('Ch1', 2)];
+    const pages = [flatChapter('Ch1', 1), flatChapter('Ch2', 2), ...ss];
+    assert.deepStrictEqual(orderedSessions(pages).map(x => x.title), ['Ch1 S1', 'Ch1 S2', 'Ch2 S1', 'Ch2 S2']);
+  });
+
+  // Review of #278: two chapters each with a "Session 01". The Ch2 page looked itself up
+  // by title, found Ch1's, and showed Ch1's prev/next.
+  it('a same-titled session in another chapter gets its own prev/next', () => {
+    const same = (ch, n) => ({ title: `Session 0${n}`, displayTitle: `Session 0${n}`,
+      outputPath: `chapters/${ch}/session-0${n}.html`, sourcePath: `/v/${ch}/Session 0${n}.md`,
+      frontmatter: { type: 'session', session_number: n, chapter: `[[${ch}]]` } });
+    const ch1s1 = same('Ch1', 1); const ch1s2 = same('Ch1', 2);
+    const ch2s1 = same('Ch2', 1); const ch2s2 = same('Ch2', 2);
+    const pages = [chapter('Ch1', 1), chapter('Ch2', 2), ch1s1, ch1s2, ch2s1, ch2s2];
+    const hrefs = page => {
+      const html = wikiTemplate(page, processed, () => '', cfg, {}, { pages, publishConfig: {}, linkMap: {} });
+      const nav = html.match(/<div class="story-nav">(.*?)<\/div>/);
+      return [...nav[1].matchAll(/href="([^"]*)"/g)].map(m => m[1]);
+    };
+    assert.deepStrictEqual(hrefs(ch2s1), ['../Ch1/session-02.html', 'session-02.html']);
+    assert.deepStrictEqual(hrefs(ch1s1), ['session-02.html']);
+  });
+
+  it('a vault with no chapters keeps exactly the old order, ties and all', () => {
+    const variants = [
+      [flat('A', { session_number: 1 }), flat('B', { session_number: 1 }), flat('C', {})],
+      [flat('S1', { session_number: 1, sort_order: 3 }), flat('S2', { session_number: 2, sort_order: 1 }),
+        flat('S3', { session_number: 3, sort_order: 2 })],
+      [flat('S3', { session_number: 3 }), flat('S1', { session_number: 1 }), flat('S2', { session_number: 2 })],
+    ];
+    for (const pages of variants) {
+      assert.deepStrictEqual(orderedSessions(pages), oldOrder(pages));
+    }
+  });
+});
+
 describe('PC template tabbed layout', () => {
   const { pcTemplate } = require('../../lib/templates/pc');
 

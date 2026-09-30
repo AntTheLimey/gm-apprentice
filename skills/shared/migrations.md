@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.17"
+current_version: "1.10.18"
 ---
 
 # Vault Migration Registry
@@ -1011,3 +1011,77 @@ changes shape; one new optional publish setting.
   can drop that step.
   If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
   (publish-site's build tool).
+
+## Migration: 1.10.17 → 1.10.18
+
+Session index pages stop publishing their bodies once the session has a
+Wrap-Up (#276), and played sessions reach the publish manifest on their
+own (#277). No frontmatter changes.
+
+### Structural
+
+- Copy `_Templates/_Template_Session.md` from
+  `shared/templates/session.md` if the vault has no session template.
+
+### Content
+
+- Nothing is required: once the site is rebuilt, a session index whose
+  Wrap-Up is linked (its `documents.wrap_up`, or the Wrap-Up's own
+  `session:`) and published no longer publishes its body. Indexes
+  without a Wrap-Up publish exactly as before; some vaults keep their
+  recaps there.
+- Optional, only if the GM asks; no automated step: a vault that keeps
+  recaps in session index bodies can move them to Wrap-Ups by setting
+  `type: session_wrap`, linking `session:` (on the Wrap-Up) and
+  `documents.wrap_up` (on the index), and listing any extra
+  player-facing sections in `publish.wrap_up.player_sections`.
+- New optional setting `publish.wrap_up.player_sections` (list of H2
+  titles): extra Wrap-Up sections `vault_check wrapup` treats as
+  player-facing. Absent means the recap and Memorable Moments only.
+- Optional tidy, one index at a time and only on the GM's yes: run
+  `vault_check.py <vault> sessions`, and for each "session index body"
+  INFO row show the body and propose where each part belongs: document
+  links into `documents:`, the Scene Index, key prep, image prompts and
+  premise into the Plan, handoffs into the Wrap-Up's fenced GM Notes,
+  anything left under a fenced `## GM Notes` on the index. Show the diff
+  before moving anything.
+- If the vault publishes in player mode and `publish.site_dir` is set,
+  run `manifest publish-played` once, after the site's pin is updated
+  (Tooling, below). It ticks a reviewed session under Publishing only
+  together with a linked Wrap-Up that will publish; report what it
+  ticked. For played sessions it lists as unclear (no Wrap-Up, Wrap-Up
+  not reviewed yet, one that is Excluded or won't publish, or a site
+  still pinned below 1.11.40), ask the GM once, in one question listing
+  the reasons, and register only what they approve with `manifest
+  publish-played --session "<index>"` and `--include-unreviewed`, or
+  `--publish-body` for a session with no Wrap-Up (as publish-site
+  does). Never touch Excluded.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.40: session pages with a published
+  Wrap-Up are built from the index's frontmatter and the Wrap-Up's recap
+  (badges, title and page wrapper unchanged); previous/next session links
+  group by chapter; `manifest publish-played` and `explain --all
+  --json` are new; the build ends by naming played sessions that are
+  not published yet. Reconcile and publish-site now run `manifest
+  publish-played` themselves; it ticks only reviewed sessions, so a
+  Wrap-Up the GM chose to publish before reconcile is ticked with
+  `manifest publish-played --session "<index>" --include-unreviewed`,
+  which keeps the pairing and site-pin checks. Never tick a session
+  index with `manifest apply`. A site pinned below 1.11.40
+  publishes every index body, so publish-played ticks no index for it.
+  If `publish.site_dir` is set (relative to the vault if relative),
+  offer `update-pin --site <site-dir>` (publish-site's build tool)
+  before anything else. For a site outside the plugin,
+  `update-pin --site <site-dir> --tag publish-v1.11.40` pins the tagged
+  release tarball instead.
+- `vault_check sessions` warns on played sessions missing from
+  Publishing, saying whether publish-played will register each or
+  publish-site will ask, and notes bookkeeping in index bodies the site
+  withholds; `vault_check gm-leak` no longer reports those withheld
+  bodies. Both ask the site's installed publish tool (`explain --all
+  --json` and `manifest publish-played --dry-run --json`, through
+  `publish.site_dir`), or the plugin's when the site has none. When
+  they can't ask, or the site is pinned below 1.11.40, they scan every
+  index body and promise nothing, with an INFO row saying why.

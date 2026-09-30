@@ -21,7 +21,8 @@ section not marked optional/conditional is required; omit empty
 optional ones, and leave `### Reconciliation Context` to
 reconcile. Keeper-facing content goes only at `###` under the
 fenced `## GM Notes` — never a new H2 (a sibling H2 publishes to
-player sites). Filename `Chapter_CC_Session_NN_Wrap_Up.md` in the
+player sites; only the recap, Memorable Moments and the vault's
+`publish.wrap_up.player_sections` are player-facing). Filename `Chapter_CC_Session_NN_Wrap_Up.md` in the
 session's own directory — the chapter number is required.
 
 **Session index:** stamp it (dry-run, then `--write` on
@@ -37,6 +38,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
 The script sets scalars only: edit the index's `scenes:` list by hand
 to the scenes actually played; unplayed ones go under Skipped Prep.
+Leave the index body alone: handoffs and notes for next session go in
+this Wrap-Up's fenced `## GM Notes`.
 
 **Authoring vs. preserving:** four outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -260,5 +263,16 @@ notes show, never awards.
 ### 6. Review (Reconcile)
 
 Run `shared/reconcile.md`; on approval it promotes the session to
-`reviewed` and the Wrap-Up to AUTHORITATIVE. If the GM defers,
-leave status `wrap-up` — session-prep runs reconcile as a fallback.
+`reviewed` and the Wrap-Up to AUTHORITATIVE, and its step 6.1
+(publish registration) runs without asking. If the GM defers, leave
+status `wrap-up` (session-prep runs reconcile as a fallback), and
+don't publish an unreviewed Wrap-Up silently. In a vault where step
+6.1 applies, ask once: "Publish the Wrap-Up now, or after
+reconcile?" Only on "now", run `node "$TOOL" manifest publish-played
+--config <site_dir>/vault.config.json --session "<index>"
+--include-unreviewed` (`$TOOL` as in publish-site; `<index>` relative
+to the vault). It waives only the review check for this one session:
+it still ticks the index only with a Wrap-Up that pairs with it and
+will publish, on a current site pin. Report what it ticked; if it
+lists the session as unclear, tell the GM its reason and tick nothing
+else.

@@ -2,6 +2,8 @@ const path = require('path');
 const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
+const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
+const { isSessionHub } = require('./processor');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -21,8 +23,6 @@ function findRecap(page, resolve) {
   }
   return null;
 }
-
-const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
 
 // Every `session:`/`chapter:` ref in this file is author-typed and is compared against a
 // filename-derived title through a Map key or `===`. Canonicalizing here (#139) covers the
@@ -85,28 +85,55 @@ function isUnder(childPath, dir) {
   return c === a || c.startsWith(a + path.sep);
 }
 
-// A session belongs to a chapter if its file lives under the chapter's folder,
-// falling back to the title/ref match for flat-structured vaults.
-function chapterOwnsSession(chapter, session) {
-  if (isUnder(session.sourcePath, folderOf(chapter))) return true;
-  return chapterMatchesSession(chapter, session);
+// The chapter a session belongs to, or null: the one rule for the Saga, the prev/next
+// regrouping and the session page's "Chapter:" line. The session's own `chapter:` ref
+// decides first (an exact title match over a display-title substring; ties go to the
+// first chapter in sort order). A session whose ref names no chapter falls back to the
+// chapter whose folder holds it, the deepest one; two chapter pages in that same folder
+// say nothing about which, so none. Folder-first would give every session to Ch1
+// wherever all chapter pages share a folder.
+function chapterOfSession(session, pages) {
+  const chapters = sortedChapters(pages);
+  const byRef = chapters.filter(c => chapterMatchesSession(c, session));
+  if (byRef.length > 0) {
+    const ref = refTarget(session.frontmatter.chapter);
+    const exact = byRef.find(c => {
+      const title = canonicalNfc(c.title);
+      return ref === title || ref === title.replace(/_/g, ' ');
+    });
+    return exact || byRef[0];
+  }
+  const holders = chapters.filter(c => isUnder(session.sourcePath, folderOf(c)));
+  if (holders.length === 0) return null;
+  const depth = c => path.resolve(folderOf(c)).length;
+  const deepest = Math.max(...holders.map(depth));
+  const at = holders.filter(c => depth(c) === deepest);
+  return at.length === 1 ? at[0] : null;
 }
 
-// The wrap-up for a unit (chapter or session). An explicit session:/chapter: ref
-// match always wins. The same-folder fallback (chapter wrap-up in the chapter folder;
-// session wrap-up in the session's subfolder) only applies when that folder holds
-// exactly ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and
-// a first-match grab there would hand the same wrap-up to every session.
-function wrapUpForUnit(unitPage, wrapUps, idx) {
+// The wrap-up for a unit (chapter or session). For a session it is the Wrap-Up the build
+// paired with it (`pairs`, session-hub.js pairHubs — the one rule that also decides
+// whether the hub body is withheld, so the Saga and the session page tell the same
+// story); the Saga never pairs a session on its own. For a chapter, a Wrap-Up whose
+// chapter: ref names it. The same-folder fallback (chapter wrap-up in the chapter folder;
+// session wrap-up in the session's subfolder) only applies when that folder holds exactly
+// ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and a
+// first-match grab there would hand the same wrap-up to every session — and, for a
+// session, only when that Wrap-Up is linked to no session at all (isLinkedWrapUp): a
+// Wrap-Up linked to one session never stands in for another.
+function wrapUpForUnit(unitPage, wrapUps, idx, pairs) {
   const title = canonicalNfc(unitPage.title);
-  const byRef = idx.bySession.get(title)
-    || idx.byChapter.get(title)
-    || idx.byChapter.get(title.replace(/_/g, ' '));
+  const hub = isSessionHub(unitPage);
+  const byRef = hub
+    ? (pairs && pairs.get(unitPage)) || null
+    : idx.bySession.get(title)
+      || idx.byChapter.get(title)
+      || idx.byChapter.get(title.replace(/_/g, ' '));
   if (byRef) return byRef;
   const dir = folderOf(unitPage);
   if (dir) {
     const sameFolder = wrapUps.filter(w => folderOf(w) === dir);
-    if (sameFolder.length === 1) return sameFolder[0];
+    if (sameFolder.length === 1 && !(hub && isLinkedWrapUp(sameFolder[0], pairs))) return sameFolder[0];
   }
   return null;
 }
@@ -124,17 +151,58 @@ function unitRefs(unit) {
   };
 }
 
-function buildStorySpine(pages, linkMap) {
+function sortedChapters(pages) {
+  return pages
+    .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
+    .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
+      || String(a.title).localeCompare(String(b.title)));
+}
+
+function bySessionNumber(a, b) {
+  return (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0)
+    || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0));
+}
+
+// The prev/next order sessions always had: sort_order, else session_number, stable.
+function sessionNavKey(p) {
+  return p.frontmatter.sort_order || p.frontmatter.session_number || 0;
+}
+
+// Every session page in prev/next order. The old order (sessionNavKey across the whole
+// vault) interleaved chapters, because numbering restarts per chapter: Ch1 S1, Ch2 S1,
+// Ch1 S2… So the sessions a chapter owns are regrouped chapter by chapter (chapters by
+// sort_order, each chapter's sessions by sessionNavKey), and put back into the slots
+// chaptered sessions held in the old order. A session no chapter owns keeps its old slot
+// — a "Session 0" prologue stays first — and a vault with no chapters keeps exactly the
+// order it had. Cached per `pages` array.
+const sessionOrders = new WeakMap();
+function orderedSessions(pages) {
+  let order = sessionOrders.get(pages);
+  if (order) return order;
+  const old = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session')
+    .sort((a, b) => sessionNavKey(a) - sessionNavKey(b));
+  const owner = new Map(old.map(s => [s, chapterOfSession(s, pages)]));
+  const seen = new Set(old.filter(s => owner.get(s)));
+  const chaptered = [];
+  for (const chapter of sortedChapters(pages)) {
+    chaptered.push(...old.filter(s => owner.get(s) === chapter));
+  }
+  let next = 0;
+  order = old.map(s => (seen.has(s) ? chaptered[next++] : s));
+  sessionOrders.set(pages, order);
+  return order;
+}
+
+// `pairs` is the build's hub -> Wrap-Up map (session-hub.js pairHubs), computed once on
+// the unreduced frontmatter; without it no session pairs with a Wrap-Up.
+function buildStorySpine(pages, linkMap, pairs) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
   const resolverFor = linkMap
     ? (outputPath) => (md) => resolveWikiLinks(md, linkMap, outputPath)
     : () => undefined;
-  const chapters = pages
-    .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
-    .sort((a, b) => (a.frontmatter.sort_order || 0) - (b.frontmatter.sort_order || 0)
-      || String(a.title).localeCompare(String(b.title)));
+  const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
   const wrapUps = pages.filter(p => p.frontmatter && WRAP_UP_TYPES.has(p.frontmatter.type));
   const idx = buildWrapUpIndex(pages);
@@ -144,20 +212,19 @@ function buildStorySpine(pages, linkMap) {
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
     const chSlug = slugify(chapter.displayTitle || chapter.title);
-    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx);
+    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx, pairs);
     // The chapter recap lands on either story/<chSlug>-intro.html or story/<chSlug>.html;
     // both live in story/, so either path yields the same relative link resolution.
     const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)));
 
     const chapterSessions = sessions
-      .filter(s => chapterOwnsSession(chapter, s))
-      .sort((a, b) => (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0)
-        || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0)));
+      .filter(s => chapterOfSession(s, pages) === chapter)
+      .sort(bySessionNumber);
 
     const sessionUnits = [];
     for (const s of chapterSessions) {
       const id = `${chSlug}-${slugify(s.title)}`;
-      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx), resolverFor(unitOutputPath(id)));
+      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pairs), resolverFor(unitOutputPath(id)));
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
@@ -206,4 +273,4 @@ function characterStoryGroup(frontmatter) {
   return 'current';
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOwnsSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, unitRefs, characterStoryGroup };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, orderedSessions, unitRefs, characterStoryGroup };

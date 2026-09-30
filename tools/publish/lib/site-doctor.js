@@ -17,6 +17,7 @@ const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
+const { pairHubs } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { pinnedVersionOf } = require('./update-pin');
 
@@ -169,6 +170,9 @@ async function runSiteDoctor(options, deps) {
     decidePage(page, { rel: relOf(page), publishConfig, manifest })));
   const linkMap = buildLinkMap(published);
   const linkNames = Object.keys(linkMap);
+  // Which session index bodies the site withholds, paired as the build pairs (GM
+  // aliases rewritten first; session-hub.js pairHubs).
+  const hubPairs = pairHubs(corpus, published, { vaultPath });
 
   const findings = [];
 
@@ -273,8 +277,9 @@ async function runSiteDoctor(options, deps) {
     }
 
     // Only the body a reader will actually get: a dead link inside a GM Notes
-    // section is not on the site and is not the GM's problem today.
-    const body = playerSafeMarkdown(page.markdown || '', {
+    // section is not on the site and is not the GM's problem today. Nor is anything
+    // in a session index's body once the site withholds it (#276).
+    const body = hubPairs.has(page) ? '' : playerSafeMarkdown(page.markdown || '', {
       excludeCallouts: publishConfig.exclude_callouts,
       excludeSections: publishConfig.exclude_sections,
     }).text;

@@ -529,7 +529,13 @@ check("flawed: Stealth base residual INFO via effective fallback",
 check("flawed: no current-level findings without a Current column",
       any("Current" in line for line in flawed_skills), False)
 
-if FAILURES:
-    print("\n".join(["", "FAILURES:"] + FAILURES))
-    sys.exit(1)
-print("all gurps checks passed")
+def test_no_failures():
+    """pytest entry point: the checks above ran when this module loaded."""
+    assert not FAILURES, "\n".join(FAILURES)
+
+
+if __name__ == "__main__":
+    if FAILURES:
+        print("\n".join(["", "FAILURES:"] + FAILURES))
+        sys.exit(1)
+    print("all gurps checks passed")

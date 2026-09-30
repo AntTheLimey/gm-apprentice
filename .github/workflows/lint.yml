@@ -103,6 +103,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      # vault_check asks the publish tool (node) whether the site withholds a
+      # session hub's body (#276); its end-to-end tests need node, and the
+      # env var makes them fail rather than skip if node goes missing.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Validate campaign entity schemas
         run: python scripts/validate_schema.py tests/benchmark-campaign
 
@@ -112,74 +119,17 @@ jobs:
       - name: Validate relationship-ontology copies agree
         run: python scripts/validate_ontology.py
 
-      - name: Plan leads_to field validation
-        run: python tests/test_plan_leads_to.py
-
-      - name: PC entity-sheet freshness regression
-        run: python tests/test_pc_freshness.py
-
-      - name: PC Current Status consumer regression
-        run: python tests/test_current_status_consumers.py
-
-      - name: vaultlib tests
-        run: python tests/test_vaultlib.py
-
-      - name: Vault utility regression
-        run: python tests/test_vault_utilities.py
-
-      - name: stamp_entities tests
-        run: python tests/test_stamp_entities.py
-
-      - name: gurps-check tests
-        run: python tests/test_gurps_check.py
-
-      - name: Vault check assistance regression
-        run: python tests/test_vault_check.py
-
-      - name: Relationship predicate vocabulary regression
-        run: python tests/test_relationship_predicates.py
-
-      - name: vault_check Slice A tests
-        run: python tests/test_vault_check_slice_a.py
-
-      - name: vault_check --file/--folder scope tests
-        run: python tests/test_vault_check_file_scope.py
-
-      - name: entity-schema Required Fields drift test
-        run: python tests/test_entity_schema_required_fields.py
-
-      - name: rules_lookup tests
-        run: python tests/test_rules_lookup.py
-
-      - name: index_build tests
-        run: python tests/test_index_build.py
-
-      - name: plan_check tests
-        run: python tests/test_plan_check.py
-
-      - name: session_context --play/--threads tests
-        run: python tests/test_session_context_play.py
-
-      - name: session_context --brief/--arcs tests
-        run: python tests/test_session_context_brief.py
-
-      - name: plans_index tests
-        run: python tests/test_plans_index.py
-
-      - name: ingest_survey tests
-        run: python tests/test_ingest_survey.py
-
-      - name: ingest_images tests
-        run: python tests/test_ingest_images.py
-
-      - name: Attribution check tests
-        run: python tests/test_attribution_check.py
+      # Every tests/test_*.py in one run, so a new test file can't be left
+      # out of CI again (tests/test_ci_runs_every_test.py pins this).
+      - name: Python test suite
+        env:
+          VAULT_CHECK_REQUIRE_NODE: '1'
+        run: |
+          pip install 'pytest>=8,<10'
+          python -m pytest tests -q
 
       - name: Every system ships its NOTICE.md with the required text
         run: python scripts/attribution_check.py
-
-      - name: License check tests
-        run: python tests/test_license_check.py
 
       # GURPS tables are benchmarked against the GCS master library. Pinned
       # to the commit the thresholds were measured against; bump deliberately.

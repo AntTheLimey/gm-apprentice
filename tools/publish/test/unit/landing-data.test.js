@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
+const { pairHubs } = require('../../lib/session-hub');
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -61,6 +62,10 @@ describe('getLatestSession', () => {
 });
 
 describe('getLatestWrapUp', () => {
+  // The build hands the landing its hub -> Wrap-Up map (session-hub.js pairHubs); the
+  // landing never pairs on its own.
+  const latest = (pages, s) => getLatestWrapUp(pages, s,
+    s ? pairHubs(pages.concat([s]), pages.concat([s]), { allNotes: [] }) : new Map());
   const session = { title: 'Session 05', frontmatter: { type: 'session', session_number: 5 } };
 
   it('matches wrap-up by session_number', () => {
@@ -68,7 +73,7 @@ describe('getLatestWrapUp', () => {
       { frontmatter: { type: 'session_wrap', session_number: 5 }, title: 'Session_05_Wrap_Up' },
       { frontmatter: { type: 'session_wrap', session_number: 4 }, title: 'Session_04_Wrap_Up' },
     ];
-    const result = getLatestWrapUp(pages, session);
+    const result = latest(pages, session);
     assert.strictEqual(result.title, 'Session_05_Wrap_Up');
   });
 
@@ -77,15 +82,34 @@ describe('getLatestWrapUp', () => {
       { frontmatter: { type: 'session-wrapup', session: 'Session 05' }, title: 'Session_05_Wrap_Up' },
     ];
     const noNumSession = { title: 'Session 05', frontmatter: { type: 'session' } };
-    const result = getLatestWrapUp(pages, noNumSession);
+    const result = latest(pages, noNumSession);
     assert.strictEqual(result.title, 'Session_05_Wrap_Up');
+  });
+
+  it('in a flat folder of wrap-ups, the session ref wins over folder proximity (#276)', () => {
+    // Every wrap-up sits in Sessions/ beside every hub. Grabbing the first one in the
+    // folder handed Session 2 the Session 1 recap on the landing.
+    const s2 = { title: 'Session 2', sourcePath: '/v/Sessions/Session 2.md', frontmatter: { type: 'session', session_number: 2 } };
+    const pages = [
+      { title: 'Session 1 Wrap-Up', sourcePath: '/v/Sessions/Session 1 Wrap-Up.md', frontmatter: { type: 'session_wrap', session: '[[Session 1]]' } },
+      { title: 'Session 2 Wrap-Up', sourcePath: '/v/Sessions/Session 2 Wrap-Up.md', frontmatter: { type: 'session_wrap', session: '[[Session 2]]' } },
+    ];
+    assert.strictEqual(latest(pages, s2).title, 'Session 2 Wrap-Up');
+  });
+
+  it('uses the same-folder wrap-up only when the folder holds exactly one', () => {
+    const s = { title: 'Session 07', sourcePath: '/v/S07/Session 07.md', frontmatter: { type: 'session' } };
+    const pages = [
+      { title: 'Chapter_02_Session_07_Wrap_Up', sourcePath: '/v/S07/Chapter_02_Session_07_Wrap_Up.md', frontmatter: { type: 'session_wrap' } },
+    ];
+    assert.strictEqual(latest(pages, s).title, 'Chapter_02_Session_07_Wrap_Up');
   });
 
   it('returns null when no wrap-up matches', () => {
     const pages = [
       { frontmatter: { type: 'session_wrap', session_number: 3 }, title: 'Session_03_Wrap_Up' },
     ];
-    const result = getLatestWrapUp(pages, session);
+    const result = latest(pages, session);
     assert.strictEqual(result, null);
   });
 
@@ -93,16 +117,41 @@ describe('getLatestWrapUp', () => {
     const pages = [
       { frontmatter: { type: 'session_wrap', session_number: 5 }, title: 'Session_05_Wrap_Up' },
     ];
-    assert.strictEqual(getLatestWrapUp(pages, null), null);
+    assert.strictEqual(latest(pages, null), null);
   });
 
-  it('matches wrap-up by title containment', () => {
+  it('a session: that names no page is not a looser second match (#276 final review)', () => {
+    // It used to match by containment; a `session:` pairs only as a link resolves.
     const pages = [
       { frontmatter: { type: 'session_wrap', session: 'Recap for Session 05 extras' }, title: 'Session_05_Wrap_Up' },
     ];
     const noNumSession = { title: 'Session 05', frontmatter: { type: 'session' } };
-    const result = getLatestWrapUp(pages, noNumSession);
-    assert.strictEqual(result.title, 'Session_05_Wrap_Up');
+    assert.strictEqual(latest(pages, noNumSession), null);
+  });
+
+  it("a Wrap-Up linked to another chapter's session never stands in by session_number (#276 final review)", () => {
+    // Ch1's hub does not publish; its Wrap-Up does, with the same session_number as Ch2's
+    // latest session. The landing used to hand Ch2 the Ch1 recap.
+    const ch1Hub = { title: 'Session 01', sourcePath: '/v/Ch1/Session 01.md', vaultPath: 'Ch1/Session 01', frontmatter: { type: 'session', session_number: 1, publish: false } };
+    const ch1Wrap = { title: 'Ch1 Wrap', sourcePath: '/v/Ch1/Ch1 Wrap.md', vaultPath: 'Ch1/Ch1 Wrap', frontmatter: { type: 'session_wrap', session: '[[Session 01]]', session_number: 1 } };
+    const ch2Hub = { title: 'Session 01', sourcePath: '/v/Ch2/Session 01.md', vaultPath: 'Ch2/Session 01', frontmatter: { type: 'session', session_number: 1 } };
+    const published = [ch1Wrap, ch2Hub];
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], published, { allNotes: [] });
+    assert.strictEqual(getLatestWrapUp(published, ch2Hub, pairs), null);
+  });
+
+  it('takes the Wrap-Up from the map, not the (reduced) frontmatter (#276 final review)', () => {
+    // build.js strips excluded fields after pairing: a hub whose documents.wrap_up was
+    // excluded still has its Wrap-Up.
+    const s = { title: 'Session 05', frontmatter: { type: 'session' } };
+    const w = { title: 'Some Recap', frontmatter: { type: 'session_wrap' } };
+    assert.strictEqual(getLatestWrapUp([s, w], s, new Map([[s, w]])), w);
+  });
+
+  it('an unlinked Wrap-Up whose title names the session still stands in', () => {
+    const pages = [{ frontmatter: { type: 'session_wrap' }, title: 'Session 05 Wrap-Up' }];
+    const noNumSession = { title: 'Session 05', frontmatter: { type: 'session' } };
+    assert.strictEqual(latest(pages, noNumSession).title, 'Session 05 Wrap-Up');
   });
 
   it('does not let Session 1 match the Session 10 wrap-up', () => {
@@ -113,7 +162,7 @@ describe('getLatestWrapUp', () => {
       { frontmatter: { type: 'session_wrap', session: '[[Session 1]]' }, title: 'Session_01_Wrap_Up' },
     ];
     const s1 = { title: 'Session 1', frontmatter: { type: 'session' } };
-    assert.strictEqual(getLatestWrapUp(pages, s1).title, 'Session_01_Wrap_Up');
+    assert.strictEqual(latest(pages, s1).title, 'Session_01_Wrap_Up');
   });
 
   it('returns null rather than a longer-numbered wrap-up', () => {
@@ -121,7 +170,7 @@ describe('getLatestWrapUp', () => {
       { frontmatter: { type: 'session_wrap', session: '[[Session 10]]' }, title: 'Session_10_Wrap_Up' },
     ];
     const s1 = { title: 'Session 1', frontmatter: { type: 'session' } };
-    assert.strictEqual(getLatestWrapUp(pages, s1), null);
+    assert.strictEqual(latest(pages, s1), null);
   });
 
   it('parses the wiki-link target, alias and all', () => {
@@ -129,7 +178,7 @@ describe('getLatestWrapUp', () => {
       { frontmatter: { type: 'session_wrap', session: '[[Session 05|the Vienna night]]' }, title: 'WU' },
     ];
     const s5 = { title: 'Session 05', frontmatter: { type: 'session' } };
-    assert.strictEqual(getLatestWrapUp(pages, s5).title, 'WU');
+    assert.strictEqual(latest(pages, s5).title, 'WU');
   });
 
   it('prefers an exact session ref over a colliding session_number', () => {
@@ -140,7 +189,7 @@ describe('getLatestWrapUp', () => {
       { frontmatter: { type: 'session_wrap', session: '[[Session 04 - Calcutta]]', session_number: 4 }, title: 'Calcutta_S4_Wrap_Up' },
     ];
     const session = { title: 'Session 04 - Calcutta', frontmatter: { type: 'session', session_number: 4 } };
-    assert.strictEqual(getLatestWrapUp(pages, session).title, 'Calcutta_S4_Wrap_Up');
+    assert.strictEqual(latest(pages, session).title, 'Calcutta_S4_Wrap_Up');
   });
 
   it('still matches an NFD-typed session ref against an NFC title', () => {
@@ -151,14 +200,14 @@ describe('getLatestWrapUp', () => {
     assert.notStrictEqual(nfd, nfc, 'fixture must actually differ by normal form');
     const pages = [{ frontmatter: { type: 'session_wrap', session: nfd }, title: 'WU' }];
     const session = { title: 'Session 05 - Caf\u00e9 Central', frontmatter: { type: 'session' } };
-    assert.strictEqual(getLatestWrapUp(pages, session).title, 'WU');
+    assert.strictEqual(latest(pages, session).title, 'WU');
   });
 
   it('recognizes all wrap-up type variants', () => {
     const variants = ['session-wrap-up', 'session_wrap', 'session-wrapup'];
     for (const type of variants) {
       const pages = [{ frontmatter: { type, session_number: 5 }, title: `WU-${type}` }];
-      const result = getLatestWrapUp(pages, session);
+      const result = latest(pages, session);
       assert.ok(result, `should match type "${type}"`);
     }
   });
@@ -183,7 +232,7 @@ describe('getLatestWrapUp', () => {
       frontmatter: { type: 'session', session_number: 4 },
       sourcePath: '/vault/Chapters/Chapter 4 - Calcutta/Sessions/Session 04/Session 04 - The Road to Cairo.md',
     };
-    const result = getLatestWrapUp(pages, calcuttaSession);
+    const result = latest(pages, calcuttaSession);
     assert.strictEqual(result.title, 'Chapter_04_Session_04_Wrap_Up');
   });
 });
@@ -219,6 +268,13 @@ describe('extractRecapHtml (#269)', () => {
 });
 
 describe('extractRecap', () => {
+  it('an empty published view is final, not a cue to read the raw markdown (#276)', () => {
+    // build.js empties a session index's body; `publishedMarkdown || markdown` treated
+    // that '' as missing and quoted the raw text instead.
+    const page = { publishedMarkdown: '', markdown: '## Narrative Recap\n\nKeeper-only forecast.\n' };
+    assert.strictEqual(extractRecap(page), null);
+  });
+
   it('extracts first paragraph from Narrative Recap section', () => {
     const page = {
       markdown: '# Session 1\n\nSome intro.\n\n## Narrative Recap\n\nThe party arrived at the castle. They were weary from travel.\n\nThen they fought a dragon.\n\n## Loot\n\nSword',

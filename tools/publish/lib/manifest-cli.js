@@ -11,10 +11,13 @@
 // keeping the annotations on the entries it was not asked to touch.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport, dirIsExcluded } = require('./scanner');
+const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { loadPublishConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
-const { decidePage } = require('./publish-decision');
+const { decidePage, publishesPage } = require('./publish-decision');
+const { pairHubs, isWrapUp } = require('./session-hub');
+const { getCanonStatus } = require('./templates/base');
+const { sitePin } = require('./site-pin');
 
 const SECTIONS = [
   { key: 'publishing', title: 'Publishing', checked: true },
@@ -145,8 +148,12 @@ function splitReason(arg) {
 function surveyVault(options, deps) {
   const configPath = path.resolve(options.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const config = loadVaultConfig(configPath, deps, { requireVaultPath: true });
-  const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
+  // options.vaultPath (`--vault`) reads another vault through this site's rules —
+  // vault_check asks about the vault it is checking, which need not be the one the
+  // site's own vaultPath names (a working copy, say).
+  const config = loadVaultConfig(configPath, deps, { requireVaultPath: !options.vaultPath });
+  const vaultPath = options.vaultPath ? path.resolve(options.vaultPath)
+    : deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
   const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
   const manifest = loadManifest(vaultPath);
 
@@ -181,7 +188,7 @@ function surveyVault(options, deps) {
       }));
   }
 
-  return { config, configPath, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report };
+  return { config, configPath, siteDir: configDir, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report };
 }
 
 async function runDiff(options, deps, survey) {
@@ -319,17 +326,246 @@ async function runApply(options, deps, survey) {
   return 0;
 }
 
+const PLAYED_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+
+// Why the site's own build would publish a ticked hub's body, or null (site-pin.js).
+function staleSitePin(siteDir) {
+  return sitePin(siteDir).stale;
+}
+
+// A session is reviewed once reconcile has run on it: reconcile promotes the Wrap-Up to
+// AUTHORITATIVE and sets the index's status to `reviewed` (shared/reconcile.md step 6),
+// and vault_check derives `reviewed` from the Wrap-Up alone. Either counts.
+function isReviewed(hub, wrapUp) {
+  if (String((hub.frontmatter || {}).status || '').toLowerCase() === 'reviewed') return true;
+  return !!(wrapUp && wrapUp.frontmatter && getCanonStatus(wrapUp.frontmatter) === 'AUTHORITATIVE');
+}
+
+// The pages that would publish if `extra` were added to the manifest's Publishing
+// section: the build's own verdicts (decidePage) under that hypothetical manifest.
+function publishedWith(survey, extra) {
+  const { manifest, publishConfig, pagesByRel } = survey;
+  const hypothetical = Object.assign({}, manifest, {
+    publishing: [...new Set(manifest.publishing.concat(extra))],
+  });
+  const published = [];
+  for (const [rel, page] of pagesByRel) {
+    const verdict = decidePage(page, { rel, publishConfig, manifest: hypothetical, pageIndex: pagesByRel });
+    // A story companion folds into its PC's page; the build never holds it as a page.
+    if (publishesPage(verdict) && verdict.code !== 'STORY_COMPANION') published.push(page);
+  }
+  return published;
+}
+
+// Hub -> Wrap-Up pairs on `published`, through the build's own alias-rewrite-then-pair
+// step (session-hub.js pairHubs), so `explain` and publish-played pair on exactly the
+// frontmatter the build does. The whole-vault note list is read once per survey.
+function pairsWith(survey, published) {
+  if (!survey.allNotes) survey.allNotes = scanAllNotes(survey.vaultPath);
+  return pairHubs([...survey.pagesByRel.values()], published, { allNotes: survey.allNotes });
+}
+
+// What publish-played would do, without doing it: `ticks` maps each played hub it would
+// tick to its paired Wrap-Up (both vault-relative), `wrapsOnly` lists reviewed Wrap-Ups
+// it would tick without their hub (the site's pin predates body withholding), and
+// `unclear` lists the played hubs it would not tick, each with the reason and the
+// Wrap-Up it pairs with, if any. Shared with build.js's end-of-run summary so the build
+// promises only what publish-played will actually do.
+//
+// `only` (`--session`) plans that one vault-relative session index and nothing else;
+// `includeUnreviewed` waives the review check for it (session-wrapup's "Publish now?").
+// Every other check holds: the hub is ticked only with a Wrap-Up that pairs with it and
+// will publish, and never on a stale site pin. `publishBody` is the GM's yes to publishing
+// the named index's body as written when no Wrap-Up pairs with it (vaults that keep the
+// recap in the index): it lands in `bodyTicks` instead of `unclear`. A hub that does pair
+// is left to the checks above, and Excluded or non-session paths are still refused.
+function planPublishPlayed(survey, { only = null, includeUnreviewed = false, publishBody = false } = {}) {
+  const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
+  const readFile = survey.readFile || ((p) => fs.readFileSync(p, 'utf8'));
+  const listed = parseAnnotatedManifest(readFile(path.join(vaultPath, '_meta', 'publish-manifest.md')));
+  const sectionOf = (rel) => (listed.get(rel) || {}).section || null;
+  const onDisk = new Set(files);
+  const relOf = new Map([...pagesByRel].map(([rel, page]) => [page, rel]));
+
+  const hubs = [...pagesByRel]
+    .filter(([rel]) => only === null || rel === only)
+    .filter(([rel, p]) => {
+      const fm = p.frontmatter || {};
+      return fm.type === 'session' && PLAYED_STATUSES.has(String(fm.status || '').toLowerCase())
+        && onDisk.has(rel) && sectionOf(rel) !== 'excluded';
+    })
+    .map(([rel, page]) => ({ rel, page }));
+  // Everything this call might tick: the played hubs, and every Wrap-Up the GM has not
+  // Excluded. The pairing is then read off the pages that would publish with all of them.
+  const wrapCandidates = [...pagesByRel]
+    .filter(([rel, p]) => isWrapUp(p) && onDisk.has(rel) && sectionOf(rel) !== 'excluded')
+    .map(([rel]) => rel);
+  let pending = hubs.map((h) => h.rel).concat(wrapCandidates);
+  const allPages = [...pagesByRel.values()];
+
+  // Pair, then keep only the ticks the resulting manifest actually supports; dropping a
+  // tick can unpair another hub (two hubs linking one Wrap-Up), so repeat until stable.
+  // Each round drops at least one hub from `pending`, so this ends.
+  let ticks;
+  for (;;) {
+    const pairs = pairsWith(survey, publishedWith(survey, pending));
+    ticks = new Map();
+    for (const { rel, page } of hubs.filter((h) => pending.includes(h.rel))) {
+      const wrap = pairs.get(page);
+      if (wrap) ticks.set(rel, relOf.get(wrap));
+    }
+    const next = [...ticks.keys()].concat([...ticks.values()]);
+    const after = pairsWith(survey, publishedWith(survey, next));
+    const unsupported = [...ticks.keys()].filter((rel) => !after.has(pagesByRel.get(rel)));
+    if (unsupported.length === 0) break;
+    pending = next.filter((rel) => !unsupported.includes(rel));
+  }
+
+  // Clear means reviewed: an unreviewed Wrap-Up is still a DRAFT the GM may not want
+  // on the site (session-wrapup's "after reconcile"), so it waits for publish-site to
+  // ask. And a site pinned below 1.11.40 (site-pin.js) would publish a ticked hub's
+  // body, so no hub is ticked there; its reviewed Wrap-Up still can be.
+  const unclear = [];
+  const pinReason = survey.siteDir ? staleSitePin(survey.siteDir) : null;
+  const wrapOnly = [];
+  for (const [rel, wrapRel] of [...ticks]) {
+    // Both already published (the GM said "publish now" at wrap-up): nothing to tick,
+    // nothing to ask.
+    if (sectionOf(rel) === 'publishing' && sectionOf(wrapRel) === 'publishing') continue;
+    const reason = !includeUnreviewed && !isReviewed(pagesByRel.get(rel), pagesByRel.get(wrapRel))
+      ? `Wrap-Up not reviewed yet (${wrapRel})`
+      : pinReason;
+    if (!reason) continue;
+    ticks.delete(rel);
+    if (reason === pinReason) wrapOnly.push(wrapRel);
+    unclear.push({ path: rel, reason, wrapUp: wrapRel });
+  }
+  const stillTicked = new Set(ticks.values());
+  const wrapsOnly = [...new Set(wrapOnly)].filter((w) => !stillTicked.has(w));
+
+  const ifAllPublished = pairsWith(survey, allPages);
+  const bodyTicks = [];
+  for (const { rel, page } of hubs) {
+    // A named session is always answered for, even one already under Publishing.
+    if (ticks.has(rel) || (only === null && sectionOf(rel) === 'publishing')
+      || unclear.some((u) => u.path === rel)) continue;
+    // Why not: the Wrap-Up the hub would pair with if every Wrap-Up published.
+    const wouldBe = ifAllPublished.get(page) || null;
+    const wrapRel = wouldBe ? relOf.get(wouldBe) : null;
+    const fm = page.frontmatter;
+    const docs = fm.documents && typeof fm.documents === 'object' ? fm.documents : {};
+    let reason;
+    if (wrapRel && sectionOf(wrapRel) === 'excluded') {
+      reason = `Wrap-Up is Excluded (${wrapRel})`;
+    } else if (wrapRel) {
+      // Its verdict as if ticked: the rule that would still stop it (publish: none, …).
+      const verdict = decidePage(wouldBe, {
+        rel: wrapRel, publishConfig, pageIndex: pagesByRel,
+        manifest: Object.assign({}, manifest, { publishing: manifest.publishing.concat([wrapRel]) }),
+      });
+      reason = `Wrap-Up ${wrapRel} does not publish: ${verdict.reason}`;
+    } else if (docs.wrap_up) {
+      reason = `documents.wrap_up ${docs.wrap_up} names no Wrap-Up (a link matches a note's exact name, path or alias)`;
+    } else {
+      reason = `status ${fm.status} but no Wrap-Up linked to it`;
+    }
+    if (only !== null && publishBody) bodyTicks.push(rel);
+    else unclear.push({ path: rel, reason, wrapUp: wrapRel });
+  }
+  // The named path is not a played session index this call could tick: say which.
+  if (only !== null && hubs.length === 0) {
+    const fm = (pagesByRel.get(only) || {}).frontmatter || {};
+    const reason = sectionOf(only) === 'excluded' ? 'the session index is Excluded'
+      : `not a played session index (type ${fm.type || 'none'}, status ${fm.status || 'none'})`;
+    unclear.push({ path: only, reason, wrapUp: null });
+  }
+  return { ticks, wrapsOnly, unclear, bodyTicks, sectionOf };
+}
+
+// `manifest publish-played` (#277): a reviewed session index is ticked under Publishing
+// only together with a Wrap-Up that will publish and that session-hub.js pairs with it —
+// i.e. only when pairHubs pairs the hub on the pages as they will publish
+// after this call, so the hub's body is withheld and its session page is built from
+// frontmatter plus the Wrap-Up. There is no matcher here: pairing is session-hub.js's.
+// Every other played session is "unclear" with a reason — no Wrap-Up linked, the Wrap-Up
+// not reviewed yet, the linked one Excluded / `publish: none` / otherwise not publishing,
+// or a site pinned to a tool that predates withholding — and is listed, never ticked, so
+// the skill asks the GM. `--session <index>` narrows the run to that one session and
+// `--include-unreviewed` (only with --session) lets it through before reconcile;
+// `--publish-body` (only with --session) registers an index no Wrap-Up pairs with, body and all. Files under Excluded
+// are a deliberate GM decision and are left alone. Only meaningful in player mode with a
+// manifest, the one place the manifest is an allowlist; elsewhere a no-op.
+async function runPublishPlayed(options, deps, survey) {
+  const out = deps.out || console.log;
+  const { publishConfig, manifest } = survey;
+
+  const report = (payload, line) => out(options.json ? JSON.stringify(payload, null, 2) : line);
+  if (!manifest || publishConfig.mode !== 'player') {
+    report({ applicable: false, mode: publishConfig.mode, manifestExists: !!manifest, published: [] },
+      'manifest publish-played: nothing to do (needs a manifest and player mode)');
+    return 0;
+  }
+
+  let only = null;
+  if (options.session != null) {
+    only = canonicalPath(String(options.session).trim().replace(/^\.\//, ''));
+    if (!survey.files.includes(only)) {
+      out(`no such file in the vault: ${only}`);
+      out('Nothing was written. --session takes the session index path relative to the vault.');
+      return 1;
+    }
+  }
+  const { ticks, wrapsOnly, unclear, bodyTicks, sectionOf } = planPublishPlayed(
+    Object.assign({ readFile: deps.readFile }, survey),
+    { only, includeUnreviewed: !!options.includeUnreviewed, publishBody: !!options.publishBody });
+  const wanted = [];
+  for (const rel of [...ticks].flat().concat(wrapsOnly, bodyTicks)) {
+    if (!wanted.includes(rel) && sectionOf(rel) !== 'publishing') wanted.push(rel);
+  }
+
+  if (wanted.length > 0 && !options.dryRun) {
+    const rc = await runApply(Object.assign({}, options, { publish: wanted, exclude: [], decide: [], json: false }),
+      Object.assign({}, deps, { out: () => {} }), survey);
+    if (rc !== 0) return rc;
+  }
+  const verb = options.dryRun ? 'would publish' : 'published';
+  const lines = [wanted.length === 0
+    ? 'manifest publish-played: no finished session needed publishing'
+    : `manifest publish-played: ${verb} ${wanted.length} file(s)\n${wanted.map((w) => `  ${w}`).join('\n')}`];
+  const bodyPublished = bodyTicks.filter((rel) => wanted.includes(rel));
+  if (bodyPublished.length > 0) {
+    lines.push(`No Wrap-Up withholds it, so its body publishes as written (--publish-body):`,
+      ...bodyPublished.map((rel) => `  ${rel}`));
+  }
+  if (unclear.length > 0) {
+    lines.push(`Unclear, not ticked (${unclear.length}):`, ...unclear.map((u) => `  ${u.path} — ${u.reason}`));
+  }
+  report({ applicable: true, dryRun: !!options.dryRun, published: wanted, bodyPublished, unclear }, lines.join('\n'));
+  return 0;
+}
+
 async function runManifest(options, deps) {
   const opts = options || {};
   const d = deps || {};
   const out = d.out || console.log;
+  if (opts.verb === 'publish-played' && opts.session == null) {
+    if (opts.includeUnreviewed) {
+      out('--include-unreviewed needs --session: it publishes one session the GM chose, never every draft');
+      return 1;
+    }
+    if (opts.publishBody) {
+      out('--publish-body needs --session: it publishes one index body the GM said yes to, never every body');
+      return 1;
+    }
+  }
   const survey = surveyVault(opts, d);
   if (opts.verb === 'diff') return runDiff(opts, d, survey);
   if (opts.verb === 'apply') return runApply(opts, d, survey);
+  if (opts.verb === 'publish-played') return runPublishPlayed(opts, d, survey);
   out(`Unknown manifest command: ${opts.verb}`);
   return 1;
 }
 
 // surveyVault is shared with explain-cli so both commands see one vault the same
 // way: the same file list, the same verdicts, the same config resolution.
-module.exports = { runManifest, surveyVault, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };
+module.exports = { runManifest, surveyVault, planPublishPlayed, pairsWith, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };

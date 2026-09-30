@@ -1059,24 +1059,33 @@ def _js_strip_comments(lines: list[str]) -> list[str]:
         if fence is not None or m:
             out.append(line)
             continue
-        kept, i = "", 0
-        while i < len(line):
-            if in_comment:
-                end = line.find("-->", i)
-                if end == -1:
-                    break
-                in_comment, i = False, end + 3
-            else:
-                start = line.find("<!--", i)
-                if start == -1:
-                    kept += line[i:]
-                    break
-                kept += line[i:start]
-                in_comment, i = True, start + 4
+        kept, in_comment = strip_comment_spans(line, in_comment)
         if not kept.strip() and line.strip():
             continue
         out.append(kept)
     return out
+
+
+def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:
+    """One line with its HTML comment spans removed, as `stripHtmlComments`
+    leaves it: (kept text, whether a comment is still open at line end).
+    The step `_js_strip_comments` takes per line, shared so a check that
+    needs line numbers reads comments exactly as the publisher does."""
+    kept, i = "", 0
+    while i < len(line):
+        if in_comment:
+            end = line.find("-->", i)
+            if end == -1:
+                break
+            in_comment, i = False, end + 3
+        else:
+            start = line.find("<!--", i)
+            if start == -1:
+                kept += line[i:]
+                break
+            kept += line[i:start]
+            in_comment, i = True, start + 4
+    return kept, in_comment
 
 
 def _js_filter_sections(lines: list[str], excludes: Iterable[str]
@@ -1345,6 +1354,49 @@ def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
     if fm is None:
         return ExcludeListConfig()
     return parse_publish_list(fm, key)
+
+
+def read_wrap_up_player_sections(vault: Path) -> list[str]:
+    """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
+    extra H2 titles the vault declares player-facing on a Wrap-Up.
+
+    The nested `wrap_up:` block is lifted out and read through
+    `parse_publish_list`, so the list syntax is exactly the one the
+    other publish lists accept. Absent, empty, null, unreadable or not a
+    list all read as no extra sections — the Keeper-facing default.
+    """
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
+    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
+    start = next((i for i, line in enumerate(lines)
+                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
+    if start is None:
+        return []
+    block: list[str] = []
+    wrap_indent: int | None = None
+    inside = False
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            if inside:
+                block.append(line)
+            continue
+        depth = len(line) - len(line.lstrip())
+        if depth == 0:
+            break                                    # the next top-level key
+        m = _KEY_LINE_RE.match(line)
+        if inside and depth > (wrap_indent or 0):
+            block.append(line)
+            continue
+        inside = False
+        if m and m.group(3) == "wrap_up" and not (m.group(4) or "").strip().split("#")[0].strip():
+            inside, wrap_indent = True, depth
+    if not block:
+        return []
+    cfg = parse_publish_list(["publish:"] + block, "player_sections")
+    return [] if cfg.error else list(cfg.value or [])
 
 
 def read_publish_scalar(vault: Path, key: str) -> str | None:

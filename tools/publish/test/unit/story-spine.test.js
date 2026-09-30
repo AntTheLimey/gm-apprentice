@@ -1,6 +1,11 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
+const { pairHubs } = require('../../lib/session-hub');
+
+// The build pairs once (session-hub.js pairHubs) and hands the Saga the map; the Saga never
+// pairs on its own.
+const buildStorySpine = (pages, linkMap) => spineWith(pages, linkMap, pairHubs(pages, pages, { allNotes: [] }));
 
 describe('findRecap', () => {
   it('extracts the Narrative Recap H2 section as HTML', () => {
@@ -128,7 +133,7 @@ describe('buildStorySpine output-path namespacing', () => {
       mk('Chapter A', 1, 'A'), se('A', 'A one'),
       mk('Chapter B', 2, 'B'), se('B', 'B one'),
     ];
-    const spine = require('../../lib/story-spine').buildStorySpine(pages);
+    const spine = buildStorySpine(pages);
     const paths = spine.map(u => u.outputPath);
     assert.strictEqual(new Set(paths).size, paths.length, `output paths must be unique: ${paths}`);
   });
@@ -139,7 +144,7 @@ describe('buildStorySpine ref-metadata source', () => {
     const chapter = { title: 'Ch', displayTitle: 'Ch', sourcePath: '/v/Ch/Ch.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' };
     const session = { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch/S1/S1.md', frontmatter: { type: 'session', session_number: 1, participants: ['[[Alice]]'], location: '[[Vienna]]' }, markdown: '## Overview\nno recap here' };
     const wrap = { title: 'S1 Wrap Up', sourcePath: '/v/Ch/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' }, markdown: '## Narrative Recap\nRecap prose from the wrap-up.' };
-    const spine = require('../../lib/story-spine').buildStorySpine([chapter, session, wrap]);
+    const spine = buildStorySpine([chapter, session, wrap]);
     const u = spine.find(x => x.kind === 'session');
     assert.ok(u, 'session unit exists');
     assert.match(u.recapHtml, /Recap prose from the wrap-up/); // text still from the wrap-up
@@ -155,7 +160,7 @@ describe('buildStorySpine folder-proximity pairing', () => {
       { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — London', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
       { title: 'Chapter_1_Wrap_Up', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter_1_Wrap_Up.md', frontmatter: { type: 'session_wrap', chapter: 'Chapter 1 — London: The Orphean Society' }, markdown: '## Narrative Recap\nLondon happened.' },
     ];
-    const spine = require('../../lib/story-spine').buildStorySpine(pages);
+    const spine = buildStorySpine(pages);
     assert.strictEqual(spine.length, 1);
     assert.strictEqual(spine[0].kind, 'chapter');
     assert.match(spine[0].recapHtml, /London happened/);
@@ -167,7 +172,7 @@ describe('buildStorySpine folder-proximity pairing', () => {
       { title: 'Session 01', displayTitle: 'Session 01', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session 01.md', frontmatter: { type: 'session', session_number: 1, chapter: 'Chapter 4 — Calcutta' }, markdown: '## Overview\nx' },
       { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After', chapter: 'Chapter 4 — Calcutta' }, markdown: '## Narrative Recap\nCalcutta session one.' },
     ];
-    const spine = require('../../lib/story-spine').buildStorySpine(pages);
+    const spine = buildStorySpine(pages);
     assert.strictEqual(spine.length, 1);
     assert.strictEqual(spine[0].kind, 'session');
     assert.match(spine[0].recapHtml, /Calcutta session one/);
@@ -264,3 +269,26 @@ describe('wrap-up matching in a flat Sessions/ folder', () => {
     assert.match(spine[0].recapHtml, /Subfolder recap/);
   });
 });
+
+// Review of #276: the Saga takes a session's recap from the Wrap-Up session-hub.js pairs
+// with it — the same rule that withholds the hub body — so a hub linked only through
+// documents.wrap_up, in a flat folder with two Wrap-Ups, keeps its recap.
+describe('buildStorySpine pairs a session with its Wrap-Up through session-hub (#276 review)', () => {
+  it('keeps the recap of a hub paired only by documents.wrap_up beside a second Wrap-Up', () => {
+    const at = (page, dir) => Object.assign(page, { sourcePath: `/v/${dir}/${page.title}.md`, vaultPath: `${dir}/${page.title}` });
+    const pages = [
+      at({ title: 'Chapter_1', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' }, 'Chapters'),
+      at({ title: 'Session 01', frontmatter: { type: 'session', session_number: 1, chapter: '[[Chapter_1]]',
+        documents: { wrap_up: '[[S1 Wrap]]' } }, markdown: '' }, 'Sessions'),
+      at({ title: 'Session 02', frontmatter: { type: 'session', session_number: 2, chapter: '[[Chapter_1]]',
+        documents: { wrap_up: '[[S2 Wrap]]' } }, markdown: '' }, 'Sessions'),
+      at({ title: 'S1 Wrap', frontmatter: { type: 'session_wrap' }, markdown: '## Narrative Recap\n\nFIRST\n' }, 'Sessions'),
+      at({ title: 'S2 Wrap', frontmatter: { type: 'session_wrap' }, markdown: '## Narrative Recap\n\nSECOND\n' }, 'Sessions'),
+    ];
+    const spine = buildStorySpine(pages);
+    assert.deepStrictEqual(spine.map(u => u.title), ['Session 01', 'Session 02']);
+    assert.match(spine[0].recapHtml, /FIRST/);
+    assert.match(spine[1].recapHtml, /SECOND/);
+  });
+});
+

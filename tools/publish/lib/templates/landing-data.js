@@ -1,6 +1,7 @@
 const { canonicalNfc, graphemes } = require('../unicode');
-const { parseWikiRef, escapeHtml } = require('../processor');
+const { escapeHtml, publishedSource } = require('../processor');
 const { stripTags } = require('../strip-tags');
+const { isLinkedWrapUp, isWrapUp } = require('../session-hub');
 
 function getLatestSession(pages) {
   const played = pages.filter(
@@ -36,7 +37,7 @@ function recapParagraph(page) {
   if (!page) return null;
   // Prefer the published view (gm-only blocks + excluded sections stripped) so the
   // landing recap can never quote Keeper-only content.
-  const md = page.publishedMarkdown || page.markdown;
+  const md = publishedSource(page);
   if (!md) return null;
 
   // Wrap-ups title this section in variants — "Narrative Recap", "What Happened —
@@ -240,36 +241,34 @@ function refMentions(ref, title) {
   return after === '' || !/[0-9A-Za-z]/.test(after);
 }
 
-function getLatestWrapUp(pages, session) {
+// The Wrap-Up whose recap the landing quotes for `session`. First the one the build
+// paired with it (`pairs`, session-hub.js pairHubs, computed once on the unreduced
+// frontmatter): the same Wrap-Up the session page and the Saga use. The landing never
+// pairs on its own. A session with no paired Wrap-Up may still borrow the recap of an
+// UNLINKED one — a Wrap-Up that names no session and that no session names
+// (isLinkedWrapUp) — found by folder, then session_number, then its title; a Wrap-Up
+// linked to one session never stands in for another.
+function getLatestWrapUp(pages, session, pairs) {
   if (!session) return null;
-  const wrapTypes = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
-  const wrapUps = pages.filter(p => wrapTypes.has(p.frontmatter.type));
+  const paired = pairs && pairs.get(session);
+  if (paired) return paired;
+  const wrapUps = pages.filter(p => isWrapUp(p) && !isLinkedWrapUp(p, pairs));
+
+  // NFC both sides (#139): the title is a filename typed in one app, the session's in
+  // another.
+  const sessionTitle = canonicalNfc(session.title || '');
 
   // Chapters restart session numbering, so a bare session_number match can return
   // ANOTHER chapter's wrap-up (Vienna Session 4 shadowing Calcutta Session 4). A
   // wrap-up lives in the same session folder as its index file — prefer that match
-  // before falling back to session_number.
-  const sessionDir = session.sourcePath
-    ? String(session.sourcePath).replace(/[^\\/]+$/, '')
-    : null;
+  // before falling back to session_number. Only when the folder holds exactly one
+  // wrap-up, though: in a flat Sessions/ folder a first-match grab hands every session
+  // the same wrap-up (the rule story-spine's wrapUpForUnit follows too).
+  const dirOf = (p) => (p.sourcePath ? String(p.sourcePath).replace(/[^\\/]+$/, '') : null);
+  const sessionDir = dirOf(session);
   if (sessionDir) {
-    for (const wu of wrapUps) {
-      if (wu.sourcePath && String(wu.sourcePath).startsWith(sessionDir)) return wu;
-    }
-  }
-
-  // NFC both sides (#139): the wrap-up's session ref is author-typed, the session title is a
-  // filename. A mismatch drops the landing page's narrative recap back to the session body.
-  const sessionTitle = canonicalNfc(session.title || '');
-  const refOf = (wu) =>
-    canonicalNfc(parseWikiRef(wu.frontmatter.session || wu.title || '').target);
-
-  // An explicit `session:` ref names one session, so it outranks session_number, which
-  // chapters make ambiguous by restarting the count.
-  if (sessionTitle) {
-    for (const wu of wrapUps) {
-      if (refOf(wu) === sessionTitle) return wu;
-    }
+    const sameFolder = pages.filter(p => isWrapUp(p) && dirOf(p) === sessionDir);
+    if (sameFolder.length === 1 && wrapUps.includes(sameFolder[0])) return sameFolder[0];
   }
 
   const num = session.frontmatter.session_number;
@@ -279,12 +278,11 @@ function getLatestWrapUp(pages, session) {
     }
   }
 
-  // Last resort: a ref that mentions the session inside longer prose ("Recap for
-  // Session 05 extras"). Guarded against the digit run-on that made "Session 1" match
-  // "[[Session 10]]" and put the wrong recap on the landing page.
+  // Last resort: a title that mentions the session ("Session 05 Wrap-Up"). Guarded
+  // against the digit run-on that made "Session 1" match "Session 10".
   if (sessionTitle) {
     for (const wu of wrapUps) {
-      if (refMentions(refOf(wu), sessionTitle)) return wu;
+      if (refMentions(canonicalNfc(wu.title || ''), sessionTitle)) return wu;
     }
   }
   return null;

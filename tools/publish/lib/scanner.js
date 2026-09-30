@@ -187,20 +187,33 @@ function scanVault(config) {
 // filename it names are authored in different apps and routinely disagree on normal form,
 // which used to render the link as plain text with no warning. Values — the output paths —
 // are stored exactly as given; nothing here rewrites an emitted path or URL.
+// The three kinds of name a `[[link]]` reaches a page by, NFC. buildLinkMap keys on
+// these and nothing else, and session-hub.js pairs a session index with its Wrap-Up
+// through linkKeys, so a pairing link resolves exactly as the same link in a page body.
+function titleKey(page) { return canonicalNfc(page.title); }
+function pathKey(page) { return page.vaultPath ? canonicalNfc(page.vaultPath) : null; }
+function aliasKeys(page) {
+  const aliases = page.frontmatter && page.frontmatter.aliases;
+  return Array.isArray(aliases) ? aliases.map(canonicalNfc) : [];
+}
+function linkKeys(page) {
+  return [titleKey(page), pathKey(page), ...aliasKeys(page)].filter(Boolean);
+}
+
 function buildLinkMap(pages) {
   const map = {};
 
   // Pass 1: add all canonical titles (non-superseded first so they claim their own names)
   for (const page of pages) {
     if (getCanonStatus(page.frontmatter) !== 'SUPERSEDED') {
-      map[canonicalNfc(page.title)] = page.outputPath;
+      map[titleKey(page)] = page.outputPath;
     }
   }
 
   // Pass 2: add superseded titles, redirecting to their superseded_by target if possible
   for (const page of pages) {
     if (getCanonStatus(page.frontmatter) === 'SUPERSEDED') {
-      const title = canonicalNfc(page.title);
+      const title = titleKey(page);
       if (title in map) continue;
       const supersededBy = page.frontmatter.superseded_by;
       if (supersededBy) {
@@ -216,20 +229,15 @@ function buildLinkMap(pages) {
   // goes in before aliases: an alias spelled like a path must not claim it. Titles can't
   // contain `/`, so none of these collide with pass 1.
   for (const page of pages) {
-    if (page.vaultPath) {
-      const key = canonicalNfc(page.vaultPath);
-      if (!(key in map)) map[key] = page.outputPath;
-    }
+    const key = pathKey(page);
+    if (key && !(key in map)) map[key] = page.outputPath;
   }
 
   // Pass 4: add aliases (only if not already claimed by a canonical title or path)
   for (const page of pages) {
-    if (Array.isArray(page.frontmatter.aliases)) {
-      for (const alias of page.frontmatter.aliases) {
-        const key = canonicalNfc(alias);
-        if (!(key in map)) {
-          map[key] = page.outputPath;
-        }
+    for (const key of aliasKeys(page)) {
+      if (!(key in map)) {
+        map[key] = page.outputPath;
       }
     }
   }
@@ -330,6 +338,8 @@ function pairStoryFiles(pages, vaultPath) {
 // excludeDirs, folderMap and `type:` (#212). GM aliases are resolved against
 // this, because Obsidian resolves a link to any note in the vault, and a
 // GM-only folder the site never scans is the likeliest home for a secret.
+const SESSION_TYPE_LINE = /^type:\s*["']?(session|session_wrap|session-wrap-up|session-wrapup)["']?\s*$/m;
+
 function scanAllNotes(vaultPath) {
   const out = [];
   (function walk(dir) {
@@ -345,8 +355,10 @@ function scanAllNotes(vaultPath) {
       let text = '';
       try {
         text = fs.readFileSync(full, 'utf8');
-        // Only a note that declares aliases needs its frontmatter parsed.
-        if (/^(gm_)?aliases:/m.test(text)) frontmatter = matter(text).data || {};
+        // Only a note that declares aliases needs its frontmatter parsed — or a session
+        // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
+        // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
+        if (/^(gm_)?aliases:/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = matter(text).data || {};
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
@@ -355,10 +367,13 @@ function scanAllNotes(vaultPath) {
             + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
         }
       }
-      out.push({ title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full });
+      out.push({
+        title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full,
+        vaultPath: toPosix(path.relative(vaultPath, full)).replace(/\.md$/i, ''),
+      });
     }
   })(vaultPath);
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, buildLinkMap, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

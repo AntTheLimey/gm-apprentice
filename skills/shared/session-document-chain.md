@@ -6,7 +6,9 @@ Each session splits into separate documents, each owned by one skill.
 
 ### 1. Session Index (`Session {NN} - {Title}.md`)
 
-The hub: metadata and links only, no prose.
+The hub: metadata and links only, no prose. Blank:
+`shared/templates/session.md` (provisioned as
+`_Templates/_Template_Session.md`).
 
 ```yaml
 ---
@@ -50,10 +52,43 @@ a Gregorian date; without a 4-digit year it is left off the timeline
 
 Derive/verify with `vault_check.py sessions`; fix with
 `stamp_entities.py … --set status=…` (see `shared/vault-access.md`).
+In a player-mode vault with `_meta/publish-manifest.md`, it also
+warns on any played (`played`/`wrap-up`/`reviewed`) session index or
+its Wrap-Up that is not under Publishing, saying what happens next:
+`manifest publish-played` (run by reconcile step 6.1 and publish-site)
+registers a reviewed session with its linked Wrap-Up, and publish-site
+asks the GM about the rest.
 
 **`world_evolved`:** the session reference (e.g. `"Session_07"`) set by
 reconcile step 6.5 once world evolution has run for it, so it is not
 offered twice. Null until then.
+
+**Body:** the H1 title, nothing else outside an optional fenced
+`## GM Notes`. The hub is metadata only by
+design. Once the session has a published Wrap-Up (linked by
+`documents.wrap_up` or by the Wrap-Up's own `session:`), the site
+withholds the hub body — from the page, search, backlinks and the
+landing — and builds the session page from this frontmatter plus the
+Wrap-Up's recap opening, with a link to the Wrap-Up. It never lists
+`scenes:`: a prepped scene that never ran is a spoiler. Until then the
+body publishes as written, so a vault that keeps its recaps in the
+hub, with no Wrap-Ups, still has them on its site.
+
+That window is why bookkeeping never goes in the hub body: a played
+session's hub is live before its Wrap-Up exists. Each kind has a
+document that owns it, where the skill that needs it reads it:
+
+| Bookkeeping | Where it goes |
+|---|---|
+| Plan, Play Notes, Wrap-Up links | frontmatter `documents:` |
+| Scene Index with prep states, key prep, image prompts, pre-play premise | the Plan |
+| Handoff briefs after play | the Wrap-Up's fenced `## GM Notes` |
+
+A GM who wants a working dashboard on the hub keeps it inside one
+`<!-- gm-only -->`/`<!-- /gm-only -->` pair under `## GM Notes`, as the
+template shows. For a session with a Wrap-Up, `vault_check.py
+sessions` reports body lines outside that fence as INFO, naming where
+each kind belongs.
 
 ### 2. Session Plan (`Session {NN} - {Title} - Plan.md`)
 
@@ -136,7 +171,7 @@ A reconstructed session (vault-ingest) opens with a
 
 | Skill | Reads | Writes | Status Transition |
 |---|---|---|---|
-| session-prep | Previous wrap-ups, vault | Plan file; index `status`, `documents.plan`, plan link; adds new scenes to `scenes:`, never removes | planned → prepped |
+| session-prep | Previous wrap-ups, vault | Plan file; index `status`, `documents.plan`; adds new scenes to `scenes:`, never removes | planned → prepped |
 | session-play | Plan file | Play Notes file, session index | prepped → played |
 | session-wrapup | Play Notes file | Wrap-Up file, entities, session index (`scenes:` set to the scenes played) | played → wrap-up |
 | reconcile | Wrap-Up file | Promotes canon status, session index | wrap-up → reviewed |

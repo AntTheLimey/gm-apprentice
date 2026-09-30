@@ -773,6 +773,60 @@ describe('build integration', () => {
         'a deliberately excluded session must not warn');
     });
 
+    it('ends the build with one summary line naming unpublished played sessions (#277)', () => {
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-played-'));
+      const vault = path.join(tmp, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 09 - The Table.md'),
+        '---\ntype: session\nsession_number: 9\nstatus: reviewed\naliases: []\ntags: []\n---\n\n## Recap\n\nDone.\n');
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 10 - Next.md'),
+        '---\ntype: session\nsession_number: 10\nstatus: prepped\naliases: []\ntags: []\n---\n\n## Recap\n\nSoon.\n');
+      // Played with a Wrap-Up: publish-played will tick it, so the build may say so.
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 11 - Docks.md'),
+        '---\ntype: session\nsession_number: 11\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Session 11 Wrap-Up]]"\n---\n\nHub.\n');
+      fs.writeFileSync(path.join(vault, 'Sessions', 'Session 11 Wrap-Up.md'),
+        '---\ntype: session_wrap\nsession: "[[Session 11 - Docks]]"\n---\n\n## Narrative Recap\n\nDocks.\n');
+
+      const configPath = path.join(tmp, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath: vault,
+        outputDir: path.join(tmp, 'docs'),
+        attachmentsDir: '_attachments',
+        siteTitle: 'Played',
+        siteUrl: 'https://example.github.io/t',
+        excludeDirs: ['_meta', '_Templates'],
+        excludeSections: ['GM Notes'],
+        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
+      }, null, 2));
+
+      const lines = [];
+      const realWarn = console.warn;
+      const realLog = console.log;
+      console.warn = (...args) => lines.push(args.join(' '));
+      console.log = (...args) => lines.push(args.join(' '));
+      try {
+        build({ configPath });
+      } finally {
+        console.warn = realWarn;
+        console.log = realLog;
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
+
+      const summary = lines.filter(l => l.includes('played session'));
+      assert.equal(summary.length, 2, JSON.stringify(summary));
+      // Split by what publish-played will do (#276/#277 review): it ticks Session 11, whose
+      // Wrap-Up pairs and will publish; it only lists Session 09, which has no Wrap-Up.
+      assert.match(summary[0], /1 played session with a Wrap-Up isn't published yet: Session 11 - Docks — `manifest publish-played`.*will publish it/);
+      assert.match(summary[1], /1 played session isn't published yet and needs the GM's say: Session 09 - The Table \(status reviewed but no Wrap-Up linked to it\) — publish-site asks the GM about it/);
+      assert.ok(!summary[1].includes('publish-played'), 'no promise to publish a session it will only ask about');
+      assert.ok(!summary.join('').includes('Session 10'), 'a prepped session is not "played"');
+      // They are the last warning-level lines before the closing "Done!".
+      assert.ok(lines.indexOf(summary[0]) > lines.findIndex(l => l.includes('wrote index.html')),
+        'summary must come after the per-file output');
+      // The played session no longer gets a separate mid-log warning.
+      assert.ok(!lines.some(l => l.includes('Session 09') && l.includes('not in the publish manifest')));
+    });
+
     it('does NOT warn about an unregistered session in full/GM mode (manifest not enforced)', () => {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-full-'));
       const vault = path.join(tmp, 'vault');

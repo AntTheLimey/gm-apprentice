@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
-const { surveyVault } = require('./manifest-cli');
+const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { extractSections, publishMode } = require('./processor');
 const { getCanonStatus } = require('./templates/base');
@@ -127,6 +127,10 @@ async function runExplain(options, deps) {
   const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
+  // Whether this is a session index whose body the site withholds (#276).
+  // Paired the way the build pairs (GM aliases rewritten first); a file the scanner
+  // produced no page for is no session index the build could pair.
+  const hubBodyUnpublished = !!page && pairsWith(survey, publishedPagesOf(survey)).has(page);
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
@@ -156,6 +160,8 @@ async function runExplain(options, deps) {
       frontmatterError,
       strippedSections: stripped,
       gmOnlyBlocks,
+      bodyPublishes: publishes && !hubBodyUnpublished,
+      bodyWithheld: hubBodyUnpublished,
     }, null, 2));
     return 0;
   }
@@ -182,6 +188,55 @@ async function runExplain(options, deps) {
   out(`  sections stripped on publish: ${
     stripped == null ? 'unknown — frontmatter could not be parsed' : (stripped.length ? stripped.join(', ') : 'none')}`);
   out(`  gm-only blocks: ${gmOnlyBlocks == null ? 'unknown' : gmOnlyBlocks}`);
+  if (hubBodyUnpublished) {
+    // A hub that does not publish has no page to build from anything; say only that
+    // its body would be withheld if it did, so the GM is not sent looking for a page.
+    out(publishes
+      ? '  body: not published — a session index is metadata only, and this session has a published Wrap-Up; its page is built from frontmatter and the Wrap-Up'
+      : '  body: not published — the page itself does not publish; if it did, the body would still be withheld, since this session has a published Wrap-Up');
+  }
+  return 0;
+}
+
+// The scanner pages that publish, as the build holds them: a story companion folds
+// into its PC's page and is not a page of its own.
+function publishedPagesOf(survey) {
+  return [...survey.pagesByRel.entries()]
+    .filter(([rel]) => survey.verdicts.has(rel) && publishesPage(survey.verdicts.get(rel))
+      && survey.verdicts.get(rel).code !== 'STORY_COMPANION')
+    .map(([, p]) => p);
+}
+
+// `explain --all --json`: the verdict for every file the vault walk sees, in one run,
+// so a caller that needs the build's answer for many files (vault_check gm-leak and
+// sessions, #276) asks once instead of re-implementing the rules. Each entry:
+//   path           vault-relative path (NFC, POSIX)
+//   type           frontmatter `type`, or null
+//   publishes      the build makes a page for it (a story companion merges into its PC)
+//   code           the verdict code decidePage returned
+//   bodyWithheld   a session index whose body the site withholds (session-hub pairHubs)
+//   bodyPublishes  publishes && !bodyWithheld
+async function runExplainAll(options, deps) {
+  const opts = options || {};
+  const d = deps || {};
+  const out = d.out || console.log;
+  const survey = surveyVault(opts, d);
+  const pairs = pairsWith(survey, publishedPagesOf(survey));
+  const pages = survey.files.map((rel) => {
+    const page = survey.pagesByRel.get(rel);
+    const verdict = survey.verdicts.get(rel);
+    const publishes = publishesPage(verdict);
+    const withheld = !!page && pairs.has(page);
+    return {
+      path: rel,
+      type: (page && page.frontmatter && page.frontmatter.type) || null,
+      publishes,
+      code: verdict.code,
+      bodyWithheld: withheld,
+      bodyPublishes: publishes && !withheld,
+    };
+  });
+  out(JSON.stringify({ vaultPath: survey.vaultPath, pages }, null, 2));
   return 0;
 }
 
@@ -191,4 +246,4 @@ function autoExcludeLabel(frontmatter, code) {
   return `${field}: ${String(frontmatter[field]).toLowerCase()}`;
 }
 
-module.exports = { runExplain };
+module.exports = { runExplain, runExplainAll };

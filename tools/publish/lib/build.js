@@ -3,17 +3,18 @@ const { configureColorMode } = require('./templates/base');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVault, scanAllNotes, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, gmAliasRewriter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
-const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
+const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { pairHubs } = require('./session-hub');
+const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
-const { buildStorySpine, unitRefs, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
@@ -21,6 +22,8 @@ const { boardFor } = require('./party-board-registry');
 const { resolveBackendFlags } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
+
+const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
@@ -311,6 +314,9 @@ function build(options = {}) {
 
   // A Publishing entry that matches no scanned file silently removes nothing and publishes
   // nothing — the page just never appears. Say so, so a typo can't blackhole a page.
+  // Played sessions the manifest would withhold (#277): reported once, at the end of the
+  // build, because the per-file warning drowns in a real build's log.
+  const unpublishedPlayedSessions = [];
   if (manifest) {
     const scanned = new Set(corpus.map(vaultRelPathOf));
     for (const entry of manifest.publishing) {
@@ -335,6 +341,10 @@ function build(options = {}) {
         if (!REGISTRABLE_TYPES.has(type)) continue;
         const rel = vaultRelPathOf(page);
         if (!registered.has(rel)) {
+          if (type === 'session' && PLAYED_SESSION_STATUSES.has(String(page.frontmatter.status || '').toLowerCase())) {
+            unpublishedPlayedSessions.push({ rel, title: page.title || path.basename(rel, '.md') });
+            continue;
+          }
           const kind = type === 'chapter' ? 'chapter' : 'session';
           console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not in the publish manifest — this ${kind} will NOT publish. Add it to _meta/publish-manifest.md.`);
         }
@@ -413,16 +423,10 @@ function build(options = {}) {
   // frontmatter, before anything renders or derives from them. Owners come
   // from the whole vault; the rewrite runs over the corpus, not just `pages`,
   // because the landing page also reads unpublished pages.
-  const scannedPaths = new Set(corpus.map(p => p.sourcePath));
-  const gmAliases = gmAliasRewriter(corpus.concat(
-    scanAllNotes(config.vaultPath).filter(n => !scannedPaths.has(n.sourcePath))), pages);
-  if (gmAliases) {
-    for (const page of corpus) {
-      page.markdown = gmAliases.markdown(page.markdown || '');
-      if (page.storyMarkdown) page.storyMarkdown = gmAliases.markdown(page.storyMarkdown);
-      page.frontmatter = gmAliases.frontmatter(page.frontmatter);
-    }
-  }
+  // pairHubs does that rewrite (in place, `apply`) and then pairs each session index with
+  // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
+  // take too, so all three pair on the same frontmatter (#276).
+  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
@@ -435,7 +439,25 @@ function build(options = {}) {
   // the search-index subtitle. The link map is built above and is what redirect
   // resolution actually consults, so `aliases`/`canon_status` are safe to strip
   // from here on.
+  //
+  // A session index with a published Wrap-Up has its body withheld (#276; the rule is
+  // session-hub.js's). Decided for every page before this loop reduces any frontmatter,
+  // and the body emptied inside it, before the published view is computed, so search,
+  // backlinks, recency, the relationship graph and the landing fallback agree with the
+  // page. A hub linking a prepped NPC who never appeared must not become that NPC's
+  // "Mentioned in".
+  //
+  // The pairs are computed HERE, once, on the unreduced frontmatter, and handed to every
+  // reader — the session page, the Saga, the landing recap and recency. None of them
+  // pairs on its own: excluding `documents`, `session` or `aliases` below would leave a
+  // late re-pairing blind to the very links that paired the page (#276 final review).
+  const hubWrapUps = new Map();
   for (const page of pages) {
+    if (hubPairs.has(page)) hubWrapUps.set(page, hubPairs.get(page));
+  }
+  hubWrapUps.linked = hubPairs.linked;
+  for (const page of pages) {
+    if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,
     // but keep only the sections the GM explicitly named. Applied to
     // page.markdown itself, before the published view is computed, so every
@@ -481,7 +503,7 @@ function build(options = {}) {
   // Whether a Story section will exist. Computed early (pure function of pages) so the
   // top nav — threaded into every page, including story pages built later — can point
   // the Story group at story.html. Must match what buildStory() emits below.
-  const hasStory = buildStorySpine(pages).length > 0
+  const hasStory = buildStorySpine(pages, null, hubWrapUps).length > 0
     || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
 
   // Build-time data pipeline
@@ -492,7 +514,6 @@ function build(options = {}) {
   const chapters = pages.filter(p => p.frontmatter.type === 'chapter');
   const npcs = pages.filter(p => p.frontmatter.type === 'npc');
   const locations = pages.filter(p => p.frontmatter.type === 'location');
-  const wrapUps = pages.filter(p => ['session-wrap-up', 'session_wrap', 'session-wrapup'].includes(p.frontmatter.type));
 
   const landingConfig = (publishConfig.landing || {});
   const recencyWindow = landingConfig.recency_window || 3;
@@ -530,13 +551,13 @@ function build(options = {}) {
 
   const recentNPCs = withFeatured(
     scoreByRecency(npcs, sessions, chapters, {
-      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUps,
+      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUpFor: hubWrapUps,
     }),
     npcs, landingConfig.featured_npcs, maxNPCs, 'featured_npcs');
 
   const recentLocations = withFeatured(
     scoreByRecency(locations, sessions, chapters, {
-      window: recencyWindow, max: maxLocations, type: 'location', wrapUps,
+      window: recencyWindow, max: maxLocations, type: 'location', wrapUpFor: hubWrapUps,
     }),
     locations, landingConfig.featured_locations, maxLocations, 'featured_locations');
 
@@ -828,17 +849,26 @@ function build(options = {}) {
         default: {
           let extraSidebar = {};
           if (page.frontmatter.type === 'session') {
+            // A hub whose body is withheld (#276) takes its NPCs and events from the
+            // Wrap-Up — who actually appeared — since its own links were prep, not play.
+            const wrapUp = hubWrapUps.get(page);
+            const source = wrapUp || page;
             const sessionMentionedNPCs = (pages || []).filter(p =>
               p.frontmatter.type === 'npc' &&
-              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === source.title)
             ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
 
             const sessionEvents = (pages || []).filter(p =>
               p.frontmatter.type === 'event' &&
-              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === page.title)
+              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === source.title)
             ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
 
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
+            if (wrapUp) {
+              // The page shell stays the wiki page's; only the article body is generated.
+              const chapter = chapterOfSession(page, pages);
+              processed.html = sessionBodyHtml(page, { wrapUp, chapter });
+            }
           }
           if (page.frontmatter.type === 'chapter') {
             // All three comparisons below are author-typed `chapter:` ref vs filename-derived
@@ -1113,7 +1143,7 @@ function build(options = {}) {
   }
 
   function buildStory() {
-    const spine = buildStorySpine(pages, linkMap);
+    const spine = buildStorySpine(pages, linkMap, hubWrapUps);
     for (const unit of spine) {
       unit.refsHtml = renderRefsHtml(unit);
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
@@ -1136,9 +1166,38 @@ function build(options = {}) {
   buildStory();
 
   // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus);
+  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps);
   fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
   console.log('  wrote index.html');
+
+  // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
+  // is a decision and never lands here; one in Needs Decision or in no section does.
+  // Split by what publish-played will do with each (its own plan, so this never promises
+  // to publish a session it will only list as unclear): a reviewed one with a Wrap-Up
+  // that pairs and publishes gets ticked; the rest — no Wrap-Up at all (recap-in-hub
+  // vaults), a Wrap-Up not reviewed yet or not publishing, a stale site pin — are asked
+  // about, each with publish-played's own reason.
+  if (unpublishedPlayedSessions.length > 0) {
+    let plan = null;
+    try {
+      const { planPublishPlayed, surveyVault } = require('./manifest-cli');
+      plan = planPublishPlayed(surveyVault({ configPath: resolvedConfigPath }, {}));
+    } catch (_) { /* no plan: promise nothing */ }
+    const reasons = new Map(plan ? plan.unclear.map((u) => [u.path, u.reason]) : []);
+    const titles = (list) => list.map((s) => s.title).join(', ');
+    const why = (list) => list.map((s) => (reasons.has(s.rel) ? `${s.title} (${reasons.get(s.rel)})` : s.title)).join(', ');
+    const plural = (n, one, many) => (n === 1 ? one : many);
+    const withWrap = plan ? unpublishedPlayedSessions.filter((s) => plan.ticks.has(s.rel)) : [];
+    const without = unpublishedPlayedSessions.filter((s) => !withWrap.includes(s));
+    if (withWrap.length > 0) {
+      const n = withWrap.length;
+      console.warn(`  WARNING: ${n} played session${plural(n, '', 's')} with a Wrap-Up ${plural(n, "isn't", "aren't")} published yet: ${titles(withWrap)} — \`manifest publish-played\` (run by publish-site before every build) will publish ${plural(n, 'it', 'them')}.`);
+    }
+    if (without.length > 0) {
+      const n = without.length;
+      console.warn(`  WARNING: ${n} played session${plural(n, " isn't", "s aren't")} published yet and need${plural(n, 's', '')} the GM's say: ${why(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
+    }
+  }
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);
