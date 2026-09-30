@@ -471,3 +471,18 @@ describe('getExploreDescriptions', () => {
     assert.ok(d.factions.includes('Corporations'));
   });
 });
+
+describe('statusLabel (In Memoriam labels)', () => {
+  const { statusLabel } = require('../../lib/templates/landing');
+  const { OUT_OF_PLAY_STATUSES } = require('../../lib/pc-status');
+  it('never labels an out-of-play status "Active"', () => {
+    for (const s of OUT_OF_PLAY_STATUSES) {
+      assert.notStrictEqual(statusLabel(s), 'Active', s);
+      assert.notStrictEqual(statusLabel(` ${s.toUpperCase()} `), 'Active', s);
+    }
+  });
+  it('labels in-play and absent statuses "Active"', () => {
+    assert.strictEqual(statusLabel('active'), 'Active');
+    assert.strictEqual(statusLabel(undefined), 'Active');
+  });
+});

@@ -68,3 +68,16 @@ test('buildSearchIndex: a term only after character 500 of the body is searchabl
   assert.strictEqual(search.runSearch(idx, 'zephyrine', lunr)[0].ref, 'sessions/s1.html');
   assert.strictEqual(search.runSearch(idx, 'zephyrin', lunr)[0].ref, 'sessions/s1.html');
 });
+
+test('runSearch: an exact hit in a long body outranks a fuzzy-only title hit', () => {
+  // With many short pages, BM25 length normalisation shrinks a long body's score, and the
+  // boosted title field let a one-letter-off title win the combined query.
+  const fillers = Array.from({ length: 30 }, (_, i) => ({ path: `npcs/f${i}.html`, title: `Filler ${i}`, body: `a short note ${i}` }));
+  const { lunr, idx } = buildIdx([
+    { path: 'npcs/marlow.html', title: 'Marlow Quill' },  // matches "Marlew" only fuzzily
+    { path: 'sessions/s1.html', title: 'Session One', body: 'the rain fell. '.repeat(400) + 'They met Marlew at the docks.' },
+    ...fillers,
+  ]);
+  const refs = search.runSearch(idx, 'Marlew', lunr).map((h) => h.ref);
+  assert.deepStrictEqual(refs, ['sessions/s1.html', 'npcs/marlow.html']);
+});

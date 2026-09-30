@@ -20,12 +20,16 @@ function formatDate(dateStr) {
 }
 
 
+// Label for an In Memoriam card. Every out-of-play status (lib/pc-status.js) gets one, so a
+// fallen PC is never labelled "Active".
 function statusLabel(status) {
-  if (!status) return 'Active';
-  const s = String(status).toLowerCase();
-  if (s === 'dead' || s === 'deceased') return 'KIA';
+  const s = String(status || '').trim().toLowerCase();
+  if (s === 'dead' || s === 'deceased' || s === 'kia') return 'KIA';
   if (s === 'missing' || s === 'unknown') return 'MIA';
   if (s === 'retired') return 'Retired';
+  if (s === 'departed') return 'Departed';
+  if (s === 'inactive') return 'Inactive';
+  if (s === 'npc') return 'Now an NPC';
   return 'Active';
 }
 
@@ -285,4 +289,4 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus)
   });
 }
 
-module.exports = { landingTemplate, formatDate };
+module.exports = { landingTemplate, formatDate, statusLabel };

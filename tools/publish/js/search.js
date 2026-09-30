@@ -29,9 +29,9 @@
     return q.normalize ? q.normalize('NFC') : q;
   }
 
-  // Typo-tolerant search (#267). Each term is matched three ways and the scores add up:
-  // exact (boost 10), prefix `term*` (boost 5) and fuzzy edit-distance 1 (boost 1), so exact
-  // and prefix hits always outrank fuzzy ones. Fuzzy only applies from MIN_FUZZY_LENGTH
+  // Typo-tolerant search (#267). Each term is matched three ways: exact (boost 10), prefix
+  // `term*` (boost 5) and fuzzy edit-distance 1; exact and prefix hits are always listed
+  // before fuzzy-only ones (see runSearch). Fuzzy only applies from MIN_FUZZY_LENGTH
   // characters: at edit distance 1 a 3-letter word matches most other 3-letter words
   // ("cat" ~ "bat", "cap", "car") and floods the list with junk, while from 4 characters a
   // one-letter slip in a name ("Aldric" for "Alderic") lands on very few unrelated terms.
@@ -49,17 +49,32 @@
     return terms;
   }
 
+  // Lunr sums field scores, and the title field is boosted, so in one combined query a
+  // fuzzy-only title hit could outrank an exact hit in a long page body. Run the exact and
+  // prefix match first and list its results in score order, then append the fuzzy-only
+  // results (those the first pass didn't find), also in score order.
   function runSearch(idx, rawQuery, lunrLib) {
     var terms = queryTerms(rawQuery, lunrLib);
     if (terms.length === 0) return [];
     try {
-      return idx.query(function(q) {
+      var strict = idx.query(function(q) {
+        terms.forEach(function(term) {
+          q.term(term, { boost: 10 });
+          q.term(term, { boost: 5, usePipeline: false, wildcard: lunrLib.Query.wildcard.TRAILING });
+        });
+      });
+      var fuzzyTerms = terms.filter(function(t) { return t.length >= MIN_FUZZY_LENGTH; });
+      if (fuzzyTerms.length === 0) return strict;
+      var seen = {};
+      strict.forEach(function(r) { seen[r.ref] = true; });
+      var fuzzy = idx.query(function(q) {
         terms.forEach(function(term) {
           q.term(term, { boost: 10 });
           q.term(term, { boost: 5, usePipeline: false, wildcard: lunrLib.Query.wildcard.TRAILING });
           if (term.length >= MIN_FUZZY_LENGTH) q.term(term, { boost: 1, editDistance: 1 });
         });
-      });
+      }).filter(function(r) { return !seen[r.ref]; });
+      return strict.concat(fuzzy);
     } catch (e) {
       return [];
     }
