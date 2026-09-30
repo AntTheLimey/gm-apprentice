@@ -683,6 +683,130 @@ describe('manifest publish-played answers for the site\'s pinned tool (#277 fina
   });
 });
 
+// Review of #278: session-wrapup's "Publish now?" registers one unreviewed session through
+// publish-played, so the pairing and the site-pin checks still hold; only the review state
+// is waived, and only for the named session.
+describe('manifest publish-played --session --include-unreviewed (#278)', () => {
+  function draftVault() {
+    const vault = copyVault('auto-exclude');
+    const hubPath = path.join(vault, 'Sessions', 'Played Session.md');
+    fs.writeFileSync(hubPath, fs.readFileSync(hubPath, 'utf8').replace('status: played', 'status: wrap-up'));
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
+      '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: DRAFT\n---\n\n## Recap\n\nDone.\n');
+    // Another played session with a DRAFT Wrap-Up: --session must leave it alone.
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Other Session.md'),
+      '---\ntype: session\nsession_number: 5\nstatus: wrap-up\n---\n\n## Notes\n\nOther.\n');
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 05 - Wrap-Up.md'),
+      '---\ntype: session_wrap\nsession: "[[Other Session]]"\ncanon_status: DRAFT\n---\n\n## Recap\n\nEarlier.\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', ''].join('\n'));
+    return vault;
+  }
+  function pinnedSite(vault, version) {
+    const site = siteFor(vault);
+    const pkg = path.join(site.dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version }));
+    return site;
+  }
+  async function run(configPath, extra) {
+    const c = capture();
+    const rc = await runManifest(Object.assign({ verb: 'publish-played', configPath, json: true }, extra), c.deps);
+    return { rc, c, payload: rc === 0 ? JSON.parse(c.text()) : null };
+  }
+  const session = 'Sessions/Played Session.md';
+
+  it('ticks the named unreviewed session and its Wrap-Up, and nothing else', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { rc, payload } = await run(configPath, { session, includeUnreviewed: true });
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(payload.published, ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
+    assert.deepStrictEqual(payload.unclear, []);
+    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8');
+    assert.doesNotMatch(written, /Other Session|Session 05/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('without --include-unreviewed the named DRAFT session stays unclear', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.deepStrictEqual(payload.unclear.map((u) => u.path), [session]);
+    assert.match(payload.unclear[0].reason, /^Wrap-Up not reviewed yet/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('on a stale site pin it ticks no index and says why', async () => {
+    const vault = draftVault();
+    const site = pinnedSite(vault, '1.11.39');
+    const { payload } = await run(site.configPath, { session, includeUnreviewed: true });
+    assert.ok(!payload.published.includes(session));
+    assert.deepStrictEqual(payload.unclear.map((u) => u.path), [session]);
+    assert.strictEqual(payload.unclear[0].reason, 'site is pinned to 1.11.39; update the pin before publishing sessions');
+    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8');
+    assert.doesNotMatch(written, /- \[x\] Sessions\/Played Session\.md/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('with no Wrap-Up that pairs it ticks nothing and says why', async () => {
+    const vault = draftVault();
+    fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session, includeUnreviewed: true });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.deepStrictEqual(payload.unclear.map((u) => u.path), [session]);
+    assert.match(payload.unclear[0].reason, /no Wrap-Up linked/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('when the Wrap-Up will not publish it ticks nothing and says why', async () => {
+    const vault = draftVault();
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      ['---', 'mode: player', '---', '', '## Excluded (1 files)', '', '- [x] Sessions/Session 06 - Wrap-Up.md', ''].join('\n'));
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session, includeUnreviewed: true });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.match(payload.unclear[0].reason, /^Wrap-Up is Excluded/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a path that is not a played session index is reported, not ticked', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { payload, c } = await run(configPath, { session: 'Sessions/Planned Session.md', includeUnreviewed: true });
+    assert.deepStrictEqual(c.writes, {});
+    assert.deepStrictEqual(payload.published, []);
+    assert.match(payload.unclear[0].reason, /not a played session/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a path that matches no vault file is an error and nothing is written', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { rc, c } = await run(configPath, { session: 'Sessions/Nope.md', includeUnreviewed: true });
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(c.writes, {});
+    assert.match(c.text(), /no such file in the vault: Sessions\/Nope\.md/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--include-unreviewed without --session is an error', async () => {
+    const vault = draftVault();
+    const { configPath } = siteFor(vault);
+    const { rc, c } = await run(configPath, { includeUnreviewed: true });
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(c.writes, {});
+    assert.match(c.text(), /--include-unreviewed needs --session/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
 // Review of #276/#277: publish-played ticks a hub only when session-hub.js pairs it with
 // a Wrap-Up that will publish — the one pairing rule — so a ticked hub's body is always
 // withheld. Each variant is a way the old loose matcher ticked a hub whose body then

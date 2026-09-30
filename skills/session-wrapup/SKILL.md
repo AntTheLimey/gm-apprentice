@@ -268,8 +268,11 @@ Run `shared/reconcile.md`; on approval it promotes the session to
 status `wrap-up` (session-prep runs reconcile as a fallback), and
 don't publish an unreviewed Wrap-Up silently. In a vault where step
 6.1 applies, ask once: "Publish the Wrap-Up now, or after
-reconcile?" Only on "now", tick the index and its Wrap-Up yourself
-with `node "$TOOL" manifest apply --config <site_dir>/vault.config.json
---publish "<index>" --publish "<wrap-up>"` (`$TOOL` as in
-publish-site) and report them. `publish-played` won't: it ticks only
-reviewed sessions.
+reconcile?" Only on "now", run `node "$TOOL" manifest publish-played
+--config <site_dir>/vault.config.json --session "<index>"
+--include-unreviewed` (`$TOOL` as in publish-site; `<index>` relative
+to the vault). It waives only the review check for this one session:
+it still ticks the index only with a Wrap-Up that pairs with it and
+will publish, on a current site pin. Report what it ticked; if it
+lists the session as unclear, tell the GM its reason and tick nothing
+else.

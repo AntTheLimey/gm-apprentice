@@ -61,11 +61,16 @@ Excluded entries and does nothing without a manifest in player mode.
 Report the paths it ticked. Every other played session is listed as
 "unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
 that is Excluded or won't publish, or a stale site pin). Ask the GM
-once, in one question listing them with their reasons, and tick only
-the approved ones with `manifest apply --publish`. Don't tick them
-silently; if the GM says "not yet", leave them and don't ask again in
-this run. When a reason says the site is pinned to an older tool,
-offer `update-pin --site <dir>` first. The build itself stays read-only
+once, in one question listing them with their reasons. Register each
+approved one with `manifest publish-played --config
+<dir>/vault.config.json --session "<index>" --include-unreviewed`: it
+waives only the review check, so a session with no Wrap-Up that will
+publish, or on a stale pin, stays unclear and you relay why. Never tick
+a session index with `manifest apply`: that publishes its body. If an
+approved session's Wrap-Up is Excluded, `manifest apply --publish
+"<wrap-up>"` first. Don't tick them silently; if the GM says "not yet",
+leave them and don't ask again in this run. When a reason says the site
+is pinned to an older tool, offer `update-pin --site <dir>` first. The build itself stays read-only
 on the vault, so this lives in the skill, not in `build`/`deploy`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
@@ -105,6 +110,8 @@ from `publish.setup_progress`). Don't improvise or skip steps.
 3. `node "$TOOL" manifest diff --config <dir>/vault.config.json`.
    If it lists New/Removed files, present them; after the GM
    confirms, `node "$TOOL" manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"... --prune`.
+   Leave played session indexes out of `--publish`: `publish-played`
+   (above) registers them.
 4. `node "$TOOL" deploy --verify --config <dir>/vault.config.json`
    — relay its final line verbatim. On a non-zero exit, go to
    capability 3. Missing Cloudflare credentials are explained

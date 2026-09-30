@@ -1052,7 +1052,9 @@ own (#277). No frontmatter changes.
   ticked. For played sessions it lists as unclear (no Wrap-Up, Wrap-Up
   not reviewed yet, one that is Excluded or won't publish, or a site
   still pinned below 1.11.40), ask the GM once, in one question listing
-  the reasons, and tick only what they approve. Never touch Excluded.
+  the reasons, and register only what they approve with `manifest
+  publish-played --session "<index>" --include-unreviewed` (as
+  publish-site does). Never touch Excluded.
 
 ### Tooling
 
@@ -1064,7 +1066,9 @@ own (#277). No frontmatter changes.
   not published yet. Reconcile and publish-site now run `manifest
   publish-played` themselves; it ticks only reviewed sessions, so a
   Wrap-Up the GM chose to publish before reconcile is ticked with
-  `manifest apply --publish` instead. A site pinned below 1.11.40
+  `manifest publish-played --session "<index>" --include-unreviewed`,
+  which keeps the pairing and site-pin checks. Never tick a session
+  index with `manifest apply`. A site pinned below 1.11.40
   publishes every index body, so publish-played ticks no index for it.
   If `publish.site_dir` is set (relative to the vault if relative),
   offer `update-pin --site <site-dir>` (publish-site's build tool)

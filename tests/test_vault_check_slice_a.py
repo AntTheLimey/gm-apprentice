@@ -679,6 +679,17 @@ class SessionsManifestTests(unittest.TestCase):
             self.assertIn(f"publish-site will ask the GM ({reason})", row)
             self.assertNotIn("will register", row)
 
+    def test_a_session_the_tool_neither_ticks_nor_asks_about_points_at_session(self):
+        # Review of #278: the fallback never says to `manifest apply --publish` a
+        # session index, which would bypass pairing and the site-pin gate.
+        vault = self.vault(self.NEEDS)
+        stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [], "unclear": []})
+        row = rows_for(self.missing(vault), f"\t{self.INDEX}\t")[0]
+        self.assertNotIn("manifest apply", row)
+        self.assertIn(f'manifest publish-played --session "{self.INDEX}"',
+                      row)
+
     def test_the_python_heuristic_no_longer_names_a_wrap_up(self):
         # The folder/number guess named this Wrap-Up; the tool, asked, pairs
         # nothing and ticks nothing, so there is no Wrap-Up row.

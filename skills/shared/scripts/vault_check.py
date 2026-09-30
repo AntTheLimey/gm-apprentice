@@ -1010,8 +1010,8 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
         reason = asks.get(canon) or wraps.get(canon)
         if reason:
             return f"{head}; publish-site will ask the GM ({reason})"
-        return (f"{head}; publish-played won't register it, so publish it "
-                f"with gm-publish manifest apply --publish if it should")
+        return (f"{head}; publish-played won't register it — run gm-publish "
+                f"manifest publish-played --session \"{rel}\" to see why")
 
     for rel in waiting:
         rows.append(row(rel, "played session"))

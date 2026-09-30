@@ -23,9 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1.11.40 counts as older), which publishes every index body, no index
   is ticked; its reviewed Wrap-Up still is. Reconcile runs it and reports the unclear list;
   publish-site runs it before every build and asks the GM, once, about
-  unclear sessions. When the GM publishes a Wrap-Up before a deferred
-  reconcile, session-wrapup ticks it with `manifest apply --publish`.
-  Excluded entries are never touched.
+  unclear sessions. `--session "<index>" --include-unreviewed` handles
+  one session the GM chose to publish before reconcile (session-wrapup's
+  "Publish now?", or an unclear session the GM approves in
+  publish-site): it waives only the review check, so the pairing and
+  site-pin checks still hold, and it reports why if it ticks nothing. No
+  skill ticks a session index with `manifest apply` any more. Excluded
+  entries are never touched.
 - **`explain --all --json`** lists every vault file with whether it
   publishes and whether its body does, in one run.
 - **A session index template** (#276), `_Template_Session.md`:
