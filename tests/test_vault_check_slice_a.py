@@ -488,6 +488,69 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertEqual(vc.check_sessions(vault),
                          ["INFO\t(vault)\tno session indexes found"])
 
+    # #276: once a session has a Wrap-Up the site withholds the hub body, so
+    # bookkeeping there leaks nothing — but it is in the wrong document.
+    HUB = ("---\ntype: session\nsession_number: 1\nstatus: wrap-up\n"
+           "documents:\n  wrap_up: \"[[Chapter_01_Session_01_Wrap_Up]]\"\n"
+           "---\n\n# Session 01 - Lone\n\n")
+    WRAP = ("---\ntype: session_wrap\nsession: \"[[Session 01 - Lone]]\"\n"
+            "canon_status: DRAFT\n---\n")
+
+    def hub_vault(self, body, wrap=True, hub=None):
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(
+            (hub or self.HUB) + body, encoding="utf-8")
+        if wrap:
+            (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+                self.WRAP, encoding="utf-8")
+        return vault
+
+    def test_hub_bookkeeping_is_an_info_naming_where_it_belongs(self):
+        vault = self.hub_vault(
+            "- Plan: [[Session 01 - Lone - Plan]]\n\n## Scene Index\n\n"
+            "| Scene | State |\n|---|---|\n| [[Churchyard]] | contingency |\n")
+        rows = [r for r in vc.check_sessions(vault)
+                if "session index body" in r]
+        self.assertEqual(len(rows), 1, rows)
+        row = rows[0]
+        self.assertTrue(row.startswith("INFO\tSession 01 - Lone.md:11\t"), row)
+        self.assertIn("5 line(s) outside a gm-only fence", row)
+        self.assertIn("frontmatter `documents:`", row)
+        self.assertIn("go in the Plan", row)
+        self.assertIn("fenced ## GM Notes", row)
+        self.assertNotIn("handoffs", row)
+
+    def test_template_shaped_hub_is_clean(self):
+        # H1, the template's comment, and a fenced GM Notes dashboard.
+        vault = self.hub_vault(
+            "<!-- Metadata only. -->\n\n<!-- gm-only -->\n## GM Notes\n\n"
+            "- Key prep: [[Standing_Situations]] — Keeper-only\n"
+            "<!-- /gm-only -->\n")
+        self.assertFalse(rows_for(vc.check_sessions(vault),
+                                  "session index body"))
+
+    def test_hub_without_a_wrap_up_is_not_flagged(self):
+        # No Wrap-Up: the hub body is the session's published record.
+        hub = "---\ntype: session\nsession_number: 1\nstatus: played\n---\n\n"
+        vault = self.hub_vault("The party arrived at dusk.\n", wrap=False,
+                               hub=hub)
+        self.assertFalse(rows_for(vc.check_sessions(vault),
+                                  "session index body"))
+
+    def test_wrap_up_paired_only_by_number_is_not_flagged(self):
+        # The site pairs only by an explicit link, so a number match alone
+        # leaves the body publishing — not the case this row describes.
+        hub = "---\ntype: session\nsession_number: 1\nstatus: played\n---\n\n"
+        vault = make_vault(self)
+        (vault / "Session 01 - Lone.md").write_text(
+            hub + "Prose recap.\n", encoding="utf-8")
+        (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
+            "---\ntype: session_wrap\nsession_number: 1\n---\n",
+            encoding="utf-8")
+        rows = vc.check_sessions(vault)
+        self.assertTrue(rows_for(rows, "derived=wrap-up"), rows)
+        self.assertFalse(rows_for(rows, "session index body"), rows)
+
     def test_cli_emits_the_section_and_all_includes_it(self):
         proc = run_cli(FIXTURES / "sessions", "sessions")
         self.assertEqual(proc.returncode, 0, proc.stderr)

@@ -1059,24 +1059,33 @@ def _js_strip_comments(lines: list[str]) -> list[str]:
         if fence is not None or m:
             out.append(line)
             continue
-        kept, i = "", 0
-        while i < len(line):
-            if in_comment:
-                end = line.find("-->", i)
-                if end == -1:
-                    break
-                in_comment, i = False, end + 3
-            else:
-                start = line.find("<!--", i)
-                if start == -1:
-                    kept += line[i:]
-                    break
-                kept += line[i:start]
-                in_comment, i = True, start + 4
+        kept, in_comment = strip_comment_spans(line, in_comment)
         if not kept.strip() and line.strip():
             continue
         out.append(kept)
     return out
+
+
+def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:
+    """One line with its HTML comment spans removed, as `stripHtmlComments`
+    leaves it: (kept text, whether a comment is still open at line end).
+    The step `_js_strip_comments` takes per line, shared so a check that
+    needs line numbers reads comments exactly as the publisher does."""
+    kept, i = "", 0
+    while i < len(line):
+        if in_comment:
+            end = line.find("-->", i)
+            if end == -1:
+                break
+            in_comment, i = False, end + 3
+        else:
+            start = line.find("<!--", i)
+            if start == -1:
+                kept += line[i:]
+                break
+            kept += line[i:start]
+            in_comment, i = True, start + 4
+    return kept, in_comment
 
 
 def _js_filter_sections(lines: list[str], excludes: Iterable[str]

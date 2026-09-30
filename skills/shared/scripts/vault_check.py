@@ -96,6 +96,11 @@ player-facing section boundary gets its frontmatter backfilled and
 its body left alone, for the GM to fix by hand; filename renames
 are never automatic.
 
+`sessions` derives each session's status from its chain documents. For
+a session index whose Wrap-Up is explicitly linked (so the site
+withholds the index body), it also reports body lines outside a gm-only
+fence as INFO, naming the document each kind belongs in.
+
 `wrapup` and `gm-leak` are the commands that can write. Each prints
 its findings first and then a repair row per action — `WOULD-FIX` on
 a dry run, `FIXED` when `--fix` applies them; `wrapup` also prints
@@ -158,6 +163,7 @@ from vaultlib import (  # noqa: F401
     body_text,
     parse_publish_list,
     publisher_lines,
+    strip_comment_spans,
     read_publish_list,
     read_publish_scalar,
     resolve_exclude_sections,
@@ -953,6 +959,55 @@ def manifest_rows(vault: Path, played: list[tuple[str, str | None]]
     return rows
 
 
+HUB_HOMES = (
+    (re.compile(r"plan\s*\]\]|play[ _-]?notes|wrap[ _-]?up", re.IGNORECASE),
+     "document links go in frontmatter `documents:`"),
+    (re.compile(r"scene index|key prep|image prompt|contingency|premise",
+                re.IGNORECASE),
+     "scene prep, key prep and image prompts go in the Plan"),
+    (re.compile(r"handoff", re.IGNORECASE),
+     "handoffs go in the Wrap-Up's fenced ## GM Notes"),
+)
+
+
+def _hub_body_rows(rel: str, text: str) -> list[str]:
+    """An INFO row when a session index that has a Wrap-Up holds anything
+    in its body but the H1 title outside a gm-only fence (#276).
+
+    INFO, not WARNING: once the session has a published Wrap-Up the site
+    withholds the hub body, so nothing leaks. It is still bookkeeping in
+    the wrong document — the skills that need it read the Plan and the
+    Wrap-Up, not the hub — so the row names where each kind belongs.
+    Comments are read as the publisher reads them (`strip_comment_spans`),
+    so the template's own comment line is not prose. The caller gates on
+    the Wrap-Up: without one the body is the session's only published
+    record, and prose there is expected.
+    """
+    states, _problems = scan_body(text, ())
+    loose: list[LineState] = []
+    in_comment = False
+    for s in states:
+        if s.gm_depth or s.spoiler_depth or s.marker is not None:
+            continue
+        if s.in_code:
+            if s.line.strip():
+                loose.append(s)
+            continue
+        kept, in_comment = strip_comment_spans(s.line, in_comment)
+        if kept.strip() and not (s.heading is not None and s.heading[0] == 1):
+            loose.append(s)
+    if not loose:
+        return []
+    body = "\n".join(s.line for s in loose)
+    homes = [home for pattern, home in HUB_HOMES if pattern.search(body)]
+    homes.append("anything the Keeper keeps on the hub goes under a fenced "
+                 "## GM Notes (see _Templates/_Template_Session.md)")
+    return [f"INFO\t{rel}:{loose[0].lineno}\tsession index body has "
+            f"{len(loose)} line(s) outside a gm-only fence — the site "
+            f"withholds it now the session has a Wrap-Up, and the hub is "
+            f"metadata only: {'; '.join(homes)}"]
+
+
 def check_sessions(vault: Path) -> list[str]:
     """Derive each session's status from the documents that exist.
 
@@ -1047,6 +1102,14 @@ def check_sessions(vault: Path) -> list[str]:
                         f"--set status={derived}")
         rows.extend(broken)
         rows.extend(unlinked)
+        # The site withholds the hub body only for a Wrap-Up it can pair by
+        # an explicit link — `documents.wrap_up`, or the Wrap-Up's own
+        # `session:` — never by number (tools/publish/lib/session-hub.js).
+        said = wikilink_target(by_rel.get(wrap, {}).get("session")) if wrap else ""
+        doc_link = wikilink_target(documents.get("wrap_up"))
+        if wrap and ((doc_link and doc_link.casefold() not in YAML_NULLS)
+                     or (said and link_target(said) == normalize(stem))):
+            rows.extend(_hub_body_rows(rel, text))
         if declared.casefold() in PLAYED_STATUSES:
             played.append((rel, wrap))
     rows.extend(manifest_rows(vault, played))
