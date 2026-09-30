@@ -141,23 +141,34 @@ function bySessionNumber(a, b) {
     || (new Date(a.frontmatter.play_date || 0)) - (new Date(b.frontmatter.play_date || 0));
 }
 
-// Every session page in story order: chapters by sort_order, then each chapter's sessions
-// by session_number (play_date breaks ties) — the order buildStorySpine walks. Numbering
-// restarts per chapter, so session_number alone would interleave them. A session no
-// chapter owns follows, in number order. Cached per `pages` array.
+// The prev/next order sessions always had: sort_order, else session_number, stable.
+function sessionNavKey(p) {
+  return p.frontmatter.sort_order || p.frontmatter.session_number || 0;
+}
+
+// Every session page in prev/next order. The old order (sessionNavKey across the whole
+// vault) interleaved chapters, because numbering restarts per chapter: Ch1 S1, Ch2 S1,
+// Ch1 S2… So the sessions a chapter owns are regrouped chapter by chapter (chapters by
+// sort_order, each chapter's sessions by sessionNavKey), and put back into the slots
+// chaptered sessions held in the old order. A session no chapter owns keeps its old slot
+// — a "Session 0" prologue stays first — and a vault with no chapters keeps exactly the
+// order it had. Cached per `pages` array.
 const sessionOrders = new WeakMap();
 function orderedSessions(pages) {
   let order = sessionOrders.get(pages);
   if (order) return order;
-  const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
+  const old = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session')
+    .sort((a, b) => sessionNavKey(a) - sessionNavKey(b));
   const seen = new Set();
-  order = [];
+  const chaptered = [];
   for (const chapter of sortedChapters(pages)) {
-    for (const s of sessions.filter(x => chapterOwnsSession(chapter, x)).sort(bySessionNumber)) {
-      if (!seen.has(s)) { seen.add(s); order.push(s); }
+    for (const s of old.filter(x => !seen.has(x) && chapterOwnsSession(chapter, x))) {
+      seen.add(s);
+      chaptered.push(s);
     }
   }
-  order.push(...sessions.filter(s => !seen.has(s)).sort(bySessionNumber));
+  let next = 0;
+  order = old.map(s => (seen.has(s) ? chaptered[next++] : s));
   sessionOrders.set(pages, order);
   return order;
 }
