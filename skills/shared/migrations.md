@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.17"
+current_version: "1.10.18"
 ---
 
 # Vault Migration Registry
@@ -1011,3 +1011,48 @@ changes shape; one new optional publish setting.
   can drop that step.
   If `publish.site_dir` is set, offer `update-pin --site <site-dir>`
   (publish-site's build tool).
+
+## Migration: 1.10.17 → 1.10.18
+
+Session index pages stop publishing their bodies once the session has a
+Wrap-Up (#276), and played sessions reach the publish manifest on their
+own (#277). No frontmatter changes.
+
+### Structural
+
+- Copy `_Templates/_Template_Session.md` from
+  `shared/templates/session.md` if the vault has no session template.
+
+### Content
+
+- Nothing is required: once the site is rebuilt, a session index whose
+  Wrap-Up is linked (its `documents.wrap_up`, or the Wrap-Up's own
+  `session:`) and published no longer publishes its body. Indexes
+  without a Wrap-Up publish exactly as before; some vaults keep their
+  recaps there.
+- Optional tidy, one index at a time and only on the GM's yes: run
+  `vault_check.py <vault> sessions`, and for each "session index body"
+  INFO row show the body and propose where each part belongs: document
+  links into `documents:`, the Scene Index, key prep, image prompts and
+  premise into the Plan, handoffs into the Wrap-Up's fenced GM Notes,
+  anything left under a fenced `## GM Notes` on the index. Show the diff
+  before moving anything.
+- If the vault publishes in player mode, run `manifest publish-played`
+  once. It ticks every played session that has a Wrap-Up (and the
+  Wrap-Up) under Publishing; report what it ticked. For played sessions
+  it lists as unclear (no Wrap-Up yet), ask the GM once, in one
+  question, and tick only what they approve. Never touch Excluded.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.40: session pages with a published
+  Wrap-Up are built from the index's frontmatter and the Wrap-Up's recap
+  (badges, title and page wrapper unchanged); previous/next session links
+  follow story order; `manifest publish-played` is new; the build ends
+  with one line naming played sessions that are not published yet.
+  session-wrapup, reconcile and publish-site now run `manifest
+  publish-played` themselves. If `publish.site_dir` is set, offer
+  `update-pin --site <site-dir>` (publish-site's build tool).
+- `vault_check sessions` warns on played sessions missing from
+  Publishing and notes bookkeeping in index bodies the site withholds;
+  `vault_check gm-leak` no longer reports those withheld bodies.
