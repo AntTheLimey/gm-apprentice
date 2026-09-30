@@ -1421,8 +1421,16 @@ class RenestReviewRegressionTests(unittest.TestCase):
 
     def test_still_published_names_the_heading(self):
         self.assertEqual(
-            vc._still_published("## Keeper\nx\n", ["GM Notes"], {},
-                                ["Keeper"]), "Keeper")
+            vc._still_published("## Keeper\nx\n", "## Keeper\nx\n",
+                                ["GM Notes"], {}, ["Keeper"]), "Keeper")
+
+    def test_still_published_counts_same_named_headings(self):
+        # One `## Context` moved, one `### Context` of the handout text
+        # stays: nothing still publishes that moved (#281 review).
+        old = "### Context\na\n## Context\nb\n"
+        new = "### Context\na\n## GM Notes\n### Context\nb\n"
+        self.assertIsNone(vc._still_published(old, new, ["GM Notes"], {},
+                                              ["Context"]))
 
     # ---- minor: page-title advice -------------------------------------
 
@@ -2730,6 +2738,31 @@ class GmLeakHandoutSectionTests(unittest.TestCase):
         stub_publish_tool(self, vault, stripped={"Chit.md": ["Context"]})
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
                                   "Keeper material"))
+
+    def test_fix_moves_the_h2_and_leaves_an_h3_of_the_same_name(self):
+        # CodeRabbit: the tool withholds `## Context` only; a `### Context`
+        # inside the handout text is the handout's own and stays put.
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(
+            "---\ntype: document\n---\n\n## The Text\n\nDear sir.\n\n"
+            "### Context\n\nPart of the letter.\n\n## Context\n\n"
+            "Keeper analysis.\n", encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={"Chit.md": ["Context"]})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 1, rows)
+        text = read(vault, "Chit.md")
+        self.assertIn("## The Text\n\nDear sir.\n\n### Context\n\n"
+                      "Part of the letter.", text)
+        self.assertIn("## GM Notes\n\n### Context\n\nKeeper analysis.", text)
+
+    def test_a_closing_sequence_is_part_of_no_title(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(self.CHIT.replace(
+            "## Context\n", "## Context ##\n"), encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 3, rows)
+        self.assertIn("### Context ##", read(vault, "Chit.md"))
 
     def test_no_tool_says_what_went_unchecked(self):
         vault = self.vault()

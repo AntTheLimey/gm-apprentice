@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installed or pinned, predates 1.11.41. The handout workflow and the document
   template now put prop notes and analysis under the fenced
   `## GM Notes`.
+- **A heading with closing hashes escaped the exclude list.**
+  `## GM Notes ##` renders as "GM Notes" but did not match it, so the
+  section published. Closing hashes are no longer part of a title,
+  for `exclude_sections` and the handout rule alike.
 - **`explain --all --json` cut off at 64 KB when piped** (#279). The
   CLI exited before a pipe had drained, so on a large vault
   `vault_check sessions` and `gm-leak` got broken JSON and fell back to

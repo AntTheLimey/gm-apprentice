@@ -162,6 +162,7 @@ from vaultlib import (  # noqa: F401
     WRAP_UP_TYPES,
     LineState,
     active_pc_names,
+    atx_title,
     active_pcs,
     delete_key,
     effective_exclude_sections,
@@ -1847,7 +1848,8 @@ def check_gm_leak(vault: Path, folder: str | None,
         if not heading_leak or renest_excludes:
             continue
         moved, new_text, refusal = _plan_gm_leak_fix(
-            vault, rel, fm, excludes, excludes, match | own_strips, excludes)
+            vault, rel, fm, excludes, excludes, match, excludes,
+            h2_match=own_strips)
         if refusal:
             rows.append(f"ERROR\t{rel}\tre-nest refused: {refusal} — "
                         f"nothing written")
@@ -3006,7 +3008,8 @@ def leak_problem(before: str, before_excludes: list[str], after: str,
 
 
 def renest_gm_leak(text: str, match: set[str], excludes: list[str],
-                   kept: set[int] | None = None
+                   kept: set[int] | None = None,
+                   h2_match: set[str] | frozenset[str] = frozenset()
                    ) -> tuple[str, list[str], str | None]:
     """(new text, titles moved, refusal) — the 1.8.3 migration's
     structural re-nest, generalised from Session Wrap-Ups to any entity
@@ -3019,6 +3022,9 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
     `--renest-excludes` passes `["GM Notes"]` and the pre-collapse list,
     so every exact title outside `## GM Notes` moves. Keyword-only
     WARNING headings never match, and a level-1 heading never moves.
+    `h2_match` (casefolded) moves only at level 2: the sections the
+    publish tool withholds by its own rule, which it matches only there
+    (#280) — a `### Context` inside the handout text is not one.
 
     A moved block runs to the next heading at its level or shallower
     *at fence depth 0* — never ending while a gm-only/spoiler fence it
@@ -3041,7 +3047,11 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
         return (s.heading is not None and s.heading[0] >= 2
                 and not s.in_code and s.published
                 and (kept is None or s.lineno in kept)
-                and _plain_title(s.heading[1]).casefold() in match)
+                and (_plain_title(s.heading[1]).casefold() in match
+                     or (s.heading[0] == 2 and (
+                         s.heading[1].casefold() in h2_match
+                         or _plain_title(s.heading[1]).casefold()
+                         in h2_match))))
 
     def ends_block(s: LineState, level: int) -> bool:
         return (s.heading is not None and not s.in_code
@@ -3125,14 +3135,35 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
     return head + eol.join(new_lines) + tail, moved_titles, None
 
 
-def _still_published(new_text: str, excludes: list[str], fm: dict,
-                     titles: list[str]) -> str | None:
-    """A moved title that the site would still render, or None."""
-    wanted = {t.lower() for t in titles}
-    for line in publisher_lines(new_text, excludes, fm):
+def _published_title_counts(text: str, excludes: list[str],
+                            fm: dict) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for line in publisher_lines(text, excludes, fm):
         m = HEADING_RE.match(line)
-        if m and m.group(2).strip().lower() in wanted:
-            return m.group(2).strip()
+        if m:
+            key = atx_title(m.group(2)).lower()
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _still_published(old_text: str, new_text: str, excludes: list[str],
+                     fm: dict, titles: list[str]) -> str | None:
+    """A moved title that the site would still render, or None.
+
+    Counted, not just looked up: a `### Context` inside a handout's text
+    publishes by design beside the `## Context` that moved (#280), so each
+    moved title must publish exactly as many times fewer as it moved.
+    """
+    before = _published_title_counts(old_text, excludes, fm)
+    after = _published_title_counts(new_text, excludes, fm)
+    moved: dict[str, int] = {}
+    for t in titles:
+        key = atx_title(t).lower()
+        moved[key] = moved.get(key, 0) + 1
+    for key, n in moved.items():
+        if after.get(key, 0) > max(before.get(key, 0) - n, 0):
+            return next(atx_title(t) for t in titles
+                        if atx_title(t).lower() == key)
     return None
 
 
@@ -3150,7 +3181,8 @@ def _h1_target(text: str, match: set[str]) -> str | None:
 def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
                       before_excludes: list[str], after_excludes: list[str],
                       match: set[str], target_excludes: list[str],
-                      always_check: bool = False
+                      always_check: bool = False,
+                      h2_match: set[str] | frozenset[str] = frozenset()
                       ) -> tuple[list[str], str | None, str | None]:
     """`gm-leak`'s mechanical repair, planned for one file.
 
@@ -3173,7 +3205,7 @@ def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
     states, problems = scan_body(text, target_excludes)
     kept = _published_linenos(states, fm)
     new_text, moved, refusal = renest_gm_leak(text, match, target_excludes,
-                                              kept)
+                                              kept, h2_match)
     if refusal:
         return [], None, refusal
     if not always_check and (not moved or new_text == text):
@@ -3199,7 +3231,7 @@ def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
                         "the marker first")
         return [], None, problem
     if moved:
-        still = _still_published(new_text, after_excludes, fm, moved)
+        still = _still_published(text, new_text, after_excludes, fm, moved)
         if still is not None:
             return [], None, f"'{still}' would still publish after the move"
     if not moved or new_text == text:

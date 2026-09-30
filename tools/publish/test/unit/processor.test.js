@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -143,6 +143,12 @@ describe("filterSections on a handout's Keeper sections (#280)", () => {
     for (const t of ['**Context**', '*Prop Notes*', 'Clues:', '__Context:__', '**Context**:', '*Prop Notes*:']) {
       assert.strictEqual(isExcludedSection(t, [], { type: 'document' }), true, t);
     }
+  });
+
+  it('ignores an ATX closing sequence (CodeRabbit: `## Context ##`)', () => {
+    const md = '## Content\nThe letter.\n## Context ##\nSECRET\n## GM Notes ##\nSECRET2\n';
+    assert.strictEqual(filterSections(md, ['GM Notes'], { type: 'document' }), '## Content\nThe letter.');
+    assert.deepStrictEqual(strippedSectionTitles(md, ['GM Notes'], { type: 'document' }), ['Context', 'GM Notes']);
   });
 
   it("treats type: handout as a document", () => {

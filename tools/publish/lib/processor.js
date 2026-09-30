@@ -140,7 +140,9 @@ function walkSections(markdown, excludeSections, frontmatter) {
     const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
-      const title = headingMatch[2].trim();
+      // An ATX closing sequence (`## GM Notes ##`) is not part of the title:
+      // markdown-it renders it as "GM Notes", so it must match as one.
+      const title = headingMatch[2].trim().replace(/\s+#+$/, '').trim();
 
       if (excluding && level <= excludeLevel) {
         excluding = false;
