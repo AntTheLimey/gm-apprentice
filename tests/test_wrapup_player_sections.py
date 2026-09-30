@@ -211,5 +211,68 @@ class WrapupPlayerSectionTests(unittest.TestCase):
         self.assertIn("### Secret Plans", fixed)
 
 
+    # Review of #278: findings and the re-nest read a listed section the
+    # same way, so a pair inside it is judged by one rule.
+
+    CROSSING = WRAP.split("## Narrative Recap")[0] + """## Narrative Recap
+
+Prose.
+
+## What the Party Learned
+
+Known.
+
+<!-- gm-only -->
+
+Secret aside.
+
+## Secret Plans
+
+Plots.
+
+<!-- /gm-only -->
+"""
+
+    ASIDE = WRAP.split("## Narrative Recap")[0] + """## Narrative Recap
+
+Prose.
+
+## What the Party Learned
+
+Known.
+
+<!-- gm-only -->
+An aside the GM fenced.
+<!-- /gm-only -->
+
+More known.
+
+<!-- gm-only -->
+
+## GM Notes
+
+Stuff.
+
+<!-- /gm-only -->
+"""
+
+    def test_a_fence_crossing_out_of_a_listed_section_is_reported(self):
+        rows, fixed = self.run_check(self.CROSSING, LISTED, True)
+        self.assertTrue(any("crosses a player-facing section boundary" in r
+                            for r in rows), rows)
+        self.assertEqual(fixed.split("\n---\n", 1)[1],
+                         self.CROSSING.split("\n---\n", 1)[1])
+        self.assertFalse(any("re-nested" in r for r in rows), rows)
+
+    def test_an_aside_in_a_listed_section_is_not_counted_as_a_second_opener(
+            self):
+        rows, fixed = self.run_check(self.ASIDE, LISTED, False)
+        self.assertFalse(any("openers outside code" in r for r in rows), rows)
+        _rows, fixed = self.run_check(self.ASIDE, LISTED, True)
+        rows, _ = self.run_check(fixed, LISTED, False)
+        self.assertFalse(any("openers outside code" in r for r in rows), rows)
+        self.assertIn("<!-- gm-only -->\nAn aside the GM fenced.", fixed)
+
+
 if __name__ == "__main__":
     unittest.main()

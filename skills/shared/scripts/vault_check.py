@@ -2443,7 +2443,7 @@ def wrapup_structure_findings(rel: str, text: str,
     that never closes or closes without an opener.
     """
     states, problems = scan_body(text, exclude)
-    preserved, crossing = _gm_pair_plan(states)
+    preserved, crossing = _gm_pair_plan(states, player)
     infos = _fence_infos(states)
     out: list[Finding] = []
     for lineno in crossing:
@@ -2663,10 +2663,13 @@ PLAYER_BLOCK_KINDS = ("preamble", "recap", "second-recap", "moments",
                       "player")
 
 
-def _gm_pair_plan(states: list[LineState],
-                  player: frozenset[str] = frozenset()
+def _gm_pair_plan(states: list[LineState], player: frozenset[str]
                   ) -> tuple[set[int], list[int]]:
     """(marker lines to keep verbatim, marker lines that cross a boundary).
+
+    `player` has no default: the findings and the re-nest must read the
+    vault's listed sections the same way, or one reports a crossing (or a
+    second opener) the other never acts on.
 
     The re-nest rebuilds one `<!-- gm-only -->` pair around the GM
     region, and stripping *every* marker first would republish a fenced
