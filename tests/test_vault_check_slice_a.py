@@ -702,6 +702,19 @@ class SessionsManifestTests(unittest.TestCase):
         row = rows_for(rows, f"\t{self.INDEX}\t")
         self.assertNotIn("will register", "".join(row))
 
+    def test_the_wrap_up_of_a_published_session_is_still_reported(self):
+        vault = self.vault(f"## Publishing (1 files)\n\n- [x] {self.INDEX}\n",
+                           status="wrap-up")
+        reason = f"Wrap-Up not reviewed yet ({self.WRAP})"
+        stub_publish_tool(self, vault, mode="player", plan={
+            "applicable": True, "published": [],
+            "unclear": [{"path": self.INDEX, "reason": reason,
+                         "wrapUp": self.WRAP}]})
+        rows = self.missing(vault)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn(f"\t{self.WRAP}\tWrap-Up", rows[0])
+        self.assertIn(f"publish-site will ask the GM ({reason})", rows[0])
+
     def test_listed_under_publishing_is_silent(self):
         self.assertEqual(self.missing(self.vault(
             "## Publishing (2 files)\n\n"

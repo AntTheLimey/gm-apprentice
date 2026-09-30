@@ -965,7 +965,7 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
                 else "no manifest section")
 
     waiting = [rel for rel in played if unlisted(rel)]
-    if not waiting:
+    if not played:
         return []
     answer = ask_publish_tool(vault, ["manifest", "publish-played",
                                       "--dry-run"])
@@ -987,6 +987,8 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
         except (AttributeError, KeyError, TypeError):
             known = False
     rows: list[str] = []
+    if not known and not waiting:
+        return []
     if not known:
         rows.append(_publish_tool_row(
             answer.why or "manifest publish-played did not return the "
