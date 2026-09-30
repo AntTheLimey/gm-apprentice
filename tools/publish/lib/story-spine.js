@@ -2,6 +2,8 @@ const path = require('path');
 const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
+const { publishedWrapUpFor, WRAP_UP_TYPES } = require('./session-hub');
+const { isSessionHub } = require('./processor');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -21,8 +23,6 @@ function findRecap(page, resolve) {
   }
   return null;
 }
-
-const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
 
 // Every `session:`/`chapter:` ref in this file is author-typed and is compared against a
 // filename-derived title through a Map key or `===`. Canonicalizing here (#139) covers the
@@ -92,16 +92,21 @@ function chapterOwnsSession(chapter, session) {
   return chapterMatchesSession(chapter, session);
 }
 
-// The wrap-up for a unit (chapter or session). An explicit session:/chapter: ref
-// match always wins. The same-folder fallback (chapter wrap-up in the chapter folder;
-// session wrap-up in the session's subfolder) only applies when that folder holds
-// exactly ONE wrap-up — in flat vaults every session shares one Sessions/ folder, and
-// a first-match grab there would hand the same wrap-up to every session.
-function wrapUpForUnit(unitPage, wrapUps, idx) {
+// The wrap-up for a unit (chapter or session). For a session it is first the Wrap-Up
+// session-hub.js pairs with it — the one rule that also decides whether the hub body is
+// withheld, so the Saga and the session page tell the same story; for a chapter, a
+// Wrap-Up whose chapter: ref names it. The same-folder fallback (chapter wrap-up in the
+// chapter folder; session wrap-up in the session's subfolder) only applies when that
+// folder holds exactly ONE wrap-up — in flat vaults every session shares one Sessions/
+// folder, and a first-match grab there would hand the same wrap-up to every session.
+// `pages` is the published set publishedWrapUpFor resolves against.
+function wrapUpForUnit(unitPage, wrapUps, idx, pages) {
   const title = canonicalNfc(unitPage.title);
-  const byRef = idx.bySession.get(title)
-    || idx.byChapter.get(title)
-    || idx.byChapter.get(title.replace(/_/g, ' '));
+  const byRef = isSessionHub(unitPage)
+    ? publishedWrapUpFor(unitPage, pages || wrapUps)
+    : idx.bySession.get(title)
+      || idx.byChapter.get(title)
+      || idx.byChapter.get(title.replace(/_/g, ' '));
   if (byRef) return byRef;
   const dir = folderOf(unitPage);
   if (dir) {
@@ -174,7 +179,7 @@ function buildStorySpine(pages, linkMap) {
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
     const chSlug = slugify(chapter.displayTitle || chapter.title);
-    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx);
+    const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx, pages);
     // The chapter recap lands on either story/<chSlug>-intro.html or story/<chSlug>.html;
     // both live in story/, so either path yields the same relative link resolution.
     const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)));
@@ -186,7 +191,7 @@ function buildStorySpine(pages, linkMap) {
     const sessionUnits = [];
     for (const s of chapterSessions) {
       const id = `${chSlug}-${slugify(s.title)}`;
-      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx), resolverFor(unitOutputPath(id)));
+      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pages), resolverFor(unitOutputPath(id)));
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),

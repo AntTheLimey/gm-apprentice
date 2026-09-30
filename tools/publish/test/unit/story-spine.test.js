@@ -264,3 +264,26 @@ describe('wrap-up matching in a flat Sessions/ folder', () => {
     assert.match(spine[0].recapHtml, /Subfolder recap/);
   });
 });
+
+// Review of #276: the Saga takes a session's recap from the Wrap-Up session-hub.js pairs
+// with it — the same rule that withholds the hub body — so a hub linked only through
+// documents.wrap_up, in a flat folder with two Wrap-Ups, keeps its recap.
+describe('buildStorySpine pairs a session with its Wrap-Up through session-hub (#276 review)', () => {
+  it('keeps the recap of a hub paired only by documents.wrap_up beside a second Wrap-Up', () => {
+    const at = (page, dir) => Object.assign(page, { sourcePath: `/v/${dir}/${page.title}.md`, vaultPath: `${dir}/${page.title}` });
+    const pages = [
+      at({ title: 'Chapter_1', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '' }, 'Chapters'),
+      at({ title: 'Session 01', frontmatter: { type: 'session', session_number: 1, chapter: '[[Chapter_1]]',
+        documents: { wrap_up: '[[S1 Wrap]]' } }, markdown: '' }, 'Sessions'),
+      at({ title: 'Session 02', frontmatter: { type: 'session', session_number: 2, chapter: '[[Chapter_1]]',
+        documents: { wrap_up: '[[S2 Wrap]]' } }, markdown: '' }, 'Sessions'),
+      at({ title: 'S1 Wrap', frontmatter: { type: 'session_wrap' }, markdown: '## Narrative Recap\n\nFIRST\n' }, 'Sessions'),
+      at({ title: 'S2 Wrap', frontmatter: { type: 'session_wrap' }, markdown: '## Narrative Recap\n\nSECOND\n' }, 'Sessions'),
+    ];
+    const spine = buildStorySpine(pages);
+    assert.deepStrictEqual(spine.map(u => u.title), ['Session 01', 'Session 02']);
+    assert.match(spine[0].recapHtml, /FIRST/);
+    assert.match(spine[1].recapHtml, /SECOND/);
+  });
+});
+

@@ -205,3 +205,31 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
     });
   });
 });
+
+// Review of #276: two chapters each with a "Session 01 Wrap-Up.md", each hub linking
+// [[Session 01 Wrap-Up]]. The Ch2 session page showed the Ch1 recap; the link must pair
+// with the Wrap-Up in the hub's own chapter.
+describe('same-titled Wrap-Ups in two chapters (#276 review)', () => {
+  it('each session page shows its own chapter recap', () => {
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-dup-wrap-'));
+    const vault = path.join(work, 'vault');
+    const docs = path.join(work, 'docs');
+    for (const c of [1, 2]) {
+      write(vault, `Chapters/Ch${c}/Ch${c}.md`, `---\ntype: chapter\nsort_order: ${c}\n---\n\n# Ch${c}\n`);
+      write(vault, `Chapters/Ch${c}/Session 01 - Ch${c} Start.md`, `---\ntype: session\nsession_number: 1\nchapter: "[[Ch${c}]]"\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Session 01 Wrap-Up]]"\n---\n\nhub body\n`);
+      write(vault, `Chapters/Ch${c}/Session 01 Wrap-Up.md`, `---\ntype: session_wrap\nchapter: "[[Ch${c}]]"\n---\n\n## Narrative Recap\n\nRECAP-OF-CHAPTER-${c}.\n`);
+    }
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Chapters: 'chapters' } }));
+    const log = console.log; const warn = console.warn;
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+    for (const c of [1, 2]) {
+      const html = fs.readFileSync(path.join(docs, `chapters/Ch${c}/session-01-ch${c}-start.html`), 'utf8');
+      assert.deepStrictEqual(html.match(/RECAP-OF-CHAPTER-\d/g), [`RECAP-OF-CHAPTER-${c}`], `Ch${c}`);
+      assert.doesNotMatch(html, /hub body/);
+    }
+    fs.rmSync(work, { recursive: true, force: true });
+  });
+});

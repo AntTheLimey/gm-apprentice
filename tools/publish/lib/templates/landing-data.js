@@ -1,6 +1,7 @@
 const { canonicalNfc, graphemes } = require('../unicode');
 const { parseWikiRef, escapeHtml, publishedSource } = require('../processor');
 const { stripTags } = require('../strip-tags');
+const { publishedWrapUpFor } = require('../session-hub');
 
 function getLatestSession(pages) {
   const played = pages.filter(
@@ -251,12 +252,11 @@ function getLatestWrapUp(pages, session) {
   const refOf = (wu) =>
     canonicalNfc(parseWikiRef(wu.frontmatter.session || wu.title || '').target);
 
-  // An explicit `session:` ref names one session, so it outranks everything below.
-  if (sessionTitle) {
-    for (const wu of wrapUps) {
-      if (refOf(wu) === sessionTitle) return wu;
-    }
-  }
+  // An explicit link — the hub's documents.wrap_up or the Wrap-Up's session: — names one
+  // Wrap-Up, so it outranks everything below. session-hub.js resolves it, the same rule
+  // that withholds the hub body and picks the Saga recap.
+  const paired = publishedWrapUpFor(session, pages);
+  if (paired) return paired;
 
   // Chapters restart session numbering, so a bare session_number match can return
   // ANOTHER chapter's wrap-up (Vienna Session 4 shadowing Calcutta Session 4). A
