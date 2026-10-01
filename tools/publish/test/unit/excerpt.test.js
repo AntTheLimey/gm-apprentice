@@ -165,3 +165,47 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
     assert.strictEqual(excerptFromMarkdown(html), 'Real prose.');
   });
 });
+
+describe('excerptFromMarkdown sentence end', () => {
+  it('does not stop at a title', () => {
+    assert.strictEqual(excerptFromMarkdown('Mr. James Bennet is a clerk. He is quiet.'), 'Mr. James Bennet is a clerk.');
+    assert.strictEqual(excerptFromMarkdown('She met Col. Moreau and Dr. Ward at St. Malo. Then left.'), 'She met Col. Moreau and Dr. Ward at St. Malo.');
+  });
+  it('still stops at the first full stop otherwise', () => {
+    assert.strictEqual(excerptFromMarkdown('A sailor. He owes the Guild.'), 'A sailor.');
+  });
+});
+
+describe('excerptFromMarkdown skipSheetLines', () => {
+  const body = '**Playbook:** Cutter\n\n**Insight**\n\n**ST** 12\n\n- [ ] Major Wound\n\n{A placeholder\nover two lines}\n\n- {unresolved item}\n\nA sailor. More.\n';
+  it('is off by default, so NPC and location quotes are unchanged', () => {
+    assert.strictEqual(excerptFromMarkdown('**Role:** Fence. More.'), 'Role: Fence.');
+  });
+  it('drops label lines, tick-boxes and placeholders when asked', () => {
+    assert.strictEqual(excerptFromMarkdown(body, { skipSheetLines: true }), 'A sailor.');
+  });
+  it('keeps prose that opens with a bold phrase and a year', () => {
+    assert.strictEqual(excerptFromMarkdown('**Born** 1890 in Brest, he became a sailor. More.', { skipSheetLines: true }),
+      'Born 1890 in Brest, he became a sailor.');
+    assert.strictEqual(excerptFromMarkdown('**ST** 12\n\n**Dodge** 9/10\n\nA sailor. More.', { skipSheetLines: true }), 'A sailor.');
+  });
+  it('drops a label whose placeholder runs over two lines', () => {
+    assert.strictEqual(excerptFromMarkdown("**Occupation:** {Describe the\ncharacter's day job}\n\nA sailor. More.", { skipSheetLines: true }),
+      'A sailor.');
+  });
+  it('cannot carry text past an excluded heading inside a placeholder', () => {
+    const leaky = 'Intro { x\n## GM Notes\nfoo } SECRET stuff.';
+    const out = excerptFromMarkdown(leaky, { skipSheetLines: true, excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('SECRET'), out);
+    assert.ok(!out.includes('foo'), out);
+  });
+});
+
+describe('excerptFromMarkdown edge stops', () => {
+  it('does not return a bare stop for text that opens with one', () => {
+    assert.strictEqual(excerptFromMarkdown('. foo'), '. foo');
+  });
+  it('returns the whole text when it ends on a title', () => {
+    assert.strictEqual(excerptFromMarkdown('Hello Mr.'), 'Hello Mr.');
+  });
+});

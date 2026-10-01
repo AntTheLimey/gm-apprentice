@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.22] — 2026-10-01
+
+### Added
+
+- **A PC that publishes with no character sheet is now reported**
+  (#273). Before, such a page went out with an empty Character Sheet
+  tab and nothing said so.
+  - The publish build prints one line, for example
+    `2 PCs published with no character sheet (Alistair Gray, Bryn)`,
+    for every PC whose system has a sheet (CoC, GURPS, D&D, PF2e,
+    FitD) but whose note gave it no stats to place. It names the first
+    eight and counts the rest. Publish tool 1.11.44.
+  - `vault_check pc-body`, which campaign-qa and session-wrapup
+    already run, warns in any system about a PC with no published
+    `## Stat Sheet` section, an empty one, one holding only a "TBD" or
+    a pointer, and one that is still the template's, untouched or but
+    for one line. The build cannot see that last case: a template
+    left at its values renders a sheet of defaults.
+  - A new optional PC field, `sheet_source`, records where a sheet is
+    kept when it is not in the vault (`"D&D Beyond"`,
+    `"paper, with the player"`). With it set none of these warnings
+    fires, the CoC "parsed no characteristics" warning included. The
+    site does not show it unless the PC lists it in `display_meta`.
+    A bare number or date is not a note. A PC published as a stub is
+    not reported either.
+  - The publish tool is the only reader of `sheet_source`
+    (`sheet-source.js`). `explain --all --json` reports it per PC as
+    `sheetSourceSet`, and `pc-body` asks the tool rather than parse
+    the field itself. Where the tool cannot answer (no `site_dir`, no node,
+    a pin below 1.11.44), a `sheet_source` with anything written in it
+    is taken as set, and `pc-body` says so.
+  - session-wrapup, vault-ingest and campaign-qa ask the GM once where
+    such sheets are kept and write `sheet_source` themselves.
+
+### Fixed
+
+- **PC pages lost their pull quote in 1.10.21.** Publish tool 1.11.43
+  stopped excerpting the body whenever a system sheet rendered, to keep
+  FitD's label lines ("Playbook: Cutter Insight Prowess…") out of the
+  quote. That took the quote off every CoC, GURPS, D&D and PF2e PC
+  with no `key_traits`. The excerpt is back for every system. On a PC
+  it now skips the sheet's own lines: bold label lines, tick-boxes and
+  unfilled `{placeholders}`. A PC whose body has no prose still gets
+  no quote. Publish tool 1.11.44.
+- **A pull quote stopped at a title.** "Mr. James Bennet was a poet."
+  was quoted as "Mr.". The first sentence no longer ends at Mr., Mrs.,
+  Dr., St., Col. and the like. This applies to NPC and location quotes
+  and listing-card excerpts too.
+
 ## [1.10.21] — 2026-10-01
 
 ### Fixed

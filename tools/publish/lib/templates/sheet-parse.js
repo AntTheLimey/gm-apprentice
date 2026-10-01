@@ -199,7 +199,18 @@ function featureCards(features) {
   return `<h3>Class Features</h3>\n<div class="card-grid">${items}</div>`;
 }
 
+// Did a sheet built on this module place anything — a tile, an ability card,
+// a skill, a track, an identity block, a proficiency or ability list — or
+// pass a table through? If not it is only loose text ("TBD", "see D&D
+// Beyond"), and the page has no character sheet (#273).
+function hasSheetStructure(html) {
+  const s = String(html || '');
+  return /<table[ >]/i.test(s)
+    || /class="(?:stat-item|dnd-ability-card|dnd-skill|dnd-proficiency|dnd-proficiency-list|pf2e-proficiency|entity-card|fitd-action-row|fitd-tracker|fitd-identity|fitd-abilities|fitd-special-ability)[ "]/.test(s);
+}
+
 module.exports = {
+  hasSheetStructure,
   ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, yesNo, isPlaceholder, filled, hasContent, statItem,
   subsections, consumeTable, stripTemplatePlaceholders, boldField, readAttributes, tiles, readSlots,
   sectionReader, consumedTitleMatcher, featureCards,

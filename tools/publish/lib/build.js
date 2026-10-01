@@ -1,5 +1,6 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
 const { configureColorMode } = require('./templates/base');
+const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -22,6 +23,7 @@ const { boardFor } = require('./party-board-registry');
 const { resolveBackendFlags } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
+const { sheetSourceOf } = require('./sheet-source');
 
 const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
@@ -737,6 +739,9 @@ function build(options = {}) {
   }
   let errorCount = 0;
   const partyEntries = [];
+  // PCs whose system has a sheet renderer that produced no sheet (#273).
+  const sheetlessPcs = [];
+  const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
   for (const page of pages) {
@@ -787,13 +792,28 @@ function build(options = {}) {
               .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           };
           const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
+          // A renderer returns an object, or (D&D, PF2e, FitD) the sheet as a string.
+          // A string sheet that is only passed-through text placed no stats.
           const systemOut = (rendered && typeof rendered === 'object')
             ? rendered
-            : { sheetHtml: rendered || null };
+            : { sheetHtml: rendered || null, sheetless: !!rendered && !hasSheetStructure(rendered) };
+          // A PC page with no sheet says nothing on its Character Sheet tab, and
+          // nothing else would tell the GM. A renderer reports it by returning no
+          // sheetHtml, or `sheetless` when (CoC) its frame renders regardless.
+          // `sheet_source` on the PC records that the sheet is kept elsewhere, which
+          // is the answer, not a gap. Read from the source frontmatter:
+          // `exclude_fields` may hide it from the page. A stub publishes named
+          // sections only, so it is not expected to carry a sheet.
+          const sourceFm = page.sourceFrontmatter || page.frontmatter;
+          const sheetSource = sheetSourceOf(sourceFm);
+          const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
+          const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
+          if (sheetless && sheetExpected) sheetlessPcs.push(page.displayTitle || page.title);
           // A system renderer may report structural warnings (e.g. a CoC sheet whose body
           // diverges from the contract and parses near-empty, #107). Surface them like other
-          // page warnings instead of shipping a silently-broken sheet.
-          if (systemOut.warnings && systemOut.warnings.length) {
+          // page warnings instead of shipping a silently-broken sheet — unless the sheet is
+          // empty on purpose (kept elsewhere, or a stub).
+          if (systemOut.warnings && systemOut.warnings.length && !(sheetless && !sheetExpected)) {
             logWarnings(page.outputPath, systemOut.warnings);
           }
           // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
@@ -1201,6 +1221,13 @@ function build(options = {}) {
       const n = without.length;
       console.warn(`  WARNING: ${n} played session${plural(n, " isn't", "s aren't")} published yet and need${plural(n, 's', '')} the GM's say: ${why(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
     }
+  }
+
+  if (sheetlessPcs.length > 0) {
+    const n = sheetlessPcs.length;
+    const shown = sheetlessPcs.slice(0, SHEETLESS_NAMED);
+    const more = n > shown.length ? `, and ${n - shown.length} more` : '';
+    console.warn(`  WARNING: ${n} PC${n === 1 ? '' : 's'} published with no character sheet (${shown.join(', ')}${more}) — the site found no stats it can read. Fill in ## Stat Sheet to the system template's layout, or set sheet_source on the PC to say where the sheet is kept. \`vault_check.py <vault> pc-body\` lists each file.`);
   }
 
   if (errorCount > 0) {

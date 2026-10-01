@@ -54,11 +54,13 @@ def rows_for(rows, needle):
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
-                      stripped=None):
+                      stripped=None, sheet_source=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
-    (None: an older tool's answer, without the field); `plan` is what `manifest publish-played
+    (None: an older tool's answer, without the field); `sheet_source` maps
+    a PC's path to its `sheetSourceSet` (None: an older tool's answer,
+    without the field); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -91,6 +93,12 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
         if stripped is not None:
             for page in pages:
                 page["strippedSections"] = stripped.get(page["path"], [])
+        if sheet_source is not None:
+            pages += [{"path": p, "bodyWithheld": False}
+                      for p in sheet_source
+                      if p not in {page["path"] for page in pages}]
+            for page in pages:
+                page["sheetSourceSet"] = sheet_source.get(page["path"])
         return subprocess.CompletedProcess(
             cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
 
@@ -1533,7 +1541,353 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(self.rows, STORY), self.rows)
 
     def test_that_is_every_row(self):
-        self.assertEqual(len(self.rows), 5, self.rows)
+        self.assertEqual(len(self.rows), 6, self.rows)
+
+    def test_a_sheet_with_no_stat_sheet_warns(self):
+        self.assertIn(
+            f"WARNING\t{LATE}\tno published ## Stat Sheet section — the PC's "
+            f"page has no character sheet; fill one in, or set sheet_source "
+            f"to where the sheet is kept",
+            self.rows)
+
+    def _template_pc(self, name, frontmatter="", edit=None):
+        """A PC whose body is a shipped template's, optionally edited."""
+        template = (Path(vc.__file__).resolve().parent.parent / "templates"
+                    / name).read_text(encoding="utf-8")
+        body = template.split("---\n", 2)[2]
+        if edit:
+            body = edit(body)
+        vault = make_vault(self)
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\n{frontmatter}---\n{body}", encoding="utf-8")
+        return vc.check_pc_body(vault)
+
+    def test_an_untouched_template_stat_sheet_warns_for_every_system(self):
+        templates = Path(vc.__file__).resolve().parent.parent / "templates"
+        names = sorted(p.name for p in templates.glob("pc-*.md"))
+        self.assertGreaterEqual(len(names), 7, names)
+        for name in names:
+            with self.subTest(template=name):
+                rows = rows_for(self._template_pc(name), "placeholder values")
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith("WARNING\tHero.md:"), rows)
+
+    def test_a_realigned_template_table_still_counts_as_untouched(self):
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| Level | 1 |", "|Level|1   |")
+                            .replace("|-----------|-------|", "|---|---|"))
+        self.assertTrue(rows_for(rows, "placeholder values"), rows)
+
+    def test_a_nearly_untouched_template_still_warns(self):
+        one = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| Level | 1 |", "| Level | 1 (starting) |"))
+        self.assertTrue(rows_for(one, "is the template's but for 1 line;"), one)
+
+    def test_two_changed_lines_are_a_character(self):
+        # A GURPS PC at all 10s but DX, with the Basic Speed that follows.
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| HP (Current) | |", "| HP (Current) | 9 |")
+                            .replace("| HP (Max) | |", "| HP (Max) | 9 |"))
+        self.assertFalse(rows_for(rows, "## Stat Sheet"), rows)
+
+    def test_a_pc_from_an_older_template_still_warns(self):
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| Heroic Inspiration | No |\n", ""))
+        self.assertTrue(rows_for(rows, "placeholder values"), rows)
+
+    def test_a_filled_in_stat_sheet_is_not_flagged(self):
+        def fill(body):
+            for old, new in (("| Level | 1 |", "| Level | 3 |"),
+                             ("| STR | 10 | +0 | No |", "| STR | 16 | +3 | Yes |"),
+                             ("| DEX | 10 | +0 | No |", "| DEX | 14 | +2 | No |"),
+                             ("| AC | 10 |", "| AC | 15 |")):
+                self.assertIn(old, body)
+                body = body.replace(old, new)
+            return body
+        rows = self._template_pc("pc-dnd-5e-2024.md", edit=fill)
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_a_pointer_or_tbd_where_the_stats_should_be_warns(self):
+        for body in ("TBD", "See D&D Beyond: https://example.com/c/12345",
+                     "[[Hero Sheet 2.pdf]]"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
+                                rows)
+
+    def test_a_sheet_in_words_dots_or_an_image_is_a_sheet(self):
+        for body in ("**High Concept:** Disgraced Knight\n\n**Trouble:** Owes "
+                     "the Guild\n\nGreat Fight, Good Athletics, Fair Will",
+                     "- Skirmish ●●○○\n- Command ●○○○",
+                     "![[Bryn_sheet_p1.png]]"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_a_longer_pointer_tbd_or_bare_skeleton_warns(self):
+        for body in ("See D&D Beyond.\n\nLink in Discord.\n\nAsk Bob.",
+                     "TBD\n\nTBD\n\nTBD",
+                     "### Attributes\n\n### Skills\n\n### Equipment",
+                     "See D&D Beyond (2024).",
+                     "Sheet is on page 12 of the group PDF.",
+                     "See Bryn_2.pdf in the drive"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
+                                rows)
+
+    def test_digits_that_are_not_stats_do_not_make_a_sheet(self):
+        for body in ("1. Open Roll20\n2. Find Bryn",
+                     "[Sheet 2](https://example.com/z)",
+                     "www.dndbeyond.com/characters/12345678",
+                     "dndbeyond.com/characters/12345678",
+                     "Bryn_2.gcs", "Bryn_2.odt in the drive",
+                     "See pp. 3 of the PDF", "pg. 12", "pages 12 and 14"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
+                                rows)
+
+    def test_a_lone_stat_that_looks_like_a_pointer_is_still_a_stat(self):
+        # A warning the GM cannot clear by filling in the sheet is the
+        # worse error, so each strip needs a mark a stat line lacks.
+        for body in ("PP 5", "Psi P 12", "Pg 12", "Armor p 3",
+                     "Speed 6.md", "Move 5.csv", "Hit Points 4.txt",
+                     "Move 6.5/turn", "Ver 2.0/ x"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_a_sheet_in_words_takes_several_shapes(self):
+        for body in ("Fight: Great\nShoot: Good\nWill: Fair",
+                     "Fight — Great\nShoot — Good\nWill — Fair",
+                     "*Fight* Great\n*Shoot* Good\n*Will* Fair",
+                     "__Fight__ Great\n__Shoot__ Good\n__Will__ Fair",
+                     "- Fight, Great\n- Shoot, Good\n- Will, Fair",
+                     "1. Fight, Great\n2. Shoot, Good\n3. Will, Fair",
+                     "### Fight\n\nGreat\n\n### Shoot\n\nGood\n\n"
+                     "### Will\n\nFair"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_a_small_table_in_words_is_a_sheet(self):
+        # The build takes any table as a sheet (Odd_Table in
+        # build-sheetless-pc.test.js); the two must not disagree on it.
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "| Thing | Amount |\n|---|---|\n| Grit | high |\n")
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_a_free_form_stat_line_is_a_sheet(self):
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "ST 12, DX 13, IQ 11, HT 12.\n")
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_an_excluded_stat_sheet_is_no_stat_sheet(self):
+        vault = make_vault(self, config="---\npublish:\n  exclude_sections: "
+                                        "[\"Stat Sheet\"]\n---\n")
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\nSTR 16.\n\n"
+            "## Background\n\nA sailor.\n", encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault),
+                                 "no published ## Stat Sheet"))
+
+    def test_a_stat_sheet_with_its_body_fenced_is_empty(self):
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "<!-- gm-only -->\nSTR 16.\n<!-- /gm-only -->\n\n"
+                        "## Background\n\nA sailor.\n")
+        self.assertTrue(rows_for(rows, "## Stat Sheet is empty;"), rows)
+
+    def test_sheet_source_settles_a_missing_or_untouched_sheet(self):
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            frontmatter='sheet_source: "D&D Beyond"\n')
+        self.assertFalse(rows_for(rows, "placeholder values"), rows)
+        vault = make_vault(self)
+        (vault / "Away.md").write_text(
+            '---\ntype: pc\nsheet_source: "paper, with the player"\n---\n\n'
+            "## Background\n\nA sailor.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+
+    def test_a_blank_sheet_source_settles_nothing(self):
+        vault = make_vault(self)
+        (vault / "Away.md").write_text(
+            '---\ntype: pc\nsheet_source: ""\n---\n\n'
+            "## Background\n\nA sailor.\n", encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+
+    def _pc(self, text):
+        vault = make_vault(self)
+        (vault / "Hero.md").write_text(text, encoding="utf-8")
+        return vc.check_pc_body(vault)
+
+    SHEETLESS = "## Background\n\nA sailor.\n"
+
+    def _asked(self, value, **stub):
+        """pc-body rows for a sheetless PC with `sheet_source: <value>`, on
+        a vault whose publish tool is stubbed; and the tool calls made."""
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, **stub)
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\nsheet_source: {value}\n---\n\n{self.SHEETLESS}",
+            encoding="utf-8")
+        return vc.check_pc_body(vault), calls
+
+    def test_the_publish_tool_says_whether_sheet_source_is_set(self):
+        # One reading of the field, the tool's: nothing here parses it.
+        for value in ("null", "~", "false", "[]", "5", "{where: paper}"):
+            with self.subTest(sheet_source=value):
+                rows, calls = self._asked(value, sheet_source={"Hero.md": False})
+                self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertEqual(len(calls), 1, calls)
+        rows, _calls = self._asked("[PDF, group drive]",
+                                   sheet_source={"Hero.md": True})
+        self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+
+    def test_a_blank_sheet_source_never_asks_the_tool(self):
+        for value in ("", '""', "''", '"  "'):
+            with self.subTest(sheet_source=value):
+                rows, calls = self._asked(value, sheet_source={"Hero.md": True})
+                self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertEqual(calls, [])
+
+    def test_a_pc_with_a_sheet_never_asks_the_tool(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
+        (vault / "Hero.md").write_text(
+            '---\ntype: pc\nsheet_source: "D&D Beyond"\n---\n\n'
+            "## Stat Sheet\n\nST 12, DX 13.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
+        self.assertEqual(calls, [])
+
+    def test_a_list_under_sheet_source_is_asked_about(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\nsheet_source:\n  - PDF\n  - group drive\n---\n\n"
+            + self.SHEETLESS, encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+        self.assertEqual(len(calls), 1)
+
+    def test_other_ways_of_writing_the_key_are_asked_about(self):
+        for fm in ("sheet_source : paper", '"sheet_source": paper',
+                   "'sheet_source': paper",
+                   "sheet_source:\n# where\n  - PDF"):
+            with self.subTest(frontmatter=fm):
+                vault = make_vault(self)
+                calls = stub_publish_tool(self, vault,
+                                          sheet_source={"Hero.md": True})
+                (vault / "Hero.md").write_text(
+                    f"---\ntype: pc\n{fm}\n---\n\n{self.SHEETLESS}",
+                    encoding="utf-8")
+                rows = vc.check_pc_body(vault)
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertEqual(len(calls), 1)
+
+    def test_a_null_or_misshapen_answer_is_reported_not_trusted(self):
+        for stdout in ("null", '{"pages": "abc"}'):
+            with self.subTest(stdout=stdout):
+                def run(cmd, stdout=stdout, **kw):
+                    return subprocess.CompletedProcess(cmd, 0, stdout, "")
+                rows, _calls = self._asked("paper", run=run)
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                info = rows_for(rows, "could not be consulted")
+                self.assertEqual(len(info), 1, rows)
+                self.assertIn("expected JSON", info[0])
+
+    def test_one_explain_answer_serves_gm_leak_and_pc_body(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\nsheet_source: paper\n---\n\n{self.SHEETLESS}",
+            encoding="utf-8")
+        explain = vc.ExplainAll(vault)
+        vc.check_gm_leak(vault, None, explain=explain)
+        vc.check_pc_body(vault, explain=explain)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_a_pc_the_tool_makes_no_page_for_is_not_warned_about(self):
+        # sheetSourceSet is null for a file in an unmapped folder.
+        rows, _calls = self._asked("paper", sheet_source={"Hero.md": None})
+        self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+
+    def test_the_tool_is_asked_once_for_many_pcs(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={
+            "A.md": True, "B.md": False})
+        for name in ("A", "B"):
+            (vault / f"{name}.md").write_text(
+                f"---\ntype: pc\nsheet_source: paper\n---\n\n{self.SHEETLESS}",
+                encoding="utf-8")
+        rows = rows_for(vc.check_pc_body(vault), "Stat Sheet section")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("B.md", rows[0])
+        self.assertEqual(len(calls), 1)
+
+    def test_a_tool_that_cannot_answer_takes_a_written_value_as_set(self):
+        # No node, and a tool too old to report the field: say so, and do
+        # not warn about a PC whose GM wrote something.
+        for stub, why in (({"which": None}, "node is not on PATH"),
+                          ({"stripped": {"Hero.md": []}}, "predates 1.11.44")):
+            with self.subTest(why=why):
+                rows, _calls = self._asked("paper", **stub)
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                info = rows_for(rows, "could not be consulted")
+                self.assertEqual(len(info), 1, rows)
+                self.assertIn(why, info[0])
+                self.assertIn("taken as set", info[0])
+
+    def test_a_vault_that_does_not_publish_takes_a_written_value_as_set(self):
+        rows = self._pc("---\ntype: pc\nsheet_source: paper\n---\n\n"
+                        + self.SHEETLESS)
+        self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+
+    def test_an_edition_number_is_not_a_stat(self):
+        for body in ("See D&D Beyond (5e).", "On Roll20, D&D 5th edition."):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "holds no stats"), rows)
+
+    def test_a_fenced_stat_sheet_is_no_stat_sheet(self):
+        rows = self._pc("---\ntype: pc\n---\n\n<!-- gm-only -->\n"
+                        "## Stat Sheet\n\nSTR 10.\n<!-- /gm-only -->\n\n"
+                        "## Background\n\nA sailor.\n")
+        self.assertTrue(rows_for(rows, "no published ## Stat Sheet"), rows)
+
+    def test_an_empty_stat_sheet_warns(self):
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "## Background\n\nA sailor.\n")
+        self.assertIn("WARNING\tHero.md:5\t## Stat Sheet is empty; fill it "
+                      "in, or set sheet_source to where the sheet is kept",
+                      rows)
+
+    def test_a_bold_or_colon_stat_sheet_heading_counts(self):
+        for heading in ("## **Stat Sheet**", "## Stat Sheet:", "## Stat sheet"):
+            with self.subTest(heading=heading):
+                rows = self._pc(f"---\ntype: pc\n---\n\n{heading}\n\n"
+                                "STR 12.\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertFalse(rows_for(rows, "; fill it in"), rows)
+
+    def test_a_stub_pc_is_not_judged_on_its_stat_sheet(self):
+        vault = make_vault(self)
+        (vault / "Stubbed.md").write_text(
+            "---\ntype: pc\npublish: stub\n"
+            'publish_include_sections: ["Background"]\n---\n\n'
+            "## Background\n\nRaised by smugglers.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
 
     def test_absent_block_is_an_info_pointing_at_wrapup(self):
         vault = make_vault(self)

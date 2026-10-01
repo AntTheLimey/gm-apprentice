@@ -387,6 +387,10 @@ for raw, expected, label in [
     ('"npc"  # legacy', "npc", "a trailing comment is not content"),
     ("'npc' # legacy", "npc", "single-quoted, trailing comment"),
     ("npc # legacy", "npc", "unquoted value stops at the comment"),
+    ("# where is it", "", "a value that is only a comment is empty"),
+    ("#ff0000", "", "an unquoted leading # is a comment, as in YAML"),
+    ('"#ff0000"', "#ff0000", "a quoted leading # is content"),
+    ("a#b", "a#b", "a # inside a word is content"),
     # A quoted scalar with anything else after the closing quote is not a
     # valid YAML scalar. Unwrapping it would hand `npc` to the type check and
     # pass malformed frontmatter silently; the raw text fails loudly instead.

@@ -190,6 +190,7 @@ from vaultlib import (  # noqa: F401
     publish_mode,
     raw_frontmatter,
     scalar_value,
+    FRONTMATTER_RE,
     scan_body,
     session_ref_number,
     set_key,
@@ -1310,6 +1311,20 @@ class ToolAnswer:
     used: str | None = None
 
 
+class ExplainAll:
+    """One `explain --all` answer for a run, asked when first needed, so
+    the checks that read it (gm-leak, pc-body) share one tool run."""
+
+    def __init__(self, vault: Path) -> None:
+        self.vault = vault
+        self._answer: ToolAnswer | None = None
+
+    def __call__(self) -> ToolAnswer:
+        if self._answer is None:
+            self._answer = ask_publish_tool(self.vault, ["explain", "--all"])
+        return self._answer
+
+
 def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
     """Run the site's publish tool with `args` plus `--json`, `--config`
     and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
@@ -1343,10 +1358,15 @@ def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
                                + (f": {detail[-1]}" if detail else "")),
                           used=label)
     try:
-        return ToolAnswer(data=json.loads(proc.stdout), used=used)
+        data = json.loads(proc.stdout)
     except ValueError:
+        data = None
+    if data is None:
+        # A bare `null` is no answer either, and must not read as "this
+        # vault publishes nothing".
         return ToolAnswer(why=f"{name} did not return the expected JSON",
                           used=label)
+    return ToolAnswer(data=data, used=used)
 
 
 def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
@@ -1691,7 +1711,8 @@ def _published_linenos(states: list[LineState],
 
 def check_gm_leak(vault: Path, folder: str | None,
                   fix: bool = False,
-                  renest_excludes: bool = False) -> list[str]:
+                  renest_excludes: bool = False,
+                  explain: ExplainAll | None = None) -> list[str]:
     """Keeper-facing content that would actually reach the player site.
 
     Mechanises graph-health.md's "Un-fenced GM-only content" prose. The
@@ -1744,7 +1765,7 @@ def check_gm_leak(vault: Path, folder: str | None,
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
     if notes:
-        tool = ask_publish_tool(vault, ["explain", "--all"])
+        tool = (explain or ExplainAll(vault))()
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
         if any(fm.get("type") == "session" for _r, _t, fm in notes):
@@ -1871,6 +1892,187 @@ PROTECTED_H2 = {"notes", "gm notes"}
 CANONICAL_FIRST_H2 = "Stat Sheet"
 
 
+# The first publish tool whose `explain --all` reports `sheetSourceSet`.
+SHEET_SOURCE_SINCE = "1.11.44"
+
+
+def _sheet_source_written(text: str) -> bool:
+    """Is anything written after `sheet_source:` in this file's frontmatter?
+
+    An absent key and the template's `sheet_source: ""` say nothing, and
+    that much is read here so a vault of template PCs needs no publish tool.
+    What a written value means is the publish tool's to say
+    (sheet_sources_unset)."""
+    match = FRONTMATTER_RE.match(text)
+    lines = match.group(1).split("\n") if match else []
+    for i, line in enumerate(lines):
+        # YAML also takes `sheet_source : x` and a quoted key.
+        key = re.match(r"""["']?sheet_source["']?[ \t]*:(.*)""", line)
+        if not key:
+            continue
+        if scalar_value(key.group(1)).strip():
+            return True
+        # Nothing on the line: a list or block may follow, indented, past
+        # any blank or comment lines.
+        follow = next((ln for ln in lines[i + 1:]
+                       if ln.strip() and not ln.lstrip().startswith("#")), "")
+        return follow[:1].isspace() or follow.startswith("- ")
+    return False
+
+
+def sheet_sources_unset(answer: ToolAnswer
+                        ) -> tuple[set[str] | None, str | None, str | None]:
+    """(the PCs whose `sheet_source` says nothing, why the publish tool could not
+    be asked, which tool answered when it wasn't the site's own).
+
+    The publish tool reads the field (sheet-source.js) and reports it as
+    `sheetSourceSet` in `explain --all --json`; nothing here reads the YAML
+    a second way. A file the tool makes no page for (an unmapped folder)
+    has no answer and is left out: nothing publishes to be missing a
+    sheet. (None, None, None) means the vault publishes nothing, so there
+    is no tool to ask. `answer` is the run's `explain --all`."""
+    if answer.data is None:
+        return None, answer.why, answer.used
+    try:
+        pages = answer.data["pages"]
+        if not isinstance(pages, list):
+            raise TypeError
+        if any("sheetSourceSet" not in p for p in pages):
+            return None, (f"the site's publish tool predates "
+                          f"{SHEET_SOURCE_SINCE}"), answer.used
+        return ({unicodedata.normalize("NFC", str(p["path"]))
+                 for p in pages if p["sheetSourceSet"] is False},
+                None, answer.used)
+    except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON", answer.used
+
+
+def _is_stat_sheet(title: str) -> bool:
+    """`## **Stat Sheet**` and `## Stat Sheet:` are the same section to the
+    publish tool, which reads the heading's text."""
+    bare = re.sub(r"[*_`]", "", title).strip().rstrip(":").strip()
+    return bare.casefold() == CANONICAL_FIRST_H2.casefold()
+
+
+def _normalise_sheet(lines: Iterable[str]) -> list[str]:
+    """Section lines with table padding, delimiter rows and blank lines taken
+    out, so a sheet re-aligned by an editor still compares equal to its
+    template."""
+    out = []
+    for line in lines:
+        collapsed = re.sub(r"\s+", " ", line).strip()
+        collapsed = re.sub(r"\s*\|\s*", "|", collapsed)
+        if collapsed and not re.fullmatch(r"[|:\- ]+", collapsed):
+            out.append(collapsed)
+    return out
+
+
+def _stat_sheet_lines(states: list[LineState], start: LineState) -> list[str]:
+    """The published lines of the `## Stat Sheet` section `start` opens, up
+    to the next H2, normalised."""
+    lines = []
+    for state in states:
+        if state.lineno <= start.lineno:
+            continue
+        if state.heading is not None and state.heading[0] <= 2:
+            break
+        # Fenced and excluded lines do not publish: no part of the sheet.
+        if not state.published:
+            continue
+        lines.append(state.line)
+    return _normalise_sheet(lines)
+
+
+# How many lines of a Stat Sheet may differ from its template's before it
+# counts as filled in. One (a note beside Level) is still the template's
+# sheet. Two is already a possible character: a GURPS PC at all 10s but DX,
+# with the Basic Speed that follows from it.
+TEMPLATE_SLACK = 1
+
+_TEMPLATE_STAT_SHEETS: list[set[str]] | None = None
+
+
+def _template_stat_sheets() -> list[set[str]]:
+    """Each shipped PC template's untouched `## Stat Sheet`, as its set of
+    normalised lines."""
+    global _TEMPLATE_STAT_SHEETS
+    if _TEMPLATE_STAT_SHEETS is None:
+        sheets: list[set[str]] = []
+        templates = Path(__file__).resolve().parent.parent / "templates"
+        for path in sorted(templates.glob("pc-*.md")):
+            body = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+            match = re.search(r"^## Stat Sheet[ \t]*\n(.*?)(?=^## |\Z)", body,
+                              re.M | re.S)
+            lines = set(_normalise_sheet(match.group(1).split("\n"))) \
+                if match else set()
+            if lines:
+                sheets.append(lines)
+        _TEMPLATE_STAT_SHEETS = sheets
+    return _TEMPLATE_STAT_SHEETS
+
+
+def _stat_sheet_problem(lines: list[str]) -> str | None:
+    """Why this Stat Sheet gives the page no real character sheet, or None.
+
+    Three ways: nothing under the heading; the template's own values,
+    untouched or nearly; a pointer or a "TBD" where the stats should be.
+    The template test is by lines, not an exact match, so a note beside one
+    row, or a PC made from an older template (a row since added or
+    dropped), still counts.
+    """
+    if not lines:
+        return "is empty"
+    for template in _template_stat_sheets():
+        differing = sum(1 for line in lines if line not in template)
+        if differing == 0:
+            return "still holds the template's placeholder values"
+        # Slack only on a sheet long enough for two lines to be a small part.
+        if differing <= TEMPLATE_SLACK and len(lines) >= 8:
+            return (f"is the template's but for {differing} "
+                    f"line{'' if differing == 1 else 's'}")
+    # Subheads alone are a skeleton with nothing in it.
+    content = [line for line in lines if not re.match(r"#{1,6}(?: |$)", line)]
+    if not content:
+        return "holds no stats"
+    # A table is a sheet, as it is to the publish build, and so are dots
+    # (●●○○ ratings) and an embedded image of the sheet.
+    text = " ".join(content)
+    if re.search(r"!\[|[●○◆◇]", text) \
+            or any(line.startswith("|") for line in content):
+        return None
+    # A figure makes it a sheet. These are not figures, whatever digits they
+    # hold: a link (its text and its target), a bare web address, a file
+    # name, a page reference, a year in brackets, a list's own numbering.
+    # Each pattern needs a mark a stat line does not have (a letter in the
+    # file's name, a dot after "p", a lettered domain), so "PP 5", "Speed
+    # 6.md" and "Move 6.5/turn" keep their figures. Other digits in a
+    # pointer ("version 2 is on Roll20") still pass; a warning that misses
+    # is cheaper than one that cries wolf.
+    prose = " ".join(re.sub(r"^\d+[.)] ", "", line) for line in content)
+    prose = re.sub(r"\[\[[^\]]*\]\]|\[[^\]]*\]\([^)]*\)"
+                   r"|(?:https?://|www\.)\S+"
+                   r"|\b[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/\S*",
+                   "", prose)
+    prose = re.sub(
+        r"(?=[\w-]*[A-Za-z])[\w-]+\.(?:pdf|png|jpe?g|gif|webp|svg|heic|docx?"
+        r"|odt|rtf|xls[xm]?|ods|csv|json|md|txt|gcs|gca\d?)\b"
+        r"|\b(?:pages?|pp?\.|pg\.)\s*\d+(?:\s*(?:[-–,]|and)\s*\d+)*"
+        r"|\((?:19|20)\d\d\)", "", prose, flags=re.I)
+    # A figure stands alone: the 5 of "5e" or "D&D 5th" is part of a name.
+    if re.search(r"(?<![A-Za-z0-9])[+-]?\d+(?![A-Za-z0-9])", prose):
+        return None
+    # Words only. A sheet in words (Fate aspects and skills) runs to several
+    # lines and gives them a shape: list items, emphasised or `Label:` names,
+    # `Name — rating` pairs, or values under subheads. A line or two, or
+    # plain sentences, is a "TBD" or a pointer to where the sheet really is.
+    shaped = len(lines) - len(content) >= 2 or any(
+        re.match(r"(?:[-*+]|\d+[.)]) |[*_]|[^:]{1,30}:\s|[^—–-]{1,30} [—–-] \S",
+                 line) for line in content)
+    if len(content) <= 2 or not shaped:
+        return "holds no stats"
+    return None
+
+
 def _has_labelled_field(states: list[LineState], start: LineState,
                         level: int, kept: set[int] | None = None) -> bool:
     """Does the block `start` opens carry any `**Label:**` field?
@@ -1894,7 +2096,8 @@ def _has_labelled_field(states: list[LineState], start: LineState,
 
 def check_pc_body(vault: Path, folder: str | None = None,
                   files: Iterable[str] | None = None,
-                  newer_than: float | None = None) -> list[str]:
+                  newer_than: float | None = None,
+                  explain: ExplainAll | None = None) -> list[str]:
     """PC sheet skeleton and `## Current Status` placement.
 
     `shared/pc-body-structure.md` makes three promises about the block
@@ -1918,6 +2121,8 @@ def check_pc_body(vault: Path, folder: str | None = None,
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
+    # The publish tool's reading of each PC's sheet_source, once asked.
+    sources: tuple[set[str] | None, str | None, str | None] | None = None
     for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
@@ -1981,6 +2186,47 @@ def check_pc_body(vault: Path, folder: str | None = None,
                 rows.append(f"WARNING\t{rel}:{s.lineno}\t"
                             f"duplicate H2 '{title}'")
             seen.add(key)
+
+        # A whole sheet with no stats, or with the template's own, publishes
+        # a Character Sheet tab that says nothing (#273). `sheet_source`
+        # records that the sheet is kept elsewhere, which settles it. A stub
+        # publishes named fragments only, so its Stat Sheet is not judged.
+        if kept is None:
+            # A fenced or excluded Stat Sheet does not publish, so the page
+            # has none.
+            stat = next((st for st, title in h2s
+                         if _is_stat_sheet(title) and st.published), None)
+            remedy = ("fill it in, or set sheet_source to where the sheet "
+                      "is kept")
+            row = None
+            if stat is None:
+                row = (f"WARNING\t{rel}\tno published "
+                       f"## {CANONICAL_FIRST_H2} section — the PC's page "
+                       f"has no character sheet; fill one in, or set "
+                       f"sheet_source to where the sheet is kept")
+            else:
+                problem = _stat_sheet_problem(_stat_sheet_lines(states, stat))
+                if problem:
+                    row = (f"WARNING\t{rel}:{stat.lineno}\t"
+                           f"## {CANONICAL_FIRST_H2} {problem}; {remedy}")
+            if row and _sheet_source_written(text):
+                # Asked once a run, and only when a PC's answer turns on it.
+                if sources is None:
+                    sources = sheet_sources_unset(
+                        (explain or ExplainAll(vault))())
+                    unset, why, used = sources
+                    if unset is not None:
+                        rows.extend(_tool_used_row(used))
+                    elif why:
+                        rows.append(_publish_tool_row(
+                            why, "a sheet_source with anything written in "
+                            "it was taken as set", used))
+                unset = sources[0]
+                if unset is None \
+                        or unicodedata.normalize("NFC", rel) not in unset:
+                    row = None
+            if row:
+                rows.append(row)
 
         if kept is None and h2s \
                 and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():
@@ -3755,15 +4001,16 @@ def main() -> int:
                                  newer_than_mtime))
     if args.command in ("sessions", "all"):
         emit("sessions", check_sessions(args.vault))
+    explain = ExplainAll(args.vault)
     if args.command in ("gm-leak", "all"):
         # `all` is a report, so it never writes — same reasoning as
         # `wrapup` below.
         emit("gm-leak", check_gm_leak(args.vault, args.folder,
                                       args.fix and args.command == "gm-leak",
-                                      args.renest_excludes))
+                                      args.renest_excludes, explain))
     if args.command in ("pc-body", "all"):
         emit("pc-body", check_pc_body(args.vault, args.folder, args.file,
-                                      newer_than_mtime))
+                                      newer_than_mtime, explain))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects

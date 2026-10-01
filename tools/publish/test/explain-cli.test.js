@@ -364,10 +364,27 @@ describe('explain --all (#276)', () => {
       path: 'Sessions/Session_07.md', type: 'session', publishes: true,
       code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
       strippedSections: ['GM Notes', 'Reconciliation Context'],
+      sheetSourceSet: null,
     });
     assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
     assert.strictEqual(pages.get('Sessions/Session_08.md').publishes, false);
     assert.strictEqual(pages.get('Sessions/Session_08.md').code, 'AUTO_EXCLUDED_STATUS');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('says whether each PC has a sheet_source, and null for any other file (#273)', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Away.md', '---\ntype: pc\nsheet_source: "D&D Beyond"\n---\n\nA sailor.\n');
+    write(vault, 'Sessions/Blank.md', '---\ntype: pc\nsheet_source: null\n---\n\nA sailor.\n');
+    write(vault, 'Unmapped/Hidden.md', '---\ntype: pc\nsheet_source: paper\n---\n\nA sailor.\n');
+    const { rc, json } = await all(siteFor(vault));
+    assert.strictEqual(rc, 0);
+    const pages = byPath(json);
+    assert.strictEqual(pages.get('Sessions/Away.md').sheetSourceSet, true);
+    assert.strictEqual(pages.get('Sessions/Blank.md').sheetSourceSet, false);
+    // No page is made for a file in an unmapped folder, so there is nothing to say.
+    assert.strictEqual(pages.get('Unmapped/Hidden.md').sheetSourceSet, null);
+    assert.strictEqual(pages.get('Sessions/Session_08.md').sheetSourceSet, null);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
