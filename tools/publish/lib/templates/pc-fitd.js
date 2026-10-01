@@ -1,6 +1,6 @@
 const { escapeHtml } = require('../processor');
 const {
-  ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, yesNo, hasContent, statItem, subsections, consumeTable,
+  ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, filled, yesNo, hasContent, statItem, subsections, consumeTable,
   stripTemplatePlaceholders, boldField, readAttributes, tiles, sectionReader, consumedTitleMatcher,
 } = require('./sheet-parse');
 
@@ -14,6 +14,7 @@ const ACTION_COLUMNS = [/^action$/i, /^(rating|dots)$/i];
 const ARMOR_COLUMNS = [/^type$/i, /^used$/i];
 const MAX_RATING = 4;
 const MAX_TRACK = 20;
+const IDENTITY_MAX = 80;
 
 function renderDots(filled, max) {
   const dots = [];
@@ -62,7 +63,8 @@ function renderActionRatings(html) {
 
 // `### Stress & Trauma`: Stress `n / max` becomes a track, Trauma a row of pills.
 function renderStressTrauma(html) {
-  const out = [];
+  let out = [];
+  let traumas = null;
   const other = [];
   const seen = new Set();
   const left = consumeTable(html, ATTRIBUTE_COLUMNS, ([label, value]) => {
@@ -73,12 +75,17 @@ function renderStressTrauma(html) {
       out.push(stressTracker(Number(stress[1]), Number(stress[2])));
     } else if (key === 'trauma' && !seen.has(key)) {
       seen.add(key);
-      out.push(traumaTracker(value.split(/[,;](?![^(]*\))/).map(t => t.trim()).filter(t => t && t !== '—')));
+      traumas = value.split(/[,;](?![^(]*\))/).map(t => t.trim()).filter(t => t && t !== '—');
+      out.push(null);   // the tracker's place, filled in below
     } else {
       other.push([label, value]);
     }
     return true;
   });
+  // A blank Trauma cell with a list under the table is not "no trauma": the
+  // list follows as written, so the empty tracker is left out.
+  const tracker = traumas && (traumas.length || !left) ? traumaTracker(traumas) : '';
+  out = out.map(block => (block === null ? tracker : block)).filter(Boolean);
   if (other.length) out.push(tiles(other));
   return { html: out.join('\n'), left };
 }
@@ -200,14 +207,20 @@ function renderFitDSheet(frontmatter, sections) {
 
   const background = reader.first('background');
   const backgroundHtml = background ? background.html : '';
-  // The identity block: Playbook, then every labelled line of Background
+  // The identity block: Playbook, then each short labelled line of Background
   // (Heritage, Background, Look, Vice/Purveyor) under the author's own label.
+  // A value that wraps onto further lines or runs long is prose: it is left to
+  // the Background accordion whole, not shown here cut short.
   const fields = found.playbook ? [['Playbook', found.playbook]] : [];
-  for (const m of backgroundHtml.matchAll(/<strong>\s*([^<:]+?)\s*:\s*<\/strong>/g)) {
+  for (const m of backgroundHtml.matchAll(/<strong>\s*([^<:]+?)\s*(?::\s*<\/strong>|<\/strong>\s*:)([^\n]*)/g)) {
     const label = cellText(m[1]);
-    // Matched against the rendered HTML, so from the label as it appears there.
-    const value = boldField(backgroundHtml, m[1].replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'));
-    if (value && !fields.some(([l]) => l.toLowerCase() === label.toLowerCase())) fields.push([label, value]);
+    const value = filled(cellText(m[2].split(/<strong>[^<]*:|<strong>[^<]*<\/strong>\s*:|<br|<\/p>/)[0]));
+    // The line after this one, when the paragraph goes on: more of the value
+    // unless it opens with the next label.
+    const after = backgroundHtml.slice(m.index + m[0].length);
+    const wraps = !/<\/p>/.test(m[2]) && /^\n(?!\s*<strong>)\s*[^<\s]/.test(after);
+    if (!value || wraps || value.length > IDENTITY_MAX) continue;
+    if (!fields.some(([l]) => l.toLowerCase() === label.toLowerCase())) fields.push([label, value]);
   }
   if (fields.length) {
     parts.push(`<dl class="fitd-identity">${fields.map(([label, value]) =>

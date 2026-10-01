@@ -43,6 +43,32 @@ describe('renderFitDSheet from the real template body', () => {
     assert.ok(html.includes('>Cold (since the fire, mostly)<') && html.includes('>Haunted<'));
   });
 
+  it('reads an identity label with its colon outside the bold', () => {
+    const body = replace(cutterBody(), '**Heritage:** Marrow Coast', '**Heritage**: Marrow Coast');
+    assert.ok(render(body).includes('<dt>Heritage</dt><dd>Marrow Coast</dd>'));
+  });
+
+  it('reads identity fields written on consecutive lines', () => {
+    const body = replace(cutterBody(), '**Heritage:** Marrow Coast\n\n**Background:** Labor', '**Heritage:** Marrow Coast\n**Background:** Labor');
+    const html = render(body);
+    assert.ok(html.includes('<dt>Heritage</dt><dd>Marrow Coast</dd>') && html.includes('<dt>Background</dt><dd>Labor</dd>'));
+  });
+
+  it('leaves a wrapped or long value to the Background accordion', () => {
+    const wrapped = render(replace(cutterBody(), '**Look:** {Physical description}', '**Look:** Tall, scarred\nand a limp.'));
+    assert.ok(!wrapped.includes('<dt>Look</dt>'));
+    const long = render(replace(cutterBody(), '**Look:** {Physical description}', `**Look:** ${'very '.repeat(30)}tall`));
+    assert.ok(!long.includes('<dt>Look</dt>'));
+  });
+
+  it('shows no empty trauma tracker over a trauma list', () => {
+    const body = replace(setRow(cutterBody(), 'Trauma', ['']), '### Harm', '- Cold\n- Haunted\n\n### Harm');
+    const html = render(body);
+    assert.ok(!html.includes('<strong>Trauma</strong>'));
+    assert.ok(html.includes('<li>Cold</li>'));
+    assert.ok(render(setRow(cutterBody(), 'Trauma', [''])).includes('<strong>Trauma</strong> <span>—</span>'));
+  });
+
   it('leaves an unfilled identity field out', () => {
     assert.ok(!render(cutterBody()).includes('<dt>Look</dt>'));
   });

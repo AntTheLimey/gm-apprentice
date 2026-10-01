@@ -46,6 +46,12 @@ describe('renderPF2eSheet from the real template body', () => {
     }
   });
 
+  it('merges a bare HP row with HP (Max)', () => {
+    const html = render(replace(druidBody(), '| HP (Current) | 20 |', '| HP | 20 |'));
+    assert.strictEqual(stat(html, 'HP'), '20 / 26');
+    assert.strictEqual((html.match(/<span class="stat-label">HP<\/span>/g) || []).length, 1);
+  });
+
   it('lists skills with their rank, and leaves the unfilled Lore row out', () => {
     const html = render(druidBody());
     assert.strictEqual((html.match(/class="dnd-skill[ "]/g) || []).length, 16);

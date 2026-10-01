@@ -125,7 +125,8 @@ function boldField(html, label) {
 
 // An `Attribute | Value` table as tiles. Every row becomes a [label, value]
 // pair unless `intercept(label, value)` takes it (Level, for the header). With
-// `mergeHp`, the `HP (Current)` and `HP (Max)` rows become one HP tile.
+// `mergeHp`, the `HP (Current)` (or bare `HP`) and `HP (Max)` rows become one
+// HP tile.
 // Returns { rows, left }: `left` is what consumeTable could not place.
 function readAttributes(html, { intercept, mergeHp } = {}) {
   const rows = [];
@@ -133,9 +134,10 @@ function readAttributes(html, { intercept, mergeHp } = {}) {
   const hpSeen = { cur: false, max: false };
   const left = consumeTable(html, ATTRIBUTE_COLUMNS, ([label, value]) => {
     if (intercept && intercept(label, value)) return true;
-    const m = mergeHp && label.match(/^HP\s*\(\s*(current|max)\w*\s*\)$/i);
+    const m = mergeHp && label.match(/^HP\s*(?:\(\s*(cur|max)\w*\s*\))?$/i);
     if (!m) { rows.push([label, value]); return true; }
-    const slot = m[1].toLowerCase() === 'max' ? 'max' : 'cur';
+    // A bare `HP` row is the current value.
+    const slot = (m[1] || '').toLowerCase() === 'max' ? 'max' : 'cur';
     if (hpSeen[slot]) return false;
     if (!hpSeen.cur && !hpSeen.max) rows.push(['HP', null]);
     hpSeen[slot] = true;

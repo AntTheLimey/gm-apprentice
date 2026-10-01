@@ -268,7 +268,7 @@ this structure; its tests build a PC from the real template.
 | | `### Stress & Trauma` | `Attribute \| Value`; `Stress` as `n / max` becomes a track, `Trauma` a comma-separated list, any other row a tile |
 | | `### Armor Uses` | `Type \| Used` with a yes or no word |
 | | `### Harm`, `### XP`, others | shown as written |
-| `## Background` | — | every filled `**Label:** value` line (Heritage, Background, Look, Vice/Purveyor), each shown under its own label in the identity block |
+| `## Background` | — | every filled `**Label:** value` line of up to 80 characters that does not wrap (Heritage, Background, Look, Vice/Purveyor), each shown under its own label in the identity block |
 | `## Special Abilities` | — | shown as written |
 | `## Stash & Coin` | — | `Attribute \| Value`, every row a tile |
 
