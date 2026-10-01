@@ -184,6 +184,15 @@ describe('excerptFromMarkdown skipSheetLines', () => {
   it('drops label lines, tick-boxes and placeholders when asked', () => {
     assert.strictEqual(excerptFromMarkdown(body, { skipSheetLines: true }), 'A sailor.');
   });
+  it('keeps prose that opens with a bold phrase and a year', () => {
+    assert.strictEqual(excerptFromMarkdown('**Born** 1890 in Brest, he became a sailor. More.', { skipSheetLines: true }),
+      'Born 1890 in Brest, he became a sailor.');
+    assert.strictEqual(excerptFromMarkdown('**ST** 12\n\n**Dodge** 9/10\n\nA sailor. More.', { skipSheetLines: true }), 'A sailor.');
+  });
+  it('drops a label whose placeholder runs over two lines', () => {
+    assert.strictEqual(excerptFromMarkdown("**Occupation:** {Describe the\ncharacter's day job}\n\nA sailor. More.", { skipSheetLines: true }),
+      'A sailor.');
+  });
   it('cannot carry text past an excluded heading inside a placeholder', () => {
     const leaky = 'Intro { x\n## GM Notes\nfoo } SECRET stuff.';
     const out = excerptFromMarkdown(leaky, { skipSheetLines: true, excludeSections: ['GM Notes'] });

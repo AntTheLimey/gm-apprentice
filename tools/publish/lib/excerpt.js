@@ -52,7 +52,7 @@ const BLOCK_BOUNDARY_RE = /<\/(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|section
 // tick-box ("- [ ] Major Wound"), and a list marker left with nothing after it. A
 // template placeholder nobody filled in ("{Appearance and manner}") goes too, wherever
 // it sits and however many lines it runs to.
-const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d|^[-*+] \[[ xX]\]|^[-*+]$/;
+const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d[\d.,/+-]*%?$|^[-*+] \[[ xX]\]|^[-*+]$/;
 const PLACEHOLDER_RE = /(?:^[ \t]*[-*+][ \t]+)?\{[^{}]{0,400}\}/gm;
 
 // A full stop after one of these is not the end of a sentence.
@@ -90,7 +90,6 @@ function excerptFromMarkdown(source, opts = {}) {
     const t = line.trim();
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) continue;    // horizontal rules
     if (t.startsWith('|')) continue;                   // table rows
-    if (opts.skipSheetLines && SHEET_LINE_RE.test(t)) continue;
     let cleaned = line.replace(/^\s*>\s?/, '');        // blockquote marker
     // A callout marker line is metadata, never prose — drop the whole line, title included.
     // The type pattern must match markdown.js CALLOUT_RE, which allows hyphens.
@@ -100,8 +99,12 @@ function excerptFromMarkdown(source, opts = {}) {
 
   let text = kept.join('\n');
   // Only now, on what survived the excluded-section cut: a placeholder stripped any
-  // earlier could swallow an excluded heading and let what follows it through.
-  if (opts.skipSheetLines) text = text.replace(PLACEHOLDER_RE, '');
+  // earlier could swallow an excluded heading and let what follows it through. Sheet
+  // lines go after it, so a label whose placeholder ran over two lines goes whole.
+  if (opts.skipSheetLines) {
+    text = text.replace(PLACEHOLDER_RE, '')
+      .split('\n').filter(line => !SHEET_LINE_RE.test(line.trim())).join('\n');
+  }
   text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, '');    // image markdown
   text = text.replace(/!\[\[[^\]]*\]\]/g, '');         // unresolved Obsidian image embed
   text = text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2');
