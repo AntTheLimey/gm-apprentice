@@ -162,6 +162,7 @@ from vaultlib import (  # noqa: F401
     WRAP_UP_TYPES,
     LineState,
     active_pc_names,
+    atx_title,
     active_pcs,
     delete_key,
     effective_exclude_sections,
@@ -1348,7 +1349,7 @@ def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
                           used=label)
 
 
-def hub_bodies_withheld(vault: Path
+def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
                         ) -> tuple[set[str] | None, str | None, str | None]:
     """(session indexes whose body the site withholds, why the publish tool
     could not be asked, which tool answered when it wasn't the site's own).
@@ -1363,9 +1364,11 @@ def hub_bodies_withheld(vault: Path
     no vault.config.json, a site pinned below 1.11.40 (it publishes every
     hub body), no node, an error, a timeout, output that isn't the expected
     JSON — is (None, reason, …), and the caller withholds nothing: a check
-    that can't ask scans every hub body rather than guess.
+    that can't ask scans every hub body rather than guess. `answer` is an
+    `explain --all` the caller already has, so one run serves two checks.
     """
-    answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer is None:
+        answer = ask_publish_tool(vault, ["explain", "--all"])
     if answer.data is None:
         return (set(), None, None) if answer.why is None else (
             None, answer.why, answer.used)
@@ -1375,6 +1378,51 @@ def hub_bodies_withheld(vault: Path
                 for p in pages if p["bodyWithheld"] is True}, None, answer.used
     except (KeyError, TypeError):
         return None, "explain did not return the expected JSON", answer.used
+
+
+# The first release whose `explain --all` names each file's stripped sections,
+# and the first that withholds a handout's Keeper sections (#280).
+STRIPPED_SECTIONS_SINCE = "1.11.41"
+
+
+def _pin_below(vault: Path, version: str) -> str | None:
+    """The site's pinned publish tool version when it is below `version`
+    (installed, or pinned in package.json and not yet installed), else
+    None. A site with no pin of its own builds with the plugin's tool."""
+    config, _why = _site_config(vault)
+    if config is None:
+        return None
+    pin = site_pin(config.parent)
+    if pin.version is None or parse_semver(pin.version) is None:
+        return None
+    return pin.version if semver_below(pin.version, version) else None
+
+
+def sections_withheld(answer: ToolAnswer
+                      ) -> tuple[dict[str, set[str]] | None, str | None]:
+    """(per file, the casefolded headings the site withholds; why not).
+
+    Read from `explain --all --json`'s `strippedSections`, the tool's own
+    walk of its section filter — never a copy of its rules here. That
+    covers the vault's exclude list and whatever the tool withholds by
+    itself (a handout's Context, Clues and Prop Notes, #280). An answer
+    without the field comes from a tool older than
+    STRIPPED_SECTIONS_SINCE, which publishes those handout sections.
+    """
+    if answer.data is None:
+        return None, answer.why
+    try:
+        pages = answer.data["pages"]
+        if any("strippedSections" not in p for p in pages):
+            return None, (f"the site's publish tool predates "
+                          f"{STRIPPED_SECTIONS_SINCE}, so a handout's "
+                          f"Context, Clues and Prop Notes sections publish "
+                          f"— run update-pin")
+        return {unicodedata.normalize("NFC", str(p["path"])):
+                {str(t).strip().casefold() for t in p["strippedSections"]}
+                for p in pages if p["strippedSections"]}, None
+    except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON"
 
 
 def _tool_used_row(used: str | None) -> list[str]:
@@ -1665,9 +1713,10 @@ def check_gm_leak(vault: Path, folder: str | None,
     it is the first thing to read, not the fifth.
 
     Every call also plans the heading re-nest (`WOULD-FIX` rows); `fix`
-    writes it (`FIXED`). Only the ERROR bold-wrapped exclude matches
-    move — keyword-only WARNING headings and INFO rows are the GM's
-    call and are never moved.
+    writes it (`FIXED`). What moves: the ERROR bold-wrapped exclude
+    matches, and `##` sections the publish tool withholds by its own rule
+    (`explain --all`'s `strippedSections`, #280). Keyword-only WARNING
+    headings and INFO rows are the GM's call and are never moved.
 
     `renest_excludes` appends `renest_excludes_migration`'s rows (the
     1.8.3 migration) instead of planning the plain re-nest.
@@ -1692,15 +1741,44 @@ def check_gm_leak(vault: Path, folder: str | None,
     notes = [(rel, text, extract_frontmatter(text) or {})
              for rel, text in vault_files(vault, folder)]
     withheld: set[str] = set()
-    if any(fm.get("type") == "session" for _r, _t, fm in notes):
-        answer, why, used = hub_bodies_withheld(vault)
-        if answer is not None:
-            withheld = answer
-            rows.extend(_tool_used_row(used))
-        else:
+    # Headings only the tool withholds (not on the exclude list), per file.
+    tool_stripped: dict[str, set[str]] = {}
+    if notes:
+        tool = ask_publish_tool(vault, ["explain", "--all"])
+        rows.extend(_tool_used_row(tool.used if tool.data is not None
+                                   else None))
+        if any(fm.get("type") == "session" for _r, _t, fm in notes):
+            answer, why, used = hub_bodies_withheld(vault, tool)
+            if answer is not None:
+                withheld = answer
+            else:
+                rows.append(_publish_tool_row(
+                    why or "unknown", "every session index body was scanned, "
+                    "including any the site withholds", used))
+        stripped, why = sections_withheld(tool)
+        if stripped is not None:
+            # The tool reports titles as written; the re-nest matches them
+            # with emphasis unwrapped, so carry both spellings.
+            tool_stripped = {rel: {v for t in titles
+                                   for v in (t, _plain_title(t).casefold())}
+                             - match for rel, titles in stripped.items()}
+        has_documents = any(entity_type(fm) in ("document", "handout")
+                            for _r, _t, fm in notes)
+        old_pin = _pin_below(vault, STRIPPED_SECTIONS_SINCE)
+        if has_documents and old_pin is not None:
+            # The answer may be the plugin's newer tool standing in for a
+            # site whose pin (installed or not) publishes these sections.
+            rows.append(f"WARNING\t(vault)\tthe site's publish tool "
+                        f"{old_pin} predates {STRIPPED_SECTIONS_SINCE}, so a "
+                        f"handout's Context, Clues and Prop Notes sections "
+                        f"publish — run update-pin")
+        elif stripped is None and tool.data is not None:
+            rows.append(f"WARNING\t(vault)\t{why}")
+        elif stripped is None and why is not None and has_documents:
             rows.append(_publish_tool_row(
-                why or "unknown", "every session index body was scanned, "
-                "including any the site withholds", used))
+                why, "headings the site withholds on its own, like a "
+                "handout's Context, Clues and Prop Notes, were not checked",
+                tool.used))
     for rel, text, fm in notes:
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
@@ -1715,6 +1793,7 @@ def check_gm_leak(vault: Path, folder: str | None,
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
+        own_strips = tool_stripped.get(unicodedata.normalize("NFC", rel), set())
         heading_leak = False
         prev_excluded: str | None = None
         for state in states:
@@ -1735,6 +1814,19 @@ def check_gm_leak(vault: Path, folder: str | None,
                 continue
             if state.heading is not None:
                 found = _heading_leak(rel, state, excludes)
+                title = state.heading[1].strip()
+                if (not found and state.heading[0] == 2
+                        and title.casefold() in own_strips):
+                    # The publish tool withholds it by its own rule (a
+                    # handout's Keeper sections, #280) — from 1.11.41 on;
+                    # an older pin publishes it, and the (vault) row says
+                    # so. Its home is under GM Notes, and moving it is
+                    # mechanical.
+                    found = [f"WARNING\t{rel}:{state.lineno}\t'{title}' "
+                             f"is Keeper material outside ## GM Notes — "
+                             f"nest it under ## GM Notes (publish "
+                             f"{STRIPPED_SECTIONS_SINCE}+ withholds it; to "
+                             f"publish it, rename the heading)"]
                 rows.extend(found)
                 heading_leak = heading_leak or bool(found)
                 continue
@@ -1756,7 +1848,8 @@ def check_gm_leak(vault: Path, folder: str | None,
         if not heading_leak or renest_excludes:
             continue
         moved, new_text, refusal = _plan_gm_leak_fix(
-            vault, rel, fm, excludes, excludes, match, excludes)
+            vault, rel, fm, excludes, excludes, match, excludes,
+            h2_match=own_strips)
         if refusal:
             rows.append(f"ERROR\t{rel}\tre-nest refused: {refusal} — "
                         f"nothing written")
@@ -2915,7 +3008,8 @@ def leak_problem(before: str, before_excludes: list[str], after: str,
 
 
 def renest_gm_leak(text: str, match: set[str], excludes: list[str],
-                   kept: set[int] | None = None
+                   kept: set[int] | None = None,
+                   h2_match: set[str] | frozenset[str] = frozenset()
                    ) -> tuple[str, list[str], str | None]:
     """(new text, titles moved, refusal) — the 1.8.3 migration's
     structural re-nest, generalised from Session Wrap-Ups to any entity
@@ -2928,6 +3022,9 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
     `--renest-excludes` passes `["GM Notes"]` and the pre-collapse list,
     so every exact title outside `## GM Notes` moves. Keyword-only
     WARNING headings never match, and a level-1 heading never moves.
+    `h2_match` (casefolded) moves only at level 2: the sections the
+    publish tool withholds by its own rule, which it matches only there
+    (#280) — a `### Context` inside the handout text is not one.
 
     A moved block runs to the next heading at its level or shallower
     *at fence depth 0* — never ending while a gm-only/spoiler fence it
@@ -2950,7 +3047,11 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
         return (s.heading is not None and s.heading[0] >= 2
                 and not s.in_code and s.published
                 and (kept is None or s.lineno in kept)
-                and _plain_title(s.heading[1]).casefold() in match)
+                and (_plain_title(s.heading[1]).casefold() in match
+                     or (s.heading[0] == 2 and (
+                         s.heading[1].casefold() in h2_match
+                         or _plain_title(s.heading[1]).casefold()
+                         in h2_match))))
 
     def ends_block(s: LineState, level: int) -> bool:
         return (s.heading is not None and not s.in_code
@@ -3034,14 +3135,35 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
     return head + eol.join(new_lines) + tail, moved_titles, None
 
 
-def _still_published(new_text: str, excludes: list[str], fm: dict,
-                     titles: list[str]) -> str | None:
-    """A moved title that the site would still render, or None."""
-    wanted = {t.lower() for t in titles}
-    for line in publisher_lines(new_text, excludes, fm):
+def _published_title_counts(text: str, excludes: list[str],
+                            fm: dict) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for line in publisher_lines(text, excludes, fm):
         m = HEADING_RE.match(line)
-        if m and m.group(2).strip().lower() in wanted:
-            return m.group(2).strip()
+        if m:
+            key = atx_title(m.group(2)).lower()
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def _still_published(old_text: str, new_text: str, excludes: list[str],
+                     fm: dict, titles: list[str]) -> str | None:
+    """A moved title that the site would still render, or None.
+
+    Counted, not just looked up: a `### Context` inside a handout's text
+    publishes by design beside the `## Context` that moved (#280), so each
+    moved title must publish exactly as many times fewer as it moved.
+    """
+    before = _published_title_counts(old_text, excludes, fm)
+    after = _published_title_counts(new_text, excludes, fm)
+    moved: dict[str, int] = {}
+    for t in titles:
+        key = atx_title(t).lower()
+        moved[key] = moved.get(key, 0) + 1
+    for key, n in moved.items():
+        if after.get(key, 0) > max(before.get(key, 0) - n, 0):
+            return next(atx_title(t) for t in titles
+                        if atx_title(t).lower() == key)
     return None
 
 
@@ -3059,7 +3181,8 @@ def _h1_target(text: str, match: set[str]) -> str | None:
 def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
                       before_excludes: list[str], after_excludes: list[str],
                       match: set[str], target_excludes: list[str],
-                      always_check: bool = False
+                      always_check: bool = False,
+                      h2_match: set[str] | frozenset[str] = frozenset()
                       ) -> tuple[list[str], str | None, str | None]:
     """`gm-leak`'s mechanical repair, planned for one file.
 
@@ -3082,7 +3205,7 @@ def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
     states, problems = scan_body(text, target_excludes)
     kept = _published_linenos(states, fm)
     new_text, moved, refusal = renest_gm_leak(text, match, target_excludes,
-                                              kept)
+                                              kept, h2_match)
     if refusal:
         return [], None, refusal
     if not always_check and (not moved or new_text == text):
@@ -3108,7 +3231,7 @@ def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
                         "the marker first")
         return [], None, problem
     if moved:
-        still = _still_published(new_text, after_excludes, fm, moved)
+        still = _still_published(text, new_text, after_excludes, fm, moved)
         if still is not None:
             return [], None, f"'{still}' would still publish after the move"
     if not moved or new_text == text:

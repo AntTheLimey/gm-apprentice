@@ -282,6 +282,7 @@ async function runSiteDoctor(options, deps) {
     const body = hubPairs.has(page) ? '' : playerSafeMarkdown(page.markdown || '', {
       excludeCallouts: publishConfig.exclude_callouts,
       excludeSections: publishConfig.exclude_sections,
+      frontmatter: page.frontmatter,
     }).text;
     const seen = new Set();
     for (const match of body.matchAll(/!?\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {

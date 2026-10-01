@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.19] — 2026-09-30
+
+### Fixed
+
+- **A handout's Keeper sections published** (#280). Handouts filed
+  with their analysis as top-level sections beside the handout text,
+  such as `## Context`, `## Clues Embedded`, `## Clues, if …` and
+  `## Prop Notes`, put that analysis on the player site; none of those
+  headings was on an exclude list. On a `type: document` page the
+  publish tool now withholds these `##` sections: `Context`, any heading
+  starting `Clues`, `Prop Notes`, `Physical Prop Notes`, `Delivery` and
+  `Delivery Notes`, also when bold or ending in a colon, whatever
+  `exclude_sections` says (`type: handout` counts as a document). A
+  `###` heading inside the handout text is left alone. The rule reads
+  the file's own `type`, even when `exclude_fields` hides it from the
+  page. To publish one of these sections, rename the heading.
+  `vault_check gm-leak` names each one still outside `## GM Notes`, and
+  `--fix` nests it there. It warns when the site's publish tool,
+  installed or pinned, predates 1.11.41. The handout workflow and the document
+  template now put prop notes and analysis under the fenced
+  `## GM Notes`.
+- **A heading with closing hashes escaped the exclude list.**
+  `## GM Notes ##` renders as "GM Notes" but did not match it, so the
+  section published. Closing hashes are no longer part of a title,
+  for `exclude_sections` and the handout rule alike.
+- **`explain --all --json` cut off at 64 KB when piped** (#279). The
+  CLI exited before a pipe had drained, so on a large vault
+  `vault_check sessions` and `gm-leak` got broken JSON and fell back to
+  "the publish tool could not be consulted". Every command now exits
+  only after its output is written.
+
+### Changed
+
+- `explain --all --json` lists each file's `strippedSections`, and
+  `explain <path>` names the same sections, taken from the strip
+  itself. `vault_check gm-leak` asks the publish tool once per run for
+  both the withheld session bodies and these sections, including on a
+  vault with no session indexes (one more INFO row naming the tool).
+
 ## [1.10.18] — 2026-09-30
 
 ### Added

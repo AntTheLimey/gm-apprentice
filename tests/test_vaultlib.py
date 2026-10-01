@@ -401,6 +401,16 @@ class ScanBodyTests(unittest.TestCase):
         self.assertIsNone(by_line[8].excluded_by)
         self.assertTrue(by_line[8].published)
 
+    def test_a_closing_sequence_does_not_hide_an_excluded_heading(self):
+        # `## GM Notes ##` renders as "GM Notes" and processor.js strips it
+        # as one; the port and scan_body must agree (#281 review).
+        text = "# Bob\n\n## GM Notes ##\nhidden\n"
+        states, _ = vl.scan_body(text, exclude_sections=["GM Notes"])
+        by_line = {s.lineno: s for s in states}
+        self.assertEqual(by_line[3].heading, (2, "GM Notes"))
+        self.assertFalse(by_line[4].published)
+        self.assertNotIn("hidden", vl.publisher_lines(text, ["GM Notes"]))
+
     def test_a_heading_inside_a_gm_block_ends_no_exclusion(self):
         # The mirror case: an exclusion opened outside the block is not
         # closed by a shallower heading the publish tool has stripped.

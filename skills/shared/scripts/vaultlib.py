@@ -763,6 +763,13 @@ def word_count(text: str) -> int:
 
 FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
+_ATX_CLOSE_RE = re.compile(r"\s+#+$")
+
+
+def atx_title(raw: str) -> str:
+    """A heading's title without an ATX closing sequence (`## GM Notes ##`
+    renders as "GM Notes"), as processor.js `walkSections` reads it."""
+    return _ATX_CLOSE_RE.sub("", raw.strip()).strip()
 _MARKERS = (("gm", "gm-only"), ("spoiler", "spoiler"))
 
 
@@ -914,7 +921,7 @@ def scan_body(text: str,
             if marker is None:
                 hm = HEADING_RE.match(line)
                 if hm:
-                    heading = (len(hm.group(1)), hm.group(2).strip())
+                    heading = (len(hm.group(1)), atx_title(hm.group(2)))
 
         # Exclusion boundaries follow `filterSections`, which sees every
         # heading-shaped line — inside a code fence too — but only at
@@ -923,7 +930,7 @@ def scan_body(text: str,
         if hm and marker is None and depths["gm"] == 0 \
                 and depths["spoiler"] == 0:
             level = len(hm.group(1))
-            title = hm.group(2).strip()
+            title = atx_title(hm.group(2))
             if excluded_by is not None and level <= exclude_level:
                 excluded_by = None
             # A nested excluded heading inside an active exclusion never
@@ -1099,7 +1106,7 @@ def _js_filter_sections(lines: list[str], excludes: Iterable[str]
             level = len(m.group(1))
             if excluding and level <= exclude_level:
                 excluding = False
-            if not excluding and m.group(2).strip().lower() in wanted:
+            if not excluding and atx_title(m.group(2)).lower() in wanted:
                 excluding, exclude_level = True, level
                 continue
         if not excluding:

@@ -226,7 +226,8 @@ maps reward assembly.
 
 ## Physical Prop Techniques
 
-Include as "Physical Prop Notes" section with generated handouts.
+Include as a `### Prop Notes` subsection of the handout's fenced
+`## GM Notes` (see the workflow below).
 
 - **Aging:** tea staining (warm yellow-brown), coffee (darker/uneven),
   edge burning (candle, work over sink), crumpling + ironing,
@@ -297,6 +298,12 @@ dictating approach.
    packaging, when to introduce, how players find it
 6. **GM Notes:** significance, skill checks needed, scenario
    connections, system mechanics (SAN loss, Mythos points, etc.)
+
+In a vault, file it on `shared/templates/document.md`: the handout
+text under `## The Text`, and everything Keeper-facing (context, the
+clues it carries, prop notes, delivery) as `###` subsections of the
+fenced `## GM Notes`. Never as top-level `##` sections beside the
+text: those publish to the player site.
 
 ## Handout Continuity
 

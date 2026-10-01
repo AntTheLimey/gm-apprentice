@@ -53,10 +53,12 @@ def rows_for(rows, needle):
 
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
-                      run=None, plan=None, installed=None, mode=None):
+                      run=None, plan=None, installed=None, mode=None,
+                      stripped=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
-    `bodyWithheld: true`; `plan` is what `manifest publish-played
+    `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
+    (None: an older tool's answer, without the field); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -84,6 +86,11 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                 plan or {"applicable": True, "published": [], "unclear": []}),
                 "")
         pages = [{"path": p, "bodyWithheld": True} for p in withheld]
+        pages += [{"path": p, "bodyWithheld": False}
+                  for p in (stripped or {}) if p not in withheld]
+        if stripped is not None:
+            for page in pages:
+                page["strippedSections"] = stripped.get(page["path"], [])
         return subprocess.CompletedProcess(
             cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
 
@@ -1414,8 +1421,16 @@ class RenestReviewRegressionTests(unittest.TestCase):
 
     def test_still_published_names_the_heading(self):
         self.assertEqual(
-            vc._still_published("## Keeper\nx\n", ["GM Notes"], {},
-                                ["Keeper"]), "Keeper")
+            vc._still_published("## Keeper\nx\n", "## Keeper\nx\n",
+                                ["GM Notes"], {}, ["Keeper"]), "Keeper")
+
+    def test_still_published_counts_same_named_headings(self):
+        # One `## Context` moved, one `### Context` of the handout text
+        # stays: nothing still publishes that moved (#281 review).
+        old = "### Context\na\n## Context\nb\n"
+        new = "### Context\na\n## GM Notes\n### Context\nb\n"
+        self.assertIsNone(vc._still_published(old, new, ["GM Notes"], {},
+                                              ["Context"]))
 
     # ---- minor: page-title advice -------------------------------------
 
@@ -2615,11 +2630,146 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertTrue(self.hub_rows(rows))
         self.assertFalse(rows_for(rows, "could not be consulted"), rows)
 
-    def test_vault_without_session_indexes_does_not_ask(self):
-        vault = make_vault(self)
-        calls = stub_publish_tool(self, vault, [])
+    def test_one_explain_run_serves_hubs_and_sections(self):
+        # Hubs and a handout's stripped sections both come from the one
+        # `explain --all` (#280): a vault without session indexes asks too.
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
+                                  stripped={})
         vc.check_gm_leak(vault, None)
+        self.assertEqual(len(calls), 1)
+        bare = make_vault(self)
+        calls = stub_publish_tool(self, bare, [], stripped={})
+        vc.check_gm_leak(bare, None)
+        self.assertEqual(len(calls), 1)
+
+
+class GmLeakHandoutSectionTests(unittest.TestCase):
+    """#280: a handout's Keeper sections outside GM Notes. The publish tool
+    says which headings it withholds (`strippedSections`); gm-leak names
+    the ones sitting outside ## GM Notes and --fix nests them there."""
+    CHIT = ("---\ntype: document\n---\n\n# The Chit\n\n## Content\n\n"
+            "> The chit.\n\n## Context\n\nThe man they came to stop.\n\n"
+            "## Clues, if Katherine walks\n\nThe route.\n\n"
+            "## Prop Notes\n\nKeeper-only until delivered.\n")
+    STRIPPED = ["Context", "Clues, if Katherine walks", "Prop Notes"]
+
+    def vault(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(self.CHIT, encoding="utf-8")
+        return vault
+
+    def test_names_each_section_and_plans_the_move(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        rows = vc.check_gm_leak(vault, None)
+        warned = [r for r in rows_for(rows, "Chit.md:")
+                  if r.startswith("WARNING")]
+        self.assertEqual(len(warned), 3, rows)
+        self.assertIn("'Context' is Keeper material outside ## GM Notes",
+                      warned[0])
+        self.assertEqual(len(rows_for(rows, "WOULD-FIX\tChit.md")), 3, rows)
+        self.assertEqual(read(vault, "Chit.md"), self.CHIT)
+
+    def test_fix_nests_them_under_gm_notes(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 3, rows)
+        text = read(vault, "Chit.md")
+        self.assertIn("## GM Notes\n\n### Context\n", text)
+        self.assertIn("### Prop Notes", text)
+        self.assertIn("## Content\n\n> The chit.", text)
+        self.assertFalse([r for r in rows_for(vc.check_gm_leak(vault, None),
+                                              "Chit.md") if "WARNING" in r])
+
+    def test_sections_on_the_exclude_list_are_not_reported_twice(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, stripped={"Chit.md": ["GM Notes"]})
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "Keeper material outside"), rows)
+
+    def test_an_older_tool_is_a_warning_to_repin(self):
+        vault = self.vault()
+        old_answer = json.dumps({"vaultPath": str(vault), "pages": [
+            {"path": "Chit.md", "bodyWithheld": False}]})
+        stub_publish_tool(self, vault, run=lambda cmd, **kw:
+                          subprocess.CompletedProcess(cmd, 0, old_answer, ""))
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
+                                       "tool predates 1.11.41"), rows)
+
+    def test_a_pin_below_the_rule_warns_even_when_the_plugin_answers(self):
+        # Review: the site pins 1.11.40 but hasn't installed it, so the
+        # plugin's 1.11.41 answers — yet the site will build with 1.11.40.
+        vault = self.vault()
+        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        (site / "package.json").write_text(json.dumps({"dependencies": {
+            "gm-apprentice-publish": "1.11.40"}}), encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
+                                       "tool 1.11.40 predates 1.11.41"), rows)
+
+    def test_a_site_too_old_to_ask_is_a_warning_not_a_note(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, installed="1.11.39")
+        rows = vc.check_gm_leak(vault, None)
         self.assertEqual(calls, [])
+        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
+                                       "tool 1.11.39 predates 1.11.41"), rows)
+
+    def test_an_emphasis_wrapped_heading_is_named_and_moved(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(self.CHIT.replace(
+            "## Context", "## **Context**"), encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={
+            "Chit.md": ["**Context**", "Clues, if Katherine walks",
+                        "Prop Notes"]})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 3, rows)
+        self.assertIn("### **Context**", read(vault, "Chit.md"))
+
+    def test_only_level_two_sections_are_named(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(
+            "---\ntype: document\n---\n\n## The Text\n\nDear sir.\n\n"
+            "### Context\n\nPart of the letter.\n", encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={"Chit.md": ["Context"]})
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
+                                  "Keeper material"))
+
+    def test_fix_moves_the_h2_and_leaves_an_h3_of_the_same_name(self):
+        # CodeRabbit: the tool withholds `## Context` only; a `### Context`
+        # inside the handout text is the handout's own and stays put.
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(
+            "---\ntype: document\n---\n\n## The Text\n\nDear sir.\n\n"
+            "### Context\n\nPart of the letter.\n\n## Context\n\n"
+            "Keeper analysis.\n", encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={"Chit.md": ["Context"]})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 1, rows)
+        text = read(vault, "Chit.md")
+        self.assertIn("## The Text\n\nDear sir.\n\n### Context\n\n"
+                      "Part of the letter.", text)
+        self.assertIn("## GM Notes\n\n### Context\n\nKeeper analysis.", text)
+
+    def test_a_closing_sequence_is_part_of_no_title(self):
+        vault = make_vault(self)
+        (vault / "Chit.md").write_text(self.CHIT.replace(
+            "## Context\n", "## Context ##\n"), encoding="utf-8")
+        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tChit.md")), 3, rows)
+        self.assertIn("### Context ##", read(vault, "Chit.md"))
+
+    def test_no_tool_says_what_went_unchecked(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault, which=None)
+        note = rows_for(vc.check_gm_leak(vault, None), "could not be consulted")
+        self.assertEqual(len(note), 1)
+        self.assertIn("a handout's Context, Clues and Prop Notes", note[0])
 
 
 # CI sets VAULT_CHECK_REQUIRE_NODE so a runner without node fails here
@@ -2690,6 +2840,23 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_sessions(broken),
                                   "session index body"))
 
+
+    def test_a_handouts_keeper_sections_come_from_the_tool(self):
+        # #280, against the real tool: it withholds the handout's Context
+        # and Prop Notes, so gm-leak names both and --fix nests them.
+        vault = self.site_vault("", "")
+        folder = vault / "Sessions"
+        (folder / "Chit.md").write_text(
+            "---\ntype: document\n---\n\n## Content\n\nThe chit.\n\n"
+            "## Context\n\nThe man they came to stop.\n\n"
+            "## Prop Notes\n\nTea-stained.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertEqual(len(rows_for(rows, "Keeper material outside")), 2,
+                         rows)
+        vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
+                                  "Keeper material outside"))
 
     def test_manifest_rows_follow_publish_played(self):
         # The real `manifest publish-played --dry-run --json --vault`: a

@@ -3,6 +3,24 @@
 const path = require('path');
 const fs = require('fs');
 
+// Exit once stdout and stderr have drained. On a pipe (macOS; Linux too for
+// large writes) Node writes asynchronously, and a bare process.exit() right after
+// a big console.log drops everything past the 64 KB pipe buffer: `explain --all
+// --json | …` came back cut off at 65,529 bytes, so vault_check could not read it
+// (#279). A write's callback runs after every write queued before it.
+function exitAfterFlush(rc) {
+  process.exitCode = rc;
+  let pending = 2;
+  const done = () => { if (--pending === 0) process.exit(rc); };
+  process.stdout.write('', done);
+  process.stderr.write('', done);
+}
+
+function failAfterFlush(err) {
+  console.error(err.message);
+  exitAfterFlush(1);
+}
+
 const args = process.argv.slice(2);
 const command = args[0];
 
@@ -367,19 +385,22 @@ function warnIfVersionDrift() {
 
 if (command === '--help' || command === '-h' || !command) {
   printHelp();
-  process.exit(0);
+  exitAfterFlush(0);
+  return;
 }
 
 if (command === '--version' || command === '-v') {
   printVersion();
-  process.exit(0);
+  exitAfterFlush(0);
+  return;
 }
 
 // `--help` on any subcommand prints usage and exits 0 with no side effects (#178).
 const wantsHelp = args.slice(1).some((a) => a === '--help' || a === '-h');
 if (wantsHelp) {
   if (Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, command)) printSubcommandHelp(command); else printHelp();
-  process.exit(0);
+  exitAfterFlush(0);
+  return;
 }
 
 
@@ -387,10 +408,10 @@ if (command === 'init') {
   const targetDir = args[1] || '.';
   const { init } = require('../lib/init');
   init(targetDir, { verbose: true }).then(() => {
-    process.exit(0);
+    exitAfterFlush(0);
   }).catch((err) => {
     console.error(`Init failed: ${err.message}`);
-    process.exit(1);
+    exitAfterFlush(1);
   });
   return;
 }
@@ -443,9 +464,10 @@ if (command === 'build') {
       build({ configPath });
     } catch (err) {
       console.error(`Build failed: ${err.message}`);
-      process.exit(1);
+      exitAfterFlush(1);
+      return;
     }
-    process.exit(0);
+    exitAfterFlush(0);
   })();
   return;
 }
@@ -453,8 +475,8 @@ if (command === 'build') {
 if (command === 'inbox') {
   const { runInbox } = require('../lib/inbox-cli.js');
   runInbox(args.slice(1))
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -467,8 +489,8 @@ if (command === 'flush') {
   }
   const { runFlush } = require('../lib/flush-cli.js');
   runFlush({ configPath: parsed.configPath, dryRun: !!parsed.flags.dryRun })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -501,8 +523,8 @@ if (command === 'sheet') {
     playerSafe: !!parsed.flags.playerSafe,
     json: !!parsed.flags.json,
   })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -515,8 +537,8 @@ if (command === 'explain' && args[1] === '--all') {
   }
   const { runExplainAll } = require('../lib/explain-cli.js');
   runExplainAll({ configPath: parsed.configPath, vaultPath: parsed.flags.vault })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -535,8 +557,8 @@ if (command === 'explain') {
   }
   const { runExplain } = require('../lib/explain-cli.js');
   runExplain({ configPath: parsed.configPath, target, json: !!parsed.flags.json })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -561,8 +583,8 @@ if (command === 'deploy') {
     dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
   })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -605,8 +627,8 @@ if (command === 'manifest') {
     dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
   })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -624,16 +646,16 @@ if (command === 'update-pin') {
   const siteDir = parsed.flags.site || path.dirname(path.resolve(parsed.configPath));
   const { runUpdatePin } = require('../lib/update-pin.js');
   runUpdatePin({ siteDir, tag: parsed.flags.tag, check: !!parsed.flags.check, json: !!parsed.flags.json })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
 if (command === 'doctor') {
   const { runDoctor } = require('../lib/doctor-cli.js');
   runDoctor(args.slice(1))
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 
@@ -649,8 +671,8 @@ if (command === 'setup-status-bar' || command === 'setup-inbox') {
   const feature = command === 'setup-status-bar' ? 'status-bar' : 'inbox';
   const { runSetupBackend } = require('../lib/setup-backend.js');
   runSetupBackend(feature, { configPath })
-    .then((rc) => process.exit(rc))
-    .catch((err) => { console.error(err.message); process.exit(1); });
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
   return;
 }
 

@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -107,6 +107,59 @@ describe('resolveWikiLinks', () => {
     const map = { 'Lord_Percival_Harcourt': 'x.html' };
     const result = resolveWikiLinks('[[Lord_Percival_Harcourt|His Lordship]]', map, 'index.html');
     assert.strictEqual(result, '[His Lordship](x.html)');
+  });
+});
+
+describe("filterSections on a handout's Keeper sections (#280)", () => {
+  const md = [
+    '## Content', 'The letter.',
+    '## Context', 'Why it matters.',
+    '## Clues Embedded', '- a clue',
+    "## Clues, if Katherine walks the servants' course", 'a route',
+    '## Physical Prop Notes', 'tea-stained',
+    '## Delivered', 'Session 4.',
+  ].join('\n');
+
+  it('withholds them on a document page', () => {
+    const out = filterSections(md, [], { type: 'document' });
+    assert.match(out, /The letter\./);
+    assert.match(out, /## Delivered/);
+    assert.doesNotMatch(out, /Context|Why it matters|Clues|a clue|a route|Prop Notes|tea-stained/);
+  });
+
+  it('leaves the same headings alone on any other page type', () => {
+    assert.strictEqual(filterSections(md, [], { type: 'location' }), md);
+    assert.strictEqual(filterSections(md, []), md);
+  });
+
+  it('withholds them as ## sections only (review: ### Delivery inside The Text is handout text)', () => {
+    const nested = '# Clues from Arkham\n\n## The Text\n\nDear sir.\n\n### Delivery\n\nBy hand.\n';
+    assert.strictEqual(filterSections(nested, [], { type: 'document' }), nested);
+    assert.strictEqual(isExcludedSection('Context', [], { type: 'document' }, 3), false);
+    assert.strictEqual(isExcludedSection('GM Notes', ['GM Notes'], null, 3), true);
+  });
+
+  it('sees through emphasis and a trailing colon', () => {
+    for (const t of ['**Context**', '*Prop Notes*', 'Clues:', '__Context:__', '**Context**:', '*Prop Notes*:']) {
+      assert.strictEqual(isExcludedSection(t, [], { type: 'document' }), true, t);
+    }
+  });
+
+  it('ignores an ATX closing sequence (CodeRabbit: `## Context ##`)', () => {
+    const md = '## Content\nThe letter.\n## Context ##\nSECRET\n## GM Notes ##\nSECRET2\n';
+    assert.strictEqual(filterSections(md, ['GM Notes'], { type: 'document' }), '## Content\nThe letter.');
+    assert.deepStrictEqual(strippedSectionTitles(md, ['GM Notes'], { type: 'document' }), ['Context', 'GM Notes']);
+  });
+
+  it("treats type: handout as a document", () => {
+    assert.strictEqual(isExcludedSection('Prop Notes', [], { type: 'handout' }), true);
+  });
+
+  it('matches whole titles, not words inside them', () => {
+    assert.strictEqual(isExcludedSection('Historical Context', [], { type: 'document' }), false);
+    assert.strictEqual(isExcludedSection('Clueless', [], { type: 'document' }), false);
+    assert.strictEqual(isExcludedSection('prop notes', [], { type: 'Document' }), true);
+    assert.strictEqual(isExcludedSection('GM Notes', ['GM Notes'], null), true);
   });
 });
 

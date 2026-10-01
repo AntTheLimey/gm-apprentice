@@ -11,6 +11,10 @@ All campaign content falls into three categories:
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
 - H2 sections listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
+- On a `type: document` page, a handout's own Keeper sections, whatever
+  `exclude_sections` says: `Context`, any heading starting `Clues`,
+  `Prop Notes`, `Physical Prop Notes`, `Delivery`, `Delivery Notes`.
+  Rename the heading to publish one
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
 - **Every other `<!-- ... -->` comment.** Private authoring notes
   (`<!-- UNVERIFIED: … -->`, change logs, import provenance) are
