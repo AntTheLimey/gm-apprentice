@@ -69,8 +69,8 @@ copies are excluded from the repo and from the zips.)
 The publish tool's FitD sheet tests
 (`tools/publish/test/helpers/pc-template.js`) fill the PC template
 with an original scoundrel that uses a playbook name, a special
-ability name and trauma names from the SRD, with no rules text and no
-setting names.
+ability name and trauma names from the SRD, a one-line paraphrase of
+that ability, and no setting names.
 
 ### Basic Roleplaying Universal Game Engine
 

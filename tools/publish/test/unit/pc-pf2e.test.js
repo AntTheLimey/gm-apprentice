@@ -161,6 +161,13 @@ describe('renderPF2eSheet frontmatter fallback', () => {
     assert.strictEqual(stat(html, 'Hero Points'), '2');
   });
 
+  it('renders hero points when the body Core table has no such row', () => {
+    const body = '## Stat Sheet\n\n### Core\n\n| Attribute | Value |\n|---|---|\n| Level | 2 |\n';
+    const html = render(body, { type: 'pc', hero_points: 3 });
+    assert.strictEqual(stat(html, 'Hero Points'), '3');
+    assert.strictEqual((render(druidBody(), { type: 'pc', hero_points: 3 }).match(/Hero Points/g) || []).length, 1);
+  });
+
   it('renders spell slots by rank', () => {
     const html = renderPF2eSheet({ type: 'pc', spell_slots: { 1: 3, 2: 2 } }, []);
     assert.ok(html.includes('Spell Slots'));

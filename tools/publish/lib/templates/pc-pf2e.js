@@ -74,7 +74,9 @@ const PF2E = {
   fallbacks: (frontmatter, rendered) => {
     const out = [];
     const heroPoints = frontmatter.hero_points;
-    if (!rendered['stat sheet'] && heroPoints !== undefined && heroPoints !== null) {
+    // Wherever the body's Core table gave no Hero Points row.
+    const onSheet = /<span class="stat-label">Hero Points<\/span>/i.test(rendered['stat sheet'] || '');
+    if (!onSheet && heroPoints !== undefined && heroPoints !== null) {
       out.push(`<div class="quick-stats"><div class="stat-item"><span class="stat-label">Hero Points</span><span class="stat-value">${escapeHtml(String(heroPoints))}</span></div></div>`);
     }
     const skills = [].concat(frontmatter.skill_proficiencies || []).filter(Boolean);

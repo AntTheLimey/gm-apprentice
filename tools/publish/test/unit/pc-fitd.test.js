@@ -33,6 +33,16 @@ describe('renderFitDSheet from the real template body', () => {
     ]);
   });
 
+  it('reads an identity label with an ampersand in it', () => {
+    const body = replace(cutterBody(), '**Vice/Purveyor:**', '**Vice & Purveyor:**');
+    assert.ok(render(body).includes('<dt>Vice &amp; Purveyor</dt><dd>Obligation — the old crew</dd>'));
+  });
+
+  it('keeps a bracketed aside inside one trauma', () => {
+    const html = render(setRow(cutterBody(), 'Trauma', ['Cold (since the fire, mostly); Haunted']));
+    assert.ok(html.includes('>Cold (since the fire, mostly)<') && html.includes('>Haunted<'));
+  });
+
   it('leaves an unfilled identity field out', () => {
     assert.ok(!render(cutterBody()).includes('<dt>Look</dt>'));
   });
@@ -96,6 +106,9 @@ describe('renderFitDSheet drops nothing from a consumed section', () => {
     'a repeated ## Special Abilities': b => b + '\n## Special Abilities\n\nMARKER veteran.\n',
     'an extra column in Stash & Coin': b => replace(b, '| Attribute | Value |\n|-----------|-------|\n| Coin | 2 |', '| Attribute | Value | Notes |\n|---|---|---|\n| Coin | 2 | MARKER |'),
     'braces an author wrote': b => replace(b, '**Battleborn.**', '{MARKER} **Battleborn.**'),
+    'a line wrapped under Playbook': b => replace(b, '**Playbook:** Cutter', '**Playbook:** Cutter\nMARKER upgrade pending.'),
+    'bold prose that starts with Playbook': b => replace(b, '**Playbook:** Cutter', '**Playbook:** Cutter\n\n**Playbook** MARKER moves are overleaf.'),
+    'an attribute name over an empty table': b => replace(b, '### Stress & Trauma', '**MARKER Luck**\n\n| Action | Rating |\n|---|---|\n\n### Stress & Trauma'),
   };
   for (const [name, mutate] of Object.entries(cases)) {
     it(`keeps ${name}`, () => {

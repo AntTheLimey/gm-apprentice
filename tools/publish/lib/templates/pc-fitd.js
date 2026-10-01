@@ -49,6 +49,8 @@ function renderActionRatings(html) {
         rows.push(actionRow(action, parseInt(rating, 10) || 0));
         return true;
       });
+      // Nothing placed and nothing left over: a name over an empty table, kept as written.
+      if (rows.length === 0 && !unplaced) return whole;
       if (rows.length) groups.push(`<div class="fitd-attribute"><h4>${name}</h4>${rows.join('\n')}</div>`);
       return unplaced ? `<p><strong>${name}</strong></p>\n${unplaced}` : '';
     });
@@ -71,7 +73,7 @@ function renderStressTrauma(html) {
       out.push(stressTracker(Number(stress[1]), Number(stress[2])));
     } else if (key === 'trauma' && !seen.has(key)) {
       seen.add(key);
-      out.push(traumaTracker(value.split(/[,;]/).map(t => t.trim()).filter(t => t && t !== '—')));
+      out.push(traumaTracker(value.split(/[,;](?![^(]*\))/).map(t => t.trim()).filter(t => t && t !== '—')));
     } else {
       other.push([label, value]);
     }
@@ -111,8 +113,9 @@ function renderStatSheet(section, found) {
 
   let top = aboveSubheadings(html);
   found.playbook = boldField(top, 'Playbook');
-  // The Playbook line moves to the header when it is a paragraph of its own.
-  top = top.replace(/<p>\s*<strong>\s*Playbook\s*:?\s*<\/strong>\s*:?[^<]*<\/p>/i, '');
+  // The Playbook line moves to the identity block when it is a paragraph of
+  // its own: the same `**Playbook:** value` shape boldField reads, on one line.
+  top = top.replace(/<p>\s*<strong>\s*Playbook\s*(?::\s*<\/strong>|<\/strong>\s*:)[^<\n]*<\/p>/i, '');
   if (hasContent(top)) parts.push(top);
 
   const seen = new Set();
@@ -202,7 +205,8 @@ function renderFitDSheet(frontmatter, sections) {
   const fields = found.playbook ? [['Playbook', found.playbook]] : [];
   for (const m of backgroundHtml.matchAll(/<strong>\s*([^<:]+?)\s*:\s*<\/strong>/g)) {
     const label = cellText(m[1]);
-    const value = boldField(backgroundHtml, label.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'));
+    // Matched against the rendered HTML, so from the label as it appears there.
+    const value = boldField(backgroundHtml, m[1].replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'));
     if (value && !fields.some(([l]) => l.toLowerCase() === label.toLowerCase())) fields.push([label, value]);
   }
   if (fields.length) {
