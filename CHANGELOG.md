@@ -41,6 +41,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - session-wrapup, vault-ingest and campaign-qa ask the GM once where
     such sheets are kept and write `sheet_source` themselves.
 
+### Fixed
+
+- **PC pages lost their pull quote in 1.10.21.** Publish tool 1.11.43
+  stopped excerpting the body whenever a system sheet rendered, to keep
+  FitD's label lines ("Playbook: Cutter Insight Prowess…") out of the
+  quote. That took the quote off every CoC, GURPS, D&D and PF2e PC
+  with no `key_traits`. The excerpt is back for every system. On a PC
+  it now skips the sheet's own lines: bold label lines, tick-boxes and
+  unfilled `{placeholders}`. A PC whose body has no prose still gets
+  no quote. Publish tool 1.11.44.
+- **A pull quote stopped at a title.** "Mr. James Bennet was a poet."
+  was quoted as "Mr.". The first sentence no longer ends at Mr., Mrs.,
+  Dr., St., Col. and the like. This applies to NPC and location quotes
+  and listing-card excerpts too.
+
 ## [1.10.21] — 2026-10-01
 
 ### Fixed

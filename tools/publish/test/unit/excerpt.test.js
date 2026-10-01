@@ -165,3 +165,23 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
     assert.strictEqual(excerptFromMarkdown(html), 'Real prose.');
   });
 });
+
+describe('excerptFromMarkdown sentence end', () => {
+  it('does not stop at a title', () => {
+    assert.strictEqual(excerptFromMarkdown('Mr. James Bennet is a clerk. He is quiet.'), 'Mr. James Bennet is a clerk.');
+    assert.strictEqual(excerptFromMarkdown('She met Col. Moreau and Dr. Ward at St. Malo. Then left.'), 'She met Col. Moreau and Dr. Ward at St. Malo.');
+  });
+  it('still stops at the first full stop otherwise', () => {
+    assert.strictEqual(excerptFromMarkdown('A sailor. He owes the Guild.'), 'A sailor.');
+  });
+});
+
+describe('excerptFromMarkdown skipSheetLines', () => {
+  const body = '**Playbook:** Cutter\n\n**Insight**\n\n**ST** 12\n\n- [ ] Major Wound\n\n{A placeholder\nover two lines}\n\n- {unresolved item}\n\nA sailor. More.\n';
+  it('is off by default, so NPC and location quotes are unchanged', () => {
+    assert.strictEqual(excerptFromMarkdown('**Role:** Fence. More.'), 'Role: Fence.');
+  });
+  it('drops label lines, tick-boxes and placeholders when asked', () => {
+    assert.strictEqual(excerptFromMarkdown(body, { skipSheetLines: true }), 'A sailor.');
+  });
+});

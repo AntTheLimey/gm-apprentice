@@ -47,6 +47,17 @@ const HTML_BLOCKS_TO_DROP = [
 // while inline tags close up cleanly so `<a>Magellan</a>'s` stays "Magellan's".
 const BLOCK_BOUNDARY_RE = /<\/(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|section|article)\s*>|<br\s*\/?>/gi;
 
+// Lines of a PC's body that are sheet, not prose (opts.skipSheetLines): a label line
+// ("**Playbook:** Cutter", "**Stress**: 3", "**ST** 12", a bare "**Insight**"), a
+// tick-box ("- [ ] Major Wound"), and a list marker left with nothing after it. A
+// template placeholder nobody filled in ("{Appearance and manner}") goes too, wherever
+// it sits and however many lines it runs to.
+const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d|^[-*+] \[[ xX]\]|^[-*+]$/;
+const PLACEHOLDER_RE = /\{[^{}]{0,400}\}/g;
+
+// A full stop after one of these is not the end of a sentence.
+const ABBREVIATION_RE = /\b(?:Mr|Mrs|Ms|Mx|Dr|St|Sr|Jr|Lt|Col|Capt|Sgt|Maj|Gen|Cmdr|Prof|Rev|Hon|Mme|Mlle|Msgr)\.$/;
+
 function stripHtml(text) {
   let out = text;
   for (const re of HTML_BLOCKS_TO_DROP) out = out.replace(re, '\n');
@@ -70,6 +81,7 @@ function excerptFromMarkdown(source, opts = {}) {
   // Fenced code (including ```dataview) is never prose.
   working = working.replace(/^[ \t]*(```|~~~)[\s\S]*?(?:^[ \t]*\1[ \t]*$|$)/gm, '');
   working = stripHtml(working);
+  if (opts.skipSheetLines) working = working.replace(PLACEHOLDER_RE, '');
 
   const kept = [];
   for (const line of working.split('\n')) {
@@ -79,6 +91,7 @@ function excerptFromMarkdown(source, opts = {}) {
     const t = line.trim();
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) continue;    // horizontal rules
     if (t.startsWith('|')) continue;                   // table rows
+    if (opts.skipSheetLines && SHEET_LINE_RE.test(t)) continue;
     let cleaned = line.replace(/^\s*>\s?/, '');        // blockquote marker
     // A callout marker line is metadata, never prose — drop the whole line, title included.
     // The type pattern must match markdown.js CALLOUT_RE, which allows hyphens.
@@ -94,8 +107,12 @@ function excerptFromMarkdown(source, opts = {}) {
   text = text.replace(/[*_`]+/g, '');
   text = text.replace(/\s+/g, ' ').trim();
 
-  const match = text.match(/^(.+?[.!?])\s/);
-  if (match) return match[1];
+  // The first sentence: up to the first stop that is not a title's ("Mr. Bennet").
+  const stop = /[.!?](?=\s)/g;
+  for (let m = stop.exec(text); m; m = stop.exec(text)) {
+    const sentence = text.slice(0, m.index + 1);
+    if (!ABBREVIATION_RE.test(sentence)) return sentence;
+  }
   if (text.length <= limit) return text;
   const cut = text.slice(0, limit);
   const lastSpace = cut.lastIndexOf(' ');

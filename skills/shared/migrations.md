@@ -1219,3 +1219,7 @@ the vault.
   note (`explain --all --json`, `sheetSourceSet`). A site pinned below
   1.11.44 cannot answer; the value is then taken as set and an INFO
   row says so.
+- `gm-apprentice-publish` 1.11.44 also restores the PC pull quote
+  that 1.11.43 dropped from any PC with a sheet and no `key_traits`.
+  A site pinned to 1.11.43 should move to 1.11.44; nothing in the
+  vault changes.

@@ -284,14 +284,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemStatusBarHtml = (context || {}).systemStatusBarHtml || null;
 
   // --- Character Epithet ---
-  // key_traits when the PC has any. Otherwise an excerpt of the body, unless a
-  // system sheet rendered: that body opens with stat tables, and an excerpt of
-  // those is noise ("Playbook: Cutter Insight Prowess Resolve…").
+  // key_traits when the PC has any, otherwise the first sentence of the body's
+  // prose. A sheet's body opens with stat tables, label lines and tick-boxes; the
+  // excerpt drops them, so the quote is never "Playbook: Cutter Insight Prowess Resolve…".
   let epithet = '';
   const traitsText = Array.isArray(fm.key_traits)
     ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
     : String(fm.key_traits || '');
-  const quoteText = traitsText.trim() || (systemHtml ? '' : excerptFromMarkdown(publishedSource(page)));
+  const quoteText = traitsText.trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
   if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
 
   // Status-bar tier off ⇒ no live vitals UI anywhere. Null out every live input
