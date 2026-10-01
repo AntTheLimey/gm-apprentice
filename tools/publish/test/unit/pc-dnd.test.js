@@ -12,7 +12,8 @@ const { pcTemplate } = require('../../lib/templates/pc');
 const TEMPLATE = path.join(__dirname, '../../../../skills/shared/templates/pc-dnd-5e-2024.md');
 
 function templateBody() {
-  return matter(fs.readFileSync(TEMPLATE, 'utf8')).content;
+  // A Windows checkout has CRLF line endings; the mutations below match on \n.
+  return matter(fs.readFileSync(TEMPLATE, 'utf8')).content.replace(/\r\n/g, '\n');
 }
 
 // Replace one table row, found by its first cell, with new cells.
