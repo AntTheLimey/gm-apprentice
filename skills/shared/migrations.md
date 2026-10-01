@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.19"
+current_version: "1.10.20"
 ---
 
 # Vault Migration Registry
@@ -1123,3 +1123,28 @@ changes.
 - `vault_check gm-leak` warns when the site's publish tool, installed
   or pinned, predates 1.11.41, since those sections still publish
   there.
+
+## Migration: 1.10.19 → 1.10.20
+
+A D&D 5e PC now publishes with a structured character sheet (#271). No
+frontmatter changes.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Nothing. The sheet is built from the body sections the D&D PC
+  template already has.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.42: on a `dnd-5e-2024` site a PC page
+  reads `## Stat Sheet`, `## Skills`, `## Spellcasting` and
+  `## Proficiencies` from the note body and renders them as a sheet;
+  before, it rendered none and showed raw tables. If
+  `publish.site_dir` is set and the campaign's system is D&D, offer
+  `update-pin --site <site-dir>` (publish-site's build tool), then
+  rebuild and redeploy. For a site outside the plugin,
+  `update-pin --site <site-dir> --tag publish-v1.11.42`.

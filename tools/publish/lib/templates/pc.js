@@ -6,6 +6,7 @@ const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
+const { isDndConsumedTitle } = require('./pc-dnd');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -43,6 +44,10 @@ function isGurpsSystem(publishConfig) {
 
 function isCocSystem(publishConfig) {
   return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
+function isDndSystem(publishConfig) {
+  return ['dnd-5e', 'dnd-5e-2024', 'dnd'].includes(String((publishConfig || {}).system || '').toLowerCase());
 }
 
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
@@ -308,12 +313,15 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   const gurpsSheet = isGurpsSystem(publishConfig);
   const cocSheet = isCocSystem(publishConfig);
+  const dndSheet = isDndSystem(publishConfig);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
     if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
     if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
     if (cocSheet && (systemHtml || systemRecordHtml) && COC_CONSUMED_TITLES.has(lower)) return false;
+    // One matcher decides both what the sheet reads and what leaves this list.
+    if (dndSheet && systemHtml && isDndConsumedTitle(s.title)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;
