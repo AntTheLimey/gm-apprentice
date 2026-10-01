@@ -1,12 +1,12 @@
 const { escapeHtml } = require('../processor');
 const {
-  ATTRIBUTE_COLUMNS, aboveSubheadings, yesNo, hasContent, statItem, subsections, consumeTable,
+  ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, yesNo, hasContent, statItem, subsections, consumeTable,
   stripTemplatePlaceholders, boldField, readAttributes, tiles, sectionReader, consumedTitleMatcher,
 } = require('./sheet-parse');
 
 // `## ` sections the sheet takes over from the accordion list; each is on the
 // sheet in full whenever renderFitDSheet returns HTML (sheet-parse.js).
-// Background is read for the header but stays an accordion, as do Friends &
+// Background is read for the identity block but stays an accordion, as do Friends &
 // Rivals and Long-Term Projects.
 const isFitDConsumedTitle = consumedTitleMatcher(['stat sheet', 'special abilities', 'stash & coin']);
 
@@ -197,13 +197,18 @@ function renderFitDSheet(frontmatter, sections) {
 
   const background = reader.first('background');
   const backgroundHtml = background ? background.html : '';
-  const bits = [
-    found.playbook,
-    boldField(backgroundHtml, 'Heritage'),
-    boldField(backgroundHtml, 'Background'),
-    boldField(backgroundHtml, 'Vice(?:\\s*/\\s*Purveyor)?'),
-  ].filter(Boolean);
-  if (bits.length) parts.push(`<div class="dnd-header">${bits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>`);
+  // The identity block: Playbook, then every labelled line of Background
+  // (Heritage, Background, Look, Vice/Purveyor) under the author's own label.
+  const fields = found.playbook ? [['Playbook', found.playbook]] : [];
+  for (const m of backgroundHtml.matchAll(/<strong>\s*([^<:]+?)\s*:\s*<\/strong>/g)) {
+    const label = cellText(m[1]);
+    const value = boldField(backgroundHtml, label.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'));
+    if (value && !fields.some(([l]) => l.toLowerCase() === label.toLowerCase())) fields.push([label, value]);
+  }
+  if (fields.length) {
+    parts.push(`<dl class="fitd-identity">${fields.map(([label, value]) =>
+      `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl>`);
+  }
 
   if (statHtml) parts.push(statHtml);
   parts.push(...reader.repeats('stat sheet'));

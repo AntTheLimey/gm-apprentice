@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     all skills with their proficiency rank, spellcasting tradition,
     attack and DC, remaining and total spell slots by rank, focus
     points, spells, and proficiencies.
-  - **Forged in the Dark:** a header (playbook, heritage, background,
-    vice), action ratings as dots grouped under Insight, Prowess and
+  - **Forged in the Dark:** a labelled identity block (playbook,
+    heritage, background, look, vice), action ratings as dots grouped under Insight, Prowess and
     Resolve, stress as a track, trauma, harm, armor uses, XP, special
     abilities, and stash and coin.
   - As on the D&D sheet, the sections a sheet shows no longer repeat

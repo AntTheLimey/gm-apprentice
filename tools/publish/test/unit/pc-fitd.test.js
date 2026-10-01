@@ -20,9 +20,21 @@ describe('renderFitDSheet from the real template body', () => {
     assert.ok(!html.includes('{'), 'no template placeholder reaches the sheet');
   });
 
-  it('shows the header: playbook, heritage, background, vice', () => {
-    const header = render(cutterBody()).match(/<div class="dnd-header">[\s\S]*?<\/div>/)[0];
-    for (const bit of ['Cutter', 'Marrow Coast', 'Labor', 'Obligation — the old crew']) assert.ok(header.includes(`<span>${bit}</span>`), bit);
+  it('labels each identity field: playbook, heritage, background, look, vice', () => {
+    const body = replace(cutterBody(), '**Look:** {Physical description}', '**Look:** Scarred, heavy coat');
+    const identity = render(body).match(/<dl class="fitd-identity">[\s\S]*?<\/dl>/)[0];
+    const fields = [...identity.matchAll(/<dt>([^<]*)<\/dt><dd>([^<]*)<\/dd>/g)].map(m => [m[1], m[2]]);
+    assert.deepStrictEqual(fields, [
+      ['Playbook', 'Cutter'],
+      ['Heritage', 'Marrow Coast'],
+      ['Background', 'Labor'],
+      ['Look', 'Scarred, heavy coat'],
+      ['Vice/Purveyor', 'Obligation — the old crew'],
+    ]);
+  });
+
+  it('leaves an unfilled identity field out', () => {
+    assert.ok(!render(cutterBody()).includes('<dt>Look</dt>'));
   });
 
   it('does not repeat the Playbook line under the header', () => {

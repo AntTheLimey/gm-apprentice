@@ -3821,6 +3821,21 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   color: var(--text-muted);
 }
 
+.fitd-identity {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0 0 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.fitd-identity dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.fitd-identity dd { margin: 0.15rem 0 0; font-weight: 600; }
 .fitd-attribute { break-inside: avoid; }
 .fitd-action-ratings { columns: 3 11rem; column-gap: 2rem; }
 .fitd-attribute h4 { margin-top: 0; }

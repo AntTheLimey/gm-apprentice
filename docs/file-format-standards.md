@@ -263,12 +263,12 @@ this structure; its tests build a PC from the real template.
 
 | Section | Subsection | What the renderer reads |
 |---------|-----------|--------------------------|
-| `## Stat Sheet` | (top) | the `**Playbook:**` line, for the header |
+| `## Stat Sheet` | (top) | the `**Playbook:**` line, for the identity block |
 | | `### Action Ratings` | a bold attribute name (`**Insight**`) on its own line over each `Action \| Rating` table; a rating of 0 to 4 becomes dots |
 | | `### Stress & Trauma` | `Attribute \| Value`; `Stress` as `n / max` becomes a track, `Trauma` a comma-separated list, any other row a tile |
 | | `### Armor Uses` | `Type \| Used` with a yes or no word |
 | | `### Harm`, `### XP`, others | shown as written |
-| `## Background` | — | the `**Heritage:**`, `**Background:**` and `**Vice/Purveyor:**` lines, for the header |
+| `## Background` | — | every filled `**Label:** value` line (Heritage, Background, Look, Vice/Purveyor), each shown under its own label in the identity block |
 | `## Special Abilities` | — | shown as written |
 | `## Stash & Coin` | — | `Attribute \| Value`, every row a tile |
 

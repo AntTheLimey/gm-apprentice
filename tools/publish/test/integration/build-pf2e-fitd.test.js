@@ -53,7 +53,7 @@ describe('build integration — FitD PC', () => {
 
   it('renders the structured sheet', () => {
     assert.ok(out.html.includes('class="fitd-sheet"'));
-    assert.ok(out.html.includes('<span>Cutter</span>'));
+    assert.ok(out.html.includes('<dt>Playbook</dt><dd>Cutter</dd>'));
     assert.strictEqual((out.html.match(/class="fitd-action-row"/g) || []).length, 12);
     assert.ok(out.html.includes('4 / 9'));
   });
