@@ -1,86 +1,137 @@
 const { escapeHtml } = require('../processor');
-const { parseTableRows, parseTables, findSectionByTitle, extractSubsectionHtml, aboveSubheadings } = require('./gurps/tables');
+const { decodeEntities, normalizeTitle, aboveSubheadings } = require('./gurps/tables');
 
 const ABILITIES = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+const ABILITY_NAME = /^(str(?:ength)?|dex(?:terity)?|con(?:stitution)?|int(?:elligence)?|wis(?:dom)?|cha(?:risma)?)$/i;
 
-// `### ` subsections of `## Stat Sheet` the sheet places itself. Any other
-// subsection is passed through whole so nothing an author adds is dropped.
-const STAT_SUBSECTIONS = ['core', 'ability scores', 'combat'];
+// `## ` sections the sheet takes over from the accordion list. The contract,
+// which pc.js relies on: whenever renderDnDSheet returns HTML, every section
+// with one of these titles is on the sheet in full. What the sheet cannot place
+// structurally — a row with an extra column, prose under a table, a repeated
+// section, an unknown `### ` subsection — is passed through as written.
+// Background is read for the header but is not consumed: its prose stays an
+// accordion, as do Class Features, Species Traits and Feats.
+const CONSUMED_TITLES = ['stat sheet', 'skills', 'spellcasting', 'proficiencies'];
+
+function isDndConsumedTitle(title) {
+  return CONSUMED_TITLES.includes(normalizeTitle(title));
+}
 
 function abilityMod(score) {
   const mod = Math.floor((score - 10) / 2);
   return mod >= 0 ? `+${mod}` : String(mod);
 }
 
-function isYes(cell) {
-  return /^(yes|y|true|x|✓|✔|●)$/i.test(String(cell || '').trim());
+function cellText(html) {
+  return decodeEntities(String(html || '').replace(/<[^>]+>/g, '')).trim();
 }
 
-// A template placeholder (`{Species name}`) is not a value.
+// A Yes/No cell: true, false, or null when it says something else (which the
+// sheet has no mark for, so the row is passed through instead).
+function yesNo(cell) {
+  const s = String(cell || '').trim();
+  if (/^(yes|y|true|x|\[x\]|✓|✔|●|1|p|prof|proficient|trained|e|expert|expertise)$/i.test(s)) return true;
+  if (/^(no|n|false|\[ ?\]|✗|0|—|–|-)?$/i.test(s)) return false;
+  return null;
+}
+
+function isPlaceholder(text) {
+  return /^\{[^}]*\}$/.test(String(text || '').trim());
+}
+
+// A header value: template placeholders and dashes are not values.
 function filled(text) {
   const s = String(text == null ? '' : text).trim();
-  return s && !/^\{[^}]*\}$/.test(s) && s !== '—' ? s : '';
+  return s && !isPlaceholder(s) && s !== '—' ? s : '';
+}
+
+// Text, or something that shows without text (an image, an embed).
+function hasContent(html) {
+  const s = String(html || '');
+  return /<(img|svg|video|audio|iframe|object|embed)[ >/]/i.test(s) || cellText(s).length > 0;
 }
 
 function statItem(label, value) {
   return `<div class="stat-item"><span class="stat-label">${escapeHtml(label)}</span><span class="stat-value">${escapeHtml(value || '—')}</span></div>`;
 }
 
-// Body rows of a two-column Attribute/Value table, header row dropped.
-function attributeRows(html) {
-  return parseTableRows(html || '')
-    .filter(r => r[0] && !/^attribute$/i.test(r[0]))
-    .map(r => [r[0], r[1] || '']);
-}
-
-// Each `### ` subsection as { title, html }, in document order.
+// Each `### ` subsection as { title, html }, in document order. The title is
+// plain text, so `### **Combat**` is still Combat.
 function subsections(sectionHtml) {
   const out = [];
   const re = /<h3[^>]*>([\s\S]*?)<\/h3>([\s\S]*?)(?=<h3[ >]|$)/gi;
   let m;
   while ((m = re.exec(sectionHtml || '')) !== null) {
-    out.push({ title: m[1].replace(/<[^>]+>/g, '').trim(), html: m[2] });
+    out.push({ title: cellText(m[1]), html: m[2] });
   }
   return out;
 }
 
+// Take the first table out of a fragment and offer each body row to `place`.
+//   columns — one pattern per column the sheet reads, matched against the
+//             table's header. Cells are read by position, so a table whose
+//             leading columns are something else is not this table: no row
+//             is offered and it is shown whole. A row with text beyond the
+//             columns read (a Notes column, say) is never offered either.
+//   place   — (cells) => true when the sheet placed the row.
+// Returns what is left: the rows nobody placed (as a table, under the original
+// header, with their markup intact) followed by the fragment minus the table.
+// Empty string when there is nothing left to show.
+const ATTRIBUTE_COLUMNS = [/^(attribute|stat|field|name)$/i, /^value$/i];
+const ABILITY_COLUMNS = [/^abilit/i, /^score$/i, /^mod/i, /^sav/i];
+const SKILL_COLUMNS = [/^skills?$/i, /^abilit/i, /^prof/i, /^expert/i, /^(mod|bonus)/i];
+const SLOT_COLUMNS = [/^(spell )?level$/i, /^(total|max)$/i, /^(expended|used|spent)$/i];
+
+function consumeTable(html, columns, place) {
+  const cols = columns.length;
+  const source = String(html || '');
+  const tableMatch = source.match(/<table[^>]*>([\s\S]*?)<\/table>/i);
+  if (!tableMatch) return hasContent(source) ? source : '';
+  const inner = tableMatch[1];
+  const theadMatch = inner.match(/<thead[^>]*>[\s\S]*?<\/thead>/i);
+  const body = theadMatch ? inner.replace(theadMatch[0], '') : inner;
+
+  const cellsOf = rowHtml => {
+    const cells = [];
+    const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let cellMatch;
+    while ((cellMatch = cellRe.exec(rowHtml)) !== null) cells.push(cellText(cellMatch[1]));
+    return cells;
+  };
+  const header = theadMatch ? cellsOf(theadMatch[0]) : null;
+  const known = !header || columns.every((pattern, i) => pattern.test(header[i] || ''));
+
+  const unplaced = [];
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let rowMatch;
+  while ((rowMatch = rowRe.exec(body)) !== null) {
+    const cells = cellsOf(rowMatch[1]);
+    if (cells.every(c => !c)) continue;
+    const fits = known && cells.slice(cols).every(c => !c);
+    if (!(fits && place(cells.slice(0, cols)))) unplaced.push(rowMatch[0]);
+  }
+
+  const rest = source.replace(tableMatch[0], '');
+  return [
+    unplaced.length ? `<table>${theadMatch ? theadMatch[0] : ''}<tbody>${unplaced.join('')}</tbody></table>` : '',
+    hasContent(rest) ? rest : '',
+  ].filter(Boolean).join('\n');
+}
+
+// The template's own unfilled lines (`**Tools:** {list}`), wherever they sit in
+// a paragraph. Only the template's exact placeholders: braces an author wrote
+// are content.
+function stripTemplatePlaceholders(html) {
+  return String(html || '')
+    .replace(/(?:<strong>[^<]*<\/strong>\s*)?\{(?:list|Continue per level as needed\.)\}[ \t]*\n?/g, '')
+    .replace(/<p>\s*<\/p>/g, '');
+}
+
 // `**Species:** Elf` in a rendered section -> 'Elf'.
 function boldField(html, label) {
-  const re = new RegExp(`<strong>\\s*${label}\\s*:?\\s*</strong>\\s*:?([\\s\\S]*?)(?=<strong>|<br|</p>|$)`, 'i');
+  const re = new RegExp(`<strong>\\s*${label}\\s*:?\\s*</strong>\\s*:?([\\s\\S]*?)(?=<br|</p>|\\n|$)`, 'i');
   const m = String(html || '').match(re);
-  return m ? filled(m[1].replace(/<[^>]+>/g, '')) : '';
-}
-
-function hasText(html) {
-  return String(html || '').replace(/<[^>]+>/g, '').trim().length > 0;
-}
-
-function parseAbilities(statHtml) {
-  const abilities = {};
-  for (const row of parseTableRows(extractSubsectionHtml(statHtml, 'Ability Scores'))) {
-    const key = (row[0] || '').trim().toUpperCase();
-    if (!ABILITIES.includes(key)) continue;
-    const score = (row[1] || '').trim();
-    const n = parseInt(score, 10);
-    abilities[key] = {
-      score,
-      mod: (row[2] || '').trim() || (Number.isFinite(n) ? abilityMod(n) : ''),
-      save: isYes(row[3]),
-    };
-  }
-  return abilities;
-}
-
-function renderHeader(coreRows, backgroundHtml) {
-  const level = filled((coreRows.find(r => /^level$/i.test(r[0])) || [])[1]);
-  const bits = [
-    level ? `Level ${level}` : '',
-    boldField(backgroundHtml, 'Class(?:\\s*/\\s*Subclass)?'),
-    boldField(backgroundHtml, 'Species'),
-    boldField(backgroundHtml, 'Background'),
-  ].filter(Boolean);
-  if (bits.length === 0) return '';
-  return `<div class="dnd-header">${bits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>`;
+  return m ? filled(cellText(m[1])) : '';
 }
 
 function renderAbilities(abilities) {
@@ -96,158 +147,212 @@ function renderAbilities(abilities) {
   return cards ? `<div class="dnd-ability-scores">${cards}</div>` : '';
 }
 
-// Core and Combat rows as stat tiles, in sheet order. Level sits in the header;
-// the two HP rows merge into one "current / max" tile.
-function renderVitals(coreRows, combatRows) {
-  const hp = { cur: '', max: '' };
-  let hpSeen = false;
+// `## Stat Sheet`: header level, ability cards, Core and Combat tiles.
+function renderStatSheet(section, frontmatter, backgroundHtml) {
+  const html = section ? section.html : '';
+  const parts = [];
+  const extras = [];
+  const passThrough = (title, body) => { if (hasContent(body)) extras.push(`<h3>${escapeHtml(title)}</h3>\n${body}`); };
+
+  let level = '';
+  let abilities = {};
+  const core = [];
   const combat = [];
-  for (const [label, value] of combatRows) {
-    const m = label.match(/^HP\s*\(\s*(current|max)\w*\s*\)$/i);
-    if (!m) { combat.push([label, value]); continue; }
-    hp[m[1].toLowerCase() === 'max' ? 'max' : 'cur'] = value.trim();
-    if (!hpSeen) { combat.push(['HP', null]); hpSeen = true; }
+  const hp = { cur: '', max: '' };
+  const hpSeen = { cur: false, max: false };
+  const seen = new Set();
+
+  if (hasContent(aboveSubheadings(html))) extras.push(aboveSubheadings(html));
+  for (const sub of subsections(html)) {
+    const key = sub.title.toLowerCase();
+    // A repeated subsection is not merged into the first; it is shown as written.
+    if (seen.has(key) || !['core', 'ability scores', 'combat'].includes(key)) {
+      passThrough(sub.title, sub.html);
+      continue;
+    }
+    seen.add(key);
+    let left = '';
+    if (key === 'core') {
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => {
+        if (/^level$/i.test(label) && !level) level = filled(value);
+        else core.push([label, value]);
+        return true;
+      });
+    } else if (key === 'combat') {
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => {
+        const m = label.match(/^HP\s*\(\s*(current|max)\w*\s*\)$/i);
+        if (!m) { combat.push([label, value]); return true; }
+        const slot = m[1].toLowerCase() === 'max' ? 'max' : 'cur';
+        if (hpSeen[slot]) return false;
+        if (!hpSeen.cur && !hpSeen.max) combat.push(['HP', null]);
+        hpSeen[slot] = true;
+        hp[slot] = value;
+        return true;
+      });
+    } else {
+      left = consumeTable(sub.html, ABILITY_COLUMNS, ([name, score, mod, save]) => {
+        const m = name.match(ABILITY_NAME);
+        const key3 = m ? m[1].slice(0, 3).toUpperCase() : '';
+        const proficient = yesNo(save);
+        if (!key3 || abilities[key3] || proficient === null) return false;
+        const n = parseInt(score, 10);
+        abilities[key3] = { score, mod: mod || (Number.isFinite(n) ? abilityMod(n) : ''), save: proficient };
+        return true;
+      });
+    }
+    passThrough(sub.title, left);
   }
-  const hpText = hp.cur && hp.max ? `${hp.cur} / ${hp.max}` : (hp.cur || hp.max);
-  const tiles = rows => rows.map(([label, value]) => statItem(label, value === null ? hpText : value.trim())).join('\n');
-  const core = coreRows.filter(r => !/^level$/i.test(r[0]));
-  return [
-    combat.length ? `<div class="quick-stats dnd-vitals">${tiles(combat)}</div>` : '',
-    core.length ? `<div class="quick-stats">${tiles(core)}</div>` : '',
-  ].filter(Boolean).join('\n');
+
+  // Frontmatter fallback, for a vault that keeps its scores there instead.
+  if (Object.keys(abilities).length === 0) {
+    for (const [name, score] of Object.entries(frontmatter.ability_scores || {})) {
+      const key3 = String(name).toUpperCase();
+      if (!ABILITIES.includes(key3)) continue;
+      abilities[key3] = { score, mod: Number.isFinite(Number(score)) ? abilityMod(Number(score)) : '', save: false };
+    }
+  }
+
+  const bits = [
+    level ? `Level ${level}` : '',
+    boldField(backgroundHtml, 'Class(?:es)?(?:\\s*/\\s*Subclass(?:es)?)?'),
+    boldField(backgroundHtml, '(?:Species|Race)'),
+    boldField(backgroundHtml, 'Background'),
+  ].filter(Boolean);
+  if (bits.length) parts.push(`<div class="dnd-header">${bits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>`);
+
+  const abilityHtml = renderAbilities(abilities);
+  if (abilityHtml) parts.push(abilityHtml);
+
+  const hpText = hp.max ? `${hp.cur || '—'} / ${hp.max}` : hp.cur;
+  const tiles = rows => rows.map(([label, value]) => statItem(label, value === null ? hpText : value)).join('\n');
+  if (combat.length) parts.push(`<div class="quick-stats dnd-vitals">${tiles(combat)}</div>`);
+  if (core.length) parts.push(`<div class="quick-stats">${tiles(core)}</div>`);
+
+  return parts.concat(extras).join('\n');
 }
 
 function renderSkills(section) {
-  if (!section) return '';
-  const rows = parseTableRows(section.html).filter(r => r[0] && !/^skill$/i.test(r[0]));
-  if (rows.length === 0) {
-    return hasText(section.html) ? `<h3>Skills</h3>\n${section.html}` : '';
-  }
-  const items = rows.map(([name, ability, proficient, expertise, modifier]) => {
-    const expert = isYes(expertise);
-    const prof = expert || isYes(proficient);
-    const cls = `dnd-skill${prof ? ' is-proficient' : ''}${expert ? ' is-expert' : ''}`;
+  const items = [];
+  const left = consumeTable(section.html, SKILL_COLUMNS, ([name, ability, proficient, expertise, modifier]) => {
+    const prof = yesNo(proficient);
+    const expert = yesNo(expertise);
+    if (!name || prof === null || expert === null) return false;
+    const cls = `dnd-skill${prof || expert ? ' is-proficient' : ''}${expert ? ' is-expert' : ''}`;
     const mark = expert ? 'Expertise' : (prof ? 'Proficient' : '');
-    return `<li class="${cls}"><span class="skill-mark"${mark ? ` title="${mark}" aria-label="${mark}"` : ''}></span><span class="skill-name">${escapeHtml(name)}</span><span class="skill-ability">${escapeHtml(ability || '')}</span><span class="skill-mod">${escapeHtml(modifier || '')}</span></li>`;
-  }).join('\n');
-  // Tables kept beside the skill list (a second, differently-shaped table) and
-  // any prose are passed through below it.
-  const extra = section.html.replace(/<table[^>]*>[\s\S]*?<\/table>/i, '');
-  return `<h3>Skills</h3>\n<ul class="dnd-skills">${items}</ul>${hasText(extra) ? '\n' + extra : ''}`;
+    items.push(`<li class="${cls}"><span class="skill-mark"${mark ? ` title="${mark}" aria-label="${mark}"` : ''}></span><span class="skill-name">${escapeHtml(name)}</span><span class="skill-ability">${escapeHtml(ability || '')}</span><span class="skill-mod">${escapeHtml(modifier || '')}</span></li>`);
+    return true;
+  });
+  if (items.length === 0 && !left) return '';
+  return [
+    '<h3>Skills</h3>',
+    items.length ? `<ul class="dnd-skills">${items.join('\n')}</ul>` : '',
+    left,
+  ].filter(Boolean).join('\n');
 }
 
 function renderSpellcasting(section) {
-  if (!section) return '';
-  const top = aboveSubheadings(section.html);
-  const stats = attributeRows(top).filter(([, v]) => filled(v));
+  const stats = [];
+  // The template's own instruction is not content; an author's blockquote is.
+  const top = aboveSubheadings(section.html).replace(/<blockquote>([\s\S]*?)<\/blockquote>/gi,
+    (whole, inner) => (/^Omit this section if the character has no spellcasting\.?$/i.test(cellText(inner)) ? '' : whole));
+  const topLeft = consumeTable(top, ATTRIBUTE_COLUMNS, ([label, value]) => {
+    if (value) stats.push(statItem(label, value));
+    return true;
+  });
 
-  const subs = subsections(section.html);
-  const slotsSub = subs.find(s => /^spell slots$/i.test(s.title));
-  const slots = parseTableRows(slotsSub ? slotsSub.html : '')
-    .filter(r => r[0] && !/^level$/i.test(r[0]) && filled(r[1]))
-    .map(([level, total, expended]) => {
-      const t = parseInt(total, 10);
-      const e = parseInt(expended, 10) || 0;
-      return statItem(level, Number.isFinite(t) ? `${Math.max(t - e, 0)} / ${t}` : total);
-    });
+  const slots = [];
+  const rest = [];
+  let slotsSeen = false;
+  for (const sub of subsections(section.html)) {
+    let body;
+    if (/^spell slots$/i.test(sub.title) && !slotsSeen) {
+      slotsSeen = true;
+      body = consumeTable(sub.html, SLOT_COLUMNS, ([level, total, expended]) => {
+        if (!total && !expended) return true;            // an unused level
+        if (!/^\d+$/.test(total) || !/^\d*$/.test(expended)) return false;
+        const t = parseInt(total, 10);
+        const e = parseInt(expended, 10) || 0;
+        if (e > t) return false;
+        slots.push(statItem(level, `${t - e} / ${t}`));
+        return true;
+      });
+      if (body) rest.push(`<h4>Spell Slots, as written</h4>${body}`);
+      continue;
+    }
+    body = stripTemplatePlaceholders(sub.html);
+    if (hasContent(body)) rest.push(`<h4>${escapeHtml(sub.title)}</h4>${body}`);
+  }
 
-  // Everything else in the section — prepared spells, author notes, extra
-  // subsections — is passed through. The template's own "Omit this section"
-  // instruction and unfilled `{list}` lines are not content.
-  const rest = [
-    top.replace(/<table[^>]*>[\s\S]*?<\/table>/i, '')
-      .replace(/<blockquote>(?:(?!<\/blockquote>)[\s\S])*Omit this section[\s\S]*?<\/blockquote>/i, ''),
-    ...subs.filter(s => s !== slotsSub).map(s => {
-      const body = s.html.replace(/<p>(?:\s*<strong>[^<]*<\/strong>)?\s*\{[^}]*\}\s*<\/p>/g, '');
-      return hasText(body) ? `<h4>${escapeHtml(s.title)}</h4>${body}` : '';
-    }),
-  ].filter(hasText).join('\n');
-
-  if (stats.length === 0 && slots.length === 0 && !rest) return '';
+  if (stats.length === 0 && slots.length === 0 && !topLeft && rest.length === 0) return '';
   return [
     '<h3>Spellcasting</h3>',
-    stats.length ? `<div class="quick-stats">${stats.map(([l, v]) => statItem(l, v.trim())).join('\n')}</div>` : '',
+    stats.length ? `<div class="quick-stats">${stats.join('\n')}</div>` : '',
+    topLeft,
     slots.length ? `<h4>Spell Slots <span class="dnd-caption">remaining / total</span></h4>\n<div class="quick-stats dnd-slots">${slots.join('\n')}</div>` : '',
-    rest,
+    ...rest,
   ].filter(Boolean).join('\n');
 }
 
 function renderProficiencies(section) {
-  if (!section) return '';
-  const body = section.html.replace(/<p>\s*<strong>[^<]*<\/strong>\s*\{[^}]*\}\s*<\/p>/g, '');
-  return hasText(body) ? `<h3>Proficiencies</h3>\n<div class="dnd-proficiency-list">${body}</div>` : '';
+  const body = stripTemplatePlaceholders(section.html);
+  return hasContent(body) ? `<h3>Proficiencies</h3>\n<div class="dnd-proficiency-list">${body}</div>` : '';
 }
 
-// The body sections follow skills/shared/templates/pc-dnd-5e-2024.md. Every
-// section this consumes (DND_CONSUMED_TITLES in pc.js) is rendered in full:
-// what it cannot place structurally it passes through as-is.
+const SECTION_RENDERERS = {
+  skills: renderSkills,
+  spellcasting: renderSpellcasting,
+  proficiencies: renderProficiencies,
+};
+
+// The body sections follow skills/shared/templates/pc-dnd-5e-2024.md
+// (docs/file-format-standards.md §9).
 function renderDnDSheet(frontmatter, sections) {
+  frontmatter = frontmatter || {};
   sections = sections || [];
+  const byTitle = title => sections.filter(s => normalizeTitle(s.title) === title);
+  // The first section of a title is read structurally; a repeat is shown as written.
+  const repeats = title => byTitle(title).slice(1)
+    .filter(s => hasContent(s.html))
+    .map(s => `<h3>${escapeHtml(s.title)}</h3>\n${s.html}`);
+
   const parts = [];
+  const background = byTitle('background')[0];
+  const statSheet = renderStatSheet(byTitle('stat sheet')[0], frontmatter, background ? background.html : '');
+  if (statSheet) parts.push(statSheet);
+  parts.push(...repeats('stat sheet'));
 
-  const statSheet = findSectionByTitle(sections, 'Stat Sheet');
-  const statHtml = statSheet ? statSheet.html : '';
-  const coreRows = attributeRows(extractSubsectionHtml(statHtml, 'Core'));
-  const combatRows = attributeRows(extractSubsectionHtml(statHtml, 'Combat'));
-  const background = findSectionByTitle(sections, 'Background');
-
-  const header = renderHeader(coreRows, background ? background.html : '');
-  if (header) parts.push(header);
-
-  let abilities = parseAbilities(statHtml);
-  if (Object.keys(abilities).length === 0) {
-    const scores = frontmatter.ability_scores || {};
-    abilities = Object.fromEntries(ABILITIES
-      .filter(a => scores[a] !== undefined)
-      .map(a => [a, { score: scores[a], mod: abilityMod(scores[a]), save: false }]));
-  }
-  const abilityHtml = renderAbilities(abilities);
-  if (abilityHtml) parts.push(abilityHtml);
-
-  const vitals = renderVitals(coreRows, combatRows);
-  if (vitals) parts.push(vitals);
-
-  const topOfStat = aboveSubheadings(statHtml);
-  if (hasText(topOfStat)) parts.push(topOfStat);
-  for (const sub of subsections(statHtml)) {
-    if (STAT_SUBSECTIONS.includes(sub.title.toLowerCase()) || !hasText(sub.html)) continue;
-    parts.push(`<h3>${escapeHtml(sub.title)}</h3>\n${sub.html}`);
+  const rendered = {};
+  for (const title of ['skills', 'spellcasting', 'proficiencies']) {
+    const first = byTitle(title)[0];
+    rendered[title] = first ? SECTION_RENDERERS[title](first) : '';
+    if (rendered[title]) parts.push(rendered[title]);
+    parts.push(...repeats(title));
   }
 
-  const skills = renderSkills(findSectionByTitle(sections, 'Skills'));
-  if (skills) parts.push(skills);
-
-  const spellSection = findSectionByTitle(sections, 'Spellcasting');
-  const spellcasting = renderSpellcasting(spellSection);
-  if (spellcasting) parts.push(spellcasting);
-
-  const profSection = findSectionByTitle(sections, 'Proficiencies');
-  const proficiencies = renderProficiencies(profSection);
-  if (proficiencies) parts.push(proficiencies);
-
-  // Frontmatter fallback, for a vault that keeps these there instead.
-  const fmProficiencies = frontmatter.proficiencies || [];
-  if (!profSection && fmProficiencies.length > 0) {
+  // Frontmatter fallback, for a vault that keeps these there and not in the body.
+  const fmProficiencies = [].concat(frontmatter.proficiencies || []);
+  if (!rendered.proficiencies && fmProficiencies.length > 0) {
     const pills = fmProficiencies.map(p =>
       `<span class="dnd-proficiency">${escapeHtml(String(p))}</span>`
     ).join('\n');
     parts.push(`<h3>Proficiencies</h3>\n<div class="dnd-proficiencies">${pills}</div>`);
   }
 
-  const features = [...(frontmatter.class_features || [])];
+  const features = [].concat(frontmatter.class_features || []);
   if (features.length > 0) {
     const items = features
+      .filter(f => f && (typeof f === 'string' || f.name))
       .sort((a, b) => (a.level || 0) - (b.level || 0))
       .map(f => {
-        const levelBadge = f.level ? `<span class="sidebar-badge">Level ${f.level}</span>` : '';
+        const levelBadge = f.level ? `<span class="sidebar-badge">Level ${escapeHtml(String(f.level))}</span>` : '';
         const desc = f.description ? `<div class="card-excerpt">${escapeHtml(f.description)}</div>` : '';
-        return `<div class="entity-card"><h4>${escapeHtml(f.name || String(f))} ${levelBadge}</h4>${desc}</div>`;
+        return `<div class="entity-card"><h4>${escapeHtml(String(f.name || f))} ${levelBadge}</h4>${desc}</div>`;
       }).join('\n');
     parts.push(`<h3>Class Features</h3>\n<div class="card-grid">${items}</div>`);
   }
 
   const spellSlots = frontmatter.spell_slots;
-  if (!spellSection && spellSlots && Object.keys(spellSlots).length > 0) {
+  if (!rendered.spellcasting && spellSlots && typeof spellSlots === 'object' && Object.keys(spellSlots).length > 0) {
     const rows = Object.entries(spellSlots)
       .sort(([a], [b]) => Number(a) - Number(b))
       .map(([level, slots]) => statItem(`Level ${level}`, String(slots)))
@@ -259,4 +364,4 @@ function renderDnDSheet(frontmatter, sections) {
   return `<div class="dnd-sheet">${parts.join('\n')}</div>`;
 }
 
-module.exports = { renderDnDSheet };
+module.exports = { renderDnDSheet, isDndConsumedTitle };

@@ -172,6 +172,87 @@ describe('renderDnDSheet from the real template body', () => {
   });
 });
 
+// The contract pc.js relies on: a consumed section is on the sheet in full.
+// Each case adds a marker somewhere the sheet has no structured place for.
+describe('renderDnDSheet drops nothing from a consumed section', () => {
+  const cases = {
+    'a ### heading with inline markup': b => replace(b, '### Combat', '### **Combat**'),
+    'prose under the Core table': b => replace(b, '### Ability Scores', 'MARKER core note.\n\n### Ability Scores'),
+    'prose under the Ability Scores table': b => replace(b, '### Combat', 'MARKER ability note.\n\n### Combat'),
+    'prose under the Combat table': b => replace(b, '## Background', 'MARKER combat note.\n\n## Background'),
+    'prose under the Spell Slots table': b => replace(b, '### Prepared Spells', 'MARKER slots recharge.\n\n### Prepared Spells'),
+    'an extra column in Core': b => replace(replace(b, '| Attribute | Value |\n|-----------|-------|\n| Level', '| Attribute | Value | Notes |\n|---|---|---|\n| Level'), '| XP | 900 |', '| XP | 900 | MARKER |'),
+    'an extra column in Skills': b => replace(replace(b, '| Skill | Ability | Proficient | Expertise | Modifier |\n|-------|---------|-----------|-----------|----------|', '| Skill | Ability | Proficient | Expertise | Modifier | Notes |\n|---|---|---|---|---|---|'), '| Stealth | DEX | No | No | +0 |', '| Stealth | DEX | No | No | +0 | MARKER |'),
+    'an ability row the sheet has no card for': b => replace(b, '| CHA | 10 | +0 | No |', '| CHA | 10 | +0 | No |\n| MARKER Honor | 11 | +0 | No |'),
+    'a proficiency cell that is not yes or no': b => replace(b, '| Stealth | DEX | No | No | +0 |', '| Stealth | DEX | MARKER Half | No | +1 |'),
+    'a spell slot row with a word for a total': b => setRow(b, '3rd', ['MARKER two', '']),
+    'a spell slot row with only Expended': b => setRow(b, '4th', ['', 'MARKER']),
+    'a repeated ## Skills section': b => b + '\n## Skills\n\nMARKER second skills.\n',
+    'a repeated ### Combat subsection': b => replace(b, '## Background', '### Combat\n\n| Attribute | Value |\n|---|---|\n| MARKER AC | 15 |\n\n## Background'),
+    'a loosely titled section (## Stat-Sheet)': b => replace(b, '## Stat Sheet', '## Stat-Sheet').replace('| Medium |', '| MARKER |'),
+    'an author blockquote beside the template note': b => replace(b, '> Omit this section if the character has no spellcasting.', '> Omit this section if the character has no spellcasting.\n> MARKER keep me.'),
+    'a skills table with other columns': b => b.replace(/\| Skill \| Ability \| Proficient \| Expertise \| Modifier \|[\s\S]*?\| Survival .*\n/, '| Skill | Ability | Proficient | Modifier |\n|---|---|---|---|\n| Stealth | DEX | Yes | MARKER +9 |\n'),
+    'a second table in Skills': b => replace(b, '## Class Features', '| Tool | Mod |\n|---|---|\n| MARKER Thieves | +9 |\n\n## Class Features'),
+    'a transposed ability table': b => b.replace(/\| Ability \| Score[\s\S]*?\| CHA .*\n/, '| STR | DEX | CON | INT | WIS | CHA |\n|---|---|---|---|---|---|\n| MARKER 8 | 14 | 13 | 17 | 12 | 10 |\n'),
+    'a slots table with a Remaining column': b => b.replace('| Level | Total | Expended |', '| Level | Total | Remaining |').replace('| 1st | 4 | 1 |', '| 1st | 4 | MARKER 3 |'),
+    'more slots expended than there are': b => setRow(b, '2nd', ['2', '5']).replace('| 2nd | 2 | 5 |', '| MARKER 2nd | 2 | 5 |'),
+    'braces an author wrote in Proficiencies': b => replace(b, '**Tools:** {list}', "**Tools:** {MARKER Thieves' Tools}"),
+    'a spellcasting value of a dash': b => setRow(b, 'Spell Save DC', ['—']).replace('Spell Save DC', 'MARKER DC'),
+  };
+  for (const [name, mutate] of Object.entries(cases)) {
+    it(`keeps ${name}`, () => {
+      const html = render(mutate(wizardBody()));
+      if (!name.includes('inline markup')) assert.ok(html.includes('MARKER'), 'the marker must reach the sheet');
+      // and the rest of the sheet still renders
+      assert.match(html, /<span class="stat-label">AC<\/span><span class="stat-value">12</);
+      assert.match(html, /<span>Level 3<\/span>/);
+    });
+  }
+
+  it('keeps an image-only subsection', () => {
+    const body = replace(wizardBody(), '## Background', '### Token\n\n![tok](token.png)\n\n## Background');
+    assert.match(render(body), /<h3>Token<\/h3>[\s\S]*<img/);
+  });
+
+  it('recognises proficiency words', () => {
+    const html = render(setRow(wizardBody(), 'Stealth', ['DEX', 'Proficient', 'Expert', '+6']));
+    assert.match(html, /class="dnd-skill is-proficient is-expert"(?:(?!<\/li>)[\s\S])*Stealth/);
+  });
+
+  it('drops the template placeholders that share a paragraph with real lines', () => {
+    const body = replace(wizardBody(), '**Armor Training:** {list}\n\n**Weapons:** {list}\n\n**Tools:** {list}\n\n', '**Armor Training:** {list}\n**Weapons:** Daggers\n**Tools:** {list}\n');
+    const html = render(body);
+    assert.ok(html.includes('Daggers'));
+    assert.ok(!html.includes('{list}'));
+  });
+
+  it('reads a header value with bold in it, and Race for Species', () => {
+    const body = replace(wizardBody(), '**Species:** Elf', '**Race:** Half-**Elf** & kin');
+    assert.match(render(body), /<span>Half-Elf &amp; kin<\/span>/);
+  });
+
+  it('shows max HP as a maximum when current is blank', () => {
+    const html = render(setRow(wizardBody(), 'HP (Current)', ['']));
+    assert.match(html, /<span class="stat-label">HP<\/span><span class="stat-value">— \/ 17</);
+  });
+
+  it('reads abilities written with full names', () => {
+    const html = render(replace(wizardBody(), '| STR | 8 |', '| Strength | 8 |'));
+    assert.match(html, /<span class="ability-name">STR<\/span>\s*<span class="ability-score">8</);
+  });
+
+  it('does not double-escape a passed-through subsection title', () => {
+    const body = replace(wizardBody(), '## Background', '### Rage & Fury\n\nTwice a day.\n\n## Background');
+    assert.ok(render(body).includes('<h3>Rage &amp; Fury</h3>'));
+  });
+
+  it('every title the page drops from its accordions is one the sheet read', () => {
+    const { isDndConsumedTitle } = require('../../lib/templates/pc-dnd');
+    for (const t of ['Stat Sheet', 'Stat-Sheet', 'SKILLS', 'Spellcasting', 'Proficiencies']) assert.ok(isDndConsumedTitle(t), t);
+    for (const t of ['Background', 'Class Features', 'Equipment', 'Notes']) assert.ok(!isDndConsumedTitle(t), t);
+  });
+});
+
 describe('pcTemplate with a D&D sheet', () => {
   const page = { frontmatter: { type: 'pc', player_name: 'X' }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
   const noop = () => '';
@@ -268,6 +349,24 @@ describe('renderDnDSheet frontmatter fallback', () => {
     };
     const html = renderDnDSheet(fm, []);
     assert.ok(html.includes('Spell Slots'));
+  });
+
+  it('falls back to frontmatter when the body section is unfilled', () => {
+    const html = renderDnDSheet({ type: 'pc', proficiencies: ['FMPROF'], spell_slots: { 1: 4 } }, extractSections(templateBody()));
+    assert.ok(html.includes('FMPROF'));
+    assert.ok(html.includes('Spell Slots'));
+  });
+
+  it('survives malformed frontmatter', () => {
+    const html = renderDnDSheet({ type: 'pc', ability_scores: { STR: 'abc' }, class_features: [null, 'Second Wind'] }, []);
+    assert.ok(!html.includes('NaN'));
+    assert.ok(html.includes('Second Wind'));
+  });
+
+  it('accepts a single proficiency string and lowercase ability keys', () => {
+    const html = renderDnDSheet({ type: 'pc', proficiencies: 'Common', ability_scores: { str: 16 } }, []);
+    assert.ok(html.includes('Common'));
+    assert.match(html, /<span class="ability-name">STR<\/span>/);
   });
 
   it('returns null when no D&D data present', () => {

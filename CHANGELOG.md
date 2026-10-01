@@ -22,8 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   all skills with proficiency and expertise marked, spellcasting
   ability, attack modifier, save DC, remaining and total spell slots,
   prepared spells, and proficiencies. Those four sections no longer
-  repeat as accordions. Anything in them the sheet has no place for,
-  such as an extra `###` subsection, is shown as written, not dropped.
+  repeat as accordions. Anything in them the sheet has no place for is
+  shown as written, not dropped: an extra `###` subsection, a note
+  under a table, a table row with a Notes column or a value the sheet
+  cannot read.
   An unfilled Spellcasting section is left out. Background, Class
   Features, Species Traits, Feats and Notes stay as accordions, and
   Equipment stays on its own tab. The old frontmatter fields still

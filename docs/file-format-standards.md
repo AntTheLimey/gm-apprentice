@@ -204,14 +204,24 @@ Notes:
   is blank. It never computes a save or skill bonus.
 - **Nothing in a consumed section is dropped.** Stat Sheet, Skills,
   Spellcasting and Proficiencies leave the accordion list once the
-  sheet renders, so the renderer passes through whatever it cannot
-  place: an extra `###` subsection, prose, a Skills section with no
-  table.
+  sheet renders (`isDndConsumedTitle` in `pc-dnd.js` is the one
+  matcher both sides use), so the renderer shows as written whatever
+  it cannot place: an extra or repeated `###` subsection, a repeated
+  `##` section, prose or a second table beside a parsed table, and
+  any table row it could not read.
+- **Tables are read by position, checked against the header.** A
+  table whose leading header cells are not the ones above is shown
+  whole as a table. So is any single row with text in a further
+  column (a Notes column), a Proficient, Expertise or Save cell that
+  is not a yes or no word, an ability row that is not one of the six,
+  and a spell slot row whose Total is not a number or whose Expended
+  exceeds it.
 - **Background stays an accordion.** The header reads three lines from
-  it; its prose is not on the sheet.
-- `{placeholder}` values and the template's "Omit this section" note
-  are not content. A Spellcasting section with nothing filled in is
-  left out.
+  it (`Race` and `Classes` are accepted too); its prose is not on the
+  sheet.
+- The template's own `{list}` placeholders and its "Omit this
+  section" note are not content, and a Spellcasting section with
+  nothing filled in is left out. Braces an author wrote are kept.
 
 ---
 
