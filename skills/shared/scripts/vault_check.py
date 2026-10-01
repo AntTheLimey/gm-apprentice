@@ -1871,6 +1871,50 @@ PROTECTED_H2 = {"notes", "gm notes"}
 CANONICAL_FIRST_H2 = "Stat Sheet"
 
 
+def _normalise_sheet(lines: Iterable[str]) -> str:
+    """Section text with table padding and blank lines taken out, so a sheet
+    re-aligned by an editor still compares equal to its template."""
+    out = []
+    for line in lines:
+        collapsed = re.sub(r"\s+", " ", re.sub(r"-{2,}", "-", line)).strip()
+        collapsed = re.sub(r"\s*\|\s*", "|", collapsed)
+        if collapsed:
+            out.append(collapsed)
+    return "\n".join(out)
+
+
+def _stat_sheet_text(states: list[LineState], start: LineState) -> str:
+    """The `## Stat Sheet` section `start` opens, up to the next H2."""
+    lines = []
+    for state in states:
+        if state.lineno <= start.lineno:
+            continue
+        if state.heading is not None and state.heading[0] <= 2:
+            break
+        lines.append(state.line)
+    return _normalise_sheet(lines)
+
+
+_TEMPLATE_STAT_SHEETS: set[str] | None = None
+
+
+def _template_stat_sheets() -> set[str]:
+    """Each shipped PC template's untouched `## Stat Sheet`, normalised."""
+    global _TEMPLATE_STAT_SHEETS
+    if _TEMPLATE_STAT_SHEETS is None:
+        sheets: set[str] = set()
+        templates = Path(__file__).resolve().parent.parent / "templates"
+        for path in sorted(templates.glob("pc-*.md")):
+            body = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+            match = re.search(r"^## Stat Sheet[ \t]*\n(.*?)(?=^## |\Z)", body,
+                              re.M | re.S)
+            if match:
+                sheets.add(_normalise_sheet(match.group(1).split("\n")))
+        sheets.discard("")
+        _TEMPLATE_STAT_SHEETS = sheets
+    return _TEMPLATE_STAT_SHEETS
+
+
 def _has_labelled_field(states: list[LineState], start: LineState,
                         level: int, kept: set[int] | None = None) -> bool:
     """Does the block `start` opens carry any `**Label:**` field?
@@ -1981,6 +2025,25 @@ def check_pc_body(vault: Path, folder: str | None = None,
                 rows.append(f"WARNING\t{rel}:{s.lineno}\t"
                             f"duplicate H2 '{title}'")
             seen.add(key)
+
+        # A whole sheet with no stats, or with the template's own, publishes
+        # a Character Sheet tab that says nothing (#273). `sheet_source`
+        # records that the sheet is kept elsewhere, which settles it. A stub
+        # publishes named fragments only, so its Stat Sheet is not judged.
+        if kept is None and not str(fm.get("sheet_source") or "").strip():
+            stat = next((st for st, title in h2s
+                         if title.casefold() == CANONICAL_FIRST_H2.casefold()),
+                        None)
+            if stat is None:
+                rows.append(f"WARNING\t{rel}\tno ## {CANONICAL_FIRST_H2} "
+                            f"section — the page publishes with no character "
+                            f"sheet; fill one in, or set sheet_source to "
+                            f"where the sheet is kept")
+            elif _stat_sheet_text(states, stat) in _template_stat_sheets():
+                rows.append(f"WARNING\t{rel}:{stat.lineno}\t"
+                            f"## {CANONICAL_FIRST_H2} still holds the "
+                            f"template's placeholder values; fill it in, or "
+                            f"set sheet_source to where the sheet is kept")
 
         if kept is None and h2s \
                 and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():

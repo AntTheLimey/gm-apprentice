@@ -365,7 +365,10 @@ usually found), `portrait` (optional)
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/unknown), `key_traits`, `portrait` (optional),
 `display_meta` (optional array: ordered field names for published site meta row;
-defaults to `[occupation, age, nationality]` when omitted)
+defaults to `[occupation, age, nationality]` when omitted), `sheet_source`
+(optional string: where the character sheet is kept when it is not in this
+file, e.g. `"D&D Beyond"` or `"paper, with the player"`; never published; see
+`shared/pc-body-structure.md`)
 
 ### PC Body Structure
 

@@ -14,6 +14,7 @@ nationality: ""
 status: alive
 key_traits: []
 portrait: ""
+sheet_source: ""
 display_meta: [occupation, age, nationality]
 relationships:
   - target: "[[]]"

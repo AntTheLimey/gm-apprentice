@@ -75,6 +75,26 @@ The block **must** sit outside any `<!-- gm-only -->` or
 the next wrap-up reconciles it either way. `vault_check.py pc-body`
 (see `shared/vault-access.md`) checks placement and field shape.
 
+## A sheet kept somewhere else
+
+Some tables keep the character sheet outside the vault: D&D Beyond, a
+PDF, paper. Such a PC has no `## Stat Sheet`, or one still holding the
+template's values, and its page publishes with an empty Character Sheet
+tab. `vault_check.py pc-body` reports either as a WARNING, and the
+publish build names every such PC in one line.
+
+`sheet_source` in the PC's frontmatter settles it: a short note of
+where the sheet is (`"D&D Beyond"`, `"PDF in the group drive"`,
+`"paper, with the player"`). It is never published. With it set,
+neither warning fires.
+
+When a skill creates or imports a PC and has no stats for it, or meets
+this WARNING on a PC it just wrote, it asks the GM once, for all such
+PCs together: are the stats coming, or is the sheet kept elsewhere, and
+where? It writes each answer to `sheet_source` itself. If stats are
+coming, it leaves the field empty and the warning stands until they
+arrive.
+
 **Consumed by:** session-prep (Context Source, Threads, PC arc check),
 the-midwife (new-chapter hooks), ttrpg-expert (arc/thread analysis),
 campaign-qa (Current Status consistency check).

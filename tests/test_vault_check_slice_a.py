@@ -1533,7 +1533,75 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(self.rows, STORY), self.rows)
 
     def test_that_is_every_row(self):
-        self.assertEqual(len(self.rows), 5, self.rows)
+        self.assertEqual(len(self.rows), 6, self.rows)
+
+    def test_a_sheet_with_no_stat_sheet_warns(self):
+        self.assertIn(
+            f"WARNING\t{LATE}\tno ## Stat Sheet section — the page publishes "
+            f"with no character sheet; fill one in, or set sheet_source to "
+            f"where the sheet is kept",
+            self.rows)
+
+    def _template_pc(self, name, frontmatter="", edit=None):
+        """A PC whose body is a shipped template's, optionally edited."""
+        template = (Path(vc.__file__).resolve().parent.parent / "templates"
+                    / name).read_text(encoding="utf-8")
+        body = template.split("---\n", 2)[2]
+        if edit:
+            body = edit(body)
+        vault = make_vault(self)
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\n{frontmatter}---\n{body}", encoding="utf-8")
+        return vc.check_pc_body(vault)
+
+    def test_an_untouched_template_stat_sheet_warns_for_every_system(self):
+        templates = Path(vc.__file__).resolve().parent.parent / "templates"
+        names = sorted(p.name for p in templates.glob("pc-*.md"))
+        self.assertGreaterEqual(len(names), 7, names)
+        for name in names:
+            with self.subTest(template=name):
+                rows = rows_for(self._template_pc(name), "placeholder values")
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith("WARNING\tHero.md:"), rows)
+
+    def test_a_realigned_template_table_still_counts_as_untouched(self):
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| Level | 1 |", "|Level|1   |")
+                            .replace("|-----------|-------|", "|---|---|"))
+        self.assertTrue(rows_for(rows, "placeholder values"), rows)
+
+    def test_a_filled_in_stat_sheet_is_not_flagged(self):
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| AC | 10 |", "| AC | 15 |"))
+        self.assertFalse(rows_for(rows, "placeholder values"), rows)
+
+    def test_sheet_source_settles_a_missing_or_untouched_sheet(self):
+        rows = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            frontmatter='sheet_source: "D&D Beyond"\n')
+        self.assertFalse(rows_for(rows, "placeholder values"), rows)
+        vault = make_vault(self)
+        (vault / "Away.md").write_text(
+            '---\ntype: pc\nsheet_source: "paper, with the player"\n---\n\n'
+            "## Background\n\nA sailor.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+
+    def test_a_blank_sheet_source_settles_nothing(self):
+        vault = make_vault(self)
+        (vault / "Away.md").write_text(
+            '---\ntype: pc\nsheet_source: ""\n---\n\n'
+            "## Background\n\nA sailor.\n", encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+
+    def test_a_stub_pc_is_not_judged_on_its_stat_sheet(self):
+        vault = make_vault(self)
+        (vault / "Stubbed.md").write_text(
+            "---\ntype: pc\npublish: stub\n"
+            'publish_include_sections: ["Background"]\n---\n\n'
+            "## Background\n\nRaised by smugglers.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
 
     def test_absent_block_is_an_info_pointing_at_wrapup(self):
         vault = make_vault(self)

@@ -27,6 +27,7 @@ These entity types have purpose-built page layouts.
 | `player_name` | Optional | Real-world player name |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
+| `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Never published. Without it, a PC whose system has a sheet renderer but no readable `## Stat Sheet` is named in the build's "published with no character sheet" warning |
 
 **Layout — single panel vs. tabbed:** When no story companion file
 exists, the PC template renders body content as collapsible accordion

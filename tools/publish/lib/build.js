@@ -737,6 +737,8 @@ function build(options = {}) {
   }
   let errorCount = 0;
   const partyEntries = [];
+  // PCs whose system has a sheet renderer that produced no sheet (#273).
+  const sheetlessPcs = [];
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
   for (const page of pages) {
@@ -795,6 +797,16 @@ function build(options = {}) {
           // page warnings instead of shipping a silently-broken sheet.
           if (systemOut.warnings && systemOut.warnings.length) {
             logWarnings(page.outputPath, systemOut.warnings);
+          }
+          // A PC page with no sheet says nothing on its Character Sheet tab, and
+          // nothing else would tell the GM. `sheet_source` on the PC records that
+          // the sheet is kept elsewhere, which is the answer, not a gap. Read from
+          // the source frontmatter: `exclude_fields` may hide it from the page.
+          // A stub publishes named sections only, so it is not expected to carry one.
+          const sourceFm = page.sourceFrontmatter || page.frontmatter;
+          const sheetSource = String(sourceFm.sheet_source || '').trim();
+          if (systemRenderer && !systemOut.sheetHtml && !sheetSource && publishMode(sourceFm) !== 'stub') {
+            sheetlessPcs.push(page.displayTitle || page.title);
           }
           // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
           // off the roster's Party Status board (#265).
@@ -1201,6 +1213,11 @@ function build(options = {}) {
       const n = without.length;
       console.warn(`  WARNING: ${n} played session${plural(n, " isn't", "s aren't")} published yet and need${plural(n, 's', '')} the GM's say: ${why(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
     }
+  }
+
+  if (sheetlessPcs.length > 0) {
+    const n = sheetlessPcs.length;
+    console.warn(`  WARNING: ${n} PC${n === 1 ? '' : 's'} published with no character sheet (${sheetlessPcs.join(', ')}) — fill in ## Stat Sheet, or set sheet_source on the PC to say where the sheet is kept.`);
   }
 
   if (errorCount > 0) {

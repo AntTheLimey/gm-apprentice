@@ -126,7 +126,8 @@ Read `references/synthesis-templates.md`.
    locations) — create them too.
 4. Each PC active in the period gets a consolidated character
    story entry (synthesis-templates.md § Character Story
-   Backstory Entries).
+   Backstory Entries). A PC whose sources hold no stats:
+   `shared/pc-body-structure.md` § A sheet kept somewhere else.
 
 Check each entity as you write it: entity mentions are
 `[[Entity Name]]` wiki-links; `play_date` is `YYYY-MM-DD`;

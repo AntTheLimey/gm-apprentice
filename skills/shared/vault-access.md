@@ -16,7 +16,7 @@ being open.
 | Vault/plugin version gate | `vault_check.py version` |
 | Session document chain status | `vault_check.py sessions` |
 | Publish-safety scan (unfenced Keeper content, fence balance; + `--fix` re-nest) | `vault_check.py gm-leak` |
-| PC body skeleton / Current Status placement | `vault_check.py pc-body` |
+| PC body skeleton / Current Status placement / missing or unfilled Stat Sheet | `vault_check.py pc-body` |
 | Wrap-Up conformance (+ `--fix` re-nest) | `vault_check.py wrapup` |
 | Active PC roster | `vault_check.py active-pcs` |
 | Session-prep context bundle (one call) | `session_context.py` |

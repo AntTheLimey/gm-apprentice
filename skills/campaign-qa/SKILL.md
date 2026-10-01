@@ -102,6 +102,10 @@ Read the named check file when the mode runs.
   `status: dead`) missing the block or with it empty despite a
   live arc; `Open threads` still open for an entity the timeline
   shows resolved or dead, or whose payoff a recap already shows
+- PCs with no character sheet — `vault_check.py pc-body`: a
+  WARNING for a PC with no `## Stat Sheet`, or one still holding
+  the template's values. Ask where the sheet is kept and write
+  `sheet_source` (`shared/pc-body-structure.md`)
 - `createdSession` vs timeline: for `source: "play"` or `"prep"`,
   it should match the session whose timeline entry introduces the
   entity; `source: "backstory"` is exempt

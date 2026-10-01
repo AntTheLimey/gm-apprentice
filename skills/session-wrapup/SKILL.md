@@ -206,7 +206,9 @@ per folder touched, `vault_check.py relationships` with `--file
 edited or re-pointed — new/updated entities, re-pointed container
 children, cross-entity claim targets, Event files — `vault_check.py
 pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
-PC refreshed in 3c, `vault_check.py wrapup --file <wrap-up>`. If
+PC refreshed in 3c (a WARNING about a missing or untouched
+`## Stat Sheet`: `shared/pc-body-structure.md` § A sheet kept
+somewhere else), `vault_check.py wrapup --file <wrap-up>`. If
 Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and
 never touched again) as a completeness cross-check on the `--file`

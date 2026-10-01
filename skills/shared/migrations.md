@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.21"
+current_version: "1.10.22"
 ---
 
 # Vault Migration Registry
@@ -1172,3 +1172,42 @@ character sheet (#272). No frontmatter changes.
   offer `update-pin --site <site-dir>` (publish-site's build tool),
   then rebuild and redeploy. For a site outside the plugin,
   `update-pin --site <site-dir> --tag publish-v1.11.43`.
+
+## Migration: 1.10.21 → 1.10.22
+
+A PC that publishes with no character sheet is now reported (#273), and
+a new optional PC field, `sheet_source`, records a sheet kept outside
+the vault.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- **New optional PC field `sheet_source`**, documented in
+  `entity-schema.md` and picked up by Schema Mirror Sync into each
+  vault's `_meta/entity-types.md`. A short note of where the character
+  sheet is kept when it is not in the PC file (`"D&D Beyond"`,
+  `"paper, with the player"`). Never published. Absent by default; not
+  backfilled.
+- The shipped PC templates now carry `sheet_source: ""`. If the vault
+  has its own `_Templates/pc-*.md` copies, add the line under
+  `portrait:` in each.
+- Run `vault_check.py <vault> pc-body`. For each new WARNING (a PC with
+  no `## Stat Sheet`, or one still holding the template's values), ask
+  the GM once, for all of them together, whether the stats are coming
+  or the sheet is kept elsewhere, and where. Write each answer to that
+  PC's `sheet_source`. A PC whose stats are coming is left as it is.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.44: the build prints one WARNING line
+  naming every PC whose system has a sheet renderer but which published
+  with no sheet. A PC with `sheet_source` set, or published as a stub,
+  is not named. If `publish.site_dir` is set, offer
+  `update-pin --site <site-dir>` (publish-site's build tool). For a
+  site outside the plugin,
+  `update-pin --site <site-dir> --tag publish-v1.11.44`.
+- `vault_check pc-body` adds two WARNING rows: no `## Stat Sheet`
+  section, and a `## Stat Sheet` identical to a shipped template's.

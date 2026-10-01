@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.22] — 2026-10-01
+
+### Added
+
+- **A PC that publishes with no character sheet is now reported**
+  (#273). Before, such a page went out with an empty Character Sheet
+  tab and nothing said so.
+  - The publish build prints one line, for example
+    `2 PCs published with no character sheet (Alistair Gray, Bryn)`,
+    for every PC whose system has a sheet (CoC, GURPS, D&D, PF2e,
+    FitD) but whose note gave it nothing to render. Publish tool
+    1.11.44.
+  - `vault_check pc-body`, which campaign-qa and session-wrapup
+    already run, warns about a PC with no `## Stat Sheet` section and
+    about one whose `## Stat Sheet` is still the template's, in any
+    system.
+  - A new optional PC field, `sheet_source`, records where a sheet is
+    kept when it is not in the vault (`"D&D Beyond"`,
+    `"paper, with the player"`). With it set neither warning fires. It
+    is never published. A PC published as a stub is not reported
+    either.
+  - session-wrapup, vault-ingest and campaign-qa ask the GM once where
+    such sheets are kept and write `sheet_source` themselves.
+
 ## [1.10.21] — 2026-10-01
 
 ### Fixed
