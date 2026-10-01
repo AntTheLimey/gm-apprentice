@@ -2043,16 +2043,20 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
     # A figure makes it a sheet. These are not figures, whatever digits they
     # hold: a link (its text and its target), a bare web address, a file
     # name, a page reference, a year in brackets, a list's own numbering.
-    # Other digits in a pointer ("version 2 is on Roll20") still pass; a
-    # warning that misses is cheaper than one that cries wolf.
+    # Each pattern needs a mark a stat line does not have (a letter in the
+    # file's name, a dot after "p", a lettered domain), so "PP 5", "Speed
+    # 6.md" and "Move 6.5/turn" keep their figures. Other digits in a
+    # pointer ("version 2 is on Roll20") still pass; a warning that misses
+    # is cheaper than one that cries wolf.
     prose = " ".join(re.sub(r"^\d+[.)] ", "", line) for line in content)
     prose = re.sub(r"\[\[[^\]]*\]\]|\[[^\]]*\]\([^)]*\)"
-                   r"|(?:https?://|www\.)\S+|\b[\w-]+(?:\.[\w-]+)+/\S*",
+                   r"|(?:https?://|www\.)\S+"
+                   r"|\b[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}/\S*",
                    "", prose)
     prose = re.sub(
-        r"[\w-]+(?:\s\d+)?\.(?:pdf|png|jpe?g|gif|webp|svg|heic|docx?|odt|rtf"
-        r"|xls[xm]?|ods|csv|json|md|txt|gcs|gca\d?|pages|numbers)\b"
-        r"|\b(?:pages?|pp?\.?|pg\.?)\s*\d+(?:\s*(?:[-–,]|and)\s*\d+)*"
+        r"(?=[\w-]*[A-Za-z])[\w-]+\.(?:pdf|png|jpe?g|gif|webp|svg|heic|docx?"
+        r"|odt|rtf|xls[xm]?|ods|csv|json|md|txt|gcs|gca\d?)\b"
+        r"|\b(?:pages?|pp?\.|pg\.)\s*\d+(?:\s*(?:[-–,]|and)\s*\d+)*"
         r"|\((?:19|20)\d\d\)", "", prose, flags=re.I)
     # A figure stands alone: the 5 of "5e" or "D&D 5th" is part of a name.
     if re.search(r"(?<![A-Za-z0-9])[+-]?\d+(?![A-Za-z0-9])", prose):

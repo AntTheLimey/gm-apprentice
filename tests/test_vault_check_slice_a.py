@@ -1648,13 +1648,24 @@ class PcBodyCommandTests(unittest.TestCase):
                      "[Sheet 2](https://example.com/z)",
                      "www.dndbeyond.com/characters/12345678",
                      "dndbeyond.com/characters/12345678",
-                     "Bryn_2.gcs", "Bryn 2.odt in the drive",
-                     "See pp 3 of the PDF", "pg. 12", "pages 12 and 14"):
+                     "Bryn_2.gcs", "Bryn_2.odt in the drive",
+                     "See pp. 3 of the PDF", "pg. 12", "pages 12 and 14"):
             with self.subTest(body=body):
                 rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
                                 f"{body}\n")
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
+
+    def test_a_lone_stat_that_looks_like_a_pointer_is_still_a_stat(self):
+        # A warning the GM cannot clear by filling in the sheet is the
+        # worse error, so each strip needs a mark a stat line lacks.
+        for body in ("PP 5", "Psi P 12", "Pg 12", "Armor p 3",
+                     "Speed 6.md", "Move 5.csv", "Hit Points 4.txt",
+                     "Move 6.5/turn", "Ver 2.0/ x"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_a_sheet_in_words_takes_several_shapes(self):
         for body in ("Fight: Great\nShoot: Good\nWill: Fair",
