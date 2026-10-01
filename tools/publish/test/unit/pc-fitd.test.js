@@ -57,6 +57,8 @@ describe('renderFitDSheet from the real template body', () => {
   it('leaves a wrapped or long value to the Background accordion', () => {
     const wrapped = render(replace(cutterBody(), '**Look:** {Physical description}', '**Look:** Tall, scarred\nand a limp.'));
     assert.ok(!wrapped.includes('<dt>Look</dt>'));
+    const markup = render(replace(cutterBody(), '**Look:** {Physical description}', '**Look:** tall and\n*very* thin'));
+    assert.ok(!markup.includes('<dt>Look</dt>'));
     const long = render(replace(cutterBody(), '**Look:** {Physical description}', `**Look:** ${'very '.repeat(30)}tall`));
     assert.ok(!long.includes('<dt>Look</dt>'));
   });
@@ -67,6 +69,12 @@ describe('renderFitDSheet from the real template body', () => {
     assert.ok(!html.includes('<strong>Trauma</strong>'));
     assert.ok(html.includes('<li>Cold</li>'));
     assert.ok(render(setRow(cutterBody(), 'Trauma', [''])).includes('<strong>Trauma</strong> <span>—</span>'));
+  });
+
+  it('takes the filled Trauma row when a blank one sits above it', () => {
+    const html = render(replace(cutterBody(), '| Trauma | Cold, Haunted |', '| Trauma | |\n| Trauma | Cold |'));
+    assert.strictEqual((html.match(/<strong>Trauma<\/strong>/g) || []).length, 1);
+    assert.ok(html.includes('>Cold<') && !html.includes('<strong>Trauma</strong> <span>—</span>'));
   });
 
   it('leaves an unfilled identity field out', () => {

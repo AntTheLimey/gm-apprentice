@@ -189,7 +189,7 @@ real template, so a mismatch fails the suite.
 |---------|-----------|--------------------------|
 | `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
 | | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency` (rows STR/DEX/CON/INT/WIS/CHA) |
-| | `### Combat` | `Attribute \| Value`; `HP (Current)` and `HP (Max)` merge into one tile, every other row becomes a tile |
+| | `### Combat` | `Attribute \| Value`; `HP (Current)` (or a bare `HP`) and `HP (Max)` merge into one tile, every other row becomes a tile |
 | `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header |
 | `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
 | `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC) |
@@ -238,7 +238,7 @@ must keep this structure; its tests build a PC from the real template.
 |---------|-----------|--------------------------|
 | `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
 | | `### Attributes` | `Attribute \| Modifier` (rows STR/DEX/CON/INT/WIS/CHA) |
-| | `### Combat` | `Attribute \| Value`; `HP (Current)` and `HP (Max)` merge into one tile, every other row becomes a tile |
+| | `### Combat` | `Attribute \| Value`; `HP (Current)` (or a bare `HP`) and `HP (Max)` merge into one tile, every other row becomes a tile |
 | `## Background` | — | the `**Class/Subclass:**`, `**Ancestry:**`, `**Heritage:**` and `**Background:**` lines, for the header |
 | `## Skills` | — | `Skill \| Attribute \| Rank \| Modifier`; Rank is U/T/E/M/L or the word |
 | `## Spellcasting` | — | `Attribute \| Value` (tradition, prepared / spontaneous, attack modifier, DC) |
@@ -265,7 +265,7 @@ this structure; its tests build a PC from the real template.
 |---------|-----------|--------------------------|
 | `## Stat Sheet` | (top) | the `**Playbook:**` line, for the identity block |
 | | `### Action Ratings` | a bold attribute name (`**Insight**`) on its own line over each `Action \| Rating` table; a rating of 0 to 4 becomes dots |
-| | `### Stress & Trauma` | `Attribute \| Value`; `Stress` as `n / max` becomes a track, `Trauma` a comma-separated list, any other row a tile |
+| | `### Stress & Trauma` | `Attribute \| Value`; `Stress` as `n / max` becomes a track, `Trauma` a list split on commas or semicolons, any other row a tile |
 | | `### Armor Uses` | `Type \| Used` with a yes or no word |
 | | `### Harm`, `### XP`, others | shown as written |
 | `## Background` | — | every filled `**Label:** value` line of up to 80 characters that does not wrap (Heritage, Background, Look, Vice/Purveyor), each shown under its own label in the identity block |

@@ -134,10 +134,10 @@ function readAttributes(html, { intercept, mergeHp } = {}) {
   const hpSeen = { cur: false, max: false };
   const left = consumeTable(html, ATTRIBUTE_COLUMNS, ([label, value]) => {
     if (intercept && intercept(label, value)) return true;
-    const m = mergeHp && label.match(/^HP\s*(?:\(\s*(cur|max)\w*\s*\))?$/i);
+    const m = mergeHp && label.match(/^HP\s*(?:\(\s*(cur(?:r(?:ent)?)?|max(?:imum)?)\.?\s*\))?$/i);
     if (!m) { rows.push([label, value]); return true; }
     // A bare `HP` row is the current value.
-    const slot = (m[1] || '').toLowerCase() === 'max' ? 'max' : 'cur';
+    const slot = /^max/i.test(m[1] || '') ? 'max' : 'cur';
     if (hpSeen[slot]) return false;
     if (!hpSeen.cur && !hpSeen.max) rows.push(['HP', null]);
     hpSeen[slot] = true;

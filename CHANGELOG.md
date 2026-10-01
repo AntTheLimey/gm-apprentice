@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- On the D&D and PF2e sheets a bare `HP` row now counts as current hit
+  points and merges with `HP (Max)` into one tile.
 - The D&D, PF2e and FitD sheets share one parser
   (`tools/publish/lib/templates/sheet-parse.js`), and D&D and PF2e one
   layout engine (`d20-sheet.js`).

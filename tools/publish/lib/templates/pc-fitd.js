@@ -73,10 +73,16 @@ function renderStressTrauma(html) {
     if (stress && !seen.has(key) && Number(stress[2]) <= MAX_TRACK && Number(stress[1]) <= Number(stress[2])) {
       seen.add(key);
       out.push(stressTracker(Number(stress[1]), Number(stress[2])));
-    } else if (key === 'trauma' && !seen.has(key)) {
-      seen.add(key);
-      traumas = value.split(/[,;](?![^(]*\))/).map(t => t.trim()).filter(t => t && t !== '—');
-      out.push(null);   // the tracker's place, filled in below
+    } else if (key === 'trauma' && !(value && seen.has(key))) {
+      // The first filled row is the trauma list. A blank row only holds the
+      // tracker's place, so a filled one below it still counts.
+      if (!out.includes(null)) out.push(null);
+      if (value) {
+        seen.add(key);
+        traumas = value.split(/[,;](?![^(]*\))/).map(t => t.trim()).filter(t => t && t !== '—');
+      } else if (!traumas) {
+        traumas = [];
+      }
     } else {
       other.push([label, value]);
     }
@@ -218,7 +224,7 @@ function renderFitDSheet(frontmatter, sections) {
     // The line after this one, when the paragraph goes on: more of the value
     // unless it opens with the next label.
     const after = backgroundHtml.slice(m.index + m[0].length);
-    const wraps = !/<\/p>/.test(m[2]) && /^\n(?!\s*<strong>)\s*[^<\s]/.test(after);
+    const wraps = !/<\/p>/.test(m[2]) && /^\n(?!\s*<strong>[^<]*(?::\s*<\/strong>|<\/strong>\s*:))\s*(?!<\/)\S/.test(after);
     if (!value || wraps || value.length > IDENTITY_MAX) continue;
     if (!fields.some(([l]) => l.toLowerCase() === label.toLowerCase())) fields.push([label, value]);
   }
