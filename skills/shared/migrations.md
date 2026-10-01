@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.20"
+current_version: "1.10.21"
 ---
 
 # Vault Migration Registry
@@ -1148,3 +1148,27 @@ frontmatter changes.
   `update-pin --site <site-dir>` (publish-site's build tool), then
   rebuild and redeploy. For a site outside the plugin,
   `update-pin --site <site-dir> --tag publish-v1.11.42`.
+
+## Migration: 1.10.20 → 1.10.21
+
+A Pathfinder 2e or Forged in the Dark PC now publishes with a structured
+character sheet (#272). No frontmatter changes.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- Nothing. The sheets are built from the body sections the PF2e and
+  FitD PC templates already have.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.11.43: on a `pf2e` or `fitd` site a PC
+  page reads its stats from the note body and renders them as a sheet;
+  before, it rendered none and showed raw tables. If
+  `publish.site_dir` is set and the campaign's system is PF2e or FitD,
+  offer `update-pin --site <site-dir>` (publish-site's build tool),
+  then rebuild and redeploy. For a site outside the plugin,
+  `update-pin --site <site-dir> --tag publish-v1.11.43`.

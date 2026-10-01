@@ -189,7 +189,7 @@ real template, so a mismatch fails the suite.
 |---------|-----------|--------------------------|
 | `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
 | | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency` (rows STR/DEX/CON/INT/WIS/CHA) |
-| | `### Combat` | `Attribute \| Value`; `HP (Current)` and `HP (Max)` merge into one tile, every other row becomes a tile |
+| | `### Combat` | `Attribute \| Value`; `HP (Current)` (or a bare `HP`) and `HP (Max)` merge into one tile, every other row becomes a tile |
 | `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header |
 | `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
 | `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC) |
@@ -222,6 +222,61 @@ Notes:
 - The template's own `{list}` placeholders and its "Omit this
   section" note are not content, and a Spellcasting section with
   nothing filled in is left out. Braces an author wrote are kept.
+
+---
+
+## 10. PF2e PC sheet — structure the publish tool reads
+
+`tools/publish/lib/templates/pc-pf2e.js` renders PF2e PC pages from the
+body of the PC file, on the same engine as D&D (`d20-sheet.js`), and
+keeps every rule in §9: positional tables checked against their
+header, nothing in a consumed section dropped, Background left as an
+accordion. The shipped template (`skills/shared/templates/pc-pf2e.md`)
+must keep this structure; its tests build a PC from the real template.
+
+| Section | Subsection | What the renderer reads |
+|---------|-----------|--------------------------|
+| `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
+| | `### Attributes` | `Attribute \| Modifier` (rows STR/DEX/CON/INT/WIS/CHA) |
+| | `### Combat` | `Attribute \| Value`; `HP (Current)` (or a bare `HP`) and `HP (Max)` merge into one tile, every other row becomes a tile |
+| `## Background` | — | the `**Class/Subclass:**`, `**Ancestry:**`, `**Heritage:**` and `**Background:**` lines, for the header |
+| `## Skills` | — | `Skill \| Attribute \| Rank \| Modifier`; Rank is U/T/E/M/L or the word |
+| `## Spellcasting` | — | `Attribute \| Value` (tradition, prepared / spontaneous, attack modifier, DC) |
+| | `### Spell Slots` | `Rank \| Total \| Expended` |
+| | `### Focus Spells` | the one-row table `Focus Points (Current/Max) \| value`; the rest is shown as written |
+| | other subsections | shown as written |
+| `## Proficiencies` | — | shown as written |
+
+Consumed sections: Stat Sheet, Skills, Spellcasting, Proficiencies. The
+template's own notes ("Remaster attributes are modifiers, not scores.",
+the rank legend, "Omit this section…"), its `{…}` placeholder lines and
+its unfilled `Lore ({topic})` row are not content.
+
+---
+
+## 11. FitD PC sheet — structure the publish tool reads
+
+`tools/publish/lib/templates/pc-fitd.js` renders Forged in the Dark PC
+pages from the body of the PC file, with the same no-loss rule as §9.
+The shipped template (`skills/shared/templates/pc-fitd.md`) must keep
+this structure; its tests build a PC from the real template.
+
+| Section | Subsection | What the renderer reads |
+|---------|-----------|--------------------------|
+| `## Stat Sheet` | (top) | the `**Playbook:**` line, for the identity block |
+| | `### Action Ratings` | a bold attribute name (`**Insight**`) on its own line over each `Action \| Rating` table; a rating of 0 to 4 becomes dots |
+| | `### Stress & Trauma` | `Attribute \| Value`; `Stress` as `n / max` becomes a track, `Trauma` a list split on commas or semicolons, any other row a tile |
+| | `### Armor Uses` | `Type \| Used` with a yes or no word |
+| | `### Harm`, `### XP`, others | shown as written |
+| `## Background` | — | every filled `**Label:** value` line of up to 80 characters that does not wrap (Heritage, Background, Look, Vice/Purveyor), each shown under its own label in the identity block |
+| `## Special Abilities` | — | shown as written |
+| `## Stash & Coin` | — | `Attribute \| Value`, every row a tile |
+
+Consumed sections: Stat Sheet, Special Abilities, Stash & Coin. Friends
+& Rivals, Long-Term Projects and Background stay accordions; Equipment
+stays on its tab. An action table with no attribute name over it, a
+rating outside 0 to 4 and a stress value that is not `n / max` are
+shown as written.
 
 ---
 

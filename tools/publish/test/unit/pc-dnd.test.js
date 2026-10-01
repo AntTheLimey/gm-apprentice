@@ -107,6 +107,14 @@ describe('renderDnDSheet from the real template body', () => {
     assert.strictEqual(stat('Passive Perception'), '11');
   });
 
+  it('merges a bare HP row, and keeps an HP row that is not current or max', () => {
+    const bare = render(replace(wizardBody(), '| HP (Current) | 14 |', '| HP | 14 |'));
+    assert.match(bare, /<span class="stat-label">HP<\/span><span class="stat-value">14 \/ 17</);
+    const cursed = render(replace(wizardBody(), '| HP (Current) | 14 |', '| HP (Cursed) | 5 |\n| HP (Current) | 14 |'));
+    assert.match(cursed, /<span class="stat-label">HP \(Cursed\)<\/span><span class="stat-value">5</);
+    assert.match(cursed, /<span class="stat-label">HP<\/span><span class="stat-value">14 \/ 17</);
+  });
+
   it('keeps every other Core and Combat row', () => {
     const html = render(wizardBody());
     for (const label of ['XP', 'Proficiency Bonus', 'Heroic Inspiration', 'Size', 'Hit Dice \\(Spent/Max\\)', 'Death Saves \\(S/F\\)']) {

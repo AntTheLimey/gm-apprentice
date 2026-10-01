@@ -6,7 +6,7 @@ const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
-const { isDndConsumedTitle } = require('./pc-dnd');
+const { getConsumedTitleMatcher } = require('./pc-registry');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -44,10 +44,6 @@ function isGurpsSystem(publishConfig) {
 
 function isCocSystem(publishConfig) {
   return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
-}
-
-function isDndSystem(publishConfig) {
-  return ['dnd-5e', 'dnd-5e-2024', 'dnd'].includes(String((publishConfig || {}).system || '').toLowerCase());
 }
 
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
@@ -278,16 +274,6 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 </div>`;
   }
 
-  // --- Character Epithet ---
-  let epithet = '';
-  if (fm.key_traits) {
-    const traitsText = Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits);
-    epithet = `<div class="pull-quote">${escapeHtml(traitsText)}</div>`;
-  } else {
-    const quoteText = excerptFromMarkdown(publishedSource(page));
-    if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
-  }
-
   // Read system HTML before filtering so the filter can react to what was actually rendered.
   const systemHtml = (context || {}).systemSheetHtml || null;
   const systemCombatHtml = (context || {}).systemCombatHtml || null;
@@ -296,6 +282,17 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemStatusPanelHtml = (context || {}).systemStatusPanelHtml || null;
   const systemRecordHtml = (context || {}).systemRecordHtml || null;
   const systemStatusBarHtml = (context || {}).systemStatusBarHtml || null;
+
+  // --- Character Epithet ---
+  // key_traits when the PC has any. Otherwise an excerpt of the body, unless a
+  // system sheet rendered: that body opens with stat tables, and an excerpt of
+  // those is noise ("Playbook: Cutter Insight Prowess Resolve…").
+  let epithet = '';
+  const traitsText = Array.isArray(fm.key_traits)
+    ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
+    : String(fm.key_traits || '');
+  const quoteText = traitsText.trim() || (systemHtml ? '' : excerptFromMarkdown(publishedSource(page)));
+  if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
 
   // Status-bar tier off ⇒ no live vitals UI anywhere. Null out every live input
   // so the existing null-guards below omit the panel, island, and client scripts.
@@ -313,15 +310,16 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   const gurpsSheet = isGurpsSystem(publishConfig);
   const cocSheet = isCocSystem(publishConfig);
-  const dndSheet = isDndSystem(publishConfig);
+  // D&D, PF2e and FitD: the sheet's own module says which sections it rendered
+  // in full, so one matcher decides both what it reads and what leaves this list.
+  const sheetConsumes = getConsumedTitleMatcher(publishConfig.system);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
     if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
     if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
     if (cocSheet && (systemHtml || systemRecordHtml) && COC_CONSUMED_TITLES.has(lower)) return false;
-    // One matcher decides both what the sheet reads and what leaves this list.
-    if (dndSheet && systemHtml && isDndConsumedTitle(s.title)) return false;
+    if (sheetConsumes && systemHtml && sheetConsumes(s.title)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;

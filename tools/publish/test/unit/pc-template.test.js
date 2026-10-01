@@ -88,3 +88,24 @@ describe('pcTemplate GURPS consumed-titles graceful degradation', () => {
     assert.ok(!html.includes('chains'), 'Combat chains accordion must be suppressed when combatHtml is present');
   });
 });
+
+describe('pcTemplate pull quote', () => {
+  const body = '## Stat Sheet\n\nPlaybook stats here.\n';
+  const quoted = (frontmatter, context) => pcTemplate(
+    { frontmatter: { type: 'pc', ...frontmatter }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero', markdown: body, content: body },
+    { html: '', relationships: '' }, [], noop, cfg, {}, undefined, context);
+
+  it('quotes key_traits', () => {
+    assert.match(quoted({ key_traits: ['bold', 'wry'] }, { systemSheetHtml: '<div>sheet</div>' }), /<div class="pull-quote">bold, wry<\/div>/);
+  });
+  it('shows no quote for an empty key_traits list', () => {
+    assert.ok(!quoted({ key_traits: [] }, { systemSheetHtml: '<div>sheet</div>' }).includes('pull-quote'));
+  });
+  it('ignores blank key_traits entries', () => {
+    assert.ok(!quoted({ key_traits: ['', null] }, { systemSheetHtml: '<div>sheet</div>' }).includes('pull-quote'));
+    assert.match(quoted({ key_traits: ['', 'wry'] }, {}), /<div class="pull-quote">wry<\/div>/);
+  });
+  it('does not excerpt the stat tables when a system sheet rendered', () => {
+    assert.ok(!quoted({}, { systemSheetHtml: '<div>sheet</div>' }).includes('pull-quote'));
+  });
+});
