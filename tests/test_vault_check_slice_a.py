@@ -54,11 +54,13 @@ def rows_for(rows, needle):
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
-                      stripped=None):
+                      stripped=None, sheet_source=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
-    (None: an older tool's answer, without the field); `plan` is what `manifest publish-played
+    (None: an older tool's answer, without the field); `sheet_source` maps
+    a PC's path to its `sheetSourceSet` (None: an older tool's answer,
+    without the field); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -91,6 +93,12 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
         if stripped is not None:
             for page in pages:
                 page["strippedSections"] = stripped.get(page["path"], [])
+        if sheet_source is not None:
+            pages += [{"path": p, "bodyWithheld": False}
+                      for p in sheet_source
+                      if p not in {page["path"] for page in pages}]
+            for page in pages:
+                page["sheetSourceSet"] = sheet_source.get(page["path"])
         return subprocess.CompletedProcess(
             cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
 
@@ -1622,6 +1630,26 @@ class PcBodyCommandTests(unittest.TestCase):
                                 f"{body}\n")
                 self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
+    def test_a_longer_pointer_tbd_or_bare_skeleton_warns(self):
+        for body in ("See D&D Beyond.\n\nLink in Discord.\n\nAsk Bob.",
+                     "TBD\n\nTBD\n\nTBD",
+                     "### Attributes\n\n### Skills\n\n### Equipment",
+                     "See D&D Beyond (2024).",
+                     "Sheet is on page 12 of the group PDF.",
+                     "See Bryn_2.pdf in the drive"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
+                                rows)
+
+    def test_a_small_table_in_words_is_a_sheet(self):
+        # The build takes any table as a sheet (Odd_Table in
+        # build-sheetless-pc.test.js); the two must not disagree on it.
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "| Thing | Amount |\n|---|---|\n| Grit | high |\n")
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
     def test_a_free_form_stat_line_is_a_sheet(self):
         rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
                         "ST 12, DX 13, IQ 11, HT 12.\n")
@@ -1665,20 +1693,90 @@ class PcBodyCommandTests(unittest.TestCase):
         (vault / "Hero.md").write_text(text, encoding="utf-8")
         return vc.check_pc_body(vault)
 
-    def test_every_sheet_source_form_reads_the_way_the_build_does(self):
-        # The same list the publish build is tested against
-        # (build-sheetless-pc.test.js), so the two cannot disagree about
-        # who is warned about.
-        vectors = json.loads((ROOT / "tools" / "publish" / "test" / "fixtures"
-                              / "sheet-source-vectors.json")
-                             .read_text(encoding="utf-8"))["vectors"]
-        self.assertGreaterEqual(len(vectors), 20)
-        for vector in vectors:
-            with self.subTest(yaml=vector["yaml"]):
-                rows = self._pc(f"---\ntype: pc\n{vector['yaml']}\n---\n\n"
-                                "## Background\n\nA sailor.\n")
-                warned = bool(rows_for(rows, "Stat Sheet section"))
-                self.assertEqual(warned, not vector["set"], rows)
+    SHEETLESS = "## Background\n\nA sailor.\n"
+
+    def _asked(self, value, **stub):
+        """pc-body rows for a sheetless PC with `sheet_source: <value>`, on
+        a vault whose publish tool is stubbed; and the tool calls made."""
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, **stub)
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\nsheet_source: {value}\n---\n\n{self.SHEETLESS}",
+            encoding="utf-8")
+        return vc.check_pc_body(vault), calls
+
+    def test_the_publish_tool_says_whether_sheet_source_is_set(self):
+        # One reading of the field, the tool's: nothing here parses it.
+        for value in ("null", "~", "false", "[]", "5", "{where: paper}"):
+            with self.subTest(sheet_source=value):
+                rows, calls = self._asked(value, sheet_source={"Hero.md": False})
+                self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertEqual(len(calls), 1, calls)
+        rows, _calls = self._asked("[PDF, group drive]",
+                                   sheet_source={"Hero.md": True})
+        self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+
+    def test_a_blank_sheet_source_never_asks_the_tool(self):
+        for value in ("", '""', "''", '"  "'):
+            with self.subTest(sheet_source=value):
+                rows, calls = self._asked(value, sheet_source={"Hero.md": True})
+                self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertEqual(calls, [])
+
+    def test_a_pc_with_a_sheet_never_asks_the_tool(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
+        (vault / "Hero.md").write_text(
+            '---\ntype: pc\nsheet_source: "D&D Beyond"\n---\n\n'
+            "## Stat Sheet\n\nST 12, DX 13.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
+        self.assertEqual(calls, [])
+
+    def test_a_list_under_sheet_source_is_asked_about(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\nsheet_source:\n  - PDF\n  - group drive\n---\n\n"
+            + self.SHEETLESS, encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+        self.assertEqual(len(calls), 1)
+
+    def test_a_pc_the_tool_makes_no_page_for_is_not_warned_about(self):
+        # sheetSourceSet is null for a file in an unmapped folder.
+        rows, _calls = self._asked("paper", sheet_source={"Hero.md": None})
+        self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+
+    def test_the_tool_is_asked_once_for_many_pcs(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={
+            "A.md": True, "B.md": False})
+        for name in ("A", "B"):
+            (vault / f"{name}.md").write_text(
+                f"---\ntype: pc\nsheet_source: paper\n---\n\n{self.SHEETLESS}",
+                encoding="utf-8")
+        rows = rows_for(vc.check_pc_body(vault), "Stat Sheet section")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("B.md", rows[0])
+        self.assertEqual(len(calls), 1)
+
+    def test_a_tool_that_cannot_answer_takes_a_written_value_as_set(self):
+        # No node, and a tool too old to report the field: say so, and do
+        # not warn about a PC whose GM wrote something.
+        for stub, why in (({"which": None}, "node is not on PATH"),
+                          ({"stripped": {"Hero.md": []}}, "predates 1.11.44")):
+            with self.subTest(why=why):
+                rows, _calls = self._asked("paper", **stub)
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                info = rows_for(rows, "could not be consulted")
+                self.assertEqual(len(info), 1, rows)
+                self.assertIn(why, info[0])
+                self.assertIn("taken as set", info[0])
+
+    def test_a_vault_that_does_not_publish_takes_a_written_value_as_set(self):
+        rows = self._pc("---\ntype: pc\nsheet_source: paper\n---\n\n"
+                        + self.SHEETLESS)
+        self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
 
     def test_an_edition_number_is_not_a_stat(self):
         for body in ("See D&D Beyond (5e).", "On Roll20, D&D 5th edition."):
@@ -1686,13 +1784,6 @@ class PcBodyCommandTests(unittest.TestCase):
                 rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
                                 f"{body}\n")
                 self.assertTrue(rows_for(rows, "holds no stats"), rows)
-
-    def test_a_sheet_source_yaml_reads_as_no_value_settles_nothing(self):
-        for raw in ("null", "~", "false", "[]", '"  "'):
-            with self.subTest(sheet_source=raw):
-                rows = self._pc(f"---\ntype: pc\nsheet_source: {raw}\n---\n\n"
-                                "## Background\n\nA sailor.\n")
-                self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
 
     def test_a_fenced_stat_sheet_is_no_stat_sheet(self):
         rows = self._pc("---\ntype: pc\n---\n\n<!-- gm-only -->\n"

@@ -190,6 +190,7 @@ from vaultlib import (  # noqa: F401
     publish_mode,
     raw_frontmatter,
     scalar_value,
+    FRONTMATTER_RE,
     scan_body,
     session_ref_number,
     set_key,
@@ -1871,27 +1872,55 @@ PROTECTED_H2 = {"notes", "gm notes"}
 CANONICAL_FIRST_H2 = "Stat Sheet"
 
 
-# `sheet_source` values that say nothing. The frontmatter reader here hands
-# back text with its quotes gone, so `0` and `"0"` cannot be told apart; the
-# publish build (sheetSourceOf in build.js) applies this same list to the
-# value's text, so the two always agree.
-SHEET_SOURCE_UNSET = {"", "null", "~", "false", "0", "[]", "{}"}
+# The first publish tool whose `explain --all` reports `sheetSourceSet`.
+SHEET_SOURCE_SINCE = "1.11.44"
 
 
-def _sheet_source(fm: dict) -> str:
-    """The PC's `sheet_source` note, or '' when it has none. The field is a
-    line of text; a list is read as its items joined, and a mapping is not a
-    note at all."""
-    raw = fm.get("sheet_source")
-    if isinstance(raw, dict):
-        return ""
-    if isinstance(raw, (list, tuple)):
-        raw = ", ".join(str(item).strip() for item in raw
-                        if item is not None and str(item).strip())
-    value = str(raw if raw is not None else "").strip()
-    if value.startswith("{"):
-        return ""
-    return "" if value.lower() in SHEET_SOURCE_UNSET else value
+def _sheet_source_written(text: str) -> bool:
+    """Is anything written after `sheet_source:` in this file's frontmatter?
+
+    An absent key and the template's `sheet_source: ""` say nothing, and
+    that much is read here so a vault of template PCs needs no publish tool.
+    What a written value means is the publish tool's to say
+    (sheet_sources_unset)."""
+    match = FRONTMATTER_RE.match(text)
+    lines = match.group(1).split("\n") if match else []
+    for i, line in enumerate(lines):
+        if not line.startswith("sheet_source:"):
+            continue
+        rest = line.split(":", 1)[1].strip()
+        if rest and not re.fullmatch(r"\"\s*\"|'\s*'", rest):
+            return True
+        # Nothing on the line: a list or block may follow, indented.
+        follow = next((ln for ln in lines[i + 1:] if ln.strip()), "")
+        return follow[:1].isspace() or follow.startswith("- ")
+    return False
+
+
+def sheet_sources_unset(vault: Path
+                        ) -> tuple[set[str] | None, str | None, str | None]:
+    """(the PCs whose `sheet_source` says nothing, why the publish tool could not
+    be asked, which tool answered when it wasn't the site's own).
+
+    The publish tool reads the field (sheet-source.js) and reports it as
+    `sheetSourceSet` in `explain --all --json`; nothing here reads the YAML
+    a second way. A file the tool makes no page for (an unmapped folder)
+    has no answer and is left out: nothing publishes to be missing a
+    sheet. (None, None, None) means the vault publishes nothing, so there
+    is no tool to ask."""
+    answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer.data is None:
+        return None, answer.why, answer.used
+    try:
+        pages = answer.data["pages"]
+        if any("sheetSourceSet" not in p for p in pages):
+            return None, (f"the site's publish tool predates "
+                          f"{SHEET_SOURCE_SINCE}"), answer.used
+        return ({unicodedata.normalize("NFC", str(p["path"]))
+                 for p in pages if p["sheetSourceSet"] is False},
+                None, answer.used)
+    except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON", answer.used
 
 
 def _is_stat_sheet(title: str) -> bool:
@@ -1977,16 +2006,32 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
         if differing <= TEMPLATE_SLACK and len(lines) >= 8:
             return (f"is the template's but for {differing} "
                     f"line{'' if differing == 1 else 's'}")
-    # A line or two with no figure in it is a "TBD" or a pointer to where the
-    # sheet really is. Longer sheets in words or dots (Fate aspects, ●●○○
-    # ratings) are sheets, and so is an embedded image of one. A link's
-    # target is not a figure, whatever digits it holds, nor is an edition.
-    text = " ".join(lines)
-    if len(lines) <= 2 and not re.search(r"!\[|[●○◆◇]", text):
-        prose = re.sub(r"https?://\S+|\[\[[^\]]*\]\]|\]\([^)]*\)", "", text)
-        # A figure stands alone: the 5 of "5e" or "D&D 5th" is part of a name.
-        if not re.search(r"(?<![A-Za-z0-9])[+-]?\d+(?![A-Za-z0-9])", prose):
-            return "holds no stats"
+    # Subheads alone are a skeleton with nothing in it.
+    content = [line for line in lines if not re.match(r"#{1,6}(?: |$)", line)]
+    if not content:
+        return "holds no stats"
+    # A table is a sheet, as it is to the publish build, and so are dots
+    # (●●○○ ratings) and an embedded image of the sheet.
+    text = " ".join(content)
+    if re.search(r"!\[|[●○◆◇]", text) \
+            or any(line.startswith("|") for line in content):
+        return None
+    # A figure makes it a sheet. A link's target is not one, whatever digits
+    # it holds, nor a file name, a page reference or a year in brackets.
+    prose = re.sub(r"https?://\S+|\[\[[^\]]*\]\]|\]\([^)]*\)", "", text)
+    prose = re.sub(r"[\w-]+\.(?:pdf|png|jpe?g|gif|webp|docx?|xlsx?|md|txt)\b"
+                   r"|\b(?:pages?|pp?\.)\s*\d+(?:\s*[-–]\s*\d+)?"
+                   r"|\((?:19|20)\d\d\)", "", prose, flags=re.I)
+    # A figure stands alone: the 5 of "5e" or "D&D 5th" is part of a name.
+    if re.search(r"(?<![A-Za-z0-9])[+-]?\d+(?![A-Za-z0-9])", prose):
+        return None
+    # Words only. A sheet in words (Fate aspects) runs to several lines and
+    # labels or lists them; a line or two, or plain sentences, is a "TBD" or
+    # a pointer to where the sheet really is.
+    listed = any(re.match(r"(?:[-*+]|\d+[.)]) |\*\*[^*]+\*\*", line)
+                 for line in content)
+    if len(content) <= 2 or not listed:
+        return "holds no stats"
     return None
 
 
@@ -2037,6 +2082,8 @@ def check_pc_body(vault: Path, folder: str | None = None,
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
+    # The publish tool's reading of each PC's sheet_source, once asked.
+    sources: tuple[set[str] | None, str | None, str | None] | None = None
     for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
@@ -2105,23 +2152,41 @@ def check_pc_body(vault: Path, folder: str | None = None,
         # a Character Sheet tab that says nothing (#273). `sheet_source`
         # records that the sheet is kept elsewhere, which settles it. A stub
         # publishes named fragments only, so its Stat Sheet is not judged.
-        if kept is None and not _sheet_source(fm):
+        if kept is None:
             # A fenced or excluded Stat Sheet does not publish, so the page
             # has none.
             stat = next((st for st, title in h2s
                          if _is_stat_sheet(title) and st.published), None)
             remedy = ("fill it in, or set sheet_source to where the sheet "
                       "is kept")
+            row = None
             if stat is None:
-                rows.append(f"WARNING\t{rel}\tno published "
-                            f"## {CANONICAL_FIRST_H2} section — the PC's page "
-                            f"has no character sheet; fill one in, or set "
-                            f"sheet_source to where the sheet is kept")
+                row = (f"WARNING\t{rel}\tno published "
+                       f"## {CANONICAL_FIRST_H2} section — the PC's page "
+                       f"has no character sheet; fill one in, or set "
+                       f"sheet_source to where the sheet is kept")
             else:
                 problem = _stat_sheet_problem(_stat_sheet_lines(states, stat))
                 if problem:
-                    rows.append(f"WARNING\t{rel}:{stat.lineno}\t"
-                                f"## {CANONICAL_FIRST_H2} {problem}; {remedy}")
+                    row = (f"WARNING\t{rel}:{stat.lineno}\t"
+                           f"## {CANONICAL_FIRST_H2} {problem}; {remedy}")
+            if row and _sheet_source_written(text):
+                # Asked once a run, and only when a PC's answer turns on it.
+                if sources is None:
+                    sources = sheet_sources_unset(vault)
+                    unset, why, used = sources
+                    if unset is not None:
+                        rows.extend(_tool_used_row(used))
+                    elif why:
+                        rows.append(_publish_tool_row(
+                            why, "a sheet_source with anything written in "
+                            "it was taken as set", used))
+                unset = sources[0]
+                if unset is None \
+                        or unicodedata.normalize("NFC", rel) not in unset:
+                    row = None
+            if row:
+                rows.append(row)
 
         if kept is None and h2s \
                 and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():

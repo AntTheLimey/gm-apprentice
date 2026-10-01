@@ -147,7 +147,9 @@ def scalar_value(value: str) -> str:
         # an unescaped form, and decoding them here would be a second guess
         # at YAML this parser is deliberately not implementing.
         return m.group(1) if m.group(1) is not None else m.group(2)
-    # Unquoted: a ' #' starts a YAML comment.
+    # Unquoted: a ' #' starts a YAML comment, and so does a leading '#'.
+    if text.startswith("#"):
+        return ""
     return re.split(r"\s+#", text, maxsplit=1)[0].strip()
 
 

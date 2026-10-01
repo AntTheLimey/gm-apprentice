@@ -23,26 +23,9 @@ const { boardFor } = require('./party-board-registry');
 const { resolveBackendFlags } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
+const { sheetSourceOf } = require('./sheet-source');
 
 const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
-
-// A PC's `sheet_source` note, or '' when it has none. The field is a line of
-// text; a list is read as its items joined, and a mapping is not a note at all.
-// vault_check.py reads frontmatter as unquoted text and cannot tell `0` from
-// `"0"`, so the values that say nothing are judged on their text here too
-// (SHEET_SOURCE_UNSET there): the two tools must agree on who is warned about.
-const SHEET_SOURCE_UNSET = new Set(['', 'null', '~', 'false', '0', '[]', '{}']);
-function sheetSourceOf(frontmatter) {
-  let raw = (frontmatter || {}).sheet_source;
-  if (Array.isArray(raw)) {
-    raw = raw.filter(item => item != null && String(item).trim()).map(item => String(item).trim()).join(', ');
-  } else if (raw && typeof raw === 'object') {
-    return '';
-  }
-  const value = String(raw == null ? '' : raw).trim();
-  if (value.startsWith('{')) return '';
-  return SHEET_SOURCE_UNSET.has(value.toLowerCase()) ? '' : value;
-}
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
@@ -1256,7 +1239,7 @@ function build(options = {}) {
   console.log('Done!');
 }
 
-module.exports = { sheetSourceOf, build };
+module.exports = { build };
 
 // Allow running directly: node lib/build.js
 // Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.

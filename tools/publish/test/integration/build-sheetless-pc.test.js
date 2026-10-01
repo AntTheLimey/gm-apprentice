@@ -3,7 +3,8 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const matter = require('gray-matter');
-const { build, sheetSourceOf } = require('../../lib/build');
+const { build } = require('../../lib/build');
+const { sheetSourceOf } = require('../../lib/sheet-source');
 const { templateBody } = require('../helpers/pc-template');
 
 // #273: a PC page with no sheet used to publish without a word to the GM.
@@ -91,15 +92,20 @@ describe('build warns about PCs with no character sheet', () => {
     assert.match(run('gurps-4e', { Solo: pc('', prose) })[0], /1 PC published with no character sheet \(Solo\)/);
   });
 
-  // The same list vault_check.py is tested against (tests/test_vault_check_slice_a.py),
-  // so the build and the QA check cannot disagree about who is warned about.
-  it('reads every sheet_source form the way vault_check does', () => {
-    const { vectors } = require('../fixtures/sheet-source-vectors.json');
-    assert.ok(vectors.length >= 20);
-    for (const { yaml, set } of vectors) {
-      const fm = matter(`---\ntype: pc\n${yaml}\n---\n`).data;
-      assert.strictEqual(Boolean(sheetSourceOf(fm)), set, yaml);
-    }
+  // The one reading of the field. vault_check.py asks for it (`explain --all`'s
+  // sheetSourceSet) instead of parsing the YAML itself.
+  it('reads sheet_source as a note only when it is text', () => {
+    const set = ['"D&D Beyond"', 'D&D Beyond', "'paper, with the player'", 'https://example.com/c/12345',
+      '[PDF, group drive]', '\n  - PDF\n  - group drive', '[PDF, 2]', '!!str D&D Beyond', '|\n  D&D Beyond\n  and paper',
+      '"# on paper"', 'D&D Beyond # as of May', '"0"', '"null"'];
+    const unset = ['', '""', '"   "', 'null', '~', 'NULL', 'false', 'true', '0', '5', '0.0', '.inf', '# where is it',
+      '2024-01-01', '[]', '[""]', '[null]', '[5]', '[{a: b}]', '{where: paper}', '\n  where: paper', '|', '>-'];
+    const read = value => sheetSourceOf(matter(`---\ntype: pc\nsheet_source: ${value}\n---\n`).data);
+    for (const value of set) assert.ok(read(value), `set: ${value}`);
+    for (const value of unset) assert.strictEqual(read(value), '', `unset: ${value}`);
+    assert.strictEqual(sheetSourceOf({ player_name: 'T' }), '');
+    assert.strictEqual(sheetSourceOf(null), '');
+    assert.strictEqual(read('[PDF, group drive]'), 'PDF, group drive');
   });
 
   it('reads sheet_source: null as unset', () => {
@@ -107,6 +113,9 @@ describe('build warns about PCs with no character sheet', () => {
   });
 
   it('names a PC whose Stat Sheet is only a pointer or a TBD', () => {
+    // Languages has no Stat Sheet at all, but its proficiency list is something on
+    // the Character Sheet tab, so the build does not call the page sheetless.
+    // `vault_check pc-body` still reports the missing section.
     const lines = run('dnd-5e-2024', {
       Tbd: pc('', '## Stat Sheet\n\nTBD\n'),
       Pointer: pc('', '## Stat Sheet\n\nSee D&D Beyond.\n'),

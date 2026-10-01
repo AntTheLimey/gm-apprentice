@@ -29,8 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     kept when it is not in the vault (`"D&D Beyond"`,
     `"paper, with the player"`). With it set none of these warnings
     fires, the CoC "parsed no characteristics" warning included. The
-    site does not show it. A PC published as a stub is not reported
-    either.
+    site does not show it unless the PC lists it in `display_meta`.
+    A bare number or date is not a note. A PC published as a stub is
+    not reported either.
+  - The publish tool is the only reader of `sheet_source`
+    (`sheet-source.js`). `explain --all --json` reports it per PC as
+    `sheetSourceSet`, and `pc-body` asks the tool rather than parse
+    the field itself. Where the tool cannot answer (no site, no node,
+    a pin below 1.11.44), a `sheet_source` with anything written in it
+    is taken as set, and `pc-body` says so.
   - session-wrapup, vault-ingest and campaign-qa ask the GM once where
     such sheets are kept and write `sheet_source` themselves.
 

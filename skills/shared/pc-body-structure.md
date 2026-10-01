@@ -92,7 +92,8 @@ Character Sheet tab that is empty or shows only defaults.
 `sheet_source` in the PC's frontmatter settles it: a short note of
 where the sheet is (`"D&D Beyond"`, `"PDF in the group drive"`,
 `"paper, with the player"`). With it set, none of these warnings
-fires. The publish tool does not put it on the page.
+fires. The publish tool does not put it on the page unless the PC
+lists it in `display_meta`.
 
 When a skill creates or imports a PC and has no stats for it, or meets
 this WARNING on a PC it just wrote, it asks the GM once, for all such

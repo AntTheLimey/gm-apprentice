@@ -17,6 +17,7 @@ const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { strippedSectionTitles, publishMode } = require('./processor');
 const { getCanonStatus } = require('./templates/base');
+const { sheetSourceOf } = require('./sheet-source');
 const { nearestNames } = require('./site-doctor');
 
 const MANIFEST_LABEL = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
@@ -217,6 +218,8 @@ function publishedPagesOf(survey) {
 //   code           the verdict code decidePage returned
 //   bodyWithheld   a session index whose body the site withholds (session-hub pairHubs)
 //   bodyPublishes  publishes && !bodyWithheld
+//   sheetSourceSet a PC whose `sheet_source` says where its sheet is kept (#273);
+//                  null for any other file
 async function runExplainAll(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -240,6 +243,10 @@ async function runExplainAll(options, deps) {
       // second copy of the rules (#280).
       strippedSections: page
         ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter))]
+        : null,
+      // vault_check pc-body reads this rather than parse the field itself.
+      sheetSourceSet: page && page.frontmatter && page.frontmatter.type === 'pc'
+        ? Boolean(sheetSourceOf(page.frontmatter))
         : null,
     };
   });

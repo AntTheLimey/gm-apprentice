@@ -1189,7 +1189,8 @@ the vault.
   `entity-schema.md` and picked up by Schema Mirror Sync into each
   vault's `_meta/entity-types.md`. A short note of where the character
   sheet is kept when it is not in the PC file (`"D&D Beyond"`,
-  `"paper, with the player"`). Never published. Absent by default; not
+  `"paper, with the player"`). Not shown on the site unless the PC
+  lists it in `display_meta`. Absent by default; not
   backfilled.
 - The shipped PC templates now carry `sheet_source: ""`. If the vault
   has its own `_Templates/pc-*.md` copies, add the line under
@@ -1213,3 +1214,8 @@ the vault.
   `## Stat Sheet` section, an empty one, one holding no stats (a "TBD"
   or a pointer), and one that is a shipped template's, untouched or
   but for one line.
+  When a PC it would warn about has something written in
+  `sheet_source`, it asks the site's publish tool whether that is a
+  note (`explain --all --json`, `sheetSourceSet`). A site pinned below
+  1.11.44 cannot answer; the value is then taken as set and an INFO
+  row says so.
