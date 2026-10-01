@@ -37,12 +37,22 @@ const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & per
 // they fall through to the Record tab's leftover-accordion guard (no content loss).
 const COC_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'combat', 'background', 'injuries & scars', 'phobias & manias', 'encounters with strange entities', 'arcane tomes & spells', 'fellow investigators', 'current status', 'equipment']);
 
+// Titles the D&D sheet renders in full (pc-dnd.js passes through whatever it
+// cannot place). Background is read for the header but stays an accordion: its
+// backstory and appearance prose is not on the sheet. Class Features, Species
+// Traits and Feats are prose too.
+const DND_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'spellcasting', 'proficiencies']);
+
 function isGurpsSystem(publishConfig) {
   return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());
 }
 
 function isCocSystem(publishConfig) {
   return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
+function isDndSystem(publishConfig) {
+  return ['dnd-5e', 'dnd-5e-2024', 'dnd'].includes(String((publishConfig || {}).system || '').toLowerCase());
 }
 
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
@@ -308,12 +318,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   const gurpsSheet = isGurpsSystem(publishConfig);
   const cocSheet = isCocSystem(publishConfig);
+  const dndSheet = isDndSystem(publishConfig);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
     if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
     if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
     if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
     if (cocSheet && (systemHtml || systemRecordHtml) && COC_CONSUMED_TITLES.has(lower)) return false;
+    if (dndSheet && systemHtml && DND_CONSUMED_TITLES.has(lower)) return false;
     if (lower === 'relationships' && emptyRelPattern.test(s.html.trim())) return false;
     if (lower === 'appearances' && emptyAppearPattern.test(s.html.trim())) return false;
     return true;

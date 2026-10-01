@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.20] — 2026-10-01
+
+### Fixed
+
+- **A D&D 5e PC never got a character sheet** (#271). The D&D sheet
+  renderer read four frontmatter fields that no template, skill or
+  importer writes, so every PC made from the D&D template published as
+  accordions of raw tables. The renderer now reads the template's own
+  body sections. The Character Sheet tab shows a header (level,
+  class/subclass, species, background), the six abilities with
+  modifiers and save proficiency, every Core and Combat row (AC, HP as
+  current / max, Initiative, Speed, Passive Perception and the rest),
+  all skills with proficiency and expertise marked, spellcasting
+  ability, attack modifier, save DC, remaining and total spell slots,
+  prepared spells, and proficiencies. Those four sections no longer
+  repeat as accordions. Anything in them the sheet has no place for,
+  such as an extra `###` subsection, is shown as written, not dropped.
+  An unfilled Spellcasting section is left out. Background, Class
+  Features, Species Traits, Feats and Notes stay as accordions, and
+  Equipment stays on its own tab. The old frontmatter fields still
+  work where a vault has them and the body does not. Publish tool
+  1.11.42.
+
 ## [1.10.19] — 2026-09-30
 
 ### Fixed

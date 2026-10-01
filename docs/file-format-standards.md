@@ -176,6 +176,45 @@ schema-change-procedure and no entity-template change.
 
 ---
 
+## 9. D&D 5e PC sheet — structure the publish tool reads
+
+`tools/publish/lib/templates/pc-dnd.js` renders D&D PC pages by parsing
+the markdown body of the PC file, as the CoC renderer does. The shipped
+template (`skills/shared/templates/pc-dnd-5e-2024.md`) must keep this
+structure. If you rename a section, subsection or first-column label,
+update `pc-dnd.js` in the same change. Its tests build a PC from the
+real template, so a mismatch fails the suite.
+
+| Section | Subsection | What the renderer reads |
+|---------|-----------|--------------------------|
+| `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
+| | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency` (rows STR/DEX/CON/INT/WIS/CHA) |
+| | `### Combat` | `Attribute \| Value`; `HP (Current)` and `HP (Max)` merge into one tile, every other row becomes a tile |
+| `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header |
+| `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
+| `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC) |
+| | `### Spell Slots` | `Level \| Total \| Expended`; rows with no Total are left out |
+| | `### Prepared Spells` | shown as written |
+| `## Proficiencies` | — | shown as written |
+
+Notes:
+
+- **Modifiers are the sheet's own.** The renderer shows the Modifier
+  cells as written and computes an ability modifier only when its cell
+  is blank. It never computes a save or skill bonus.
+- **Nothing in a consumed section is dropped.** Stat Sheet, Skills,
+  Spellcasting and Proficiencies leave the accordion list once the
+  sheet renders, so the renderer passes through whatever it cannot
+  place: an extra `###` subsection, prose, a Skills section with no
+  table.
+- **Background stays an accordion.** The header reads three lines from
+  it; its prose is not on the sheet.
+- `{placeholder}` values and the template's "Omit this section" note
+  are not content. A Spellcasting section with nothing filled in is
+  left out.
+
+---
+
 ## Quick Checklist
 
 - [ ] Licensed content: system `NOTICE.md` and `ATTRIBUTION.md` updated; no per-file notice

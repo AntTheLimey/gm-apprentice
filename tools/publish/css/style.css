@@ -3646,6 +3646,57 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   font-size: 0.8rem;
   color: var(--accent);
 }
+.dnd-ability-card { display: flex; flex-direction: column; align-items: center; }
+.dnd-ability-card.has-save { border-color: var(--accent); }
+.dnd-ability-card .ability-save {
+  margin-top: 0.25rem;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.dnd-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 1.25rem;
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+}
+.dnd-header span + span::before { content: "·"; margin-right: 0.75rem; color: var(--text-muted); }
+.dnd-sheet .quick-stats .stat-item { background: var(--bg); display: flex; flex-direction: column; }
+.dnd-sheet h3 { margin: 1.5rem 0 0.75rem; }
+.dnd-sheet h4 { margin: 1rem 0 0.5rem; }
+.dnd-caption { font-size: 0.7rem; font-weight: 400; color: var(--text-muted); margin-left: 0.5rem; }
+.dnd-skills {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  columns: 2 15rem;
+  column-gap: 1.5rem;
+}
+.dnd-skill {
+  display: grid;
+  grid-template-columns: 0.75rem 1fr auto 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  break-inside: avoid;
+}
+.dnd-skill.is-proficient { color: var(--text); font-weight: 600; }
+.dnd-skill .skill-mark {
+  width: 0.6rem;
+  height: 0.6rem;
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+}
+.dnd-skill.is-proficient .skill-mark { background: var(--accent); border-color: var(--accent); }
+.dnd-skill.is-expert .skill-mark { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px var(--accent); }
+.dnd-skill .skill-ability { font-size: 0.65rem; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 400; }
+.dnd-skill .skill-mod { font-family: var(--font-mono); text-align: right; }
+.dnd-proficiency-list p { margin: 0 0 0.35rem; }
 .dnd-proficiencies {
   display: flex;
   flex-wrap: wrap;

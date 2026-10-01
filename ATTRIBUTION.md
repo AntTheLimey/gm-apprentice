@@ -36,6 +36,11 @@ descriptions, magic item indexes and descriptions, and full
 monster stat blocks (ability scores, attacks, damage dice, save
 DCs, traits, legendary actions) for 235 creatures.
 
+The publish tool's D&D test fixture
+(`tools/publish/test/fixtures/with-dnd-pc/`) is an original character
+that uses SRD 5.2 names only (class, subclass, species, background,
+feat, spell, skill and equipment names) with no rules text.
+
 ### Blades in the Dark / Forged in the Dark
 
 This work is based on Blades in the Dark (found at
