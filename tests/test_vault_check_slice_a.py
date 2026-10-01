@@ -1643,6 +1643,33 @@ class PcBodyCommandTests(unittest.TestCase):
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
 
+    def test_digits_that_are_not_stats_do_not_make_a_sheet(self):
+        for body in ("1. Open Roll20\n2. Find Bryn",
+                     "[Sheet 2](https://example.com/z)",
+                     "www.dndbeyond.com/characters/12345678",
+                     "dndbeyond.com/characters/12345678",
+                     "Bryn_2.gcs", "Bryn 2.odt in the drive",
+                     "See pp 3 of the PDF", "pg. 12", "pages 12 and 14"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
+                                rows)
+
+    def test_a_sheet_in_words_takes_several_shapes(self):
+        for body in ("Fight: Great\nShoot: Good\nWill: Fair",
+                     "Fight — Great\nShoot — Good\nWill — Fair",
+                     "*Fight* Great\n*Shoot* Good\n*Will* Fair",
+                     "__Fight__ Great\n__Shoot__ Good\n__Will__ Fair",
+                     "- Fight, Great\n- Shoot, Good\n- Will, Fair",
+                     "1. Fight, Great\n2. Shoot, Good\n3. Will, Fair",
+                     "### Fight\n\nGreat\n\n### Shoot\n\nGood\n\n"
+                     "### Will\n\nFair"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
     def test_a_small_table_in_words_is_a_sheet(self):
         # The build takes any table as a sheet (Odd_Table in
         # build-sheetless-pc.test.js); the two must not disagree on it.
@@ -1740,6 +1767,43 @@ class PcBodyCommandTests(unittest.TestCase):
             + self.SHEETLESS, encoding="utf-8")
         self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
         self.assertEqual(len(calls), 1)
+
+    def test_other_ways_of_writing_the_key_are_asked_about(self):
+        for fm in ("sheet_source : paper", '"sheet_source": paper',
+                   "'sheet_source': paper",
+                   "sheet_source:\n# where\n  - PDF"):
+            with self.subTest(frontmatter=fm):
+                vault = make_vault(self)
+                calls = stub_publish_tool(self, vault,
+                                          sheet_source={"Hero.md": True})
+                (vault / "Hero.md").write_text(
+                    f"---\ntype: pc\n{fm}\n---\n\n{self.SHEETLESS}",
+                    encoding="utf-8")
+                rows = vc.check_pc_body(vault)
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertEqual(len(calls), 1)
+
+    def test_a_null_or_misshapen_answer_is_reported_not_trusted(self):
+        for stdout in ("null", '{"pages": "abc"}'):
+            with self.subTest(stdout=stdout):
+                def run(cmd, stdout=stdout, **kw):
+                    return subprocess.CompletedProcess(cmd, 0, stdout, "")
+                rows, _calls = self._asked("paper", run=run)
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                info = rows_for(rows, "could not be consulted")
+                self.assertEqual(len(info), 1, rows)
+                self.assertIn("expected JSON", info[0])
+
+    def test_one_explain_answer_serves_gm_leak_and_pc_body(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\nsheet_source: paper\n---\n\n{self.SHEETLESS}",
+            encoding="utf-8")
+        explain = vc.ExplainAll(vault)
+        vc.check_gm_leak(vault, None, explain=explain)
+        vc.check_pc_body(vault, explain=explain)
+        self.assertEqual(len(calls), 1, calls)
 
     def test_a_pc_the_tool_makes_no_page_for_is_not_warned_about(self):
         # sheetSourceSet is null for a file in an unmapped folder.

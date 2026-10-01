@@ -1311,6 +1311,20 @@ class ToolAnswer:
     used: str | None = None
 
 
+class ExplainAll:
+    """One `explain --all` answer for a run, asked when first needed, so
+    the checks that read it (gm-leak, pc-body) share one tool run."""
+
+    def __init__(self, vault: Path) -> None:
+        self.vault = vault
+        self._answer: ToolAnswer | None = None
+
+    def __call__(self) -> ToolAnswer:
+        if self._answer is None:
+            self._answer = ask_publish_tool(self.vault, ["explain", "--all"])
+        return self._answer
+
+
 def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
     """Run the site's publish tool with `args` plus `--json`, `--config`
     and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
@@ -1344,10 +1358,15 @@ def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
                                + (f": {detail[-1]}" if detail else "")),
                           used=label)
     try:
-        return ToolAnswer(data=json.loads(proc.stdout), used=used)
+        data = json.loads(proc.stdout)
     except ValueError:
+        data = None
+    if data is None:
+        # A bare `null` is no answer either, and must not read as "this
+        # vault publishes nothing".
         return ToolAnswer(why=f"{name} did not return the expected JSON",
                           used=label)
+    return ToolAnswer(data=data, used=used)
 
 
 def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
@@ -1692,7 +1711,8 @@ def _published_linenos(states: list[LineState],
 
 def check_gm_leak(vault: Path, folder: str | None,
                   fix: bool = False,
-                  renest_excludes: bool = False) -> list[str]:
+                  renest_excludes: bool = False,
+                  explain: ExplainAll | None = None) -> list[str]:
     """Keeper-facing content that would actually reach the player site.
 
     Mechanises graph-health.md's "Un-fenced GM-only content" prose. The
@@ -1745,7 +1765,7 @@ def check_gm_leak(vault: Path, folder: str | None,
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
     if notes:
-        tool = ask_publish_tool(vault, ["explain", "--all"])
+        tool = (explain or ExplainAll(vault))()
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
         if any(fm.get("type") == "session" for _r, _t, fm in notes):
@@ -1886,18 +1906,21 @@ def _sheet_source_written(text: str) -> bool:
     match = FRONTMATTER_RE.match(text)
     lines = match.group(1).split("\n") if match else []
     for i, line in enumerate(lines):
-        if not line.startswith("sheet_source:"):
+        # YAML also takes `sheet_source : x` and a quoted key.
+        key = re.match(r"""["']?sheet_source["']?[ \t]*:(.*)""", line)
+        if not key:
             continue
-        rest = line.split(":", 1)[1].strip()
-        if rest and not re.fullmatch(r"\"\s*\"|'\s*'", rest):
+        if scalar_value(key.group(1)).strip():
             return True
-        # Nothing on the line: a list or block may follow, indented.
-        follow = next((ln for ln in lines[i + 1:] if ln.strip()), "")
+        # Nothing on the line: a list or block may follow, indented, past
+        # any blank or comment lines.
+        follow = next((ln for ln in lines[i + 1:]
+                       if ln.strip() and not ln.lstrip().startswith("#")), "")
         return follow[:1].isspace() or follow.startswith("- ")
     return False
 
 
-def sheet_sources_unset(vault: Path
+def sheet_sources_unset(answer: ToolAnswer
                         ) -> tuple[set[str] | None, str | None, str | None]:
     """(the PCs whose `sheet_source` says nothing, why the publish tool could not
     be asked, which tool answered when it wasn't the site's own).
@@ -1907,12 +1930,13 @@ def sheet_sources_unset(vault: Path
     a second way. A file the tool makes no page for (an unmapped folder)
     has no answer and is left out: nothing publishes to be missing a
     sheet. (None, None, None) means the vault publishes nothing, so there
-    is no tool to ask."""
-    answer = ask_publish_tool(vault, ["explain", "--all"])
+    is no tool to ask. `answer` is the run's `explain --all`."""
     if answer.data is None:
         return None, answer.why, answer.used
     try:
         pages = answer.data["pages"]
+        if not isinstance(pages, list):
+            raise TypeError
         if any("sheetSourceSet" not in p for p in pages):
             return None, (f"the site's publish tool predates "
                           f"{SHEET_SOURCE_SINCE}"), answer.used
@@ -2016,21 +2040,31 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
     if re.search(r"!\[|[●○◆◇]", text) \
             or any(line.startswith("|") for line in content):
         return None
-    # A figure makes it a sheet. A link's target is not one, whatever digits
-    # it holds, nor a file name, a page reference or a year in brackets.
-    prose = re.sub(r"https?://\S+|\[\[[^\]]*\]\]|\]\([^)]*\)", "", text)
-    prose = re.sub(r"[\w-]+\.(?:pdf|png|jpe?g|gif|webp|docx?|xlsx?|md|txt)\b"
-                   r"|\b(?:pages?|pp?\.)\s*\d+(?:\s*[-–]\s*\d+)?"
-                   r"|\((?:19|20)\d\d\)", "", prose, flags=re.I)
+    # A figure makes it a sheet. These are not figures, whatever digits they
+    # hold: a link (its text and its target), a bare web address, a file
+    # name, a page reference, a year in brackets, a list's own numbering.
+    # Other digits in a pointer ("version 2 is on Roll20") still pass; a
+    # warning that misses is cheaper than one that cries wolf.
+    prose = " ".join(re.sub(r"^\d+[.)] ", "", line) for line in content)
+    prose = re.sub(r"\[\[[^\]]*\]\]|\[[^\]]*\]\([^)]*\)"
+                   r"|(?:https?://|www\.)\S+|\b[\w-]+(?:\.[\w-]+)+/\S*",
+                   "", prose)
+    prose = re.sub(
+        r"[\w-]+(?:\s\d+)?\.(?:pdf|png|jpe?g|gif|webp|svg|heic|docx?|odt|rtf"
+        r"|xls[xm]?|ods|csv|json|md|txt|gcs|gca\d?|pages|numbers)\b"
+        r"|\b(?:pages?|pp?\.?|pg\.?)\s*\d+(?:\s*(?:[-–,]|and)\s*\d+)*"
+        r"|\((?:19|20)\d\d\)", "", prose, flags=re.I)
     # A figure stands alone: the 5 of "5e" or "D&D 5th" is part of a name.
     if re.search(r"(?<![A-Za-z0-9])[+-]?\d+(?![A-Za-z0-9])", prose):
         return None
-    # Words only. A sheet in words (Fate aspects) runs to several lines and
-    # labels or lists them; a line or two, or plain sentences, is a "TBD" or
-    # a pointer to where the sheet really is.
-    listed = any(re.match(r"(?:[-*+]|\d+[.)]) |\*\*[^*]+\*\*", line)
-                 for line in content)
-    if len(content) <= 2 or not listed:
+    # Words only. A sheet in words (Fate aspects and skills) runs to several
+    # lines and gives them a shape: list items, emphasised or `Label:` names,
+    # `Name — rating` pairs, or values under subheads. A line or two, or
+    # plain sentences, is a "TBD" or a pointer to where the sheet really is.
+    shaped = len(lines) - len(content) >= 2 or any(
+        re.match(r"(?:[-*+]|\d+[.)]) |[*_]|[^:]{1,30}:\s|[^—–-]{1,30} [—–-] \S",
+                 line) for line in content)
+    if len(content) <= 2 or not shaped:
         return "holds no stats"
     return None
 
@@ -2058,7 +2092,8 @@ def _has_labelled_field(states: list[LineState], start: LineState,
 
 def check_pc_body(vault: Path, folder: str | None = None,
                   files: Iterable[str] | None = None,
-                  newer_than: float | None = None) -> list[str]:
+                  newer_than: float | None = None,
+                  explain: ExplainAll | None = None) -> list[str]:
     """PC sheet skeleton and `## Current Status` placement.
 
     `shared/pc-body-structure.md` makes three promises about the block
@@ -2173,7 +2208,8 @@ def check_pc_body(vault: Path, folder: str | None = None,
             if row and _sheet_source_written(text):
                 # Asked once a run, and only when a PC's answer turns on it.
                 if sources is None:
-                    sources = sheet_sources_unset(vault)
+                    sources = sheet_sources_unset(
+                        (explain or ExplainAll(vault))())
                     unset, why, used = sources
                     if unset is not None:
                         rows.extend(_tool_used_row(used))
@@ -3961,15 +3997,16 @@ def main() -> int:
                                  newer_than_mtime))
     if args.command in ("sessions", "all"):
         emit("sessions", check_sessions(args.vault))
+    explain = ExplainAll(args.vault)
     if args.command in ("gm-leak", "all"):
         # `all` is a report, so it never writes — same reasoning as
         # `wrapup` below.
         emit("gm-leak", check_gm_leak(args.vault, args.folder,
                                       args.fix and args.command == "gm-leak",
-                                      args.renest_excludes))
+                                      args.renest_excludes, explain))
     if args.command in ("pc-body", "all"):
         emit("pc-body", check_pc_body(args.vault, args.folder, args.file,
-                                      newer_than_mtime))
+                                      newer_than_mtime, explain))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects

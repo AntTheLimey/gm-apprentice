@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The publish tool is the only reader of `sheet_source`
     (`sheet-source.js`). `explain --all --json` reports it per PC as
     `sheetSourceSet`, and `pc-body` asks the tool rather than parse
-    the field itself. Where the tool cannot answer (no site, no node,
+    the field itself. Where the tool cannot answer (no `site_dir`, no node,
     a pin below 1.11.44), a `sheet_source` with anything written in it
     is taken as set, and `pc-body` says so.
   - session-wrapup, vault-ingest and campaign-qa ask the GM once where
