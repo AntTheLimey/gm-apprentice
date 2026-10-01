@@ -1665,6 +1665,28 @@ class PcBodyCommandTests(unittest.TestCase):
         (vault / "Hero.md").write_text(text, encoding="utf-8")
         return vc.check_pc_body(vault)
 
+    def test_every_sheet_source_form_reads_the_way_the_build_does(self):
+        # The same list the publish build is tested against
+        # (build-sheetless-pc.test.js), so the two cannot disagree about
+        # who is warned about.
+        vectors = json.loads((ROOT / "tools" / "publish" / "test" / "fixtures"
+                              / "sheet-source-vectors.json")
+                             .read_text(encoding="utf-8"))["vectors"]
+        self.assertGreaterEqual(len(vectors), 20)
+        for vector in vectors:
+            with self.subTest(yaml=vector["yaml"]):
+                rows = self._pc(f"---\ntype: pc\n{vector['yaml']}\n---\n\n"
+                                "## Background\n\nA sailor.\n")
+                warned = bool(rows_for(rows, "Stat Sheet section"))
+                self.assertEqual(warned, not vector["set"], rows)
+
+    def test_an_edition_number_is_not_a_stat(self):
+        for body in ("See D&D Beyond (5e).", "On Roll20, D&D 5th edition."):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "holds no stats"), rows)
+
     def test_a_sheet_source_yaml_reads_as_no_value_settles_nothing(self):
         for raw in ("null", "~", "false", "[]", '"  "'):
             with self.subTest(sheet_source=raw):

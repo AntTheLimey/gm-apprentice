@@ -1871,14 +1871,27 @@ PROTECTED_H2 = {"notes", "gm notes"}
 CANONICAL_FIRST_H2 = "Stat Sheet"
 
 
+# `sheet_source` values that say nothing. The frontmatter reader here hands
+# back text with its quotes gone, so `0` and `"0"` cannot be told apart; the
+# publish build (sheetSourceOf in build.js) applies this same list to the
+# value's text, so the two always agree.
+SHEET_SOURCE_UNSET = {"", "null", "~", "false", "0", "[]", "{}"}
+
+
 def _sheet_source(fm: dict) -> str:
-    """The PC's `sheet_source`, or '' when unset — as the publish build reads
-    it, where YAML's null, `~` and false are no value at all."""
+    """The PC's `sheet_source` note, or '' when it has none. The field is a
+    line of text; a list is read as its items joined, and a mapping is not a
+    note at all."""
     raw = fm.get("sheet_source")
+    if isinstance(raw, dict):
+        return ""
     if isinstance(raw, (list, tuple)):
-        raw = "".join(str(item) for item in raw)
+        raw = ", ".join(str(item).strip() for item in raw
+                        if item is not None and str(item).strip())
     value = str(raw if raw is not None else "").strip()
-    return "" if value.lower() in {"null", "~", "false", "[]", "0"} else value
+    if value.startswith("{"):
+        return ""
+    return "" if value.lower() in SHEET_SOURCE_UNSET else value
 
 
 def _is_stat_sheet(title: str) -> bool:
@@ -1967,11 +1980,12 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
     # A line or two with no figure in it is a "TBD" or a pointer to where the
     # sheet really is. Longer sheets in words or dots (Fate aspects, ●●○○
     # ratings) are sheets, and so is an embedded image of one. A link's
-    # target is not a figure, whatever digits it holds.
+    # target is not a figure, whatever digits it holds, nor is an edition.
     text = " ".join(lines)
     if len(lines) <= 2 and not re.search(r"!\[|[●○◆◇]", text):
         prose = re.sub(r"https?://\S+|\[\[[^\]]*\]\]|\]\([^)]*\)", "", text)
-        if not re.search(r"\d", prose):
+        # A figure stands alone: the 5 of "5e" or "D&D 5th" is part of a name.
+        if not re.search(r"(?<![A-Za-z0-9])[+-]?\d+(?![A-Za-z0-9])", prose):
             return "holds no stats"
     return None
 

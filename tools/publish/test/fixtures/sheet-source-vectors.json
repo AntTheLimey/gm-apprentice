@@ -1,0 +1,29 @@
+{
+  "comment": "One list both tools are tested against: sheetSourceOf in tools/publish/lib/build.js and _sheet_source in skills/shared/scripts/vault_check.py must agree on whether a PC's sheet_source is set (#273). `yaml` is the frontmatter line(s); `set` is the expected answer.",
+  "vectors": [
+    { "yaml": "sheet_source: \"D&D Beyond\"", "set": true },
+    { "yaml": "sheet_source: D&D Beyond", "set": true },
+    { "yaml": "sheet_source: 'paper, with the player'", "set": true },
+    { "yaml": "sheet_source: https://example.com/characters/12345", "set": true },
+    { "yaml": "sheet_source: [PDF, group drive]", "set": true },
+    { "yaml": "sheet_source:\n  - PDF\n  - group drive", "set": true },
+    { "yaml": "sheet_source: 5", "set": true },
+    { "yaml": "sheet_source:", "set": false },
+    { "yaml": "sheet_source: \"\"", "set": false },
+    { "yaml": "sheet_source: \"   \"", "set": false },
+    { "yaml": "sheet_source: null", "set": false },
+    { "yaml": "sheet_source: ~", "set": false },
+    { "yaml": "sheet_source: false", "set": false },
+    { "yaml": "sheet_source: 0", "set": false },
+    { "yaml": "sheet_source: []", "set": false },
+    { "yaml": "sheet_source: [\"\"]", "set": false },
+    { "yaml": "sheet_source: \"0\"", "set": false },
+    { "yaml": "sheet_source: \"null\"", "set": false },
+    { "yaml": "sheet_source: \"false\"", "set": false },
+    { "yaml": "sheet_source: '~'", "set": false },
+    { "yaml": "sheet_source: \"[]\"", "set": false },
+    { "yaml": "sheet_source: {where: paper}", "set": false },
+    { "yaml": "sheet_source:\n  where: paper", "set": false },
+    { "yaml": "player_name: T", "set": false }
+  ]
+}

@@ -2,7 +2,8 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
-const { build } = require('../../lib/build');
+const matter = require('gray-matter');
+const { build, sheetSourceOf } = require('../../lib/build');
 const { templateBody } = require('../helpers/pc-template');
 
 // #273: a PC page with no sheet used to publish without a word to the GM.
@@ -88,6 +89,17 @@ describe('build warns about PCs with no character sheet', () => {
 
   it('names a GURPS PC with no stat sheet', () => {
     assert.match(run('gurps-4e', { Solo: pc('', prose) })[0], /1 PC published with no character sheet \(Solo\)/);
+  });
+
+  // The same list vault_check.py is tested against (tests/test_vault_check_slice_a.py),
+  // so the build and the QA check cannot disagree about who is warned about.
+  it('reads every sheet_source form the way vault_check does', () => {
+    const { vectors } = require('../fixtures/sheet-source-vectors.json');
+    assert.ok(vectors.length >= 20);
+    for (const { yaml, set } of vectors) {
+      const fm = matter(`---\ntype: pc\n${yaml}\n---\n`).data;
+      assert.strictEqual(Boolean(sheetSourceOf(fm)), set, yaml);
+    }
   });
 
   it('reads sheet_source: null as unset', () => {

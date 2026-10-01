@@ -26,6 +26,24 @@ const { isOutOfPlay } = require('./pc-status');
 
 const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
+// A PC's `sheet_source` note, or '' when it has none. The field is a line of
+// text; a list is read as its items joined, and a mapping is not a note at all.
+// vault_check.py reads frontmatter as unquoted text and cannot tell `0` from
+// `"0"`, so the values that say nothing are judged on their text here too
+// (SHEET_SOURCE_UNSET there): the two tools must agree on who is warned about.
+const SHEET_SOURCE_UNSET = new Set(['', 'null', '~', 'false', '0', '[]', '{}']);
+function sheetSourceOf(frontmatter) {
+  let raw = (frontmatter || {}).sheet_source;
+  if (Array.isArray(raw)) {
+    raw = raw.filter(item => item != null && String(item).trim()).map(item => String(item).trim()).join(', ');
+  } else if (raw && typeof raw === 'object') {
+    return '';
+  }
+  const value = String(raw == null ? '' : raw).trim();
+  if (value.startsWith('{')) return '';
+  return SHEET_SOURCE_UNSET.has(value.toLowerCase()) ? '' : value;
+}
+
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
@@ -804,7 +822,7 @@ function build(options = {}) {
           // `exclude_fields` may hide it from the page. A stub publishes named
           // sections only, so it is not expected to carry a sheet.
           const sourceFm = page.sourceFrontmatter || page.frontmatter;
-          const sheetSource = [].concat(sourceFm.sheet_source || []).join('').trim();
+          const sheetSource = sheetSourceOf(sourceFm);
           const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
           const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
           if (sheetless && sheetExpected) sheetlessPcs.push(page.displayTitle || page.title);
@@ -1238,7 +1256,7 @@ function build(options = {}) {
   console.log('Done!');
 }
 
-module.exports = { build };
+module.exports = { sheetSourceOf, build };
 
 // Allow running directly: node lib/build.js
 // Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.
