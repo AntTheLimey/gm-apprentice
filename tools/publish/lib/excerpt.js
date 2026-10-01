@@ -53,7 +53,7 @@ const BLOCK_BOUNDARY_RE = /<\/(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|section
 // template placeholder nobody filled in ("{Appearance and manner}") goes too, wherever
 // it sits and however many lines it runs to.
 const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d|^[-*+] \[[ xX]\]|^[-*+]$/;
-const PLACEHOLDER_RE = /\{[^{}]{0,400}\}/g;
+const PLACEHOLDER_RE = /(?:^[ \t]*[-*+][ \t]+)?\{[^{}]{0,400}\}/gm;
 
 // A full stop after one of these is not the end of a sentence.
 const ABBREVIATION_RE = /\b(?:Mr|Mrs|Ms|Mx|Dr|St|Sr|Jr|Lt|Col|Capt|Sgt|Maj|Gen|Cmdr|Prof|Rev|Hon|Mme|Mlle|Msgr)\.$/;
@@ -81,7 +81,6 @@ function excerptFromMarkdown(source, opts = {}) {
   // Fenced code (including ```dataview) is never prose.
   working = working.replace(/^[ \t]*(```|~~~)[\s\S]*?(?:^[ \t]*\1[ \t]*$|$)/gm, '');
   working = stripHtml(working);
-  if (opts.skipSheetLines) working = working.replace(PLACEHOLDER_RE, '');
 
   const kept = [];
   for (const line of working.split('\n')) {
@@ -100,6 +99,9 @@ function excerptFromMarkdown(source, opts = {}) {
   }
 
   let text = kept.join('\n');
+  // Only now, on what survived the excluded-section cut: a placeholder stripped any
+  // earlier could swallow an excluded heading and let what follows it through.
+  if (opts.skipSheetLines) text = text.replace(PLACEHOLDER_RE, '');
   text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, '');    // image markdown
   text = text.replace(/!\[\[[^\]]*\]\]/g, '');         // unresolved Obsidian image embed
   text = text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2');
@@ -111,7 +113,7 @@ function excerptFromMarkdown(source, opts = {}) {
   const stop = /[.!?](?=\s)/g;
   for (let m = stop.exec(text); m; m = stop.exec(text)) {
     const sentence = text.slice(0, m.index + 1);
-    if (!ABBREVIATION_RE.test(sentence)) return sentence;
+    if (m.index > 0 && !ABBREVIATION_RE.test(sentence)) return sentence;
   }
   if (text.length <= limit) return text;
   const cut = text.slice(0, limit);

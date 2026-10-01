@@ -184,4 +184,19 @@ describe('excerptFromMarkdown skipSheetLines', () => {
   it('drops label lines, tick-boxes and placeholders when asked', () => {
     assert.strictEqual(excerptFromMarkdown(body, { skipSheetLines: true }), 'A sailor.');
   });
+  it('cannot carry text past an excluded heading inside a placeholder', () => {
+    const leaky = 'Intro { x\n## GM Notes\nfoo } SECRET stuff.';
+    const out = excerptFromMarkdown(leaky, { skipSheetLines: true, excludeSections: ['GM Notes'] });
+    assert.ok(!out.includes('SECRET'), out);
+    assert.ok(!out.includes('foo'), out);
+  });
+});
+
+describe('excerptFromMarkdown edge stops', () => {
+  it('does not return a bare stop for text that opens with one', () => {
+    assert.strictEqual(excerptFromMarkdown('. foo'), '. foo');
+  });
+  it('returns the whole text when it ends on a title', () => {
+    assert.strictEqual(excerptFromMarkdown('Hello Mr.'), 'Hello Mr.');
+  });
 });
