@@ -1537,9 +1537,9 @@ class PcBodyCommandTests(unittest.TestCase):
 
     def test_a_sheet_with_no_stat_sheet_warns(self):
         self.assertIn(
-            f"WARNING\t{LATE}\tno ## Stat Sheet section — the page publishes "
-            f"with no character sheet; fill one in, or set sheet_source to "
-            f"where the sheet is kept",
+            f"WARNING\t{LATE}\tno published ## Stat Sheet section — the PC's "
+            f"page has no character sheet; fill one in, or set sheet_source "
+            f"to where the sheet is kept",
             self.rows)
 
     def _template_pc(self, name, frontmatter="", edit=None):
@@ -1571,11 +1571,63 @@ class PcBodyCommandTests(unittest.TestCase):
                             .replace("|-----------|-------|", "|---|---|"))
         self.assertTrue(rows_for(rows, "placeholder values"), rows)
 
-    def test_a_filled_in_stat_sheet_is_not_flagged(self):
+    def test_a_nearly_untouched_template_still_warns(self):
+        one = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| Level | 1 |", "| Level | 1 (starting) |"))
+        self.assertTrue(rows_for(one, "is the template's but for 1 line;"), one)
+        hp = self._template_pc(
+            "pc-dnd-5e-2024.md",
+            edit=lambda b: b.replace("| HP (Current) | |", "| HP (Current) | 9 |")
+                            .replace("| HP (Max) | |", "| HP (Max) | 9 |"))
+        self.assertTrue(rows_for(hp, "is the template's but for 2 lines;"), hp)
+
+    def test_a_pc_from_an_older_template_still_warns(self):
         rows = self._template_pc(
             "pc-dnd-5e-2024.md",
-            edit=lambda b: b.replace("| AC | 10 |", "| AC | 15 |"))
-        self.assertFalse(rows_for(rows, "placeholder values"), rows)
+            edit=lambda b: b.replace("| Heroic Inspiration | No |\n", ""))
+        self.assertTrue(rows_for(rows, "placeholder values"), rows)
+
+    def test_a_filled_in_stat_sheet_is_not_flagged(self):
+        def fill(body):
+            for old, new in (("| Level | 1 |", "| Level | 3 |"),
+                             ("| STR | 10 | +0 | No |", "| STR | 16 | +3 | Yes |"),
+                             ("| DEX | 10 | +0 | No |", "| DEX | 14 | +2 | No |"),
+                             ("| AC | 10 |", "| AC | 15 |")):
+                self.assertIn(old, body)
+                body = body.replace(old, new)
+            return body
+        rows = self._template_pc("pc-dnd-5e-2024.md", edit=fill)
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_a_pointer_or_tbd_where_the_stats_should_be_warns(self):
+        for body in ("TBD", "See D&D Beyond: https://example.com/c/12345",
+                     "[[Hero Sheet 2.pdf]]"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
+                                rows)
+
+    def test_a_free_form_stat_line_is_a_sheet(self):
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "ST 12, DX 13, IQ 11, HT 12.\n")
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+
+    def test_an_excluded_stat_sheet_is_no_stat_sheet(self):
+        vault = make_vault(self, config="---\npublish:\n  exclude_sections: "
+                                        "[\"Stat Sheet\"]\n---\n")
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\nSTR 16.\n\n"
+            "## Background\n\nA sailor.\n", encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault),
+                                 "no published ## Stat Sheet"))
+
+    def test_a_stat_sheet_with_its_body_fenced_is_empty(self):
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "<!-- gm-only -->\nSTR 16.\n<!-- /gm-only -->\n\n"
+                        "## Background\n\nA sailor.\n")
+        self.assertTrue(rows_for(rows, "## Stat Sheet is empty;"), rows)
 
     def test_sheet_source_settles_a_missing_or_untouched_sheet(self):
         rows = self._template_pc(
@@ -1594,6 +1646,39 @@ class PcBodyCommandTests(unittest.TestCase):
             '---\ntype: pc\nsheet_source: ""\n---\n\n'
             "## Background\n\nA sailor.\n", encoding="utf-8")
         self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
+
+    def _pc(self, text):
+        vault = make_vault(self)
+        (vault / "Hero.md").write_text(text, encoding="utf-8")
+        return vc.check_pc_body(vault)
+
+    def test_a_sheet_source_yaml_reads_as_no_value_settles_nothing(self):
+        for raw in ("null", "~", "false", "[]", '"  "'):
+            with self.subTest(sheet_source=raw):
+                rows = self._pc(f"---\ntype: pc\nsheet_source: {raw}\n---\n\n"
+                                "## Background\n\nA sailor.\n")
+                self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
+
+    def test_a_fenced_stat_sheet_is_no_stat_sheet(self):
+        rows = self._pc("---\ntype: pc\n---\n\n<!-- gm-only -->\n"
+                        "## Stat Sheet\n\nSTR 10.\n<!-- /gm-only -->\n\n"
+                        "## Background\n\nA sailor.\n")
+        self.assertTrue(rows_for(rows, "no published ## Stat Sheet"), rows)
+
+    def test_an_empty_stat_sheet_warns(self):
+        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                        "## Background\n\nA sailor.\n")
+        self.assertIn("WARNING\tHero.md:5\t## Stat Sheet is empty; fill it "
+                      "in, or set sheet_source to where the sheet is kept",
+                      rows)
+
+    def test_a_bold_or_colon_stat_sheet_heading_counts(self):
+        for heading in ("## **Stat Sheet**", "## Stat Sheet:", "## Stat sheet"):
+            with self.subTest(heading=heading):
+                rows = self._pc(f"---\ntype: pc\n---\n\n{heading}\n\n"
+                                "STR 12.\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
+                self.assertFalse(rows_for(rows, "; fill it in"), rows)
 
     def test_a_stub_pc_is_not_judged_on_its_stat_sheet(self):
         vault = make_vault(self)

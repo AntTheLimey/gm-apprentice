@@ -1195,7 +1195,7 @@ the vault.
   has its own `_Templates/pc-*.md` copies, add the line under
   `portrait:` in each.
 - Run `vault_check.py <vault> pc-body`. For each new WARNING (a PC with
-  no `## Stat Sheet`, or one still holding the template's values), ask
+  no usable `## Stat Sheet`), ask
   the GM once, for all of them together, whether the stats are coming
   or the sheet is kept elsewhere, and where. Write each answer to that
   PC's `sheet_source`. A PC whose stats are coming is left as it is.
@@ -1204,10 +1204,12 @@ the vault.
 
 - `gm-apprentice-publish` 1.11.44: the build prints one WARNING line
   naming every PC whose system has a sheet renderer but which published
-  with no sheet. A PC with `sheet_source` set, or published as a stub,
-  is not named. If `publish.site_dir` is set, offer
+  with no sheet (for CoC, one whose folio parsed no characteristics).
+  A PC with `sheet_source` set, or published as a stub, is not named. If `publish.site_dir` is set, offer
   `update-pin --site <site-dir>` (publish-site's build tool). For a
   site outside the plugin,
   `update-pin --site <site-dir> --tag publish-v1.11.44`.
-- `vault_check pc-body` adds two WARNING rows: no `## Stat Sheet`
-  section, and a `## Stat Sheet` identical to a shipped template's.
+- `vault_check pc-body` adds WARNING rows for a PC with no published
+  `## Stat Sheet` section, an empty one, one holding no stats (a "TBD"
+  or a pointer), and one that is a shipped template's, untouched or
+  but for a line or two.

@@ -17,6 +17,9 @@ function renderCoCSheet(frontmatter, sections, meta) {
   }
 
   return {
+    // The folio always renders, so an empty one is flagged for the build's
+    // "published with no character sheet" line (#273).
+    sheetless: warnings.length > 0,
     sheetHtml: buildSheet(model),
     recordHtml: buildRecord(model, sections || []),
     equipmentHtml: buildEquipment(model, sections || []),

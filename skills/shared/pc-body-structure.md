@@ -78,15 +78,21 @@ the next wrap-up reconciles it either way. `vault_check.py pc-body`
 ## A sheet kept somewhere else
 
 Some tables keep the character sheet outside the vault: D&D Beyond, a
-PDF, paper. Such a PC has no `## Stat Sheet`, or one still holding the
-template's values, and its page publishes with an empty Character Sheet
-tab. `vault_check.py pc-body` reports either as a WARNING, and the
-publish build names every such PC in one line.
+PDF, paper. Such a PC has no `## Stat Sheet`, an empty one, or one
+still holding the template's values, and its page publishes with a
+Character Sheet tab that is empty or shows only defaults.
+
+- `vault_check.py pc-body` reports these as a WARNING, in any system,
+  along with a Stat Sheet that holds only a pointer or a "TBD", and
+  one that is the template's but for a line or two.
+- The publish build names, in one line, every PC whose note gave the
+  system's sheet no stats to place. A template left at its values
+  renders a sheet of defaults, so only `pc-body` catches that case.
 
 `sheet_source` in the PC's frontmatter settles it: a short note of
 where the sheet is (`"D&D Beyond"`, `"PDF in the group drive"`,
-`"paper, with the player"`). It is never published. With it set,
-neither warning fires.
+`"paper, with the player"`). With it set, none of these warnings
+fires. The publish tool does not put it on the page.
 
 When a skill creates or imports a PC and has no stats for it, or meets
 this WARNING on a PC it just wrote, it asks the GM once, for all such

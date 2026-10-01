@@ -73,6 +73,46 @@ describe('build warns about PCs with no character sheet', () => {
     assert.deepStrictEqual(run('pf2e', { Hero: pc('', templateBody('pc-pf2e.md')) }), []);
   });
 
+  it('names a CoC investigator whose folio is empty, and sheet_source settles it', () => {
+    const lines = run('coc-7e', {
+      Empty: pc('', prose),
+      Away: pc('sheet_source: "paper"\n', prose),
+      Full: pc('', templateBody('pc-coc-7e.md')),
+    });
+    assert.strictEqual(lines.length, 1, warnings.join('\n'));
+    assert.match(lines[0], /1 PC published with no character sheet \(Empty\)/);
+    const perPage = warnings.filter(w => w.includes('parsed no characteristics'));
+    assert.strictEqual(perPage.length, 1, 'the PC with sheet_source gets no per-page warning either');
+    assert.ok(perPage[0].includes('empty.html'));
+  });
+
+  it('names a GURPS PC with no stat sheet', () => {
+    assert.match(run('gurps-4e', { Solo: pc('', prose) })[0], /1 PC published with no character sheet \(Solo\)/);
+  });
+
+  it('reads sheet_source: null as unset', () => {
+    assert.strictEqual(run('fitd', { Solo: pc('sheet_source: null\n', prose) }).length, 1);
+  });
+
+  it('names a PC whose Stat Sheet is only a pointer or a TBD', () => {
+    const lines = run('dnd-5e-2024', {
+      Tbd: pc('', '## Stat Sheet\n\nTBD\n'),
+      Pointer: pc('', '## Stat Sheet\n\nSee D&D Beyond.\n'),
+      Real: pc('', '## Stat Sheet\n\n### Combat\n\n| Attribute | Value |\n|---|---|\n| AC | 15 |\n'),
+    });
+    assert.match(lines[0], /2 PCs published with no character sheet \(Pointer, Tbd\)/);
+    assert.ok(read('characters/pcs/tbd.html').includes('TBD'), 'the text itself still publishes');
+  });
+
+  it('names eight and counts the rest', () => {
+    const many = {};
+    for (let i = 1; i <= 11; i++) many[`Pc_${String(i).padStart(2, '0')}`] = pc('', prose);
+    const line = run('fitd', many)[0];
+    assert.match(line, /11 PCs published with no character sheet \(Pc 01, .*Pc 08, and 3 more\)/);
+    assert.ok(!line.includes('Pc 09'));
+    assert.match(line, /pc-body/);
+  });
+
   it('is silent for a system with no sheet renderer', () => {
     assert.deepStrictEqual(run('generic', { Hero: pc('', prose) }), []);
   });
