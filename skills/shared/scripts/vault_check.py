@@ -1877,7 +1877,7 @@ def _sheet_source(fm: dict) -> str:
     raw = fm.get("sheet_source")
     if isinstance(raw, (list, tuple)):
         raw = "".join(str(item) for item in raw)
-    value = str(raw if raw is not None else "").strip().strip("\"'").strip()
+    value = str(raw if raw is not None else "").strip()
     return "" if value.lower() in {"null", "~", "false", "[]", "0"} else value
 
 
@@ -1918,9 +1918,10 @@ def _stat_sheet_lines(states: list[LineState], start: LineState) -> list[str]:
 
 
 # How many lines of a Stat Sheet may differ from its template's before it
-# counts as filled in. One or two (a note beside Level, HP set and nothing
-# else) is still the template's sheet; a played character changes many.
-TEMPLATE_SLACK = 2
+# counts as filled in. One (a note beside Level) is still the template's
+# sheet. Two is already a possible character: a GURPS PC at all 10s but DX,
+# with the Basic Speed that follows from it.
+TEMPLATE_SLACK = 1
 
 _TEMPLATE_STAT_SHEETS: list[set[str]] | None = None
 
@@ -1947,12 +1948,11 @@ def _template_stat_sheets() -> list[set[str]]:
 def _stat_sheet_problem(lines: list[str]) -> str | None:
     """Why this Stat Sheet gives the page no real character sheet, or None.
 
-    Three ways, each seen on real vaults: nothing under the heading; a
-    pointer or a "TBD" where the stats should be; the template's own
-    values, untouched or nearly. The last is measured by lines, not by an
-    exact match, so a note beside one row, a single filled field, or a PC
-    made from an older template (a row since added or dropped) still
-    counts.
+    Three ways: nothing under the heading; the template's own values,
+    untouched or nearly; a pointer or a "TBD" where the stats should be.
+    The template test is by lines, not an exact match, so a note beside one
+    row, or a PC made from an older template (a row since added or
+    dropped), still counts.
     """
     if not lines:
         return "is empty"
@@ -1964,11 +1964,15 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
         if differing <= TEMPLATE_SLACK and len(lines) >= 8:
             return (f"is the template's but for {differing} "
                     f"line{'' if differing == 1 else 's'}")
-    # A link's target is not a stat, whatever digits it holds.
-    prose = re.sub(r"https?://\S+|\[\[[^\]]*\]\]|\]\([^)]*\)", "",
-                   " ".join(lines))
-    if not re.search(r"\d", prose):
-        return "holds no stats"
+    # A line or two with no figure in it is a "TBD" or a pointer to where the
+    # sheet really is. Longer sheets in words or dots (Fate aspects, ●●○○
+    # ratings) are sheets, and so is an embedded image of one. A link's
+    # target is not a figure, whatever digits it holds.
+    text = " ".join(lines)
+    if len(lines) <= 2 and not re.search(r"!\[|[●○◆◇]", text):
+        prose = re.sub(r"https?://\S+|\[\[[^\]]*\]\]|\]\([^)]*\)", "", text)
+        if not re.search(r"\d", prose):
+            return "holds no stats"
     return None
 
 

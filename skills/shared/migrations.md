@@ -1212,4 +1212,4 @@ the vault.
 - `vault_check pc-body` adds WARNING rows for a PC with no published
   `## Stat Sheet` section, an empty one, one holding no stats (a "TBD"
   or a pointer), and one that is a shipped template's, untouched or
-  but for a line or two.
+  but for one line.

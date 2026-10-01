@@ -84,7 +84,7 @@ Character Sheet tab that is empty or shows only defaults.
 
 - `vault_check.py pc-body` reports these as a WARNING, in any system,
   along with a Stat Sheet that holds only a pointer or a "TBD", and
-  one that is the template's but for a line or two.
+  one that is the template's but for a single line.
 - The publish build names, in one line, every PC whose note gave the
   system's sheet no stats to place. A template left at its values
   renders a sheet of defaults, so only `pc-body` catches that case.

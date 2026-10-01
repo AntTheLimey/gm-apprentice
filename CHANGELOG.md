@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     already run, warns in any system about a PC with no published
     `## Stat Sheet` section, an empty one, one holding only a "TBD" or
     a pointer, and one that is still the template's, untouched or but
-    for a line or two. The build cannot see that last case: a template
+    for one line. The build cannot see that last case: a template
     left at its values renders a sheet of defaults.
   - A new optional PC field, `sheet_source`, records where a sheet is
     kept when it is not in the vault (`"D&D Beyond"`,

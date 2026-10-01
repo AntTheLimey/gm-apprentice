@@ -1576,11 +1576,14 @@ class PcBodyCommandTests(unittest.TestCase):
             "pc-dnd-5e-2024.md",
             edit=lambda b: b.replace("| Level | 1 |", "| Level | 1 (starting) |"))
         self.assertTrue(rows_for(one, "is the template's but for 1 line;"), one)
-        hp = self._template_pc(
+
+    def test_two_changed_lines_are_a_character(self):
+        # A GURPS PC at all 10s but DX, with the Basic Speed that follows.
+        rows = self._template_pc(
             "pc-dnd-5e-2024.md",
             edit=lambda b: b.replace("| HP (Current) | |", "| HP (Current) | 9 |")
                             .replace("| HP (Max) | |", "| HP (Max) | 9 |"))
-        self.assertTrue(rows_for(hp, "is the template's but for 2 lines;"), hp)
+        self.assertFalse(rows_for(rows, "## Stat Sheet"), rows)
 
     def test_a_pc_from_an_older_template_still_warns(self):
         rows = self._template_pc(
@@ -1608,6 +1611,16 @@ class PcBodyCommandTests(unittest.TestCase):
                                 f"{body}\n")
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
+
+    def test_a_sheet_in_words_dots_or_an_image_is_a_sheet(self):
+        for body in ("**High Concept:** Disgraced Knight\n\n**Trouble:** Owes "
+                     "the Guild\n\nGreat Fight, Good Athletics, Fair Will",
+                     "- Skirmish ●●○○\n- Command ●○○○",
+                     "![[Bryn_sheet_p1.png]]"):
+            with self.subTest(body=body):
+                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
+                                f"{body}\n")
+                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_a_free_form_stat_line_is_a_sheet(self):
         rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"

@@ -99,6 +99,8 @@ describe('build warns about PCs with no character sheet', () => {
       Tbd: pc('', '## Stat Sheet\n\nTBD\n'),
       Pointer: pc('', '## Stat Sheet\n\nSee D&D Beyond.\n'),
       Real: pc('', '## Stat Sheet\n\n### Combat\n\n| Attribute | Value |\n|---|---|\n| AC | 15 |\n'),
+      Languages: pc('', '## Proficiencies\n\n**Languages:** Common, Elvish\n'),
+      Odd_Table: pc('', '## Stat Sheet\n\n| Thing | Amount |\n|---|---|\n| Grit | high |\n'),
     });
     assert.match(lines[0], /2 PCs published with no character sheet \(Pointer, Tbd\)/);
     assert.ok(read('characters/pcs/tbd.html').includes('TBD'), 'the text itself still publishes');
