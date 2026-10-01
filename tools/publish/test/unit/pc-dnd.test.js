@@ -197,6 +197,11 @@ describe('renderDnDSheet drops nothing from a consumed section', () => {
     'a slots table with a Remaining column': b => b.replace('| Level | Total | Expended |', '| Level | Total | Remaining |').replace('| 1st | 4 | 1 |', '| 1st | 4 | MARKER 3 |'),
     'more slots expended than there are': b => setRow(b, '2nd', ['2', '5']).replace('| 2nd | 2 | 5 |', '| MARKER 2nd | 2 | 5 |'),
     'braces an author wrote in Proficiencies': b => replace(b, '**Tools:** {list}', "**Tools:** {MARKER Thieves' Tools}"),
+    'an image in a Combat cell': b => setRow(b, 'Size', ['![MARKER](size.png)']),
+    'a link in a Core cell': b => replace(b, '| XP | 900 |', '| XP | [900](MARKER.html) |'),
+    'a label-only spellcasting row': b => replace(b, '| Spell Save DC | 13 |', '| Spell Save DC | 13 |\n| MARKER Focus | |'),
+    'a label-only spell slot row': b => replace(b, '| 9th | | |', '| 9th | | |\n| MARKER Pact | | |'),
+    'bold text before an author {list}': b => replace(b, '**Tools:** {list}', 'Carries **MARKER** {list} of tools.'),
     'a spellcasting value of a dash': b => setRow(b, 'Spell Save DC', ['—']).replace('Spell Save DC', 'MARKER DC'),
   };
   for (const [name, mutate] of Object.entries(cases)) {
@@ -234,6 +239,23 @@ describe('renderDnDSheet drops nothing from a consumed section', () => {
   it('shows max HP as a maximum when current is blank', () => {
     const html = render(setRow(wizardBody(), 'HP (Current)', ['']));
     assert.match(html, /<span class="stat-label">HP<\/span><span class="stat-value">— \/ 17</);
+  });
+
+  it('does not read bold prose as a header field', () => {
+    const body = replace(wizardBody(), '**Alignment:** {Alignment}', 'She hated **class** distinctions deeply.').replace('**Class/Subclass:** Wizard (Evoker)', '');
+    assert.ok(!render(body).includes('distinctions'));
+  });
+
+  it('reads several header fields written on one line', () => {
+    const body = replace(wizardBody(), '**Species:** Elf', '**Species:** Elf (**Drow**) **Age:** 112');
+    assert.match(render(body), /<span>Elf \(Drow\)<\/span>/);
+  });
+
+  it('keeps an author {list} in prose and in code', () => {
+    const body = replace(wizardBody(), '**Tools:** {list}', 'Keep a {list} here and `{list}` there.');
+    const html = render(body);
+    assert.ok(html.includes('Keep a {list} here'));
+    assert.ok(html.includes('<code>{list}</code>'));
   });
 
   it('reads abilities written with full names', () => {
@@ -355,6 +377,10 @@ describe('renderDnDSheet frontmatter fallback', () => {
     const html = renderDnDSheet({ type: 'pc', proficiencies: ['FMPROF'], spell_slots: { 1: 4 } }, extractSections(templateBody()));
     assert.ok(html.includes('FMPROF'));
     assert.ok(html.includes('Spell Slots'));
+  });
+
+  it('returns null when class_features has no usable entry', () => {
+    assert.strictEqual(renderDnDSheet({ type: 'pc', class_features: [{ level: 1 }] }, []), null);
   });
 
   it('survives malformed frontmatter', () => {

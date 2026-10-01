@@ -193,7 +193,7 @@ real template, so a mismatch fails the suite.
 | `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header |
 | `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
 | `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC) |
-| | `### Spell Slots` | `Level \| Total \| Expended`; rows with no Total are left out |
+| | `### Spell Slots` | `Level \| Total \| Expended`; a template row with neither Total nor Expended is left out |
 | | `### Prepared Spells` | shown as written |
 | `## Proficiencies` | — | shown as written |
 
@@ -214,8 +214,8 @@ Notes:
   whole as a table. So is any single row with text in a further
   column (a Notes column), a Proficient, Expertise or Save cell that
   is not a yes or no word, an ability row that is not one of the six,
-  and a spell slot row whose Total is not a number or whose Expended
-  exceeds it.
+  a row with a link or an image in it, and a spell slot row whose
+  Total is not a number or whose Expended exceeds it.
 - **Background stays an accordion.** The header reads three lines from
   it (`Race` and `Classes` are accepted too); its prose is not on the
   sheet.

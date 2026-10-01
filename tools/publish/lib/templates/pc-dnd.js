@@ -77,6 +77,8 @@ function subsections(sectionHtml) {
 // Returns what is left: the rows nobody placed (as a table, under the original
 // header, with their markup intact) followed by the fragment minus the table.
 // Empty string when there is nothing left to show.
+// The template's spellcasting rows: left out while blank.
+const SPELL_STAT_LABELS = /^(spellcasting ability|spell attack modifier|spell save dc)$/i;
 const ATTRIBUTE_COLUMNS = [/^(attribute|stat|field|name)$/i, /^value$/i];
 const ABILITY_COLUMNS = [/^abilit/i, /^score$/i, /^mod/i, /^sav/i];
 const SKILL_COLUMNS = [/^skills?$/i, /^abilit/i, /^prof/i, /^expert/i, /^(mod|bonus)/i];
@@ -105,9 +107,11 @@ function consumeTable(html, columns, place) {
   const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
   while ((rowMatch = rowRe.exec(body)) !== null) {
+    if (!hasContent(rowMatch[1])) continue;
     const cells = cellsOf(rowMatch[1]);
-    if (cells.every(c => !c)) continue;
-    const fits = known && cells.slice(cols).every(c => !c);
+    // A tile shows text only, so a row holding a link or an image is not placed.
+    const plain = !/<(a|img)[ >]/i.test(rowMatch[1]);
+    const fits = known && plain && cells.slice(cols).every(c => !c);
     if (!(fits && place(cells.slice(0, cols)))) unplaced.push(rowMatch[0]);
   }
 
@@ -118,18 +122,19 @@ function consumeTable(html, columns, place) {
   ].filter(Boolean).join('\n');
 }
 
-// The template's own unfilled lines (`**Tools:** {list}`), wherever they sit in
-// a paragraph. Only the template's exact placeholders: braces an author wrote
-// are content.
+// The template's own unfilled lines: `**Tools:** {list}`, alone on a line or
+// in a paragraph. Only that shape and only the template's exact placeholders;
+// braces an author wrote, anywhere else, are content.
 function stripTemplatePlaceholders(html) {
   return String(html || '')
-    .replace(/(?:<strong>[^<]*<\/strong>\s*)?\{(?:list|Continue per level as needed\.)\}[ \t]*\n?/g, '')
+    .replace(/(<p>|\n)(?:<strong>[^<]*:<\/strong>\s*)?\{(?:list|Continue per level as needed\.)\}[ \t]*(?=\n|<\/p>)/g, '$1')
     .replace(/<p>\s*<\/p>/g, '');
 }
 
-// `**Species:** Elf` in a rendered section -> 'Elf'.
+// `**Species:** Elf` in a rendered section -> 'Elf'. A label needs its colon
+// (bold prose is not a field) and its value runs to the next label or line end.
 function boldField(html, label) {
-  const re = new RegExp(`<strong>\\s*${label}\\s*:?\\s*</strong>\\s*:?([\\s\\S]*?)(?=<br|</p>|\\n|$)`, 'i');
+  const re = new RegExp(`<strong>\\s*${label}\\s*(?::\\s*</strong>|</strong>\\s*:)([\\s\\S]*?)(?=<strong>[^<]*:|<br|</p>|\\n|$)`, 'i');
   const m = String(html || '').match(re);
   return m ? filled(cellText(m[1])) : '';
 }
@@ -256,7 +261,7 @@ function renderSpellcasting(section) {
   const top = aboveSubheadings(section.html).replace(/<blockquote>([\s\S]*?)<\/blockquote>/gi,
     (whole, inner) => (/^Omit this section if the character has no spellcasting\.?$/i.test(cellText(inner)) ? '' : whole));
   const topLeft = consumeTable(top, ATTRIBUTE_COLUMNS, ([label, value]) => {
-    if (value) stats.push(statItem(label, value));
+    if (value || !SPELL_STAT_LABELS.test(label)) stats.push(statItem(label, value));
     return true;
   });
 
@@ -268,7 +273,7 @@ function renderSpellcasting(section) {
     if (/^spell slots$/i.test(sub.title) && !slotsSeen) {
       slotsSeen = true;
       body = consumeTable(sub.html, SLOT_COLUMNS, ([level, total, expended]) => {
-        if (!total && !expended) return true;            // an unused level
+        if (!total && !expended) return /^(\d+(st|nd|rd|th)?|cantrips?)$/i.test(level);   // an unused level
         if (!/^\d+$/.test(total) || !/^\d*$/.test(expended)) return false;
         const t = parseInt(total, 10);
         const e = parseInt(expended, 10) || 0;
@@ -338,10 +343,10 @@ function renderDnDSheet(frontmatter, sections) {
     parts.push(`<h3>Proficiencies</h3>\n<div class="dnd-proficiencies">${pills}</div>`);
   }
 
-  const features = [].concat(frontmatter.class_features || []);
+  const features = [].concat(frontmatter.class_features || [])
+    .filter(f => f && (typeof f === 'string' || f.name));
   if (features.length > 0) {
     const items = features
-      .filter(f => f && (typeof f === 'string' || f.name))
       .sort((a, b) => (a.level || 0) - (b.level || 0))
       .map(f => {
         const levelBadge = f.level ? `<span class="sidebar-badge">Level ${escapeHtml(String(f.level))}</span>` : '';
