@@ -101,6 +101,10 @@ describe('pcTemplate pull quote', () => {
   it('shows no quote for an empty key_traits list', () => {
     assert.ok(!quoted({ key_traits: [] }, { systemSheetHtml: '<div>sheet</div>' }).includes('pull-quote'));
   });
+  it('ignores blank key_traits entries', () => {
+    assert.ok(!quoted({ key_traits: ['', null] }, { systemSheetHtml: '<div>sheet</div>' }).includes('pull-quote'));
+    assert.match(quoted({ key_traits: ['', 'wry'] }, {}), /<div class="pull-quote">wry<\/div>/);
+  });
   it('does not excerpt the stat tables when a system sheet rendered', () => {
     assert.ok(!quoted({}, { systemSheetHtml: '<div>sheet</div>' }).includes('pull-quote'));
   });

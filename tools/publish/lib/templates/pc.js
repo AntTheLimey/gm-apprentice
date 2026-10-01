@@ -288,7 +288,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // system sheet rendered: that body opens with stat tables, and an excerpt of
   // those is noise ("Playbook: Cutter Insight Prowess Resolve…").
   let epithet = '';
-  const traitsText = Array.isArray(fm.key_traits) ? fm.key_traits.join(', ') : String(fm.key_traits || '');
+  const traitsText = Array.isArray(fm.key_traits)
+    ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
+    : String(fm.key_traits || '');
   const quoteText = traitsText.trim() || (systemHtml ? '' : excerptFromMarkdown(publishedSource(page)));
   if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
 
