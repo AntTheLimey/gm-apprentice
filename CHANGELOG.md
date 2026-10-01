@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.21] — 2026-10-01
+
+### Fixed
+
+- **A PF2e or FitD PC never got a character sheet** (#272). Like the
+  D&D sheet before 1.10.20, both renderers read frontmatter fields
+  nothing writes, so a PC made from either template published as
+  accordions of raw tables. Both now read the template's own body
+  sections.
+  - **Pathfinder 2e:** a header (level, class, ancestry, heritage,
+    background), the six attribute modifiers, every Core and Combat
+    row (HP as current / max, saves and Perception with their rank),
+    all skills with their proficiency rank, spellcasting tradition,
+    attack and DC, remaining and total spell slots by rank, focus
+    points, spells, and proficiencies.
+  - **Forged in the Dark:** a header (playbook, heritage, background,
+    vice), action ratings as dots grouped under Insight, Prowess and
+    Resolve, stress as a track, trauma, harm, armor uses, XP, special
+    abilities, and stash and coin.
+  - As on the D&D sheet, the sections a sheet shows no longer repeat
+    as accordions, and anything in them it has no place for is shown
+    as written, not dropped. The old frontmatter fields still work
+    where the body has nothing.
+- **A PC page opened with a quote made of stat-table text.** A PC with
+  no `key_traits` got a pull quote excerpted from its body, which for
+  a sheet is table text. A page with a structured sheet now shows a
+  pull quote only when the PC has `key_traits`, and an empty
+  `key_traits` list no longer leaves an empty quote. Publish tool
+  1.11.43.
+
+### Changed
+
+- The D&D, PF2e and FitD sheets share one parser
+  (`tools/publish/lib/templates/sheet-parse.js`), and D&D and PF2e one
+  layout engine (`d20-sheet.js`).
+
 ## [1.10.20] — 2026-10-01
 
 ### Fixed

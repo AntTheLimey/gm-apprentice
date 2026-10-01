@@ -1,8 +1,8 @@
 const { renderCoCSheet } = require('./coc/index');
 const { renderGURPSSheet } = require('./gurps/index');
-const { renderDnDSheet } = require('./pc-dnd');
-const { renderFitDSheet } = require('./pc-fitd');
-const { renderPF2eSheet } = require('./pc-pf2e');
+const { renderDnDSheet, isDndConsumedTitle } = require('./pc-dnd');
+const { renderFitDSheet, isFitDConsumedTitle } = require('./pc-fitd');
+const { renderPF2eSheet, isPF2eConsumedTitle } = require('./pc-pf2e');
 
 const renderers = {
   'coc-7e': renderCoCSheet,
@@ -21,9 +21,24 @@ const renderers = {
   'pathfinder': renderPF2eSheet,
 };
 
+// For a renderer built on sheet-parse.js: which `## ` section titles its sheet
+// renders in full, so the PC page can drop them from its accordion list. Keyed
+// by renderer, so the system aliases above stay the only list of them.
+const consumedTitles = new Map([
+  [renderDnDSheet, isDndConsumedTitle],
+  [renderFitDSheet, isFitDConsumedTitle],
+  [renderPF2eSheet, isPF2eConsumedTitle],
+]);
+
+// (title) => boolean for the system's sheet, or null when the system has no
+// such sheet (CoC and GURPS keep their own lists in pc.js).
+function getConsumedTitleMatcher(system) {
+  return consumedTitles.get(getRenderer(system)) || null;
+}
+
 function getRenderer(system) {
   if (!system) return null;
   return renderers[String(system).toLowerCase()] || null;
 }
 
-module.exports = { getRenderer };
+module.exports = { getRenderer, getConsumedTitleMatcher };

@@ -1,78 +1,179 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { renderPF2eSheet } = require('../../lib/templates/pc-pf2e');
+const { templateBody, setRow, replace, sectionsOf, druidBody } = require('../helpers/pc-template');
+const { renderPF2eSheet, isPF2eConsumedTitle } = require('../../lib/templates/pc-pf2e');
+const { pcTemplate } = require('../../lib/templates/pc');
 
-describe('renderPF2eSheet', () => {
+const blank = () => templateBody('pc-pf2e.md');
+
+
+const render = (body, fm = { type: 'pc' }) => renderPF2eSheet(fm, sectionsOf(body));
+const stat = (html, label) => {
+  const m = html.match(new RegExp(`<span class="stat-label">${label.replace(/[()/]/g, '\\$&')}</span><span class="stat-value">([^<]*)<`));
+  return m ? m[1] : null;
+};
+
+describe('renderPF2eSheet from the real template body', () => {
+  it('renders a sheet for the untouched template', () => {
+    const html = render(blank());
+    assert.ok(html.includes('pf2e-sheet'));
+    assert.ok(!html.includes('{'), 'no template placeholder reaches the sheet');
+    assert.ok(!html.includes('Spellcasting'));
+    assert.ok(!html.includes('Remaster attributes are modifiers'));
+  });
+
+  it('shows the header: level, class, ancestry, heritage, background', () => {
+    const header = render(druidBody()).match(/<div class="dnd-header">[\s\S]*?<\/div>/)[0];
+    for (const bit of ['Level 2', 'Druid \\(Leaf\\)', 'Elf', 'Woodland Elf', 'Herbalist']) assert.match(header, new RegExp(`<span>${bit}</span>`));
+  });
+
+  it('shows the six attribute modifiers', () => {
+    const html = render(druidBody());
+    assert.match(html, /<span class="ability-name">WIS<\/span>\s*<span class="ability-score">\+4</);
+    assert.match(html, /<span class="ability-name">CHA<\/span>\s*<span class="ability-score">-1</);
+    assert.strictEqual((html.match(/class="dnd-ability-card/g) || []).length, 6);
+  });
+
+  it('shows every Core and Combat row', () => {
+    const html = render(druidBody());
+    assert.strictEqual(stat(html, 'AC'), '17');
+    assert.strictEqual(stat(html, 'HP'), '20 / 26');
+    assert.strictEqual(stat(html, 'Will'), '+10 (Expert)');
+    assert.strictEqual(stat(html, 'Hero Points'), '2');
+    assert.strictEqual(stat(html, 'Class DC'), '18');
+    for (const label of ['XP', 'Shield (Hardness/HP/BT)', 'Speed', 'Size', 'Perception', 'Fortitude', 'Reflex']) {
+      assert.notStrictEqual(stat(html, label), null, label);
+    }
+  });
+
+  it('lists skills with their rank, and leaves the unfilled Lore row out', () => {
+    const html = render(druidBody());
+    assert.strictEqual((html.match(/class="dnd-skill[ "]/g) || []).length, 16);
+    const nature = html.match(/<li class="dnd-skill[^"]*">(?:(?!<\/li>)[\s\S])*Nature[\s\S]*?<\/li>/)[0];
+    assert.match(nature, /is-proficient/);
+    assert.match(nature, /<span class="skill-rank" title="Expert"[^>]*>E</);
+    assert.match(nature, /\+10/);
+    const medicine = html.match(/<li class="dnd-skill[^"]*">(?:(?!<\/li>)[\s\S])*Medicine[\s\S]*?<\/li>/)[0];
+    assert.match(medicine, /title="Trained"[^>]*>T</);
+    assert.ok(!html.includes('{topic}'));
+  });
+
+  it('keeps a Lore row once it is filled in', () => {
+    const html = render(replace(druidBody(), '| Lore ({topic}) | INT | U | +0 |', '| Lore (Herbalism) | INT | T | +5 |'));
+    assert.ok(html.includes('Lore (Herbalism)'));
+  });
+
+  it('shows spellcasting, slots by rank, focus points and spells', () => {
+    const html = render(druidBody());
+    assert.strictEqual(stat(html, 'Tradition'), 'Primal');
+    assert.strictEqual(stat(html, 'Prepared / Spontaneous'), 'Prepared');
+    assert.strictEqual(stat(html, 'Spell DC'), '18');
+    assert.strictEqual(stat(html, 'Rank 1'), '2 / 3');
+    assert.strictEqual(stat(html, 'Rank 2'), null);
+    assert.strictEqual(stat(html, 'Focus Points (Current/Max)'), '1/1');
+    assert.ok(html.includes('Heal, Gust of Wind'));
+    assert.ok(html.includes('Cornucopia'));
+  });
+
+  it('shows proficiencies', () => {
+    assert.ok(render(druidBody()).includes('Common, Elven, Fey'));
+  });
+});
+
+describe('renderPF2eSheet drops nothing from a consumed section', () => {
+  const cases = {
+    'prose under the Attributes table': b => replace(b, '### Combat', 'MARKER drained.\n\n### Combat'),
+    'an attribute row the sheet has no card for': b => replace(b, '| CHA | -1 |', '| CHA | -1 |\n| MARKER | +1 |'),
+    'a Notes column in Combat': b => replace(b, '| Attribute | Value |\n|-----------|-------|\n| AC | 17 |', '| Attribute | Value | Notes |\n|---|---|---|\n| AC | 17 | MARKER shield raised |'),
+    'a rank the sheet does not know': b => setRow(b, 'Stealth', ['DEX', 'MARKER', '+2']),
+    'an unknown Stat Sheet subsection': b => replace(b, '## Background', '### Senses\n\nMARKER low-light vision.\n\n## Background'),
+    'a focus table with rows under it': b => replace(b, '| Focus Points (Current/Max) | 1/1 |\n|----------------------------|--|', '| Focus Points (Current/Max) | 1/1 |\n|----------------------------|--|\n| MARKER | 2 |'),
+    'a slot row with a word for a total': b => setRow(b, '2', ['MARKER', '']),
+    'a repeated ## Proficiencies section': b => b + '\n## Proficiencies\n\nMARKER again.\n',
+    'braces an author wrote': b => replace(b, '**Armor:** {list with ranks}', '**Armor:** {MARKER light}'),
+  };
+  for (const [name, mutate] of Object.entries(cases)) {
+    it(`keeps ${name}`, () => {
+      const html = render(mutate(druidBody()));
+      assert.ok(html.includes('MARKER'), 'the marker must reach the sheet');
+      assert.strictEqual(stat(html, 'AC') === '17' || name.includes('Notes column'), true);
+    });
+  }
+});
+
+describe('pcTemplate with a PF2e sheet', () => {
+  const page = { frontmatter: { type: 'pc', player_name: 'X' }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
+  const sections = sectionsOf(druidBody());
+  const accordionTitles = html => [...html.matchAll(/<button class="accordion-header"[^>]*>([^<]*)</g)].map(m => m[1]);
+  const build = (system, sheet) => pcTemplate(page, { html: '', relationships: '' }, sections, () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
+    { publishConfig: { system }, systemSheetHtml: sheet });
+
+  it('drops the consumed sections and keeps the prose ones, for every alias', () => {
+    for (const system of ['pf2e', 'pathfinder-2e', 'pathfinder']) {
+      const titles = accordionTitles(build(system, renderPF2eSheet(page.frontmatter, sections)));
+      for (const t of ['Stat Sheet', 'Skills', 'Spellcasting', 'Proficiencies']) assert.ok(!titles.includes(t), `${system}: ${t}`);
+      for (const t of ['Background', 'Class Features', 'Ancestry Feats', 'Class Feats', 'Skill &amp; General Feats', 'Notes']) assert.ok(titles.includes(t), `${system}: ${t}`);
+    }
+  });
+
+  it('keeps every section when no sheet rendered', () => {
+    assert.ok(accordionTitles(build('pf2e', null)).includes('Stat Sheet'));
+  });
+
+  it('matches titles the way the renderer reads them', () => {
+    assert.ok(isPF2eConsumedTitle('Stat-Sheet'));
+    assert.ok(!isPF2eConsumedTitle('Class Feats'));
+  });
+});
+
+describe('renderPF2eSheet frontmatter fallback', () => {
   it('renders 6 attribute cards with signed modifiers', () => {
-    const fm = {
-      type: 'pc',
-      attributes: { STR: 4, DEX: 2, CON: 1, INT: 0, WIS: 1, CHA: -1 },
-    };
-    const html = renderPF2eSheet(fm, []);
-    assert.ok(html.includes('pf2e-attributes'));
-    assert.ok(html.includes('STR'));
+    const html = renderPF2eSheet({ type: 'pc', attributes: { STR: 4, DEX: 2, CON: 3, INT: 0, WIS: 1, CHA: -1 } }, []);
+    assert.strictEqual((html.match(/class="dnd-ability-card/g) || []).length, 6);
     assert.ok(html.includes('+4'));
     assert.ok(html.includes('+0'));
     assert.ok(html.includes('-1'));
   });
 
+  it('prefers the body attributes over frontmatter', () => {
+    const html = render(druidBody(), { type: 'pc', attributes: { WIS: 9 } });
+    assert.ok(!html.includes('+9'));
+  });
+
   it('renders skill proficiencies as pills with rank', () => {
-    const fm = {
-      type: 'pc',
-      skill_proficiencies: [
-        { name: 'Athletics', rank: 'Expert' },
-        { name: 'Stealth', rank: 'Trained' },
-      ],
-    };
-    const html = renderPF2eSheet(fm, []);
+    const html = renderPF2eSheet({ type: 'pc', skill_proficiencies: [{ name: 'Athletics', rank: 'Expert' }, 'Acrobatics'] }, []);
     assert.ok(html.includes('pf2e-proficiencies'));
     assert.ok(html.includes('Athletics'));
     assert.ok(html.includes('Expert'));
-  });
-
-  it('renders plain-string proficiencies', () => {
-    const fm = {
-      type: 'pc',
-      skill_proficiencies: ['Acrobatics', 'Occultism'],
-    };
-    const html = renderPF2eSheet(fm, []);
     assert.ok(html.includes('Acrobatics'));
-    assert.ok(html.includes('Occultism'));
   });
 
   it('renders class features sorted by level', () => {
-    const fm = {
-      type: 'pc',
-      class_features: [
-        { name: 'Sneak Attack', level: 1, description: 'Extra precision damage vs off-guard' },
-        { name: 'Deny Advantage', level: 3, description: 'Not off-guard to hidden attackers' },
-      ],
-    };
-    const html = renderPF2eSheet(fm, []);
-    assert.ok(html.includes('Sneak Attack'));
+    const html = renderPF2eSheet({ type: 'pc', class_features: [
+      { name: 'Deny Advantage', level: 3 }, { name: 'Sneak Attack', level: 1 },
+    ] }, []);
     assert.ok(html.includes('Level 1'));
     assert.ok(html.indexOf('Sneak Attack') < html.indexOf('Deny Advantage'));
   });
 
-  it('renders hero points when present', () => {
-    const fm = { type: 'pc', hero_points: 2 };
-    const html = renderPF2eSheet(fm, []);
-    assert.ok(html.includes('Hero Points'));
-    assert.ok(html.includes('2'));
+  it('renders hero points when the body has no stat sheet', () => {
+    const html = renderPF2eSheet({ type: 'pc', hero_points: 2 }, []);
+    assert.strictEqual(stat(html, 'Hero Points'), '2');
   });
 
   it('renders spell slots by rank', () => {
-    const fm = {
-      type: 'pc',
-      spell_slots: { 1: 3, 2: 2 },
-    };
-    const html = renderPF2eSheet(fm, []);
+    const html = renderPF2eSheet({ type: 'pc', spell_slots: { 1: 3, 2: 2 } }, []);
     assert.ok(html.includes('Spell Slots'));
-    assert.ok(html.includes('Rank 1'));
+    assert.strictEqual(stat(html, 'Rank 1'), '3');
+  });
+
+  it('survives malformed frontmatter', () => {
+    const html = renderPF2eSheet({ type: 'pc', attributes: { STR: 'abc' }, skill_proficiencies: 'Stealth', class_features: [null] }, []);
+    assert.ok(html.includes('Stealth'));
+    assert.ok(!html.includes('NaN'));
   });
 
   it('returns null when no PF2e data present', () => {
-    const html = renderPF2eSheet({ type: 'pc' }, []);
-    assert.strictEqual(html, null);
+    assert.strictEqual(renderPF2eSheet({ type: 'pc' }, []), null);
   });
 });

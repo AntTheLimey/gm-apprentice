@@ -66,6 +66,12 @@ for attribution "reasonable to the medium or means", so the notice
 travels with the directory. (The gitignored `personal/` working
 copies are excluded from the repo and from the zips.)
 
+The publish tool's FitD sheet tests
+(`tools/publish/test/helpers/pc-template.js`) fill the PC template
+with an original scoundrel that uses a playbook name, a special
+ability name and trauma names from the SRD, with no rules text and no
+setting names.
+
 ### Basic Roleplaying Universal Game Engine
 
 This work includes material from Basic Roleplaying: Universal
@@ -98,6 +104,12 @@ included. Content was sourced via an ORC-filtered extraction of
 the Foundry VTT pf2e system data and the PF2SRD (ORC)
 compilation. This is free, non-commercial material, not
 published, endorsed, or specifically approved by Paizo Inc.
+
+The publish tool's PF2e sheet tests
+(`tools/publish/test/helpers/pc-template.js`) fill the PC template
+with an original character that uses names only (class, order,
+ancestry, heritage, background, spell and skill names found in the
+ORC dataset), with no rules text and no Reserved Material.
 
 ## GURPS
 

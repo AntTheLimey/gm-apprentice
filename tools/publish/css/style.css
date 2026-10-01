@@ -3694,6 +3694,16 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 }
 .dnd-skill.is-proficient .skill-mark { background: var(--accent); border-color: var(--accent); }
 .dnd-skill.is-expert .skill-mark { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px var(--accent); }
+.dnd-skill:has(.skill-rank) { grid-template-columns: 0.75rem 1fr 1.25rem auto 2.5rem; }
+.dnd-skill .skill-rank {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 0.2rem;
+}
+.dnd-skill.is-proficient .skill-rank { color: var(--accent); border-color: var(--accent); }
 .dnd-skill .skill-ability { font-size: 0.65rem; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 400; }
 .dnd-skill .skill-mod { font-family: var(--font-mono); text-align: right; }
 .dnd-proficiency-list p { margin: 0 0 0.35rem; }
@@ -3810,6 +3820,23 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+.fitd-attribute { break-inside: avoid; }
+.fitd-action-ratings { columns: 3 11rem; column-gap: 2rem; }
+.fitd-attribute h4 { margin-top: 0; }
+.fitd-tracker { flex-wrap: wrap; }
+.fitd-sheet table { margin-bottom: 1rem; }
+.fitd-armor { display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 0.75rem; }
+.fitd-box {
+  width: 0.8rem;
+  height: 0.8rem;
+  border: 2px solid var(--accent);
+  border-radius: 0.15rem;
+}
+.fitd-box.filled { background: var(--accent); }
+.fitd-sheet h3 { margin: 1.5rem 0 0.75rem; }
+.fitd-sheet .quick-stats .stat-item { background: var(--bg); display: flex; flex-direction: column; }
+.fitd-abilities p { margin: 0 0 0.5rem; }
 
 /* ===== FOOTER ===== */
 .site-footer {
