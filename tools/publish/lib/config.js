@@ -4,6 +4,7 @@ const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
 const { MOVED_KEYS } = require('./config-keys');
+const { resolveSwitches } = require('./switches');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
@@ -370,13 +371,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
-    // Explicit flags win, publish block over json fallback; absent stays undefined.
-    backend: {
-      statusBar: (publish.backend && publish.backend.statusBar)
-        ?? (jsonConfigFallback.backend && jsonConfigFallback.backend.statusBar),
-      inbox: (publish.backend && publish.backend.inbox)
-        ?? (jsonConfigFallback.backend && jsonConfigFallback.backend.inbox),
-    },
+    switches: resolveSwitches(publish, jsonConfigFallback),
     setting_year: settingYear,
   };
 
