@@ -286,7 +286,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
 
   if (fs.existsSync(configFile)) {
     const raw = fs.readFileSync(configFile, 'utf-8');
-    const { data } = parseNote(raw);
+    let data;
+    try {
+      ({ data } = parseNote(raw));
+    } catch (e) {
+      // One line, naming the file: js-yaml's message ends in a code excerpt, and a
+      // caller that reads the last line of stderr (vault_check) got only its caret.
+      throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
+    }
     if (data.publish) {
       publish = data.publish;
     }

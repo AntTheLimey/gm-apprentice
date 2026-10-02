@@ -768,3 +768,19 @@ describe('scanVaultReport reads every note afresh', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 });
+
+describe('loadPublishConfig on a vault-config.md that is not valid YAML', () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const { loadPublishConfig } = require('../../lib/config');
+
+  it('fails with one line naming the file (#287)', () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'bad-config-'));
+    fs.mkdirSync(path.join(vault, '_meta'));
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\npublish:\n  mode: player\n  mode: gm\n---\n');
+    assert.throws(() => loadPublishConfig(vault), (e) => {
+      assert.match(e.message, /^_meta\/vault-config\.md frontmatter is not valid YAML: duplicated mapping key at line 4, column 3$/);
+      return true;
+    });
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});

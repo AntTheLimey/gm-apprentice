@@ -1236,16 +1236,19 @@ A note whose frontmatter the site's build cannot parse is now reported
 ### Content
 
 - If the vault publishes, run `vault_check.py <vault> frontmatter`. For
-  each WARNING row "the site's build cannot parse this frontmatter",
-  fix the YAML at the line the row names: quote a value that holds a
+  each ERROR row "the site's build cannot parse this frontmatter", fix
+  the YAML near the line the row names: quote a value that holds a
   colon, and keep one of a key written twice, asking the GM only when
-  the two values differ. Each such note has had no page on the site.
+  the two values differ. For an unclosed quote the parser names the
+  end of the block, not the line with the quote. The build has been
+  skipping each of these notes, so one that should publish has had no
+  page.
 
 ### Tooling
 
 - `vault_check.py frontmatter` asks the site's publish tool which notes
   it cannot parse (`explain --all --json`, verdict `FILE_UNPARSEABLE`)
-  and reports each as a WARNING. Its own reader takes the last of a
+  and reports each as an ERROR. Its own reader takes the last of a
   duplicated key and accepts an unquoted `key: a: b`, so it passed
   these files before. A vault with no `publish:` block is not asked.
   Where the tool cannot answer, one INFO row says the check was not
@@ -1253,10 +1256,14 @@ A note whose frontmatter the site's build cannot parse is now reported
 - `gm-apprentice-publish` 1.11.45: the build repeats the notes it
   skipped for unparseable frontmatter in a closing WARNING line (the
   first eight, with the parser's message); `explain --all --json`
-  carries that message as `frontmatterError`; and two notes with the
+  carries that message as `frontmatterError`; two notes with the
   same broken frontmatter are both reported, where the second used to
-  read as a note with no `type:`. If `publish.site_dir` is set, offer
+  read as a note with no `type:`; and a `_meta/vault-config.md` whose
+  frontmatter is not valid YAML fails with one line naming the file.
+  If `publish.site_dir` is set, offer
   `update-pin --site <site-dir>` (publish-site's build tool). For a
   site outside the plugin, `update-pin --site <site-dir> --tag
-  publish-v1.11.45`. A site on an older pin still gets the
-  `vault_check` rows, without the parser's message.
+  publish-v1.11.45`. A site pinned to 1.11.40 through 1.11.44 still
+  gets the `vault_check` rows, without the parser's message, and
+  still misses the second of two notes with the same broken text.
+  A pin below 1.11.40 cannot be asked at all: one INFO row says so.

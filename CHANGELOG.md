@@ -19,13 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `wrote …` list.
   - `vault_check frontmatter` now asks the site's publish tool which
     notes it cannot parse (`explain --all --json`) and reports each as
-    a WARNING with the parser's message. It does not read the YAML a
+    an ERROR with the parser's message, so the skills' post-write
+    checks fix a note they have just written broken. It does not read the YAML a
     second way: its own reader takes the last of a duplicated key and
     was never going to see these. `vault_check all` still runs the
     tool once, shared with `gm-leak` and `pc-body`. A vault that does
     not publish is not asked.
   - The build repeats the skipped notes in a closing line, next to its
-    other warnings: `WARNING: 1 note was left off the site because its
+    other warnings: `WARNING: the build skipped 1 note whose
     frontmatter is not valid YAML: PCs/Dup.md (duplicated mapping key
     at line 5, column 1)`. It names the first eight and counts the
     rest. Publish tool 1.11.45.
@@ -37,7 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty and was listed as having no `type:`. The same happened to any
   note on a second scan in one process. Every read now goes through
   one uncached parser (`lib/frontmatter.js`). Two notes with identical
-  text also no longer share one frontmatter object.
+  text also no longer share one frontmatter object. A site pinned
+  below 1.11.45 still misses the second note.
+- **A `_meta/vault-config.md` with broken frontmatter was reported as
+  `exited 1: ^`.** The publish tool's error ended in the parser's code
+  excerpt and `vault_check` quoted its last line. The tool now fails
+  with one line naming the file.
 
 ## [1.10.22] — 2026-10-01
 

@@ -813,14 +813,15 @@ class FrontmatterUnparseableTests(unittest.TestCase):
                                        encoding="utf-8")
         return vault, stub_publish_tool(self, vault, **stub)
 
-    def test_a_note_the_build_cannot_parse_is_a_warning_with_the_message(self):
+    def test_a_note_the_build_cannot_parse_is_an_error_with_the_message(self):
         vault, calls = self._vault(unparseable={
             "PCs/Dup.md": "duplicated mapping key (4:1)\n\n 3 | sheet_source"})
         rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
         self.assertEqual(rows, [
-            "WARNING\tPCs/Dup.md\tthe site's build cannot parse this "
-            "frontmatter (duplicated mapping key (4:1)) — the note gets no "
-            "page on the site; fix the YAML"])
+            "ERROR\tPCs/Dup.md\tthe site's build cannot parse this "
+            "frontmatter (duplicated mapping key (4:1)) and skips the note "
+            "— most often a key written twice, or an unquoted value with a "
+            "colon in it"])
         self.assertEqual(len(calls), 1, calls)
 
     def test_the_line_reader_alone_sees_nothing_wrong(self):
@@ -833,7 +834,7 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         vault, _calls = self._vault(unparseable={"PCs/Dup.md": None})
         rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
         self.assertEqual(len(rows), 1, rows)
-        self.assertIn("this frontmatter — the note gets no page", rows[0])
+        self.assertIn("this frontmatter and skips the note", rows[0])
 
     def test_folder_scope_leaves_out_files_outside_it(self):
         vault, _calls = self._vault(unparseable={
@@ -844,6 +845,29 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         rows = rows_for(vc.check_frontmatter(vault, "PCs"), "cannot parse")
         self.assertEqual(len(rows), 1, rows)
         self.assertIn("PCs/Dup.md", rows[0])
+
+    def test_a_folder_with_nothing_broken_in_it_gets_no_row_at_all(self):
+        # The post-write loops run `--folder` on a clean folder; a broken
+        # note elsewhere must not leave a stray "asked the plugin's tool".
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        (vault / "Clean").mkdir()
+        (vault / "Clean" / "Ok.md").write_text(
+            "---\ntype: npc\ncanon_status: DRAFT\n---\n", encoding="utf-8")
+        self.assertEqual(vc.check_frontmatter(vault, "Clean"), [])
+
+    def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
+        # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
+        # exclude_dirs, so the build's closing line names it.
+        vault, _calls = self._vault(unparseable={"_inbox/Raw.md": "bad"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual([r.split("\t")[1] for r in rows], ["_inbox/Raw.md"])
+        self.assertFalse(rows_for(vc.check_frontmatter(vault, "PCs"),
+                                  "cannot parse"))
+
+    def test_a_tab_in_the_parser_message_does_not_split_the_row(self):
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad\there"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(len(rows[0].split("\t")), 3, rows)
 
     def test_a_decomposed_filename_still_matches_the_tools_nfc_path(self):
         # The tool reports NFC paths; the vault walk gives the name as
@@ -3310,10 +3334,24 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertEqual(sorted(r.split("\t")[1] for r in warned),
                          ["Sessions/Colon.md", "Sessions/Dup Twin.md",
                           "Sessions/Dup.md"], rows)
-        self.assertTrue(all(r.startswith("WARNING\t") for r in warned))
+        self.assertTrue(all(r.startswith("ERROR\t") for r in warned))
         self.assertIn("duplicated mapping key",
                       rows_for(warned, "Sessions/Dup.md")[0])
         self.assertTrue(all("\n" not in r for r in warned))
+
+    def test_a_broken_vault_config_is_named_in_one_readable_line(self):
+        # The tool's error ended in js-yaml's caret line, and the row's
+        # reason was "exited 1: ^".
+        vault = self.site_vault("", "session_number: 1\n")
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "  mode: player\n", "  mode: player\n  mode: gm\n"),
+            encoding="utf-8")
+        info = rows_for(vc.check_frontmatter(vault, None),
+                        "could not be consulted")
+        self.assertEqual(len(info), 1, info)
+        self.assertIn("_meta/vault-config.md frontmatter is not valid YAML: "
+                      "duplicated mapping key", info[0])
 
     def test_a_handouts_keeper_sections_come_from_the_tool(self):
         # #280, against the real tool: it withholds the handout's Context

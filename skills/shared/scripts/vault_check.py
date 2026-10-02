@@ -229,7 +229,9 @@ def check_frontmatter(vault: Path, folder: str | None,
     (#287). The line reader takes the last of a duplicated key and accepts
     an unquoted `key: a: b`; js-yaml rejects both and the build makes no
     page. Which notes those are is the publish tool's answer (`explain
-    --all`), never a second YAML reading here."""
+    --all`), never a second YAML reading here. An ERROR, like the schema
+    rows: the post-write loops fix ERRORs, and a skill that has just
+    written such a note must not leave it."""
     rows = []
     notes = list(vault_files(vault, folder))
     if notes:
@@ -239,15 +241,21 @@ def check_frontmatter(vault: Path, folder: str | None,
             rows.append(_publish_tool_row(
                 why, "notes whose frontmatter the site's build cannot "
                 "parse were not looked for", tool.used))
-        elif broken:
+        on_disk = {unicodedata.normalize("NFC", rel): rel
+                   for rel, _text in notes}
+        # Unscoped, name every file the build names: it walks folders this
+        # script's own walk skips (`_inbox`).
+        named = sorted((key, message or "")
+                       for key, message in (broken or {}).items()
+                       if key in on_disk or folder is None)
+        if named:
             rows.extend(_tool_used_row(tool.used))
-        for rel, _text in notes:
-            key = unicodedata.normalize("NFC", rel)
-            if broken and key in broken:
-                detail = f" ({broken[key]})" if broken[key] else ""
-                rows.append(f"WARNING\t{rel}\tthe site's build cannot parse "
-                            f"this frontmatter{detail} — the note gets no "
-                            f"page on the site; fix the YAML")
+        for key, message in named:
+            detail = f" ({message})" if message else ""
+            rows.append(f"ERROR\t{on_disk.get(key, key)}\tthe site's build "
+                        f"cannot parse this frontmatter{detail} and skips "
+                        f"the note — most often a key written twice, or an "
+                        f"unquoted value with a colon in it")
     for rel, text in notes:
         fm = extract_frontmatter(text)
         if fm is None:
@@ -1477,7 +1485,8 @@ def unparseable_files(answer: ToolAnswer
 
     Read from `explain --all --json`: verdict code `FILE_UNPARSEABLE`, and
     `frontmatterError` for the message (None from a tool older than
-    1.11.45, which reports the code alone). A vault that publishes nothing
+    1.11.45, which reports the code alone, and misses the second of two
+    notes with the same broken text). A vault that publishes nothing
     has no build to fail: (None, None).
     """
     if answer.data is None:
@@ -1485,7 +1494,8 @@ def unparseable_files(answer: ToolAnswer
     def headline(message: object) -> str | None:
         # js-yaml follows its one-line reason with a code excerpt.
         lines = str(message or "").strip().splitlines()
-        return (lines[0].rstrip(": ") or None) if lines else None
+        return (lines[0].replace("\t", " ").rstrip(": ") or None
+                ) if lines else None
     try:
         return {unicodedata.normalize("NFC", str(p["path"])):
                 headline(p.get("frontmatterError"))

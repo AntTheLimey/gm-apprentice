@@ -28,7 +28,7 @@ describe('build repeats the notes it could not parse in its closing warnings', (
     console.warn = (...args) => lines.push(args.join(' '));
     console.log = (...args) => lines.push(args.join(' '));
     try { build({ configPath }); } finally { Object.assign(console, original); }
-    return lines.filter(l => l.includes('left off the site'));
+    return lines.filter(l => l.includes('whose frontmatter is not valid YAML'));
   }
   after(() => root && fs.rmSync(root, { recursive: true, force: true }));
 
@@ -38,7 +38,7 @@ describe('build repeats the notes it could not parse in its closing warnings', (
   it('names each skipped file with the parser message, after the pages are written', () => {
     const warned = run({ Good: good, Dup: dup, Colon: '---\ntype: npc\nrole: a: b\n---\n\nA spy.\n' });
     assert.strictEqual(warned.length, 1, lines.join('\n'));
-    assert.match(warned[0], /WARNING: 2 notes were left off the site because their frontmatter is not valid YAML/);
+    assert.match(warned[0], /WARNING: the build skipped 2 notes whose frontmatter is not valid YAML/);
     assert.match(warned[0], /Characters\/NPCs\/Dup\.md \(duplicated mapping key/);
     assert.match(warned[0], /Characters\/NPCs\/Colon\.md \(/);
     assert.ok(!warned[0].includes('\n'), 'one line');
@@ -52,7 +52,7 @@ describe('build repeats the notes it could not parse in its closing warnings', (
     const notes = { Good: good };
     for (let i = 0; i < 10; i++) notes[`Dup${i}`] = dup;
     const warned = run(notes);
-    assert.match(warned[0], /WARNING: 10 notes were left off the site/);
+    assert.match(warned[0], /WARNING: the build skipped 10 notes /);
     assert.match(warned[0], /, and 2 more/);
   });
 
@@ -61,6 +61,6 @@ describe('build repeats the notes it could not parse in its closing warnings', (
   });
 
   it('uses the singular for one note', () => {
-    assert.match(run({ Good: good, Dup: dup })[0], /WARNING: 1 note was left off the site because its frontmatter/);
+    assert.match(run({ Good: good, Dup: dup })[0], /WARNING: the build skipped 1 note whose frontmatter/);
   });
 });

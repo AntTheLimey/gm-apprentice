@@ -133,8 +133,8 @@ One of:
   field
 - The file's frontmatter is not valid YAML, most often a key written
   twice or an unquoted value with a colon in it (`role: a: b`). The
-  build skips the file, names it in a closing `WARNING: … left off
-  the site` line, and still exits 0
+  build skips the file, names it in a closing `WARNING: the build
+  skipped …` line, and still exits 0
 
 ### Diagnosis steps
 
@@ -169,9 +169,11 @@ Add `type: npc` (or the appropriate type) to the entity's
 frontmatter. See `schema-reference.md` for the list of known types.
 
 **Frontmatter that cannot be parsed:**
-Fix the YAML at the line the message names. Quote a value that holds a
-colon (`role: "a: b"`). For a key written twice, keep one; if the two
-values differ, ask the GM which is right. Then rebuild.
+Fix the YAML near the line the message names; for an unclosed quote
+the parser names the end of the block, not the line with the quote.
+Quote a value that holds a colon (`role: "a: b"`). For a key written
+twice, keep one; if the two values differ, ask the GM which is right.
+Then rebuild.
 
 ---
 
