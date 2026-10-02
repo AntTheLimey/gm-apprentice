@@ -30,6 +30,8 @@ publish:
 
 | Setting | Key path | Description |
 |---------|----------|-------------|
+| Site | `publish.site` | Switch: whether the vault has a site at all. See § Switches |
+| Site folder | `publish.site_dir` | Where the site is, when `publish.site` is on. `init` writes it |
 | Publish mode | `publish.mode` | `player` or `full` |
 | Site title | `publish.site_title` | Name shown in the nav bar and browser tab |
 | Landing tagline | `publish.theme.tagline` | One-sentence hook under the title on the landing page (default: none) |
@@ -263,8 +265,24 @@ only the two default sections are player-facing.
 
 ## Switches
 
-Three keys under `publish:` decide whether character sheets, live
-stats and the at-table inbox are published.
+`publish.site` says whether the vault has a site. Three more keys
+under `publish:` decide whether character sheets, live stats and the
+at-table inbox are published on it.
+
+**`publish.site`.** A site is on or off.
+
+| `publish.site` | `publish.site_dir` | What happens |
+|----------------|--------------------|--------------|
+| `true` | set | The vault has a site. Builds run, and `vault_check` `gm-leak`, `pc-body` and `wrapup` ask the site's publish tool what publishes |
+| `true` | unset or blank | A site still to be set up. Those checks stop with one ERROR row that says to run the setup or turn the switch off |
+| `false` | anything | No site. `build` and `deploy` stop with one line and exit code 1. `gm-leak` gives one INFO row and checks nothing; `pc-body` and `wrapup` do their own work without asking the tool. Node is not needed |
+| unset | set | On. A vault from before the switch; `update-pin` writes `site: true` |
+| unset | unset | Off |
+
+`init` writes `site: true` and `site_dir`, and turns on a site that
+was off. To stop publishing without losing the folder's path, set
+`site: false`. It takes the same words as the other switches; a value
+that is none of them is off, with a build warning naming the key.
 
 ```yaml
 publish:

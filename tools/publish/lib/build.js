@@ -12,6 +12,7 @@ const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSaf
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
+const { siteOff } = require('./switches');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -68,6 +69,8 @@ function build(options = {}) {
   rawConfig.vaultPath = path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
   const outputDir = path.resolve(configDir, config.outputDir);
+  const off = siteOff(publishConfig.switches);
+  if (off) throw new Error(off);
 
   const host = config.host || 'github-pages';
   if (host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
@@ -564,7 +567,7 @@ function build(options = {}) {
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
-      { pcKeepSections, warn: (m) => console.warn(`  WARNING: ${page.outputPath}: ${m}`) });
+      { pcKeepSections });   // its warnings are the page render's to print, once
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the

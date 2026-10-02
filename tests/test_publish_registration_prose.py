@@ -50,8 +50,9 @@ class ReconcileRegistrationTests(unittest.TestCase):
         self.assertIn("publish-site asks the GM", self.step)
 
     def test_says_what_an_unset_or_relative_site_dir_means(self):
-        self.assertRegex(self.step, r"`publish\.site_dir` is unset the vault"
-                                    r" has no site")
+        self.assertRegex(self.step, r"`publish\.site` is `false`, or it is "
+                                    r"unset and so is\s+`publish\.site_dir`, "
+                                    r"the vault has no site")
         self.assertIn("relative to the vault", self.step)
 
 

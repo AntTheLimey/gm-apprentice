@@ -196,6 +196,19 @@ class MigrateTests(unittest.TestCase):
             self.assertIn(line + "\n", out)
             self.assertNotIn("site_dir is set to", out)
 
+    def test_a_site_that_is_off_is_said_to_be_off(self):
+        # site_dir is set; the site settings are not moved because the site
+        # is off, and the line must not tell the GM to set site_dir.
+        vault = make_vault(self)
+        file = vault / "_meta" / "vault-config.md"
+        file.write_text(file.read_text(encoding="utf-8").replace(
+            "publish:\n", "publish:\n  site: false\n"), encoding="utf-8")
+        code, out, _ = run_cli([str(vault), "--dry-run"], Tool())
+        self.assertEqual(code, 0)
+        self.assertIn("the site is off (publish.site); site settings were "
+                      "not looked at.", out)
+        self.assertNotIn("site_dir is not set", out)
+
     def test_vault_without_publish_block_has_no_site_dir_line(self):
         vault = make_vault(self, publish=False)
         _, out, _ = run_cli([str(vault), "--dry-run"], Tool())

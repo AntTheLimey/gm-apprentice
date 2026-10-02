@@ -75,15 +75,49 @@ describe('publish switches', () => {
 
 describe('explicitOff: which off switches were the GM\'s choice', () => {
   const off = (p, j) => resolveSwitches(p || {}, j || {}).explicitOff;
-  it('unset is not explicit', () => assert.deepStrictEqual(off({}, {}), { liveStats: false, inbox: false }));
+  it('unset is not explicit', () => assert.deepStrictEqual(off({}, {}), { liveStats: false, inbox: false, site: false }));
   it('false is explicit, under the new name or either old one', () => {
-    assert.deepStrictEqual(off({ live_stats: false, inbox: false }), { liveStats: true, inbox: true });
-    assert.deepStrictEqual(off({ backend: { statusBar: false } }), { liveStats: true, inbox: false });
-    assert.deepStrictEqual(off({}, { backend: { inbox: false } }), { liveStats: false, inbox: true });
+    assert.deepStrictEqual(off({ live_stats: false, inbox: false }), { liveStats: true, inbox: true, site: false });
+    assert.deepStrictEqual(off({ backend: { statusBar: false } }), { liveStats: true, inbox: false, site: false });
+    assert.deepStrictEqual(off({}, { backend: { inbox: false } }), { liveStats: false, inbox: true, site: false });
   });
-  it('an unreadable value counts as set', () => assert.deepStrictEqual(off({ live_stats: 'maybe', inbox: null }), { liveStats: true, inbox: true }));
+  it('an unreadable value counts as set', () => assert.deepStrictEqual(off({ live_stats: 'maybe', inbox: null }), { liveStats: true, inbox: true, site: false }));
   it('character_sheets: false makes live stats explicit, not the inbox', () => {
-    assert.deepStrictEqual(off({ character_sheets: false }), { liveStats: true, inbox: false });
+    assert.deepStrictEqual(off({ character_sheets: false }), { liveStats: true, inbox: false, site: false });
   });
-  it('an on switch is never explicitly off', () => assert.deepStrictEqual(off({ live_stats: true, inbox: true }), { liveStats: false, inbox: false }));
+  it('an on switch is never explicitly off', () => assert.deepStrictEqual(off({ live_stats: true, inbox: true }), { liveStats: false, inbox: false, site: false }));
+  it('a site turned off, or set to something unreadable, is explicit; one never set is not', () => {
+    assert.strictEqual(off({ site: false, site_dir: '/s' }).site, true);
+    assert.strictEqual(off({ site: 'maybe', site_dir: '/s' }).site, true);
+    assert.strictEqual(off({}).site, false);
+    assert.strictEqual(off({ site: true }).site, false);
+  });
+});
+
+describe('site: whether the vault has a site at all', () => {
+  const site = (p) => resolveSwitches(p, {}).site;
+  it('is what the switch says, whatever site_dir says', () => {
+    assert.strictEqual(site({ site: true }), true);
+    assert.strictEqual(site({ site: 'on', site_dir: '/s' }), true);
+    assert.strictEqual(site({ site: false, site_dir: '/s' }), false);
+    assert.strictEqual(site({ site: 'off', site_dir: '/s' }), false);
+  });
+  it('unset, a site_dir says on and none says off', () => {
+    assert.strictEqual(site({ site_dir: '/s' }), true);
+    assert.strictEqual(site({}), false);
+    assert.strictEqual(site({ site_dir: '' }), false);
+    assert.strictEqual(site({ site_dir: null }), false);
+  });
+  it('an unreadable value is off, with a note naming the key', () => {
+    const got = resolveSwitches({ site: 'maybe', site_dir: '/s' }, {});
+    assert.strictEqual(got.site, false);
+    assert.ok(got.notes.some((n) => n.key === 'site' && /treated as off/.test(n.problem)), JSON.stringify(got.notes));
+  });
+  it('siteOff stops a build only for an explicit off', () => {
+    const { siteOff, SITE_OFF } = require('../../lib/switches');
+    assert.strictEqual(siteOff(resolveSwitches({ site: false, site_dir: '/s' }, {})), SITE_OFF);
+    assert.strictEqual(siteOff(resolveSwitches({}, {})), null);
+    assert.strictEqual(siteOff(resolveSwitches({ site: true }, {})), null);
+    assert.strictEqual(siteOff(undefined), null);
+  });
 });

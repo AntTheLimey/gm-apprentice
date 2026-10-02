@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.24"
+current_version: "1.10.25"
 ---
 
 # Vault Migration Registry
@@ -1308,3 +1308,51 @@ three switches control character sheets, live stats and the inbox
   as PC frontmatter fields (`attributes`, `skills`, `loadouts` and
   the like) are no longer read; `vault_check.py <vault> pc-body`
   names any PC that has them.
+
+## Migration: 1.10.24 → 1.10.25
+
+The publish build withholds an excluded section more carefully, the
+vault checks ask the build what publishes, and `publish.site` in
+`_meta/vault-config.md` says whether the vault has a site. No entity
+frontmatter changes.
+
+### Structural
+
+- **`publish.site`** is a new switch in vault-config: `true` when the
+  vault has a site, `false` when it does not. With it off nothing is
+  built and no leak check runs, whatever `publish.site_dir` says.
+  Unset counts as on only when `site_dir` is set, so a vault that is
+  not migrated yet behaves as before.
+- If the GM has a site, run `update-pin --site <site-dir>`. It
+  installs publish tool 1.12.1 there and writes `publish.site: true`
+  and `publish.site_dir` into the vault file where they are missing;
+  it leaves a `site: false` alone. Ask the GM for the site folder if
+  the vault file does not name one. Until the site's tool is 1.12.1 or
+  later, `vault_check.py` `gm-leak`, `pc-body` and `wrapup` stop with
+  one ERROR row and write nothing.
+- If the GM has no site and the vault file has a `publish:` block, add
+  `site: false` under it. A vault file with no `publish:` block needs
+  nothing: it has no site.
+
+### Content
+
+- Nothing. No note changes.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.12.1. A `#` line inside a fenced code block
+  no longer ends a withheld section such as `## GM Notes`. A heading on
+  the exclude list is withheld when it is written with an underline
+  (`GM Notes` over `--------`), indented up to three spaces, or inside
+  a blockquote or list item. Nothing that was withheld before publishes
+  now. A note whose `# Title` line is on the exclude list has that
+  section withheld. With character sheets off, a PC page obeys the exclude list
+  as any other page does. A code block left open inside a withheld
+  section withholds the rest of the note, and the build warns.
+- `vault_check.py` `gm-leak`, `pc-body` and `wrapup` ask the publish
+  tool which lines publish. A vault with a `site_dir` asks the tool
+  installed in that site; when it cannot be asked, each gives one ERROR
+  row and writes nothing. A vault with no `site_dir` has no site and is
+  never blocked: `wrapup --fix` and `pc-body` work without Node, and
+  `gm-leak` gives one INFO row when there is no Node.
+- `update-pin` no longer reports a successful install as a failure.

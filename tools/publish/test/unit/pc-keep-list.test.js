@@ -202,13 +202,15 @@ describe('PC keep-list reads headings the way a renderer does', () => {
   it('a horizontal rule after a blank line does not end the section', () => {
     assert.strictEqual(f('## Background\nprose\n\n---\nmore prose\n'), '## Background\nprose\n\n---\nmore prose\n');
   });
-  it('with no rule, the output is what the exclude-list walk gave at f848d8b5', () => {
+  // The first four are what the exclude-list walk gave at f848d8b5. The fifth is not:
+  // there the fenced heading ended `## Stat Sheet` and published the rest of it.
+  it('with no rule, only the exclude list is applied', () => {
     const cases = [
       ['## Background\nprose\n\nSkills\n------\nSTAT\n', '## Background\nprose\n\nSkills\n------\nSTAT\n'],
       ['## Background\nprose\n\nSkills\n======\nSTAT\n', '## Background\nprose\n\nSkills\n======\nSTAT\n'],
       ['## Background\nprose\n  ## Skills\nSTAT\n', '## Background\nprose\n  ## Skills\nSTAT\n'],
       ['## Background\nprose\n<h2>Skills</h2>\nSTAT\n', '## Background\nprose\n<h2>Skills</h2>\nSTAT\n'],
-      ['## Stat Sheet\n```\n## Background\n```\nSTAT\n', '## Background\n```\nSTAT\n'],
+      ['## Stat Sheet\n```\n## Background\n```\nSTAT\n', ''],
     ];
     for (const [input, expected] of cases) {
       assert.strictEqual(filterSections(input, ['Stat Sheet'], pc), expected);

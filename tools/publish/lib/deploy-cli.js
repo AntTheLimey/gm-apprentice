@@ -175,6 +175,9 @@ async function runDeploy(options, deps) {
     if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands, messages }, null, 2));
     return 1;
   };
+  // A site the GM turned off is neither built nor uploaded, --no-build included.
+  const off = (d.siteOffFor || require('./config').siteOffFor)(configPath);
+  if (off) return buildFailed(off);
   const runHook = (hook) => {
     commands.push(`npm run ${hook}`);
     // Output streams as it happens (a big image step runs for minutes); under --json it

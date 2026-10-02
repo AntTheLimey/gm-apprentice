@@ -32,7 +32,7 @@ from typing import Any, Callable
 
 from vault_check import (PUBLISH_PACKAGE, ToolAnswer, ask_publish_tool,
                          configured_site, parse_semver, publish_block_inline,
-                         site_pin)
+                         site_pin, site_switch)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
@@ -45,6 +45,8 @@ INLINE_PUBLISH = (
 # What the tool's note lines start with, for a tool that does not name them
 # (`noteLines`); backups are never changes either.
 NOTE_PREFIXES = ("left in ", "skipped ", "note ")
+SITE_OFF = ("the site is off (publish.site); site settings were not looked at. "
+            "Turn it on and run migrate.py again to move them.")
 SITE_DIR_UNSET = (
     "publish.site_dir is not set; site settings were not looked at. Set it "
     "to your site folder and run migrate.py again, or run "
@@ -118,6 +120,8 @@ def _site_note(vault: Path) -> str:
     mistyped path from reading as "nothing to move". Empty when the site
     was looked at."""
     site, has_config = configured_site(vault)
+    if site is None and site_switch(vault) is False:
+        return SITE_OFF
     if site is None:
         return SITE_DIR_UNSET
     if not has_config:

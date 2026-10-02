@@ -96,6 +96,10 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const flagKey = FLAG_KEY[feature];
   if (!flagKey) { out(`Unknown setup feature: ${feature}`); return 1; }
 
+  // A site the GM turned off gets no backend: say so before anything is created.
+  const off = (deps.siteOffFor || require('./config').siteOffFor)(configPath);
+  if (off) { out(off.replace('nothing was built', 'nothing was set up')); return 1; }
+
   const config = JSON.parse(readFile(configPath));
   const siteRoot = path.dirname(path.resolve(configPath));
   const tomlPath = path.join(siteRoot, 'wrangler.toml');

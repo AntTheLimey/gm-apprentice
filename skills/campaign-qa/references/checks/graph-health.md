@@ -87,8 +87,8 @@ Skip files the publish pipeline would already exclude wholesale
 `exclude_dirs`, and — when the vault has `exclude_drafts`
 configured — draft entities), so this check only flags content
 that would actually reach the site.
-Severity: Critical if the vault has `publish.site_dir`
-configured (it's actually publishing); Warning otherwise.
+Severity: Critical if the vault has a site (`publish.site` is on,
+or unset with a `publish.site_dir`); Warning otherwise.
 
 ### Step 3: Schema Compliance
 

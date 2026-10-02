@@ -88,11 +88,22 @@ npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 Node 22+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
-**Site directory:** capabilities 2 and 4 read `publish.site_dir`
-from `_meta/vault-config.md`; a relative value is relative to the
-vault. If unset, ask for the absolute path to the site repo and offer
-to save it there. With no site at all there is nothing to register,
-so skip `publish-played`.
+**Is there a site?** `publish.site` in `_meta/vault-config.md` is
+the switch, and `init` turns it on.
+
+- **Off** (`false`, or unset with no `site_dir`): the vault has no
+  site. No leak check runs, and there is nothing to register, so skip
+  `publish-played`. If the GM asks for a site, run capability 1;
+  `init` turns the switch on. `publish.site: false` also makes `build`
+  and `deploy` refuse: if the GM asks for a build of a site they
+  turned off, say it is off and that `publish.site: true` turns it
+  back on.
+- **On, with no `publish.site_dir`:** a site still to be set up. Run
+  capability 1.
+- **On, with a `site_dir`:** capabilities 2 and 4 read the folder from
+  it; a relative value is relative to the vault. A vault from before
+  1.10.25 with a `site_dir` and no switch counts as on, and
+  `update-pin --site <dir>` writes both.
 
 ## Nine Capabilities
 

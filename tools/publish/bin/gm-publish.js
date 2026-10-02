@@ -38,6 +38,7 @@ Usage:
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
+  gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
   gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
@@ -183,6 +184,24 @@ excluded versus missing is the GM's call.
                      that pairs keeps the checks above. Excluded and
                      non-session paths are still refused.
   --help, -h         Show this help
+`,
+  lines: `
+gm-apprentice-publish lines
+
+Answers what the build would publish, for text handed in on stdin. One JSON
+request per input line, one JSON answer per output line, until stdin closes.
+vault_check uses it instead of keeping a copy of the build's filters.
+
+  {"op":"published","text":"…","excludeSections":["GM Notes"],"publish":"all"}
+      -> {"text":"…"}          the body the site renders
+  {"op":"sections","text":"…","excludeSections":["GM Notes"]}
+      -> {"withheldBy":[…]}    per line: the excluded section withholding it, or null
+  {"op":"stub","text":"…","include":["Overview"]}
+      -> {"kept":[…]}          per line: whether a publish: stub page keeps it
+  {"op":"site","vault":"/path/to/vault"}
+      -> {"publishes":…,"site":…,"siteDir":…}  the vault's publish: block, whether its site is on, and the site folder
+
+A request that cannot be answered gets {"error":"…"}.
 `,
   explain: `
 gm-apprentice-publish explain <vault-relative path> [--config <path>] [--json]
@@ -510,6 +529,13 @@ if (command === 'build') {
   warnIfVersionDrift();
   assertRuntimeDeps();
 
+  // A site the GM turned off (publish.site) is not built, and its functions are left alone.
+  const off = require('../lib/config').siteOffFor(configPath);
+  if (off) {
+    console.error(`Build failed: ${off}`);
+    process.exit(1);
+  }
+
   // Bring plugin-owned Cloudflare Functions up to date on every build so API routes
   // added or fixed in a newer plugin version reach flagged sites scaffolded before they
   // existed. Each feature's files follow its own switch: on copies them, an explicit off
@@ -586,6 +612,17 @@ if (command === 'sheet') {
   })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'lines') {
+  if (args.length > 1) {
+    console.error(`Error: lines takes no arguments (got ${args[1]})`);
+    printSubcommandHelp('lines');
+    process.exit(1);
+  }
+  const { runLines } = require('../lib/lines-cli.js');
+  runLines().then(exitAfterFlush).catch(failAfterFlush);
   return;
 }
 

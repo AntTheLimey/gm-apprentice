@@ -24,9 +24,13 @@ might see rather than quietly assuming something is hidden.
 
 from __future__ import annotations
 
+import atexit
 import json
 import re
+import shutil
+import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -775,6 +779,220 @@ def atx_title(raw: str) -> str:
 _MARKERS = (("gm", "gm-only"), ("spoiler", "spoiler"))
 
 
+# --------------------------------------------------------------------------
+# What the build publishes, asked of the build
+#
+# Which lines of a note reach the site is the publish tool's decision:
+# its strip chain, and a section filter whose headings come from its
+# renderer's parser. Nothing here re-implements either. `gm-publish
+# lines` answers from the functions the build itself calls
+# (tools/publish/lib/lines-cli.js), and one process is kept open for the
+# run so a whole vault can be asked note by note.
+# --------------------------------------------------------------------------
+
+# The publish tool, beside skills/ in both the repo and the installed plugin
+# (<plugin>/skills/shared/scripts/vaultlib.py, <plugin>/tools/publish/...).
+PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
+                / "tools" / "publish" / "bin" / "gm-publish.js")
+# How long one question may take before the tool is given up on.
+PUBLISH_LINES_TIMEOUT = 120
+
+
+class PublishToolUnavailable(Exception):
+    """The publish tool could not say what publishes. The message is why."""
+
+
+class PublishLines:
+    """A `gm-publish lines` process: one JSON question per line."""
+
+    def __init__(self, tool: Path = PUBLISH_TOOL) -> None:
+        self.tool = tool
+        self._proc: subprocess.Popen[str] | None = None
+
+    def _process(self) -> subprocess.Popen[str]:
+        if self._proc is not None and self._proc.poll() is None:
+            return self._proc
+        node = shutil.which("node")
+        if not node:
+            raise PublishToolUnavailable("node is not on PATH")
+        if not self.tool.is_file():
+            raise PublishToolUnavailable(
+                f"the publish tool is not at {self.tool.as_posix()}")
+        try:
+            self._proc = subprocess.Popen(
+                [node, str(self.tool), "lines"], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                text=True, encoding="utf-8")
+        except OSError as e:
+            raise PublishToolUnavailable(
+                f"node could not run ({e.__class__.__name__})") from e
+        return self._proc
+
+    def ask(self, request: dict[str, Any]) -> dict[str, Any]:
+        proc = self._process()
+        assert proc.stdin is not None and proc.stdout is not None
+        # A tool that hangs is killed, which ends the read below.
+        timed_out: list[bool] = []
+
+        def give_up() -> None:
+            timed_out.append(True)
+            proc.kill()
+
+        watchdog = threading.Timer(PUBLISH_LINES_TIMEOUT, give_up)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            proc.stdin.write(json.dumps(request) + "\n")
+            proc.stdin.flush()
+            line = proc.stdout.readline()
+        except (OSError, ValueError) as e:
+            self.close()
+            raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
+                f"the publish tool stopped answering "
+                f"({e.__class__.__name__})") from e
+        finally:
+            watchdog.cancel()
+        if not line and timed_out:
+            self.close()
+            raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s")
+        if not line:
+            self.close()
+            raise PublishToolUnavailable(
+                "the publish tool exited without answering (it needs Node "
+                "22+, and a tool older than 1.12.1 has no `lines` command)")
+        try:
+            answer = json.loads(line)
+        except ValueError as e:
+            self.close()
+            raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
+                "the publish tool did not answer the question (a tool "
+                "older than 1.12.1 has no `lines` command)") from e
+        if not isinstance(answer, dict) or "error" in answer:
+            why = answer.get("error") if isinstance(answer, dict) else answer
+            raise PublishToolUnavailable(f"the publish tool refused: {why}")
+        return answer
+
+    def close(self) -> None:
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        try:
+            if proc.stdin is not None:
+                proc.stdin.close()
+            proc.wait(timeout=5)
+        except (OSError, subprocess.TimeoutExpired):
+            proc.kill()
+        finally:
+            if proc.stdout is not None:
+                proc.stdout.close()
+
+
+# The process every question below goes to. The plugin's own tool until a
+# check that knows the vault's site points it at the tool that site builds
+# with (`use_publish_tool`).
+PUBLISH_LINES = PublishLines()
+_LINES_BY_TOOL: dict[Path, PublishLines] = {PUBLISH_TOOL: PUBLISH_LINES}
+
+
+def use_publish_tool(tool: Path) -> None:
+    """Ask `tool` from here on: the publish tool a vault's site builds
+    with, whose answer is the one that counts for that vault."""
+    global PUBLISH_LINES
+    if tool not in _LINES_BY_TOOL:
+        _LINES_BY_TOOL[tool] = PublishLines(tool)
+    PUBLISH_LINES = _LINES_BY_TOOL[tool]
+
+
+def _close_publish_tools() -> None:
+    for lines in set(_LINES_BY_TOOL.values()) | {PUBLISH_LINES}:
+        lines.close()
+
+
+atexit.register(_close_publish_tools)
+
+
+def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
+    """(whether the vault file has a `publish:` block, whether the vault
+    has a site, the site folder its `site_dir` names). `publish.site` is
+    the switch: off is no site whatever `site_dir` says, and on with no
+    folder is a site still to be set up. Asked of the plugin's own publish
+    tool, which reads the file with the build's YAML parser. Raises
+    `PublishToolUnavailable` when the tool cannot be asked or cannot
+    parse the file."""
+    answer = _LINES_BY_TOOL[PUBLISH_TOOL].ask(
+        {"op": "site", "vault": str(vault.resolve())})
+    publishes, on = answer.get("publishes"), answer.get("site")
+    site = answer.get("siteDir")
+    if (not isinstance(publishes, bool) or not isinstance(on, bool)
+            or not (site is None or isinstance(site, str))):
+        raise PublishToolUnavailable(
+            "the publish tool's answer about the site is not understood")
+    return publishes, on, Path(site) if site else None
+
+
+SITE_ON_WORDS = ("true", "yes", "on")
+
+
+def site_switch(vault: Path) -> bool | None:
+    """`publish.site` as the line reader sees it: True, False, or None when
+    the key is not written. A key left blank, or holding anything that is
+    not one of the switch words, is off, as the publish tool reads it
+    (`asBool` in switches.js). For when the tool cannot be asked; its own
+    reading (`vault_site`) comes first."""
+    written, value = _publish_scalar(vault, "site")
+    if not written:
+        return None
+    return (value or "").strip().lower() in SITE_ON_WORDS
+
+
+def publish_tool_problem() -> str | None:
+    """Why the publish tool cannot be asked what publishes, or None when it
+    can. A check that depends on the answer asks this first and says so,
+    rather than guess."""
+    try:
+        PUBLISH_LINES.ask({"op": "sections", "text": "", "excludeSections": []})
+    except PublishToolUnavailable as e:
+        return str(e)
+    return None
+
+
+def withheld_by(lines: list[str], exclude_sections: Iterable[str]
+                ) -> list[str | None]:
+    """For each line, the excluded section that withholds it on the site,
+    or None. The publish tool's own section walk."""
+    excludes = [str(s) for s in exclude_sections]
+    if not excludes or not lines:
+        return [None] * len(lines)
+    answer = PUBLISH_LINES.ask({"op": "sections", "text": "\n".join(lines),
+                                "excludeSections": excludes})
+    verdicts = answer.get("withheldBy")
+    if not isinstance(verdicts, list) or len(verdicts) != len(lines):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    return [v if isinstance(v, str) else None for v in verdicts]
+
+
+def stub_kept(lines: list[str], include: Iterable[Any]) -> list[bool]:
+    """For each line, whether a `publish: stub` page with these
+    `publish_include_sections` keeps it. The publish tool's own answer."""
+    if not lines:
+        return []
+    answer = PUBLISH_LINES.ask({
+        "op": "stub", "text": "\n".join(lines),
+        "include": [s for s in include if isinstance(s, str)]})
+    kept = answer.get("kept")
+    if not isinstance(kept, list) or len(kept) != len(lines):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    return [k is True for k in kept]
+
+
 @dataclass
 class LineState:
     """What the publish pipeline would make of one body line."""
@@ -799,10 +1017,11 @@ def scan_body(text: str,
                                                              list[str]]:
     """Classify every body line the way the publish pipeline would.
 
-    Mirrors tools/publish/lib/processor.js — `stripMarkedBlocks` for the
-    `<!-- gm-only -->` / `<!-- spoiler -->` fences and `filterSections`
-    for excluded headings — so a check written against this agrees with
-    what actually ships.
+    Mirrors tools/publish/lib/processor.js `stripMarkedBlocks` for the
+    `<!-- gm-only -->` / `<!-- spoiler -->` fences. Excluded sections are
+    not modelled here: with an exclude list, the publish tool is asked
+    which lines its section filter withholds (`withheld_by`), and
+    `PublishToolUnavailable` is raised when it cannot be.
 
     The two behaviours worth restating, because both were bugs once:
 
@@ -816,41 +1035,31 @@ def scan_body(text: str,
       after it, silently, which is the worst possible failure of the one
       primitive whose whole job is hiding things (#168).
 
-    Section exclusion follows the pipeline's *order*, not just its rule.
-    `processContent` / `playerSafeMarkdown` run `stripGmOnly` and
-    `stripSpoiler` BEFORE `filterSections`, so a `## GM Notes` written
-    inside a `<!-- gm-only -->` block is already gone when the section
-    filter runs: it never starts an exclusion, and it never ends one
-    either. Headings are therefore only allowed to drive `excluded_by`
-    at marker depth zero. They are still reported in `LineState.heading`
-    wherever they appear. This matters because `<!-- gm-only -->`
+    Section exclusion follows the pipeline's *order*. `processContent` /
+    `playerSafeMarkdown` run `stripGmOnly` and `stripSpoiler` BEFORE
+    `filterSections`, so a `## GM Notes` written inside a
+    `<!-- gm-only -->` block is already gone when the section filter
+    runs: it never starts an exclusion, and it never ends one either. The
+    tool is therefore asked about the note with its marker lines and
+    marker blocks blanked. This matters because `<!-- gm-only -->`
     wrapping `## GM Notes` is exactly the shape `wrapup --fix` writes:
     letting that heading exclude the rest of the file would blind every
     leak check to everything a GM appends below the fence.
 
-    Exclusion boundaries match `filterSections`: a heading-shaped line
-    inside a code fence starts or ends an exclusion exactly as on the
-    built site (it does no fence tracking), though `heading` stays unset
-    for it. A nested excluded heading never re-anchors an exclusion that
-    is already running.
+    Known divergences of the marker model, which can err either way — the
+    leak invariant in vault_check.py uses `publisher_lines`, the tool's
+    own answer, instead:
 
-    Known divergences, which can err either way — the leak invariant in
-    vault_check.py uses `publisher_lines`, an exact port, instead:
-
-    * Titles are compared with `str.casefold()`; `filterSections` uses
-      JavaScript `toLowerCase()`. The two differ on a handful of
-      non-ASCII titles (German `ß`, Turkish dotted/dotless `I`), so a
-      heading using them can match here and not there, or vice versa.
-    * Only the two marker blocks suppress exclusion, not multi-line HTML
-      comments, which `stripHtmlComments` also removes before
-      `filterSections`. A `## GM Notes` commented out that way still
-      starts an exclusion here and does not on the site, so what follows
-      it is called hidden here and publishes there.
+    * Only the two marker blocks are blanked before the tool is asked,
+      not multi-line HTML comments, which `stripHtmlComments` also
+      removes before `filterSections`. A `## GM Notes` commented out that
+      way still starts an exclusion here and does not on the site, so
+      what follows it is called hidden here and publishes there.
 
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.
     """
-    excludes = {s.casefold() for s in exclude_sections}
+    excludes = [str(s) for s in exclude_sections]
     marker_res = {
         name: re.compile(rf"<!--\s*(/?){re.escape(word)}\s*-->")
         for name, word in _MARKERS
@@ -862,9 +1071,8 @@ def scan_body(text: str,
 
     states: list[LineState] = []
     problems: list[str] = []
+    shadow: list[str] = []      # the note as `filterSections` is handed it
     fence_delim: str | None = None
-    excluded_by: str | None = None
-    exclude_level = 0
 
     for lineno, line in iter_body_lines(text):
         # up to 3 leading spaces; 4+ would be an indented code block
@@ -925,21 +1133,11 @@ def scan_body(text: str,
                 if hm:
                     heading = (len(hm.group(1)), atx_title(hm.group(2)))
 
-        # Exclusion boundaries follow `filterSections`, which sees every
-        # heading-shaped line — inside a code fence too — but only at
-        # marker depth zero: the pipeline strips marker blocks first.
-        hm = HEADING_RE.match(line)
-        if hm and marker is None and depths["gm"] == 0 \
-                and depths["spoiler"] == 0:
-            level = len(hm.group(1))
-            title = atx_title(hm.group(2))
-            if excluded_by is not None and level <= exclude_level:
-                excluded_by = None
-            # A nested excluded heading inside an active exclusion never
-            # re-anchors it deeper (the #228 filterSections fix).
-            if excluded_by is None and title.casefold() in excludes:
-                excluded_by = title
-                exclude_level = level
+        # Headings drive exclusion only at marker depth zero: the pipeline
+        # strips marker blocks before `filterSections` runs.
+        visible = (marker is None and depths["gm"] == 0
+                   and depths["spoiler"] == 0)
+        shadow.append(line if visible else "")
 
         states.append(LineState(
             lineno=lineno,
@@ -947,10 +1145,14 @@ def scan_body(text: str,
             in_code=in_code,
             gm_depth=depths["gm"],
             spoiler_depth=depths["spoiler"],
-            excluded_by=excluded_by,
+            excluded_by=None,
             heading=heading,
             marker=marker,
         ))
+
+    if excludes:
+        for state, title in zip(states, withheld_by(shadow, excludes)):
+            state.excluded_by = title
 
     for name, word in _MARKERS:
         for lineno in open_lines[name]:
@@ -959,19 +1161,8 @@ def scan_body(text: str,
 
 
 # --------------------------------------------------------------------------
-# An exact port of the publisher's body pipeline
-#
-# tools/publish/lib/processor.js `playerSafeMarkdown` (stripDataview,
-# stripGmOnly, stripSpoiler, stripHtmlComments, filterSections), preceded
-# by build.js's `keepOnlySections` for a `publish: stub` page. Callout
-# stripping is left out: it is a config option that only ever removes
-# more, and leaving it out errs toward calling a line published. Kept
-# line-for-line with the JS so the leak invariant never trusts a model.
+# The publisher's body pipeline
 # --------------------------------------------------------------------------
-
-_JS_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
-_JS_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
-_JS_COMMENT_FENCE_RE = re.compile(r"^\s*(```|~~~)")
 
 
 def body_text(text: str) -> str:
@@ -986,100 +1177,11 @@ def body_text(text: str) -> str:
     return norm
 
 
-def _js_keep_only_sections(lines: list[str],
-                           include: list[str]) -> list[str]:
-    wanted = [s.lower() for s in include if isinstance(s, str)]
-    if not wanted:
-        return []
-    out: list[str] = []
-    keeping, keep_level = False, 0
-    for line in lines:
-        m = _JS_HEADING_RE.match(line)
-        if m:
-            level = len(m.group(1))
-            if keeping and level <= keep_level:
-                keeping = False
-            if m.group(2).strip().lower() in wanted:
-                keeping, keep_level = True, level
-        if keeping:
-            out.append(line)
-    return out
-
-
-def _js_strip_marked(lines: list[str], word: str) -> list[str]:
-    marker_re = re.compile(rf"<!--\s*(/?){re.escape(word)}\s*-->")
-    out: list[str] = []
-    stack: list[tuple[bool, int]] = []
-    fence: str | None = None
-    for i, line in enumerate(lines):
-        m = _JS_FENCE_RE.match(line)
-        is_fence_line = False
-        if m:
-            delim, info = m.group(1), m.group(2)
-            if fence is None:
-                if delim[0] != "`" or "`" not in info:
-                    fence, is_fence_line = delim, True
-            elif (delim[0] == fence[0] and len(delim) >= len(fence)
-                  and not info.strip()):
-                fence, is_fence_line = None, True
-        if fence is not None or is_fence_line:
-            if not stack:
-                out.append(line)
-            continue
-        found = list(marker_re.finditer(line))
-        if not found:
-            if not stack:
-                out.append(line)
-            continue
-        kept, last, opened = "", 0, False
-        for mm in found:
-            if not stack:
-                kept += line[last:mm.start()]
-            last = mm.end()
-            inline = line[:mm.start()].strip() != ""
-            if mm.group(1) == "":
-                if not stack:
-                    opened = True
-                stack.append((inline, i))
-            elif stack:
-                top_inline, top_line = stack[-1]
-                if not inline or top_inline or top_line == i:
-                    stack.pop()
-        if not stack:
-            kept += line[last:]
-        if kept.strip():
-            out.append(kept)
-        elif opened:
-            out.append("")
-    return out
-
-
-def _js_strip_comments(lines: list[str]) -> list[str]:
-    out: list[str] = []
-    fence: str | None = None
-    in_comment = False
-    for line in lines:
-        m = None if in_comment else _JS_COMMENT_FENCE_RE.match(line)
-        if m:
-            if fence is None:
-                fence = m.group(1)
-            elif fence == m.group(1):
-                fence = None
-        if fence is not None or m:
-            out.append(line)
-            continue
-        kept, in_comment = strip_comment_spans(line, in_comment)
-        if not kept.strip() and line.strip():
-            continue
-        out.append(kept)
-    return out
-
-
 def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:
     """One line with its HTML comment spans removed, as `stripHtmlComments`
     leaves it: (kept text, whether a comment is still open at line end).
-    The step `_js_strip_comments` takes per line, shared so a check that
-    needs line numbers reads comments exactly as the publisher does."""
+    For a check that needs line numbers and reads comments as the
+    publisher does."""
     kept, i = "", 0
     while i < len(line):
         if in_comment:
@@ -1097,41 +1199,29 @@ def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:
     return kept, in_comment
 
 
-def _js_filter_sections(lines: list[str], excludes: Iterable[str]
-                        ) -> list[str]:
-    wanted = {s.lower() for s in excludes}
-    out: list[str] = []
-    excluding, exclude_level = False, 0
-    for line in lines:
-        m = _JS_HEADING_RE.match(line)
-        if m:
-            level = len(m.group(1))
-            if excluding and level <= exclude_level:
-                excluding = False
-            if not excluding and atx_title(m.group(2)).lower() in wanted:
-                excluding, exclude_level = True, level
-                continue
-        if not excluding:
-            out.append(line)
-    return out
-
-
 def publisher_lines(text: str, excludes: Iterable[str],
                     fm: dict[str, Any] | None = None) -> list[str]:
-    """The body lines the player site renders for this file."""
-    body = body_text(text)
-    body = re.sub(r"```dataview[\s\S]*?```", "", body)
-    lines = body.split("\n")
-    if publish_mode(fm) == "none":
+    """The body lines the player site renders for this file.
+
+    The publish tool's own answer (`gm-publish lines`, op `published`):
+    the page's `publish:` gate, then `playerSafeMarkdown` under the
+    exclude list. Callout stripping is left out: it is a config option
+    that only ever removes more. Raises `PublishToolUnavailable` when the
+    tool cannot be asked."""
+    mode = publish_mode(fm)
+    if mode == "none":
         return []
-    if publish_mode(fm) == "stub":
-        raw = (fm or {}).get("publish_include_sections")
-        lines = _js_keep_only_sections(lines,
-                                       raw if isinstance(raw, list) else [])
-    lines = _js_strip_marked(lines, "gm-only")
-    lines = _js_strip_marked(lines, "spoiler")
-    lines = _js_strip_comments(lines)
-    return _js_filter_sections(lines, excludes)
+    raw = (fm or {}).get("publish_include_sections")
+    answer = PUBLISH_LINES.ask({
+        "op": "published", "text": body_text(text),
+        "excludeSections": [str(s) for s in excludes], "publish": mode,
+        "include": [s for s in raw if isinstance(s, str)]
+        if isinstance(raw, list) else []})
+    published = answer.get("text")
+    if not isinstance(published, str):
+        raise PublishToolUnavailable(
+            "the publish tool's answer has no text")
+    return published.split("\n")
 
 
 # --------------------------------------------------------------------------
@@ -1353,7 +1443,7 @@ def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
     frontmatter → no list set. An unreadable file is an error."""
     config = vault / "_meta" / "vault-config.md"
     try:
-        text = config.read_text(encoding="utf-8")
+        text = config.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return ExcludeListConfig()
     except (OSError, UnicodeDecodeError) as e:
@@ -1408,20 +1498,20 @@ def read_wrap_up_player_sections(vault: Path) -> list[str]:
     return [] if cfg.error else list(cfg.value or [])
 
 
-def read_publish_scalar(vault: Path, key: str) -> str | None:
-    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
-    say), or None when absent, null or not a plain scalar. Only a direct
-    child of `publish:` counts: a same-named key nested deeper, or a line
-    inside a block scalar, is someone else's."""
+def _publish_scalar(vault: Path, key: str) -> tuple[bool, str | None]:
+    """(whether `publish.<key>` is written in `_meta/vault-config.md`, its
+    value as a scalar: None when null, blank or not a plain scalar). Only
+    a direct child of `publish:` counts: a same-named key nested deeper,
+    or a line inside a block scalar, is someone else's."""
     try:
         text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
-        return None
+        return False, None
     lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
     start = next((i for i, line in enumerate(lines)
                   if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
     if start is None:
-        return None
+        return False, None
     indent: int | None = None
     for line in lines[start + 1:]:
         stripped = line.strip()
@@ -1445,16 +1535,23 @@ def read_publish_scalar(vault: Path, key: str) -> str | None:
             # apostrophe ("GM's Site") is just a character.
             value = re.split(r"\s#", raw, maxsplit=1)[0].strip()
         if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
-            return None
+            return True, None
         if value.startswith('"'):
             try:
-                return json.loads(value) or None  # YAML double quotes use JSON's escapes
+                return True, json.loads(value) or None  # YAML double quotes use JSON's escapes
             except ValueError:
-                return None
+                return True, None
         if value.startswith("'"):
-            return value[1:-1].replace("''", "'") or None if value.endswith("'") else None
-        return value
-    return None
+            return True, (value[1:-1].replace("''", "'") or None
+                          if value.endswith("'") else None)
+        return True, value
+    return False, None
+
+
+def read_publish_scalar(vault: Path, key: str) -> str | None:
+    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
+    say), or None when absent, null or not a plain scalar."""
+    return _publish_scalar(vault, key)[1]
 
 
 # The publish pipeline's own defaults (tools/publish/lib/config.js

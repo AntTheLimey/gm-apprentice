@@ -131,6 +131,18 @@ describe('deploy: cloudflare-pages', () => {
     assert.match(h.text(), /Deploy failed: Error: project not found/);
   });
 
+  it('a site turned off is neither built nor uploaded, with or without --no-build', async () => {
+    for (const noBuild of [false, true]) {
+      const h = harness();
+      h.deps.siteOffFor = () => 'the site is off for this vault';
+      const rc = await runDeploy({ configPath: CONFIG, noBuild }, h.deps);
+      assert.strictEqual(rc, 1);
+      assert.deepStrictEqual(h.builds, []);
+      assert.deepStrictEqual(h.wrangler, []);
+      assert.match(h.text(), /the site is off for this vault/);
+    }
+  });
+
   it('--no-build skips the build', async () => {
     const h = harness();
     await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);

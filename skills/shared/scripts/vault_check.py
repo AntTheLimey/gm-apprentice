@@ -171,7 +171,14 @@ from vaultlib import (  # noqa: F401
     entity_type,
     body_text,
     parse_publish_list,
+    PUBLISH_TOOL,
+    PublishToolUnavailable,
+    publish_tool_problem,
     publisher_lines,
+    stub_kept,
+    use_publish_tool,
+    site_switch,
+    vault_site,
     strip_comment_spans,
     read_publish_list,
     read_publish_scalar,
@@ -1166,10 +1173,8 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
     return linked or found, broken, unlinked
 
 
-# The publish tool, beside skills/ in both the repo and the installed plugin
-# (<plugin>/skills/shared/scripts/vault_check.py, <plugin>/tools/publish/...).
-PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
-                / "tools" / "publish" / "bin" / "gm-publish.js")
+# The publish tool (`PUBLISH_TOOL`, from vaultlib) sits beside skills/ in
+# both the repo and the installed plugin.
 PUBLISH_TOOL_TIMEOUT = 120
 # The site builds with the tool installed in its own node_modules (update-pin
 # reads it there too), so that is the renderer whose answer counts. The first
@@ -1181,10 +1186,11 @@ WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
 
 def configured_site(vault: Path) -> tuple[Path | None, bool]:
     """(the site folder `publish.site_dir` names, whether a
-    vault.config.json is in it). (None, False) when `site_dir` is unset. A
-    relative `site_dir` is relative to the vault."""
+    vault.config.json is in it). (None, False) when `site_dir` is unset or
+    the site is off (`publish.site`). A relative `site_dir` is relative to
+    the vault."""
     site_dir = read_publish_scalar(vault, "site_dir")
-    if not site_dir:
+    if not site_dir or site_switch(vault) is False:
         return None, False
     site = Path(site_dir).expanduser()
     if not site.is_absolute():
@@ -1205,6 +1211,9 @@ def publish_block_inline(vault: Path) -> bool:
                for line in _frontmatter_lines(text) or [])
 
 
+NO_SITE_DIR = "publish.site_dir is not set in _meta/vault-config.md"
+
+
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     """(the site's vault.config.json, why there is none).
 
@@ -1214,7 +1223,7 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     if site is None:
         if read_publish_list(vault, "exclude_sections").publish_line is None:
             return None, None
-        return None, "publish.site_dir is not set in _meta/vault-config.md"
+        return None, NO_SITE_DIR
     if not has_config:
         return None, f"no vault.config.json in publish.site_dir ({site})"
     return site / "vault.config.json", None
@@ -1416,7 +1425,10 @@ def ask_publish_tool(vault: Path, args: list[str],
     no_site = config is None
     if config is None:
         if not (vault_only and why):
-            return ToolAnswer(why=why)
+            # A site that is off is not a tool that could not be asked:
+            # there is nothing to say. One that is on with no folder is.
+            quiet = why == NO_SITE_DIR and site_switch(vault) is not True
+            return ToolAnswer(why=None if quiet else why)
         label = "the plugin's publish tool (the vault has no site)"
         if not PUBLISH_TOOL.is_file():
             return ToolAnswer(
@@ -1507,18 +1519,182 @@ def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
 # and the first that withholds a handout's Keeper sections (#280).
 STRIPPED_SECTIONS_SINCE = "1.11.41"
 
+def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
+                                      bool]:
+    """(the tool to ask what publishes, why none is asked, what to do
+    about it, whether the vault has a site).
 
-def _pin_below(vault: Path, version: str) -> str | None:
-    """The site's pinned publish tool version when it is below `version`
-    (installed, or pinned in package.json and not yet installed), else
-    None. A site with no pin of its own builds with the plugin's tool."""
-    config, _why = _site_config(vault)
-    if config is None:
+    `publish.site` is the switch, read by the plugin's publish tool
+    (`vault_site`), which has the build's YAML parser. Off, there is no
+    site: nothing is asked and nothing is checked for one, whatever
+    `site_dir` says. Unset, in a vault from before the switch, a `site_dir`
+    says on. On with no `site_dir` is a site still to be set up.
+
+    With a site, the tool installed in that site folder answers: it is the
+    one the site builds with, and it is not judged by a version number or
+    a package.json pin, it is asked, and a tool without the `lines` command
+    does not answer. A site whose package.json names the tool without it
+    being installed has no tool to ask. One that does not name it is asked
+    through whatever copy node would load from there (a workspace installs
+    it higher up), and failing that by the plugin's own tool.
+    """
+    node_fix = "it needs Node 22+ on PATH"
+    try:
+        publishes, on, site = vault_site(vault)
+    except PublishToolUnavailable as e:
+        # No node, a node too old to run the tool, or a vault file the tool
+        # will not parse: the switch is read here instead (`_site_unasked`).
+        why = str(e)
+        if why.startswith("the publish tool refused"):
+            fix = f"fix {VAULT_CONFIG}"
+        elif why.endswith("is not understood"):
+            # The plugin's own tool answered in a shape this script does not
+            # know: the two are from different releases.
+            fix = "update the gm-apprentice plugin"
+        else:
+            fix = node_fix
+        has_site = _site_unasked(vault)
+        if has_site:
+            fix += (f"; if this vault has no site, set publish.site: false "
+                    f"in {VAULT_CONFIG}")
+        elif fix == node_fix:
+            # The site is off and only node is missing: there is nothing a
+            # GM with no site has to hear about node.
+            return None, SITE_IS_OFF, None, False
+        return None, why, fix, has_site
+    if not on:
+        return None, SITE_IS_OFF, None, False
+    if site is None:
+        return None, "publish.site is on but publish.site_dir names no site", (
+            "set the site up with publish-site, or set publish.site: false"
+            ), True
+    if publishes and (publish_block_inline(vault) or read_publish_list(
+            vault, "exclude_sections").publish_line is None):
+        # The tool reads this block; the reader here that the exclude list
+        # still comes through does not, and would assume the defaults.
+        return None, (f"publish: in {VAULT_CONFIG} is written in a way that "
+                      f"is not understood here (on one line, or indented)"), (
+            "write it as a block at the margin, one key per line"), True
+    if not (site / "vault.config.json").is_file():
+        return None, (f"no vault.config.json in publish.site_dir "
+                      f"({site.as_posix()})"), "fix publish.site_dir", True
+    fix = f"run update-pin --site {site.as_posix()}, then run this again"
+    installed = site / "node_modules" / PUBLISH_PACKAGE
+    script = installed / "bin" / "gm-publish.js"
+    if script.is_file():
+        return script, None, fix, True
+    if installed.is_symlink() or installed.exists():
+        return None, f"{script.as_posix()} is missing", fix, True
+    try:
+        named = PUBLISH_PACKAGE in (site / "package.json").read_text(
+            encoding="utf-8", errors="replace")
+    except FileNotFoundError:
+        named = False
+    except OSError:
+        named = True
+    if named:
+        # It builds with some version of the tool, not installed here. Which
+        # one is npm's to work out, not a guess from the pin.
+        return None, (f"the site's package.json names {PUBLISH_PACKAGE} "
+                      f"but it is not installed in {site.as_posix()}"), (
+            fix), True
+    above = _resolved_from(site)
+    if above is not None:
+        # Installed above the site folder (a workspace): node loads it from
+        # there when the site builds, so that is the one to ask.
+        return above / "bin" / "gm-publish.js", None, fix, True
+    # A site with no tool of its own is built with the plugin's.
+    return PUBLISH_TOOL, None, node_fix, True
+
+
+SITE_IS_OFF = "publish.site is not on"
+
+
+def _site_unasked(vault: Path) -> bool:
+    """Whether the vault has a site, for the one time the publish tool
+    cannot be asked. The switch as the line reader sees it; where that is
+    unset, a vault file that mentions `site_dir`, or that cannot be read,
+    is taken to have one."""
+    switch = site_switch(vault)
+    if switch is not None:
+        return switch
+    try:
+        text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return False
+    except (OSError, UnicodeDecodeError):
+        return True
+    return "site_dir" in text
+
+
+def _resolved_from(site: Path) -> Path | None:
+    """The folder node would load the publish tool from when run in the
+    site folder. None when node finds none, or cannot be run."""
+    node = shutil.which("node")
+    if not node:
         return None
-    pin = site_pin(config.parent)
-    if pin.version is None or parse_semver(pin.version) is None:
+    script = ("try { process.stdout.write(require.resolve("
+              f"'{PUBLISH_PACKAGE}/package.json', {{ paths: [process.cwd()] "
+              "})); } catch (e) {}")
+    try:
+        with subprocess.Popen(
+                [node, "-e", script], cwd=site, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                errors="replace") as proc:
+            try:
+                found, _ = proc.communicate(timeout=PUBLISH_TOOL_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                return None
+    except OSError:
         return None
-    return pin.version if semver_below(pin.version, version) else None
+    found = found.strip()
+    return Path(found).parent if found else None
+
+
+def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
+    """(why the publish tool cannot say what publishes, the row saying so).
+
+    (None, []) when it can; every later question in the run then goes to
+    the tool chosen here (`_lines_tool`).
+
+    What a section hides is the tool's decision and there is no copy of it
+    here. For a vault with a site (`publish.site` on), no answer means the
+    check stops and nothing is written: (why, [an ERROR]), because a guess
+    could leak. For a vault with no site there is nothing to leak, nothing
+    is asked and nothing has to be installed: (why, [an INFO]), and the
+    caller carries on with whatever it does without the tool.
+    """
+    tool, why, fix, has_site = _lines_tool(vault)
+    if tool is not None:
+        use_publish_tool(tool)
+        why = publish_tool_problem()
+        if why is None:
+            return None, []
+    if has_site:
+        return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
+                     f"tool what publishes ({why}) — nothing checked, "
+                     f"nothing written; {fix}"]
+    if why == SITE_IS_OFF:
+        # gm-leak is only about the site, so it says why it has no rows. A
+        # check with work of its own (pc-body, wrapup) just gets on with it.
+        return why, [f"INFO\t(vault)\t{check} has no site to check: "
+                     f"{SITE_IS_OFF} in {VAULT_CONFIG}, so nothing publishes"
+                     ] if check == "gm-leak" else []
+    # The tool could not be asked. A vault file it refused is still to be
+    # fixed; a missing node is nothing a GM with no site has to act on.
+    todo = f"; {fix}" if fix == f"fix {VAULT_CONFIG}" else ""
+    return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
+                 f"hide on a site ({why}). This vault has no site "
+                 f"(publish.site is not on), so nothing publishes{todo}"]
+
+
+def _tool_gone_row(check: str, e: Exception) -> str:
+    """The row for a publish tool that stopped answering after a check
+    began: what came before it stands, nothing after it was done."""
+    return (f"ERROR\t(vault)\t{check} stopped: the publish tool stopped "
+            f"answering ({e}) — the check is incomplete and nothing further "
+            f"was written; run it again")
 
 
 def sections_withheld(answer: ToolAnswer
@@ -1950,44 +2126,36 @@ def _published_linenos(states: list[LineState],
                        fm: dict) -> set[int] | None:
     """Which body lines a `publish: stub` page actually ships, or None.
 
-    None means every line — the page is not a stub. Mirrors
-    processor.js `keepOnlySections`, which build.js applies to a stub
-    page's body before anything downstream reads it: content runs from an
-    included heading down to the next heading at its level or shallower,
-    and an absent or empty `publish_include_sections` ships nothing at
-    all. Headings are matched on the raw line rather than through
-    `LineState.heading`, because `keepOnlySections` — like
-    `filterSections` — does no code-fence tracking, and the whole point
-    of this helper is to agree with the tool.
+    None means every line — the page is not a stub. The answer is the
+    publish tool's `keepOnlySections` (`stub_kept`), which build.js
+    applies to a stub page's body before anything downstream reads it:
+    content runs from an included heading down to the next heading at its
+    level or shallower, and an absent or empty `publish_include_sections`
+    ships nothing at all.
     """
     if publish_mode(fm) != "stub":
         return None
     raw = fm.get("publish_include_sections")
-    include = raw if isinstance(raw, list) else []
-    wanted = {str(s).strip().casefold() for s in include if isinstance(s, str)}
-    kept: set[int] = set()
-    if not wanted:
-        return kept
-    keeping = False
-    keep_level = 0
-    for state in states:
-        m = HEADING_RE.match(state.line)
-        if m:
-            level = len(m.group(1))
-            if keeping and level <= keep_level:
-                keeping = False
-            if m.group(2).strip().casefold() in wanted:
-                keeping = True
-                keep_level = level
-        if keeping:
-            kept.add(state.lineno)
-    return kept
+    kept = stub_kept([s.line for s in states],
+                     raw if isinstance(raw, list) else [])
+    return {s.lineno for s, keep in zip(states, kept) if keep}
 
 
 def check_gm_leak(vault: Path, folder: str | None,
                   fix: bool = False,
                   renest_excludes: bool = False,
                   explain: ExplainAll | None = None) -> list[str]:
+    """`_gm_leak`, or one row when the publish tool stops answering part-way.
+    Its writes all come after the last question, so nothing is written."""
+    try:
+        return _gm_leak(vault, folder, fix, renest_excludes, explain)
+    except PublishToolUnavailable as e:
+        return [_tool_gone_row("gm-leak", e)]
+
+
+def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
+             renest_excludes: bool = False,
+             explain: ExplainAll | None = None) -> list[str]:
     """Keeper-facing content that would actually reach the player site.
 
     Mechanises graph-health.md's "Un-fenced GM-only content" prose. The
@@ -2017,12 +2185,17 @@ def check_gm_leak(vault: Path, folder: str | None,
     `renest_excludes` appends `renest_excludes_migration`'s rows (the
     1.8.3 migration) instead of planning the plain re-nest.
 
-    A heading-shaped line inside a code fence that ends a running
-    exclusion is an ERROR: `filterSections` does not track code fences,
-    so everything after it publishes.
+    Which lines an excluded section withholds is asked of the publish
+    tool (`scan_body`); when it cannot be asked, or the site is pinned to
+    a tool too old to ask, the check says so and stops
+    (`no_publish_tool`).
     """
     notes = [(rel, text, extract_frontmatter(text) or {})
              for rel, text in vault_files(vault, folder)]
+    if notes:
+        why, gate = no_publish_tool(vault, "gm-leak")
+        if why is not None:
+            return gate
     # The list the build applies comes from the publish tool, asked once for
     # the run; the vault file's own list only when it cannot be asked.
     explain = explain or ExplainAll(vault)
@@ -2041,8 +2214,8 @@ def check_gm_leak(vault: Path, folder: str | None,
         # publishes isn't told.
         reason = ("the publish tool's answer has no exclude list (an older tool "
                "— run update-pin)" if tool is not None and tool.data is not None
-               else "the publish tool could not be asked (check "
-                    "publish.site_dir and that node is installed)")
+               else "there is no site to ask (publish.site is not on), "
+                    "or its publish tool could not be asked")
         rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
                     f"exclude list: {reason}")
     withheld: set[str] = set()
@@ -2070,15 +2243,7 @@ def check_gm_leak(vault: Path, folder: str | None,
                              - match for rel, titles in stripped.items()}
         has_documents = any(entity_type(fm) in ("document", "handout")
                             for _r, _t, fm in notes)
-        old_pin = _pin_below(vault, STRIPPED_SECTIONS_SINCE)
-        if has_documents and old_pin is not None:
-            # The answer may be the plugin's newer tool standing in for a
-            # site whose pin (installed or not) publishes these sections.
-            rows.append(f"WARNING\t(vault)\tthe site's publish tool "
-                        f"{old_pin} predates {STRIPPED_SECTIONS_SINCE}, so a "
-                        f"handout's Context, Clues and Prop Notes sections "
-                        f"publish — run update-pin")
-        elif stripped is None and tool.data is not None:
+        if stripped is None and tool.data is not None:
             rows.append(f"WARNING\t(vault)\t{why}")
         elif stripped is None and why is not None and has_documents:
             rows.append(_publish_tool_row(
@@ -2107,18 +2272,9 @@ def check_gm_leak(vault: Path, folder: str | None,
         rows.extend(_fence_rows(rel, problems, kept))
         own_strips = tool_stripped.get(unicodedata.normalize("NFC", rel), set())
         heading_leak = False
-        prev_excluded: str | None = None
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
-            if (state.in_code and state.published and state.excluded_by
-                    is None and HEADING_RE.match(state.line)
-                    and prev_excluded is not None):
-                rows.append(f"ERROR\t{rel}:{state.lineno}\theading-shaped "
-                            f"line in a code fence ends the '{prev_excluded}' "
-                            f"exclusion on the site — everything after it "
-                            f"publishes; indent it or move the code block")
-            prev_excluded = state.excluded_by
             # `published` deliberately says nothing about code fences —
             # vaultlib's divergence note — so exclude them here, or this
             # repo's own documented examples become findings.
@@ -2404,6 +2560,18 @@ def check_pc_body(vault: Path, folder: str | None = None,
                   files: Iterable[str] | None = None,
                   newer_than: float | None = None,
                   explain: ExplainAll | None = None) -> list[str]:
+    """`_pc_body`, or one row when the publish tool stops answering
+    part-way. The check writes nothing."""
+    try:
+        return _pc_body(vault, folder, files, newer_than, explain)
+    except PublishToolUnavailable as e:
+        return [_tool_gone_row("pc-body", e)]
+
+
+def _pc_body(vault: Path, folder: str | None = None,
+             files: Iterable[str] | None = None,
+             newer_than: float | None = None,
+             explain: ExplainAll | None = None) -> list[str]:
     """PC sheet skeleton and `## Current Status` placement.
 
     `shared/pc-body-structure.md` makes three promises about the block
@@ -2430,6 +2598,9 @@ def check_pc_body(vault: Path, folder: str | None = None,
     explain = explain or ExplainAll(vault)
     # The build's exclude list, asked of the tool at the first PC.
     excludes: list[str] | None = None
+    # Whether the publish tool can say what a section hides, once asked;
+    # and whether this is a vault with no site and no tool to ask.
+    gated = no_tool = False
     # The publish tool's reading of each PC's sheet_source, once asked.
     sources: tuple[set[str] | None, str | None, str | None] | None = None
     # The fields each PC carries that its sheet no longer reads, once asked.
@@ -2443,11 +2614,21 @@ def check_pc_body(vault: Path, folder: str | None = None,
             continue
         if publish_mode(fm) == "none":
             continue
+        if not gated:
+            gated = True
+            why, gate = no_publish_tool(vault, "pc-body")
+            if why is not None and gate and gate[0].startswith("ERROR"):
+                return gate
+            if why is not None:
+                # No site and no tool: the structure checks still run,
+                # with nothing counted as hidden by a section.
+                rows.extend(gate)
+                excludes, no_tool = [], True
         if excludes is None:
             excludes = effective_exclude_sections(
                 vault, tool_exclude_sections(explain()))
         states, problems = scan_body(text, excludes)
-        kept = _published_linenos(states, fm)
+        kept = None if no_tool else _published_linenos(states, fm)
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
@@ -3550,8 +3731,8 @@ def _keys(lines: list[str]) -> Counter:
 def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
     """Every non-blank, non-comment body line the site would NOT publish.
 
-    Read through `publisher_lines`, a line-for-line port of the publish
-    pipeline — not `scan_body`'s model — because this is the invariant
+    Read through `publisher_lines`, the publish tool's own answer — not
+    `scan_body`'s model — because this is the invariant
     every writer here checks before it writes: a line hidden before a
     repair must still be hidden after it. Counted by content, not
     position, because a repair moves lines; headings by title, because
@@ -3562,21 +3743,47 @@ def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
             - _keys(publisher_lines(text, excludes, fm)))
 
 
+def _marker_hidden(states: list[LineState]) -> Counter:
+    """The lines a `<!-- gm-only -->` or `<!-- spoiler -->` block or an
+    HTML comment hides, keyed as `hidden_lines` keys them. What an
+    excluded section hides is not here: that is the publish tool's to
+    say."""
+    hidden: list[str] = []
+    in_comment = False
+    for s in states:
+        opened = in_comment
+        if not s.in_code:
+            _kept, in_comment = strip_comment_spans(s.line, in_comment)
+        if not s.published or opened or in_comment:
+            hidden.append(s.line)
+    return _keys(hidden)
+
+
 def leak_problem(before: str, before_excludes: list[str], after: str,
-                 after_excludes: list[str], fm: dict) -> str | None:
+                 after_excludes: list[str], fm: dict,
+                 ask_tool: bool = True) -> str | None:
     """Why `after` must not be written, or None when it is safe.
 
     Unsafe means the rewrite added a gm-only/spoiler fence problem, or a
     line hidden in `before` (read under `before_excludes`) publishes in
     `after` (read under `after_excludes`). The two exclude lists differ
     only for a migration that also changes the vault's config.
+
+    What publishes is the publish tool's answer; `PublishToolUnavailable`
+    is raised when it cannot be asked. `ask_tool=False` is for a vault
+    with no site and no tool: the fences, and the lines a gm-only or
+    spoiler block hides, are checked without it.
     """
-    _states, was = scan_body(before, before_excludes)
-    _states, now = scan_body(after, after_excludes)
+    _before, was = scan_body(before, ())
+    _after, now = scan_body(after, ())
     if len(now) > len(was):
         return f"the rewrite leaves {now[-1]}"
-    lost = hidden_lines(before, before_excludes, fm) - hidden_lines(
-        after, after_excludes, fm)
+    if ask_tool:
+        lost = hidden_lines(before, before_excludes, fm) - hidden_lines(
+            after, after_excludes, fm)
+    else:
+        # What a gm-only or spoiler block hides needs no tool to read.
+        lost = _marker_hidden(_before) - _marker_hidden(_after)
     if lost:
         first = next(iter(lost)).lstrip("#")
         return (f"{sum(lost.values())} hidden line(s) would publish "
@@ -3605,10 +3812,7 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
 
     A moved block runs to the next heading at its level or shallower
     *at fence depth 0* — never ending while a gm-only/spoiler fence it
-    opened is still open. A block holding a heading-shaped line inside a
-    code fence is refused: the publisher's section filter does not know
-    about code fences, so that line ends the exclusion on the site.
-    Blocks go under the first `## GM Notes`, straight after its heading
+    opened is still open. Blocks go under the first `## GM Notes`, straight after its heading
     and any lead prose — before its first sub-heading, where a nested
     excluded heading could not claim them — and inside its fence when it
     is fenced; a new `## GM Notes` is appended when there is none.
@@ -3646,12 +3850,7 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
             j = i + 1
             while j < n and not ends_block(states[j], level):
                 j += 1
-            block = states[i:j]
-            if any(s.in_code and HEADING_RE.match(s.line) for s in block):
-                return text, [], (
-                    f"'{state.heading[1]}' holds a heading-shaped line in a "
-                    f"code fence, which ends the exclusion on the site")
-            moved_blocks.append(block)
+            moved_blocks.append(states[i:j])
             i = j
         else:
             kept_states.append(state)
@@ -4050,14 +4249,30 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
             vault, tool_exclude_sections((explain or ExplainAll(vault))()))
     rows: list[str] = []
     matched = False
+    gated = no_tool = False
     for rel, _text, fm in entries:
         if entity_type(fm) not in WRAP_TYPES:
             continue
         if file is not None and rel != file:
             continue
         matched = True
-        rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes, fix,
-                                     player))
+        if not gated:
+            gated = True
+            why, gate = no_publish_tool(vault, "wrapup")
+            rows.extend(gate)
+            if why is not None and gate and gate[0].startswith("ERROR"):
+                return rows
+            if why is not None:
+                # No site and no tool: nothing publishes, so the repairs
+                # run with nothing counted as hidden by a section. What a
+                # gm-only block hides is still checked before each write.
+                excludes, no_tool = [], True
+        try:
+            rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes,
+                                          fix, player, no_tool))
+        except PublishToolUnavailable as e:
+            rows.append(_tool_gone_row("wrapup", e))
+            return rows
     if file is not None and not matched:
         rows.append(f"INFO\t{file}\tno wrap-up with that path — `type:` must "
                     f"be one of {', '.join(sorted(WRAP_TYPES))}")
@@ -4067,8 +4282,12 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
 def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       entries: list[tuple[str, str, dict]],
                       excludes: list[str], fix: bool,
-                      player: frozenset[str] = frozenset()) -> list[str]:
-    """One wrap-up: findings, then the plan, then a single write."""
+                      player: frozenset[str] = frozenset(),
+                      no_tool: bool = False) -> list[str]:
+    """One wrap-up: findings, then the plan, then a single write.
+    `no_tool`: a vault with no site and no publish tool to ask. The
+    check before the write then covers what needs no tool: the fences,
+    and the lines a gm-only or spoiler block hides."""
     path = vault / rel
     try:
         # newline='' preserves the file's own line endings exactly, the
@@ -4123,7 +4342,8 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
         # Byte-identical: whatever the plan said, nothing moved.
         rows.append(f"UNCHANGED\t{rel}\tnothing to fix")
         return rows
-    problem = leak_problem(text, excludes, new_text, excludes, fm)
+    problem = leak_problem(text, excludes, new_text, excludes, fm,
+                           ask_tool=not no_tool)
     if problem:
         rows.append(f"ERROR\t{rel}\trepair refused: {problem} — nothing "
                     f"written; fix it by hand")
@@ -4385,5 +4605,17 @@ def main() -> int:
     return 0
 
 
+def run() -> int:
+    """`main`, with the one failure no check can answer for itself: the
+    publish tool going away after a check began asking it."""
+    try:
+        return main()
+    except PublishToolUnavailable as e:
+        print(f"error: the publish tool stopped answering part-way ({e}) — "
+              f"the rows above are incomplete and nothing further was "
+              f"written; run it again", file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

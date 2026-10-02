@@ -7,6 +7,161 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.25] — 2026-10-02
+
+### Fixed
+
+- **A `#` line inside a fenced code block ended a withheld section, and
+  the rest of it published.** With `GM Notes` on the exclude list, a
+  `## Example` shown in a fenced code block under `## GM Notes` was
+  read as the next heading, so every line after the code block reached
+  the site. Two more shapes got through the same filter: an excluded
+  heading written with an underline (`GM Notes` over `--------`) and
+  one indented by one to three spaces were not seen as headings, so
+  their sections published whole.
+  - The build now also asks the renderer's own parser where the
+    headings are, and takes whichever reading withholds more. A
+    withheld section starts at anything the parser or the old pattern
+    reads as a heading with an excluded title: underlined, indented,
+    inside a blockquote or list item, typed after a non-breaking
+    space, or sitting under a code block that was never closed. It
+    ends only where both agree: a `#` heading at the margin, with a
+    title, outside a code block.
+  - So nothing that was withheld before publishes now. A line with
+    `---` typed straight under it, a bare `##`, and an indented heading
+    do not end a withheld section. An excluded title shown in a code
+    block still starts one, as it always did.
+  - An excluded heading inside a blockquote or list item is new: what
+    follows it is withheld to the next heading outside the quote or
+    list.
+  - `publish: stub` pages read `publish_include_sections` the strict
+    way round: a section is kept only from a heading both readings
+    agree on, and ends at anything either calls a heading. A
+    `## Overview` shown in a code block inside `## GM Notes` no longer
+    publishes what follows it.
+  - A PC or NPC page's accordion sections no longer split at a `##`
+    line inside a code block.
+  - A note the parser cannot read is withheld whole, with a build
+    warning.
+  - A code block left open inside a withheld section now withholds the
+    rest of the note, where a later `##` used to end the section. The
+    build warns when headings follow it.
+- **With character sheets off, a PC page could publish a withheld
+  section.** That page is filtered by its own walk, which read
+  headings from the parser alone: `## GM Notes` typed after a
+  non-breaking space, or under an unclosed code block, published. The
+  exclude list is now applied to a PC page exactly as to any other.
+- **A note whose title line is on the exclude list published its
+  body.** The page drops its `# Title` line before filtering, so a note
+  that opens `# GM Notes` lost the heading and kept everything under
+  it. That section is now removed first, down to the next `#` heading,
+  which then serves as the page's title.
+- Proved on scratch copies of two real vaults: with no note using these
+  shapes the old and new builds are byte-identical, and planted notes
+  (fenced, underlined, indented) leak under the old tool and not under
+  the new. A random-note comparison against the previous release found
+  no line under an excluded heading that the new build publishes and
+  the old one withheld.
+
+- **`update-pin` called every successful install a failure.** It
+  compared the version of the tool it had just installed (say 1.11.41)
+  with the plugin's version (1.10.19), which is the name of the folder
+  that tool sits in. The two are never equal, so it ended with "npm
+  install left 1.11.41 in node_modules" and exit code 1 even when the
+  install had worked, and never reported a site as current. It now
+  compares against the version of the tool in that folder.
+
+- **`init` and `update-pin` called a site written as `~/site` a
+  different site.** They compared the path as typed, without the home
+  folder filled in, and reported "the vault already names a different
+  site". They now resolve the path the way the rest of the tool does.
+
+### Changed
+
+- **`vault_check` asks the publish tool which lines publish; it no
+  longer keeps its own copy of the rules.** `vaultlib.py` carried a
+  hand-kept copy of the build's strip chain and section filter, which
+  had to match `processor.js` line for line and had the same defects.
+  That copy is deleted. `gm-leak`, `pc-body`, `wrapup` and the check
+  each `--fix` runs before it writes now ask
+  `gm-apprentice-publish lines`, a new command that answers from the
+  functions the build calls. One node process serves a whole run.
+  - **`publish.site` says whether the vault has a site.** It is a
+    switch in `_meta/vault-config.md`, on or off, and `init` writes
+    `true`.
+    - **On, with a `publish.site_dir`:** the checks go through that
+      site's publish tool, and when the tool cannot be asked each check
+      gives one ERROR row and nothing is checked or written.
+    - **On, with no `site_dir`:** a site still to be set up. The checks
+      give one ERROR row that says to run the setup or turn the switch
+      off.
+    - **Off, whatever `site_dir` says:** there is no site. `build` and
+      `deploy` stop with one line and exit code 1. `gm-leak` gives one
+      INFO row and checks nothing. `wrapup --fix` makes its repairs and
+      `pc-body` runs its structure checks without asking the tool, so a
+      GM who only keeps a vault needs Python and nothing else. A
+      wrap-up repair is still checked for what a `<!-- gm-only -->`
+      block or an HTML comment hides.
+    - **Unset:** on when `site_dir` is set, off when it is not, so a
+      vault from before the switch behaves as it did. `update-pin`
+      writes `site: true` for a site whose vault lacks it, and leaves a
+      `site: false` alone.
+    - When the publish tool cannot be asked (no Node), the switch is
+      read from the vault file directly. Where it is unset, a vault
+      file that mentions `site_dir` counts as having a site, and the
+      ERROR row says to set `publish.site: false` if it has none.
+  - **The site's own installed tool is the one asked.** With a
+    `site_dir`, the questions go to the publish tool installed in that
+    site folder, because that is what the site builds with. It is not
+    judged by a version number: it is asked, and a tool older than
+    1.12.1 has no `lines` command and does not answer. `gm-leak`,
+    `pc-body` and `wrapup` then give one ERROR row and write nothing
+    until `update-pin --site <site-dir>` has run. The same goes for a
+    site whose `package.json` names the tool without it being
+    installed, and a `site_dir` with no site in it. A site that names
+    no tool of its own is asked through whatever copy node would load
+    from that folder (a workspace installs it higher up); failing that,
+    the plugin's tool answers.
+  - Whether the vault has a `publish:` block, and where its `site_dir`
+    points, is read by the publish tool's YAML parser, so a block
+    written in a way the Python line reader does not expect (a quoted
+    key, a byte-order mark) is still seen. For a vault with
+    a site, a block written on one line or indented, which that reader
+    cannot take the exclude list from, stops the check with an ERROR
+    row instead of being scanned on the default list.
+  - The fix-time refusal "holds a heading-shaped line in a code fence"
+    is gone: such a block is now safe to move.
+  - If the tool stops answering part-way, the check ends with an ERROR
+    row and nothing further is written. `gm-leak` and `pc-body` give
+    that row alone; `wrapup` keeps the rows of the wrap-ups it had
+    finished. A tool that hangs is given up on after two minutes.
+
+### Added
+
+- **`publish.site`: a switch for whether the vault has a site.** Set
+  it to `false` to stop publishing without deleting the site folder's
+  path: `build` and `deploy` stop, and the leak checks have nothing to
+  check. Set it to `true` with no `publish.site_dir` and the checks say
+  the site is still to be set up. `init` writes `true`, and turns on a
+  site that was off. See § Switches in the publish-site configuration
+  reference.
+
+- **`init` writes `publish.site_dir` into the vault file**, as an
+  absolute path, and `update-pin` adds it to a vault that lacks it. A
+  site made by `init` alone used to leave the vault with no record of
+  where its site was, so the vault checks could not find the tool that
+  site builds with. A `site_dir` that is already set is never changed,
+  though one naming a different folder is said out loud; a blank one is
+  filled. `update-pin` adds to a vault file that is already there and
+  never creates one, and says so when it could not record the site.
+- **`gm-apprentice-publish lines`.** Reads one JSON request per line on
+  stdin and writes one JSON answer per line: `published` (the body the
+  site renders for a note), `sections` (per line, the excluded section
+  withholding it), `stub` (per line, whether a stub page keeps it) and
+  `site` (whether a vault has a `publish:` block, and its site folder).
+  A malformed request is answered with an error, never read as
+  "nothing is withheld".
+
 ## [1.10.24] — 2026-10-02
 
 ### Added
