@@ -13,7 +13,7 @@ const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy } = requ
 const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
 const { asBool } = require('./switches');
-const { normalizeExcludeDir } = require('./config');
+const { normalizeExcludeDir, stricterCallouts } = require('./config');
 const { parseNote } = require('./frontmatter');
 
 const VAULT_REL = path.join('_meta', 'vault-config.md');
@@ -88,7 +88,8 @@ function planMigration({ configPath, vaultPath } = {}) {
     for (const entry of MOVED_KEYS) {
       if (site[entry.json] === undefined) continue;
       const fromSite = site[entry.json];
-      const fromVault = publish[entry.publish];
+      // An empty `exclude_callouts:` says nothing, as in the reader: the site's value moves.
+      const fromVault = entry.publish === 'exclude_callouts' && publish[entry.publish] === null ? undefined : publish[entry.publish];
       if (fromVault === undefined && entry.kind === 'list') {
         // A list key whose value is not a list is not moved (a non-list under a list key
         // would be unreadable) and stays in the site file. A list with nothing but
@@ -142,6 +143,17 @@ function planMigration({ configPath, vaultPath } = {}) {
           if (added.length || skipped.length) {
             plan.merges.push({ to: `publish.${entry.publish}`, added, ...(skipped.length ? { skipped } : {}) });
           }
+          continue;
+        }
+      }
+      if (entry.publish === 'exclude_callouts') {
+        // The stricter of the two is kept: `true` beats a list, a list beats off, two lists
+        // are unioned. A weaker site value is the only thing discarded.
+        const strict = stricterCallouts(fromVault, fromSite);
+        if (!isDeepStrictEqual(strict, fromVault)) {
+          plan.vaultSet[entry.publish] = strict;
+          const had = new Set((Array.isArray(fromVault) ? fromVault : []).map((t) => String(t).toLowerCase()));
+          plan.merges.push({ to: `publish.${entry.publish}`, added: Array.isArray(strict) ? strict.filter((t) => !had.has(String(t).toLowerCase())) : [strict] });
           continue;
         }
       }

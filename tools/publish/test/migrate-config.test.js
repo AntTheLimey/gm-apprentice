@@ -534,6 +534,33 @@ describe('migrate-config', () => {
     for (const k of Object.keys(a)) assert.strictEqual(fs.readFileSync(a[k]).equals(fs.readFileSync(b[k])), true, k);
   });
 
+  it('I2: exclude_callouts moves the stricter of the two values and reports it', () => {
+    const cases = [
+      [false, true, true], [['gm'], true, true], [true, ['gm'], true], [false, ['gm'], ['gm']],
+      [['gm'], ['GM', 'secret'], ['gm', 'secret']], [['gm'], false, ['gm']], [null, true, true],
+    ];
+    for (const [vault, site, want] of cases) {
+      const v = vault === null ? 'null' : JSON.stringify(vault);
+      const s = makeSite({ site: { excludeCallouts: site }, vaultFile: `---\npublish:\n  exclude_callouts: ${v}\n---\n` });
+      const lines = [];
+      runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
+      assert.deepStrictEqual(publishOf(s.vaultFile).exclude_callouts, want, `${v} + ${JSON.stringify(site)}`);
+      assert.ok(!('excludeCallouts' in JSON.parse(read(s.configPath))));
+      if (JSON.stringify(want) !== v) assert.ok(lines.some((l) => l.includes('publish.exclude_callouts')), lines.join('\n'));
+    }
+  });
+
+  it('I2: two sites sharing one vault: the second site\'s true is not lost behind the first site\'s false', () => {
+    const a = makeSite({ site: { excludeCallouts: false } });
+    migrate(a);
+    assert.strictEqual(publishOf(a.vaultFile).exclude_callouts, false);
+    const bConfig = path.join(a.root, 'siteB.json');
+    fs.writeFileSync(bConfig, JSON.stringify({ vaultPath: a.vault, outputDir: './docsB', excludeCallouts: true }));
+    const plan = planMigration({ configPath: bConfig });
+    applyMigration(plan, { configPath: bConfig });
+    assert.strictEqual(publishOf(a.vaultFile).exclude_callouts, true);
+  });
+
   it('the site file keeps its mode, and a symlinked config is written through', () => {
     const s = makeSite({ site: { siteTitle: 'T' } });
     fs.chmodSync(s.configPath, 0o640);

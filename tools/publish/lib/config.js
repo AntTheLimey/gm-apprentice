@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
+const { isDeepStrictEqual } = require('node:util');
 const { MOVED_KEYS } = require('./config-keys');
 const { resolveSwitches, asBool } = require('./switches');
 
@@ -158,17 +159,35 @@ function normalizeExcludeDirs(list, vaultPath, warn = true) {
   return out;
 }
 
+// exclude_callouts is `true` (strip every callout), a list of types, or off. When both files
+// set it, the stricter wins: true beats a list, a list beats off, two lists are unioned
+// (the vault file's first). An upgrade must never be what publishes a callout.
+function stricterCallouts(fromVault, fromSite) {
+  const stripsAll = (v) => !!v && !Array.isArray(v);
+  if (stripsAll(fromVault)) return fromVault;
+  if (stripsAll(fromSite)) return fromSite;
+  if (Array.isArray(fromVault) && Array.isArray(fromSite)) {
+    const have = new Set(fromVault.map((t) => String(t).toLowerCase()));
+    return [...fromVault, ...fromSite.filter((t) => !have.has(String(t).toLowerCase()) && have.add(String(t).toLowerCase()))];
+  }
+  if (Array.isArray(fromSite)) return fromSite;
+  return fromVault;
+}
+
 // Vault file value when set, else the site file's, recording which was used. A moved key
 // is "set" when it is not undefined: an explicit false or null is a value, not silence.
 // `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
 // "Secrets" in the other are the same entry.
 //
-// The three exclude lists are the one exception to "the vault file wins outright": a
+// The three exclude lists (and exclude_callouts, which takes the stricter of the two) are the
+// exception to "the vault file wins outright": a
 // site-file entry the vault list lacks is still applied until the migration moves it (the
 // vault list first, then those entries), and the record names them as `stillApplied`. An
 // upgrade must never be what publishes a section or folder the site file used to hide.
 function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase(), warn = console.warn) {
-  const fromVault = publish[entry.publish];
+  // An empty `exclude_callouts:` in the vault file (null) says nothing, so the site file's
+  // value is not discarded for it.
+  const fromVault = entry.publish === 'exclude_callouts' && publish[entry.publish] === null ? undefined : publish[entry.publish];
   const fromSite = json[entry.json];
   const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
   if (vaultMalformed) {
@@ -193,6 +212,14 @@ function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) =>
         value = [...base, ...stillApplied];
       } else if (vaultMalformed) {
         value = [...base];
+      }
+    }
+    if (entry.publish === 'exclude_callouts' && fromVault !== undefined) {
+      value = stricterCallouts(fromVault, fromSite);
+      if (!isDeepStrictEqual(value, fromVault)) {
+        // What the site file adds: `true`, or the list entries the vault value lacks.
+        const had = new Set((Array.isArray(fromVault) ? fromVault : []).map((t) => String(t).toLowerCase()));
+        rec.stillApplied = Array.isArray(value) ? value.filter((t) => !had.has(String(t).toLowerCase())) : [value];
       }
     }
     legacy.push(rec);
@@ -468,4 +495,4 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
   return { config, publishConfig };
 }
 
-module.exports = { loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir };
+module.exports = { loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };
