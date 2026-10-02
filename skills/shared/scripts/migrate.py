@@ -30,14 +30,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from vault_check import (ToolAnswer, ask_publish_tool, configured_site,
-                         parse_semver, site_pin)
+from vault_check import (PUBLISH_PACKAGE, ToolAnswer, ask_publish_tool,
+                         configured_site, parse_semver, publish_block_inline,
+                         site_pin)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
 # The first publish tool whose `migrate-config` reports its own plan lines.
 NEEDS_PUBLISH = "1.12.0"
 NO_LINES = "migrate-config does not report its lines"
+INLINE_PUBLISH = (
+    "the publish: block in _meta/vault-config.md is written on one line "
+    "({…}); write it as a block so its settings can be read")
+# What the tool's note lines start with, for a tool that does not name them
+# (`noteLines`); backups are never changes either.
+NOTE_PREFIXES = ("left in ", "skipped ", "note ")
 SITE_DIR_UNSET = (
     "publish.site_dir is not set; site settings were not looked at. Set it "
     "to your site folder and run migrate.py again, or run "
@@ -52,6 +59,7 @@ class StepPlan:
     error: str | None = None
     notes: int = 0          # how many leading lines are warnings, not changes
     after: tuple[str, ...] = ()  # trailing lines that are not changes (backups)
+    kept_notes: tuple[str, ...] = ()  # the tool's notes: after the changes, not counted
 
 
 @dataclass(frozen=True)
@@ -76,13 +84,20 @@ def _tool_error(vault: Path, why: str) -> str:
     if has_config and site is not None:
         pin = site_pin(site)
         if pin.stale and why == pin.stale:
+            if pin.version is None and pin.spec is None:
+                if pin.source == "package.json":
+                    return f"{pin.stale}; fix or restore it, then run migrate.py again"
+                return f"{pin.stale}. {_update_pin(site)}"
             if pin.version is None:
                 return (f"cannot tell which publish tool the site at {site} "
-                        f"uses ({pin.spec or 'no readable version'}). "
-                        f"{_update_pin(site)}")
+                        f"uses ({pin.spec}). {_update_pin(site)}")
             return (f"the site's publish tool ({pin.version}) is older than "
                     f"this migration needs ({NEEDS_PUBLISH}). "
                     f"{_update_pin(site)}")
+    if has_config and site is not None:
+        script = site / "node_modules" / PUBLISH_PACKAGE / "bin" / "gm-publish.js"
+        if why == f"{script} is missing":
+            return f"{why}. {_update_pin(site)}"
     if why == "node is not on PATH":
         return f"{why}; install Node.js, then run migrate.py again"
     if "unknown command" in why.lower() or why == NO_LINES:
@@ -139,6 +154,8 @@ def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | Non
 
 def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
     """(the plan, whether it has changes)."""
+    if publish_block_inline(vault):
+        return StepPlan(False, [], error=INLINE_PUBLISH), False
     plan, why = _ask(vault, args)
     if why is not None:
         return StepPlan(False, [], error=why), False
@@ -148,10 +165,17 @@ def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
     notes = [note] if note else []
     if not plan["applicable"]:
         return StepPlan(False, [*notes, NOTHING_TO_DO]), False
-    changes = [x for x in plan["lines"] if not x.startswith("backup ")]
+    named = plan.get("noteLines")
+    def is_note(x: str) -> bool:
+        if isinstance(named, list) and all(isinstance(n, str) for n in named):
+            return x in named
+        return x.startswith(NOTE_PREFIXES)
     backups = [x for x in plan["lines"] if x.startswith("backup ")]
+    kept = [x for x in plan["lines"] if not x.startswith("backup ") and is_note(x)]
+    changes = [x for x in plan["lines"]
+               if not x.startswith("backup ") and not is_note(x)]
     return StepPlan(True, [*notes, *changes], notes=len(notes),
-                    after=tuple(backups)), True
+                    after=tuple(backups), kept_notes=tuple(kept)), True
 
 
 def describe_config_to_vault(vault: Path) -> StepPlan:
@@ -205,12 +229,13 @@ def run(vault: Path, mode: str, steps: list[Step] | None = None) -> int:
             return 1
         count = len(plan.lines) - plan.notes if plan.applies else 0
         if mode == "status":
-            rows = ([f"pending: {count} change(s)", *plan.lines[:plan.notes]]
+            rows = ([f"pending: {count} change(s)", *plan.lines[:plan.notes],
+                     *plan.kept_notes]
                     if plan.applies else
                     [f"done: {plan.lines[-1] if plan.lines else NOTHING_TO_DO}",
                      *plan.lines[:-1]])
         else:
-            rows = [*(plan.lines or [NOTHING_TO_DO]), *plan.after]
+            rows = [*(plan.lines or [NOTHING_TO_DO]), *plan.kept_notes, *plan.after]
         print(f"## {label}")
         print(f"# count: {count}")
         for row in rows:

@@ -165,6 +165,7 @@ from vaultlib import (  # noqa: F401
     active_pc_names,
     atx_title,
     active_pcs,
+    _frontmatter_lines,
     delete_key,
     effective_exclude_sections,
     entity_type,
@@ -1191,6 +1192,19 @@ def configured_site(vault: Path) -> tuple[Path | None, bool]:
     return site, (site / "vault.config.json").is_file()
 
 
+def publish_block_inline(vault: Path) -> bool:
+    """Whether `publish:` in `_meta/vault-config.md` is written on one line
+    (`publish: {mode: player}`). `configured_site` cannot read such a block,
+    and neither can the publish tool, so a caller says that instead of
+    "site_dir is not set"."""
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any(re.match(r"""^["']?publish["']?\s*:\s*\{""", line)
+               for line in _frontmatter_lines(text) or [])
+
+
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     """(the site's vault.config.json, why there is none).
 
@@ -1565,17 +1579,41 @@ def tool_exclude_sections(answer: ToolAnswer) -> list[str] | None:
     return list(block)
 
 
+def pc_keep_sections(answer: ToolAnswer) -> set[str]:
+    """The bare titles (`_bare_section_title`) of the `##` sections a PC
+    keeps whatever the switches say: `pcKeepSections` in `explain --all
+    --json` (a list when sheets are off, null or absent otherwise). Empty
+    for a tool that predates the field; nothing here holds a copy of the
+    list. Titles in parentheses are the tool's placeholders, not sections."""
+    try:
+        block = answer.data["pcKeepSections"] if answer.data is not None else None
+    except (KeyError, TypeError):
+        return set()
+    if not isinstance(block, list) or not all(isinstance(t, str) for t in block):
+        return set()
+    return {_bare_section_title(t) for t in block if not t.strip().startswith("(")}
+
+
 def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
     """Per file (NFC path), the `##` headings (`_bare_section_title`) the site withholds
     only because character sheets are off, from `sheetWithheldSections` in
     `explain --all --json`. Empty when the tool could not be asked,
     answered oddly, or predates the field: an older tool withholds nothing
-    here, so nothing is removed from what gm-leak scans."""
+    here, so nothing is removed from what gm-leak scans.
+
+    The tool reports an HTML heading it withheld by its text, and names a
+    heading it cannot read in parentheses (`(empty heading)`). So a title
+    that starts with `(`, or that is one of `pc_keep_sections`, is never
+    returned: a real, published `## Background` is scanned even when the
+    tool also lists "Background" for an HTML heading."""
+    keep = pc_keep_sections(answer)
     try:
         pages = answer.data["pages"] if answer.data is not None else []
-        return {unicodedata.normalize("NFC", str(p["path"])):
-                {_bare_section_title(str(t)) for t in p["sheetWithheldSections"]}
-                for p in pages if p.get("sheetWithheldSections")}
+        got = {unicodedata.normalize("NFC", str(p["path"])):
+               {_bare_section_title(str(t)) for t in p["sheetWithheldSections"]
+                if not str(t).strip().startswith("(")} - keep
+               for p in pages if p.get("sheetWithheldSections")}
+        return {rel: titles for rel, titles in got.items() if titles}
     except (KeyError, TypeError, AttributeError):
         return {}
 
@@ -3858,7 +3896,13 @@ def renest_excludes_migration(vault: Path, fix: bool,
         # Silent vault file: which list publishes is the build's decision.
         # Assuming the defaults could move a heading out of a section the
         # build hides into a published `## GM Notes`.
-        tool_list = tool_exclude_sections((explain or ExplainAll(vault))())
+        answer = (explain or ExplainAll(vault))()
+        tool_list = tool_exclude_sections(answer)
+        if tool_list is None and answer.data is None and answer.why is None:
+            # No `publish:` block: nothing is built, so no build can
+            # disagree. The defaults stand, as they did before the tool
+            # owned the list.
+            tool_list = list(resolve_exclude_sections(None))
         if tool_list is None:
             return [f"ERROR\t{VAULT_CONFIG}\tpublish.exclude_sections is not "
                     f"set and the publish tool could not say which exclude "

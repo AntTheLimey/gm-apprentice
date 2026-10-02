@@ -64,9 +64,9 @@ class Tool:
     pending plan until it has been run for real, then with nothing."""
 
     def __init__(self, pending=True, fail=None, stays_pending=False,
-                 no_lines=False, stdout=None):
+                 no_lines=False, stdout=None, plan=None):
         self.pending, self.fail, self.stays = pending, fail, stays_pending
-        self.no_lines, self.stdout = no_lines, stdout
+        self.no_lines, self.stdout, self.plan = no_lines, stdout, plan
         self.calls = []
 
     def __call__(self, cmd, **kwargs):
@@ -75,7 +75,7 @@ class Tool:
             return subprocess.CompletedProcess(cmd, 1, "", self.fail + "\n")
         if self.stdout is not None:
             return subprocess.CompletedProcess(cmd, 0, self.stdout, "")
-        plan = MOVES if self.pending else NOTHING
+        plan = (self.plan or MOVES) if self.pending else NOTHING
         if "--dry-run" not in cmd:
             if self.pending:
                 plan = dict(plan, lines=plan["lines"] + BACKUPS)
@@ -110,7 +110,7 @@ class MigrateTests(unittest.TestCase):
         tool = Tool()
         code, out, _ = run_cli([str(vault), "--dry-run"], tool)
         self.assertEqual(code, 0)
-        self.assertIn("# count: 4", out)
+        self.assertIn("# count: 2", out)
         for line in MOVES["lines"]:
             self.assertIn(line + "\n", out)
         self.assertNotIn("backup", out)
@@ -205,11 +205,11 @@ class MigrateTests(unittest.TestCase):
         vault = make_vault(self)
         _, dry, _ = run_cli([str(vault), "--dry-run"], Tool())
         _, out, _ = run_cli([str(vault)], Tool())
-        self.assertIn("# count: 4\n", dry)
-        self.assertIn("# count: 4\n", out)
+        self.assertIn("# count: 2\n", dry)
+        self.assertIn("# count: 2\n", out)
         lines = out.splitlines()
         self.assertEqual(lines[-2:], BACKUPS)
-        self.assertEqual(lines[2:6], MOVES["lines"])
+        self.assertEqual(lines[2:6], [MOVES["lines"][i] for i in (0, 2, 1, 3)])
 
     def test_configured_site_reports_path_and_config(self):
         vault = make_vault(self)
@@ -278,6 +278,72 @@ class MigrateTests(unittest.TestCase):
             f"migrate.py again.", err)
         self.assertEqual(err.count("update-pin"), 1)
         self.assertNotIn("isn't a version", err)
+
+    def test_notes_are_not_counted_as_changes(self):
+        # Without `noteLines` the prefixes the tool uses mark the notes; they
+        # print after the changes and before the backups.
+        vault = make_vault(self)
+        _, out, _ = run_cli([str(vault)], Tool())
+        lines = out.splitlines()
+        self.assertEqual(lines[1], "# count: 2")
+        self.assertEqual(lines[2:], [MOVES["lines"][0], MOVES["lines"][2],
+                                     MOVES["lines"][1], MOVES["lines"][3],
+                                     *BACKUPS])
+        _, status, _ = run_cli([str(vault), "--status"], Tool())
+        self.assertIn("pending: 2 change(s)", status)
+
+    def test_the_tools_own_note_lines_decide_what_is_a_note(self):
+        plan = dict(MOVES, lines=["move a -> b", "tidy c", "left over d"],
+                    noteLines=["left over d"])
+        vault = make_vault(self)
+        _, out, _ = run_cli([str(vault), "--dry-run"], Tool(plan=plan))
+        self.assertEqual(out.splitlines()[1:],
+                         ["# count: 2", "move a -> b", "tidy c", "left over d"])
+        _, status, _ = run_cli([str(vault), "--status"], Tool(plan=plan))
+        self.assertIn("pending: 2 change(s)", status)
+        self.assertIn("left over d", status)
+        # A prefix is not a note when the tool says what its notes are.
+        plan = dict(MOVES, lines=["note x moved to y", "move a -> b"],
+                    noteLines=[])
+        _, out, _ = run_cli([str(vault), "--dry-run"], Tool(plan=plan))
+        self.assertIn("# count: 2\n", out)
+
+    def test_a_publish_block_on_one_line_is_named_and_fails(self):
+        vault = make_vault(self, publish=False)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish: {mode: player, site_dir: ../site}\n---\n",
+            encoding="utf-8")
+        for args in ([], ["--dry-run"], ["--status"]):
+            tool = Tool()
+            code, out, err = run_cli([str(vault), *args], tool)
+            self.assertEqual(code, 1)
+            self.assertIn("the publish: block in _meta/vault-config.md is "
+                          "written on one line ({…}); write it as a block so "
+                          "its settings can be read", err)
+            self.assertNotIn("site_dir is not set", err + out)
+            self.assertEqual(tool.calls, [])
+
+    def test_a_missing_tool_script_points_at_update_pin(self):
+        vault = make_vault(self)
+        site = site_of(vault)
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "package.json").write_text('{"version": "1.12.0"}', encoding="utf-8")
+        tool = Tool()
+        code, _, err = run_cli([str(vault), "--status"], tool)
+        self.assertEqual(code, 1)
+        self.assertEqual(tool.calls, [])
+        self.assertIn(f"{pkg / 'bin' / 'gm-publish.js'} is missing. "
+                      f"Run update-pin --site {site}, then migrate.py again.", err)
+
+    def test_an_unreadable_package_json_is_said_plainly(self):
+        vault = make_vault(self)
+        site = site_of(vault)
+        (site / "package.json").write_text("{not json", encoding="utf-8")
+        code, _, err = run_cli([str(vault), "--status"], Tool())
+        self.assertEqual(code, 1)
+        self.assertIn("the site's package.json can't be read", err)
+        self.assertNotIn("no readable version", err)
 
     def test_other_callers_keep_the_pin_reason(self):
         vault, _ = self.pin_site("1.10.19")
