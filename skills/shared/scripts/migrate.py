@@ -30,11 +30,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from vault_check import ToolAnswer, _site_config, ask_publish_tool, parse_semver
+from vault_check import (ToolAnswer, ask_publish_tool, configured_site,
+                         parse_semver, site_pin)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
-UPDATE_PIN_HINT = "run update-pin, then migrate.py again"
+# The first publish tool whose `migrate-config` reports its own plan lines.
+NEEDS_PUBLISH = "1.12.0"
+NO_LINES = "migrate-config does not report its lines"
+SITE_DIR_UNSET = (
+    "publish.site_dir is not set; site settings were not looked at. Set it "
+    "to your site folder and run migrate.py again, or run "
+    "`gm-apprentice-publish migrate-config --config <site>/vault.config.json` "
+    "from the site.")
 
 
 @dataclass
@@ -43,6 +51,7 @@ class StepPlan:
     lines: list[str]        # one human line per change, or why it does not apply
     error: str | None = None
     notes: int = 0          # how many leading lines are warnings, not changes
+    after: tuple[str, ...] = ()  # trailing lines that are not changes (backups)
 
 
 @dataclass(frozen=True)
@@ -55,32 +64,58 @@ class Step:
 
 # --- the config step ---------------------------------------------------------
 
-def _tool_error(why: str) -> str:
-    """The tool's reason, plus the way out when the cause is the tool
-    itself (no node, a pin that is too old or lacks the command). A
-    refusal about the vault's own files gets no such hint."""
-    if " exited " in why and "unknown command" not in why.lower():
-        return why
-    return f"{why}; {UPDATE_PIN_HINT}"
+def _update_pin(site: Path) -> str:
+    return f"Run update-pin --site {site}, then migrate.py again."
 
 
-def _site_note(vault: Path) -> str | None:
-    """The line for a `publish.site_dir` that is set but has no
-    vault.config.json: the tool then only looks at the vault file, and
-    saying so keeps a mistyped path from reading as "nothing to move"."""
-    config, why = _site_config(vault)
-    if config is not None or not why or not why.startswith("no vault.config.json"):
-        return None
-    path = why[why.index("(") + 1:why.rindex(")")]
-    return (f"publish.site_dir is set to {path} but no vault.config.json is "
-            f"there; site settings were not looked at")
+def _tool_error(vault: Path, why: str) -> str:
+    """One plain message for a tool that can't answer. The tool's own
+    reason stands when the cause is the vault's files; a site whose tool
+    is too old, or can't be read, says what to run instead."""
+    site, has_config = configured_site(vault)
+    if has_config and site is not None:
+        pin = site_pin(site)
+        if pin.stale and why == pin.stale:
+            if pin.version is None:
+                return (f"cannot tell which publish tool the site at {site} "
+                        f"uses ({pin.spec or 'no readable version'}). "
+                        f"{_update_pin(site)}")
+            return (f"the site's publish tool ({pin.version}) is older than "
+                    f"this migration needs ({NEEDS_PUBLISH}). "
+                    f"{_update_pin(site)}")
+    if why == "node is not on PATH":
+        return f"{why}; install Node.js, then run migrate.py again"
+    if "unknown command" in why.lower() or why == NO_LINES:
+        what = "the site's publish tool" if has_config else "the publish tool"
+        base = (f"{what} does not have migrate-config" if "unknown" in why.lower()
+                else f"{what}'s migrate-config does not report its lines")
+        base += f"; it is older than this migration needs ({NEEDS_PUBLISH}). "
+        if has_config and site is not None:
+            return base + _update_pin(site)
+        return base + "Update the gm-apprentice plugin, then run migrate.py again."
+    return why
+
+
+def _site_note(vault: Path) -> str:
+    """The line for a site the tool did not look at: `publish.site_dir`
+    unset, or set to a folder with no vault.config.json. The tool then
+    only looks at the vault file, and saying so keeps a missing or
+    mistyped path from reading as "nothing to move". Empty when the site
+    was looked at."""
+    site, has_config = configured_site(vault)
+    if site is None:
+        return SITE_DIR_UNSET
+    if not has_config:
+        return (f"publish.site_dir is set to {site} but no vault.config.json "
+                f"is there; site settings were not looked at")
+    return ""
 
 
 def _backup_places(vault: Path) -> str:
-    config, _why = _site_config(vault)
+    site, has_config = configured_site(vault)
     places = [str(vault / "_meta" / "vault-config.md.pre-migrate")]
-    if config is not None:
-        places.append(f"{config}.pre-migrate")
+    if site is not None and has_config:
+        places.append(f"{site / 'vault.config.json'}.pre-migrate")
     return " and ".join(places)
 
 
@@ -89,7 +124,7 @@ def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | Non
     vault has no `publish:` block."""
     answer: ToolAnswer = ask_publish_tool(vault, args, vault_only=True)
     if answer.why is not None:
-        return None, _tool_error(answer.why)
+        return None, _tool_error(vault, answer.why)
     if answer.data is None:
         return None, None
     data = answer.data
@@ -98,8 +133,7 @@ def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | Non
     lines = data.get("lines")
     if not isinstance(lines, list) or not all(isinstance(x, str) for x in lines):
         # A tool from before the plan carried its own lines.
-        return None, _tool_error("this publish tool's migrate-config does not "
-                                 "report its lines")
+        return None, _tool_error(vault, NO_LINES)
     return data, None
 
 
@@ -109,12 +143,15 @@ def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
     if why is not None:
         return StepPlan(False, [], error=why), False
     note = _site_note(vault)
-    notes = [note] if note else []
     if plan is None:
         return StepPlan(False, [DOES_NOT_PUBLISH]), False
+    notes = [note] if note else []
     if not plan["applicable"]:
         return StepPlan(False, [*notes, NOTHING_TO_DO]), False
-    return StepPlan(True, [*notes, *plan["lines"]], notes=len(notes)), True
+    changes = [x for x in plan["lines"] if not x.startswith("backup ")]
+    backups = [x for x in plan["lines"] if x.startswith("backup ")]
+    return StepPlan(True, [*notes, *changes], notes=len(notes),
+                    after=tuple(backups)), True
 
 
 def describe_config_to_vault(vault: Path) -> StepPlan:
@@ -173,7 +210,7 @@ def run(vault: Path, mode: str, steps: list[Step] | None = None) -> int:
                     [f"done: {plan.lines[-1] if plan.lines else NOTHING_TO_DO}",
                      *plan.lines[:-1]])
         else:
-            rows = plan.lines or [NOTHING_TO_DO]
+            rows = [*(plan.lines or [NOTHING_TO_DO]), *plan.after]
         print(f"## {label}")
         print(f"# count: {count}")
         for row in rows:

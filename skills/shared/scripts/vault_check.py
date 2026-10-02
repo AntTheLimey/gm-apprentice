@@ -1178,24 +1178,32 @@ PUBLISH_PACKAGE = "gm-apprentice-publish"
 WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
 
 
+def configured_site(vault: Path) -> tuple[Path | None, bool]:
+    """(the site folder `publish.site_dir` names, whether a
+    vault.config.json is in it). (None, False) when `site_dir` is unset. A
+    relative `site_dir` is relative to the vault."""
+    site_dir = read_publish_scalar(vault, "site_dir")
+    if not site_dir:
+        return None, False
+    site = Path(site_dir).expanduser()
+    if not site.is_absolute():
+        site = vault / site
+    return site, (site / "vault.config.json").is_file()
+
+
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     """(the site's vault.config.json, why there is none).
 
     (None, None) means the vault publishes nothing — no `publish:` block —
-    so there is nothing to ask about. A relative `publish.site_dir` is
-    relative to the vault."""
-    site_dir = read_publish_scalar(vault, "site_dir")
-    if not site_dir:
+    so there is nothing to ask about."""
+    site, has_config = configured_site(vault)
+    if site is None:
         if read_publish_list(vault, "exclude_sections").publish_line is None:
             return None, None
         return None, "publish.site_dir is not set in _meta/vault-config.md"
-    site = Path(site_dir).expanduser()
-    if not site.is_absolute():
-        site = vault / site
-    config = site / "vault.config.json"
-    if not config.is_file():
+    if not has_config:
         return None, f"no vault.config.json in publish.site_dir ({site})"
-    return config, None
+    return site / "vault.config.json", None
 
 
 _SEMVER = re.compile(
@@ -1278,6 +1286,7 @@ class SitePin:
     source: str  # "installed", "package.json" or "none"
     version: str | None
     stale: str | None
+    spec: str | None = None  # the package.json spec, when that is what was read
 
 
 def _stale_reason(version: str) -> str | None:
@@ -1320,8 +1329,8 @@ def site_pin(site: Path) -> SitePin:
     if version is None:
         return SitePin("package.json", None,
                        f"the site pins {PUBLISH_PACKAGE} as \"{spec}\", which "
-                       f"isn't a version this can check")
-    return SitePin("package.json", version, _stale_reason(version))
+                       f"isn't a version this can check", str(spec))
+    return SitePin("package.json", version, _stale_reason(version), str(spec))
 
 
 def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
