@@ -1340,7 +1340,9 @@ vault checks ask the build what publishes. No frontmatter changes.
   as any other page does. A code block left open inside a withheld
   section withholds the rest of the note, and the build warns.
 - `vault_check.py` `gm-leak`, `pc-body` and `wrapup` ask the publish
-  tool which lines publish, so they need Node 22+ on PATH. With no
-  node, a vault with a `publish:` block gets one ERROR row; a vault
-  with none gets an INFO row and `wrapup` lists its repairs as
-  WOULD-FIX. Nothing is written without the tool.
+  tool which lines publish. A vault with a `site_dir` asks the tool
+  installed in that site; when it cannot be asked, each gives one ERROR
+  row and writes nothing. A vault with no `site_dir` has no site and is
+  never blocked: `wrapup --fix` and `pc-body` work without Node, and
+  `gm-leak` gives one INFO row when there is no Node.
+- `update-pin` no longer reports a successful install as a failure.

@@ -76,6 +76,7 @@ async function runUpdatePinTag(opts, d) {
 
   const m = TAG_RE.exec(String(opts.tag));
   const desired = m ? m[1] : null;
+  if (m) recordSiteDir(siteDir, opts, d);
   const result = (fields, rc) => {
     const payload = Object.assign({
       tag: opts.tag, pinnedBefore: null, pinnedAfter: null, installedBefore: null,
@@ -171,28 +172,37 @@ async function runUpdatePinTag(opts, d) {
 
 // A site made before `init` wrote it has no `publish.site_dir` in its vault, so the
 // vault cannot find the site and vault_check takes it to have none. Any update-pin run
-// puts that right: it is the command a GM with an older site is told to run. Never
-// changes a site_dir that is already set, and never stops the repoint.
+// puts that right: it is the command a GM with an older site is told to run. It adds to
+// a vault file that is already there and never creates one, never changes a site_dir
+// that is set, and never stops the repoint. What it could not do, it says.
 function recordSiteDir(siteDir, opts, d) {
   if (opts.check) return null;
   const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const seed = d.seedVaultSettings || require('./init').seedVaultSettings;
+  const say = (line) => { if (!opts.json) (d.out || console.log)(line); };
+  const here = toPosix(siteDir);
   let vaultPath;
   try {
+    // A folder with no package.json is not a site this command can repoint.
+    readFile(path.join(siteDir, 'package.json'));
     vaultPath = JSON.parse(readFile(path.join(siteDir, 'vault.config.json'))).vaultPath;
   } catch { return null; }
   if (typeof vaultPath !== 'string' || vaultPath === '') return null;
-  const result = seed(path.resolve(siteDir, vaultPath), { site_dir: toPosix(siteDir) });
-  if (result.written.length && !opts.json) {
-    (d.out || console.log)(`recorded this site in the vault: publish.site_dir = ${toPosix(siteDir)}`);
+  let result;
+  try {
+    result = seed(path.resolve(siteDir, vaultPath), { site_dir: here }, { existingOnly: true });
+  } catch (err) {
+    result = { written: [], kept: [], skipped: err.message, missing: {} };
   }
+  if (result.written.length) say(`recorded this site in the vault: publish.site_dir = ${here}`);
+  else if (result.skipped) say(`could not record this site in the vault (${result.skipped}). Add \`site_dir: ${here}\` under publish: in _meta/vault-config.md.`);
+  else if (result.otherSite) say(`the vault already names a different site (publish.site_dir: ${result.otherSite}); it was left as it is.`);
   return result;
 }
 
 async function runUpdatePin(options, deps) {
   const opts = options || {};
   const d = deps || {};
-  recordSiteDir(path.resolve(opts.siteDir || '.'), opts, d);
   // Any --tag at all, even an empty one, is a tag pin: `--tag ""` falling through to a
   // plugin-cache repoint would silently do the opposite of what was asked.
   if (opts.tag !== undefined && opts.tag !== null && opts.tag !== false) return runUpdatePinTag(opts, d);
@@ -204,6 +214,7 @@ async function runUpdatePin(options, deps) {
   const toolDir = d.toolDir || path.join(__dirname, '..');
   const siteDir = path.resolve(opts.siteDir || '.');
   const asJson = !!opts.json;
+  recordSiteDir(siteDir, opts, d);
 
   const report = (payload, rc) => {
     if (asJson) out(JSON.stringify(payload, null, 2));
@@ -269,8 +280,19 @@ async function runUpdatePin(options, deps) {
   };
   const installedBefore = readInstalled();
 
-  if (pinnedBefore === desired && installedBefore === desired) {
-    if (!asJson) out(`${DEP} ${desired} is current`);
+  // suggestedPath is null whenever detectVersionDrift saw no drift — which happens
+  // routinely here, because the tool being run is usually already the newest one and
+  // it is the SITE that is stale. Build the path from versionsRoot in that case.
+  const targetPath = cache.suggestedPath
+    || toPosix(path.join(cache.versionsRoot, desired, 'tools', 'publish'));
+  // `desired` is the PLUGIN's version (the cache folder's name). The package that folder
+  // holds has its own version, and that is what lands in node_modules: plugin 1.10.19
+  // holds tool 1.11.41. Comparing the two called every successful install a failure.
+  let desiredTool = desired;
+  try { desiredTool = JSON.parse(readFile(path.join(targetPath, 'package.json'))).version || desired; } catch { /* keep the folder's number */ }
+
+  if (pinnedBefore === desired && installedBefore === desiredTool) {
+    if (!asJson) out(`${DEP} ${desiredTool} is current (plugin ${desired})`);
     return report({
       pinnedBefore, pinnedAfter: pinnedBefore, installedBefore, installedAfter: installedBefore,
       desired, changed: false, ok: true,
@@ -282,7 +304,7 @@ async function runUpdatePin(options, deps) {
       out(`${DEP} is out of date — the site would build with the old renderer.`);
       out(`  pinned:    ${pinnedBefore || '(unrecognised path)'}`);
       out(`  installed: ${installedBefore || 'none'}`);
-      out(`  desired:   ${desired}`);
+      out(`  desired:   ${desiredTool} (plugin ${desired})`);
       out('Run `gm-publish update-pin` to repoint it.');
     }
     return report({
@@ -291,23 +313,18 @@ async function runUpdatePin(options, deps) {
     }, 1);
   }
 
-  // suggestedPath is null whenever detectVersionDrift saw no drift — which happens
-  // routinely here, because the tool being run is usually already the newest one and
-  // it is the SITE that is stale. Build the path from versionsRoot in that case.
-  const targetPath = cache.suggestedPath
-    || toPosix(path.join(cache.versionsRoot, desired, 'tools', 'publish'));
   sitePkg.dependencies = Object.assign({}, dependencies, { [DEP]: `file:${targetPath}` });
   writeFile(sitePkgPath, JSON.stringify(sitePkg, null, 2) + '\n');
 
   const install = runCommand('npm', ['install'], { cwd: siteDir });
   const installedAfter = readInstalled();
-  const ok = installedAfter === desired;
+  const ok = installedAfter === desiredTool;
 
   if (!asJson) {
     if (ok) {
       out(`Updated ${DEP} from ${installedBefore || 'none'} to ${installedAfter}`);
     } else {
-      out(`Repointed ${sitePkgPath} to ${desired}, but npm install left ${installedAfter || 'nothing'} in node_modules.`);
+      out(`Repointed ${sitePkgPath} to plugin ${desired} (tool ${desiredTool}), but npm install left ${installedAfter || 'nothing'} in node_modules.`);
       const detail = tail(install.stderr) || tail(install.stdout);
       if (detail) out(detail);
       out(`Run \`npm install\` in ${siteDir} by hand to see the whole log.`);

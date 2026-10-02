@@ -90,7 +90,7 @@ describe('update-pin', () => {
     });
     const rc = await runUpdatePin({ siteDir: '/site' }, h.deps);
     assert.strictEqual(rc, 0);
-    assert.strictEqual(h.out.join('\n'), 'gm-apprentice-publish 1.11.30 is current');
+    assert.strictEqual(h.out.join('\n'), 'gm-apprentice-publish 1.11.30 is current (plugin 1.11.30)');
     assert.deepStrictEqual(h.writes, {});
     assert.deepStrictEqual(h.runs, []);
   });
@@ -402,6 +402,7 @@ describe('update-pin records the site in its vault', () => {
     fs.mkdirSync(siteDir);
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
     fs.writeFileSync(path.join(siteDir, 'vault.config.json'), JSON.stringify({ vaultPath: '../vault' }));
+    fs.writeFileSync(path.join(siteDir, 'package.json'), '{}');
     if (config !== null) fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), config);
     const publish = () => parseNote(fs.readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8')).data.publish;
     return { root, siteDir, vault, publish, posix: path.resolve(siteDir).split(path.sep).join('/') };
@@ -446,13 +447,94 @@ describe('update-pin records the site in its vault', () => {
       assert.strictEqual(s.publish().site_dir, s.posix);
     } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
   });
-  it('a site with no vault.config.json, or a vault that is not there, stops nothing', async () => {
+  it('a site with no vault.config.json, or a vault that is not there, stops nothing and creates nothing', async () => {
     const s = site(null);
     try {
       fs.rmSync(s.vault, { recursive: true, force: true });
       assert.strictEqual((await run(s)).rc, 0);
+      assert.ok(!fs.existsSync(s.vault));
       fs.rmSync(path.join(s.siteDir, 'vault.config.json'));
       assert.strictEqual((await run(s)).rc, 0);
     } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+  it('never creates a vault file: a folder with none is said, not turned into a vault', async () => {
+    const s = site(null);
+    try {
+      const { rc, out } = await run(s);
+      assert.strictEqual(rc, 0);
+      assert.ok(!fs.existsSync(path.join(s.vault, '_meta', 'vault-config.md')));
+      assert.ok(out.some((l) => l.includes('could not record this site in the vault') && l.includes('has no _meta/vault-config.md') && l.includes(`site_dir: ${s.posix}`)), out.join('\n'));
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+  it('fills a blank site_dir', async () => {
+    for (const blank of ['site_dir:', 'site_dir: null', 'site_dir: ""']) {
+      const s = site(`---\npublish:\n  ${blank}\n  mode: player\n---\n`);
+      try {
+        await run(s);
+        assert.strictEqual(s.publish().site_dir, s.posix, blank);
+        assert.strictEqual(s.publish().mode, 'player');
+      } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+    }
+  });
+  it('says so when the vault names a different site, and when the file cannot be edited', async () => {
+    const other = site('---\npublish:\n  site_dir: /somewhere/else\n---\n');
+    const flow = site('---\npublish: {mode: player}\n---\n');
+    try {
+      assert.ok((await run(other)).out.some((l) => l.includes('already names a different site (publish.site_dir: /somewhere/else)')));
+      const { rc, out } = await run(flow);
+      assert.strictEqual(rc, 0);
+      assert.ok(out.some((l) => l.includes('could not record this site in the vault') && l.includes(`site_dir: ${flow.posix}`)), out.join('\n'));
+      assert.strictEqual(flow.publish().site_dir, undefined);
+    } finally {
+      fs.rmSync(other.root, { recursive: true, force: true });
+      fs.rmSync(flow.root, { recursive: true, force: true });
+    }
+  });
+  it('a folder with no package.json, and a --tag that is refused, write nothing', async () => {
+    const before = '---\npublish:\n  mode: player\n---\n';
+    const s = site(before);
+    const file = path.join(s.vault, '_meta', 'vault-config.md');
+    try {
+      assert.strictEqual((await run(s, { tag: 'nonsense' })).rc, 1);
+      assert.strictEqual(fs.readFileSync(file, 'utf8'), before);
+      fs.rmSync(path.join(s.siteDir, 'package.json'));
+      await run(s);
+      assert.strictEqual(fs.readFileSync(file, 'utf8'), before);
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+});
+
+describe('update-pin compares the tool version, not the plugin folder', () => {
+  // Plugin 1.10.25 holds publish tool 1.12.1: the folder's number and the package's differ.
+  const toolPkg = { [path.resolve(`${CACHE}/1.10.25/tools/publish/package.json`)]: JSON.stringify({ version: '1.12.1' }) };
+
+  it('a site pinned to the newest plugin with its tool installed is current', async () => {
+    const h = harness({
+      files: Object.assign(siteFiles(`file:${CACHE}/1.10.25/tools/publish`, '1.12.1'), toolPkg),
+      detect: drift('1.10.25', '1.10.25'),
+    });
+    assert.strictEqual(await runUpdatePin({ siteDir: '/site' }, h.deps), 0);
+    assert.strictEqual(h.out.join('\n'), 'gm-apprentice-publish 1.12.1 is current (plugin 1.10.25)');
+    assert.deepStrictEqual(h.runs, []);
+  });
+  it('a repoint that installs the tool the plugin holds is a success', async () => {
+    const h = harness({
+      files: Object.assign(siteFiles(`file:${CACHE}/1.10.19/tools/publish`, '1.11.41'), toolPkg),
+      detect: drift('1.10.25', '1.10.25'),
+      npm: (store) => {
+        store[path.resolve('/site/node_modules/gm-apprentice-publish/package.json')] = installedPkg('1.12.1');
+        return { code: 0, stdout: '', stderr: '' };
+      },
+    });
+    assert.strictEqual(await runUpdatePin({ siteDir: '/site' }, h.deps), 0);
+    assert.match(h.out.join('\n'), /Updated gm-apprentice-publish from 1\.11\.41 to 1\.12\.1/);
+  });
+  it('an install that left the old tool is still a failure', async () => {
+    const h = harness({
+      files: Object.assign(siteFiles(`file:${CACHE}/1.10.19/tools/publish`, '1.11.41'), toolPkg),
+      detect: drift('1.10.25', '1.10.25'),
+    });
+    assert.strictEqual(await runUpdatePin({ siteDir: '/site' }, h.deps), 1);
+    assert.match(h.out.join('\n'), /to plugin 1\.10\.25 \(tool 1\.12\.1\), but npm install left 1\.11\.41/);
   });
 });

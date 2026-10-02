@@ -151,11 +151,11 @@ most Linux ship `python3` already; on Windows, install Python from the
 Microsoft Store, whose `python3` alias Git Bash finds on PATH (the
 python.org installer provides only `python` and `py`).
 
-Publishing a site needs Node 22 or later. So do the checks that ask
+A site is optional. Publishing one needs Node 22 or later, and for a
+vault that has a site (`publish.site_dir` is set) the checks that ask
 which lines of a note would publish (`vault_check.py` `gm-leak`,
-`pc-body` and `wrapup`): they ask the publish tool rather than keep a
-copy of its rules. Without node those checks say what they skipped
-and write nothing.
+`pc-body` and `wrapup`) ask that site's publish tool rather than keep a
+copy of its rules. A vault with no site needs only Python.
 
 ## License
 

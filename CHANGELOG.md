@@ -63,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no line under an excluded heading that the new build publishes and
   the old one withheld.
 
+- **`update-pin` called every successful install a failure.** It
+  compared the version of the tool it had just installed (say 1.11.41)
+  with the plugin's version (1.10.19), which is the name of the folder
+  that tool sits in. The two are never equal, so it ended with "npm
+  install left 1.11.41 in node_modules" and exit code 1 even when the
+  install had worked, and never reported a site as current. It now
+  compares against the version of the tool in that folder.
+
 ### Changed
 
 - **`vault_check` asks the publish tool which lines publish; it no
@@ -73,14 +81,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each `--fix` runs before it writes now ask
   `gm-apprentice-publish lines`, a new command that answers from the
   functions the build calls. One node process serves a whole run.
-  - These checks now need Node 22+ on PATH. When the tool cannot be
-    asked, a vault with a `publish:` block gets one ERROR row and
-    nothing is checked or written. A vault with no `publish:` block
-    gets an INFO row; `gm-leak` and `pc-body` stop there, and `wrapup`
-    still lists its findings, with each repair as a WOULD-FIX row that
-    has not been checked against what publishes.
-    Nothing is written without the tool, in any vault: whether a repair
-    would unhide a line is the tool's to say.
+  - **`publish.site_dir` is the dividing line.** A vault with a
+    `site_dir` has a site: its checks go through that site's publish
+    tool, and when the tool cannot be asked each check gives one ERROR
+    row and nothing is checked or written. A vault with no `site_dir`
+    has no site, so nothing can leak and nothing here gets in the way:
+    `wrapup --fix` makes its repairs and `pc-body` runs its structure
+    checks with or without Node, and `gm-leak` reports what would show
+    if the vault were published now, or gives one INFO row when there
+    is no Node to ask with. A GM who only keeps a vault needs Python
+    and nothing else, as before.
   - **The site's own installed tool is the one asked.** With a
     `site_dir`, the questions go to the publish tool installed in that
     site folder, because that is what the site builds with. It is not
@@ -92,15 +102,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     installed, and a `site_dir` with no site in it. A site that names
     no tool of its own is asked through whatever copy node would load
     from that folder (a workspace installs it higher up); failing that,
-    and for a vault with no `site_dir` (no site), the plugin's tool
-    answers.
+    the plugin's tool answers.
   - Whether the vault has a `publish:` block, and where its `site_dir`
     points, is read by the publish tool's YAML parser, so a block
     written in a way the Python line reader does not expect (quoted
-    key, saved with a byte-order mark) is still seen. A block written
-    on one line or indented, which that reader cannot take the exclude
-    list from, stops the check with an ERROR row instead of being
-    scanned on the default list.
+    key, saved with a byte-order mark) is still seen. For a vault with
+    a site, a block written on one line or indented, which that reader
+    cannot take the exclude list from, stops the check with an ERROR
+    row instead of being scanned on the default list.
   - The fix-time refusal "holds a heading-shaped line in a code fence"
     is gone: such a block is now safe to move.
   - If the tool stops answering part-way, the check ends with an ERROR
@@ -114,9 +123,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absolute path, and `update-pin` adds it to a vault that lacks it. A
   site made by `init` alone used to leave the vault with no record of
   where its site was, so the vault checks could not find the tool that
-  site builds with. A `site_dir` that is already set is never changed.
-  A vault with no `site_dir` has no site: the leak checks then report
-  what would show if it were published now.
+  site builds with. A `site_dir` that is already set is never changed,
+  though one naming a different folder is said out loud; a blank one is
+  filled. `update-pin` adds to a vault file that is already there and
+  never creates one, and says so when it could not record the site.
 - **`gm-apprentice-publish lines`.** Reads one JSON request per line on
   stdin and writes one JSON answer per line: `published` (the body the
   site renders for a note), `sections` (per line, the excluded section

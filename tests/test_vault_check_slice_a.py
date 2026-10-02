@@ -1756,9 +1756,10 @@ class WrapupLeakInvariantTests(unittest.TestCase):
 
 class NoPublishToolTests(unittest.TestCase):
     """What a section hides is the publish tool's decision and nothing
-    here copies it. Without the tool a check that needs the answer stops:
-    loudly for a vault with a site, quietly for one with none, where the
-    wrap-up repairs still run."""
+    here copies it. `publish.site_dir` is the dividing line. A vault with a
+    site is checked through that site's tool, or not at all. A vault with
+    no site has nothing that can leak, and a GM who only keeps a vault is
+    never made to install anything: its checks and repairs carry on."""
 
     WRAP = ("---\ntype: session_wrap\n---\n\n## Narrative Recap\n\n"
             "It happened.\n\n## Keeper Checklist\n\n- task\n")
@@ -1814,15 +1815,8 @@ class NoPublishToolTests(unittest.TestCase):
             lines.ask({"op": "stub", "text": ""})
         self.assertIn("no `lines` command", str(raised.exception))
 
-    def test_a_publishing_vault_is_not_checked_and_not_written(self):
-        # With a site_dir or without: the build never reads site_dir, so a
-        # `publish:` block alone means the vault may publish.
-        for site in (True, False):
-            with self.subTest(site_dir=site):
-                self.publishing_vault_stops(site)
-
-    def publishing_vault_stops(self, site):
-        vault = self.vault(site=site)
+    def test_a_vault_with_a_site_is_not_checked_and_not_written(self):
+        vault = self.vault(site=True)
         self.no_tool()
         for name, rows in (
                 ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
@@ -1834,34 +1828,36 @@ class NoPublishToolTests(unittest.TestCase):
                     f"ERROR\t(vault)\t{name} could not ask the publish tool "
                     f"what publishes (node is not on PATH) — nothing "
                     f"checked, nothing written; it needs Node 22+"), rows)
-                self.assertEqual(read(vault, "W.md"), self.WRAP)
-
-    def test_a_vault_that_does_not_publish_skips_the_leak_checks(self):
-        vault = self.vault(site=False, publish=False)
-        self.no_tool()
-        for name, rows in (("gm-leak", vc.check_gm_leak(vault, None)),
-                           ("pc-body", vc.check_pc_body(vault))):
-            with self.subTest(name):
-                self.assertEqual(len(rows), 1, rows)
-                self.assertTrue(rows[0].startswith(
-                    f"INFO\t(vault)\t{name} did not ask what a section "
-                    f"hides"), rows)
-
-    def test_a_vault_that_does_not_publish_gets_its_findings_and_no_write(self):
-        # Whether a repair would unhide a line is the tool's to say, so
-        # without it nothing is written, in any vault.
-        vault = self.vault(site=False, publish=False)
-        self.no_tool()
-        rows = vc.check_wrapup(vault, None, True)
-        self.assertEqual(len(rows_for(rows, "INFO\t(vault)\twrapup did not "
-                                            "ask what a section hides")), 1,
-                         rows)
-        self.assertEqual(len(rows_for(rows, "wrapup --fix writes nothing "
-                                            "without the publish tool")), 1,
-                         rows)
-        self.assertTrue(rows_for(rows, "WOULD-FIX\tW.md"), rows)
-        self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_a_vault_with_no_site_is_never_blocked(self):
+        # With a publish: block (the game system lives there) or without:
+        # no site_dir is no site, and no node is no obstacle.
+        for publish in (True, False):
+            with self.subTest(publish_block=publish):
+                vault = self.vault(site=False, publish=publish)
+                self.no_tool()
+                leak = vc.check_gm_leak(vault, None, fix=True)
+                self.assertEqual(len(leak), 1, leak)
+                self.assertTrue(leak[0].startswith(
+                    "INFO\t(vault)\tgm-leak did not ask what a section would "
+                    "hide on a site (node is not on PATH). This vault has no "
+                    "site"), leak)
+                body = vc.check_pc_body(vault)
+                self.assertFalse(rows_for(body, "ERROR\t(vault)"), body)
+                self.assertEqual(len(rows_for(body, "INFO\t(vault)\tpc-body "
+                                                    "did not ask")), 1, body)
+                wrap = vc.check_wrapup(vault, None, True)
+                self.assertFalse(rows_for(wrap, "ERROR\t(vault)"), wrap)
+                self.assertTrue(rows_for(wrap, "FIXED\tW.md"), wrap)
+                self.assertIn("<!-- gm-only -->", read(vault, "W.md"))
+
+    def test_a_vault_with_no_site_and_node_is_checked_by_the_plugins_tool(self):
+        vault = self.vault(site=False)
+        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "(vault)\tgm-leak did not ask"), rows)
+        self.assertTrue(rows_for(rows, "ERROR\tBob.md"), rows)
 
     def test_a_tool_that_goes_away_mid_run_is_an_error_exit(self):
         gone = vaultlib.PublishToolUnavailable("node could not run")
@@ -2073,7 +2069,6 @@ class NoPublishToolTests(unittest.TestCase):
                 vault = make_vault(self, "")
                 (vault / "_meta" / "vault-config.md").write_bytes(data)
                 self.assertEqual(vaultlib.vault_site(vault), (True, None))
-                self.assertTrue(vc._maybe_publishes(vault))
         for form, text in (
                 ("indented", "---\n  publish:\n    mode: player\n---\n"),
                 ("complex key", "---\n? publish\n: {mode: player}\n---\n"),
@@ -2085,16 +2080,21 @@ class NoPublishToolTests(unittest.TestCase):
                 self.assertEqual(vaultlib.vault_site(vault), (True, None))
         none = make_vault(self, "---\ntype: meta\n---\n")
         self.assertEqual(vaultlib.vault_site(none), (False, None))
-        self.assertFalse(vc._maybe_publishes(none))
         self.assertEqual(vaultlib.vault_site(make_vault(self, meta=False)),
                          (False, None))
 
     def test_a_block_the_list_reader_cannot_read_is_not_checked_on_a_guess(self):
         # The gate's tool reads these; the exclude list is still read by the
         # line reader, which does not, and would scan with the default list.
+        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text("{}", encoding="utf-8")
+        where = site.as_posix()
         for form, block in (
-                ("one line", "publish: {exclude_sections: [Plot Threads]}\n"),
-                ("indented", "  publish:\n    exclude_sections: [Plot Threads]\n")):
+                ("one line", "publish: {exclude_sections: [Plot Threads], "
+                             f"site_dir: {where}}}\n"),
+                ("indented", "  publish:\n    exclude_sections: [Plot Threads]\n"
+                             f"    site_dir: {where}\n")):
             with self.subTest(form):
                 vault = make_vault(self, f"---\n{block}---\n")
                 note = ("---\ntype: npc\n---\n\n# Bob\n\n"

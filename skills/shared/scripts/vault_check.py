@@ -1511,64 +1511,56 @@ def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
 # and the first that withholds a handout's Keeper sections (#280).
 STRIPPED_SECTIONS_SINCE = "1.11.41"
 
-def _maybe_publishes(vault: Path) -> bool:
-    """Whether the vault file so much as mentions a `publish` key. Only
-    for choosing the level of the row a check prints when the publish
-    tool cannot be asked at all, which is the one time the tool's own
-    reading (`vault_site`) is not to be had. Nothing is checked or
-    written on the strength of it."""
-    try:
-        text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
-    except FileNotFoundError:
-        return False
-    except (OSError, UnicodeDecodeError):
-        return True
-    return re.search(r"publish", text) is not None
-
-
 def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
                                       bool]:
-    """(the tool to ask what this vault's site publishes, why none can be
-    asked, what to do about it, whether the vault publishes).
+    """(the tool to ask what publishes, why none can be asked, what to do
+    about it, whether the vault has a site).
 
-    The vault file is read by the plugin's publish tool (`vault_site`),
-    not here. With a `site_dir`, the tool installed in that site folder
-    answers: it is the one the site builds with, and it is not judged by
-    a version number or a package.json pin, it is asked, and a tool
-    without the `lines` command does not answer. A site whose
-    package.json names the tool without it being installed has no tool
-    to ask. One that does not name it is asked through whatever copy node
-    would load from there (a workspace installs it higher up), and failing
-    that, like a vault with no `site_dir`, by the plugin's own tool.
+    A site is `publish.site_dir`, and nothing else: `init` writes it, and
+    a GM who only keeps a vault never has one. Whether it is set is read
+    by the plugin's publish tool (`vault_site`), which has the build's YAML
+    parser; with no node to run that tool, by the line reader here.
+
+    With a site, the tool installed in that site folder answers: it is the
+    one the site builds with, and it is not judged by a version number or
+    a package.json pin, it is asked, and a tool without the `lines` command
+    does not answer. A site whose package.json names the tool without it
+    being installed has no tool to ask. One that does not name it is asked
+    through whatever copy node would load from there (a workspace installs
+    it higher up), and failing that by the plugin's own tool.
+
+    With no site, the plugin's own tool answers, when there is node to run
+    it: what would publish if a site were made today.
     """
-    if not PUBLISH_TOOL.is_file():
-        return None, f"the publish tool is not at {PUBLISH_TOOL}", (
-            "reinstall the plugin"), _maybe_publishes(vault)
+    node_fix = "it needs Node 22+ on PATH"
     try:
         publishes, site = vault_site(vault)
     except PublishToolUnavailable as e:
-        fix = ("it needs Node 22+ on PATH" if "node" in str(e)
-               else f"fix {VAULT_CONFIG}")
-        return None, str(e), fix, _maybe_publishes(vault)
+        if shutil.which("node") and PUBLISH_TOOL.is_file():
+            # The tool ran and refused the vault file. Whether there is a
+            # site is then unknown, which is not "no site".
+            return None, str(e), f"fix {VAULT_CONFIG}", True
+        return None, str(e), node_fix, bool(
+            read_publish_scalar(vault, "site_dir"))
+    if site is None:
+        return PUBLISH_TOOL, None, node_fix, False
     if publishes and (publish_block_inline(vault) or read_publish_list(
             vault, "exclude_sections").publish_line is None):
         # The tool reads this block; the reader here that the exclude list
         # still comes through does not, and would assume the defaults.
         return None, (f"publish: in {VAULT_CONFIG} is written in a way that "
                       f"is not understood here (on one line, or indented)"), (
-            "write it as a block at the margin, one key per line"), publishes
-    if site is None:
-        return PUBLISH_TOOL, None, "it needs Node 22+ on PATH", publishes
+            "write it as a block at the margin, one key per line"), True
     if not (site / "vault.config.json").is_file():
         return None, (f"no vault.config.json in publish.site_dir "
-                      f"({site.as_posix()})"), "fix publish.site_dir", publishes
+                      f"({site.as_posix()})"), "fix publish.site_dir", True
     fix = f"run update-pin --site {site.as_posix()}, then run this again"
     installed = site / "node_modules" / PUBLISH_PACKAGE
     script = installed / "bin" / "gm-publish.js"
     if script.is_file():
-        return script, None, fix, publishes
+        return script, None, fix, True
     if installed.is_symlink() or installed.exists():
-        return None, f"{script.as_posix()} is missing", fix, publishes
+        return None, f"{script.as_posix()} is missing", fix, True
     try:
         named = PUBLISH_PACKAGE in (site / "package.json").read_text(
             encoding="utf-8", errors="replace")
@@ -1581,14 +1573,14 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         # one is npm's to work out, not a guess from the pin.
         return None, (f"the site's package.json names {PUBLISH_PACKAGE} "
                       f"but it is not installed in {site.as_posix()}"), (
-            fix), publishes
+            fix), True
     above = _resolved_from(site)
     if above is not None:
         # Installed above the site folder (a workspace): node loads it from
         # there when the site builds, so that is the one to ask.
-        return above / "bin" / "gm-publish.js", None, fix, publishes
+        return above / "bin" / "gm-publish.js", None, fix, True
     # A site with no tool of its own is built with the plugin's.
-    return PUBLISH_TOOL, None, "it needs Node 22+ on PATH", publishes
+    return PUBLISH_TOOL, None, node_fix, True
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -1617,29 +1609,31 @@ def _resolved_from(site: Path) -> Path | None:
 
 
 def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
-    """(why the publish tool cannot say what this vault's site publishes,
-    the row saying so).
+    """(why the publish tool cannot say what publishes, the row saying so).
 
-    What a section hides is the tool's decision and there is no copy of
-    it here, so without an answer a check stops and nothing is written:
-    (why, [an ERROR]) for a vault that publishes, (why, [an INFO]) for
-    one with no `publish:` block. (None, []) when the tool answers. Every
-    later question in the run goes to the tool chosen here
-    (`_lines_tool`).
+    (None, []) when it can; every later question in the run then goes to
+    the tool chosen here (`_lines_tool`).
+
+    What a section hides is the tool's decision and there is no copy of it
+    here. For a vault with a site, no answer means the check stops and
+    nothing is written: (why, [an ERROR]), because a guess could leak. For
+    a vault with no site there is nothing to leak and nothing a GM who only
+    keeps a vault should have to install: (why, [an INFO]), and the caller
+    carries on with whatever it can do without the tool.
     """
-    tool, why, fix, publishes = _lines_tool(vault)
+    tool, why, fix, has_site = _lines_tool(vault)
     if tool is not None:
         use_publish_tool(tool)
         why = publish_tool_problem()
         if why is None:
             return None, []
-    if publishes:
+    if has_site:
         return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
                      f"tool what publishes ({why}) — nothing checked, "
                      f"nothing written; {fix}"]
-    return why, [f"INFO\t(vault)\t{check} did not ask what a section hides "
-                 f"({why}; {fix}). This vault has no publish: block, so "
-                 f"nothing publishes"]
+    return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
+                 f"hide on a site ({why}). This vault has no site "
+                 f"(publish.site_dir is not set), so nothing publishes"]
 
 
 def _tool_gone_row(check: str, e: Exception) -> str:
@@ -2167,8 +2161,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         # publishes isn't told.
         reason = ("the publish tool's answer has no exclude list (an older tool "
                "— run update-pin)" if tool is not None and tool.data is not None
-               else "the publish tool could not be asked (check "
-                    "publish.site_dir and that node is installed)")
+               else "there is no site to ask (publish.site_dir is not "
+                    "set), or its publish tool could not be asked")
         rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
                     f"exclude list: {reason}")
     withheld: set[str] = set()
@@ -2551,8 +2545,9 @@ def _pc_body(vault: Path, folder: str | None = None,
     explain = explain or ExplainAll(vault)
     # The build's exclude list, asked of the tool at the first PC.
     excludes: list[str] | None = None
-    # Whether the publish tool can say what a section hides, once asked.
-    gated = False
+    # Whether the publish tool can say what a section hides, once asked;
+    # and whether this is a vault with no site and no tool to ask.
+    gated = no_tool = False
     # The publish tool's reading of each PC's sheet_source, once asked.
     sources: tuple[set[str] | None, str | None, str | None] | None = None
     # The fields each PC carries that its sheet no longer reads, once asked.
@@ -2569,13 +2564,18 @@ def _pc_body(vault: Path, folder: str | None = None,
         if not gated:
             gated = True
             why, gate = no_publish_tool(vault, "pc-body")
-            if why is not None:
+            if why is not None and gate[0].startswith("ERROR"):
                 return gate
+            if why is not None:
+                # No site and no tool: the structure checks still run,
+                # with nothing counted as hidden by a section.
+                rows.extend(gate)
+                excludes, no_tool = [], True
         if excludes is None:
             excludes = effective_exclude_sections(
                 vault, tool_exclude_sections(explain()))
         states, problems = scan_body(text, excludes)
-        kept = _published_linenos(states, fm)
+        kept = None if no_tool else _published_linenos(states, fm)
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
@@ -3708,8 +3708,8 @@ def leak_problem(before: str, before_excludes: list[str], after: str,
 
     What publishes is the publish tool's answer; `PublishToolUnavailable`
     is raised when it cannot be asked. `ask_tool=False` is for a vault
-    with no `publish:` block and no tool: the fences, and the lines a
-    gm-only or spoiler block hides, are checked without it.
+    with no site and no tool: the fences, and the lines a gm-only or
+    spoiler block hides, are checked without it.
     """
     _before, was = scan_body(before, ())
     _after, now = scan_body(after, ())
@@ -4200,16 +4200,10 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
             if why is not None and gate[0].startswith("ERROR"):
                 return rows
             if why is not None:
-                # No publish: block and no tool: nothing publishes, so the
-                # findings are still worth having, with nothing counted as
-                # hidden. Nothing is written: whether a repair would unhide
-                # a line is the tool's to say.
-                if fix:
-                    rows.append("INFO\t(vault)\twrapup --fix writes "
-                                "nothing without the publish tool; the "
-                                "WOULD-FIX rows below are not checked "
-                                "against what publishes")
-                excludes, no_tool, fix = [], True, False
+                # No site and no tool: nothing publishes, so the repairs
+                # run with nothing counted as hidden by a section. What a
+                # gm-only block hides is still checked before each write.
+                excludes, no_tool = [], True
         try:
             rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes,
                                           fix, player, no_tool))
@@ -4228,9 +4222,9 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       player: frozenset[str] = frozenset(),
                       no_tool: bool = False) -> list[str]:
     """One wrap-up: findings, then the plan, then a single write.
-    `no_tool`: a vault with no `publish:` block and no publish tool to
-    ask. `check_wrapup` has already turned `fix` off; the plan is still
-    worked out, checked without the tool as far as that goes."""
+    `no_tool`: a vault with no site and no publish tool to ask. The
+    check before the write then covers what needs no tool: the fences,
+    and the lines a gm-only or spoiler block hides."""
     path = vault / rel
     try:
         # newline='' preserves the file's own line endings exactly, the
