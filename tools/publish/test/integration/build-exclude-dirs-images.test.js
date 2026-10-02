@@ -1,4 +1,5 @@
 const { describe, it, before, after } = require('node:test');
+require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
