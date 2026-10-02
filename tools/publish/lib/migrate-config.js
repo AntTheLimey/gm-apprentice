@@ -265,6 +265,15 @@ function describePlan(plan) {
   return lines;
 }
 
+// The planned changes, then (after a real run) the backups it wrote or kept.
+function changeLines(plan, result) {
+  return [
+    ...describePlan(plan),
+    ...result.backups.map((b) => `backup ${b}`),
+    ...result.keptBackups.map((b) => `backup kept from an earlier run: ${b}`),
+  ];
+}
+
 // CLI body. Returns the exit code: 0 on success or nothing to do, 1 on refusal.
 function runMigrateConfig({ configPath, vaultPath, dryRun = false, json = false } = {}, deps = {}) {
   const out = deps.out || console.log;
@@ -289,20 +298,19 @@ function runMigrateConfig({ configPath, vaultPath, dryRun = false, json = false 
       return 1;
     }
   }
+  // The one rendering of the plan: the human run prints these, and --json carries them
+  // as `lines` so a caller never re-renders the plan itself.
+  const lines = plan.applicable ? changeLines(plan, result) : [];
   if (json) {
-    out(JSON.stringify(dryRun ? plan : { ...plan, ...result }, null, 2));
+    out(JSON.stringify({ ...plan, ...(dryRun ? {} : result), lines }, null, 2));
     return 0;
   }
   if (!plan.applicable) {
     out('Nothing to migrate.');
     return 0;
   }
-  for (const line of describePlan(plan)) out(line);
+  for (const line of lines) out(line);
   if (dryRun) out('Dry run: nothing written.');
-  else {
-    for (const b of result.backups) out(`backup ${b}`);
-    for (const b of result.keptBackups) out(`backup kept from an earlier run: ${b}`);
-  }
   return 0;
 }
 

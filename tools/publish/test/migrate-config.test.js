@@ -69,10 +69,10 @@ describe('migrate-config', () => {
     assert.strictEqual(dry.status, 0, dry.stderr);
     assert.deepStrictEqual([read(s.configPath), read(s.vaultFile)], before);
     assert.ok(!fs.existsSync(`${s.configPath}.pre-migrate`));
-    const planned = JSON.parse(dry.stdout);
+    const { lines: plannedLines, ...planned } = JSON.parse(dry.stdout);
     const real = cli(['--json', '--config', s.configPath]);
     assert.strictEqual(real.status, 0, real.stderr);
-    const { backups, keptBackups, ...applied } = JSON.parse(real.stdout);
+    const { backups, keptBackups, lines: appliedLines, ...applied } = JSON.parse(real.stdout);
     assert.deepStrictEqual(applied, planned);
     assert.strictEqual(backups.length, 2);
     assert.deepStrictEqual(keptBackups, []);
@@ -434,5 +434,42 @@ describe('migrate-config', () => {
     assert.strictEqual(publishOf(s.vaultFile).site_title, 'T');
     assert.strictEqual(read(s.configPath), siteBefore);
     assert.strictEqual(read(`${s.configPath}.pre-migrate`), siteBefore);
+  });
+
+  it('--json carries `lines`, the exact lines the human run prints', () => {
+    const files = () => {
+      const s = makeSite({
+        site: { siteTitle: 'Old', footer: 'F', excludeDirs: ['A', 1], excludeFields: [null, 'f'], landingTagline: 'Hi', backend: { inbox: 'maybe' } },
+        vaultFile: '---\npublish:\n  site_title: New\n  exclude_dirs: [B]\n  theme:\n    genre: noir\n---\n',
+      });
+      return s;
+    };
+    const humanLines = (args, dryRun) => {
+      const out = [];
+      runMigrateConfig({ ...args, dryRun }, { out: (l) => out.push(l) });
+      return out.filter((l) => l !== 'Dry run: nothing written.');
+    };
+    const jsonLines = (args, dryRun) => {
+      const out = [];
+      runMigrateConfig({ ...args, dryRun, json: true }, { out: (l) => out.push(l) });
+      return JSON.parse(out.join('\n')).lines;
+    };
+    const a = files();
+    const dry = humanLines({ configPath: a.configPath }, true);
+    assert.deepStrictEqual(jsonLines({ configPath: a.configPath }, true), dry);
+    for (const kind of ['skipped ', 'conflict ', 'note ']) assert.ok(dry.some((l) => l.startsWith(kind)), `${kind}: ${dry.join('\n')}`);
+    // A real run: the backups it wrote and the one it kept are lines too.
+    const seeded = () => {
+      const t = files();
+      fs.writeFileSync(`${t.vaultFile}.pre-migrate`, 'older backup');
+      return t;
+    };
+    const h = seeded();
+    const j = seeded();
+    const human = humanLines({ configPath: h.configPath }, false);
+    const json = jsonLines({ configPath: j.configPath }, false);
+    assert.ok(human.some((l) => l.startsWith('backup ')), human.join('\n'));
+    assert.ok(human.some((l) => l.startsWith('backup kept from an earlier run: ')), human.join('\n'));
+    assert.deepStrictEqual(json.map((l) => l.replace(j.root, 'ROOT')), human.map((l) => l.replace(h.root, 'ROOT')));
   });
 });

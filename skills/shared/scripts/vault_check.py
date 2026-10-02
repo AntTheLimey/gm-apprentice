@@ -1408,20 +1408,30 @@ def ask_publish_tool(vault: Path, args: list[str],
     if not node:
         return ToolAnswer(why="node is not on PATH", used=label)
     name = " ".join(args[:2])
+    empty: str | None = None
+    if no_site:
+        try:
+            empty = tempfile.mkdtemp(prefix="vc-nosite-")
+        except OSError as e:
+            return ToolAnswer(
+                why=f"no temporary directory to run in ({e.__class__.__name__})",
+                used=label)
     try:
-        with tempfile.TemporaryDirectory(prefix="vc-nosite-") as empty:
-            proc = subprocess.run(
-                [node, str(tool), *args, "--json", *site_args,
-                 "--vault", str(vault.resolve())],
-                capture_output=True, text=True, encoding="utf-8",
-                errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False,
-                cwd=empty if no_site else None)
+        proc = subprocess.run(
+            [node, str(tool), *args, "--json", *site_args,
+             "--vault", str(vault.resolve())],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False,
+            cwd=empty)
     except subprocess.TimeoutExpired:
         return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
                           used=label)
     except OSError as e:
         return ToolAnswer(why=f"node could not run ({e.__class__.__name__})",
                           used=label)
+    finally:
+        if empty is not None:
+            shutil.rmtree(empty, ignore_errors=True)
     if proc.returncode != 0:
         detail = (proc.stderr or "").strip().splitlines()
         return ToolAnswer(why=(f"{name} exited {proc.returncode}"

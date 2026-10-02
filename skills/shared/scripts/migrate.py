@@ -25,13 +25,12 @@ setting itself.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from vault_check import ToolAnswer, ask_publish_tool, emit, parse_semver
+from vault_check import ToolAnswer, _site_config, ask_publish_tool, parse_semver
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
@@ -43,6 +42,7 @@ class StepPlan:
     applies: bool
     lines: list[str]        # one human line per change, or why it does not apply
     error: str | None = None
+    notes: int = 0          # how many leading lines are warnings, not changes
 
 
 @dataclass(frozen=True)
@@ -55,23 +55,6 @@ class Step:
 
 # --- the config step ---------------------------------------------------------
 
-def _plan_lines(plan: dict[str, Any]) -> list[str]:
-    """The tool's `--json` plan as one line per change, worded as its own
-    human output (lib/migrate-config.js describePlan)."""
-    def show(v: Any) -> str:
-        return json.dumps(v)
-    lines = [f"move {m['from']} -> {m['to']}" for m in plan.get("moves", [])]
-    lines += [f"merge {m['to']}: added {', '.join(show(a) for a in m['added'])}"
-              for m in plan.get("merges", [])]
-    lines += [f"switch {s['to']} = {str(s['value']).lower()} (from {s['from']})"
-              for s in plan.get("switches", [])]
-    lines += [f"conflict {c['key']}: kept {show(c['kept'])} from the vault "
-              f"file, discarded {show(c['discarded'])}"
-              for c in plan.get("conflicts", [])]
-    lines += [f"note {n}" for n in plan.get("notes", [])]
-    return lines
-
-
 def _tool_error(why: str) -> str:
     """The tool's reason, plus the way out when the cause is the tool
     itself (no node, a pin that is too old or lacks the command). A
@@ -81,29 +64,57 @@ def _tool_error(why: str) -> str:
     return f"{why}; {UPDATE_PIN_HINT}"
 
 
+def _site_note(vault: Path) -> str | None:
+    """The line for a `publish.site_dir` that is set but has no
+    vault.config.json: the tool then only looks at the vault file, and
+    saying so keeps a mistyped path from reading as "nothing to move"."""
+    config, why = _site_config(vault)
+    if config is not None or not why or not why.startswith("no vault.config.json"):
+        return None
+    path = why[why.index("(") + 1:why.rindex(")")]
+    return (f"publish.site_dir is set to {path} but no vault.config.json is "
+            f"there; site settings were not looked at")
+
+
+def _backup_places(vault: Path) -> str:
+    config, _why = _site_config(vault)
+    places = [str(vault / "_meta" / "vault-config.md.pre-migrate")]
+    if config is not None:
+        places.append(f"{config}.pre-migrate")
+    return " and ".join(places)
+
+
 def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | None]:
-    """(the tool's plan, or why there is none). (None, None) means the
+    """(the tool's answer, or why there is none). (None, None) means the
     vault has no `publish:` block."""
     answer: ToolAnswer = ask_publish_tool(vault, args, vault_only=True)
     if answer.why is not None:
         return None, _tool_error(answer.why)
     if answer.data is None:
         return None, None
-    if not isinstance(answer.data, dict) or "applicable" not in answer.data:
-        return None, _tool_error("migrate-config did not return the expected JSON")
-    return answer.data, None
+    data = answer.data
+    if not isinstance(data, dict) or "applicable" not in data:
+        return None, "migrate-config did not return the expected JSON"
+    lines = data.get("lines")
+    if not isinstance(lines, list) or not all(isinstance(x, str) for x in lines):
+        # A tool from before the plan carried its own lines.
+        return None, _tool_error("this publish tool's migrate-config does not "
+                                 "report its lines")
+    return data, None
 
 
 def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
-    """(the plan, whether a dry run found changes)."""
+    """(the plan, whether it has changes)."""
     plan, why = _ask(vault, args)
     if why is not None:
         return StepPlan(False, [], error=why), False
+    note = _site_note(vault)
+    notes = [note] if note else []
     if plan is None:
         return StepPlan(False, [DOES_NOT_PUBLISH]), False
     if not plan["applicable"]:
-        return StepPlan(False, [NOTHING_TO_DO]), False
-    return StepPlan(True, _plan_lines(plan)), True
+        return StepPlan(False, [*notes, NOTHING_TO_DO]), False
+    return StepPlan(True, [*notes, *plan["lines"]], notes=len(notes)), True
 
 
 def describe_config_to_vault(vault: Path) -> StepPlan:
@@ -112,6 +123,11 @@ def describe_config_to_vault(vault: Path) -> StepPlan:
 
 def apply_config_to_vault(vault: Path) -> StepPlan:
     done, _ = _config_plan(vault, ["migrate-config"])
+    if done.error and ("expected JSON" in done.error
+                       or "does not report its lines" in done.error):
+        # The run exited 0 but said nothing usable: it may have written.
+        done.error += (f"; the files may already have been changed, the "
+                       f"originals are in {_backup_places(vault)}")
     if done.error or not done.applies:
         return done
     # Running it again must plan nothing; anything left is a failure.
@@ -150,13 +166,18 @@ def run(vault: Path, mode: str, steps: list[Step] | None = None) -> int:
         if plan.error:
             print(f"migrate.py: {label}: {plan.error}", file=sys.stderr)
             return 1
+        count = len(plan.lines) - plan.notes if plan.applies else 0
         if mode == "status":
-            if plan.applies:
-                emit(label, [f"pending: {len(plan.lines)} change(s)"])
-            else:
-                emit(label, [f"done: {plan.lines[0] if plan.lines else NOTHING_TO_DO}"])
+            rows = ([f"pending: {count} change(s)", *plan.lines[:plan.notes]]
+                    if plan.applies else
+                    [f"done: {plan.lines[-1] if plan.lines else NOTHING_TO_DO}",
+                     *plan.lines[:-1]])
         else:
-            emit(label, plan.lines or [NOTHING_TO_DO])
+            rows = plan.lines or [NOTHING_TO_DO]
+        print(f"## {label}")
+        print(f"# count: {count}")
+        for row in rows:
+            print(row)
     return 0
 
 

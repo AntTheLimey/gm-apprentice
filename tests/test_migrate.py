@@ -24,8 +24,15 @@ MOVES = {"applicable": True,
          "moves": [{"from": "vault.config.json siteTitle",
                     "to": "publish.site_title", "value": "T"}],
          "merges": [], "switches": [], "conflicts": [], "notes": [],
-         "vaultSet": {}, "vaultRemove": [], "siteRemove": []}
-NOTHING = dict(MOVES, applicable=False, moves=[], reason="nothing to migrate")
+         "vaultSet": {}, "vaultRemove": [], "siteRemove": [],
+         "lines": ["move vault.config.json siteTitle -> publish.site_title",
+                   'skipped publish.exclude_dirs: not text, so not carried over: 2',
+                   'conflict footer: kept "F" from the vault file, discarded "G"',
+                   "note publish.theme is rewritten to add tagline"]}
+BACKUPS = ["backup /v/_meta/vault-config.md.pre-migrate",
+           "backup kept from an earlier run: /s/vault.config.json.pre-migrate"]
+NOTHING = dict(MOVES, applicable=False, moves=[], lines=[],
+               reason="nothing to migrate")
 
 
 def tmp(case, prefix):
@@ -52,17 +59,26 @@ class Tool:
     """A stand-in for subprocess.run: answers `migrate-config` with the
     pending plan until it has been run for real, then with nothing."""
 
-    def __init__(self, pending=True, fail=None, stays_pending=False):
+    def __init__(self, pending=True, fail=None, stays_pending=False,
+                 no_lines=False, stdout=None):
         self.pending, self.fail, self.stays = pending, fail, stays_pending
+        self.no_lines, self.stdout = no_lines, stdout
         self.calls = []
 
     def __call__(self, cmd, **kwargs):
         self.calls.append(cmd)
         if self.fail:
             return subprocess.CompletedProcess(cmd, 1, "", self.fail + "\n")
+        if self.stdout is not None:
+            return subprocess.CompletedProcess(cmd, 0, self.stdout, "")
         plan = MOVES if self.pending else NOTHING
-        if "--dry-run" not in cmd and not self.stays:
-            self.pending = False
+        if "--dry-run" not in cmd:
+            if self.pending:
+                plan = dict(plan, lines=plan["lines"] + BACKUPS)
+            if not self.stays:
+                self.pending = False
+        if self.no_lines:
+            plan = {k: v for k, v in plan.items() if k != "lines"}
         return subprocess.CompletedProcess(cmd, 0, json.dumps(plan), "")
 
 
@@ -90,8 +106,10 @@ class MigrateTests(unittest.TestCase):
         tool = Tool()
         code, out, _ = run_cli([str(vault), "--dry-run"], tool)
         self.assertEqual(code, 0)
-        self.assertIn("# count: 1", out)
-        self.assertIn("move vault.config.json siteTitle -> publish.site_title", out)
+        self.assertIn("# count: 4", out)
+        for line in MOVES["lines"]:
+            self.assertIn(line + "\n", out)
+        self.assertNotIn("backup", out)
         self.assertEqual(len(tool.calls), 1)
         self.assertIn("--dry-run", tool.calls[0])
 
@@ -100,7 +118,8 @@ class MigrateTests(unittest.TestCase):
         tool = Tool()
         code, out, _ = run_cli([str(vault)], tool)
         self.assertEqual(code, 0)
-        self.assertIn("move vault.config.json siteTitle", out)
+        for line in MOVES["lines"] + BACKUPS:
+            self.assertIn(line + "\n", out)
         self.assertEqual(len(tool.calls), 2)
         self.assertNotIn("--dry-run", tool.calls[0])
         self.assertIn("migrate-config", tool.calls[0])
@@ -119,6 +138,50 @@ class MigrateTests(unittest.TestCase):
         code, out, _ = run_cli([str(vault)], tool)
         self.assertEqual(code, 0)
         self.assertIn("nothing to do", out)
+        self.assertIn("# count: 0", out)
+
+    def test_tool_without_lines_is_too_old(self):
+        vault = make_vault(self)
+        code, _, err = run_cli([str(vault), "--dry-run"], Tool(no_lines=True))
+        self.assertEqual(code, 1)
+        self.assertIn("run update-pin, then migrate.py again", err)
+
+    def test_unparseable_apply_output_says_files_may_have_changed(self):
+        vault = make_vault(self)
+        code, _, err = run_cli([str(vault)], Tool(stdout="not json"))
+        self.assertEqual(code, 1)
+        self.assertIn("may already have been changed", err)
+        self.assertIn("vault-config.md.pre-migrate", err)
+        self.assertIn("vault.config.json.pre-migrate", err)
+
+    def test_site_dir_without_a_site_file_is_never_silent(self):
+        vault = make_vault(self)
+        missing = tmp(self, "mig-gone-") / "typo"
+        (vault / "_meta" / "vault-config.md").write_text(
+            f"---\npublish:\n  mode: player\n  site_dir: {missing}\n---\n",
+            encoding="utf-8")
+        line = (f"publish.site_dir is set to {missing} but no vault.config.json "
+                f"is there; site settings were not looked at")
+        for tool in (Tool(pending=False), Tool()):
+            code, out, _ = run_cli([str(vault), "--dry-run"], tool)
+            self.assertEqual(code, 0)
+            self.assertIn(line + "\n", out)
+            self.assertNotIn("--config", tool.calls[0])
+
+    def test_temp_dir_failure_is_not_reported_as_node_failing(self):
+        vault = make_vault(self, site=False)
+        tool = Tool()
+        with mock.patch.object(vc.tempfile, "mkdtemp", side_effect=OSError):
+            code, _, err = run_cli([str(vault)], tool)
+        self.assertEqual(code, 1)
+        self.assertIn("no temporary directory", err)
+        self.assertNotIn("node could not run", err)
+        self.assertEqual(tool.calls, [])
+
+    def test_unset_site_dir_has_no_such_line(self):
+        vault = make_vault(self, site=False)
+        _, out, _ = run_cli([str(vault), "--dry-run"], Tool())
+        self.assertNotIn("site_dir is set to", out)
 
     def test_tool_failure_exits_1_with_its_reason(self):
         vault = make_vault(self)
