@@ -1,0 +1,222 @@
+"""migrate_vault.py: the checks that read and write vault files alone."""
+
+import json
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+
+import migrate_vault as mv  # noqa: E402
+from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
+
+SHARED = SCRIPTS.parent
+
+
+def make_vault(case, system="coc-7e"):
+    vault = Path(tempfile.mkdtemp(prefix="migv-"))
+    case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+    (vault / "_meta").mkdir()
+    publish = f"publish:\n  system: {system}\n" if system else ""
+    (vault / "_meta" / "vault-config.md").write_text(
+        f'---\ngm_apprentice_version: "1.10.12"\n{publish}---\n',
+        encoding="utf-8")
+    return vault
+
+
+def by_id(items):
+    return {item.id: item for item in items}
+
+
+class SystemTests(unittest.TestCase):
+    def test_aliases_map_to_file_ids(self):
+        for written, wanted in (("CoC", "coc-7e"), ("gurps", "gurps-4e"),
+                                ("dnd-5e", "dnd-5e-2024"), ("Blades", "fitd"),
+                                ("pathfinder", "pf2e"),
+                                ("regency-cthulhu", "coc-7e-regency")):
+            self.assertEqual(mv.vault_system(make_vault(self, written)), wanted)
+
+    def test_campaign_overview_answers_when_the_config_does_not(self):
+        vault = make_vault(self, None)
+        (vault / "Overview.md").write_text(
+            "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
+            encoding="utf-8")
+        self.assertEqual(mv.vault_system(vault), "gurps-4e")
+        self.assertIsNone(mv.vault_system(make_vault(self, None)))
+
+
+class TemplateTests(unittest.TestCase):
+    def test_expected_set_for_a_coc_vault(self):
+        expected = mv.expected_templates(make_vault(self))
+        self.assertIn("_Template_NPC.md", expected)
+        self.assertIn("_Template_Session_WrapUp.md", expected)
+        self.assertIn("pc-coc-7e.md", expected)
+        self.assertIn("character-story.md", expected)
+        self.assertNotIn("crew-fitd.md", expected)
+        self.assertNotIn("pc-generic.md", expected)
+        npc = expected["_Template_NPC.md"]
+        self.assertNotIn("{STAT BLOCK", npc)
+        self.assertNotIn("Reputation", npc)
+        self.assertIn("**Damage Bonus**", npc)
+
+    def test_regency_keeps_reputation_without_the_comment(self):
+        npc = mv.expected_templates(
+            make_vault(self, "coc-7e-regency"))["_Template_NPC.md"]
+        self.assertIn("**Reputation** {n}", npc)
+        self.assertNotIn("Regency Cthulhu only", npc)
+
+    def test_no_system_gets_the_generic_block_and_pc(self):
+        expected = mv.expected_templates(make_vault(self, None))
+        self.assertIn("### Stats\n\n{System stat block.}",
+                      expected["_Template_NPC.md"])
+        self.assertIn("pc-generic.md", expected)
+
+    def test_fitd_gets_the_crew_sheet(self):
+        self.assertIn("crew-fitd.md",
+                      mv.expected_templates(make_vault(self, "fitd")))
+
+    def test_missing_is_will_do_and_changed_is_a_choice(self):
+        vault = make_vault(self)
+        expected = mv.expected_templates(vault)
+        (vault / "_Templates").mkdir()
+        for name, text in expected.items():
+            (vault / "_Templates" / name).write_text(text, encoding="utf-8")
+        self.assertEqual(mv.find_templates(vault), [])
+        (vault / "_Templates" / "_Template_Item.md").unlink()
+        (vault / "_Templates" / "_Template_NPC.md").write_text(
+            expected["_Template_NPC.md"] + "\n## My Section\n",
+            encoding="utf-8")
+        # Trailing blanks and blank-line runs are not a change.
+        (vault / "_Templates" / "_Template_Clue.md").write_text(
+            expected["_Template_Clue.md"].replace("\n\n", "\n\n\n") + "  \n",
+            encoding="utf-8")
+        items = by_id(mv.find_templates(vault))
+        self.assertEqual(sorted(items), ["template:_Template_Item.md",
+                                         "template:_Template_NPC.md"])
+        self.assertEqual(items["template:_Template_Item.md"].group, WILL)
+        self.assertEqual(items["template:_Template_NPC.md"].group, CHOICE)
+        self.assertIn("local changes are lost",
+                      items["template:_Template_NPC.md"].lines[0])
+        for item in items.values():
+            item.apply(None)
+        self.assertEqual(mv.find_templates(vault), [])
+
+    def test_a_vault_with_no_templates_folder_gets_one(self):
+        vault = make_vault(self)
+        for item in mv.find_templates(vault):
+            self.assertEqual(item.group, WILL)
+            item.apply(None)
+        self.assertTrue((vault / "_Templates" / "_Template_Session.md").is_file())
+
+    def test_sheet_source_is_added_under_portrait(self):
+        vault = make_vault(self)
+        (vault / "_Templates").mkdir()
+        old = '---\nname: ""\ntype: pc\nportrait: ""\ntags: []\n---\n\n## Stat Sheet\n'
+        (vault / "_Templates" / "pc-coc-7e.md").write_text(old, encoding="utf-8")
+        (item,) = mv.find_pc_template_field(vault)
+        self.assertEqual(item.group, WILL)
+        item.apply(None)
+        text = (vault / "_Templates" / "pc-coc-7e.md").read_text(encoding="utf-8")
+        self.assertIn('portrait: ""\nsheet_source: ""\ntags: []\n', text)
+        self.assertEqual(mv.find_pc_template_field(vault), [])
+
+    def test_an_unreadable_pc_template_is_a_failed_step(self):
+        vault = make_vault(self)
+        (vault / "_Templates").mkdir()
+        (vault / "_Templates" / "pc-x.md").write_bytes(b"\xff\xfe\x00bad")
+        with self.assertRaises(StepFailed):
+            mv.find_pc_template_field(vault)
+        self.assertEqual(mv.find_pc_template_field(make_vault(self)), [])
+
+
+class SchemaMirrorTests(unittest.TestCase):
+    def mirror(self, vault, text):
+        (vault / "_meta" / "entity-types.md").write_text(text, encoding="utf-8")
+
+    def canonical(self):
+        return mv.type_entries(
+            (SHARED / "entity-schema.md").read_text(encoding="utf-8"))
+
+    def test_a_matching_mirror_plans_nothing(self):
+        vault = make_vault(self)
+        body = "\n\n".join(self.canonical().values())
+        self.mirror(vault, f"# Types\n\n## Type-Specific Fields\n\n{body}\n")
+        self.assertEqual(mv.find_schema_mirror(vault), [])
+
+    def test_stale_and_missing_entries_are_one_choice(self):
+        vault = make_vault(self)
+        entries = self.canonical()
+        kept = dict(entries)
+        del kept["Creature"]
+        kept["Event"] = "**Event:** `event_type`, `date` (in-game)"
+        kept["Starship"] = "**Starship:** `tonnage`, `crew`"
+        body = "\n\n".join(kept.values())
+        self.mirror(vault, f"## Type-Specific Fields\n\n{body}\n\n## Notes\n\nmine\n")
+        (item,) = mv.find_schema_mirror(vault)
+        self.assertEqual((item.id, item.group), ("schema-mirror", CHOICE))
+        self.assertEqual(sorted(item.lines), [
+            "add the Creature entry to _meta/entity-types.md",
+            "update the Event entry in _meta/entity-types.md"])
+        item.apply(None)
+        text = (vault / "_meta" / "entity-types.md").read_text(encoding="utf-8")
+        self.assertIn(entries["Event"], text)
+        self.assertIn(entries["Creature"], text)
+        self.assertIn("**Starship:** `tonnage`, `crew`", text)
+        self.assertTrue(text.endswith("## Notes\n\nmine\n"))
+        self.assertEqual(mv.find_schema_mirror(vault), [])
+
+    def test_no_mirror_file_plans_nothing(self):
+        self.assertEqual(mv.find_schema_mirror(make_vault(self)), [])
+
+
+class SmallCheckTests(unittest.TestCase):
+    def test_old_wrap_up_filenames_need_a_person(self):
+        vault = make_vault(self)
+        for name in ("Session_03_Wrap_Up.md", "Chapter_01_Session_03_Wrap_Up.md"):
+            (vault / name).write_text("---\ntype: session_wrap\n---\n",
+                                      encoding="utf-8")
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(len(item.lines), 1)
+        self.assertTrue(item.lines[0].startswith("Session_03_Wrap_Up.md\t"))
+
+    def test_mobrpg_sections_choice_adds_the_two_titles(self):
+        vault = make_vault(self)
+        path = vault / "_meta" / "mobrpg-map.json"
+        path.write_text(json.dumps(
+            {"world": "w", "vaultOnlySections": ["GM Notes", "Encounters"]}),
+            encoding="utf-8")
+        (item,) = mv.find_mobrpg_sections(vault)
+        self.assertEqual((item.id, item.group), ("mobrpg-sections", CHOICE))
+        item.apply(None)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(data["vaultOnlySections"],
+                         ["GM Notes", "Encounters", "Campaign Log"])
+        self.assertEqual(data["world"], "w")
+        self.assertEqual(mv.find_mobrpg_sections(vault), [])
+
+    def test_no_map_or_no_list_plans_nothing(self):
+        vault = make_vault(self)
+        self.assertEqual(mv.find_mobrpg_sections(vault), [])
+        (vault / "_meta" / "mobrpg-map.json").write_text('{"world": "w"}',
+                                                         encoding="utf-8")
+        self.assertEqual(mv.find_mobrpg_sections(vault), [])
+
+    def test_heritage_notes_outside_heritages_need_a_person(self):
+        vault = make_vault(self)
+        (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")
+        for folder in ("Cultures", "Heritages"):
+            (vault / folder).mkdir()
+            (vault / folder / "Dwarves.md").write_text(
+                "---\ntype: heritage\n---\n", encoding="utf-8")
+        (item,) = mv.find_heritage_notes(vault)
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual([line.split("\t")[0] for line in item.lines],
+                         ["Cultures/Dwarves.md"])
+
+
+if __name__ == "__main__":
+    unittest.main()

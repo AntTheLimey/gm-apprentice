@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import migrate  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
-                          StepFailed, edit_frontmatter)
+                          StepFailed, edit_frontmatter, write_text_atomic)
 
 PLUGIN = "1.10.30"
 
@@ -365,6 +365,27 @@ class EditFrontmatterTests(unittest.TestCase):
         self.assertTrue(link.is_symlink())
         self.assertIn("a: b", real.read_text())
         self.assertEqual(real.stat().st_mode & 0o777, 0o640)
+
+
+class WriteTextAtomicTests(unittest.TestCase):
+    def test_writes_a_new_file_and_makes_its_folder(self):
+        vault = make_vault(self)
+        path = vault / "_Templates" / "a.md"
+        write_text_atomic(path, "one\r\ntwo\n")
+        self.assertEqual(path.read_bytes(), b"one\r\ntwo\n")
+        self.assertEqual([p.name for p in path.parent.iterdir()], ["a.md"])
+
+    def test_failure_leaves_the_file_and_no_temp_file(self):
+        vault = make_vault(self)
+        path = vault / "_meta" / "vault-config.md"
+        before = path.read_bytes()
+        with mock.patch("migrate_core.os.replace",
+                        side_effect=OSError("boom")):
+            with self.assertRaises(StepFailed):
+                write_text_atomic(path, "x")
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual([p.name for p in path.parent.iterdir()],
+                         ["vault-config.md"])
 
 
 if __name__ == "__main__":

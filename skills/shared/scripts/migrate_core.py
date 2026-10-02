@@ -49,6 +49,38 @@ class Check:
     choices: tuple[str, ...] = ()
 
 
+def write_text_atomic(path: Path, text: str) -> None:
+    """Write `text` to `path` exactly (no newline translation), so a failure
+    partway leaves the file as it was. Writes beside it and swaps it in;
+    resolves first so a symlinked file keeps its link. New files get the
+    mode a plain write would."""
+    real = path.resolve()
+    tmp = None
+    try:
+        try:
+            mode = real.stat().st_mode & 0o7777
+        except FileNotFoundError:
+            umask = os.umask(0)
+            os.umask(umask)
+            mode = 0o666 & ~umask
+        real.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=real.parent, prefix=f".{real.name}.")
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, real)
+        tmp = None
+    except OSError as e:
+        raise StepFailed(f"{path.name} cannot be written "
+                         f"({e.__class__.__name__})") from e
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+
 def edit_frontmatter(path: Path,
                      change: Callable[[list[str], str], object]) -> None:
     """Run `change(frontmatter lines, eol)` on a note and write it back.
@@ -70,27 +102,7 @@ def edit_frontmatter(path: Path,
     except ValueError as e:
         raise StepFailed(f"{path.name}: {e}") from e
     new_text = "".join([lines[0], *fm, *lines[end:]])
-    # Write beside the note and swap it in, so a failure partway leaves the
-    # note as it was. Resolve first so a symlinked note keeps its link.
-    real = path.resolve()
-    tmp = None
-    try:
-        mode = real.stat().st_mode & 0o7777
-        fd, tmp = tempfile.mkstemp(dir=real.parent, prefix=f".{real.name}.")
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-            f.write(new_text)
-        os.chmod(tmp, mode)
-        os.replace(tmp, real)
-        tmp = None
-    except OSError as e:
-        raise StepFailed(f"{path.name} cannot be written "
-                         f"({e.__class__.__name__})") from e
-    finally:
-        if tmp is not None:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+    write_text_atomic(path, new_text)
 
 
 def plugin_tool(args: list[str]) -> tuple[int, str, str]:
