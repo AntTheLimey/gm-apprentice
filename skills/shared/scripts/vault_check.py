@@ -1550,6 +1550,13 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         fix = ("it needs Node 22+ on PATH" if "node" in str(e)
                else f"fix {VAULT_CONFIG}")
         return None, str(e), fix, _maybe_publishes(vault)
+    if publishes and (publish_block_inline(vault) or read_publish_list(
+            vault, "exclude_sections").publish_line is None):
+        # The tool reads this block; the reader here that the exclude list
+        # still comes through does not, and would assume the defaults.
+        return None, (f"publish: in {VAULT_CONFIG} is written in a way that "
+                      f"is not understood here (on one line, or indented)"), (
+            "write it as a block at the margin, one key per line"), publishes
     if site is None:
         return PUBLISH_TOOL, None, "it needs Node 22+ on PATH", publishes
     if not (site / "vault.config.json").is_file():

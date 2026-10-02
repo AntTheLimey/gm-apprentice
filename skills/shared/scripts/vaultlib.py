@@ -871,7 +871,8 @@ class PublishLines:
             raise PublishToolUnavailable(
                 f"the publish tool did not answer within "
                 f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
-                "the publish tool did not answer in JSON") from e
+                "the publish tool did not answer the question (a tool "
+                "older than 1.12.1 has no `lines` command)") from e
         if not isinstance(answer, dict) or "error" in answer:
             why = answer.get("error") if isinstance(answer, dict) else answer
             raise PublishToolUnavailable(f"the publish tool refused: {why}")

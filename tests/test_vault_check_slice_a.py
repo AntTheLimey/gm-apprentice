@@ -2089,6 +2089,39 @@ class NoPublishToolTests(unittest.TestCase):
         self.assertEqual(vaultlib.vault_site(make_vault(self, meta=False)),
                          (False, None))
 
+    def test_a_block_the_list_reader_cannot_read_is_not_checked_on_a_guess(self):
+        # The gate's tool reads these; the exclude list is still read by the
+        # line reader, which does not, and would scan with the default list.
+        for form, block in (
+                ("one line", "publish: {exclude_sections: [Plot Threads]}\n"),
+                ("indented", "  publish:\n    exclude_sections: [Plot Threads]\n")):
+            with self.subTest(form):
+                vault = make_vault(self, f"---\n{block}---\n")
+                note = ("---\ntype: npc\n---\n\n# Bob\n\n"
+                        "## **Plot Threads**\n\nSECRET\n")
+                (vault / "Bob.md").write_text(note, encoding="utf-8")
+                (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+                for rows in (vc.check_gm_leak(vault, None, fix=True),
+                             vc.check_wrapup(vault, None, True)):
+                    self.assertEqual(len(rows), 1, rows)
+                    self.assertIn("is written in a way that is not understood",
+                                  rows[0])
+                    self.assertIn("nothing checked, nothing written", rows[0])
+                self.assertEqual(read(vault, "Bob.md"), note)
+                self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_a_real_old_tool_prints_its_usage_and_is_refused_in_words(self):
+        old = Path(tempfile.mkdtemp(prefix="vc-old-tool-")) / "gm-publish.js"
+        self.addCleanup(shutil.rmtree, old.parent, ignore_errors=True)
+        old.write_text("console.log('Usage: gm-apprentice-publish ...');\n"
+                       "process.exit(1);\n", encoding="utf-8")
+        lines = vaultlib.PublishLines(old)
+        self.addCleanup(lines.close)
+        with self.assertRaises(vaultlib.PublishToolUnavailable) as raised:
+            lines.ask({"op": "stub", "text": "", "include": []})
+        self.assertIn("older than 1.12.1 has no `lines` command",
+                      str(raised.exception))
+
     def test_site_dir_is_read_by_the_tool_however_the_block_is_written(self):
         # The line reader here cannot see an indented block; the gate must
         # still find the site and its old tool.
@@ -2111,7 +2144,7 @@ class NoPublishToolTests(unittest.TestCase):
                      vc.check_wrapup(vault, None, True)):
             self.assertEqual(len(rows), 1, rows)
             self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
-            self.assertIn("run update-pin --site ", rows[0])
+            self.assertIn("nothing checked, nothing written", rows[0])
         self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
         self.assertEqual(read(vault, "W.md"), self.WRAP)
 

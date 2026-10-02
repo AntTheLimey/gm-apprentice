@@ -90,12 +90,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     until `update-pin --site <site-dir>` has run. The same goes for a
     site whose `package.json` names the tool without it being
     installed, and a `site_dir` with no site in it. A site that names
-    no tool of its own, and a vault with no `site_dir`, are answered by
-    the plugin's tool.
+    no tool of its own is asked through whatever copy node would load
+    from that folder (a workspace installs it higher up); failing that,
+    and for a vault with no `site_dir`, the plugin's tool answers.
   - Whether the vault has a `publish:` block, and where its `site_dir`
     points, is read by the publish tool's YAML parser, so a block
-    written in a way the Python line reader does not expect (indented,
-    quoted key, saved with a byte-order mark) is still seen.
+    written in a way the Python line reader does not expect (quoted
+    key, saved with a byte-order mark) is still seen. A block written
+    on one line or indented, which that reader cannot take the exclude
+    list from, stops the check with an ERROR row instead of being
+    scanned on the default list.
   - The fix-time refusal "holds a heading-shaped line in a code fence"
     is gone: such a block is now safe to move.
   - If the tool stops answering part-way, the check ends with an ERROR
