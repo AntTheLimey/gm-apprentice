@@ -40,7 +40,7 @@ this skill's own cache path). One-off commands run from the cache:
 
 ```bash
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
-node "$TOOL" init <target-dir>   # scaffold a new site (auto-pins itself to this version)
+node "$TOOL" init <target-dir> --vault <vault>   # scaffold a new site (auto-pins itself to this version)
 node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
 node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the manifest
 node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # edit the manifest
@@ -134,10 +134,12 @@ offer to apply it.
 ("I added a new entity type", "campaign-organizer was updated",
 "new folder in the vault", "pages missing after an update")
 
-1. Locate the site directory and read its `vault.config.json`.
-2. Compare `folderMap` with the vault's folders; propose
-   `folderMap` / `excludeDirs` additions.
-3. Apply after confirmation, then `npm run build` to confirm.
+1. Locate the site directory and read `publish:` in the vault's
+   `_meta/vault-config.md`.
+2. Compare `publish.folder_map` with the vault's folders; propose
+   `folder_map` / `exclude_dirs` additions.
+3. Apply to the vault file after confirmation, then `npm run build`
+   to confirm.
 4. Say briefly what the new type renders as (dedicated template or
    smart wiki fallback — `references/schema-reference.md`).
 
@@ -178,7 +180,8 @@ the inbox", "watch for sheet changes")
 
 Follow `references/change-request-loop.md` — an unattended,
 self-paced loop that applies clean player sheet edits (GURPS 4e
-and CoC 7e) and flags edge cases.
+and CoC 7e) and flags edge cases. With `publish.character_sheets`
+off it only answers questions.
 
 ### 8. Live status bar setup (Tier 2a) / 9. At-table inbox setup (Tier 2b)
 ("turn on the status bar", "let players update HP/FP live" / "set
@@ -187,15 +190,18 @@ up the inbox", "let players submit changes")
 Cloudflare Pages only. From the site directory run
 `node "$TOOL" setup-status-bar` or `node "$TOOL" setup-inbox`
 (`--config <path>` if not `./vault.config.json`). Both are
-preflight-gated, idempotent and handle KV themselves — see
+preflight-gated, idempotent, handle KV themselves and write
+`publish.live_stats` / `publish.inbox` to the vault file — see
 `references/cloudflare-pages.md` § The fast way. `setup-inbox` is
 infra only; the at-table session is capability 7.
 
 ## References
 
-- `references/configuration.md` — all settings. `_meta/vault-config.md`
-  (filtering, theming) wins over `vault.config.json` (paths, URLs,
-  display) when both set something.
+- `references/configuration.md` — all settings. Everything about what
+  publishes lives under `publish:` in `_meta/vault-config.md`;
+  `vault.config.json` holds only the six deployment keys. § Switches
+  covers `character_sheets`, `live_stats` and `inbox` (on/off, and
+  what a PC page shows with sheets off).
 - `references/schema-reference.md` — which fields each entity type
   renders.
 - `references/cloudflare-pages.md` — Cloudflare token, credentials

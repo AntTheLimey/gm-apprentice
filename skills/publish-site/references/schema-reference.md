@@ -65,9 +65,10 @@ beneath them. No accordion — the content flows as continuous prose.
 | `rank` | Optional | Military or organizational rank |
 | `portrait` | Optional | Path relative to vault root |
 
-Body content renders below the header card. The `Relationships`
-section in the body is excluded from the public site by default
-(see `excludeSections` in `vault.config.json`).
+Body content renders below the header card. To keep a body section
+such as `Relationships` off the public site, list its heading in
+`publish.exclude_sections` in `_meta/vault-config.md` (see
+`configuration.md`).
 
 ---
 
@@ -329,7 +330,7 @@ mustn't see, use `gm_aliases`.
 ## Portrait paths
 
 Portrait paths must be relative to the vault root and use
-forward slashes. The `attachmentsDir` field in `vault.config.json`
+forward slashes. `publish.attachments_dir` in `_meta/vault-config.md`
 sets the base folder (default: `_attachments`).
 
 Example vault frontmatter:
@@ -351,6 +352,21 @@ These fields live in `_meta/vault-config.md` under the `publish:` key
 and affect the whole site rather than individual entity pages. See
 `configuration.md` for the full vault-config reference.
 
-| Field | Key path | Description |
-|-------|----------|-------------|
-| `system` | `publish.system` | Game system identifier. Expected values: `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e`, `fitd`. Selects the PC character-sheet renderer at build time; matched case-insensitively, with aliases (`coc`, `gurps`, `dnd`, `pathfinder`, `blades`). An unrecognised or absent value falls back to the generic PC layout. |
+| Field | Key path | Type | Default | Description |
+|-------|----------|------|---------|-------------|
+| `system` | `publish.system` | text | none | Game system identifier. Expected values: `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e`, `fitd`. Selects the PC character-sheet renderer at build time; matched case-insensitively, with aliases (`coc`, `gurps`, `dnd`, `pathfinder`, `blades`). An unrecognised or absent value falls back to the generic PC layout. |
+| `site_title` | `publish.site_title` | text | none (`init` writes one) | Name shown in the nav bar and browser tab |
+| `footer` | `publish.footer` | text | none | Footer text on every page |
+| `search` | `publish.search` | true/false | `true` | `false` leaves out the search index |
+| `folder_map` | `publish.folder_map` | map of vault folder → output path | empty (`init` writes the standard map) | Which vault folders publish, and where. A folder holding typed pages with no entry is skipped with a build warning |
+| `attachments_dir` | `publish.attachments_dir` | text | `_attachments` | Vault folder holding images |
+| `character_sheets` | `publish.character_sheets` | switch | on | Off: PC pages publish prose sections and no stats, and live stats are forced off |
+| `live_stats` | `publish.live_stats` | switch | off | The live status bar on each PC sheet and the live party board. Needs a KV store wired in the site's `wrangler.toml` |
+| `inbox` | `publish.inbox` | switch | off | The change-request widget on each PC page. Needs a KV store wired in the site's `wrangler.toml` |
+| `pc_prose_sections` | `publish.pc_prose_sections` | list of heading titles | empty | Extra `##` sections a PC page keeps when `character_sheets` is off, on top of the built-in list |
+
+A switch takes `true`/`false` or the words `yes`, `no`, `on`, `off`
+(any case). Any other value, or a key left empty, counts as off and
+the build warns. `configuration.md` § Switches has the full rules,
+and its § Settings left in `vault.config.json` lists the old site-file
+names these keys replace.

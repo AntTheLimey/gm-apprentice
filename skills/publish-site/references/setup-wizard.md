@@ -229,9 +229,12 @@ confirmed. Rules:
 - This block is **transient setup progress**, not durable config. It
   exists so a later run knows where the GM stopped and what they already
   answered.
-- **Durable config** — `host`, `siteUrl`, `cloudflarePagesProject` (or
-  the GitHub repo), the `backend` block, and output paths — lives in the
-  site's `vault.config.json`, written once the site directory exists
+- **Durable config** lives in two places. The campaign settings (site
+  title, tagline, theme, folder map, exclusions, the switches) go in
+  the same file's `publish:` block, beside `setup_progress`. The
+  site's `vault.config.json` holds only the deployment keys —
+  `vaultPath`, `outputDir`, `host`, `siteUrl`, `cloudflarePagesProject`
+  and `preserveDirs` — written once the site directory exists
   (Phase C). Do not try to keep durable config in `setup_progress`.
 - On a fresh successful finish, set `tier1_complete: true` after the
   post-deploy verify (Phase F) succeeds. **Keep the block** — a later
@@ -261,8 +264,9 @@ If `_Campaign/Campaign Overview.md` exists in the vault, read its
 > "I found a title in your campaign overview: '[title]'. Would
 > you like to use that, or something different?"
 
-Store the confirmed name as `site_title` (it becomes `siteTitle` in
-`vault.config.json`).
+Store the confirmed name as `site_title` in `setup_progress`. Step 13
+hands it to `init` as `--title`, which writes `publish.site_title` in
+`_meta/vault-config.md` when the vault file does not already set it.
 
 ### Step 7: Landing page tagline
 
@@ -275,7 +279,10 @@ Ask:
 > or
 > 'A Regency-era Call of Cthulhu investigation in Bath, 1814.'"
 
-Store as `tagline` (it becomes `landingTagline` in `vault.config.json`).
+Store as `tagline` in `setup_progress`. Step 13 hands it to `init` as
+`--tagline`, which writes `publish.theme.tagline` in
+`_meta/vault-config.md` (a child of `theme:`, beside any palette and
+fonts set later) when the vault file does not already set it.
 
 ### Step 8: Name the site (host-specific)
 
@@ -387,12 +394,17 @@ npm registry. Run its `init` from the plugin cache so the scaffold pins
 itself to the exact version the GM has installed:
 
 ```bash
-node "$TOOL" init "<site_dir>"
+node "$TOOL" init "<site_dir>" --vault "<vault_path>" --title "<site_title>" --tagline "<tagline>"
 ```
 
 Use the plugin cache path for the GM's OS (e.g.
-`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). This creates
-the following structure inside `<site_dir>`:
+`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). Pass the
+absolute vault path from Step 1: `--vault` records it as `vaultPath`
+in the site file and tells `init` where the campaign settings go
+(without it `init` assumes `./vault` inside the site directory).
+`--title` and `--tagline` carry the Step 6 and Step 7 answers; leave
+one out and `init` uses "My Campaign" or sets no tagline. This
+creates the following structure inside `<site_dir>`:
 
 ```text
 <site_dir>/
@@ -409,6 +421,17 @@ the following structure inside `<site_dir>`:
 The scaffold is intentionally minimal — no `functions/` directory and no KV
 binding in `wrangler.toml`. Those are added only if the GM opts into the
 at-table inbox or live status bar later (Phase G).
+
+`init` also writes the starting campaign settings into the vault's
+`_meta/vault-config.md`, under `publish:`, for each key that file does
+not already set: `site_title`, `folder_map` (the standard vault
+folders), `attachments_dir`, `exclude_dirs` (`_meta`, `_Templates`,
+`_resources`) and `exclude_callouts: true`, plus `site_title` and
+`theme.tagline` from `--title` and `--tagline`. A key already there is
+left alone. If `init` prints `Campaign settings were not written: …`,
+the vault file could not be edited safely: fix what the message
+names, then add the listed keys under `publish:` yourself (Step 15 shows the full block; without a
+`folder_map` no folder publishes).
 
 If the command fails with "command not found", explain:
 
@@ -459,23 +482,21 @@ the package.
 
 ### Step 15: Fill in vault.config.json
 
-Open `vault.config.json` in `<site_dir>` and update these fields with
-the values gathered in Phase B. From here on, durable config lives in
-this file; `setup_progress` continues only to track `last_completed_step`
-for resume.
+Open `vault.config.json` in `<site_dir>` and set the deployment keys
+from the values gathered in Phase B. These are the only keys the file
+holds; everything about what the site publishes is in the vault's
+`_meta/vault-config.md`. `setup_progress` continues only to track
+`last_completed_step` for resume.
 
 **Cloudflare Pages (recommended):**
 
 ```json
 {
-  "vaultPath": "<vault_path from Step 1>",
-  "siteTitle": "<site_title from Step 6>",
-  "landingTagline": "<tagline from Step 7>",
   "host": "cloudflare-pages",
   "cloudflarePagesProject": "<project_name>",
   "siteUrl": "https://<project_name>.pages.dev",
-  "outputDir": "./docs",
-  "backend": { "statusBar": false, "inbox": false }
+  "vaultPath": "<vault_path from Step 1>",
+  "outputDir": "./docs"
 }
 ```
 
@@ -483,29 +504,54 @@ for resume.
 
 ```json
 {
-  "vaultPath": "<vault_path from Step 1>",
-  "siteTitle": "<site_title from Step 6>",
-  "landingTagline": "<tagline from Step 7>",
   "host": "github-pages",
   "siteUrl": "https://<github_username>.github.io/<project_name>/",
-  "outputDir": "./docs",
-  "backend": { "statusBar": false, "inbox": false }
+  "vaultPath": "<vault_path from Step 1>",
+  "outputDir": "./docs"
 }
 ```
 
-**Verify the Tier-1 backend default is present.** `init` writes
-`"backend": { "statusBar": false, "inbox": false }` into
-`vault.config.json` for you. Confirm that block is present and leave it
-as-is — do **not** remove it or flip either value. This keeps the live
-status bar and the at-table inbox off until the GM explicitly opts in
-(Phase G); flipping them on here would surface backend UI on a site
-that has no KV namespace behind it.
+Do not add campaign settings (`siteTitle`, `folderMap`, exclude lists,
+a `backend` block) to this file. The build would still read them for
+now, with a warning, and they belong in the vault file.
 
-The other fields (`folderMap`, `excludeDirs`, `excludeSections`,
-`attachmentsDir`) are pre-filled with sensible defaults. Leave them
-as-is unless the vault uses non-standard folder names. Apply these
-changes directly to the file — do not ask the GM to edit JSON by hand
-unless they prefer to.
+**Check the vault file's `publish:` block.** After Steps 6, 7 and 13
+it should read like this (plus any theme and 404 settings from Phase
+B, and `setup_progress`):
+
+```yaml
+publish:
+  site_title: "<site_title from Step 6>"
+  theme:
+    tagline: "<tagline from Step 7>"
+  folder_map:
+    Characters/PCs: characters/pcs
+    Characters/NPCs: characters/npcs
+    Locations: locations
+    "Factions & Organizations": factions
+    "Items & Artifacts": items
+    Creatures: creatures
+    Events: events
+    Documents: documents
+    Clues: clues
+    Chapters: chapters
+    _Campaign: campaign
+    _World: world
+    Heritages: heritages
+  attachments_dir: _attachments
+  exclude_dirs: ["_meta", "_Templates", "_resources"]
+  exclude_callouts: true
+```
+
+If `site_title` reads `My Campaign`, `init` ran without `--title`: set
+it to the Step 6 answer. Leave `folder_map`,
+`exclude_dirs` and `attachments_dir` as written unless the vault uses
+non-standard folder names. Leave `live_stats` and `inbox` unset: unset
+means off, which keeps the live status bar and the at-table inbox off
+until the GM opts in (Phase G). Leave `character_sheets` unset too
+(sheets publish) unless the GM asks to keep sheets off the site — see
+`configuration.md` § Switches. Apply these changes directly to the
+files — do not ask the GM to edit them by hand unless they prefer to.
 
 ---
 
@@ -774,12 +820,14 @@ node "$TOOL" setup-inbox        # Tier 2b — at-table change-request inbox
 Run from the site directory (each defaults to `./vault.config.json`; pass
 `--config <path>` otherwise). Either command creates or reuses the `INBOX`
 KV namespace, aligns `wrangler.toml`'s `name` to the Cloudflare project,
-flips the matching `backend.statusBar` / `backend.inbox` flag in
-`vault.config.json`, rebuilds, and deploys — one step, no manual
-`wrangler.toml` editing. `setup-inbox` requires and ensures the same KV
-namespace (**inbox ⇒ KV**) and is **infra-only** — it flips the flag but
+sets the matching switch (`publish.live_stats: true` /
+`publish.inbox: true`) in the vault's `_meta/vault-config.md`,
+rebuilds, and deploys — one step, no manual `wrangler.toml` editing.
+It checks that the vault file can be edited before it touches wrangler
+or KV. `setup-inbox` requires and ensures the same KV
+namespace (**inbox ⇒ KV**) and is **infra-only** — it sets the switch but
 does not open a session; that's still "start your checking loop"
-(capability 7) once the flag is live. If the command reports the
+(capability 7) once the switch is live. If the command reports the
 KV-permission fix, walk the GM through editing the token (My Profile → API
 Tokens → their token → Edit → add **Account · Workers KV Storage · Edit** →
 Save) — the same one-tick permission mentioned in Phase A — then re-run;
