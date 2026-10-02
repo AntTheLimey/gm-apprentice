@@ -248,7 +248,9 @@ def check_frontmatter(vault: Path, folder: str | None,
     rows = []
     unparsed: set[str] = set()
     notes = list(vault_files(vault, folder))
-    if notes:
+    # Unscoped, ask even with nothing to walk here: the build walks
+    # folders this script skips, and names any broken note in them.
+    if notes or folder is None:
         tool = (explain or ExplainAll(vault))()
         broken, why = unparseable_files(tool)
         if broken is None and why:

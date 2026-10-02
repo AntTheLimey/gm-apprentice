@@ -902,6 +902,19 @@ class FrontmatterUnparseableTests(unittest.TestCase):
                  if c.args and "\tasked " in str(c.args[0])]
         self.assertEqual(len(asked), 1, asked)
 
+    def test_an_unscoped_run_asks_even_when_its_own_walk_finds_nothing(self):
+        # The build walks folders this script skips. A real publishing
+        # vault always has _meta/vault-config.md in the walk, so the walk
+        # is emptied by hand here.
+        vault, calls = self._vault(unparseable={"_inbox/Raw.md": "bad"})
+        with mock.patch.object(vc, "vault_files", return_value=iter([])):
+            rows = vc.check_frontmatter(vault, None)
+        self.assertEqual([r.split("\t")[1] for r in
+                          rows_for(rows, "cannot parse")], ["_inbox/Raw.md"])
+        with mock.patch.object(vc, "vault_files", return_value=iter([])):
+            self.assertEqual(vc.check_frontmatter(vault, "Empty"), [])
+        self.assertEqual(len(calls), 1, calls)
+
     def test_a_tab_in_the_parser_message_does_not_split_the_row(self):
         vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad\there"})
         rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
