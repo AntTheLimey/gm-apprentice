@@ -33,4 +33,42 @@ describe('publish switches', () => {
     assert.strictEqual(resolveSwitches({ inbox: false, backend: { inbox: true } }, {}).inbox, false));
   it('unset means off even when the caller passes nothing about the backend', () =>
     assert.deepStrictEqual(on({}, {}), [true, false, false]));
+
+  it('a present but empty value is unreadable: off, with a note, for every switch', () => {
+    for (const key of ['character_sheets', 'live_stats', 'inbox']) {
+      const s = resolveSwitches({ [key]: null }, {});
+      assert.ok(s.notes.some((n) => n.key === key), key);
+    }
+    assert.strictEqual(resolveSwitches({ character_sheets: null }, {}).characterSheets, false);
+    assert.strictEqual(resolveSwitches({ inbox: null }, {}).inbox, false);
+  });
+  it('an empty vault-file value wins over the site file and does not fall through', () =>
+    assert.strictEqual(resolveSwitches({ live_stats: null }, { backend: { statusBar: true } }).liveStats, false));
+  it('a backend that is not a map is ignored and reported', () => {
+    const s = resolveSwitches({ backend: true }, { backend: 'yes' });
+    assert.deepStrictEqual(s.notes.map((n) => n.key).sort(), ['backend', 'vault.config.json backend']);
+    assert.ok(s.notes.every((n) => /not a map/.test(n.problem)));
+  });
+  it('an unreadable old-name value withholds and reports both', () => {
+    const s = resolveSwitches({ backend: { statusBar: 'maybe' } }, {});
+    assert.strictEqual(s.liveStats, false);
+    assert.ok(s.notes.some((n) => n.key === 'backend.statusBar'));
+    assert.ok(s.notes.some((n) => n.key === 'live_stats' && /not true or false/.test(n.problem)));
+  });
+  it('a site-file old name is reported under its own label', () =>
+    assert.ok(resolveSwitches({}, { backend: { statusBar: true } }).notes.some((n) => n.key === 'vault.config.json backend.statusBar')));
+  it('live stats via an old name is forced off when sheets are off', () => {
+    const s = resolveSwitches({ character_sheets: false, backend: { statusBar: true } }, {});
+    assert.strictEqual(s.liveStats, false);
+    assert.ok(s.notes.some((n) => /character_sheets is off/.test(n.problem)));
+  });
+  it('loadPublishConfig returns switches and no backend', () => {
+    const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
+    const { loadPublishConfig } = require('../../lib/config');
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-sw-'));
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    const cfg = loadPublishConfig(vault, {});
+    assert.ok(cfg.switches);
+    assert.ok(!('backend' in cfg));
+  });
 });

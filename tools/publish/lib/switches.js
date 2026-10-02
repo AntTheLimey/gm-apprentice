@@ -2,9 +2,11 @@
 // The only place the three GM switches are decided (#285).
 const WORDS = new Map([['true', true], ['yes', true], ['on', true], ['false', false], ['no', false], ['off', false]]);
 
-// undefined: not set. true/false: set. null: set to something unreadable.
+// undefined: not set. true/false: set. null: set to something unreadable,
+// including a key present but empty (`inbox:` in YAML parses to null).
 function asBool(value) {
-  if (value === undefined || value === null) return undefined;
+  if (value === undefined) return undefined;
+  if (value === null) return null;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string' && WORDS.has(value.trim().toLowerCase())) return WORDS.get(value.trim().toLowerCase());
   return null;
@@ -12,9 +14,15 @@ function asBool(value) {
 
 function resolveSwitches(publish, json) {
   const p = publish || {};
-  const pb = (p.backend && typeof p.backend === 'object') ? p.backend : {};
-  const jb = (json && json.backend && typeof json.backend === 'object') ? json.backend : {};
   const notes = [];
+  const asMap = (v, label) => {
+    if (v === undefined) return {};
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+    notes.push({ key: label, problem: 'is not a map of switches; ignored' });
+    return {};
+  };
+  const pb = asMap(p.backend, 'backend');
+  const jb = asMap(json && json.backend, 'vault.config.json backend');
   // First source that sets it wins: new name, old name in the vault file, old name in the site file.
   const read = (key, sources, fallback) => {
     for (const [label, raw] of sources) {

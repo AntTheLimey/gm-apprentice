@@ -49,7 +49,7 @@ function build(options = {}) {
   // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
   // publishConfig.backend, so this must run before any page renders.
   publishConfig.backend = resolveBackendFlags(
-    { statusBar: (publishConfig.backend || {}).statusBar, inbox: (publishConfig.backend || {}).inbox },
+    { statusBar: (publishConfig.switches || {}).liveStats === true, inbox: (publishConfig.switches || {}).inbox === true },
     configDir,
   );
   const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
@@ -941,7 +941,7 @@ function build(options = {}) {
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
     const board = boardFor(publishConfig.system);
-    const live = (publishConfig.backend || {}).statusBar === true;
+    const live = (publishConfig.switches || {}).liveStats === true;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
