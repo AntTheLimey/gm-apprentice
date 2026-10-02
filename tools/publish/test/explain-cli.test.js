@@ -205,13 +205,11 @@ describe('explain', () => {
   // as "no `type:`" (NO_TYPE) — wrong, since there is no frontmatter to have read a
   // type from — and explain's own re-read for "sections stripped"/"gm-only blocks"
   // silently swallowed the same error, reporting "none"/"0" as if the file were clean.
-  // Each check below gets its own vault with its own marker. That was once needed to
-  // get past gray-matter's parse cache; lib/frontmatter.js no longer uses it (#287).
-  const malformedFrontmatter = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+  const MALFORMED = `---\ntype: npc\nname: "Unterminated\n---\n\nBody.\n`;
 
-  function siteForMalformed(marker) {
+  function siteForMalformed() {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-'));
-    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter(marker));
+    write(vault, 'Characters/NPCs/Bram.md', MALFORMED);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-site-'));
     const configPath = path.join(dir, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({
@@ -225,7 +223,7 @@ describe('explain', () => {
   }
 
   it('says the frontmatter could not be parsed, not NO_TYPE, for an unparseable file', async () => {
-    const { vault, dir, configPath } = siteForMalformed('human-check');
+    const { vault, dir, configPath } = siteForMalformed();
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Characters/NPCs/Bram.md' }, c.deps);
     assert.strictEqual(rc, 0);
@@ -240,7 +238,7 @@ describe('explain', () => {
   });
 
   it('--json carries the same FILE_UNPARSEABLE verdict and null stripped/gm-only fields', async () => {
-    const { vault, dir, configPath } = siteForMalformed('json-check');
+    const { vault, dir, configPath } = siteForMalformed();
     const j = capture();
     await runExplain({ configPath, target: 'Characters/NPCs/Bram.md', json: true }, j.deps);
     const payload = JSON.parse(j.out.join(''));

@@ -133,7 +133,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -222,6 +222,19 @@ def emit(label: str, rows: list[str]):
         print(r)
 
 
+def _emit_tool_once() -> Callable[[str, list[str]], None]:
+    """`emit` for `all`: the "asked <which tool>" row prints under the
+    first check that used the tool, not again under each later one."""
+    seen: set[str] = set()
+
+    def emit_once(label: str, rows: list[str]) -> None:
+        kept = [r for r in rows
+                if not (r.startswith("INFO\t(vault)\tasked ") and r in seen)]
+        seen.update(r for r in kept if r.startswith("INFO\t(vault)\tasked "))
+        emit(label, kept)
+    return emit_once
+
+
 def check_frontmatter(vault: Path, folder: str | None,
                       explain: ExplainAll | None = None) -> list[str]:
     """Schema rules, read by vaultlib's line reader, then the one thing
@@ -233,6 +246,7 @@ def check_frontmatter(vault: Path, folder: str | None,
     rows: the post-write loops fix ERRORs, and a skill that has just
     written such a note must not leave it."""
     rows = []
+    unparsed: set[str] = set()
     notes = list(vault_files(vault, folder))
     if notes:
         tool = (explain or ExplainAll(vault))()
@@ -254,9 +268,13 @@ def check_frontmatter(vault: Path, folder: str | None,
             detail = f" ({message})" if message else ""
             rows.append(f"ERROR\t{on_disk.get(key, key)}\tthe site's build "
                         f"cannot parse this frontmatter{detail} and skips "
-                        f"the note — most often a key written twice, or an "
-                        f"unquoted value with a colon in it")
+                        f"the note — {_yaml_hint(message)}")
+        unparsed = {on_disk[key] for key, _message in named if key in on_disk}
     for rel, text in notes:
+        if rel in unparsed:
+            # Schema rows would come from the line reader's guess at YAML
+            # the build rejects; they mean nothing until it parses.
+            continue
         fm = extract_frontmatter(text)
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
@@ -1476,6 +1494,18 @@ def sections_withheld(answer: ToolAnswer
                 for p in pages if p["strippedSections"]}, None
     except (KeyError, TypeError):
         return None, "explain did not return the expected JSON"
+
+
+def _yaml_hint(message: str) -> str:
+    """What to look for, read off the parser's own message; the general
+    hint when the message is absent (an older tool) or not one of these."""
+    if "duplicated mapping key" in message:
+        return "a key is written twice; keep one"
+    if "quoted scalar" in message:
+        return ("a quote is not closed; the line named is where the block "
+                "ends, not where the quote opens")
+    return ("most often a key written twice, or an unquoted value with a "
+            "colon in it")
 
 
 def unparseable_files(answer: ToolAnswer
@@ -4041,43 +4071,44 @@ def main() -> int:
         return 0
 
     explain = ExplainAll(args.vault)
+    emit_rows = _emit_tool_once() if args.command == "all" else emit
     if args.command in ("frontmatter", "all"):
-        emit("frontmatter", check_frontmatter(args.vault, args.folder,
+        emit_rows("frontmatter", check_frontmatter(args.vault, args.folder,
                                               explain))
     if args.command in ("names", "all"):
-        emit("names", check_names(args.vault, args.threshold))
+        emit_rows("names", check_names(args.vault, args.threshold))
     if args.command in ("index", "all"):
-        emit("index", check_index(args.vault))
+        emit_rows("index", check_index(args.vault))
     if args.command in ("stale-drafts", "all"):
-        emit("stale-drafts", check_stale_drafts(args.vault))
+        emit_rows("stale-drafts", check_stale_drafts(args.vault))
     if args.command in ("tables", "all"):
-        emit("tables", check_tables(args.vault, args.folder, args.file,
+        emit_rows("tables", check_tables(args.vault, args.folder, args.file,
                                     newer_than_mtime))
     if args.command in ("timeline", "all"):
-        emit("timeline", check_timeline(args.vault))
+        emit_rows("timeline", check_timeline(args.vault))
     if args.command in ("read-aloud", "all"):
-        emit("read-aloud", check_read_aloud(args.vault))
+        emit_rows("read-aloud", check_read_aloud(args.vault))
     if args.command in ("relationships", "all"):
-        emit("relationships",
+        emit_rows("relationships",
              check_relationships(args.vault, args.folder, args.file,
                                  newer_than_mtime))
     if args.command in ("sessions", "all"):
-        emit("sessions", check_sessions(args.vault))
+        emit_rows("sessions", check_sessions(args.vault))
     if args.command in ("gm-leak", "all"):
         # `all` is a report, so it never writes — same reasoning as
         # `wrapup` below.
-        emit("gm-leak", check_gm_leak(args.vault, args.folder,
+        emit_rows("gm-leak", check_gm_leak(args.vault, args.folder,
                                       args.fix and args.command == "gm-leak",
                                       args.renest_excludes, explain))
     if args.command in ("pc-body", "all"):
-        emit("pc-body", check_pc_body(args.vault, args.folder, args.file,
+        emit_rows("pc-body", check_pc_body(args.vault, args.folder, args.file,
                                       newer_than_mtime, explain))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects
         # from a command whose other twelve checks are read-only.
         wrap_file = args.file[0] if args.file else None
-        emit("wrapup", check_wrapup(args.vault, wrap_file,
+        emit_rows("wrapup", check_wrapup(args.vault, wrap_file,
                                     args.fix and args.command == "wrapup"))
     return 0
 

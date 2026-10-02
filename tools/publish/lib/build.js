@@ -1240,7 +1240,7 @@ function build(options = {}) {
     const n = scanReport.malformed.length;
     const shown = scanReport.malformed.slice(0, UNPARSEABLE_NAMED).map((m) => `${m.rel} (${firstLine(m.message)})`);
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
-    console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
+    console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
 
   if (errorCount > 0) {

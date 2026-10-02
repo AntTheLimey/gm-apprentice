@@ -820,15 +820,8 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         self.assertEqual(rows, [
             "ERROR\tPCs/Dup.md\tthe site's build cannot parse this "
             "frontmatter (duplicated mapping key (4:1)) and skips the note "
-            "— most often a key written twice, or an unquoted value with a "
-            "colon in it"])
+            "— a key is written twice; keep one"])
         self.assertEqual(len(calls), 1, calls)
-
-    def test_the_line_reader_alone_sees_nothing_wrong(self):
-        # What #287 reported: without the tool's answer the file passes.
-        vault, _calls = self._vault()
-        self.assertFalse(rows_for(vc.check_frontmatter(vault, None),
-                                  "cannot parse"))
 
     def test_an_older_tool_gives_the_code_without_a_message(self):
         vault, _calls = self._vault(unparseable={"PCs/Dup.md": None})
@@ -863,6 +856,46 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         self.assertEqual([r.split("\t")[1] for r in rows], ["_inbox/Raw.md"])
         self.assertFalse(rows_for(vc.check_frontmatter(vault, "PCs"),
                                   "cannot parse"))
+
+    def test_the_hint_follows_the_parsers_message(self):
+        for message, hint in (
+                ("unexpected end of the stream within a double quoted scalar "
+                 "at line 5, column 1", "a quote is not closed"),
+                ("incomplete explicit mapping pair", "unquoted value with a colon"),
+                (None, "unquoted value with a colon")):
+            with self.subTest(message=message):
+                vault, _calls = self._vault(unparseable={"PCs/Dup.md": message})
+                rows = rows_for(vc.check_frontmatter(vault, None),
+                                "cannot parse")
+                self.assertIn(hint, rows[0])
+
+    def test_a_note_the_build_cannot_parse_gets_no_schema_rows(self):
+        # The line reader's "missing canon_status" on YAML the build
+        # rejects is noise until the YAML parses.
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "PCs/Dup.md")
+        self.assertEqual(len(rows), 1, rows)
+        vault, _calls = self._vault()
+        self.assertTrue(rows_for(vc.check_frontmatter(vault, None),
+                                 "PCs/Dup.md"))
+
+    def test_a_pin_too_old_to_ask_says_so_in_one_info_row(self):
+        vault, _calls = self._vault(installed="1.11.39",
+                                    unparseable={"PCs/Dup.md": "bad"})
+        rows = vc.check_frontmatter(vault, None)
+        self.assertEqual(len(rows_for(rows, "could not be consulted")), 1, rows)
+        self.assertFalse(rows_for(rows, "cannot parse this"), rows)
+
+    def test_all_says_which_tool_answered_once(self):
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        (vault / "Handout.md").write_text(
+            "---\ntype: handout\n---\n\n## Context\n\nx\n", encoding="utf-8")
+        with mock.patch.object(sys, "argv", ["vault_check.py", str(vault), "all"]), \
+                mock.patch("builtins.print") as out:
+            vc.main()
+        asked = [c.args[0] for c in out.call_args_list
+                 if c.args and "\tasked " in str(c.args[0])]
+        self.assertEqual(len(asked), 1, asked)
 
     def test_a_tab_in_the_parser_message_does_not_split_the_row(self):
         vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad\there"})

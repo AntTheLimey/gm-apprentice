@@ -280,14 +280,12 @@ describe('doctor --site', () => {
   // C1: a file gray-matter cannot parse used to vanish entirely — neither untyped nor
   // unmapped, so the audit found nothing wrong with a vault that was silently missing
   // a page.
-  // The `marker` field dates from when gray-matter's parse cache made a second read of
-  // the same broken text come back clean; lib/frontmatter.js no longer uses it (#287).
-  const malformedFrontmatter = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+  const MALFORMED = `---\ntype: npc\nname: "Unterminated\n---\n\nBody.\n`;
 
   it('reports an unparseable file as FILE_UNPARSEABLE, naming the YAML error', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-malformed-'));
     write(vault, 'Sessions/Good.md', '---\ntype: session\nstatus: played\n---\n\nIt happened.\n');
-    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter('json-check'));
+    write(vault, 'Characters/NPCs/Bram.md', MALFORMED);
     const { configPath } = siteFor(vault, {
       folderMap: { 'Characters/NPCs': 'characters/npcs', Sessions: 'sessions' },
     });
@@ -307,7 +305,7 @@ describe('doctor --site', () => {
   it('names the file in the human report too, not just the JSON payload', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-malformed-human-'));
     write(vault, 'Sessions/Good.md', '---\ntype: session\nstatus: played\n---\n\nIt happened.\n');
-    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter('human-check'));
+    write(vault, 'Characters/NPCs/Bram.md', MALFORMED);
     const { configPath } = siteFor(vault, {
       folderMap: { 'Characters/NPCs': 'characters/npcs', Sessions: 'sessions' },
     });

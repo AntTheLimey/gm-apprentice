@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     was never going to see these. `vault_check all` still runs the
     tool once, shared with `gm-leak` and `pc-body`. A vault that does
     not publish is not asked.
+  - The row says what to look for, from the parser's message: a key
+    written twice, a quote left open, or most often an unquoted value
+    with a colon in it. A note that cannot be parsed gets that one
+    row and no schema rows, which came from a guess at its YAML.
   - The build repeats the skipped notes in a closing line, next to its
     other warnings: `WARNING: the build skipped 1 note whose
     frontmatter is not valid YAML: PCs/Dup.md (duplicated mapping key

@@ -586,9 +586,8 @@ describe('scanVaultReport', () => {
   const TYPED = '---\ntype: npc\n---\n\nBody.\n';
   const UNTYPED = '---\nname: Nobody\n---\n\nBody.\n';
   // An unterminated double-quoted scalar: gray-matter throws on this rather than
-  // returning empty/partial frontmatter. The `marker` dates from when gray-matter's
-  // parse cache hid the throw from a second read; lib/frontmatter.js no longer uses it.
-  const malformed = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+  // returning empty/partial frontmatter.
+  const MALFORMED = `---\ntype: npc\nname: "Unterminated\n---\n\nBody.\n`;
 
   function silently(fn) {
     const orig = console.warn;
@@ -599,7 +598,7 @@ describe('scanVaultReport', () => {
   it('reports an unparseable file under `malformed`, not `untyped` or `pages` (C1)', () => {
     const vault = makeVault({
       'Characters/NPCs/Gatekeeper.md': TYPED,
-      'Characters/NPCs/Bram.md': malformed('report-shape'),
+      'Characters/NPCs/Bram.md': MALFORMED,
     });
     try {
       const report = silently(() => scanVaultReport(config(vault)));
@@ -616,7 +615,7 @@ describe('scanVaultReport', () => {
   });
 
   it('scanVaultReport itself prints nothing for a malformed file — only scanVault does', () => {
-    const vault = makeVault({ 'Characters/NPCs/Bram.md': malformed('silent-report') });
+    const vault = makeVault({ 'Characters/NPCs/Bram.md': MALFORMED });
     const warns = [];
     const orig = console.warn;
     console.warn = (...a) => warns.push(a.join(' '));
@@ -630,7 +629,7 @@ describe('scanVaultReport', () => {
   });
 
   it('scanVault warns about the malformed file, naming the file and the YAML error', () => {
-    const vault = makeVault({ 'Characters/NPCs/Bram.md': malformed('warn-text') });
+    const vault = makeVault({ 'Characters/NPCs/Bram.md': MALFORMED });
     const warns = [];
     const orig = console.warn;
     console.warn = (...a) => warns.push(a.join(' '));
