@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import migrate  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
-                          StepFailed)
+                          StepFailed, edit_frontmatter)
 
 PLUGIN = "1.10.30"
 
@@ -253,7 +253,7 @@ class ApplyTests(unittest.TestCase):
                      wants="dark or light"),
                 Item("p", PERSON, ["A.md:1\tlook at this"])]
         return [Check("ask", "1.10.20", 2, "t", find,
-                      choices=("fonts", "mode", "template:"))]
+                      choices=("fonts", "mode=", "template:"))]
 
     def test_choices_taken_and_declined(self):
         vault = make_vault(self)
@@ -277,12 +277,52 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(log, [])
         self.assertEqual(stamp_of(vault), "1.10.12")
 
-    def test_a_choice_that_needs_a_value_and_has_none_fails(self):
+    def test_a_choice_that_needs_a_value_and_has_none_is_refused_up_front(self):
         vault = make_vault(self)
-        code, _, err = call([str(vault), "apply", "--choose", "mode"],
-                            self.choice_checks([]))
+        log = []
+        checks = [will("a", "1.10.20", log=log), *self.choice_checks(log)]
+        for raw in ("mode", "mode="):
+            code, out, err = call([str(vault), "apply", "--choose", raw],
+                                  checks)
+            self.assertEqual(code, 2)
+            self.assertIn("mode=<value>", err)
+            self.assertEqual(out, "")
+        self.assertEqual(log, [])
+        self.assertEqual(stamp_of(vault), "1.10.12")
+
+    def test_a_prefixed_value_choice_needs_its_value(self):
+        vault = make_vault(self)
+        checks = [Check("x", None, 2, "t", lambda v: [],
+                        choices=("sheet-source:=",))]
+        self.assertEqual(
+            call([str(vault), "apply", "--choose", "sheet-source:a"],
+                 checks)[0], 2)
+        self.assertEqual(
+            call([str(vault), "apply", "--choose", "sheet-source:a=b"],
+                 checks)[0], 0)
+
+    def test_a_release_above_the_plugin_is_not_offered(self):
+        vault = make_vault(self)
+        log = []
+        code, out, _ = call([str(vault), "apply"],
+                            [will("future", "1.10.31", log=log)])
+        self.assertEqual(code, 0)
+        self.assertEqual(log, [])
+
+    def test_an_unwritable_config_fails_cleanly(self):
+        vault = make_vault(self)
+        cfg = vault / "_meta" / "vault-config.md"
+        cfg.chmod(0o444)
+        vault.joinpath("_meta").chmod(0o555)
+        self.addCleanup(vault.joinpath("_meta").chmod, 0o755)
+        code, out, err = call([str(vault), "apply"],
+                              [will("a", "1.10.20")])
         self.assertEqual(code, 1)
-        self.assertIn("mode=<dark or light>", err)
+        self.assertEqual(len(err.strip().splitlines()), 1)
+        self.assertNotIn("Traceback", err)
+        self.assertIn("## Did", out)
+        self.assertEqual(stamp_of(vault), "1.10.12")
+
 
     def test_a_prefixed_choice_the_vault_does_not_have_is_said(self):
         vault = make_vault(self)
@@ -299,6 +339,32 @@ class ApplyTests(unittest.TestCase):
         self.assertIn(f'gm_apprentice_version: "{PLUGIN}"\r\n'.encode(), raw)
         self.assertNotIn(b"\n\n", raw.replace(b"\r\n", b""))
         self.assertEqual(raw.count(b"\r\n"), raw.count(b"\n"))
+
+
+class EditFrontmatterTests(unittest.TestCase):
+    def test_failure_leaves_the_note_and_no_temp_file(self):
+        vault = make_vault(self)
+        cfg = vault / "_meta" / "vault-config.md"
+        before = cfg.read_bytes()
+        with mock.patch("migrate_core.os.replace",
+                        side_effect=OSError("boom")):
+            with self.assertRaises(StepFailed):
+                edit_frontmatter(cfg, lambda fm, eol: fm.append("a: b" + eol))
+        self.assertEqual(cfg.read_bytes(), before)
+        self.assertEqual([p.name for p in cfg.parent.iterdir()],
+                         ["vault-config.md"])
+
+    def test_symlink_and_mode_survive(self):
+        vault = make_vault(self)
+        real = vault / "real.md"
+        (vault / "_meta" / "vault-config.md").replace(real)
+        link = vault / "_meta" / "vault-config.md"
+        link.symlink_to(real)
+        real.chmod(0o640)
+        edit_frontmatter(link, lambda fm, eol: fm.append("a: b" + eol))
+        self.assertTrue(link.is_symlink())
+        self.assertIn("a: b", real.read_text())
+        self.assertEqual(real.stat().st_mode & 0o777, 0o640)
 
 
 if __name__ == "__main__":

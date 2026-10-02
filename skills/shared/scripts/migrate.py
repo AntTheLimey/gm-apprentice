@@ -26,7 +26,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from migrate_core import CHOICE, PERSON, WILL, Check, StepFailed, edit_frontmatter
+from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed, edit_frontmatter
 from vault_check import emit
 from vaultlib import extract_frontmatter, parse_version, plugin_version, set_key
 
@@ -64,16 +64,19 @@ def gate(vault: Path) -> tuple[str, str] | str:
     return shown, plugin
 
 
-def offered(checks: list[Check], vault_v: str) -> list[Check]:
-    """The checks this vault is offered, in run order: band, then release."""
-    below = parse_version(vault_v)
+def offered(checks: list[Check], vault_v: str,
+            plugin_v: str) -> list[Check]:
+    """The checks this vault is offered, in run order: band, then release.
+    A release above the plugin's own is not offered."""
+    below, top = parse_version(vault_v), parse_version(plugin_v)
     keep = [c for c in checks
-            if c.release is None or below < parse_version(c.release)]
+            if c.release is None
+            or below < parse_version(c.release) <= top]
     return sorted(keep, key=lambda c: (
         c.band, parse_version(c.release) if c.release else ()))
 
 
-def _rows(item) -> list[str]:
+def _rows(item: Item) -> list[str]:
     if item.group == PERSON:
         return list(item.lines)
     label = f"{item.id}=<{item.wants}>" if item.wants else item.id
@@ -89,7 +92,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     groups: dict[str, list[str]] = {WILL: [], CHOICE: [], PERSON: []}
     waiting: list[str] = []
     repin_waits = False
-    for check in offered(CHECKS if checks is None else checks, vault_v):
+    for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
             waiting.append(f"{check.name}\t{check.title}")
             continue
@@ -127,9 +130,19 @@ def _stamp(vault: Path, version: str) -> None:
                                 f'"{version}"', eol))
 
 
-def _is_offered(choice: str, known: list[str]) -> bool:
-    return any(choice == k or (k.endswith(":") and choice.startswith(k))
-               for k in known)
+def _choice_problem(choice: str, value: str | None,
+                    known: list[str]) -> str | None:
+    """Why `--choose choice[=value]` cannot run, or None. A known entry
+    ending in "=" needs a value; "x:" entries match by prefix."""
+    for entry in known:
+        base = entry.removesuffix("=")
+        if choice == base or (base.endswith(":") and choice.startswith(base)):
+            if entry.endswith("=") and not value:
+                return (f"--choose {choice} needs a value: "
+                        f"{choice}=<value>")
+            return None
+    return (f"--choose {choice}: not something this vault is offered; "
+            f"run plan to see the ids")
 
 
 def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
@@ -139,12 +152,12 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"migrate.py: {refused}", file=sys.stderr)
         return 2
     vault_v, plugin_v = refused
-    todo = offered(CHECKS if checks is None else checks, vault_v)
+    todo = offered(CHECKS if checks is None else checks, vault_v, plugin_v)
     known = [c for check in todo for c in check.choices]
-    for choice, _value in chosen:
-        if not _is_offered(choice, known):
-            print(f"migrate.py: --choose {choice}: not something this vault "
-                  f"is offered; run plan to see the ids", file=sys.stderr)
+    for choice, value in chosen:
+        problem = _choice_problem(choice, value, known)
+        if problem:
+            print(f"migrate.py: {problem}", file=sys.stderr)
             return 2
     did: list[str] = []
     person: list[str] = []

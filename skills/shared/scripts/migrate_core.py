@@ -9,8 +9,10 @@ pending when its check finds it.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -42,7 +44,9 @@ class Check:
     title: str              # shown when the check waits for the repin
     find: Callable[[Path], list[Item]]
     asks_site: bool = False
-    choices: tuple[str, ...] = ()  # ids it can offer; "x:" is a prefix
+    # ids it can offer; "x:" is a prefix; a trailing "=" ("mode=",
+    # "sheet-source:=") marks a choice that needs `--choose id=value`
+    choices: tuple[str, ...] = ()
 
 
 def edit_frontmatter(path: Path,
@@ -65,8 +69,28 @@ def edit_frontmatter(path: Path,
         change(fm, eol)
     except ValueError as e:
         raise StepFailed(f"{path.name}: {e}") from e
-    with path.open("w", encoding="utf-8", newline="") as f:
-        f.write("".join([lines[0], *fm, *lines[end:]]))
+    new_text = "".join([lines[0], *fm, *lines[end:]])
+    # Write beside the note and swap it in, so a failure partway leaves the
+    # note as it was. Resolve first so a symlinked note keeps its link.
+    real = path.resolve()
+    tmp = None
+    try:
+        mode = real.stat().st_mode & 0o7777
+        fd, tmp = tempfile.mkstemp(dir=real.parent, prefix=f".{real.name}.")
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(new_text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, real)
+        tmp = None
+    except OSError as e:
+        raise StepFailed(f"{path.name} cannot be written "
+                         f"({e.__class__.__name__})") from e
+    finally:
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def plugin_tool(args: list[str]) -> tuple[int, str, str]:
