@@ -236,3 +236,109 @@ describe('PC keep-list and the page title', () => {
     assert.ok(out.includes('kept') && !out.includes('gone') && !out.includes('# Stats'));
   });
 });
+
+describe('PC keep-list takes its headings from the renderer\'s parser', () => {
+  const f = (md) => filterSections(md, [], pc, rules);
+  it('A: a backtick fence whose info string holds a backtick is not a fence', () => {
+    assert.strictEqual(f('## Background\n```x``` ok\n## Skills\nST 14\n'), '## Background\n```x``` ok');
+    assert.strictEqual(f('## Background\n```a`b\n## Skills\nST 14\n'), '## Background\n```a`b');
+  });
+  it('B: an empty ATX heading is withheld', () => {
+    assert.strictEqual(f('## Background\nok\n##\nST 14\n'), '## Background\nok');
+    assert.strictEqual(f('## Background\nok\n## \nST 14\n'), '## Background\nok');
+    assert.strictEqual(f('## Background\nok\n#\nST 14\n'), '## Background\nok');
+    assert.deepStrictEqual(sheetWithheldTitles('## Background\nok\n##\nST 14\n', [], pc, rules), ['(empty heading)']);
+  });
+  it('C: a fence inside a blockquote or list item hides its headings, and a quoted heading is no boundary', () => {
+    assert.strictEqual(f('## Skills\n- ```\n  ## Background\n  ```\nST 14\n## Notes\nok\n'), '## Notes\nok\n');
+    assert.strictEqual(f('## Skills\n> ```\n> ## Background\n> ```\nST 14\n## Notes\nok\n'), '## Notes\nok\n');
+    assert.strictEqual(f('## Background\nok\n> ## Skills\n> text\n'), '## Background\nok\n> ## Skills\n> text\n');
+  });
+  it('a documented <h2> in a code sample still publishes; one in prose ends the section', () => {
+    assert.strictEqual(f('## Background\n```\n<h2>x</h2>\n```\nok\n'), '## Background\n```\n<h2>x</h2>\n```\nok\n');
+    assert.strictEqual(f('## Background\n    <h2>x</h2>\n\nok\n'), '## Background\n    <h2>x</h2>\n\nok\n');
+    assert.strictEqual(f('## Background\nok\n<h2>x</h2>\nST 14\n'), '## Background\nok');
+  });
+  it('the exclude list still applies first inside the keep-list walk', () => {
+    const out = filterSections('## GM Notes\n### Background\nSecret.\n', ['GM Notes'], pc, rules);
+    assert.ok(!out.includes('Secret.'));
+  });
+  it('a parser failure withholds the whole body and says so', () => {
+    const said = [];
+    const out = filterSections('# Jean\n## Background\nok\n', [], pc, { ...rules, parse: () => { throw new Error('boom'); }, warn: (m) => said.push(m) });
+    assert.strictEqual(out, '');
+    assert.ok(said.length === 1 && /boom/.test(said[0]));
+  });
+  it('playerSafeMarkdown reports a parser failure as a warning', () => {
+    const MarkdownIt = require('markdown-it');
+    const orig = MarkdownIt.prototype.parse;
+    MarkdownIt.prototype.parse = () => { throw new Error('boom'); };
+    try {
+      const r = playerSafeMarkdown('## Background\nok\n', { frontmatter: pc, pcKeepSections: PC_PROSE_SECTIONS });
+      assert.strictEqual(r.text, '');
+      assert.ok(r.warnings.some((w) => /boom/.test(w)));
+    } finally { MarkdownIt.prototype.parse = orig; }
+  });
+});
+
+describe('PC keep-list: nothing but kept headings and no stats survive the real renderer', () => {
+  const { createRenderer } = require('../../lib/markdown');
+  const renderer = createRenderer();
+  const SENT = 'STAT14';
+  const base = '## Background\nok\n';
+  const bodies = {
+    setextDash: `${base}\nSkills\n------\n${SENT}\n`,
+    setextEq: `${base}\nSkills\n======\n${SENT}\n`,
+    setextTight: `${base}Skills\n---\n${SENT}\n`,
+    setextSpaced: `${base}\nSkills  \n -\n${SENT}\n`,
+    setextMulti: `${base}\nStat\nblock\n-----\n${SENT}\n`,
+    indent1: `${base}\n ## Skills\n${SENT}\n`,
+    indent3: `${base}\n   ## Skills\n${SENT}\n`,
+    closed: `${base}\n## Skills ##\n${SENT}\n`,
+    emptyBare: `${base}\n##\n${SENT}\n`,
+    emptySpace: `${base}\n## \n${SENT}\n`,
+    emptyH1: `${base}\n#\n${SENT}\n`,
+    h1Stats: `${base}\n# Stats\n${SENT}\n`,
+    tab: `${base}\n##\tSkills\n${SENT}\n`,
+    bold: `${base}\n## **Skills**\n${SENT}\n`,
+    htmlH2: `${base}<h2>Skills</h2>\n${SENT}\n`,
+    htmlH3: `${base}<H3 class="x">\n${SENT}\n`,
+    badFence1: `${base}\`\`\`x\`\`\` ok\n## Skills\n${SENT}\n`,
+    badFence2: `${base}\`\`\`a\`b\n## Skills\n${SENT}\n`,
+    fenceInWithheld: `## Stat Sheet\n\`\`\`\n## Background\n\`\`\`\n${SENT}\n`,
+    tildeInWithheld: `## Stat Sheet\n~~~\n## Background\n~~~\n${SENT}\n`,
+    unclosed: `## Stat Sheet\n\`\`\`\n## Background\n${SENT}\n`,
+    mismatch: `## Stat Sheet\n~~~\n\`\`\`\n## Background\n${SENT}\n`,
+    quoteFence: `## Skills\n> \`\`\`\n> ## Background\n> \`\`\`\n${SENT}\n`,
+    listFence: `## Skills\n- \`\`\`\n  ## Background\n  \`\`\`\n${SENT}\n`,
+    quotedHeading: `## Skills\n> ## Background\n${SENT}\n`,
+    indentedCode: `## Skills\n\n    ## Background\n\n${SENT}\n`,
+    preamble: `# Jean\n${SENT}\n${base}`,
+    preambleH3: `# Jean\n### Loose\n${SENT}\n${base}`,
+    crlf: `${base}\nSkills\r\n------\r\n${SENT}\r\n`,
+  };
+  for (const [name, body] of Object.entries(bodies)) {
+    it(name, () => {
+      const out = filterSections(body, [], pc, rules);
+      assert.ok(!out.includes(SENT), `stat survived: ${JSON.stringify(out)}`);
+      const html = renderer.render(out);
+      for (const m of html.matchAll(/<h([12])[^>]*>(.*?)<\/h\1>/g)) {
+        const text = m[2].replace(/<[^>]+>/g, '').trim().toLowerCase();
+        assert.ok(['background', 'jean'].includes(text) || PC_PROSE_SECTIONS.some((s) => s.toLowerCase() === text), `heading ${text} in ${html}`);
+      }
+    });
+  }
+  it('a wikilink label cannot become a heading the filters did not judge', () => {
+    // The label is prose of the Background section in both views: the search text and
+    // the page agree, because the rewrite no longer makes it block syntax.
+    const md = `${base}[[Nowhere|## Skills]]\n${SENT}\n`;
+    const page = { markdown: md, frontmatter: pc, outputPath: 'pcs/jean.html' };
+    const html = processContent(page, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS }).html;
+    assert.ok(!/<h[1-6]/.test(html.replace('<h2>Background</h2>', '')), html);
+    assert.ok(html.includes('## Skills') && html.includes(SENT), html);
+    for (const label of ['---', '===', '# Stats', '```']) {
+      const out = processContent({ ...page, markdown: `${base}Intro\n[[Nowhere|${label}]]\n${SENT}\n` }, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS }).html;
+      assert.ok(!/<h[1-6]|<hr|<pre/.test(out.replace('<h2>Background</h2>', '')), `${label}: ${out}`);
+    }
+  });
+});

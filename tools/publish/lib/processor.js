@@ -73,7 +73,10 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
     // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
     const display = displayText || wikiTargetLabel(target);
     const targetPath = linkMap[target];
-    if (!targetPath) return display;
+    // Plain text standing where a link was must not turn into block syntax: a label
+    // of `## Stats` or `---` at the start of a line would otherwise become a heading
+    // the section filters, which read the text before this runs, never saw.
+    if (!targetPath) return display.replace(/\s*\n\s*/g, ' ').replace(/^([#=\-~`])/, '\\$1');
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
     // A raw space (or other unsafe char) in the destination is not valid markdown link
     // syntax — markdown-it falls back to literal `[text](path)` text, and the typographer
@@ -116,7 +119,8 @@ function exclusionReason(title, excludeSections = [], frontmatter = null, level 
   if (pcKeepRuleApplies(frontmatter, rules) && level <= 2) {
     const keep = (Array.isArray(rules.pcKeepSections) ? rules.pcKeepSections : [])
       .filter(s => typeof s === 'string')
-      .map(bareSectionTitle);
+      .map(bareSectionTitle)
+      .filter(t => t !== '');
     if (!keep.includes(bareSectionTitle(lower))) return 'sheet';
   }
   return null;
@@ -207,51 +211,54 @@ function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
   return { kept, stripped };
 }
 
-const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
-const ATX_RE = /^ {0,3}(#{1,6})\s+(.+)$/;
-const SETEXT_UNDERLINE_RE = /^ {0,3}(=+|-+)[ \t]*$/;
-const THEMATIC_BREAK_RE = /^ {0,3}([-*_])( *\1){2,} *$/;
-const LIST_OR_QUOTE_RE = /^ {0,3}(>|[-*+]\s|\d+[.)]\s)/;
 const HTML_HEADING_RE = /<h[1-6][\s>]/i;
 
-// A line that can be part of a paragraph a setext underline closes.
-function isParagraphLine(line) {
-  return line.trim() !== '' && !ATX_RE.test(line) && !FENCE_OPEN_RE.test(line)
-    && !LIST_OR_QUOTE_RE.test(line) && !SETEXT_UNDERLINE_RE.test(line) && !THEMATIC_BREAK_RE.test(line);
+// What the build renders with, asked for its own reading of the note.
+function parseBlocks(text) {
+  return md.parse(text, {});
 }
 
-// The walk for a PC note under the keep-list. It reads headings the way a Markdown
-// renderer does, because the exclude-list walk's `^#{1,6}\s+` misses forms a renderer
-// still shows as headings, and a missed heading lets whatever follows ride out under a
-// kept section: fenced code is not heading syntax, an ATX heading may be indented 1-3
-// spaces, a setext heading (`Skills` over `------`) is a heading of level 1 or 2, and
-// an HTML heading tag inside a kept section ends it.
+// The walk for a PC note under the keep-list. Section boundaries come from the
+// renderer's own parser (the instance the build renders with), not from patterns that
+// approximate it: ATX at any indent the parser accepts, empty and closed headings,
+// setext, and every fence rule are exactly what will be rendered. Only TOP-LEVEL
+// headings are boundaries; one inside a blockquote or list renders inside its parent
+// section, like a level 3+ heading. A parse failure withholds the whole body.
+// `rules.parse` replaces the parser (a test seam); `rules.warn` hears of a failure.
 function walkKeepList(markdown, excludeSections, frontmatter, rules) {
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
-  const kept = [];
   const stripped = [];
+  let tokens;
+  try {
+    tokens = (rules.parse || parseBlocks)(lines.join('\n'));
+  } catch (err) {
+    if (typeof rules.warn === 'function') rules.warn(`keep-list: could not parse the note, body withheld (${err.message})`);
+    stripped.push({ title: '(unparsed note)', reason: 'sheet' });
+    return { kept: [], stripped };
+  }
+
+  const headingAt = new Map();   // first line -> { end, level, title }
+  const inCode = new Set();      // lines of fenced or indented code, at any depth
+  for (let t = 0; t < tokens.length; t++) {
+    const tok = tokens[t];
+    if (!tok.map) continue;
+    if (tok.type === 'heading_open' && tok.level === 0) {
+      const inline = tokens[t + 1];
+      headingAt.set(tok.map[0], {
+        end: tok.map[1],
+        level: Number(tok.tag.slice(1)),
+        title: inline && inline.type === 'inline' ? inline.content.trim() : '',
+      });
+    } else if (tok.type === 'fence' || tok.type === 'code_block') {
+      for (let l = tok.map[0]; l < tok.map[1]; l++) inCode.add(l);
+    }
+  }
+
+  const kept = [];
   let excluding = false;
   let excludeLevel = 0;
-  let fence = null;        // { ch, len } while inside a fenced code block
   let sawHeading = false;  // the note's first heading is its title (a level 1, unless the H1 strip ran)
-  let sawSection = false;  // text before the first `##` belongs to no kept section
-
-  // Judge one heading; true when it starts a withheld section.
-  const judge = (title, level) => {
-    if (excluding && level <= excludeLevel) excluding = false;
-    const isTitle = !rules.titleStripped && level === 1 && !sawHeading;
-    sawHeading = true;
-    if (level <= 2 && !isTitle) sawSection = true;
-    const reason = excluding ? null
-      : exclusionReason(title, excludeSections, frontmatter, level, isTitle ? {} : rules);
-    if (reason) {
-      excluding = true;
-      excludeLevel = level;
-      stripped.push({ title, reason });
-      return { withheld: true, isTitle };
-    }
-    return { withheld: false, isTitle };
-  };
+  let sawSection = false;  // text before the first level 1-2 section belongs to no kept section
   const keep = (line, isPreamble) => {
     if (excluding) return;
     if (isPreamble && line.trim() !== '') return;
@@ -259,56 +266,35 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
   };
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (fence) {
-      const close = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
-      if (close && close[1][0] === fence.ch && close[1].length >= fence.len) fence = null;
-      keep(line, !sawSection);
-      continue;
-    }
-    const open = line.match(FENCE_OPEN_RE);
-    if (open) {
-      fence = { ch: open[1][0], len: open[1].length };
-      keep(line, !sawSection);
-      continue;
-    }
-
-    const atx = line.match(ATX_RE);
-    if (atx) {
-      const level = atx[1].length;
-      const title = atx[2].trim().replace(/\s+#+$/, '').trim();
-      const { withheld, isTitle } = judge(title, level);
-      if (withheld) continue;
-      if (!excluding && !sawSection && level > 1 && !isTitle) continue;
-      keep(line, false);
-      continue;
-    }
-
-    // Setext: a paragraph closed by a `===` or `---` line is a heading of that text.
-    if (isParagraphLine(line) && /^ {0,3}\S/.test(line)) {
-      let j = i;
-      while (j + 1 < lines.length && isParagraphLine(lines[j]) && !SETEXT_UNDERLINE_RE.test(lines[j + 1])) j++;
-      const underline = j + 1 < lines.length && isParagraphLine(lines[j]) ? lines[j + 1].match(SETEXT_UNDERLINE_RE) : null;
-      if (underline) {
-        const level = underline[1][0] === '=' ? 1 : 2;
-        const title = lines.slice(i, j + 1).map(l => l.trim()).join(' ');
-        const { withheld } = judge(title, level);
-        if (!withheld) for (let k = i; k <= j + 1; k++) keep(lines[k], false);
-        i = j + 1;
-        continue;
+    const h = headingAt.get(i);
+    if (h) {
+      if (excluding && h.level <= excludeLevel) excluding = false;
+      const isTitle = !rules.titleStripped && h.level === 1 && !sawHeading;
+      sawHeading = true;
+      if (h.level <= 2 && !isTitle) sawSection = true;
+      const reason = excluding ? null
+        : exclusionReason(h.title, excludeSections, frontmatter, h.level, isTitle ? {} : rules);
+      if (reason) {
+        excluding = true;
+        excludeLevel = h.level;
+        stripped.push({ title: h.title || '(empty heading)', reason });
+      } else if (!excluding && (isTitle || h.level <= 2 || sawSection)) {
+        for (let l = i; l < h.end; l++) keep(lines[l], false);
       }
+      i = Math.max(i, h.end - 1);
+      continue;
     }
 
-    // An HTML heading inside a kept section ends it: withheld to the next level 1-2 heading.
-    if (!excluding && HTML_HEADING_RE.test(line)) {
+    // An HTML heading line outside code ends a kept section: withheld to the next
+    // level 1-2 heading. The renderer shows it as text, so this only ever withholds more.
+    if (!excluding && !inCode.has(i) && HTML_HEADING_RE.test(lines[i])) {
       excluding = true;
       excludeLevel = 2;
-      stripped.push({ title: line.replace(/<[^>]*>/g, '').trim() || '(html heading)', reason: 'sheet' });
+      stripped.push({ title: lines[i].replace(/<[^>]*>/g, '').trim() || '(html heading)', reason: 'sheet' });
       continue;
     }
 
-    keep(line, !sawSection);
+    keep(lines[i], !sawSection);
   }
 
   return { kept, stripped };
@@ -766,7 +752,8 @@ function playerSafeMarkdown(markdown, options = {}) {
     }
   }
   text = stripCallouts(text, options.excludeCallouts);
-  text = filterSections(text, options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections });
+  text = filterSections(text, options.excludeSections, options.frontmatter,
+    { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m) });
   return { text, warnings };
 }
 
@@ -797,12 +784,17 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   markdown = stripLeadingH1(markdown);
   markdown = stripCallouts(markdown, options.excludeCallouts);
-  markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections: options.pcKeepSections, titleStripped: true });
+  markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter);
   markdown = separateBoldLabelLines(markdown);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
     portraitBasename: portraitBasename(page.frontmatter),
   });
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
+  // The PC keep-list reads the text the renderer will read: the transforms above can
+  // rewrite lines, so its section boundaries are found here, not before them.
+  // stripLeadingH1 has already taken the title, so every `#` is judged.
+  markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter,
+    { pcKeepSections: options.pcKeepSections, titleStripped: true, warn: (m) => warnings.push(m) });
   const html = md.render(markdown);
   const relationships = renderRelationships(page.frontmatter, linkMap, page.outputPath);
   return { html, relationships, warnings };

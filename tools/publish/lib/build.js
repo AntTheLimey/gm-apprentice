@@ -531,7 +531,8 @@ function build(options = {}) {
     const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections });
+    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
+      { pcKeepSections, warn: (m) => console.warn(`  WARNING: ${page.outputPath}: ${m}`) });
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -796,6 +797,9 @@ function build(options = {}) {
             portraitBasename: portraitBasename(page.frontmatter),
           });
           filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
+          // The keep-list again, on the text extractSections will split: the rewrites
+          // above can change lines, and the sections must be the ones that were judged.
+          if (pcKeepSections) filtered = filterSections(filtered, excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections });
           const sections = extractSections(filtered);
 
           let storyHtml;
