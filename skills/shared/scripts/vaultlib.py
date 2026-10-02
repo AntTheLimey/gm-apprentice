@@ -916,6 +916,23 @@ def _close_publish_tools() -> None:
 atexit.register(_close_publish_tools)
 
 
+def vault_site(vault: Path) -> tuple[bool, Path | None]:
+    """(whether the vault file has a `publish:` block, the site folder its
+    `site_dir` names). Asked of the plugin's own publish tool, which reads
+    the file with the build's YAML parser: the line reader here would miss
+    a block written any way it does not expect. Raises
+    `PublishToolUnavailable` when the tool cannot be asked or cannot
+    parse the file."""
+    answer = _LINES_BY_TOOL[PUBLISH_TOOL].ask(
+        {"op": "site", "vault": str(vault.resolve())})
+    publishes, site = answer.get("publishes"), answer.get("siteDir")
+    if not isinstance(publishes, bool) or not (site is None
+                                                or isinstance(site, str)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer about the site is not understood")
+    return publishes, Path(site) if site else None
+
+
 def publish_tool_problem() -> str | None:
     """Why the publish tool cannot be asked what publishes, or None when it
     can. A check that depends on the answer asks this first and says so,

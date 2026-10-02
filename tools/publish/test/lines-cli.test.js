@@ -62,6 +62,55 @@ describe('lines: stub', () => {
   });
 });
 
+describe('lines: site', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const vaultWith = (config) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lines-site-'));
+    if (config !== null) {
+      fs.mkdirSync(path.join(dir, '_meta'));
+      fs.writeFileSync(path.join(dir, '_meta', 'vault-config.md'), config);
+    }
+    return dir;
+  };
+  const ask = (config) => {
+    const vault = vaultWith(config);
+    try { return { vault, got: answer({ op: 'site', vault }) }; } finally { fs.rmSync(vault, { recursive: true, force: true }); }
+  };
+
+  it('no file, and a file with no publish block, publish nothing', () => {
+    assert.deepStrictEqual(ask(null).got, { publishes: false, siteDir: null });
+    assert.deepStrictEqual(ask('---\ntype: meta\n---\n').got, { publishes: false, siteDir: null });
+    assert.deepStrictEqual(ask('---\npublish:\n---\n').got, { publishes: false, siteDir: null });
+  });
+  it('reads the block however YAML allows it to be written', () => {
+    for (const config of [
+      '---\npublish:\n  mode: player\n---\n',
+      '\ufeff---\npublish:\n  mode: player\n---\n',
+      '---\n"publish":\n  mode: player\n---\n',
+      '---\n  publish:\n    mode: player\n---\n',
+      '---\n? publish\n: {mode: player}\n---\n',
+      '---\n{publish: {mode: player}}\n---\n',
+      '---\npublish: {mode: player}\n---\n',
+    ]) {
+      assert.deepStrictEqual(ask(config).got, { publishes: true, siteDir: null }, JSON.stringify(config));
+    }
+  });
+  it('resolves site_dir against the vault, and ~ against the home folder', () => {
+    const abs = path.resolve(os.tmpdir(), 'some site');
+    assert.strictEqual(ask(`---\npublish:\n  site_dir: "${abs.replace(/\\/g, '/')}"\n---\n`).got.siteDir, abs);
+    const rel = ask('---\npublish:\n  site_dir: ../site\n---\n');
+    assert.strictEqual(rel.got.siteDir, path.resolve(rel.vault, '../site'));
+    assert.strictEqual(ask('---\npublish:\n  site_dir: ~/site\n---\n').got.siteDir, path.join(os.homedir(), 'site'));
+  });
+  it('a file that cannot be parsed, or a block that is not one, is an error, not a "no"', () => {
+    assert.throws(() => ask('---\npublish:\n  a: 1\npublish:\n  b: 2\n---\n'), /not valid YAML/);
+    assert.throws(() => ask('---\npublish: yes please\n---\n'), /not a block of settings/);
+    assert.throws(() => ask('---\npublish:\n  site_dir: [a]\n---\n'), /site_dir .* is not a path/);
+    assert.throws(() => answer({ op: 'site' }), /vault must be a path/);
+  });
+});
+
 describe('lines: the protocol', () => {
   it('a bad request is answered with an error, not a crash', () => {
     assert.match(JSON.parse(answerLine('not json')).error, /JSON/);

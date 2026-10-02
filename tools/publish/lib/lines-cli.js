@@ -22,8 +22,18 @@
 //       -> {"kept":[…]}      per line of `text`: whether a `publish: stub` page with
 //                            these `publish_include_sections` keeps it
 //
+//   {"op":"site","vault":…}
+//       -> {"publishes":…,"siteDir":…}  whether the vault file has a `publish:`
+//                            block, and the site folder its `site_dir` names (an
+//                            absolute path, or null). Read with the build's own YAML
+//                            parser, so vault_check does not read that file a second way.
+//
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { parseNote } = require('./frontmatter');
 const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -36,8 +46,31 @@ function list(request, key) {
   return value;
 }
 
+// What `_meta/vault-config.md` says about publishing. A file that is not there says
+// nothing publishes; one that cannot be parsed is an error, not a "no".
+function site(vault) {
+  if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
+  const file = path.join(vault, '_meta', 'vault-config.md');
+  if (!fs.existsSync(file)) return { publishes: false, siteDir: null };
+  let data;
+  try {
+    ({ data } = parseNote(fs.readFileSync(file, 'utf-8')));
+  } catch (err) {
+    throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(err.message).split('\n')[0].trim()}`);
+  }
+  const publish = data && data.publish;
+  if (publish === undefined || publish === null) return { publishes: false, siteDir: null };
+  if (typeof publish !== 'object' || Array.isArray(publish)) throw new Error('publish: in _meta/vault-config.md is not a block of settings');
+  const raw = publish.site_dir;
+  if (raw === undefined || raw === null || raw === '') return { publishes: true, siteDir: null };
+  if (typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
+  const expanded = raw === '~' || raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(1)) : raw;
+  return { publishes: true, siteDir: path.resolve(vault, expanded) };
+}
+
 function answer(request) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('a request is a JSON object');
+  if (request.op === 'site') return site(request.vault);
   if (typeof request.text !== 'string') throw new Error('text must be a string');
   const { text } = request;
   switch (request.op) {

@@ -198,6 +198,8 @@ vault_check uses it instead of keeping a copy of the build's filters.
       -> {"withheldBy":[…]}    per line: the excluded section withholding it, or null
   {"op":"stub","text":"…","include":["Overview"]}
       -> {"kept":[…]}          per line: whether a publish: stub page keeps it
+  {"op":"site","vault":"/path/to/vault"}
+      -> {"publishes":…,"siteDir":…}  the vault's publish: block and site folder
 
 A request that cannot be answered gets {"error":"…"}.
 `,

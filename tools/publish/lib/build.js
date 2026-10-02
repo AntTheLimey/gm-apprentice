@@ -564,7 +564,7 @@ function build(options = {}) {
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
-      { pcKeepSections, warn: (m) => console.warn(`  WARNING: ${page.outputPath}: ${m}`) });
+      { pcKeepSections });   // its warnings are the page render's to print, once
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the

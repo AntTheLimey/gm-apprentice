@@ -89,11 +89,14 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
         (pkg / "bin").mkdir(parents=True)
         (pkg / "package.json").write_text(json.dumps({"version": installed}),
                                           encoding="utf-8")
-        # Stands in for the site's tool: the `lines` questions go to it
-        # for real, so it hands them to the plugin's.
+        # Stands in for the site's tool. The `lines` questions go to it for
+        # real: a tool from 1.12.1 on hands them to the plugin's, an older
+        # or unreadable one has no such command and exits.
+        new = vc.parse_semver(installed) is not None and not vc.semver_below(
+            installed, "1.12.1")
         (pkg / "bin" / "gm-publish.js").write_text(
-            f"require({json.dumps(str(vc.PUBLISH_TOOL))});\n",
-            encoding="utf-8")
+            f"require({json.dumps(str(vc.PUBLISH_TOOL))});\n" if new
+            else "process.exit(1);\n", encoding="utf-8")
     (vault / "_meta").mkdir(exist_ok=True)
     mode_line = f"  mode: {mode}\n" if mode else ""
     (vault / "_meta" / "vault-config.md").write_text(
@@ -1570,7 +1573,10 @@ class RenestReviewRegressionTests(unittest.TestCase):
                 vault = self.vault(config, {"Bob.md": self.WS})
                 rows = vc.check_gm_leak(vault, None, fix=True,
                                         renest_excludes=True)
-                self.assertTrue(rows_for(rows, "not understood"), rows)
+                # The publish tool refuses a file its YAML parser rejects
+                # before the list is ever read; either way nothing moves.
+                self.assertTrue(rows_for(rows, "not understood")
+                                or rows_for(rows, "not valid YAML"), rows)
                 self.assertFalse(rows_for(rows, "FIXED"), rows)
                 self.assertEqual(read(vault, "_meta/vault-config.md"), config)
                 self.assertEqual(read(vault, "Bob.md"), self.WS)
@@ -1587,7 +1593,8 @@ class RenestReviewRegressionTests(unittest.TestCase):
         (pkg / "bin").mkdir(parents=True)
         (pkg / "package.json").write_text(json.dumps({"version": "1.12.0"}),
                                           encoding="utf-8")
-        (pkg / "bin" / "gm-publish.js").write_text("", encoding="utf-8")
+        (pkg / "bin" / "gm-publish.js").write_text("process.exit(1);\n",
+                                                   encoding="utf-8")
         return config.replace("publish:\n",
                               f"publish:\n  site_dir: {site.as_posix()}\n")
 
@@ -1610,9 +1617,10 @@ class RenestReviewRegressionTests(unittest.TestCase):
                 self.assertEqual(len(rows), 1, rows)
                 self.assertTrue(rows[0].startswith(
                     f"ERROR\t(vault)\t{name} could not ask the publish tool "
-                    f"what publishes (the site's publish tool 1.12.0 "
-                    f"predates 1.12.1 and cannot be asked) — nothing "
-                    f"checked, nothing written; run update-pin --site "), rows)
+                    f"what publishes (the publish tool exited without "
+                    f"answering"), rows)
+                self.assertIn(") — nothing checked, nothing written; run "
+                              "update-pin --site ", rows[0])
         self.assertEqual(read(vault, "_meta/vault-config.md"), config)
         self.assertEqual(read(vault, "C.md"), self.FENCED_COLLAPSE)
         self.assertEqual(read(vault, "W.md"), NoPublishToolTests.WRAP)
@@ -1885,10 +1893,13 @@ class NoPublishToolTests(unittest.TestCase):
 
         def ask(request):
             asked.append(request)
-            if len(asked) > 4:
+            if "SECOND WRAP-UP" in request.get("text", ""):
                 raise vaultlib.PublishToolUnavailable("gone")
             return real(request)
 
+        (vault / "W2.md").write_text(
+            self.WRAP.replace("It happened.", "SECOND WRAP-UP happened."),
+            encoding="utf-8")
         with mock.patch.object(vaultlib.PUBLISH_LINES, "ask", ask):
             rows = vc.check_wrapup(vault, None, True)
         self.assertTrue(rows[-1].startswith(
@@ -1896,7 +1907,8 @@ class NoPublishToolTests(unittest.TestCase):
             "answering (gone)"), rows)
         # The first wrap-up's rows are still there, and so is its repair.
         self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
-        self.assertEqual(read(vault, "W2.md"), self.WRAP)
+        self.assertIn("SECOND WRAP-UP happened.", read(vault, "W2.md"))
+        self.assertNotIn("<!-- gm-only -->", read(vault, "W2.md"))
 
     def test_a_tool_lost_mid_run_is_one_row_for_a_check_that_writes_last(self):
         vault = self.vault(site=True)
@@ -1909,7 +1921,7 @@ class NoPublishToolTests(unittest.TestCase):
 
         def ask(request):
             asked.append(request)
-            if len(asked) > 1:      # the gate's question is answered
+            if request.get("text"):  # the gate's questions carry no note
                 raise vaultlib.PublishToolUnavailable("gone")
             return real(request)
 
@@ -1944,9 +1956,15 @@ class NoPublishToolTests(unittest.TestCase):
             (pkg / "bin").mkdir(parents=True)
             (pkg / "package.json").write_text(json.dumps(installed),
                                               encoding="utf-8")
+            # A tool from 1.12.1 on answers `lines`; an older one, or one
+            # with no version, is stood in for by one that has no such
+            # command.
+            version = installed.get("version")
+            new = (vc.parse_semver(version) is not None
+                   and not vc.semver_below(version, "1.12.1"))
             (pkg / "bin" / "gm-publish.js").write_text(
-                f"require({json.dumps(str(vc.PUBLISH_TOOL))});\n",
-                encoding="utf-8")
+                f"require({json.dumps(str(vc.PUBLISH_TOOL))});\n" if new
+                else "process.exit(1);\n", encoding="utf-8")
         return vault
 
     def test_a_pin_that_cannot_be_read_is_not_taken_for_a_new_tool(self):
@@ -1971,6 +1989,10 @@ class NoPublishToolTests(unittest.TestCase):
                 "dependencies": {name: "^1.12.1"},
                 "overrides": {name: "1.11.0"}}},
             "not an object": {"package": [name]},
+            "pinned new, not installed": {"package": {
+                "dependencies": {name: "^1.12.1"}}},
+            "pnpm override": {"package": {
+                "pnpm": {"overrides": {name: "1.11.0"}}}},
         }
         for form, site in sites.items():
             with self.subTest(form):
@@ -1991,9 +2013,9 @@ class NoPublishToolTests(unittest.TestCase):
     def test_a_site_on_a_tool_that_answers_is_checked_and_fixed(self):
         for form, site in (
                 ("installed", {"installed": {"version": "1.12.1"}}),
-                ("pinned, not installed", {"package": {"dependencies": {
-                    "gm-apprentice-publish": "^1.12.1"}}}),
-                ("no pin at all", {})):
+                ("no tool of its own", {}),
+                ("a package.json that does not name it",
+                 {"package": {"dependencies": {"left-pad": "1.0.0"}}})):
             with self.subTest(form):
                 vault = self.pinned_site(**site)
                 rows = vc.check_gm_leak(vault, None, fix=True)
@@ -2031,7 +2053,7 @@ class NoPublishToolTests(unittest.TestCase):
         vault = make_vault(self, "---\npublish:\n  site_dir: "
                                  f"{site.as_posix()}\n---\n")
         (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
-        tool, why, _fix = vc._lines_tool(vault)
+        tool, why, _fix, _publishes = vc._lines_tool(vault)
         self.assertEqual(tool.resolve(), (pkg / "bin" / "gm-publish.js").resolve())
         rows = vc.check_gm_leak(vault, None, fix=True)
         self.assertEqual(len(rows), 1, rows)
@@ -2050,9 +2072,48 @@ class NoPublishToolTests(unittest.TestCase):
             with self.subTest(form):
                 vault = make_vault(self, "")
                 (vault / "_meta" / "vault-config.md").write_bytes(data)
-                self.assertTrue(vc.vault_publishes(vault))
-        self.assertFalse(vc.vault_publishes(make_vault(self, "---\ntype: meta\n---\n")))
-        self.assertFalse(vc.vault_publishes(make_vault(self, meta=False)))
+                self.assertEqual(vaultlib.vault_site(vault), (True, None))
+                self.assertTrue(vc._maybe_publishes(vault))
+        for form, text in (
+                ("indented", "---\n  publish:\n    mode: player\n---\n"),
+                ("complex key", "---\n? publish\n: {mode: player}\n---\n"),
+                ("flow root", "---\n{publish: {mode: player}}\n---\n"),
+                ("merge key", "---\nb: &b {publish: {mode: player}}\n"
+                              "<<: *b\n---\n")):
+            with self.subTest(form):
+                vault = make_vault(self, text)
+                self.assertEqual(vaultlib.vault_site(vault), (True, None))
+        none = make_vault(self, "---\ntype: meta\n---\n")
+        self.assertEqual(vaultlib.vault_site(none), (False, None))
+        self.assertFalse(vc._maybe_publishes(none))
+        self.assertEqual(vaultlib.vault_site(make_vault(self, meta=False)),
+                         (False, None))
+
+    def test_site_dir_is_read_by_the_tool_however_the_block_is_written(self):
+        # The line reader here cannot see an indented block; the gate must
+        # still find the site and its old tool.
+        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text("{}", encoding="utf-8")
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "package.json").write_text('{"version": "1.11.0"}',
+                                          encoding="utf-8")
+        (pkg / "bin" / "gm-publish.js").write_text("process.exit(1);\n",
+                                                   encoding="utf-8")
+        vault = make_vault(self, "---\n  publish:\n    mode: player\n"
+                                 f"    site_dir: {site.as_posix()}\n---\n")
+        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
+        (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+        self.assertEqual(vaultlib.vault_site(vault)[1].resolve(),
+                         site.resolve())
+        for rows in (vc.check_gm_leak(vault, None, fix=True),
+                     vc.check_wrapup(vault, None, True)):
+            self.assertEqual(len(rows), 1, rows)
+            self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
+            self.assertIn("run update-pin --site ", rows[0])
+        self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
+        self.assertEqual(read(vault, "W.md"), self.WRAP)
 
     def test_no_tool_does_not_move_fenced_text_out_of_its_fence(self):
         # What a gm-only block hides needs no tool to read, so the check
@@ -3730,8 +3791,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
-            "publishes (the site's publish tool 1.11.39 predates 1.12.1 and "
-            "cannot be asked)"), rows)
+            "publishes ("), rows)
         self.assertIn("run update-pin --site ", rows[0])
 
     def test_a_pin_not_yet_installed_is_still_the_sites_tool(self):
@@ -3750,8 +3810,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
-            "publishes (the site's publish tool 1.11.39 predates 1.12.1 and "
-            "cannot be asked)"), rows)
+            "publishes ("), rows)
         self.assertIn("run update-pin --site ", rows[0])
 
     def test_an_installed_prerelease_is_below_the_release(self):
@@ -3763,8 +3822,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
-            "publishes (the site's publish tool 1.12.1-rc.1 predates 1.12.1 and "
-            "cannot be asked)"), rows)
+            "publishes ("), rows)
         self.assertIn("run update-pin --site ", rows[0])
 
     def test_an_unreadable_site_tool_is_not_guessed_at(self):
@@ -3775,7 +3833,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith("ERROR\t(vault)\tgm-leak could "
                                            "not ask the publish tool"), rows)
-        self.assertIn("no readable version", rows[0])
+        self.assertIn("exited without answering", rows[0])
 
     def test_the_plugins_tool_stands_in_only_without_a_site_tool_and_says_so(self):
         vault = self.vault()
@@ -4045,8 +4103,7 @@ class GmLeakHandoutSectionTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith(
             "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
-            "publishes (the site's publish tool 1.12.0 predates 1.12.1 and "
-            "cannot be asked)"), rows)
+            "publishes ("), rows)
         self.assertIn("run update-pin --site ", rows[0])
 
     def test_an_emphasis_wrapped_heading_is_named_and_moved(self):

@@ -54,12 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A note whose title line is on the exclude list published its
   body.** The page drops its `# Title` line before filtering, so a note
   that opens `# GM Notes` lost the heading and kept everything under
-  it. The filter now runs first for such a note.
+  it. That section is now removed first, down to the next `#` heading,
+  which then serves as the page's title.
 - Proved on scratch copies of two real vaults: with no note using these
   shapes the old and new builds are byte-identical, and planted notes
   (fenced, underlined, indented) leak under the old tool and not under
   the new. A random-note comparison against the previous release found
-  no line the new build publishes that the old one withheld.
+  no line under an excluded heading that the new build publishes and
+  the old one withheld.
 
 ### Changed
 
@@ -74,21 +76,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - These checks now need Node 22+ on PATH. When the tool cannot be
     asked, a vault with a `publish:` block gets one ERROR row and
     nothing is checked or written. A vault with no `publish:` block
-    gets one INFO row; `gm-leak` and `pc-body` stop there, and `wrapup`
-    still lists its findings, with each repair as a WOULD-FIX row.
+    gets an INFO row; `gm-leak` and `pc-body` stop there, and `wrapup`
+    still lists its findings, with each repair as a WOULD-FIX row that
+    has not been checked against what publishes.
     Nothing is written without the tool, in any vault: whether a repair
     would unhide a line is the tool's to say.
-  - **The site's own installed tool is the one asked.** A site pinned
-    to a publish tool older than 1.12.1 builds by the old rules and
-    has no `lines` command, and the old rules are no longer copied
-    here, so it is not checked: `gm-leak`, `pc-body` and `wrapup` give
-    one ERROR row and write nothing until
-    `update-pin --site <site-dir>` has run. The same goes for a pin
-    whose version cannot be read (a git URL, a tag, a range, a local
-    path), a pin that appears twice or is overridden, and a `site_dir`
-    with no site in it. A tool installed above the site folder (a
-    workspace) is found the way node finds it. With no `site_dir` set,
-    the plugin's own tool answers.
+  - **The site's own installed tool is the one asked.** With a
+    `site_dir`, the questions go to the publish tool installed in that
+    site folder, because that is what the site builds with. It is not
+    judged by a version number: it is asked, and a tool older than
+    1.12.1 has no `lines` command and does not answer. `gm-leak`,
+    `pc-body` and `wrapup` then give one ERROR row and write nothing
+    until `update-pin --site <site-dir>` has run. The same goes for a
+    site whose `package.json` names the tool without it being
+    installed, and a `site_dir` with no site in it. A site that names
+    no tool of its own, and a vault with no `site_dir`, are answered by
+    the plugin's tool.
+  - Whether the vault has a `publish:` block, and where its `site_dir`
+    points, is read by the publish tool's YAML parser, so a block
+    written in a way the Python line reader does not expect (indented,
+    quoted key, saved with a byte-order mark) is still seen.
   - The fix-time refusal "holds a heading-shaped line in a code fence"
     is gone: such a block is now safe to move.
   - If the tool stops answering part-way, the check ends with an ERROR
@@ -101,7 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`gm-apprentice-publish lines`.** Reads one JSON request per line on
   stdin and writes one JSON answer per line: `published` (the body the
   site renders for a note), `sections` (per line, the excluded section
-  withholding it) and `stub` (per line, whether a stub page keeps it).
+  withholding it), `stub` (per line, whether a stub page keeps it) and
+  `site` (whether a vault has a `publish:` block, and its site folder).
   A malformed request is answered with an error, never read as
   "nothing is withheld".
 

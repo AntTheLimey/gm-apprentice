@@ -188,7 +188,7 @@ directories listed in `preserveDirs`.
 
 Answers what the build would publish, for text handed in on stdin.
 `vault_check.py` uses it, so the vault checks never keep their own copy
-of the build's filters. It takes no arguments and reads no config: one
+of the build's filters. It takes no arguments: one
 JSON request per input line, one JSON answer per output line, until
 stdin closes.
 
@@ -197,6 +197,7 @@ stdin closes.
 | `{"op":"published","text":…,"excludeSections":[…],"publish":"all"}` | `{"text":…}`: the body the site renders. `publish` is `all`, `stub` (with `include`, the page's `publish_include_sections`) or `none`. |
 | `{"op":"sections","text":…,"excludeSections":[…]}` | `{"withheldBy":[…]}`: for each line of `text`, the excluded section withholding it, or `null`. |
 | `{"op":"stub","text":…,"include":[…]}` | `{"kept":[…]}`: for each line of `text`, whether a stub page keeps it. |
+| `{"op":"site","vault":…}` | `{"publishes":…,"siteDir":…}`: whether the vault's `_meta/vault-config.md` has a `publish:` block, and the absolute path its `site_dir` names (or `null`). |
 
 A request that cannot be answered gets `{"error":…}` and the process
 carries on. That includes a malformed one: `text` must be a string, and

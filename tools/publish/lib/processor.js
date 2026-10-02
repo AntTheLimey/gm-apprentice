@@ -435,11 +435,11 @@ function keptSectionFlags(markdown, includeSections = []) {
     const hashes = MARGIN_HEADING_RE.exec(lines[i]);
     const level = Math.min(h ? h.level : 7, hashes ? hashes[1].length : 7);
     if (keeping && level <= keepLevel) keeping = false;
-    // The margin reading's title is the line's own text after the hashes, as this
-    // always compared it: `## Overview ##` is not "Overview" here.
+    // The title compared is the line's own text after the hashes, as it always was
+    // (`## Overview ##` is not "Overview" here); the parser's part is to say the
+    // line is a real heading, at that level, and not code.
     const written = hashes ? hashes[2].trim().toLowerCase() : null;
-    if (h && h.atx && hashes && h.level === hashes[1].length
-        && wanted.includes(h.title.toLowerCase()) && wanted.includes(written)) {
+    if (h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written)) {
       keeping = true;
       keepLevel = h.level;
     } else if (keeping) {
@@ -972,18 +972,15 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   } else {
     markdown = commentResult;
   }
-  // A note whose title line is itself withheld (`# GM Notes`) is withheld before the
-  // title is dropped: once the line is gone nothing below would know its section had
-  // started, and the body used to publish.
-  // The withheld title goes with its section, so there is no title left to drop: the
-  // next `#` line is a section like any other, not this note's title.
+  markdown = stripCallouts(markdown, options.excludeCallouts);
+  // A note whose title line is itself withheld (`# GM Notes`) has that section
+  // removed before the title is dropped: once the line is gone nothing below would
+  // know its section had started, and the body used to publish.
   const fm = page.sourceFrontmatter || page.frontmatter;
   if (leadingH1Withheld(markdown, excludeSections, fm)) {
     markdown = walkExcludeList(markdown.split('\n'), excludeSections, fm, { warn: (m) => warnings.push(m) }).kept.join('\n');
-  } else {
-    markdown = stripLeadingH1(markdown);
   }
-  markdown = stripCallouts(markdown, options.excludeCallouts);
+  markdown = stripLeadingH1(markdown);
   // The PC keep-list is decided here, on the raw note, before any transform: the same
   // text publishedMarkdown, explain and the doctor walk. A note whose headings the
   // transforms below would change is withheld whole (pcHeadingsUnstable).

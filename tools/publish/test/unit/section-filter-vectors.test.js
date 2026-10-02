@@ -68,9 +68,14 @@ describe('section filter: what reaches the page', () => {
     assert.strictEqual(html('# GM Notes\nthe butler did it\n\n## Plan\nambush\n').trim(), '');
     assert.strictEqual(html('\n# GM Notes #\nthe butler did it\n').trim(), '');
   });
-  it('a withheld title runs to the next level 1 heading', () => {
+  it('a withheld title runs to the next level 1 heading, which becomes the page title', () => {
     const out = html('# GM Notes\nsecret\n# Players\nshown\n');
-    assert.ok(!out.includes('secret') && out.includes('shown'), out);
+    assert.strictEqual(out, '<p>shown</p>\n');
+  });
+  it('a withheld title on a sheets-off PC page leaves the kept sections under the real title', () => {
+    const page = { markdown: '# GM Notes\nsecret\n# Jean\n## Current Status\nhp 10\n', frontmatter: { type: 'pc' }, outputPath: 'pcs/jean.html' };
+    const out = processContent(page, {}, ['GM Notes'], {}, { pcKeepSections: ['Current Status'] }).html;
+    assert.ok(!out.includes('secret') && out.includes('hp 10'), out);
   });
   it('an ordinary title is dropped and the body kept, as before', () => {
     assert.strictEqual(html('# Inn\nA cosy inn.\n'), '<p>A cosy inn.</p>\n');
@@ -109,6 +114,11 @@ describe('section filter: stub pages open only where both readings agree', () =>
     assert.strictEqual(keepOnlySections('x\n## GM  Notes\nSECRET\n', ['GM Notes']), '');
     assert.strictEqual(keepOnlySections('x\n## GM Notes ##\nSECRET\n', ['GM Notes']), '');
     assert.strictEqual(keepOnlySections('x\n## GM Notes\nkept\n', ['GM Notes']), '## GM Notes\nkept\n');
+  });
+  it('a heading and an include entry that are written the same way still match', () => {
+    assert.strictEqual(keepOnlySections('## GM  Notes\nkept', ['GM  Notes']), '## GM  Notes\nkept');
+    assert.strictEqual(keepOnlySections('## Overview ##\nkept', ['Overview ##']), '## Overview ##\nkept');
+    assert.strictEqual(keepOnlySections('## Over\u00a0view\nkept', ['Over\u00a0view']), '## Over\u00a0view\nkept');
   });
 });
 
