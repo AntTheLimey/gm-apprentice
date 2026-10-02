@@ -1497,15 +1497,23 @@ def sections_withheld(answer: ToolAnswer
 
 
 def _yaml_hint(message: str) -> str:
-    """What to look for, read off the parser's own message; the general
-    hint when the message is absent (an older tool) or not one of these."""
+    """What to look for, read off the parser's own message. With no
+    message (a tool older than 1.11.45) the two commonest causes; with
+    one this does not know, nothing it cannot back up."""
+    if not message:
+        return ("most often a key written twice, or an unquoted value with "
+                "a colon in it")
     if "duplicated mapping key" in message:
         return "a key is written twice; keep one"
     if "quoted scalar" in message:
         return ("a quote is not closed; the line named is where the block "
                 "ends, not where the quote opens")
-    return ("most often a key written twice, or an unquoted value with a "
-            "colon in it")
+    if "flow collection" in message:
+        return "a [ ] or { } value is not closed, or is missing a comma"
+    if "mapping" in message:
+        return ("most often a value with a colon or a quote mark in it; "
+                "put the whole value in quotes")
+    return "fix the YAML at the line named"
 
 
 def unparseable_files(answer: ToolAnswer
@@ -4074,7 +4082,7 @@ def main() -> int:
     emit_rows = _emit_tool_once() if args.command == "all" else emit
     if args.command in ("frontmatter", "all"):
         emit_rows("frontmatter", check_frontmatter(args.vault, args.folder,
-                                              explain))
+                                                   explain))
     if args.command in ("names", "all"):
         emit_rows("names", check_names(args.vault, args.threshold))
     if args.command in ("index", "all"):
@@ -4083,33 +4091,33 @@ def main() -> int:
         emit_rows("stale-drafts", check_stale_drafts(args.vault))
     if args.command in ("tables", "all"):
         emit_rows("tables", check_tables(args.vault, args.folder, args.file,
-                                    newer_than_mtime))
+                                         newer_than_mtime))
     if args.command in ("timeline", "all"):
         emit_rows("timeline", check_timeline(args.vault))
     if args.command in ("read-aloud", "all"):
         emit_rows("read-aloud", check_read_aloud(args.vault))
     if args.command in ("relationships", "all"):
         emit_rows("relationships",
-             check_relationships(args.vault, args.folder, args.file,
-                                 newer_than_mtime))
+                  check_relationships(args.vault, args.folder, args.file,
+                                      newer_than_mtime))
     if args.command in ("sessions", "all"):
         emit_rows("sessions", check_sessions(args.vault))
     if args.command in ("gm-leak", "all"):
         # `all` is a report, so it never writes — same reasoning as
         # `wrapup` below.
         emit_rows("gm-leak", check_gm_leak(args.vault, args.folder,
-                                      args.fix and args.command == "gm-leak",
-                                      args.renest_excludes, explain))
+                                           args.fix and args.command == "gm-leak",
+                                           args.renest_excludes, explain))
     if args.command in ("pc-body", "all"):
         emit_rows("pc-body", check_pc_body(args.vault, args.folder, args.file,
-                                      newer_than_mtime, explain))
+                                           newer_than_mtime, explain))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects
         # from a command whose other twelve checks are read-only.
         wrap_file = args.file[0] if args.file else None
         emit_rows("wrapup", check_wrapup(args.vault, wrap_file,
-                                    args.fix and args.command == "wrapup"))
+                                         args.fix and args.command == "wrapup"))
     return 0
 
 

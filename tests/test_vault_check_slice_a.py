@@ -861,8 +861,13 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         for message, hint in (
                 ("unexpected end of the stream within a double quoted scalar "
                  "at line 5, column 1", "a quote is not closed"),
-                ("incomplete explicit mapping pair", "unquoted value with a colon"),
-                (None, "unquoted value with a colon")):
+                ("incomplete explicit mapping pair; a key node is missed",
+                 "a colon or a quote mark in it"),
+                ("can not read a block mapping entry", "a quote mark in it"),
+                ("missed comma between flow collection entries",
+                 "is not closed, or is missing a comma"),
+                ("unknown escape sequence", "fix the YAML at the line named"),
+                (None, "a key written twice, or an unquoted value")):
             with self.subTest(message=message):
                 vault, _calls = self._vault(unparseable={"PCs/Dup.md": message})
                 rows = rows_for(vc.check_frontmatter(vault, None),

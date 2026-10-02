@@ -20,15 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `vault_check frontmatter` now asks the site's publish tool which
     notes it cannot parse (`explain --all --json`) and reports each as
     an ERROR with the parser's message, so the skills' post-write
-    checks fix a note they have just written broken. It does not read the YAML a
-    second way: its own reader takes the last of a duplicated key and
-    was never going to see these. `vault_check all` still runs the
-    tool once, shared with `gm-leak` and `pc-body`. A vault that does
-    not publish is not asked.
+    checks fix a note they have just written broken. It does not read
+    the YAML a second way: its own reader takes the last of a
+    duplicated key and was never going to see these. `vault_check all`
+    still runs the tool once, shared with `gm-leak` and `pc-body`. A
+    vault that does not publish is not asked.
   - The row says what to look for, from the parser's message: a key
-    written twice, a quote left open, or most often an unquoted value
-    with a colon in it. A note that cannot be parsed gets that one
-    row and no schema rows, which came from a guess at its YAML.
+    written twice, a quote left open, an unclosed `[ ]` list, or a
+    value with a colon or quote mark in it that needs quoting. A note
+    that cannot be parsed gets that one row and no schema rows, which
+    came from a guess at its YAML.
   - The build repeats the skipped notes in a closing line, next to its
     other warnings: `WARNING: the build skipped 1 note whose
     frontmatter is not valid YAML: PCs/Dup.md (duplicated mapping key
