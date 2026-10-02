@@ -90,7 +90,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
   const build = deps.build || (async (opts) => { await require('./fonts').prefetchForConfig(opts.configPath); return require('./build').build(opts); });
-  const syncFunctions = deps.syncFunctions || ((root) => require('./sync-functions').syncScaffoldFunctions(root));
+  const syncFunctions = deps.syncFunctions || ((root, cfgPath) => require('./sync-functions').syncSiteFunctions({ configPath: cfgPath }));
 
   const flagKey = FLAG_KEY[feature];
   if (!flagKey) { out(`Unknown setup feature: ${feature}`); return 1; }
@@ -132,7 +132,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   try { setPublishKeys(vaultPath, { [switchKey]: true }); } catch (e) { out(e.message); return 1; }
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
-  syncFunctions(siteRoot);
+  syncFunctions(siteRoot, configPath);
   await build({ configPath });
   const dep = runWranglerAt(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${failureDetail(dep)}`); return 1; }

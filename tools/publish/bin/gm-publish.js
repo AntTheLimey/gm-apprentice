@@ -512,24 +512,9 @@ if (command === 'build') {
 
   // Bring plugin-owned Cloudflare Functions up to date on every build so API routes
   // added or fixed in a newer plugin version reach flagged sites scaffolded before they
-  // existed. A Tier-1 (static) site has no backend, so it gets no Functions re-added.
-  try {
-    const { syncScaffoldFunctions, shouldSyncFunctions } = require('../lib/sync-functions');
-    const siteRoot = path.dirname(path.resolve(configPath));
-    // Unreadable config throws into the catch below: nothing is synced, nothing is guessed.
-    const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    const vaultPath = path.resolve(siteRoot, rawConfig.vaultPath);
-    // The build resolves the same config next and says everything it has to say; this
-    // read only needs the switches, so its warnings go nowhere rather than print twice.
-    const { publishConfig } = require('../lib/config').resolveConfig(rawConfig, vaultPath, () => {});
-    if (shouldSyncFunctions(siteRoot, publishConfig.switches)) {
-      const { created, updated } = syncScaffoldFunctions(siteRoot);
-      for (const f of created) console.log(`  synced (new) functions/${f}`);
-      for (const f of updated) console.log(`  synced (updated) functions/${f}`);
-    }
-  } catch (err) {
-    console.warn(`⚠️  Could not sync scaffold Functions: ${err.message}`);
-  }
+  // existed. Each feature's files follow its own switch: on copies them, an explicit off
+  // removes them, unset does neither (a Tier-1 static site gets no Functions re-added).
+  require('../lib/sync-functions').syncSiteFunctionsOrWarn(configPath);
 
   const { build } = loadBuild();
   (async () => {

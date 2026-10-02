@@ -72,3 +72,18 @@ describe('publish switches', () => {
     assert.ok(!('backend' in cfg));
   });
 });
+
+describe('explicitOff: which off switches were the GM\'s choice', () => {
+  const off = (p, j) => resolveSwitches(p || {}, j || {}).explicitOff;
+  it('unset is not explicit', () => assert.deepStrictEqual(off({}, {}), { liveStats: false, inbox: false }));
+  it('false is explicit, under the new name or either old one', () => {
+    assert.deepStrictEqual(off({ live_stats: false, inbox: false }), { liveStats: true, inbox: true });
+    assert.deepStrictEqual(off({ backend: { statusBar: false } }), { liveStats: true, inbox: false });
+    assert.deepStrictEqual(off({}, { backend: { inbox: false } }), { liveStats: false, inbox: true });
+  });
+  it('an unreadable value counts as set', () => assert.deepStrictEqual(off({ live_stats: 'maybe', inbox: null }), { liveStats: true, inbox: true }));
+  it('character_sheets: false makes live stats explicit, not the inbox', () => {
+    assert.deepStrictEqual(off({ character_sheets: false }), { liveStats: true, inbox: false });
+  });
+  it('an on switch is never explicitly off', () => assert.deepStrictEqual(off({ live_stats: true, inbox: true }), { liveStats: false, inbox: false }));
+});

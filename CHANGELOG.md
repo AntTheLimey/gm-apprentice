@@ -108,6 +108,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The migration moves it to `publish.theme.tagline` (keeping the
   theme's other keys), which can put a tagline on the homepage where
   none showed before.
+- **Cloudflare Functions follow their own switch.** `live_stats`
+  copies only the live-stats functions and `inbox` only the inbox
+  ones; before, either switch copied the whole set. A switch set to
+  off (or live stats forced off by `character_sheets: false`) removes
+  that feature's functions from the site's `functions/`, printing a
+  line for each, and keeps and names a file you edited. An unset
+  switch removes nothing. `deploy` now runs the same step as `build`.
 
 ### Upgrading
 

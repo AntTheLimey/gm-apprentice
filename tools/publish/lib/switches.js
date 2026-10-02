@@ -48,7 +48,14 @@ function resolveSwitches(publish, json) {
     liveStats = false;
   }
   // `unset`: the switches neither file sets (they sit at their default).
-  return { characterSheets, liveStats, inbox, notes, unset };
+  // `explicitOff`: the feature is off because the GM said so (set to false, set to something
+  // unreadable, or live stats forced off by character_sheets: false), not because nothing
+  // set it. Only an explicit off may remove a deployed function; an unset switch never does.
+  const explicitOff = {
+    liveStats: !liveStats && (!unset.includes('live_stats') || !characterSheets),
+    inbox: !inbox && !unset.includes('inbox'),
+  };
+  return { characterSheets, liveStats, inbox, notes, unset, explicitOff };
 }
 
 module.exports = { resolveSwitches, asBool };

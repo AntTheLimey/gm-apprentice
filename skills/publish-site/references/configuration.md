@@ -298,6 +298,17 @@ switch; `migrate.py` writes `true` for it.
 even when `live_stats: true`; the build prints one line saying so. The
 inbox is independent of the other two.
 
+**Functions follow their switch.** `build` and `deploy` keep the site's
+`functions/` in step with the switches, one feature at a time. `live_stats: true`
+copies the live-stats files (`api/loadout.js`, `api/loadout-list.js`,
+`api/loadout-core.mjs`); `inbox: true` copies the inbox files
+(`api/request.js`, `api/inbox-core.mjs`); `api/package.json` follows either.
+A switch set to off, or live stats forced off by `character_sheets: false`,
+removes that feature's files and prints one `removed functions/…` line each.
+A file you edited is kept with a warning, and nothing else in `functions/`
+is touched. A switch that is unset removes nothing. A removal reaches the live
+site only with the next deploy, which uploads whatever `functions/` holds then.
+
 **On, but no KV store.** `live_stats` and `inbox` need the site's
 `wrangler.toml` to carry a real `INBOX` KV namespace id. When a switch
 is on and the id is missing or is still the scaffold placeholder, the
