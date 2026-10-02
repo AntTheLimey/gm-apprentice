@@ -12,15 +12,19 @@ const yaml = require('js-yaml');
 const { parseNote } = require('./frontmatter');
 
 const CONFIG_REL = path.join('_meta', 'vault-config.md');
-const KEY_RE = /^(?:"([^"]*)"|'([^']*)'|([^\s#:'"-][^:]*?)):(?:\s|$)/;
+const KEY_RE = /^(?:"([^"]*)"|'([^']*)'|([^\s#:'"-][^:]*?))([ \t]*):(?:\s|$)/;
 
 const indentOf = (line) => line.length - line.trimStart().length;
 const isBlank = (line) => line.trim() === '';
 const isComment = (line) => line.trimStart().startsWith('#');
 
+// { key, spaced } for a `key:` line; spaced is true when blanks sit between the key and its
+// colon (a form this editor does not rewrite). null for a line that is not a key.
 function keyOf(line) {
   const m = KEY_RE.exec(line);
-  return m ? (m[1] ?? m[2] ?? m[3]) : null;
+  if (!m) return null;
+  const key = m[1] ?? m[2] ?? m[3];
+  return { key: m[3] !== undefined ? key.trim() : key, spaced: m[4] !== '' || (m[3] !== undefined && key !== key.trim()) };
 }
 
 function readOrReason(text) {
@@ -77,9 +81,9 @@ function locateBlock(lines) {
   const starts = [];
   for (let i = start + 1; i < end; i++) {
     if (indentOf(lines[i]) === indent && !isBlank(lines[i]) && !isComment(lines[i])) {
-      const key = keyOf(lines[i].slice(indent));
-      if (key !== null && key !== key.trim()) return { error: `the key "${key.trim()}" has a space before its colon` };
-      if (key !== null) starts.push({ key, from: i });
+      const found = keyOf(lines[i].slice(indent));
+      if (found !== null && found.spaced) return { error: `the key "${found.key}" has a space before its colon` };
+      if (found !== null) starts.push({ key: found.key, from: i });
     }
   }
   const keys = starts.map((s, n) => {
@@ -175,7 +179,8 @@ function editPublishBlock(text, changes = {}) {
 }
 
 // setPublishKeys(vaultPath, set, remove) -> { changed }. Throws Error(reason) on refusal.
-function setPublishKeys(vaultPath, set, remove = []) {
+// deps.rename replaces fs.renameSync (tests inject a failing one).
+function setPublishKeys(vaultPath, set, remove = [], deps = {}) {
   const file = path.join(vaultPath, CONFIG_REL);
   const exists = fs.existsSync(file);
   const before = exists ? fs.readFileSync(file, 'utf8') : '---\ntype: meta\n---\n';
@@ -187,7 +192,7 @@ function setPublishKeys(vaultPath, set, remove = []) {
   const tmp = path.join(path.dirname(file), `.vault-config.md.${process.pid}.tmp`);
   try {
     fs.writeFileSync(tmp, out.text);
-    fs.renameSync(tmp, file);
+    (deps.rename || fs.renameSync)(tmp, file);
   } catch (e) {
     fs.rmSync(tmp, { force: true });
     throw e;

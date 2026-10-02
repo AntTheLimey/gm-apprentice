@@ -34,7 +34,7 @@ publish:
 | Site title | `publish.site_title` | Name shown in the nav bar and browser tab |
 | Landing tagline | `publish.theme.tagline` | One-sentence hook under the title on the landing page (default: none) |
 | Footer | `publish.footer` | Text for the footer of every page (default: none) |
-| Search | `publish.search` | `false` leaves out the search index (default: `true`) |
+| Search | `publish.search` | `false` (or `no`, `off`) leaves out the search index (default: `true`) |
 | Game system | `publish.system` | Selects the PC character-sheet renderer. Values in `schema-reference.md` § Site-level configuration fields |
 | Folder map | `publish.folder_map` | Maps vault folders to site output paths. A folder holding typed pages with no entry is skipped with a build warning. Default: empty; `init` writes the standard map |
 | Attachments directory | `publish.attachments_dir` | Vault folder holding images (default: `_attachments`) |

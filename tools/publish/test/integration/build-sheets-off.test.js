@@ -252,6 +252,17 @@ describe('character sheets off: more cases', () => {
     assert.deepStrictEqual(identityOf(html), [['Age', '41']]);
   });
 
+  it('a header that shows an invalid point_total leaves the body total in the strip', () => {
+    const body = '## Background\n\nx\n\n## Points Summary\n\n| Category | Points |\n|---|---|\n| **Total** | **197** |\n';
+    for (const bad of ['"ca. 150"', '0', '[150]']) {
+      const html = buildSite({ system: 'gurps-4e', pcBody: body, pcFm: `point_total: ${bad}\ndisplay_meta: [point_total]\n` }).pc();
+      assert.deepStrictEqual(identityOf(html), [['Points', '197']], bad);
+    }
+    // The same valid number in header and strip is still said once.
+    const same = buildSite({ system: 'gurps-4e', pcBody: body, pcFm: 'point_total: 197\ndisplay_meta: [point_total]\n' }).pc();
+    assert.strictEqual(identityOf(same), null);
+  });
+
   it('a display_meta naming point_total puts the points in the header only', () => {
     const named = buildSite({ system: 'gurps-4e', pcBody: '## Background\n\nx\n', pcFm: 'point_total: 250\ndisplay_meta: [point_total]\n' }).pc();
     assert.strictEqual(identityOf(named), null);

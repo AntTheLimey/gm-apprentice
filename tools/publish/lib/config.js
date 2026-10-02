@@ -4,7 +4,7 @@ const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
 const { MOVED_KEYS } = require('./config-keys');
-const { resolveSwitches } = require('./switches');
+const { resolveSwitches, asBool } = require('./switches');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
@@ -88,6 +88,18 @@ const PUBLISH_DEFAULTS = {
   },
   section_titles: {},
 };
+
+// `search` takes the same words as the switches (true/false, yes/no, on/off). Unset is the
+// default (on); a value that is not one of them is the default too, and said so.
+function searchFrom(raw, label, warn = console.warn) {
+  if (raw === undefined) return PUBLISH_DEFAULTS.search;
+  const b = asBool(raw);
+  if (b === null) {
+    warn(`config: ${label} is not true or false (${JSON.stringify(raw)}); search stays on`);
+    return PUBLISH_DEFAULTS.search;
+  }
+  return b;
+}
 
 // A mistyped default_mode falls back to 'system' — say so rather than silently.
 function defaultModeFrom(raw, warn = console.warn) {
@@ -344,7 +356,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
     site_title: picked.site_title ?? null,
     footer: picked.footer ?? null,
-    search: picked.search == null ? PUBLISH_DEFAULTS.search : (picked.search !== false && picked.search !== 'false'),
+    search: searchFrom(picked.search, publish.search !== undefined ? 'publish.search' : 'vault.config.json searchEnabled', warn),
     folder_map: asMap(picked.folder_map),
     attachments_dir: picked.attachments_dir || PUBLISH_DEFAULTS.attachments_dir,
     pc_prose_sections: Array.isArray(publish.pc_prose_sections) ? publish.pc_prose_sections : [],

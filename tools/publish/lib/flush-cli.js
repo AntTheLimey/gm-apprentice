@@ -68,6 +68,17 @@ async function runFlush(deps) {
   const campaignSystem = publishConfig.system;
   const campaignId = slugify(config.siteTitle || 'campaign');
 
+  // Flush writes live vitals into PC notes. With live stats off (or sheets off, which forces
+  // them off) there is no live state to keep, so it does nothing. An injected publishConfig
+  // with no `switches` (a test seam) means on, as in pcKeepList.
+  const switches = publishConfig.switches;
+  if (switches && switches.liveStats !== true) {
+    out(switches.characterSheets === false
+      ? 'Nothing flushed: character sheets are off for this campaign, so live stats are off too.'
+      : 'Nothing flushed: live stats are off for this campaign (publish.live_stats is not true).');
+    return 0;
+  }
+
   const adapter = deps.adapter || defaultAdapter(configDir);
   const core = await import('../templates-scaffold/functions/api/loadout-core.mjs');
   let states;

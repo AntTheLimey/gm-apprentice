@@ -354,7 +354,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     // A fact the header's meta badges already show is not said twice.
     const headerFields = new Set((Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS)
       .filter(field => fm[field] != null && fm[field] !== ''));
-    const pairs = ((context || {}).identity || []).filter(([label]) => !headerFields.has(IDENTITY_SOURCE_FIELD[label]));
+    // ... but only when the header shows the same value the strip would: a header that shows
+    // a raw "ca. 150" leaves the strip's valid total (from the Points Summary) in place.
+    const inHeader = (label, value) => {
+      const field = IDENTITY_SOURCE_FIELD[label];
+      return headerFields.has(field) && String(fm[field]).trim() === value;
+    };
+    const pairs = ((context || {}).identity || []).filter(([label, value]) => !inHeader(label, value));
     const strip = pairs.length
       ? `<div class="pc-identity">\n${pairs.map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(value)}</span>`).join('\n')}\n</div>\n`
       : '';

@@ -557,7 +557,8 @@ Under `publish:`:
 | `wrap_up` | object | `player_sections`: extra H2 titles on a Wrap-Up that `vault_check wrapup` treats as player-facing (default none) |
 | `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
-| `exclude_callouts` | boolean | Strip GM callouts from output (default `false`) |
+| `exclude_callouts` | boolean or array | Strip callouts from output: `true` for all, or an array of callout types (default `false`) |
+| `exclude_drafts` | boolean | Leave DRAFT entities out of the site entirely (default `false`) |
 | `site_title` | string | Title shown on the site (default none) |
 | `footer` | string | Footer text (default none) |
 | `search` | boolean | Site search (default `true`) |

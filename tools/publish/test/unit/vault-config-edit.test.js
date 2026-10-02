@@ -144,6 +144,13 @@ describe('editPublishBlock edge cases', () => {
     const out = run('---\n  type: meta\n  publish:\n    mode: player\n---\n', { set: { inbox: true } });
     assert.match(out.error, /top-level keys are indented/);
   });
+  it('refuses a quoted child key with a space before the colon, with the plain reason', () => {
+    for (const key of ['"inbox" :', "'inbox'  :", 'inbox :']) {
+      const out = editPublishBlock(`---\npublish:\n  ${key} true\n---\n`, { set: { inbox: false } });
+      assert.strictEqual(out.error, 'the key "inbox" has a space before its colon', key);
+    }
+    assert.ok(editPublishBlock('---\npublish:\n  "inbox": true\n---\n', { set: { inbox: false } }).text);
+  });
   it('refuses a child key written with a space before the colon', () => {
     const out = run('---\npublish:\n  inbox : false\n---\n', { set: { inbox: true } });
     assert.match(out.error, /space before its colon/);
@@ -184,5 +191,23 @@ describe('setPublishKeys', () => {
     fs.writeFileSync(cfg(dir), '---\npublish:\n  backend:\n    inbox: true\n  mode: player\n---\n');
     assert.deepStrictEqual(setPublishKeys(dir, {}, ['backend']), { changed: true });
     assert.strictEqual(fs.readFileSync(cfg(dir), 'utf8'), '---\npublish:\n  mode: player\n---\n');
+  });
+});
+
+describe('setPublishKeys write failure', () => {
+  it('a failed rename leaves the file as it was and no temp file behind', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-vce-'));
+    try {
+      fs.mkdirSync(path.join(dir, '_meta'));
+      const file = path.join(dir, '_meta', 'vault-config.md');
+      const original = '---\npublish:\n  mode: player\n---\n';
+      fs.writeFileSync(file, original);
+      const failing = () => { throw new Error('rename refused'); };
+      assert.throws(() => setPublishKeys(dir, { inbox: true }, [], { rename: failing }), /rename refused/);
+      assert.strictEqual(fs.readFileSync(file, 'utf8'), original);
+      assert.deepStrictEqual(fs.readdirSync(path.join(dir, '_meta')), ['vault-config.md']);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

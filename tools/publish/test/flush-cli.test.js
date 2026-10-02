@@ -31,7 +31,7 @@ function run(over = {}) {
     'loadout:test-campaign:ghost:ZZZZ': JSON.stringify({ hp: 3, conditions: {}, updatedAt: 9 }),
   });
   const deps = Object.assign({
-    config: CONFIG, adapter, scan: pages,
+    config: CONFIG, adapter, scan: pages, publishConfig: { switches: { characterSheets: true, liveStats: true } },
     readFile: (p) => (p === '/vault/PCs/Jane_Ashford.md' ? JANE_MD : ''),
     writeFile: (p, s) => { writes[p] = s; },
     out: (m) => lines.push(String(m)),
@@ -103,6 +103,7 @@ test('routes a GURPS PC to the GURPS writeback (injects HP/FP)', async () => {
   });
   const rc = await runFlush({
     config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', system: 'gurps-4e', excludeDirs: [], folderMap: {} },
+    publishConfig: { system: 'gurps-4e', switches: { characterSheets: true, liveStats: true } },
     adapter,
     scan: () => [{ sourcePath: '/vault/PCs/Karl.md', title: 'Karl_Brenner', displayTitle: 'Karl Brenner', frontmatter: { type: 'pc', system: 'gurps-4e' } }],
     readFile: () => KARL,
@@ -164,6 +165,7 @@ test('flush skips a GURPS PC whose HP/FP are pinned in frontmatter (status objec
   });
   const rc = await runFlush({
     config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', system: 'gurps-4e', excludeDirs: [], folderMap: {} },
+    publishConfig: { system: 'gurps-4e', switches: { characterSheets: true, liveStats: true } },
     adapter,
     scan: () => [{ sourcePath: '/vault/PCs/Karl.md', title: 'Karl_Brenner', displayTitle: 'Karl Brenner', frontmatter: { type: 'pc', system: 'gurps-4e', status: { hp: '11/11', fp: '11/11' } } }],
     readFile: () => KARL,
@@ -208,4 +210,19 @@ test('flush --dry-run reports the same changes and writes nothing (#178)', async
   assert.deepEqual(Object.keys(r.writes), [], 'no file written');
   assert.ok(r.lines.some((l) => /DRY RUN/.test(l)));
   assert.ok(r.lines.some((l) => /Jane Ashford/.test(l) && /HP 11→7/.test(l) && /would write/.test(l)));
+});
+
+test('flush does nothing, and says why, when live stats are off or character sheets are off', async () => {
+  const cases = [
+    [{ switches: { characterSheets: true, liveStats: false } }, /live stats are off for this campaign/],
+    [{ switches: { characterSheets: false, liveStats: false } }, /character sheets are off for this campaign, so live stats are off too/],
+    [undefined, /live stats are off for this campaign/],   // resolved from config: unset means off
+  ];
+  for (const [publishConfig, say] of cases) {
+    const r = run({ publishConfig, adapter: { async get() { throw new Error('KV must not be read'); } } });
+    assert.equal(await r.promise, 0);
+    assert.deepEqual(r.writes, {});
+    assert.equal(r.lines.length, 1, r.lines.join('\n'));
+    assert.match(r.lines[0], say);
+  }
 });
