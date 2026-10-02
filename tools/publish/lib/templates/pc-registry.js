@@ -36,9 +36,22 @@ function getConsumedTitleMatcher(system) {
   return consumedTitles.get(getRenderer(system)) || null;
 }
 
+// Which sheet family a system's renderer belongs to, by renderer so the
+// aliases above stay the only list of them. CoC has no frontmatter stat read.
+const families = new Map([
+  [renderGURPSSheet, 'gurps'],
+  [renderDnDSheet, 'dnd'],
+  [renderPF2eSheet, 'pf2e'],
+  [renderFitDSheet, 'fitd'],
+]);
+
+function getSheetFamily(system) {
+  return families.get(getRenderer(system)) || null;
+}
+
 function getRenderer(system) {
   if (!system) return null;
   return renderers[String(system).toLowerCase()] || null;
 }
 
-module.exports = { getRenderer, getConsumedTitleMatcher };
+module.exports = { getRenderer, getConsumedTitleMatcher, getSheetFamily };

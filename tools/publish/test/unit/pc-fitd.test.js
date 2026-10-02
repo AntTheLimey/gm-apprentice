@@ -189,11 +189,6 @@ describe('renderFitDSheet body sections', () => {
     assert.strictEqual(dotsFor(html, 'hunt'), 2);
   });
 
-  it('prefers the body ratings over frontmatter', () => {
-    const html = render(cutterBody(), { type: 'pc', action_ratings: { insight: { FMONLY: 4 } } });
-    assert.ok(!html.includes('FMONLY'));
-  });
-
   it('renders stress and trauma', () => {
     const html = render([
       '## Stat Sheet', '', '### Stress & Trauma', '',
@@ -223,6 +218,10 @@ describe('renderFitDSheet ignores frontmatter stats', () => {
 
   it('returns null when only frontmatter carries stats', () => {
     assert.strictEqual(renderFitDSheet(sentinel, []), null);
+  });
+
+  it('renders a filled body sheet identically with or without them', () => {
+    assert.strictEqual(render(cutterBody(), sentinel), render(cutterBody()));
   });
 
   it('leaves every frontmatter value off a sheet built from the template body', () => {

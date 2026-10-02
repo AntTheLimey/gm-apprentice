@@ -312,30 +312,26 @@ function parseReactions(model, sections) {
 }
 
 function parseSocial(model, sections) {
-  {
-    const sec = findSectionByTitle(sections, 'cultural familiarities', 'cultural');
-    if (sec) {
-      for (const row of parseTableRows(sec.html).slice(1)) {
-        if (row[0]) model.social.cultural.push({ name: row[0], cost: row[row.length - 1] || '0', markers: [] });
-      }
+  const cultural = findSectionByTitle(sections, 'cultural familiarities', 'cultural');
+  if (cultural) {
+    for (const row of parseTableRows(cultural.html).slice(1)) {
+      if (row[0]) model.social.cultural.push({ name: row[0], cost: row[row.length - 1] || '0', markers: [] });
     }
   }
-  {
-    const sec = findSectionByTitle(sections, 'languages');
-    if (sec) {
-      const rows = parseTableRows(sec.html);
-      const header = (rows[0] || []).map(h => h.toLowerCase());
-      const iName = Math.max(0, header.findIndex(h => h.includes('name')));
-      const iSpoken = header.findIndex(h => h.includes('spoken'));
-      const iWritten = header.findIndex(h => h.includes('written'));
-      const iPts = header.findIndex(h => h.includes('point'));
-      for (const row of rows.slice(1)) {
-        if (!row[iName]) continue;
-        model.social.languages.push({
-          name: row[iName], spoken: iSpoken >= 0 ? row[iSpoken] : '',
-          written: iWritten >= 0 ? row[iWritten] : '', points: iPts >= 0 ? row[iPts] : '0',
-        });
-      }
+  const languages = findSectionByTitle(sections, 'languages');
+  if (languages) {
+    const rows = parseTableRows(languages.html);
+    const header = (rows[0] || []).map(h => h.toLowerCase());
+    const iName = Math.max(0, header.findIndex(h => h.includes('name')));
+    const iSpoken = header.findIndex(h => h.includes('spoken'));
+    const iWritten = header.findIndex(h => h.includes('written'));
+    const iPts = header.findIndex(h => h.includes('point'));
+    for (const row of rows.slice(1)) {
+      if (!row[iName]) continue;
+      model.social.languages.push({
+        name: row[iName], spoken: iSpoken >= 0 ? row[iSpoken] : '',
+        written: iWritten >= 0 ? row[iWritten] : '', points: iPts >= 0 ? row[iPts] : '0',
+      });
     }
   }
 }

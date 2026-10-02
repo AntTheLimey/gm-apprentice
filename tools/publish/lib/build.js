@@ -7,7 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { pcKeepList } = require('./pc-prose');
+const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
@@ -780,6 +780,7 @@ function build(options = {}) {
   const partyEntries = [];
   // PCs whose system has a sheet renderer that produced no sheet (#273).
   const sheetlessPcs = [];
+  const retiredFieldPcs = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
@@ -848,6 +849,11 @@ function build(options = {}) {
           const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
           const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
           if (sheetless && sheetExpected) sheetlessPcs.push(page.displayTitle || page.title);
+          // A frontmatter stat is not read; with sheets off no sheet is built, so nothing is lost.
+          if (!(publishConfig.switches && publishConfig.switches.characterSheets === false)) {
+            const retired = retiredSheetFieldsFor(sourceFm, system);
+            if (retired.length) retiredFieldPcs.push({ rel: vaultRelPathOf(page), names: retired });
+          }
           // A system renderer may report structural warnings (e.g. a CoC sheet whose body
           // diverges from the contract and parses near-empty, #107). Surface them like other
           // page warnings instead of shipping a silently-broken sheet — unless the sheet is
@@ -1260,6 +1266,10 @@ function build(options = {}) {
       const n = without.length;
       console.warn(`  WARNING: ${n} played session${plural(n, " isn't", "s aren't")} published yet and need${plural(n, 's', '')} the GM's say: ${why(without)} — publish-site asks the GM about ${plural(n, 'it', 'these')}.`);
     }
+  }
+
+  for (const { rel, names } of retiredFieldPcs) {
+    console.warn(`  WARNING: ${rel}: ${retiredSheetFieldsMessage(names)}`);
   }
 
   if (sheetlessPcs.length > 0) {

@@ -386,19 +386,40 @@ describe('explain --all (#276)', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('lists the retired sheet fields a PC still carries in frontmatter, null for any other file', async () => {
-    const vault = makeVault();
-    write(vault, 'Sessions/Old.md', '---\ntype: pc\nattributes: { ST: 77 }\nskills: [{ name: Sentinel }]\nstress: { current: 1, max: 9 }\noccupation: Sailor\n---\n\nA sailor.\n');
-    write(vault, 'Sessions/Clean.md', '---\ntype: pc\noccupation: Sailor\npoint_total: 150\n---\n\nA sailor.\n');
-    write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
-    const { rc, json } = await all(siteFor(vault));
-    assert.strictEqual(rc, 0);
-    const pages = byPath(json);
-    assert.deepStrictEqual(pages.get('Sessions/Old.md').retiredSheetFields, ['attributes', 'skills', 'stress']);
-    assert.deepStrictEqual(pages.get('Sessions/Clean.md').retiredSheetFields, []);
-    assert.strictEqual(pages.get('Sessions/Npc.md').retiredSheetFields, null);
-    assert.strictEqual(pages.get('Sessions/Session_07.md').retiredSheetFields, null);
-    fs.rmSync(vault, { recursive: true, force: true });
+  describe('retiredSheetFields follow the campaign system', () => {
+    async function retiredFor(system, fm) {
+      const vault = makeVault();
+      write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${system ? `  system: ${system}\n` : ''}---\n`);
+      write(vault, 'Sessions/Pc.md', `---\ntype: pc\noccupation: Sailor\n${fm}---\n\nA sailor.\n`);
+      write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
+      const { rc, json } = await all(siteFor(vault));
+      assert.strictEqual(rc, 0);
+      const pages = byPath(json);
+      assert.strictEqual(pages.get('Sessions/Npc.md').retiredSheetFields, null);
+      assert.strictEqual(pages.get('Sessions/Session_07.md').retiredSheetFields, null);
+      fs.rmSync(vault, { recursive: true, force: true });
+      return pages.get('Sessions/Pc.md').retiredSheetFields;
+    }
+    const gurpsFm = 'attributes: { ST: 77 }\nskills: [{ name: Sentinel }]\nstress: { current: 1, max: 9 }\n';
+
+    it('lists a GURPS name on a GURPS PC (aliases included), and [] when none is carried', async () => {
+      assert.deepStrictEqual(await retiredFor('gurps-4e', gurpsFm), ['attributes', 'skills']);
+      assert.deepStrictEqual(await retiredFor('gurps', gurpsFm), ['attributes', 'skills']);
+      assert.deepStrictEqual(await retiredFor('gurps-4e', 'point_total: 150\n'), []);
+    });
+
+    it('does not report a GURPS-only name on a CoC, D&D or generic PC', async () => {
+      for (const system of ['coc-7e', 'dnd-5e-2024', 'fitd', 'generic', '']) {
+        const got = await retiredFor(system, 'skills: [x]\nidentity: x\nlanguages: [x]\npoints: [x]\n');
+        assert.deepStrictEqual(got, [], system);
+      }
+    });
+
+    it('reports each system its own names, a shared name for every system that read it', async () => {
+      assert.deepStrictEqual(await retiredFor('dnd-5e-2024', gurpsFm + 'ability_scores: {}\nspell_slots: {}\n'), ['ability_scores', 'spell_slots']);
+      assert.deepStrictEqual(await retiredFor('blades', gurpsFm), ['stress']);
+      assert.deepStrictEqual(await retiredFor('pathfinder-2e', gurpsFm + 'hero_points: 1\nspell_slots: {}\n'), ['attributes', 'spell_slots', 'hero_points']);
+    });
   });
 
   it('says whether each PC has a sheet_source, and null for any other file (#273)', async () => {

@@ -192,7 +192,7 @@ function consumedTitleMatcher(titles) {
 function hasSheetStructure(html) {
   const s = String(html || '');
   return /<table[ >]/i.test(s)
-    || /class="(?:stat-item|dnd-ability-card|dnd-skill|dnd-proficiency|dnd-proficiency-list|pf2e-proficiency|entity-card|fitd-action-row|fitd-tracker|fitd-identity|fitd-abilities|fitd-special-ability)[ "]/.test(s);
+    || /class="(?:stat-item|dnd-ability-card|dnd-skill|dnd-proficiency|dnd-proficiency-list|fitd-action-row|fitd-tracker|fitd-identity|fitd-abilities)[ "]/.test(s);
 }
 
 module.exports = {

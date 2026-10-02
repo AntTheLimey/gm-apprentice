@@ -348,12 +348,6 @@ describe('renderDnDSheet body sections', () => {
     assert.ok(html.includes('+4'));
   });
 
-  it('prefers the body abilities over frontmatter', () => {
-    const html = renderDnDSheet({ type: 'pc', ability_scores: { STR: 20 } }, extractSections(wizardBody()));
-    const str = html.match(/<span class="ability-name">STR<\/span>[\s\S]*?<\/div>/)[0];
-    assert.match(str, />8</);
-  });
-
   it('renders proficiencies from the body', () => {
     const html = renderDnDSheet({ type: 'pc' }, sectionsFromMarkdown(
       '## Proficiencies\n\n**Armor Training:** Light\n\n**Tools:** Athletics, Perception, Stealth\n'));
@@ -383,6 +377,11 @@ describe('renderDnDSheet ignores frontmatter stats', () => {
 
   it('returns null when only frontmatter carries stats', () => {
     assert.strictEqual(renderDnDSheet(sentinel, []), null);
+  });
+
+  it('renders a filled body sheet identically with or without them', () => {
+    const sections = extractSections(wizardBody());
+    assert.strictEqual(renderDnDSheet(sentinel, sections), renderDnDSheet({ type: 'pc' }, sections));
   });
 
   it('leaves every frontmatter value off a sheet built from the template body', () => {

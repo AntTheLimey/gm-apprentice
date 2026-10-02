@@ -145,11 +145,6 @@ describe('renderPF2eSheet body sections', () => {
     assert.ok(html.includes('-1'));
   });
 
-  it('prefers the body attributes over frontmatter', () => {
-    const html = render(druidBody(), { type: 'pc', attributes: { WIS: 9 } });
-    assert.ok(!html.includes('+9'));
-  });
-
   it('renders body skills with their rank', () => {
     const html = render([
       '## Skills', '', '| Skill | Attribute | Rank | Modifier |', '|---|---|---|---|',
@@ -189,6 +184,10 @@ describe('renderPF2eSheet ignores frontmatter stats', () => {
 
   it('returns null when only frontmatter carries stats', () => {
     assert.strictEqual(renderPF2eSheet(sentinel, []), null);
+  });
+
+  it('renders a filled body sheet identically with or without them', () => {
+    assert.strictEqual(render(druidBody(), sentinel), render(druidBody()));
   });
 
   it('leaves every frontmatter value off a sheet built from the template body', () => {
