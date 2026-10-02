@@ -392,8 +392,9 @@ A newly scaffolded site file has `host`, `siteUrl`, `vaultPath` and
 ## Settings left in `vault.config.json`
 
 One rule: the vault file decides. Campaign settings used to live in
-the site file under other names. Until plugin 1.11.0 the build still
-reads them there, and warns:
+the site file under other names. The build still reads them there,
+and warns. That site-file form is planned to be removed in plugin
+1.11.0:
 
 - A setting the vault file does not set is taken from the site file.
 - A setting both files set comes from the vault file. The site file's
@@ -466,19 +467,25 @@ one site directly, run `node "$TOOL" migrate-config --dry-run --config
 <dir>/vault.config.json`, then again without `--dry-run`. The move:
 
 - writes each campaign setting under `publish:` and removes it from
-  the site file, leaving the six deployment keys;
+  the site file. Only the old keys in the table above are removed;
+  any other key the site file holds is left as it is;
 - merges exclude lists: the vault file's entries first, then the site
   file's entries that are not already there;
 - keeps the vault file's value where both files set a key, and reports
   the value it discarded;
 - copies an old `backend` flag to `live_stats` / `inbox`. With no flag
   at all, it writes `true` for a feature that is deployed on the site
-  (its Function and a real KV id are present). It never writes
+  (its Function and a real KV id are present), but only while the
+  site file still holds old settings to move. A later run on a
+  migrated site does not switch a feature back on. It never writes
   `character_sheets`;
 - copies both files to `<file>.pre-migrate` first. An existing backup
   is never replaced;
 - changes only the keys it moves in the vault file. Comments and
-  layout elsewhere stay as written. It writes nothing when the vault
+  layout elsewhere stay as written, with one exception: adding a
+  tagline to an existing `theme:` block rewrites that block, so
+  comments inside it are lost, and the tool prints a note saying so.
+  It writes nothing when the vault
   file cannot be edited safely (a `publish: {…}` written on one line,
   tab indentation, mixed line endings, YAML that does not parse).
 

@@ -258,18 +258,18 @@ node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
 Each defaults to `./vault.config.json`; pass `--config <path>` if you're
 running from elsewhere. Both are:
 
-- **KV-permission probe first** — the command lists KV namespaces to
-  confirm the token can manage KV before touching anything (this is the
-  command's own check, not a `doctor` run). If the token can't manage KV, it stops with the fix
-  rather than half-applying anything: edit the token (My Profile → API
-  Tokens → your token → Edit) to add **Account · Workers KV Storage · Edit**
-  (Cloudflare returns `Authentication error [code: 10000]` for this case),
-  then re-run — no undo needed.
 - **Vault-file check first** — the command writes `publish.live_stats: true`
   (`setup-status-bar`) or `publish.inbox: true` (`setup-inbox`) into the
   vault's `_meta/vault-config.md`. If that file cannot be edited safely it
   stops with `cannot edit _meta/vault-config.md: …` before it touches
   wrangler or KV. Nothing is written to `vault.config.json`.
+- **KV-permission probe next** — the command lists KV namespaces to
+  confirm the token can manage KV before it creates or changes anything (this is the
+  command's own check, not a `doctor` run). If the token can't manage KV, it stops with the fix
+  rather than half-applying anything: edit the token (My Profile → API
+  Tokens → your token → Edit) to add **Account · Workers KV Storage · Edit**
+  (Cloudflare returns `Authentication error [code: 10000]` for this case),
+  then re-run — no undo needed.
 - **Idempotent** — safe to re-run. A namespace id already in `wrangler.toml`
   (or an existing `INBOX` namespace) is reused rather than recreated.
 

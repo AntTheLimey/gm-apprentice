@@ -10,10 +10,8 @@ does the waiting, and you only wake when a request actually arrives.
 
 - The inbox is set up (KV namespace + `wrangler.toml` id + deployed Function).
   See `references/cloudflare-pages.md` → "Change-request inbox".
-- The system is GURPS 4e or CoC 7e (including Regency Cthulhu). For any
-  other system, stop and tell the GM this isn't supported yet.
 - You know the campaign's switches. Ask the tool, from the site directory,
-  before opening the session. Do not read the config files and work it out:
+  before anything else. Do not read the config files and work it out:
 
   ```bash
   npx gm-apprentice-publish explain --all --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["switches"])'
@@ -28,6 +26,10 @@ does the waiting, and you only wake when a request actually arrives.
     "When character sheets are off" below.
   - The command fails: act as if character sheets are on, and tell the GM
     you could not check.
+- With character sheets on, the system is GURPS 4e or CoC 7e (including
+  Regency Cthulhu). For any other system, stop and tell the GM sheet
+  changes aren't supported yet. With character sheets off this gate does
+  not apply: the loop is a question channel for every system.
 
 ## Start
 
@@ -266,19 +268,23 @@ lost reports `status: gone` to the widget, which tells the player to resend.
 
 With `publish.character_sheets` off (`switches.characterSheets` is `false`
 in the Prerequisites check), the site carries no sheet and the widget is a
-question channel labelled "Ask the GM". The Start, watcher, failure and Stop
-sections apply unchanged. "When a batch arrives" changes:
+question channel labelled "Ask the GM". This holds for every system, not
+only GURPS and CoC. The Start, watcher, failure and Stop sections apply
+unchanged. "When a batch arrives" changes:
 
 - **Every request is a question.** Step 0 (resolve the `character`) still
-  applies. Skip step 1's classification and step 2 entirely, for GURPS and
-  CoC alike.
-- **Never apply a sheet change.** Do not edit a PC's `.md`, do not track a
-  running value, and never finalize with `applied`: there is no sheet on the
-  site for a change to show up on.
+  applies. Skip step 1's classification, step 2 and "CoC 7e changes"
+  entirely, whatever the system.
+- **Never edit a PC note.** Apply no edit of any kind to a PC's `.md`. That
+  includes the Notes and Current Status self-service that is applied when
+  sheets are on. Do not track a running value, and never finalize with
+  `applied`.
 - **Answer per step 3**, from `sheet show --player-safe` output only, and
-  finalize with `advice`. Don't point the player at a sheet on the site.
-- **A request worded as a change** ("spend 4 points on DX", "lost 3 SAN") is
-  still answered, not applied. Reply `advice` saying the sheet isn't kept on
+  finalize with `advice`. With sheets off that output is the note's
+  published prose sections, without the stat sections, so an answer cannot
+  quote the sheet. Don't point the player at a sheet on the site.
+- **A request worded as a change** ("spend 4 points on DX", "lost 3 SAN",
+  "add this to my notes") is still answered, not applied. Reply `advice` saying the sheet isn't kept on
   the site and the change is one to raise with the GM at the table, and log
   a `⚠ NEEDS YOU` line (character · what was asked · "sheets off — nothing
   applied") so the GM sees it.

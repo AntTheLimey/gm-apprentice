@@ -268,6 +268,9 @@ Store the confirmed name as `site_title` in `setup_progress`, and
 write it to `publish.site_title` in `_meta/vault-config.md` now.
 `init` (Step 13) fills in only the settings the vault file does not
 already set, so the title written here is the one the site uses.
+Edit the `publish:` block in place: add
+only that key, and leave every other line as written. If the file has
+no `publish:` block, add one at the end of the frontmatter.
 
 ### Step 7: Landing page tagline
 
@@ -282,7 +285,11 @@ Ask:
 
 Store as `tagline` in `setup_progress`, and write it to
 `publish.theme.tagline` in `_meta/vault-config.md` (a child of
-`theme:`, beside any palette and fonts set later).
+`theme:`, beside any palette and fonts set later). Edit the
+`publish:` block in place: add only that key (and the `theme:` line
+above it when there is none), and leave every other line as written.
+If the file has no `publish:` block, add one at the end of the
+frontmatter.
 
 ### Step 8: Name the site (host-specific)
 
