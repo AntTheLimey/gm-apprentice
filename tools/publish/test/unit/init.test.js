@@ -275,7 +275,6 @@ describe('init', () => {
         assert.strictEqual(pub.exclude_callouts, true);
         for (const k of Object.keys(real)) console[k] = (...a) => lines.push(a.join(' '));
         const configPath = path.join(site, 'vault.config.json');
-        delete require.cache[require.resolve(configPath)];
         build({ configPath });
         await assert.doesNotReject(fs.access(path.join(site, 'docs', 'index.html')));
       } finally {
@@ -298,6 +297,56 @@ describe('init', () => {
         assert.deepStrictEqual(pub.theme, { tagline: 'Hello' });
         assert.deepStrictEqual(result.vaultSettings.kept, ['site_title']);
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('keeps a key set to false or to an empty list, and a second init changes nothing', async () => {
+      const tmpDir = await makeTmpDir();
+      try {
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        const file = path.join(vault, '_meta', 'vault-config.md');
+        await fs.writeFile(file, '---\ntype: meta\npublish:\n  exclude_callouts: false\n  exclude_dirs: []\n---\n');
+        const site = path.join(tmpDir, 'site');
+        await init(site, { vaultPath: vault });
+        const pub = publishOf(vault);
+        assert.strictEqual(pub.exclude_callouts, false);
+        assert.deepStrictEqual(pub.exclude_dirs, []);
+        const after1 = readFileSync(file, 'utf8');
+        await assert.rejects(() => init(site, { vaultPath: vault }), /already exists/);
+        assert.strictEqual(readFileSync(file, 'utf8'), after1);
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('--vault is read from the cwd and recorded relative to the site, or absolute', async () => {
+      const tmpDir = await makeTmpDir();
+      const { spawnSync } = require('child_process');
+      const cli = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+      const run = (args) => spawnSync(process.execPath, [cli, 'init', ...args], { cwd: tmpDir, encoding: 'utf8' });
+      try {
+        // relative, vault inside the site folder
+        await fs.mkdir(path.join(tmpDir, 'site', 'myvault'), { recursive: true });
+        let r = run(['site', '--vault', './site/myvault']);
+        assert.strictEqual(r.status, 0, r.stderr);
+        assert.strictEqual(JSON.parse(readFileSync(path.join(tmpDir, 'site', 'vault.config.json'), 'utf8')).vaultPath, './myvault');
+        assert.strictEqual(publishOf(path.join(tmpDir, 'site', 'myvault')).attachments_dir, '_attachments');
+        // vault outside the site folder: absolute, resolved against the cwd
+        await fs.mkdir(path.join(tmpDir, 'elsewhere'));
+        r = run(['site2', '--vault', 'elsewhere']);
+        assert.strictEqual(r.status, 0, r.stderr);
+        const abs = path.join(await fs.realpath(tmpDir), 'elsewhere');
+        const rec = JSON.parse(readFileSync(path.join(tmpDir, 'site2', 'vault.config.json'), 'utf8')).vaultPath;
+        assert.strictEqual(await fs.realpath(rec), abs);
+        assert.ok(path.isAbsolute(rec));
+        assert.strictEqual(publishOf(path.join(tmpDir, 'elsewhere')).site_title, 'My Campaign');
+        // an absolute --vault is recorded as given
+        r = run(['site3', '--vault', path.join(tmpDir, 'elsewhere')]);
+        assert.strictEqual(r.status, 0, r.stderr);
+        assert.strictEqual(JSON.parse(readFileSync(path.join(tmpDir, 'site3', 'vault.config.json'), 'utf8')).vaultPath, path.join(tmpDir, 'elsewhere'));
       } finally {
         await removeTmpDir(tmpDir);
       }

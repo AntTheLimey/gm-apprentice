@@ -553,10 +553,27 @@ Under `publish:`:
 | `system` | string | `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e` or `fitd`; drives system-specific rendering. |
 | `site_dir` | string | Absolute path to the site repo, so publish-site needn't ask each session. Optional. |
 | `mode` | string | `"player"` or `"full"` — GM-only content visibility |
-| `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes"]`) |
+| `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | `wrap_up` | object | `player_sections`: extra H2 titles on a Wrap-Up that `vault_check wrapup` treats as player-facing (default none) |
 | `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
-| `theme` | object | `genre`, `palette`, `fonts`, `campaign_image`, `default_mode` (`system`, `dark` or `light`; default `system`) |
+| `exclude_callouts` | boolean | Strip GM callouts from output (default `false`) |
+| `site_title` | string | Title shown on the site (default none) |
+| `footer` | string | Footer text (default none) |
+| `search` | boolean | Site search (default `true`) |
+| `folder_map` | object | Vault folder to site folder, e.g. `Locations: locations` (default `{}`) |
+| `attachments_dir` | string | Vault folder holding images and attachments (default `_attachments`) |
+| `character_sheets` | boolean | Publish PC stat sheets (default `true`). `false` withholds the sheet; the PC page keeps its prose sections and no stats, and live stats go off |
+| `live_stats` | boolean | Live values on each sheet and the Party Status board (default `false`) |
+| `inbox` | boolean | Change-request widget and its inbox (default `false`) |
+| `pc_prose_sections` | array | Extra PC `##` headings that still publish when `character_sheets` is `false` (default none) |
+| `theme` | object | `genre`, `palette`, `fonts`, `campaign_image`, `default_mode` (`system`, `dark` or `light`; default `system`), `tagline` (homepage tagline; default none) |
 | `four_oh_four` | object | Custom 404 page: `style`, `message` |
 | `overrides` | object | Per-file include/exclude/field overrides |
+
+The three switches (`character_sheets`, `live_stats`, `inbox`) take
+`true` or `false`, or the words yes, no, on and off in any case. Any
+other value, including an empty one, means off. These settings live
+only in the vault file: the site's `vault.config.json` keeps just
+`vaultPath`, `outputDir`, `host`, `siteUrl`, `cloudflarePagesProject`
+and `preserveDirs`.

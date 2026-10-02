@@ -40,8 +40,8 @@ Usage:
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
-  gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
-  gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
+  gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
+  gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -77,7 +77,9 @@ folder is not there yet, or its config file cannot be edited safely, the
 site is still scaffolded and the settings to add are printed.
 Follow with "build" to generate the site.
 
-  --vault <dir>      The vault: recorded as vaultPath and given the settings
+  --vault <dir>      The vault, read relative to where you run this. Recorded as
+                     vaultPath (relative to the site if inside it, else absolute)
+                     and given the settings
   --help, -h         Show this help
 `,
   build: `
@@ -284,10 +286,11 @@ the edit that fixes it. Exits 1 only on an error, not on a warning.
   'setup-status-bar': `
 gm-apprentice-publish setup-status-bar [--config <path>]
 
-Enables the live status bar: creates the KV namespace, records its id in
+Enables live stats: creates the KV namespace, records its id in
 wrangler.toml, sets publish.live_stats: true in the vault's
-_meta/vault-config.md (refusing first if that file cannot be edited), then rebuilds
-and deploys the site. Requires wrangler auth ("doctor" checks it).
+_meta/vault-config.md (refusing first if that file cannot be edited),
+then rebuilds and deploys the site. Requires wrangler auth ("doctor"
+checks it).
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
@@ -297,8 +300,9 @@ gm-apprentice-publish setup-inbox [--config <path>]
 
 Enables the change-request inbox: creates the KV namespace, records its id
 in wrangler.toml, sets publish.inbox: true in the vault's
-_meta/vault-config.md (refusing first if that file cannot be edited), then rebuilds
-and deploys the site. Requires wrangler auth ("doctor" checks it).
+_meta/vault-config.md (refusing first if that file cannot be edited),
+then rebuilds and deploys the site. Requires wrangler auth ("doctor"
+checks it).
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
@@ -447,6 +451,11 @@ if (command === 'init') {
       return;
     }
     rest.splice(vi, 2);
+    // Typed relative to where the user is; vaultPath is read relative to the site folder.
+    // Inside the site folder it is recorded relative (forward slashes), else absolute.
+    const vaultAbs = path.resolve(vaultPath);
+    const rel = path.relative(path.resolve(rest[0] || '.'), vaultAbs);
+    vaultPath = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? `./${rel.split(path.sep).join('/')}` : vaultAbs;
   }
   const targetDir = rest[0] || '.';
   const { init } = require('../lib/init');

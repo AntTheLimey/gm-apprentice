@@ -196,7 +196,8 @@ async function init(targetDir = '.', options = {}) {
   const vaultDir = path.resolve(dest, values.VAULT_PATH);
   const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle));
   if (vaultSettings.written.length) {
-    log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}`);
+    const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
+    log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}${which}`);
   }
   if (vaultSettings.skipped) {
     const keys = Object.keys(vaultSettings.missing).join(', ');
