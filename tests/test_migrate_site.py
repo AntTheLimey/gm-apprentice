@@ -1,4 +1,4 @@
-"""migrate_site.py: the repin, config-to-vault and publish.site checks. The
+"""migrate_site.py: the repin, config, publish.site and site-tool checks. The
 publish tool is stubbed the way tests/test_vault_check_slice_a.py stubs it,
 plus one end-to-end test against the real tool."""
 
@@ -422,6 +422,206 @@ class PublishSiteTests(unittest.TestCase):
         before = self.text(vault)
         self.assertEqual(ms.find_publish_site(vault), [])
         self.assertEqual(self.text(vault), before)
+
+
+class LeakTests(unittest.TestCase):
+    ROWS = ["INFO\t(vault)\tasked the plugin's publish tool",
+            "WOULD-FIX\tHandouts/Letter.md\tre-nested 'Context' under ## GM Notes",
+            "ERROR\tNPCs/Vane.md:12\tre-nest refused: an open code block",
+            "WARNING\tNPCs/Crowe.md:30\theading 'Keeper Secret' publishes"]
+
+    def test_would_fix_is_will_do_and_the_rest_needs_a_person(self):
+        vault = make_vault(self)
+        with mock.patch.object(ms, "check_gm_leak", return_value=self.ROWS):
+            items = {i.group: i for i in ms.find_gm_leak(vault)}
+        self.assertEqual(items[WILL].lines, [
+            "Handouts/Letter.md: re-nest 'Context' under ## GM Notes"])
+        self.assertEqual(items[PERSON].lines, [
+            "NPCs/Vane.md:12\tre-nest refused: an open code block",
+            "NPCs/Crowe.md:30\theading 'Keeper Secret' publishes"])
+
+    def test_apply_fixes_reports_and_checks_nothing_is_left(self):
+        vault = make_vault(self)
+        calls = []
+
+        def leak(v, folder, fix=False):
+            calls.append(fix)
+            if fix:
+                return ["FIXED\tHandouts/Letter.md\tre-nested 'Context' "
+                        "under ## GM Notes"]
+            return self.ROWS[:2] if len(calls) == 1 else []
+        with mock.patch.object(ms, "check_gm_leak", leak):
+            item = next(i for i in ms.find_gm_leak(vault) if i.group == WILL)
+            done = item.apply(None)
+        self.assertEqual(calls, [False, True, False])
+        self.assertEqual(done[0], "Handouts/Letter.md: re-nested 'Context' "
+                                  "under ## GM Notes")
+        self.assertIn("no longer publish", done[-1])
+
+    def test_a_fix_that_leaves_work_fails(self):
+        vault = make_vault(self)
+        with mock.patch.object(ms, "check_gm_leak", return_value=self.ROWS[:2]):
+            item = next(i for i in ms.find_gm_leak(vault) if i.group == WILL)
+            with self.assertRaises(StepFailed):
+                item.apply(None)
+
+    def test_a_tool_that_cannot_be_asked_stops(self):
+        rows = ["ERROR\t(vault)\tgm-leak cannot ask the site's publish tool"]
+        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
+            with self.assertRaises(StepFailed) as caught:
+                ms.find_gm_leak(make_vault(self))
+        self.assertIn("cannot ask", str(caught.exception))
+
+    def test_no_site_is_nothing(self):
+        rows = ["INFO\t(vault)\tgm-leak has no site to check: publish.site is not on"]
+        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
+            self.assertEqual(ms.find_gm_leak(make_vault(self, site=False)), [])
+
+
+class PlayedTests(unittest.TestCase):
+    def answer(self, published, unclear):
+        return vc.ToolAnswer(data={"applicable": True, "dryRun": True,
+                                   "published": published, "unclear": unclear})
+
+    def test_reviewed_sessions_are_will_do_and_unclear_are_choices(self):
+        vault = make_vault(self)
+        asked = []
+
+        def ask(v, args, vault_only=False):
+            asked.append(args)
+            if "--dry-run" in args:
+                return self.answer(
+                    ["Ch1/S01/Session 01.md"],
+                    [{"path": "Ch1/S02/Session 02.md",
+                      "reason": "Wrap-Up not reviewed yet",
+                      "wrapUp": "Ch1/S02/Wrap.md"},
+                     {"path": "Ch1/S03/Session 03.md",
+                      "reason": "no Wrap-Up", "wrapUp": None}])
+            return vc.ToolAnswer(data={"applicable": True, "published": []})
+        with mock.patch.object(ms, "ask_publish_tool", ask):
+            items = {i.id: i for i in ms.find_publish_played(vault)}
+            self.assertEqual(items["publish-played"].group, WILL)
+            self.assertEqual(items["publish-played"].lines,
+                             ["register Ch1/S01/Session 01.md as published"])
+            items["publish-played"].apply(None)
+            items["played:Ch1/S02/Session 02.md"].apply(None)
+            items["played:Ch1/S03/Session 03.md"].apply(None)
+        self.assertEqual(asked[1], ["manifest", "publish-played"])
+        self.assertEqual(asked[2], ["manifest", "publish-played", "--session",
+                                    "Ch1/S02/Session 02.md",
+                                    "--include-unreviewed"])
+        self.assertEqual(asked[3], ["manifest", "publish-played", "--session",
+                                    "Ch1/S03/Session 03.md", "--publish-body"])
+        self.assertIn("Wrap-Up not reviewed yet",
+                      items["played:Ch1/S02/Session 02.md"].lines[0])
+
+    def test_not_applicable_or_no_site_is_nothing(self):
+        vault = make_vault(self)
+        for answer in (vc.ToolAnswer(),
+                       vc.ToolAnswer(data={"applicable": False})):
+            with mock.patch.object(ms, "ask_publish_tool",
+                                   return_value=answer):
+                self.assertEqual(ms.find_publish_played(vault), [])
+
+    def test_a_tool_that_cannot_answer_stops(self):
+        with mock.patch.object(ms, "ask_publish_tool",
+                               return_value=vc.ToolAnswer(why="node is not on PATH")):
+            with self.assertRaises(StepFailed):
+                ms.find_publish_played(make_vault(self))
+
+
+class PersonRowTests(unittest.TestCase):
+    def test_session_recaps_in_index_bodies(self):
+        rows = ["WARNING\tCh1/S01/Session 01.md\tnot in Publishing",
+                "INFO\tCh1/S02/Session 02.md:9\tsession index body has 4 "
+                "line(s) outside a gm-only fence \u2014 the site withholds it"]
+        with mock.patch.object(ms, "check_sessions", return_value=rows):
+            (item,) = ms.find_session_recaps(make_vault(self))
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(len(item.lines), 1)
+        self.assertTrue(item.lines[0].startswith("Ch1/S02/Session 02.md:9\t"))
+
+    def test_notes_the_build_cannot_parse(self):
+        rows = ["ERROR\tNPCs/A.md\tthe site's build cannot parse this "
+                "frontmatter (duplicated mapping key) and skips the note",
+                "ERROR\tNPCs/B.md\tmissing required field: name"]
+        with mock.patch.object(ms, "check_frontmatter", return_value=rows):
+            (item,) = ms.find_unparseable(make_vault(self))
+        self.assertEqual([line.split("\t")[0] for line in item.lines],
+                         ["NPCs/A.md"])
+
+    def test_a_postbuild_script_is_named(self):
+        vault = make_vault(self)
+        site = site_of(vault)
+        (site / "package.json").write_text(json.dumps(
+            {"scripts": {"postbuild": "node add-toggle.js"}}), encoding="utf-8")
+        (item,) = ms.find_postbuild(vault)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("node add-toggle.js", item.lines[0])
+        self.assertTrue(item.lines[0].startswith(f"{site / 'package.json'}\t"))
+        (site / "package.json").write_text("{}", encoding="utf-8")
+        self.assertEqual(ms.find_postbuild(vault), [])
+        self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])
+
+
+class SheetSourceTests(unittest.TestCase):
+    PC = '---\nname: "Ada"\ntype: pc\n---\n\n## Stat Sheet\n\nTBD\n'
+
+    def make_pc(self):
+        vault = make_vault(self)
+        (vault / "PCs").mkdir()
+        pc = vault / "PCs" / "Ada.md"
+        pc.write_text(self.PC, encoding="utf-8")
+        return vault, pc
+
+    def test_a_pc_with_no_sheet_is_a_choice_that_writes_the_answer(self):
+        vault, pc = self.make_pc()
+        # The shapes vault_check's pc-body emits; the retired-fields row
+        # names the heading too but is not about a missing sheet.
+        rows = ["WARNING\tPCs/Ada.md:6\t## Stat Sheet holds no stats; fill it "
+                "in, or set sheet_source to where the sheet is kept",
+                "WARNING\tPCs/Ada.md\tfrontmatter field(s) str are no longer "
+                "read for the character sheet \u2014 move the values into the "
+                "note's ## Stat Sheet sections",
+                "WARNING\tPCs/Ada.md:9\tCurrent Status is an H3 \u2014 it must "
+                "be an H2 outside the protected sections",
+                "WARNING\tPCs/Bea.md\tno published ## Stat Sheet section "
+                "\u2014 the PC's page has no character sheet; fill one in, or "
+                "set sheet_source to where the sheet is kept"]
+        with mock.patch.object(ms, "check_pc_body", return_value=rows):
+            items = ms.find_sheet_source(vault)
+        self.assertEqual([i.id for i in items],
+                         ["sheet-source:PCs/Ada.md", "sheet-source:PCs/Bea.md"])
+        item = items[0]
+        self.assertEqual(item.wants, "where the sheet is kept")
+        item.apply("paper, with the player")
+        self.assertIn('sheet_source: "paper, with the player"\n',
+                      pc.read_text(encoding="utf-8"))
+
+    def test_a_tool_that_cannot_be_asked_stops(self):
+        vault, _pc = self.make_pc()
+        rows = ["ERROR\t(vault)\tpc-body stopped: the publish tool stopped "
+                "answering (x)"]
+        with mock.patch.object(ms, "check_pc_body", return_value=rows):
+            with self.assertRaises(StepFailed):
+                ms.find_sheet_source(vault)
+
+    def test_the_check_asks_for_a_value(self):
+        (check,) = [c for c in ms.SITE_CHECKS if c.name == "sheet-source"]
+        self.assertEqual(check.choices, ("sheet-source:=",))
+
+    @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                         or (shutil.which("node") and (
+                             vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                         "node and the publish tool's node_modules are needed")
+    def test_a_real_tbd_sheet_is_found_and_written(self):
+        vault, pc = self.make_pc()
+        (item,) = ms.find_sheet_source(vault)
+        self.assertEqual(item.id, "sheet-source:PCs/Ada.md")
+        self.assertIn("holds no stats", item.lines[0])
+        item.apply("on paper")
+        self.assertIn('sheet_source: "on paper"', pc.read_text(encoding="utf-8"))
+        self.assertEqual(ms.find_sheet_source(vault), [])
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")

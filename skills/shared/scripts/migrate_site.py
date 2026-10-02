@@ -252,6 +252,179 @@ def find_publish_site(vault: Path) -> list[Item]:
                  apply)]
 
 
+def _cells(row: str) -> tuple[str, str, str]:
+    level, _, rest = row.partition("\t")
+    where, _, message = rest.partition("\t")
+    return level, where, message
+
+
+def _stopped(rows: list[tuple[str, str, str]]) -> None:
+    """A check that could not ask the tool says so in an ERROR on the
+    vault; what it found before that is not the whole answer."""
+    for level, where, message in rows:
+        if level == "ERROR" and where == "(vault)":
+            raise StepFailed(message)
+
+
+LEAK_NOTE = ("these sections no longer publish; if one was meant for "
+             "players, say which and it is moved back out of GM Notes under "
+             "a new heading")
+
+
+def find_gm_leak(vault: Path) -> list[Item]:
+    """Every pass: headings the site withholds are nested under GM Notes,
+    so the vault matches the site (1.10.19 handout sections among them).
+    What can be moved is Will do; what the check only reports needs a
+    person."""
+    rows = [_cells(r) for r in check_gm_leak(vault, None, fix=False)]
+    _stopped(rows)
+    would = [(where, m) for level, where, m in rows if level == "WOULD-FIX"]
+    person = [f"{where}\t{m}" for level, where, m in rows
+              if level in ("ERROR", "WARNING", "INFO") and where != "(vault)"]
+    items: list[Item] = []
+    if would:
+        def apply(_value: str | None) -> list[str]:
+            fixed = [_cells(r) for r in check_gm_leak(vault, None, fix=True)]
+            left = [r for r in check_gm_leak(vault, None, fix=False)
+                    if r.startswith("WOULD-FIX\t")]
+            if left:
+                raise StepFailed(
+                    f"gm-leak --fix left {len(left)} heading(s) to re-nest")
+            return [*(f"{where}: {m}" for level, where, m in fixed
+                      if level == "FIXED"), LEAK_NOTE]
+
+        items.append(Item(
+            "gm-leak", WILL,
+            [f"{where}: {m.replace('re-nested', 're-nest', 1)}"
+             for where, m in would], apply))
+    if person:
+        items.append(Item("gm-leak-review", PERSON, person))
+    return items
+
+
+def _played(vault: Path, extra: list[str]) -> dict[str, Any] | None:
+    answer = ask_publish_tool(vault, ["manifest", "publish-played", *extra])
+    if answer.why is not None:
+        raise StepFailed(answer.why)
+    data = answer.data
+    if not isinstance(data, dict) or not data.get("applicable"):
+        return None
+    return data
+
+
+def find_publish_played(vault: Path) -> list[Item]:
+    """1.10.18: reviewed played sessions are registered in the publish
+    manifest; the ones the tool calls unclear are the GM's choice."""
+    data = _played(vault, ["--dry-run"])
+    if data is None:
+        return []
+    items: list[Item] = []
+    published = [str(p) for p in data.get("published") or []]
+    if published:
+        def apply(_value: str | None) -> list[str]:
+            _played(vault, [])
+            return [f"registered {p}" for p in published]
+
+        items.append(Item("publish-played", WILL,
+                          [f"register {p} as published" for p in published],
+                          apply))
+    for entry in data.get("unclear") or []:
+        if not isinstance(entry, dict) or not entry.get("path"):
+            continue
+        path = str(entry["path"])
+        flag = "--include-unreviewed" if entry.get("wrapUp") else "--publish-body"
+
+        def apply_one(_value: str | None, path: str = path,
+                      flag: str = flag) -> list[str]:
+            _played(vault, ["--session", path, flag])
+            return [f"registered {path}"]
+
+        items.append(Item(f"played:{path}", CHOICE,
+                          [f"publish this played session "
+                           f"({entry.get('reason') or 'unclear'})"], apply_one))
+    return items
+
+
+def _person_rows(rows: list[str], marker: str) -> list[str]:
+    out = []
+    for row in rows:
+        _level, where, message = _cells(row)
+        if marker in message:
+            out.append(f"{where}\t{message}")
+    return out
+
+
+def find_session_recaps(vault: Path) -> list[Item]:
+    """1.10.18: a session index whose body the site now withholds."""
+    rows = _person_rows(check_sessions(vault), "session index body has")
+    return [Item("session-recaps", PERSON, rows)] if rows else []
+
+
+def find_unparseable(vault: Path) -> list[Item]:
+    """1.10.23: notes whose frontmatter the build cannot parse."""
+    rows = _person_rows(check_frontmatter(vault, None, ExplainAll(vault)),
+                        "cannot parse this frontmatter")
+    return [Item("unparseable-notes", PERSON, rows)] if rows else []
+
+
+# The remedy both "no usable Stat Sheet" warnings in vault_check's pc-body
+# end with; the warning about retired frontmatter fields names the heading
+# too but not this, so it is not a sheet problem.
+NO_SHEET = "set sheet_source to where the sheet is kept"
+
+
+def find_sheet_source(vault: Path) -> list[Item]:
+    """1.10.22: a PC that publishes with no usable sheet. If the sheet is
+    kept elsewhere the GM says where, and it is written to sheet_source."""
+    rows = [_cells(r) for r in check_pc_body(vault)]
+    _stopped(rows)
+    items: list[Item] = []
+    seen: set[str] = set()
+    for level, where, message in rows:
+        rel, _, line = where.rpartition(":")
+        if not line.isdigit():
+            rel = where
+        if level != "WARNING" or NO_SHEET not in message or rel in seen:
+            continue
+        seen.add(rel)
+
+        def apply(value: str | None, rel: str = rel) -> list[str]:
+            scalar = yaml_scalar(value or "")
+            edit_frontmatter(
+                vault / rel,
+                lambda fm, eol: set_key(fm, "sheet_source", scalar, eol))
+            return [f"wrote sheet_source: {scalar} to {rel}"]
+
+        items.append(Item(f"sheet-source:{rel}", CHOICE,
+                          [f"{message}; if the sheet is kept elsewhere, say "
+                           f"where"], apply, wants="where the sheet is kept"))
+    return items
+
+
+POSTBUILD = ("the publish tool now adds the light/dark toggle and leaves "
+             "retired PCs off the party board; if this script does either, "
+             "remove that part")
+
+
+def find_postbuild(vault: Path) -> list[Item]:
+    """1.10.16 and 1.10.17: a site's own postbuild step may now double
+    what the tool does. Whether it does is for a person to read."""
+    site, _has_config = configured_site(vault)
+    if site is None:
+        return []
+    try:
+        data = json.loads((site / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    scripts = data.get("scripts") if isinstance(data, dict) else None
+    script = scripts.get("postbuild") if isinstance(scripts, dict) else None
+    if not isinstance(script, str) or not script.strip():
+        return []
+    return [Item("postbuild", PERSON,
+                 [f'{site / "package.json"}\tpostbuild script "{script}": '
+                  f"{POSTBUILD}"])]
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check("config-to-vault", "1.10.24", 2,
@@ -259,4 +432,16 @@ SITE_CHECKS: list[Check] = [
           asks_site=True),
     Check("publish-site", None, 2, "the publish.site switch",
           find_publish_site),
+    Check("postbuild", "1.10.17", 3, "the site's postbuild script",
+          find_postbuild),
+    Check("publish-played", "1.10.18", 4, "played sessions are registered",
+          find_publish_played, asks_site=True, choices=("played:",)),
+    Check("session-recaps", "1.10.18", 4, "recaps kept in session indexes",
+          find_session_recaps, asks_site=True),
+    Check("sheet-source", "1.10.22", 4, "PCs with no character sheet",
+          find_sheet_source, asks_site=True, choices=("sheet-source:=",)),
+    Check("unparseable-notes", "1.10.23", 4,
+          "notes the build cannot parse", find_unparseable, asks_site=True),
+    Check("gm-leak", None, 4, "sections the site withholds are nested under "
+          "GM Notes", find_gm_leak, asks_site=True),
 ]
