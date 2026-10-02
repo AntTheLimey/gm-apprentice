@@ -6,7 +6,7 @@
 const { escapeHtml } = require('../processor');
 const {
   ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, filled, hasContent, subsections, consumeTable,
-  stripTemplatePlaceholders, boldField, readAttributes, tiles, readSlots, sectionReader, featureCards,
+  stripTemplatePlaceholders, boldField, readAttributes, tiles, readSlots, sectionReader,
 } = require('./sheet-parse');
 
 const ABILITIES = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -38,7 +38,7 @@ function renderAbilities(abilities) {
 }
 
 // `## Stat Sheet`: header, ability cards, Combat and Core tiles.
-function renderStatSheet(section, frontmatter, backgroundHtml, cfg) {
+function renderStatSheet(section, backgroundHtml, cfg) {
   const html = section ? section.html : '';
   const parts = [];
   const extras = [];
@@ -86,14 +86,6 @@ function renderStatSheet(section, frontmatter, backgroundHtml, cfg) {
       });
     }
     passThrough(sub.title, left);
-  }
-
-  // Frontmatter fallback, for a vault that keeps its abilities there instead.
-  if (Object.keys(abilities).length === 0) {
-    for (const [name, value] of Object.entries(frontmatter[cfg.abilityField] || {})) {
-      const key3 = String(name).toUpperCase();
-      if (ABILITIES.includes(key3)) abilities[key3] = cfg.abilityFromFrontmatter(value);
-    }
   }
 
   const bits = [
@@ -187,35 +179,19 @@ const SECTION_RENDERERS = {
 };
 
 function renderD20Sheet(frontmatter, sections, cfg) {
-  frontmatter = frontmatter || {};
   const reader = sectionReader(sections);
 
   const parts = [];
   const background = reader.first('background');
-  const statSheet = renderStatSheet(reader.first('stat sheet'), frontmatter, background ? background.html : '', cfg);
+  const statSheet = renderStatSheet(reader.first('stat sheet'), background ? background.html : '', cfg);
   if (statSheet) parts.push(statSheet);
   parts.push(...reader.repeats('stat sheet'));
 
-  // What each body section put on the sheet; the frontmatter fallbacks fill
-  // in only where the body gave nothing.
-  const rendered = { 'stat sheet': reader.first('stat sheet') ? statSheet : '' };
   for (const title of ['skills', 'spellcasting', 'proficiencies']) {
     const first = reader.first(title);
-    rendered[title] = first ? SECTION_RENDERERS[title](first, cfg) : '';
-    if (rendered[title]) parts.push(rendered[title]);
+    const html = first ? SECTION_RENDERERS[title](first, cfg) : '';
+    if (html) parts.push(html);
     parts.push(...reader.repeats(title));
-  }
-
-  parts.push(...cfg.fallbacks(frontmatter, rendered).filter(Boolean));
-  const features = featureCards(frontmatter.class_features);
-  if (features) parts.push(features);
-
-  const spellSlots = frontmatter.spell_slots;
-  if (!rendered.spellcasting && spellSlots && typeof spellSlots === 'object' && Object.keys(spellSlots).length > 0) {
-    const rows = Object.entries(spellSlots)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([level, slots]) => [`${cfg.slotWord} ${level}`, String(slots)]);
-    parts.push(`<h3>Spell Slots</h3>\n${tiles(rows)}`);
   }
 
   if (parts.length === 0) return null;

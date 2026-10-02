@@ -2074,6 +2074,21 @@ def sheet_sources_unset(answer: ToolAnswer
         return None, "explain did not return the expected JSON", answer.used
 
 
+def retired_sheet_fields(answer: ToolAnswer) -> dict[str, list[str]]:
+    """The frontmatter fields each PC carries that the character sheet no
+    longer reads, by NFC path, from `retiredSheetFields` in `explain --all
+    --json`. The publish tool owns the list (pc-prose.js); nothing here
+    names a field. Empty when the tool could not be asked, answered oddly,
+    or predates the field: the warning is advice, so an older tool means
+    no row, never a guess."""
+    try:
+        pages = answer.data["pages"] if answer.data is not None else []
+        return {unicodedata.normalize("NFC", str(p["path"])): list(p["retiredSheetFields"])
+                for p in pages if p.get("retiredSheetFields")}
+    except (KeyError, TypeError, AttributeError):
+        return {}
+
+
 def _is_stat_sheet(title: str) -> bool:
     """`## **Stat Sheet**` and `## Stat Sheet:` are the same section to the
     publish tool, which reads the heading's text."""
@@ -2248,8 +2263,12 @@ def check_pc_body(vault: Path, folder: str | None = None,
     """
     excludes = effective_exclude_sections(vault)
     rows: list[str] = []
+    # One `explain --all` for the run, shared by both questions asked of it.
+    explain = explain or ExplainAll(vault)
     # The publish tool's reading of each PC's sheet_source, once asked.
     sources: tuple[set[str] | None, str | None, str | None] | None = None
+    # The fields each PC carries that its sheet no longer reads, once asked.
+    retired: dict[str, list[str]] | None = None
     for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
@@ -2261,6 +2280,15 @@ def check_pc_body(vault: Path, folder: str | None = None,
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
+
+        if retired is None:
+            retired = retired_sheet_fields(explain())
+        stale = retired.get(unicodedata.normalize("NFC", rel))
+        if stale:
+            rows.append(f"WARNING\t{rel}\tfrontmatter field(s) "
+                        f"{', '.join(stale)} are no longer read for the "
+                        f"character sheet \u2014 move the values into the "
+                        f"note's ## {CANONICAL_FIRST_H2} sections")
 
         headings: list[tuple[LineState, int, str]] = []
         for state in states:
@@ -2339,8 +2367,7 @@ def check_pc_body(vault: Path, folder: str | None = None,
             if row and _sheet_source_written(text):
                 # Asked once a run, and only when a PC's answer turns on it.
                 if sources is None:
-                    sources = sheet_sources_unset(
-                        (explain or ExplainAll(vault))())
+                    sources = sheet_sources_unset(explain())
                     unset, why, used = sources
                     if unset is not None:
                         rows.extend(_tool_used_row(used))

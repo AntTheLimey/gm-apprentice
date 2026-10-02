@@ -16,7 +16,7 @@ const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXC
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { strippedSectionTitles, publishMode } = require('./processor');
-const { pcKeepList } = require('./pc-prose');
+const { pcKeepList, RETIRED_SHEET_FIELDS } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
@@ -218,6 +218,8 @@ function publishedPagesOf(survey) {
 //   bodyPublishes  publishes && !bodyWithheld
 //   sheetSourceSet a PC whose `sheet_source` says where its sheet is kept (#273);
 //                  null for any other file
+//   retiredSheetFields  a PC's frontmatter fields the sheet no longer reads (the note
+//                  body is the only source); [] when none, null for any other file
 //   frontmatterError the parser's message for a file whose frontmatter could not be
 //                  parsed (code FILE_UNPARSEABLE, no page is built); null otherwise (#287)
 async function runExplainAll(options, deps) {
@@ -248,6 +250,10 @@ async function runExplainAll(options, deps) {
       // vault_check pc-body reads this rather than parse the field itself.
       sheetSourceSet: page && page.frontmatter && page.frontmatter.type === 'pc'
         ? Boolean(sheetSourceOf(page.frontmatter))
+        : null,
+      // vault_check pc-body warns on these; the list lives in pc-prose.js.
+      retiredSheetFields: page && page.frontmatter && page.frontmatter.type === 'pc'
+        ? RETIRED_SHEET_FIELDS.filter((f) => Object.prototype.hasOwnProperty.call(page.frontmatter, f))
         : null,
       // vault_check frontmatter reports these: its own reader accepts YAML this one rejects.
       frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,

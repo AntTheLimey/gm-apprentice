@@ -36,7 +36,7 @@ function isHeaderRow(row) {
   return /^(characteristic|attribute|trait|name|field)$/.test(c0) || /^(value|score|detail)$/.test(c1);
 }
 
-function parseAttributes(model, sections, fm) {
+function parseAttributes(model, sections) {
   const sec = findSectionByTitle(sections, 'stat sheet');
   if (sec) {
     const primHtml = extractSubsectionHtml(sec.html, 'Primary Attributes') || sec.html;
@@ -65,21 +65,6 @@ function parseAttributes(model, sections, fm) {
         } else {
           model.attributes.secondary[key] = cell(row[1]);
         }
-      }
-    }
-  }
-  if (fm.attributes) {
-    for (const a of PRIMARY) {
-      if (fm.attributes[a] != null) model.attributes.primary[a] = { value: String(fm.attributes[a]), markers: [] };
-    }
-  }
-  if (fm.secondary) {
-    for (const [k, v] of Object.entries(fm.secondary)) {
-      const c = { value: String(v), markers: [] };
-      if (DERIVED_KEYS.includes(k)) {
-        model.attributes.derived[k] = c;
-      } else {
-        model.attributes.secondary[k] = c;
       }
     }
   }
@@ -133,30 +118,7 @@ function resolveLevelColumns(header) {
   return { iLevel, iBase };
 }
 
-// Frontmatter counterpart of resolveLevelColumns, shared by the skills,
-// techniques, and spells fm paths. Explicit `current`/`level` keys win over
-// the legacy `effective`/`base` fallbacks; blank values fall through instead
-// of rendering an empty level.
-function resolveFmLevel(o) {
-  for (const k of ['current', 'level', 'effective', 'base']) {
-    const v = o[k];
-    if (v != null && String(v).trim() !== '') return String(v);
-  }
-  return '';
-}
-
-function parseSkills(model, sections, fm) {
-  if (Array.isArray(fm.skills)) {
-    model.skills = fm.skills.map(s => ({
-      name: String(s.name ?? ''), level: resolveFmLevel(s),
-      relative: s.relative || '',
-      points: String(s.points ?? ''), parry: s.parry != null ? String(s.parry) : null,
-      block: s.block != null ? String(s.block) : null,
-      base: s.base != null ? String(s.base) : null,
-      markers: [], source: s.source || null,
-    }));
-    return;
-  }
+function parseSkills(model, sections) {
   const sec = findSectionByTitle(sections, 'skills');
   if (!sec) return;
   const rows = parseTableRows(topLevelHtml(sec.html));
@@ -205,21 +167,14 @@ function readTraitRows(html) {
   return out;
 }
 
-function parseTraits(model, sections, fm) {
+function parseTraits(model, sections) {
   const map = [
     ['advantages', ['advantages & perks', 'advantages']],
     ['disadvantages', ['disadvantages & quirks', 'disadvantages']],
   ];
   for (const [key, titles] of map) {
-    if (Array.isArray(fm[key])) {
-      model.traits[key] = fm[key].map(t => ({ name: t.name || String(t), cost: String(t.cost ?? ''), markers: [], source: t.source || null }));
-      continue;
-    }
     const sec = findSectionByTitle(sections, ...titles);
     if (sec) model.traits[key] = readTraitRows(sec.html);
-  }
-  for (const key of ['perks', 'quirks', 'templates']) {
-    if (Array.isArray(fm[key])) model.traits[key] = fm[key].map(t => ({ name: t.name || String(t), cost: String(t.cost ?? ''), markers: [], source: t.source || null }));
   }
 }
 
@@ -231,21 +186,7 @@ const IDENTITY_SUBSECTIONS = [
   'Physical Description', 'Description', 'Identity',
 ];
 
-function parseIdentity(model, sections, fm) {
-  // Frontmatter: objects merge in (appearance, then identity); a plain string
-  // becomes the band's Appearance/Identity entry instead of shadowing the
-  // other key (`||` used to consume the slot and drop the object silently).
-  let fromFmObject = false;
-  for (const [key, label] of [['appearance', 'Appearance'], ['identity', 'Identity']]) {
-    const src = fm[key];
-    if (src && typeof src === 'object' && !Array.isArray(src)) {
-      for (const [k, v] of Object.entries(src)) model.identity[k] = String(v);
-      fromFmObject = true;
-    } else if (typeof src === 'string' && src.trim()) {
-      model.identity[label] = src.trim();
-    }
-  }
-  if (fromFmObject) return;
+function parseIdentity(model, sections) {
   const sec = findSectionByTitle(sections, 'stat sheet');
   if (!sec) return;
   // Merge EVERY recognised sub-table: the aliases are alternative names sheets
@@ -264,11 +205,7 @@ function parseIdentity(model, sections, fm) {
   }
 }
 
-function parseSenses(model, sections, fm) {
-  if (fm.senses && typeof fm.senses === 'object') {
-    for (const [k, v] of Object.entries(fm.senses)) model.senses[k] = String(v);
-    return;
-  }
+function parseSenses(model, sections) {
   const sec = findSectionByTitle(sections, 'stat sheet');
   if (!sec) return;
   // `Appearance & Social` belongs to parseIdentity — reading it here labelled every
@@ -284,13 +221,7 @@ function parseSenses(model, sections, fm) {
   }
 }
 
-function parseDefenses(model, sections, fm) {
-  if (fm.defenses && typeof fm.defenses === 'object') {
-    model.defenses = { parry: fm.defenses.parry || [], block: fm.defenses.block || [],
-      dodge: fm.defenses.dodge != null ? String(fm.defenses.dodge) : null,
-      hitLocations: fm.defenses.hitLocations || [] };
-    return;
-  }
+function parseDefenses(model, sections) {
   const sec = findSectionByTitle(sections, 'active defenses');
   if (sec) {
     for (const row of parseTableRows(sec.html).slice(1)) {
@@ -326,14 +257,7 @@ function encumbranceRow(row) {
   return { level, weight: row[1] || '', move: row[2] || '', dodge: row[3] || '', current };
 }
 
-function parseEncumbrance(model, sections, fm) {
-  if (Array.isArray(fm.encumbrance)) {
-    model.encumbrance = fm.encumbrance.map(e => ({
-      level: String(e.level || ''), weight: String(e.weight || ''),
-      move: String(e.move || ''), dodge: String(e.dodge || ''), current: !!e.current,
-    }));
-    return;
-  }
+function parseEncumbrance(model, sections) {
   const sec = findSectionByTitle(sections, 'encumbrance');
   let rows;
   if (sec) {
@@ -379,11 +303,7 @@ function resolveCurrentEncumbrance(model) {
   if (match) match.current = true;
 }
 
-function parseReactions(model, sections, fm) {
-  if (fm.reactions && typeof fm.reactions === 'object') {
-    for (const [k, v] of Object.entries(fm.reactions)) model.reactions[k] = String(v);
-    return;
-  }
+function parseReactions(model, sections) {
   const sec = findSectionByTitle(sections, 'reaction modifiers', 'reactions');
   if (!sec) return;
   for (const row of parseTableRows(sec.html).slice(1)) {
@@ -391,10 +311,8 @@ function parseReactions(model, sections, fm) {
   }
 }
 
-function parseSocial(model, sections, fm) {
-  if (Array.isArray(fm.cultural)) {
-    model.social.cultural = fm.cultural.map(c => ({ name: c.name || String(c), cost: String(c.cost ?? '0'), markers: [] }));
-  } else {
+function parseSocial(model, sections) {
+  {
     const sec = findSectionByTitle(sections, 'cultural familiarities', 'cultural');
     if (sec) {
       for (const row of parseTableRows(sec.html).slice(1)) {
@@ -402,11 +320,7 @@ function parseSocial(model, sections, fm) {
       }
     }
   }
-  if (Array.isArray(fm.languages)) {
-    model.social.languages = fm.languages.map(l => ({
-      name: l.name, spoken: l.spoken || '', written: l.written || '', points: String(l.points ?? '0'),
-    }));
-  } else {
+  {
     const sec = findSectionByTitle(sections, 'languages');
     if (sec) {
       const rows = parseTableRows(sec.html);
@@ -426,14 +340,7 @@ function parseSocial(model, sections, fm) {
   }
 }
 
-function parseSpells(model, sections, fm) {
-  if (Array.isArray(fm.spells)) {
-    model.spells = fm.spells.map(s => ({
-      name: String(s.name ?? ''), level: resolveFmLevel(s), points: String(s.points ?? '0'),
-      markers: [], source: s.source || null,
-    }));
-    return;
-  }
+function parseSpells(model, sections) {
   const sec = findSectionByTitle(sections, 'spells');
   if (!sec) return;
   const rows = parseTableRows(topLevelHtml(sec.html));
@@ -450,13 +357,7 @@ function parseSpells(model, sections, fm) {
   }
 }
 
-function parsePoints(model, sections, fm) {
-  if (Array.isArray(fm.points)) {
-    model.points = fm.points.map(p => ({
-      label: p.label, value: String(p.value ?? ''), total: !!p.total, unspent: !!p.unspent,
-    }));
-    return;
-  }
+function parsePoints(model, sections) {
   const sec = findSectionByTitle(sections, 'points summary', 'points');
   if (!sec) return;
   for (const row of parseTableRows(sec.html).slice(1)) {
@@ -577,14 +478,7 @@ function noteEmptyWeapons(model, sections) {
     `GURPS combat tab is empty: section(s) ${named.map(s => `"## ${s.title}"`).join(', ')} exist but were not recognised as weapon sections. Headings recognised: ${[...MELEE_TITLES, ...RANGED_TITLES, ...COMBINED_TITLES].map(t => `"${t}"`).join(', ')}; ${shape}.`);
 }
 
-function parseMelee(model, sections, fm) {
-  if (Array.isArray(fm.melee)) {
-    model.melee = fm.melee.map(a => ({
-      weapon: a.weapon || '', skill: String(a.skill ?? ''), parry: String(a.parry ?? ''),
-      damage: a.damage || '', reach: a.reach || '', st: String(a.st ?? ''), notes: a.notes || '',
-    }));
-    return;
-  }
+function parseMelee(model, sections) {
   for (const rows of weaponTables(sections, 'melee').tables) {
     const header = (rows[0] || []).map(h => h.toLowerCase());
     const idx = n => header.findIndex(h => h.includes(n));
@@ -603,16 +497,7 @@ function parseMelee(model, sections, fm) {
   }
 }
 
-function parseRanged(model, sections, fm) {
-  if (Array.isArray(fm.ranged)) {
-    model.ranged = fm.ranged.map(a => ({
-      weapon: a.weapon || '', skill: String(a.skill ?? ''), damage: a.damage || '',
-      acc: String(a.acc ?? ''), range: a.range || '', rof: String(a.rof ?? ''),
-      shots: a.shots || '', st: String(a.st ?? ''), bulk: String(a.bulk ?? ''),
-      rcl: String(a.rcl ?? ''), notes: a.notes || '',
-    }));
-    return;
-  }
+function parseRanged(model, sections) {
   for (const rows of weaponTables(sections, 'ranged').tables) {
     const header = (rows[0] || []).map(h => h.toLowerCase());
     const idx = n => header.findIndex(h => h.includes(n));
@@ -635,15 +520,7 @@ function parseRanged(model, sections, fm) {
   }
 }
 
-function parseGrimoire(model, sections, fm) {
-  if (Array.isArray(fm.grimoire)) {
-    model.grimoire = fm.grimoire.map(g => ({
-      name: g.name, skill: String(g.skill ?? ''), class: g.class || '',
-      time: g.time || '', duration: g.duration || '', cost: g.cost || '',
-      college: g.college || '', page: g.page || '',
-    }));
-    return;
-  }
+function parseGrimoire(model, sections) {
   const sec = findSectionByTitle(sections, 'spell grimoire', 'grimoire');
   if (!sec) return;
   const rows = parseTableRows(sec.html);
@@ -713,15 +590,7 @@ function parseStatus(model, sections, fm) {
   }
 }
 
-function parseTechniques(model, sections, fm) {
-  if (Array.isArray(fm.techniques)) {
-    model.techniques = fm.techniques.map(t => ({
-      name: String(t.name ?? ''), def: t.default || t.def || '',
-      points: String(t.points ?? ''), level: resolveFmLevel(t),
-      markers: [],
-    }));
-    return;
-  }
+function parseTechniques(model, sections) {
   const sec = findSectionByTitle(sections, 'techniques');
   if (!sec) return;
   const rows = parseTableRows(topLevelHtml(sec.html));
@@ -746,17 +615,7 @@ function parseTechniques(model, sections, fm) {
   }
 }
 
-function parseChains(model, sections, fm) {
-  // frontmatter.chains = { melee: [{name, steps:[]}], ranged: [...] }
-  if (fm.chains && (Array.isArray(fm.chains.melee) || Array.isArray(fm.chains.ranged))) {
-    model.chains.melee = (fm.chains.melee || []).map(c => ({
-      name: c.name || '', steps: Array.isArray(c.steps) ? c.steps.map(String) : [],
-    }));
-    model.chains.ranged = (fm.chains.ranged || []).map(c => ({
-      name: c.name || '', steps: Array.isArray(c.steps) ? c.steps.map(String) : [],
-    }));
-    return;
-  }
+function parseChains(model, sections) {
   const sec = findSectionByTitle(sections, 'combat action chains', 'multi-action combat skill chains');
   if (!sec) return;
 
@@ -814,19 +673,7 @@ function parseChains(model, sections, fm) {
   }
 }
 
-function parseEquipment(model, sections, fm) {
-  // frontmatter.loadouts = [{name, items:[{qty,name,cost,weight,location?,notes?}], totalCost, totalWeight}]
-  if (fm.loadouts && Array.isArray(fm.loadouts)) {
-    model.equipment.loadouts = fm.loadouts.map(lo => ({
-      name: lo.name || '',
-      items: (lo.items || []).map(i => ({
-        qty: String(i.qty ?? '1'), name: i.name || '', cost: String(i.cost ?? ''),
-        weight: String(i.weight ?? ''), location: i.location || null, notes: i.notes || null,
-      })),
-      totalCost: lo.totalCost != null ? String(lo.totalCost) : null,
-      totalWeight: lo.totalWeight != null ? String(lo.totalWeight) : null,
-    }));
-  }
+function parseEquipment(model, sections) {
   // Parse ## Equipment table → items (top-level only, before any ### subsection)
   const sec = findSectionByTitle(sections, 'equipment');
   if (sec) {
@@ -854,7 +701,7 @@ function parseEquipment(model, sections, fm) {
         notes: iNotes >= 0 ? row[iNotes] || null : null,
       });
     }
-    // Parse ### Load-Outs subsection if not already set from frontmatter
+    // Parse ### Load-Outs subsection
     if (model.equipment.loadouts.length === 0) {
       const loHtml = extractSubsectionHtml(sec.html, 'Load-Outs') ||
         extractSubsectionHtml(sec.html, 'Loadouts') || '';
@@ -921,7 +768,7 @@ function crossReferenceSkillDefenses(model) {
   // 1) Active Defenses (preferred) — label like "Parry (Knife)" where "Knife" matches skill name
   // 2) Melee Weapons — skill cell starts with skill name, has parry value
   for (const skill of model.skills) {
-    if (skill.parry != null || skill.block != null) continue; // already set (frontmatter)
+    if (skill.parry != null || skill.block != null) continue; // already set
     const skillNorm = normalizeSkillName(skill.name);
     if (!skillNorm) continue;
 
@@ -962,26 +809,26 @@ function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
   const model = emptyModel();
-  parseAttributes(model, secs, fm);
-  parseSkills(model, secs, fm);
-  parseTechniques(model, secs, fm);
-  parseTraits(model, secs, fm);
-  parseIdentity(model, secs, fm);
-  parseSenses(model, secs, fm);
-  parseDefenses(model, secs, fm);
-  parseEncumbrance(model, secs, fm);
-  parseReactions(model, secs, fm);
-  parseSocial(model, secs, fm);
-  parseSpells(model, secs, fm);
-  parsePoints(model, secs, fm);
-  parseMelee(model, secs, fm);
-  parseRanged(model, secs, fm);
+  parseAttributes(model, secs);
+  parseSkills(model, secs);
+  parseTechniques(model, secs);
+  parseTraits(model, secs);
+  parseIdentity(model, secs);
+  parseSenses(model, secs);
+  parseDefenses(model, secs);
+  parseEncumbrance(model, secs);
+  parseReactions(model, secs);
+  parseSocial(model, secs);
+  parseSpells(model, secs);
+  parsePoints(model, secs);
+  parseMelee(model, secs);
+  parseRanged(model, secs);
   noteEmptyWeapons(model, secs);
-  parseGrimoire(model, secs, fm);
+  parseGrimoire(model, secs);
   parseStatus(model, secs, fm);
   resolveCurrentEncumbrance(model);
-  parseChains(model, secs, fm);
-  parseEquipment(model, secs, fm);
+  parseChains(model, secs);
+  parseEquipment(model, secs);
   crossReferenceSkillDefenses(model);
   return model;
 }

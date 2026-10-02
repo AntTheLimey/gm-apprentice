@@ -150,60 +150,9 @@ function renderStatSheet(section, found) {
   return parts.join('\n');
 }
 
-// Frontmatter fallbacks, for a vault that keeps these there and not in the body.
-function frontmatterBlocks(frontmatter, found) {
-  const parts = [];
-
-  const actionRatings = frontmatter.action_ratings;
-  if (!found['action ratings'] && actionRatings && typeof actionRatings === 'object') {
-    const groups = Object.entries(actionRatings)
-      .filter(([, actions]) => actions && typeof actions === 'object')
-      .map(([attr, actions]) => {
-        const rows = Object.entries(actions)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([action, rating]) => actionRow(action, Number(rating) || 0))
-          .join('\n');
-        return `<div class="fitd-attribute"><h4>${escapeHtml(attr)}</h4>${rows}</div>`;
-      });
-    if (groups.length) parts.push(`<div class="fitd-action-ratings">${groups.join('\n')}</div>`);
-  }
-
-  if (!found['stress & trauma']) {
-    const stress = frontmatter.stress;
-    if (stress && typeof stress === 'object') {
-      parts.push(stressTracker(Number(stress.current) || 0, Math.min(Number(stress.max) || 9, MAX_TRACK)));
-    }
-    const trauma = frontmatter.trauma;
-    if (Array.isArray(trauma) && trauma.length > 0) parts.push(traumaTracker(trauma));
-  }
-
-  const abilities = [].concat(frontmatter.special_abilities || []).filter(Boolean);
-  if (!found['special abilities'] && abilities.length > 0) {
-    const cards = abilities.map(a => {
-      const name = typeof a === 'string' ? a : (a.name || '');
-      const desc = typeof a === 'string' ? '' : (a.description || '');
-      return `<div class="fitd-special-ability"><h4>${escapeHtml(String(name))}</h4>${desc ? `<p>${escapeHtml(String(desc))}</p>` : ''}</div>`;
-    }).join('\n');
-    parts.push(`<h3>Special Abilities</h3>\n${cards}`);
-  }
-
-  const load = frontmatter.load;
-  if (load && typeof load === 'object') {
-    const items = Array.isArray(load.items) ? load.items : [];
-    let loadHtml = `<div class="fitd-tracker"><strong>Load</strong> <span>${escapeHtml(String(load.level || ''))}</span></div>`;
-    if (items.length > 0) {
-      const itemList = items.map(i => `<span class="dnd-proficiency">${escapeHtml(String(i))}</span>`).join(' ');
-      loadHtml += `<div style="margin-top:0.5rem">${itemList}</div>`;
-    }
-    parts.push(loadHtml);
-  }
-  return parts;
-}
-
 // The body sections follow skills/shared/templates/pc-fitd.md
 // (docs/file-format-standards.md §11).
 function renderFitDSheet(frontmatter, sections) {
-  frontmatter = frontmatter || {};
   const reader = sectionReader(sections);
   const found = {};
   const parts = [];
@@ -240,7 +189,6 @@ function renderFitDSheet(frontmatter, sections) {
   if (abilities) {
     const body = stripTemplatePlaceholders(abilities.html, ['Selected special abilities from playbook list.']);
     if (hasContent(body)) {
-      found['special abilities'] = true;
       parts.push(`<h3>Special Abilities</h3>\n<div class="fitd-abilities">${body}</div>`);
     }
   }
@@ -254,8 +202,6 @@ function renderFitDSheet(frontmatter, sections) {
     }
   }
   parts.push(...reader.repeats('stash & coin'));
-
-  parts.push(...frontmatterBlocks(frontmatter, found));
 
   if (parts.length === 0) return null;
   return `<div class="fitd-sheet">${parts.join('\n')}</div>`;

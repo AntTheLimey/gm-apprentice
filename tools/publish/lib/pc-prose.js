@@ -10,6 +10,23 @@ const PC_PROSE_SECTIONS = [
   'Friends & Rivals', 'Long-Term Projects',
 ];
 
+// Frontmatter fields the sheet renderers used to accept as a second source of
+// stats. They are no longer read (the note body is the only source); explain
+// reports a PC that still carries one. Identity and header fields (occupation,
+// age, status, point_total and the like) are not here: they are still read.
+const RETIRED_SHEET_FIELDS = [
+  // GURPS
+  'attributes', 'secondary', 'skills', 'senses', 'defenses', 'encumbrance', 'reactions',
+  'cultural', 'languages', 'spells', 'points', 'melee', 'ranged', 'grimoire',
+  'techniques', 'chains', 'loadouts',
+  'advantages', 'disadvantages', 'perks', 'quirks', 'templates', 'appearance', 'identity',
+  // D&D, PF2e
+  'abilities', 'ability_scores', 'class_features', 'spell_slots', 'proficiencies', 'hero_points',
+  'skill_proficiencies',
+  // FitD
+  'action_ratings', 'stress', 'trauma', 'special_abilities', 'load',
+];
+
 // A heading's title with its dressing removed, lower-cased: `**Background**`,
 // `*Background*`, `Background:` and `background` are one section. The document
 // rule and the keep-list both compare through this, so a spelling is never the
@@ -33,4 +50,4 @@ function pcKeepList(publishConfig) {
   return [...PC_PROSE_SECTIONS, ...extra];
 }
 
-module.exports = { PC_PROSE_SECTIONS, pcKeepList, bareSectionTitle };
+module.exports = { PC_PROSE_SECTIONS, RETIRED_SHEET_FIELDS, pcKeepList, bareSectionTitle };

@@ -54,7 +54,8 @@ def rows_for(rows, needle):
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
-                      stripped=None, sheet_source=None, unparseable=None):
+                      stripped=None, sheet_source=None, unparseable=None,
+                      retired=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
@@ -62,7 +63,9 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
     a PC's path to its `sheetSourceSet` (None: an older tool's answer,
     without the field); `unparseable` maps a path to the parser message
     the tool reports for it (None: a tool older than 1.11.45, which gives
-    the `FILE_UNPARSEABLE` code alone); `plan` is what `manifest publish-played
+    the `FILE_UNPARSEABLE` code alone); `retired` maps a PC's path to its
+    `retiredSheetFields` (None: an older tool's answer, without the field);
+    `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -101,6 +104,12 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       if p not in {page["path"] for page in pages}]
             for page in pages:
                 page["sheetSourceSet"] = sheet_source.get(page["path"])
+        if retired is not None:
+            pages += [{"path": p, "bodyWithheld": False}
+                      for p in retired
+                      if p not in {page["path"] for page in pages}]
+            for page in pages:
+                page["retiredSheetFields"] = retired.get(page["path"])
         for path, message in (unparseable or {}).items():
             page = {"path": path, "bodyWithheld": False, "publishes": False,
                     "code": "FILE_UNPARSEABLE", "strippedSections": None,
@@ -1929,21 +1938,23 @@ class PcBodyCommandTests(unittest.TestCase):
                                    sheet_source={"Hero.md": True})
         self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
 
-    def test_a_blank_sheet_source_never_asks_the_tool(self):
+    def test_a_blank_sheet_source_is_never_what_asks_the_tool(self):
+        # The one `explain --all` a run makes (for retiredSheetFields) is the
+        # only call; the stubbed sheet_source answer is not used for a blank.
         for value in ("", '""', "''", '"  "'):
             with self.subTest(sheet_source=value):
                 rows, calls = self._asked(value, sheet_source={"Hero.md": True})
                 self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
-                self.assertEqual(calls, [])
+                self.assertEqual(len(calls), 1, calls)
 
-    def test_a_pc_with_a_sheet_never_asks_the_tool(self):
+    def test_a_pc_with_a_sheet_is_not_asked_about_its_sheet_source(self):
         vault = make_vault(self)
         calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
         (vault / "Hero.md").write_text(
             '---\ntype: pc\nsheet_source: "D&D Beyond"\n---\n\n'
             "## Stat Sheet\n\nST 12, DX 13.\n", encoding="utf-8")
         self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
-        self.assertEqual(calls, [])
+        self.assertEqual(len(calls), 1, calls)
 
     def test_a_list_under_sheet_source_is_asked_about(self):
         vault = make_vault(self)
@@ -1989,6 +2000,63 @@ class PcBodyCommandTests(unittest.TestCase):
         explain = vc.ExplainAll(vault)
         vc.check_gm_leak(vault, None, explain=explain)
         vc.check_pc_body(vault, explain=explain)
+        self.assertEqual(len(calls), 1, calls)
+
+    RETIRED = "no longer read for the character sheet"
+
+    def _retired(self, **stub):
+        """pc-body rows for two PCs, `Old.md` with retired fields in its
+        frontmatter and `New.md` without; and the tool calls made."""
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, **stub)
+        (vault / "Old.md").write_text(
+            "---\ntype: pc\nattributes: {ST: 77}\nskills: []\n---\n\n"
+            "## Stat Sheet\n\nST 12, DX 13.\n", encoding="utf-8")
+        (vault / "New.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\nST 12, DX 13.\n",
+            encoding="utf-8")
+        return vc.check_pc_body(vault), calls
+
+    def test_a_pc_with_retired_frontmatter_fields_is_warned_about(self):
+        rows, calls = self._retired(retired={
+            "Old.md": ["attributes", "skills"], "New.md": []})
+        warned = rows_for(rows, self.RETIRED)
+        self.assertEqual(warned, [
+            "WARNING\tOld.md\tfrontmatter field(s) attributes, skills are "
+            "no longer read for the character sheet \u2014 move the values "
+            "into the note's ## Stat Sheet sections"], rows)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_an_older_tool_without_the_field_gives_no_row(self):
+        rows, _calls = self._retired(sheet_source={"Old.md": True})
+        self.assertFalse(rows_for(rows, self.RETIRED), rows)
+
+    def test_a_tool_that_cannot_answer_gives_no_retired_row_and_no_crash(self):
+        for stub in ({"which": None}, {"run": lambda cmd, **kw:
+                     subprocess.CompletedProcess(cmd, 0, '{"pages": "abc"}', "")},
+                     {"run": lambda cmd, **kw:
+                      subprocess.CompletedProcess(cmd, 0, "null", "")}):
+            with self.subTest(stub=sorted(stub)):
+                rows, _calls = self._retired(**stub)
+                self.assertFalse(rows_for(rows, self.RETIRED), rows)
+
+    def test_a_vault_that_does_not_publish_gives_no_retired_row(self):
+        vault = make_vault(self)
+        (vault / "Old.md").write_text(
+            "---\ntype: pc\nattributes: {ST: 77}\n---\n\n## Stat Sheet\n\n"
+            "ST 12.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), self.RETIRED))
+
+    def test_retired_fields_and_sheet_source_share_one_tool_run(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Old.md": True},
+                                  retired={"Old.md": ["stress"]})
+        (vault / "Old.md").write_text(
+            f"---\ntype: pc\nsheet_source: paper\nstress: 1\n---\n\n"
+            f"{self.SHEETLESS}", encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertEqual(len(rows_for(rows, self.RETIRED)), 1, rows)
+        self.assertFalse(rows_for(rows, "no published"), rows)
         self.assertEqual(len(calls), 1, calls)
 
     def test_a_pc_the_tool_makes_no_page_for_is_not_warned_about(self):

@@ -178,9 +178,13 @@ describe('pcTemplate with a FitD sheet', () => {
   });
 });
 
-describe('renderFitDSheet frontmatter fallback', () => {
+describe('renderFitDSheet body sections', () => {
   it('renders action ratings as dots', () => {
-    const html = renderFitDSheet({ type: 'pc', action_ratings: { insight: { hunt: 2, study: 0 }, prowess: { skirmish: 1 } } }, []);
+    const html = render([
+      '## Stat Sheet', '', '### Action Ratings', '',
+      '**Insight**', '', '| Action | Rating |', '|---|---|', '| hunt | 2 |', '| study | 0 |', '',
+      '**Prowess**', '', '| Action | Rating |', '|---|---|', '| skirmish | 1 |',
+    ].join('\n'));
     assert.ok(html.includes('fitd-action-ratings'));
     assert.strictEqual(dotsFor(html, 'hunt'), 2);
   });
@@ -191,24 +195,46 @@ describe('renderFitDSheet frontmatter fallback', () => {
   });
 
   it('renders stress and trauma', () => {
-    const html = renderFitDSheet({ type: 'pc', stress: { current: 4, max: 9 }, trauma: ['Cold', 'Haunted'] }, []);
+    const html = render([
+      '## Stat Sheet', '', '### Stress & Trauma', '',
+      '| Attribute | Value |', '|---|---|', '| Stress | 4 / 9 |', '| Trauma | Cold, Haunted |',
+    ].join('\n'));
     assert.ok(html.includes('4 / 9'));
     assert.ok(html.includes('Haunted'));
   });
 
-  it('renders special abilities as cards', () => {
-    const html = renderFitDSheet({ type: 'pc', special_abilities: [{ name: 'Ghost Mind', description: 'x' }, 'Shadow'] }, []);
-    assert.ok(html.includes('fitd-special-ability'));
+  it('renders the Special Abilities section', () => {
+    const html = render('## Special Abilities\n\n- Ghost Mind\n- Shadow\n');
+    assert.ok(html.includes('fitd-abilities'));
     assert.ok(html.includes('Ghost Mind') && html.includes('Shadow'));
   });
+});
 
-  it('uses frontmatter abilities when the body section is unfilled', () => {
-    assert.ok(render(blank(), { type: 'pc', special_abilities: ['FMABILITY'] }).includes('FMABILITY'));
+// The note body is the only source: a frontmatter copy of any stat is not read.
+describe('renderFitDSheet ignores frontmatter stats', () => {
+  const sentinel = {
+    type: 'pc',
+    action_ratings: { insight: { FMACTION: 4 } },
+    stress: { current: 7, max: 9 },
+    trauma: ['FMTRAUMA'],
+    special_abilities: [{ name: 'FMABILITY', description: 'x' }, 'FMSTRING'],
+    load: { level: 'FMLOAD', items: ['FMITEM'] },
+  };
+
+  it('returns null when only frontmatter carries stats', () => {
+    assert.strictEqual(renderFitDSheet(sentinel, []), null);
   });
 
-  it('survives malformed frontmatter', () => {
+  it('leaves every frontmatter value off a sheet built from the template body', () => {
+    const html = render(blank(), sentinel);
+    for (const s of ['FMACTION', '7 / 9', 'FMTRAUMA', 'FMABILITY', 'FMSTRING', 'FMLOAD', 'FMITEM']) {
+      assert.ok(!html.includes(s), `${s} must not come from frontmatter`);
+    }
+  });
+
+  it('does not choke on malformed frontmatter values', () => {
     const html = renderFitDSheet({ type: 'pc', action_ratings: { insight: null, prowess: 'x' }, stress: 3, special_abilities: 'Mule', load: 'heavy' }, []);
-    assert.ok(html.includes('Mule'));
+    assert.strictEqual(html, null);
   });
 
   it('returns null when no FitD data present', () => {

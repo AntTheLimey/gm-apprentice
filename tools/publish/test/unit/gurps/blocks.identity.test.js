@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const { renderIdentity } = require('../../../lib/templates/gurps/blocks/identity');
 const { parseGurps } = require('../../../lib/templates/gurps/parse');
 const { buildSheet } = require('../../../lib/templates/gurps/layout');
+const { sectionsFromMarkdown } = require('../../helpers/sections');
 
 const appearanceSheet = {
   title: 'Stat Sheet', id: 'stat-sheet',
@@ -75,9 +76,17 @@ describe('parseIdentity', () => {
     assert.deepStrictEqual(model.identity, {});
   });
 
-  it('accepts an appearance object in frontmatter', () => {
-    const model = parseGurps({ appearance: { Height: '5\'6"', Eyes: 'Brown' } }, []);
-    assert.strictEqual(model.identity.Height, '5\'6"');
+  it('reads an appearance table from the Stat Sheet body', () => {
+    const model = parseGurps({}, sectionsFromMarkdown([
+      '## Stat Sheet', '', '### Appearance & Social', '',
+      '| Trait | Value |', '|---|---|', '| Height | 168 cm |', '| Eyes | Brown |',
+    ].join('\n')));
+    assert.strictEqual(model.identity.Height, '168 cm');
+  });
+
+  it('ignores frontmatter appearance and identity', () => {
+    const model = parseGurps({ appearance: { Height: 'sentinel' }, identity: 'sentinel' }, []);
+    assert.deepStrictEqual(model.identity, {});
   });
 });
 
@@ -106,11 +115,13 @@ describe('parseIdentity completeness', () => {
     assert.strictEqual(model.identity.Hair, 'Black');
   });
 
-  it('a string appearance: does not shadow an identity: object', () => {
-    const model = parseGurps(
-      { appearance: 'Tall and weathered', identity: { Height: '6ft' } }, []);
+  it('a Physical Description table still merges beside Appearance & Social', () => {
+    const model = parseGurps({}, sectionsFromMarkdown([
+      '## Stat Sheet', '', '### Appearance & Social', '', '| Trait | Value |', '|---|---|', '| Height | 6ft |', '',
+      '### Physical Description', '', '| Trait | Value |', '|---|---|', '| Build | Lean |',
+    ].join('\n')));
     assert.strictEqual(model.identity.Height, '6ft');
-    assert.strictEqual(model.identity.Appearance, 'Tall and weathered');
+    assert.strictEqual(model.identity.Build, 'Lean');
   });
 
   it('keeps columns beyond the second', () => {

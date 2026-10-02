@@ -360,6 +360,7 @@ describe('explain --all (#276)', () => {
       code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
       strippedSections: ['GM Notes', 'Reconciliation Context'],
       sheetSourceSet: null,
+      retiredSheetFields: null,
       frontmatterError: null,
     });
     assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
@@ -382,6 +383,21 @@ describe('explain --all (#276)', () => {
     assert.strictEqual(pages.get('Sessions/Colon.md').code, 'FILE_UNPARSEABLE');
     assert.ok(pages.get('Sessions/Colon.md').frontmatterError);
     assert.strictEqual(pages.get('Sessions/Session_07.md').frontmatterError, null);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('lists the retired sheet fields a PC still carries in frontmatter, null for any other file', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Old.md', '---\ntype: pc\nattributes: { ST: 77 }\nskills: [{ name: Sentinel }]\nstress: { current: 1, max: 9 }\noccupation: Sailor\n---\n\nA sailor.\n');
+    write(vault, 'Sessions/Clean.md', '---\ntype: pc\noccupation: Sailor\npoint_total: 150\n---\n\nA sailor.\n');
+    write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
+    const { rc, json } = await all(siteFor(vault));
+    assert.strictEqual(rc, 0);
+    const pages = byPath(json);
+    assert.deepStrictEqual(pages.get('Sessions/Old.md').retiredSheetFields, ['attributes', 'skills', 'stress']);
+    assert.deepStrictEqual(pages.get('Sessions/Clean.md').retiredSheetFields, []);
+    assert.strictEqual(pages.get('Sessions/Npc.md').retiredSheetFields, null);
+    assert.strictEqual(pages.get('Sessions/Session_07.md').retiredSheetFields, null);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

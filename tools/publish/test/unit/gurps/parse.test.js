@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { parseGurps } = require('../../../lib/templates/gurps/parse');
 const { renderGURPSSheet } = require('../../../lib/templates/gurps/index');
+const { sectionsFromMarkdown } = require('../../helpers/sections');
 
 const statSheet = {
   title: 'Stat Sheet', id: 'stat-sheet',
@@ -46,9 +47,10 @@ describe('parseGurps', () => {
     const c = parseGurps({}, [statSheet]);
     assert.strictEqual(c.attributes.secondary.HP.value, '10');
   });
-  it('frontmatter.attributes overrides parsed primary values', () => {
-    const c = parseGurps({ attributes: { ST: 20 } }, [statSheet]);
-    assert.strictEqual(c.attributes.primary.ST.value, '20');
+  it('ignores frontmatter attributes: the Stat Sheet is the only source', () => {
+    const c = parseGurps({ attributes: { ST: 20, DX: 20 }, secondary: { HP: 99 } }, [statSheet]);
+    assert.strictEqual(c.attributes.primary.ST.value, '10');
+    assert.strictEqual(c.attributes.secondary.HP.value, '10');
   });
   it('returns a model even with no sections', () => {
     const c = parseGurps({}, []);
@@ -150,20 +152,29 @@ describe('parseGurps — Techniques level columns', () => {
     assert.strictEqual(c.techniques[0].level, '14');
   });
 
-  it('frontmatter techniques prefer current over level/effective', () => {
-    const c = parseGurps({ techniques: [
-      { name: 'Choke Hold', default: 'Judo-2', points: 3, current: 13, level: 14 },
-      { name: 'Kicking', default: 'Karate-2', points: 3, effective: 15 },
-    ] }, []);
+  it('body techniques prefer a Current column over Level', () => {
+    const c = parseGurps({}, sectionsFromMarkdown([
+      '## Techniques', '',
+      '| Name | Default | Points | Level | Current |', '|---|---|---|---|---|',
+      '| Choke Hold | Judo-2 | 3 | 14 | 13 |',
+    ].join('\n')));
     assert.strictEqual(c.techniques[0].level, '13');
-    assert.strictEqual(c.techniques[1].level, '15');
   });
 
-  it('blank frontmatter current falls through to the next level key', () => {
+  it('body techniques read an Effective column when there is no Current', () => {
+    const c = parseGurps({}, sectionsFromMarkdown([
+      '## Techniques', '',
+      '| Name | Default | Points | Effective |', '|---|---|---|---|',
+      '| Kicking | Karate-2 | 3 | 15 |',
+    ].join('\n')));
+    assert.strictEqual(c.techniques[0].level, '15');
+  });
+
+  it('ignores frontmatter techniques', () => {
     const c = parseGurps({ techniques: [
-      { name: 'Kicking', default: 'Karate-2', points: 3, current: '', level: 14 },
+      { name: 'Sentinel Hold', default: 'Judo-2', points: 3, current: 13 },
     ] }, []);
-    assert.strictEqual(c.techniques[0].level, '14');
+    assert.deepStrictEqual(c.techniques, []);
   });
 });
 
@@ -187,21 +198,32 @@ describe('parseGurps — Spells and frontmatter level fallbacks', () => {
     assert.strictEqual(c.spells[0].level, '15');
   });
 
-  it('frontmatter skills fall back to effective/base when current/level are absent', () => {
-    const c = parseGurps({ skills: [
-      { name: 'Broadsword', points: 4, effective: 14 },
-      { name: 'Judo', points: 4, base: 12 },
-    ] }, []);
-    assert.strictEqual(c.skills[0].level, '14');
-    assert.strictEqual(c.skills[1].level, '12');
+  it('body skills fall back to Effective, then Base, when there is no Current column', () => {
+    const effective = parseGurps({}, sectionsFromMarkdown([
+      '## Skills', '', '| Name | Points | Effective |', '|---|---|---|', '| Broadsword | 4 | 14 |',
+    ].join('\n')));
+    const base = parseGurps({}, sectionsFromMarkdown([
+      '## Skills', '', '| Name | Points | Base |', '|---|---|---|', '| Judo | 4 | 12 |',
+    ].join('\n')));
+    assert.strictEqual(effective.skills[0].level, '14');
+    assert.strictEqual(base.skills[0].level, '12');
   });
 
-  it('frontmatter skills keep level over base, preserving the base subline', () => {
-    const c = parseGurps({ skills: [
-      { name: 'Climbing', points: 1, level: 10, base: 12 },
-    ] }, []);
+  it('body skills keep Current as the level and the Base column as the subline', () => {
+    const c = parseGurps({}, sectionsFromMarkdown([
+      '## Skills', '', '| Name | Points | Base | Current |', '|---|---|---|---|', '| Climbing | 1 | 12 | 10 |',
+    ].join('\n')));
     assert.strictEqual(c.skills[0].level, '10');
     assert.strictEqual(c.skills[0].base, '12');
+  });
+
+  it('ignores frontmatter skills and spells', () => {
+    const c = parseGurps({
+      skills: [{ name: 'Sentinel Skill', points: 4, level: 14 }],
+      spells: [{ name: 'Sentinel Spell', points: 1, level: 12 }],
+    }, []);
+    assert.deepStrictEqual(c.skills, []);
+    assert.deepStrictEqual(c.spells, []);
   });
 });
 
@@ -401,12 +423,11 @@ describe('parseGurps — current encumbrance row', () => {
     assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
   });
 
-  it('frontmatter encumbrance with current: true is untouched by the fallback', () => {
-    const fm = { encumbrance: [
-      { level: 'None (0)', weight: '22 lb', move: '6', dodge: '9', current: true },
-      { level: 'Light (1)', weight: '44 lb', move: '4', dodge: '8' },
-    ] };
-    const model = parseGurps(fm, [statusSection]);
+  it('a marked row is untouched by the status fallback', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0) *', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ]), statusSection]);
     assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
   });
 
@@ -439,23 +460,21 @@ describe('parseGurps — current encumbrance row (review hardening)', () => {
     assert.strictEqual(model.encumbrance[1].level, 'Light (1)');
   });
 
-  it('frontmatter array with two current entries keeps only the first', () => {
-    const fm = { encumbrance: [
-      { level: 'None (0)', current: true },
-      { level: 'Light (1)', current: true },
-    ] };
-    const model = parseGurps(fm, []);
+  it('two marked rows keep only the first', () => {
+    const model = parseGurps({}, [encSection([
+      ['None (0) *', '22 lb', '6', '9'],
+      ['Light (1) *', '44 lb', '4', '8'],
+    ])]);
     assert.deepStrictEqual(model.encumbrance.map(e => e.current), [true, false]);
   });
 
-  it('frontmatter array without current is flagged by a matching status Enc', () => {
-    const fm = { encumbrance: [
-      { level: 'None (0)' },
-      { level: 'Light (1)' },
-    ] };
+  it('an unmarked table is flagged by a matching status Enc', () => {
     const status = { title: 'Current Status', id: 'current-status',
       html: '<p><strong>Enc:</strong> Light (1)</p>' };
-    const model = parseGurps(fm, [status]);
+    const model = parseGurps({}, [encSection([
+      ['None (0)', '22 lb', '6', '9'],
+      ['Light (1)', '44 lb', '4', '8'],
+    ]), status]);
     assert.deepStrictEqual(model.encumbrance.map(e => e.current), [false, true]);
   });
 
@@ -618,5 +637,41 @@ describe('parseGurps — silent section drops (issue #177)', () => {
   it('renderGURPSSheet surfaces the warnings for build.js', () => {
     const out = renderGURPSSheet({}, [{ title: 'Weapons', id: 'w', html: '<p>none</p>' }]);
     assert.ok(Array.isArray(out.warnings) && out.warnings.length === 1);
+  });
+});
+
+// The note body is the only source: a frontmatter copy of any stat is not read.
+describe('parseGurps ignores frontmatter stats', () => {
+  const row = (name) => ({ name, label: name, level: 99, points: 99, cost: 99, weapon: name, spoken: 'x', items: [{ name }] });
+  const sentinel = {
+    type: 'pc',
+    attributes: { ST: 77 }, secondary: { HP: 77 }, senses: { Vision: 77 },
+    defenses: { dodge: 77, parry: [row('FMPARRY')] }, reactions: { Appearance: 77 },
+    encumbrance: [{ level: 'FMENC' }],
+    skills: [row('FMSKILL')], techniques: [row('FMTECH')], spells: [row('FMSPELL')],
+    advantages: [row('FMADV')], disadvantages: [row('FMDIS')], perks: [row('FMPERK')],
+    quirks: [row('FMQUIRK')], templates: [row('FMTEMPLATE')],
+    cultural: [row('FMCULT')], languages: [row('FMLANG')], points: [row('FMPOINTS')],
+    melee: [row('FMMELEE')], ranged: [row('FMRANGED')], grimoire: [row('FMGRIMOIRE')],
+    chains: { melee: [{ name: 'FMCHAIN', steps: ['a'] }] },
+    loadouts: [row('FMLOADOUT')],
+    appearance: { Height: 'FMHEIGHT' }, identity: 'FMIDENTITY',
+  };
+
+  it('leaves the model empty when only frontmatter carries stats', () => {
+    const m = parseGurps(sentinel, []);
+    assert.ok(!JSON.stringify(m).includes('FM'), 'no frontmatter value reaches the model');
+    assert.ok(!JSON.stringify(m).includes('77'));
+  });
+
+  it('renders none of it beside a body sheet', () => {
+    const out = JSON.stringify(renderGURPSSheet(sentinel, [statSheet], { buildVersion: 'x', campaignId: 'c', pcSlug: 'p' }));
+    assert.ok(out.includes('Basic Speed') || out.includes('IQ'), 'the body sheet still renders');
+    assert.ok(!out.includes('FM'));
+    assert.ok(!out.includes('77'));
+  });
+
+  it('still reads the PC status object from frontmatter', () => {
+    assert.strictEqual(parseGurps({ status: { hp: '8/10' } }, []).status.hp, '8/10');
   });
 });
