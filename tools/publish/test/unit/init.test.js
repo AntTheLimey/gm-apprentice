@@ -15,6 +15,11 @@ async function removeTmpDir(dir) {
 }
 
 describe('init', () => {
+  // Most tests scaffold with no vault beside the site, which init says so on stderr.
+  const realWarn = console.warn;
+  before(() => { console.warn = () => {}; });
+  after(() => { console.warn = realWarn; });
+
   describe('creates expected files', () => {
     let tmpDir;
     let result;
@@ -53,11 +58,14 @@ describe('init', () => {
       await assert.doesNotReject(fs.access(p));
     });
 
-    it('vault.config.json is valid JSON with siteTitle and siteUrl', async () => {
+    it('vault.config.json holds exactly the four scaffold keys', async () => {
       const content = await fs.readFile(path.join(tmpDir, 'vault.config.json'), 'utf8');
-      const cfg = JSON.parse(content);
-      assert.ok(typeof cfg.siteTitle === 'string', 'siteTitle missing');
-      assert.ok(typeof cfg.siteUrl === 'string', 'siteUrl missing');
+      assert.deepStrictEqual(JSON.parse(content), {
+        host: 'github-pages',
+        siteUrl: 'https://example.github.io/my-campaign',
+        vaultPath: './vault',
+        outputDir: './docs',
+      });
     });
 
     it('creates README.md', async () => {
@@ -214,10 +222,9 @@ describe('init', () => {
       assert.strictEqual(pkg.name, 'canticle-of-the-end');
     });
 
-    it('uses siteTitle for vault.config.json siteTitle', async () => {
-      const content = await fs.readFile(path.join(tmpDir, 'vault.config.json'), 'utf8');
-      const cfg = JSON.parse(content);
-      assert.strictEqual(cfg.siteTitle, 'Canticle of the End');
+    it('keeps the title out of vault.config.json', async () => {
+      const cfg = JSON.parse(await fs.readFile(path.join(tmpDir, 'vault.config.json'), 'utf8'));
+      assert.strictEqual(cfg.siteTitle, undefined);
     });
   });
 
@@ -241,12 +248,106 @@ describe('init', () => {
     });
   });
 
-  describe('vault.config.json.tmpl folderMap', () => {
-    it('maps Chapters so sessions and wrap-ups publish out of the box', () => {
+  describe('campaign settings go to the vault file', () => {
+    const { parseNote } = require('../../lib/frontmatter');
+    const { build } = require('../../lib/build');
+    const publishOf = (vault) => parseNote(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8')).data.publish;
+
+    it('a fresh init writes the block, and init + build prints no WARNING at all', async () => {
+      const tmpDir = await makeTmpDir();
+      const lines = [];
+      const real = { log: console.log, warn: console.warn, error: console.error };
+      try {
+        const site = path.join(tmpDir, 'site');
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(vault);
+        await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
+        const result = await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
+        assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(),
+          ['host', 'outputDir', 'siteUrl', 'vaultPath']);
+        assert.deepStrictEqual(result.vaultSettings.written,
+          ['site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_callouts']);
+        const pub = publishOf(vault);
+        assert.strictEqual(pub.site_title, 'Dead Light');
+        assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
+        assert.strictEqual(pub.attachments_dir, '_attachments');
+        assert.deepStrictEqual(pub.exclude_dirs, ['_meta', '_Templates', '_resources']);
+        assert.strictEqual(pub.exclude_callouts, true);
+        for (const k of Object.keys(real)) console[k] = (...a) => lines.push(a.join(' '));
+        const configPath = path.join(site, 'vault.config.json');
+        delete require.cache[require.resolve(configPath)];
+        build({ configPath });
+        await assert.doesNotReject(fs.access(path.join(site, 'docs', 'index.html')));
+      } finally {
+        Object.assign(console, real);
+        await removeTmpDir(tmpDir);
+      }
+      assert.deepStrictEqual(lines.filter((l) => /WARNING/.test(l)), []);
+    });
+
+    it('leaves a key the vault file already sets, and keeps the rest of the theme', async () => {
+      const tmpDir = await makeTmpDir();
+      try {
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        const original = '---\ntype: meta\npublish:\n  site_title: Mine\n  theme:\n    tagline: Hello\n---\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const result = await init(path.join(tmpDir, 'site'), { siteTitle: 'Other', vaultPath: vault });
+        const pub = publishOf(vault);
+        assert.strictEqual(pub.site_title, 'Mine');
+        assert.deepStrictEqual(pub.theme, { tagline: 'Hello' });
+        assert.deepStrictEqual(result.vaultSettings.kept, ['site_title']);
+        assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('a vault that is not there yet is not created; the site is still scaffolded', async () => {
+      const tmpDir = await makeTmpDir();
+      const real = console.warn;
+      const warned = [];
+      console.warn = (m) => warned.push(m);
+      try {
+        const site = path.join(tmpDir, 'site');
+        const result = await init(site);
+        assert.strictEqual(result.success, true);
+        assert.ok(result.vaultSettings.skipped);
+        await assert.rejects(fs.access(path.join(site, 'vault')));
+        assert.match(warned.join('\n'), /site_title.*folder_map/);
+      } finally {
+        console.warn = real;
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('a vault file the editor refuses is left alone and the reason is shown', async () => {
+      const tmpDir = await makeTmpDir();
+      const real = console.warn;
+      const warned = [];
+      console.warn = (m) => warned.push(m);
+      try {
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        const original = '---\ntype: meta\npublish: {site_title: X}\n---\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault });
+        assert.strictEqual(result.success, true);
+        assert.ok(result.vaultSettings.skipped);
+        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
+        assert.match(warned.join('\n'), /Campaign settings were not written/);
+      } finally {
+        console.warn = real;
+        await removeTmpDir(tmpDir);
+      }
+    });
+  });
+
+  describe('vault.config.json.tmpl', () => {
+    it('is exactly the four scaffold keys, with no backend flags or campaign settings', () => {
       const tmplPath = path.join(__dirname, '..', '..', 'templates-scaffold', 'vault.config.json.tmpl');
-      const raw = readFileSync(tmplPath, 'utf-8').replace(/\{\{\w+\}\}/g, 'x');
-      const config = JSON.parse(raw);
-      assert.strictEqual(config.folderMap['Chapters'], 'chapters');
+      const config = JSON.parse(readFileSync(tmplPath, 'utf-8').replace(/\{\{\w+\}\}/g, 'x'));
+      assert.deepStrictEqual(Object.keys(config).sort(), ['host', 'outputDir', 'siteUrl', 'vaultPath']);
     });
   });
 });
