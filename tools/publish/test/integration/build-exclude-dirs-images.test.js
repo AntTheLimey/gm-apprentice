@@ -56,9 +56,9 @@ describe('publish.exclude_dirs from vault-config.md reaches the scanner (#209)',
   });
 });
 
-// #209 continued: vault.config.json's legacy excludeDirs must keep working too — the fix
-// unions both sources, it does not swap one for the other.
-describe('legacy vault.config.json excludeDirs still honoured alongside publish.exclude_dirs (#209)', () => {
+// #209 continued: the vault file's exclude_dirs is the list in force; a site-file excludeDirs
+// does not add to it (no union).
+describe('publish.exclude_dirs wins whole over vault.config.json excludeDirs (#209)', () => {
   let work, outputDir;
 
   before(() => {
@@ -97,11 +97,11 @@ describe('legacy vault.config.json excludeDirs still honoured alongside publish.
     assert.ok(!fs.existsSync(path.join(outputDir, 'from-vault-config', 'a.html')));
   });
 
-  it('still honours the legacy vault.config.json source', () => {
-    assert.ok(!fs.existsSync(path.join(outputDir, 'from-json-config', 'b.html')));
+  it('ignores the site file list when the vault file sets its own', () => {
+    assert.ok(fs.existsSync(path.join(outputDir, 'from-json-config', 'b.html')));
   });
 
-  it('publishes everything neither source excludes', () => {
+  it('publishes everything the vault file does not exclude', () => {
     assert.ok(fs.existsSync(path.join(outputDir, 'characters', 'npcs', 'visible.html')));
   });
 });

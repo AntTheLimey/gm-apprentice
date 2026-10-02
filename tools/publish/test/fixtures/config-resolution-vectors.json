@@ -1,0 +1,14 @@
+[
+  { "name": "site title from the vault file only", "vault": { "site_title": "Canticle" }, "site": {}, "expect": { "site_title": "Canticle" }, "legacy": [] },
+  { "name": "site title from the site file only is used and reported", "vault": {}, "site": { "siteTitle": "Old" }, "expect": { "site_title": "Old" }, "legacy": [{ "key": "siteTitle", "status": "used" }] },
+  { "name": "vault file wins and the site file is reported ignored", "vault": { "site_title": "New" }, "site": { "siteTitle": "Old" }, "expect": { "site_title": "New" }, "legacy": [{ "key": "siteTitle", "status": "ignored" }] },
+  { "name": "search defaults on", "vault": {}, "site": {}, "expect": { "search": true }, "legacy": [] },
+  { "name": "search false in the site file is honoured", "vault": {}, "site": { "searchEnabled": false }, "expect": { "search": false }, "legacy": [{ "key": "searchEnabled", "status": "used" }] },
+  { "name": "exclude_dirs is not unioned", "vault": { "exclude_dirs": ["Drafts"] }, "site": { "excludeDirs": ["Secrets", "drafts"] }, "expect": { "exclude_dirs": ["Drafts"] }, "legacy": [{ "key": "excludeDirs", "status": "ignored", "dropped": ["Secrets"] }] },
+  { "name": "exclude_dirs from the site file alone still applies", "vault": {}, "site": { "excludeDirs": ["Secrets"] }, "expect": { "exclude_dirs": ["Secrets"] }, "legacy": [{ "key": "excludeDirs", "status": "used" }] },
+  { "name": "exclude_sections default when neither sets it", "vault": {}, "site": {}, "expect": { "exclude_sections": ["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"] }, "legacy": [] },
+  { "name": "exclude_sections is not unioned", "vault": { "exclude_sections": ["GM Notes"] }, "site": { "excludeSections": ["GM Notes", "Keeper Only"] }, "expect": { "exclude_sections": ["GM Notes"] }, "legacy": [{ "key": "excludeSections", "status": "ignored", "dropped": ["Keeper Only"] }] },
+  { "name": "folder_map from the vault file", "vault": { "folder_map": { "NPCs": "npcs" } }, "site": { "folderMap": { "Old": "old" } }, "expect": { "folder_map": { "NPCs": "npcs" } }, "legacy": [{ "key": "folderMap", "status": "ignored" }] },
+  { "name": "system falls back to the site file", "vault": {}, "site": { "system": "gurps-4e" }, "expect": { "system": "gurps-4e" }, "legacy": [{ "key": "system", "status": "used" }] },
+  { "name": "an explicit false is a value, not silence", "vault": { "exclude_callouts": false }, "site": { "excludeCallouts": true }, "expect": { "exclude_callouts": false }, "legacy": [{ "key": "excludeCallouts", "status": "ignored" }] }
+]
