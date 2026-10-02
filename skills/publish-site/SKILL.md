@@ -92,11 +92,12 @@ https://nodejs.org (LTS).
 the switch, and `init` turns it on.
 
 - **Off** (`false`, or unset with no `site_dir`): the vault has no
-  site. Nothing is built, no leak check runs, and there is nothing to
-  register, so skip `publish-played`. If the GM asks for a site, run
-  capability 1; `init` turns the switch on. If they asked
-  for a build of a site they turned off, say it is off and that
-  `publish.site: true` turns it back on.
+  site. No leak check runs, and there is nothing to register, so skip
+  `publish-played`. If the GM asks for a site, run capability 1;
+  `init` turns the switch on. `publish.site: false` also makes `build`
+  and `deploy` refuse: if the GM asks for a build of a site they
+  turned off, say it is off and that `publish.site: true` turns it
+  back on.
 - **On, with no `publish.site_dir`:** a site still to be set up. Run
   capability 1.
 - **On, with a `site_dir`:** capabilities 2 and 4 read the folder from

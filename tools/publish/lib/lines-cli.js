@@ -37,7 +37,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
-const { asBool } = require('./switches');
+const { resolveSwitches } = require('./switches');
 const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -66,21 +66,21 @@ function site(vault) {
   if (publish === undefined || publish === null) return { publishes: false, site: false, siteDir: null };
   if (typeof publish !== 'object' || Array.isArray(publish)) throw new Error('publish: in _meta/vault-config.md is not a block of settings');
   const raw = publish.site_dir;
-  const blank = raw === undefined || raw === null || raw === '';
-  // `publish.site` is the switch. Off: there is no site, whatever site_dir says. Unset, in
-  // a vault written before the switch, a site_dir says on. An unreadable value is off, as
-  // for the other switches.
-  const flag = asBool(publish.site);
-  const on = flag === undefined ? !blank : flag === true;
+  const blank = raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '');
+  // `publish.site` is the switch, decided where the build decides it (resolveSwitches).
+  // Off: there is no site, whatever site_dir says. Unset, in a vault written before the
+  // switch, a site_dir says on. An unreadable value is off, as for the other switches.
+  const on = resolveSwitches(publish, {}).site;
   if (!on || blank) return { publishes: true, site: on, siteDir: null };
   if (typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
   return { publishes: true, site: true, siteDir: siteDirPath(vault, raw) };
 }
 
-// The folder a `publish.site_dir` value names: `~` is the home folder, and a relative
+// The folder a `publish.site_dir` value names: `~` is the home folder (`~/` or `~\`), and a relative
 // path is taken from the vault. `init` and `update-pin` compare sites through this too.
 function siteDirPath(vault, raw) {
-  const expanded = raw === '~' || raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(1)) : raw;
+  const text = raw.trim();
+  const expanded = text === '~' || text.startsWith('~/') || text.startsWith('~\\') ? path.join(os.homedir(), text.slice(1)) : text;
   return path.resolve(vault, expanded);
 }
 

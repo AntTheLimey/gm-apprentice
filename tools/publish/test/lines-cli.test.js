@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { Readable } = require('stream');
-const { runLines, answer, answerLine } = require('../lib/lines-cli');
+const { runLines, answer, answerLine, siteDirPath } = require('../lib/lines-cli');
 const { filterSections, keepOnlySections, playerSafeMarkdown } = require('../lib/processor');
 
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
@@ -105,6 +105,11 @@ describe('lines: site', () => {
     assert.deepStrictEqual(ask(cfg(['site: true'])).got, { publishes: true, site: true, siteDir: null });
     assert.deepStrictEqual(ask(cfg(['site: true', 'site_dir:'])).got, { publishes: true, site: true, siteDir: null });
     assert.deepStrictEqual(ask(cfg(['site: yes', `site_dir: "${dir}"`])).got, { publishes: true, site: true, siteDir: path.resolve(dir) });
+    // A site_dir that names nothing is no site_dir, as the build reads it.
+    assert.deepStrictEqual(ask(cfg(['site_dir: "  "'])).got, { publishes: true, site: false, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site_dir: 5'])).got, { publishes: true, site: false, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site_dir: [a]'])).got, { publishes: true, site: false, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site: true', 'site_dir: "  "'])).got, { publishes: true, site: true, siteDir: null });
     // Unset, in a vault written before the switch: a site_dir says on.
     assert.deepStrictEqual(ask(cfg([`site_dir: "${dir}"`])).got, { publishes: true, site: true, siteDir: path.resolve(dir) });
   });
@@ -114,11 +119,14 @@ describe('lines: site', () => {
     const rel = ask('---\npublish:\n  site_dir: ../site\n---\n');
     assert.strictEqual(rel.got.siteDir, path.resolve(rel.vault, '../site'));
     assert.strictEqual(ask('---\npublish:\n  site_dir: ~/site\n---\n').got.siteDir, path.join(os.homedir(), 'site'));
+    // On Windows a home-folder path is written ~\site as well.
+    if (process.platform === 'win32') assert.strictEqual(siteDirPath('C:\\v', '~\\site'), path.join(os.homedir(), 'site'));
+    assert.strictEqual(siteDirPath('/v', '  ~/site '), path.join(os.homedir(), 'site'));
   });
   it('a file that cannot be parsed, or a block that is not one, is an error, not a "no"', () => {
     assert.throws(() => ask('---\npublish:\n  a: 1\npublish:\n  b: 2\n---\n'), /not valid YAML/);
     assert.throws(() => ask('---\npublish: yes please\n---\n'), /not a block of settings/);
-    assert.throws(() => ask('---\npublish:\n  site_dir: [a]\n---\n'), /site_dir .* is not a path/);
+    assert.throws(() => ask('---\npublish:\n  site: true\n  site_dir: [a]\n---\n'), /site_dir .* is not a path/);
     assert.throws(() => answer({ op: 'site' }), /vault must be a path/);
   });
 });
