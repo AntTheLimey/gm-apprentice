@@ -586,10 +586,8 @@ describe('scanVaultReport', () => {
   const TYPED = '---\ntype: npc\n---\n\nBody.\n';
   const UNTYPED = '---\nname: Nobody\n---\n\nBody.\n';
   // An unterminated double-quoted scalar: gray-matter throws on this rather than
-  // returning empty/partial frontmatter. gray-matter caches by exact string content,
-  // so each call site needs a distinct body (via `marker`) — reusing one literal
-  // string across tests makes only the first one see the throw.
-  const malformed = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+  // returning empty/partial frontmatter.
+  const MALFORMED = `---\ntype: npc\nname: "Unterminated\n---\n\nBody.\n`;
 
   function silently(fn) {
     const orig = console.warn;
@@ -600,7 +598,7 @@ describe('scanVaultReport', () => {
   it('reports an unparseable file under `malformed`, not `untyped` or `pages` (C1)', () => {
     const vault = makeVault({
       'Characters/NPCs/Gatekeeper.md': TYPED,
-      'Characters/NPCs/Bram.md': malformed('report-shape'),
+      'Characters/NPCs/Bram.md': MALFORMED,
     });
     try {
       const report = silently(() => scanVaultReport(config(vault)));
@@ -617,7 +615,7 @@ describe('scanVaultReport', () => {
   });
 
   it('scanVaultReport itself prints nothing for a malformed file — only scanVault does', () => {
-    const vault = makeVault({ 'Characters/NPCs/Bram.md': malformed('silent-report') });
+    const vault = makeVault({ 'Characters/NPCs/Bram.md': MALFORMED });
     const warns = [];
     const orig = console.warn;
     console.warn = (...a) => warns.push(a.join(' '));
@@ -631,7 +629,7 @@ describe('scanVaultReport', () => {
   });
 
   it('scanVault warns about the malformed file, naming the file and the YAML error', () => {
-    const vault = makeVault({ 'Characters/NPCs/Bram.md': malformed('warn-text') });
+    const vault = makeVault({ 'Characters/NPCs/Bram.md': MALFORMED });
     const warns = [];
     const orig = console.warn;
     console.warn = (...a) => warns.push(a.join(' '));
@@ -734,5 +732,54 @@ describe('buildLinkMap: a vault path beats an alias spelled like one', () => {
       { title: 'Drageby', vaultPath: 'Locations/Drageby', outputPath: 'locations/drageby.html', frontmatter: {} },
     ];
     assert.strictEqual(buildLinkMap(pages)['Locations/Drageby'], 'locations/drageby.html');
+  });
+});
+
+// #287: gray-matter's own cache kept a half-read note, so the second of two notes with
+// the same broken frontmatter (and any note on a second scan) read as "no type".
+describe('scanVaultReport reads every note afresh', () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const { scanVaultReport } = require('../../lib/scanner');
+  const dup = '---\ntype: npc\nrole: clerk\nrole: twice-over\n---\n\nBody.\n';
+  let vault;
+  const scan = () => scanVaultReport({ vaultPath: vault, excludeDirs: [], folderMap: { NPCs: 'npcs' } });
+
+  it('reports two notes with identical broken frontmatter, on every scan', () => {
+    vault = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-afresh-'));
+    fs.mkdirSync(path.join(vault, 'NPCs'));
+    fs.writeFileSync(path.join(vault, 'NPCs', 'One.md'), dup);
+    fs.writeFileSync(path.join(vault, 'NPCs', 'Two.md'), dup);
+    for (const report of [scan(), scan()]) {
+      assert.deepStrictEqual(report.malformed.map((m) => m.rel).sort(), ['NPCs/One.md', 'NPCs/Two.md']);
+      assert.deepStrictEqual(report.untyped, []);
+    }
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('gives two identical notes their own frontmatter object', () => {
+    vault = fs.mkdtempSync(path.join(os.tmpdir(), 'scan-afresh-'));
+    fs.mkdirSync(path.join(vault, 'NPCs'));
+    const same = '---\ntype: npc\ntags: [a]\n---\n\nSame body.\n';
+    fs.writeFileSync(path.join(vault, 'NPCs', 'One.md'), same);
+    fs.writeFileSync(path.join(vault, 'NPCs', 'Two.md'), same);
+    const [a, b] = scan().pages;
+    assert.notStrictEqual(a.frontmatter, b.frontmatter);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+describe('loadPublishConfig on a vault-config.md that is not valid YAML', () => {
+  const fs = require('fs'); const os = require('os'); const path = require('path');
+  const { loadPublishConfig } = require('../../lib/config');
+
+  it('fails with one line naming the file (#287)', () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'bad-config-'));
+    fs.mkdirSync(path.join(vault, '_meta'));
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\npublish:\n  mode: player\n  mode: gm\n---\n');
+    assert.throws(() => loadPublishConfig(vault), (e) => {
+      assert.match(e.message, /^_meta\/vault-config\.md frontmatter is not valid YAML: duplicated mapping key at line 4, column 3$/);
+      return true;
+    });
+    fs.rmSync(vault, { recursive: true, force: true });
   });
 });

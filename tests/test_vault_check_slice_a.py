@@ -54,13 +54,15 @@ def rows_for(rows, needle):
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
-                      stripped=None, sheet_source=None):
+                      stripped=None, sheet_source=None, unparseable=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
     (None: an older tool's answer, without the field); `sheet_source` maps
     a PC's path to its `sheetSourceSet` (None: an older tool's answer,
-    without the field); `plan` is what `manifest publish-played
+    without the field); `unparseable` maps a path to the parser message
+    the tool reports for it (None: a tool older than 1.11.45, which gives
+    the `FILE_UNPARSEABLE` code alone); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -99,6 +101,13 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       if p not in {page["path"] for page in pages}]
             for page in pages:
                 page["sheetSourceSet"] = sheet_source.get(page["path"])
+        for path, message in (unparseable or {}).items():
+            page = {"path": path, "bodyWithheld": False, "publishes": False,
+                    "code": "FILE_UNPARSEABLE", "strippedSections": None,
+                    "sheetSourceSet": None}
+            if message is not None:
+                page["frontmatterError"] = message
+            pages.append(page)
         return subprocess.CompletedProcess(
             cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
 
@@ -788,6 +797,172 @@ STORY = "Characters/PCs/Fine_Story.md"
 UNPUBLISHED = "Characters/NPCs/Unpublished.md"
 STUB = "Characters/NPCs/Stub.md"
 HIDDEN = "Characters/PCs/Hidden.md"
+
+
+class FrontmatterUnparseableTests(unittest.TestCase):
+    """#287: the line reader passes frontmatter the site's build rejects,
+    and the note drops off the site."""
+
+    DUP = "---\ntype: pc\nsheet_source: paper\nsheet_source: PDF\n---\n"
+
+    def _vault(self, **stub):
+        vault = make_vault(self)
+        (vault / "PCs").mkdir()
+        (vault / "PCs" / "Dup.md").write_text(self.DUP, encoding="utf-8")
+        (vault / "Fine.md").write_text("---\ntype: npc\n---\n",
+                                       encoding="utf-8")
+        return vault, stub_publish_tool(self, vault, **stub)
+
+    def test_a_note_the_build_cannot_parse_is_an_error_with_the_message(self):
+        vault, calls = self._vault(unparseable={
+            "PCs/Dup.md": "duplicated mapping key (4:1)\n\n 3 | sheet_source"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(rows, [
+            "ERROR\tPCs/Dup.md\tthe site's build cannot parse this "
+            "frontmatter (duplicated mapping key (4:1)) and skips the note "
+            "— a key is written twice; keep one"])
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_an_older_tool_gives_the_code_without_a_message(self):
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": None})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("this frontmatter and skips the note", rows[0])
+
+    def test_folder_scope_leaves_out_files_outside_it(self):
+        vault, _calls = self._vault(unparseable={
+            "PCs/Dup.md": "bad", "Elsewhere/Other.md": "bad"})
+        (vault / "Elsewhere").mkdir()
+        (vault / "Elsewhere" / "Other.md").write_text(self.DUP,
+                                                      encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, "PCs"), "cannot parse")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("PCs/Dup.md", rows[0])
+
+    def test_a_folder_with_nothing_broken_in_it_gets_no_row_at_all(self):
+        # The post-write loops run `--folder` on a clean folder; a broken
+        # note elsewhere must not leave a stray "asked the plugin's tool".
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        (vault / "Clean").mkdir()
+        (vault / "Clean" / "Ok.md").write_text(
+            "---\ntype: npc\ncanon_status: DRAFT\n---\n", encoding="utf-8")
+        self.assertEqual(vc.check_frontmatter(vault, "Clean"), [])
+
+    def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
+        # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
+        # exclude_dirs, so the build's closing line names it.
+        vault, _calls = self._vault(unparseable={"_inbox/Raw.md": "bad"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual([r.split("\t")[1] for r in rows], ["_inbox/Raw.md"])
+        self.assertFalse(rows_for(vc.check_frontmatter(vault, "PCs"),
+                                  "cannot parse"))
+
+    def test_the_hint_follows_the_parsers_message(self):
+        for message, hint in (
+                ("unexpected end of the stream within a double quoted scalar "
+                 "at line 5, column 1", "a quote is not closed"),
+                ("incomplete explicit mapping pair; a key node is missed",
+                 "a colon or a quote mark in it"),
+                ("can not read a block mapping entry", "a quote mark in it"),
+                ("missed comma between flow collection entries",
+                 "is not closed, or is missing a comma"),
+                ("unknown escape sequence", "fix the YAML at the line named"),
+                (None, "a key written twice, or an unquoted value")):
+            with self.subTest(message=message):
+                vault, _calls = self._vault(unparseable={"PCs/Dup.md": message})
+                rows = rows_for(vc.check_frontmatter(vault, None),
+                                "cannot parse")
+                self.assertIn(hint, rows[0])
+
+    def test_a_note_the_build_cannot_parse_gets_no_schema_rows(self):
+        # The line reader's "missing canon_status" on YAML the build
+        # rejects is noise until the YAML parses.
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "PCs/Dup.md")
+        self.assertEqual(len(rows), 1, rows)
+        vault, _calls = self._vault()
+        self.assertTrue(rows_for(vc.check_frontmatter(vault, None),
+                                 "PCs/Dup.md"))
+
+    def test_a_pin_too_old_to_ask_says_so_in_one_info_row(self):
+        vault, _calls = self._vault(installed="1.11.39",
+                                    unparseable={"PCs/Dup.md": "bad"})
+        rows = vc.check_frontmatter(vault, None)
+        self.assertEqual(len(rows_for(rows, "could not be consulted")), 1, rows)
+        self.assertFalse(rows_for(rows, "cannot parse this"), rows)
+
+    def test_all_says_which_tool_answered_once(self):
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        (vault / "Handout.md").write_text(
+            "---\ntype: handout\n---\n\n## Context\n\nx\n", encoding="utf-8")
+        with mock.patch.object(sys, "argv", ["vault_check.py", str(vault), "all"]), \
+                mock.patch("builtins.print") as out:
+            vc.main()
+        asked = [c.args[0] for c in out.call_args_list
+                 if c.args and "\tasked " in str(c.args[0])]
+        self.assertEqual(len(asked), 1, asked)
+
+    def test_an_unscoped_run_asks_even_when_its_own_walk_finds_nothing(self):
+        # The build walks folders this script skips. A real publishing
+        # vault always has _meta/vault-config.md in the walk, so the walk
+        # is emptied by hand here.
+        vault, calls = self._vault(unparseable={"_inbox/Raw.md": "bad"})
+        with mock.patch.object(vc, "vault_files", return_value=iter([])):
+            rows = vc.check_frontmatter(vault, None)
+        self.assertEqual([r.split("\t")[1] for r in
+                          rows_for(rows, "cannot parse")], ["_inbox/Raw.md"])
+        with mock.patch.object(vc, "vault_files", return_value=iter([])):
+            self.assertEqual(vc.check_frontmatter(vault, "Empty"), [])
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_a_tab_in_the_parser_message_does_not_split_the_row(self):
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": "bad\there"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(len(rows[0].split("\t")), 3, rows)
+
+    def test_a_decomposed_filename_still_matches_the_tools_nfc_path(self):
+        # The tool reports NFC paths; the vault walk gives the name as
+        # written on disk.
+        vault, _calls = self._vault(unparseable={"Ren\u00e9e.md": "bad"})
+        (vault / "Rene\u0301e.md").write_text(self.DUP, encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(len(rows), 1, rows)
+
+    def test_a_tool_that_cannot_answer_says_what_went_unchecked(self):
+        vault, _calls = self._vault(which=None)
+        rows = vc.check_frontmatter(vault, None)
+        info = rows_for(rows, "could not be consulted")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("node is not on PATH", info[0])
+        self.assertIn("were not looked for", info[0])
+        self.assertFalse(rows_for(rows, "cannot parse this"), rows)
+
+    def test_a_vault_that_does_not_publish_is_not_asked_or_told(self):
+        vault = make_vault(self)
+        (vault / "Dup.md").write_text(self.DUP, encoding="utf-8")
+        with mock.patch.object(vc.subprocess, "run") as run:
+            rows = vc.check_frontmatter(vault, None)
+        run.assert_not_called()
+        self.assertFalse(rows_for(rows, "publish tool"), rows)
+        self.assertFalse(rows_for(rows, "cannot parse"), rows)
+
+    def test_an_answer_of_the_wrong_shape_is_reported_not_raised(self):
+        vault = make_vault(self)
+        (vault / "Dup.md").write_text(self.DUP, encoding="utf-8")
+        for payload in ('{"pages": [5]}', '{"nope": 1}', '[]'):
+            with self.subTest(payload=payload):
+                stub_publish_tool(self, vault, run=lambda cmd, **kw:
+                                  subprocess.CompletedProcess(cmd, 0, payload, ""))
+                rows = vc.check_frontmatter(vault, None)
+                self.assertTrue(rows_for(rows, "expected JSON"), rows)
+
+    def test_all_asks_the_tool_once_for_frontmatter_gm_leak_and_pc_body(self):
+        vault, calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        explain = vc.ExplainAll(vault)
+        vc.check_frontmatter(vault, None, explain)
+        vc.check_gm_leak(vault, None, explain=explain)
+        vc.check_pc_body(vault, explain=explain)
+        self.assertEqual(len(calls), 1, calls)
 
 
 class GmLeakCommandTests(unittest.TestCase):
@@ -3194,6 +3369,40 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_sessions(broken),
                                   "session index body"))
 
+
+    def test_notes_the_build_cannot_parse_come_from_the_tool(self):
+        # #287, against the real tool: a duplicated key and an unquoted
+        # colon both pass the line reader and both lose their page. Two
+        # notes with identical text must both be named.
+        vault = self.site_vault("", "session_number: 1\n")
+        dup = "---\ntype: session\nstatus: played\nstatus: prepped\n---\n"
+        for name, text in (("Dup.md", dup), ("Dup Twin.md", dup),
+                           ("Colon.md", "---\ntype: session\ntitle: a: b\n---\n")):
+            (vault / "Sessions" / name).write_text(text, encoding="utf-8")
+        rows = vc.check_frontmatter(vault, None)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        warned = rows_for(rows, "cannot parse this frontmatter")
+        self.assertEqual(sorted(r.split("\t")[1] for r in warned),
+                         ["Sessions/Colon.md", "Sessions/Dup Twin.md",
+                          "Sessions/Dup.md"], rows)
+        self.assertTrue(all(r.startswith("ERROR\t") for r in warned))
+        self.assertIn("duplicated mapping key",
+                      rows_for(warned, "Sessions/Dup.md")[0])
+        self.assertTrue(all("\n" not in r for r in warned))
+
+    def test_a_broken_vault_config_is_named_in_one_readable_line(self):
+        # The tool's error ended in js-yaml's caret line, and the row's
+        # reason was "exited 1: ^".
+        vault = self.site_vault("", "session_number: 1\n")
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "  mode: player\n", "  mode: player\n  mode: gm\n"),
+            encoding="utf-8")
+        info = rows_for(vc.check_frontmatter(vault, None),
+                        "could not be consulted")
+        self.assertEqual(len(info), 1, info)
+        self.assertIn("_meta/vault-config.md frontmatter is not valid YAML: "
+                      "duplicated mapping key", info[0])
 
     def test_a_handouts_keeper_sections_come_from_the_tool(self):
         # #280, against the real tool: it withholds the handout's Context

@@ -1,7 +1,7 @@
 const { normalizeDefaultMode } = require('./color-mode');
 const fs = require('fs');
 const path = require('path');
-const matter = require('gray-matter');
+const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
 
 const PUBLISH_DEFAULTS = {
@@ -286,7 +286,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
 
   if (fs.existsSync(configFile)) {
     const raw = fs.readFileSync(configFile, 'utf-8');
-    const { data } = matter(raw);
+    let data;
+    try {
+      ({ data } = parseNote(raw));
+    } catch (e) {
+      // One line, naming the file: js-yaml's message ends in a code excerpt, and a
+      // caller that reads the last line of stderr (vault_check) got only its caret.
+      throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
+    }
     if (data.publish) {
       publish = data.publish;
     }

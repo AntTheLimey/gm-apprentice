@@ -6,7 +6,7 @@ entity validation and campaign-qa checks into one deterministic pass;
 interpretation stays with the skill. Stdlib only.
 
 Usage:
-  vault_check.py VAULT frontmatter [--folder SUB]
+  vault_check.py VAULT frontmatter [--folder SUB]   (also: notes the site's build cannot parse)
   vault_check.py VAULT names [--threshold 0.85]
   vault_check.py VAULT index
   vault_check.py VAULT stale-drafts
@@ -133,7 +133,7 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 import unicodedata
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -222,9 +222,61 @@ def emit(label: str, rows: list[str]):
         print(r)
 
 
-def check_frontmatter(vault: Path, folder: str | None) -> list[str]:
+def _emit_tool_once() -> Callable[[str, list[str]], None]:
+    """`emit` for `all`: the "asked <which tool>" row prints under the
+    first check that used the tool, not again under each later one."""
+    seen: set[str] = set()
+
+    def emit_once(label: str, rows: list[str]) -> None:
+        kept = [r for r in rows
+                if not (r.startswith("INFO\t(vault)\tasked ") and r in seen)]
+        seen.update(r for r in kept if r.startswith("INFO\t(vault)\tasked "))
+        emit(label, kept)
+    return emit_once
+
+
+def check_frontmatter(vault: Path, folder: str | None,
+                      explain: ExplainAll | None = None) -> list[str]:
+    """Schema rules, read by vaultlib's line reader, then the one thing
+    that reader cannot see: a note the site's build cannot parse at all
+    (#287). The line reader takes the last of a duplicated key and accepts
+    an unquoted `key: a: b`; js-yaml rejects both and the build makes no
+    page. Which notes those are is the publish tool's answer (`explain
+    --all`), never a second YAML reading here. An ERROR, like the schema
+    rows: the post-write loops fix ERRORs, and a skill that has just
+    written such a note must not leave it."""
     rows = []
-    for rel, text in vault_files(vault, folder):
+    unparsed: set[str] = set()
+    notes = list(vault_files(vault, folder))
+    # Unscoped, ask even with nothing to walk here: the build walks
+    # folders this script skips, and names any broken note in them.
+    if notes or folder is None:
+        tool = (explain or ExplainAll(vault))()
+        broken, why = unparseable_files(tool)
+        if broken is None and why:
+            rows.append(_publish_tool_row(
+                why, "notes whose frontmatter the site's build cannot "
+                "parse were not looked for", tool.used))
+        on_disk = {unicodedata.normalize("NFC", rel): rel
+                   for rel, _text in notes}
+        # Unscoped, name every file the build names: it walks folders this
+        # script's own walk skips (`_inbox`).
+        named = sorted((key, message or "")
+                       for key, message in (broken or {}).items()
+                       if key in on_disk or folder is None)
+        if named:
+            rows.extend(_tool_used_row(tool.used))
+        for key, message in named:
+            detail = f" ({message})" if message else ""
+            rows.append(f"ERROR\t{on_disk.get(key, key)}\tthe site's build "
+                        f"cannot parse this frontmatter{detail} and skips "
+                        f"the note — {_yaml_hint(message)}")
+        unparsed = {on_disk[key] for key, _message in named if key in on_disk}
+    for rel, text in notes:
+        if rel in unparsed:
+            # Schema rows would come from the line reader's guess at YAML
+            # the build rejects; they mean nothing until it parses.
+            continue
         fm = extract_frontmatter(text)
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
@@ -1313,7 +1365,8 @@ class ToolAnswer:
 
 class ExplainAll:
     """One `explain --all` answer for a run, asked when first needed, so
-    the checks that read it (gm-leak, pc-body) share one tool run."""
+    the checks that read it (frontmatter, gm-leak, pc-body) share one
+    tool run."""
 
     def __init__(self, vault: Path) -> None:
         self.vault = vault
@@ -1442,6 +1495,53 @@ def sections_withheld(answer: ToolAnswer
                 {str(t).strip().casefold() for t in p["strippedSections"]}
                 for p in pages if p["strippedSections"]}, None
     except (KeyError, TypeError):
+        return None, "explain did not return the expected JSON"
+
+
+def _yaml_hint(message: str) -> str:
+    """What to look for, read off the parser's own message. With no
+    message (a tool older than 1.11.45) the two commonest causes; with
+    one this does not know, nothing it cannot back up."""
+    if not message:
+        return ("most often a key written twice, or an unquoted value with "
+                "a colon in it")
+    if "duplicated mapping key" in message:
+        return "a key is written twice; keep one"
+    if "quoted scalar" in message:
+        return ("a quote is not closed; the line named is where the block "
+                "ends, not where the quote opens")
+    if "flow collection" in message:
+        return "a [ ] or { } value is not closed, or is missing a comma"
+    if "mapping" in message:
+        return ("most often a value with a colon or a quote mark in it; "
+                "put the whole value in quotes")
+    return "fix the YAML at the line named"
+
+
+def unparseable_files(answer: ToolAnswer
+                      ) -> tuple[dict[str, str | None] | None, str | None]:
+    """(per file the site's build cannot parse, the parser's message; why
+    the tool could not say).
+
+    Read from `explain --all --json`: verdict code `FILE_UNPARSEABLE`, and
+    `frontmatterError` for the message (None from a tool older than
+    1.11.45, which reports the code alone, and misses the second of two
+    notes with the same broken text). A vault that publishes nothing
+    has no build to fail: (None, None).
+    """
+    if answer.data is None:
+        return None, answer.why
+    def headline(message: object) -> str | None:
+        # js-yaml follows its one-line reason with a code excerpt.
+        lines = str(message or "").strip().splitlines()
+        return (lines[0].replace("\t", " ").rstrip(": ") or None
+                ) if lines else None
+    try:
+        return {unicodedata.normalize("NFC", str(p["path"])):
+                headline(p.get("frontmatterError"))
+                for p in answer.data["pages"]
+                if p.get("code") == "FILE_UNPARSEABLE"}, None
+    except (KeyError, TypeError, AttributeError):
         return None, "explain did not return the expected JSON"
 
 
@@ -3980,44 +4080,46 @@ def main() -> int:
         emit("active-pcs", list_active_pcs(args.vault))
         return 0
 
-    if args.command in ("frontmatter", "all"):
-        emit("frontmatter", check_frontmatter(args.vault, args.folder))
-    if args.command in ("names", "all"):
-        emit("names", check_names(args.vault, args.threshold))
-    if args.command in ("index", "all"):
-        emit("index", check_index(args.vault))
-    if args.command in ("stale-drafts", "all"):
-        emit("stale-drafts", check_stale_drafts(args.vault))
-    if args.command in ("tables", "all"):
-        emit("tables", check_tables(args.vault, args.folder, args.file,
-                                    newer_than_mtime))
-    if args.command in ("timeline", "all"):
-        emit("timeline", check_timeline(args.vault))
-    if args.command in ("read-aloud", "all"):
-        emit("read-aloud", check_read_aloud(args.vault))
-    if args.command in ("relationships", "all"):
-        emit("relationships",
-             check_relationships(args.vault, args.folder, args.file,
-                                 newer_than_mtime))
-    if args.command in ("sessions", "all"):
-        emit("sessions", check_sessions(args.vault))
     explain = ExplainAll(args.vault)
+    emit_rows = _emit_tool_once() if args.command == "all" else emit
+    if args.command in ("frontmatter", "all"):
+        emit_rows("frontmatter", check_frontmatter(args.vault, args.folder,
+                                                   explain))
+    if args.command in ("names", "all"):
+        emit_rows("names", check_names(args.vault, args.threshold))
+    if args.command in ("index", "all"):
+        emit_rows("index", check_index(args.vault))
+    if args.command in ("stale-drafts", "all"):
+        emit_rows("stale-drafts", check_stale_drafts(args.vault))
+    if args.command in ("tables", "all"):
+        emit_rows("tables", check_tables(args.vault, args.folder, args.file,
+                                         newer_than_mtime))
+    if args.command in ("timeline", "all"):
+        emit_rows("timeline", check_timeline(args.vault))
+    if args.command in ("read-aloud", "all"):
+        emit_rows("read-aloud", check_read_aloud(args.vault))
+    if args.command in ("relationships", "all"):
+        emit_rows("relationships",
+                  check_relationships(args.vault, args.folder, args.file,
+                                      newer_than_mtime))
+    if args.command in ("sessions", "all"):
+        emit_rows("sessions", check_sessions(args.vault))
     if args.command in ("gm-leak", "all"):
         # `all` is a report, so it never writes — same reasoning as
         # `wrapup` below.
-        emit("gm-leak", check_gm_leak(args.vault, args.folder,
-                                      args.fix and args.command == "gm-leak",
-                                      args.renest_excludes, explain))
+        emit_rows("gm-leak", check_gm_leak(args.vault, args.folder,
+                                           args.fix and args.command == "gm-leak",
+                                           args.renest_excludes, explain))
     if args.command in ("pc-body", "all"):
-        emit("pc-body", check_pc_body(args.vault, args.folder, args.file,
-                                      newer_than_mtime, explain))
+        emit_rows("pc-body", check_pc_body(args.vault, args.folder, args.file,
+                                           newer_than_mtime, explain))
     if args.command in ("wrapup", "all"):
         # `all` is a report, so it never writes: a full audit that
         # silently rewrote wrap-ups would be the last thing a GM expects
         # from a command whose other twelve checks are read-only.
         wrap_file = args.file[0] if args.file else None
-        emit("wrapup", check_wrapup(args.vault, wrap_file,
-                                    args.fix and args.command == "wrapup"))
+        emit_rows("wrapup", check_wrapup(args.vault, wrap_file,
+                                         args.fix and args.command == "wrapup"))
     return 0
 
 

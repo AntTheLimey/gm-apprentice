@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const matter = require('gray-matter');
+const { parseNote } = require('./frontmatter');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
 
@@ -99,7 +99,7 @@ function scanVaultReport(config) {
         const raw = fs.readFileSync(fullPath, 'utf-8');
         let frontmatter, content;
         try {
-          ({ data: frontmatter, content } = matter(raw));
+          ({ data: frontmatter, content } = parseNote(raw));
         } catch (e) {
           malformed.push({ rel: relPath, fullPath, message: e.message });
           continue;
@@ -163,7 +163,13 @@ function scanVaultReport(config) {
 // The build's entry point: the pages, with the three "could not publish this"
 // classes reported to the console rather than returned.
 function scanVault(config) {
-  const { pages, untyped, unmapped, malformed } = scanVaultReport(config);
+  return warnScanReport(scanVaultReport(config));
+}
+
+// Prints what the walk could not publish and hands back the pages. The build keeps
+// the report too, to repeat the unparseable files where the GM reads (#287).
+function warnScanReport(report) {
+  const { pages, untyped, unmapped, malformed } = report;
   for (const { fullPath, message } of malformed) {
     console.warn(`scanner: skipping ${fullPath} — malformed frontmatter: ${message}`);
   }
@@ -319,7 +325,7 @@ function pairStoryFiles(pages, vaultPath) {
     if (fs.existsSync(storyPath)) {
       let data, content;
       try {
-        ({ data, content } = matter(fs.readFileSync(storyPath, 'utf-8')));
+        ({ data, content } = parseNote(fs.readFileSync(storyPath, 'utf-8')));
       } catch (e) {
         console.warn(`scanner: skipping story file ${storyPath} — malformed frontmatter: ${e.message}`);
         continue;
@@ -358,7 +364,7 @@ function scanAllNotes(vaultPath) {
         // Only a note that declares aliases needs its frontmatter parsed — or a session
         // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
-        if (/^(gm_)?aliases:/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = matter(text).data || {};
+        if (/^(gm_)?aliases:/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
@@ -376,4 +382,4 @@ function scanAllNotes(vaultPath) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

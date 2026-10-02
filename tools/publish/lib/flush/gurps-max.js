@@ -4,14 +4,14 @@
 // pipeline (frontmatter split -> section extraction -> parseGurps -> buildVitals).
 // Returns { maxHp, maxFp } with nulls when the sheet is too incomplete to resolve
 // (e.g. no Attributes) — the caller then does update-in-place only. Never throws.
-const matter = require('gray-matter');
+const { parseNote } = require('../frontmatter');
 const { extractSections } = require('../processor');
 const { parseGurps } = require('../templates/gurps/parse');
 const { buildVitals } = require('../templates/gurps/live-data');
 
 function deriveGurpsMax(raw, frontmatter) {
   try {
-    const content = matter(String(raw)).content;
+    const content = parseNote(String(raw)).content;
     const model = parseGurps(frontmatter || {}, extractSections(content));
     const v = buildVitals(model);
     if (!v) return { maxHp: null, maxFp: null };

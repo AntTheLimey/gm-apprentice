@@ -18,6 +18,7 @@ const { canonicalPath } = require('./manifest');
 const { strippedSectionTitles, publishMode } = require('./processor');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
+const { parseNote } = require('./frontmatter');
 const { nearestNames } = require('./site-doctor');
 
 const MANIFEST_LABEL = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
@@ -102,10 +103,7 @@ async function runExplain(options, deps) {
 
   const frontmatter = (page && page.frontmatter) || null;
   // The scanner already knows which files it could not parse (report.malformed) —
-  // reuse that rather than re-parsing here. gray-matter caches a parse by exact
-  // string content, so a second attempt at the very content scanVaultReport just
-  // threw on comes back a silent, cached "success" with empty data instead of
-  // throwing again, which would have made this file read as clean.
+  // reuse that rather than parse the file a second time here.
   const parseFailure = report.malformed.find((m) => canonicalPath(m.rel) === target);
   // Kept, not swallowed: a file whose frontmatter gray-matter cannot parse at all
   // has no sections and no gm-only markers to count, and silently reporting "none"/
@@ -116,9 +114,8 @@ async function runExplain(options, deps) {
       : (() => {
         // A file under excludeDirs never reaches the scanner's walk at all, so
         // report.malformed has nothing to say about it — this is the only parse
-        // attempt it gets, and (being the first) it throws reliably rather than
-        // hitting the cache above.
-        try { return require('gray-matter')(readFile(path.join(vaultPath, target))).content; }
+        // attempt it gets.
+        try { return parseNote(readFile(path.join(vaultPath, target))).content; }
         catch (e) { frontmatterError = e.message; return ''; }
       })();
 
@@ -220,12 +217,15 @@ function publishedPagesOf(survey) {
 //   bodyPublishes  publishes && !bodyWithheld
 //   sheetSourceSet a PC whose `sheet_source` says where its sheet is kept (#273);
 //                  null for any other file
+//   frontmatterError the parser's message for a file whose frontmatter could not be
+//                  parsed (code FILE_UNPARSEABLE, no page is built); null otherwise (#287)
 async function runExplainAll(options, deps) {
   const opts = options || {};
   const d = deps || {};
   const out = d.out || console.log;
   const survey = surveyVault(opts, d);
   const pairs = pairsWith(survey, publishedPagesOf(survey));
+  const parseErrors = new Map(survey.report.malformed.map((m) => [canonicalPath(m.rel), m.message]));
   const pages = survey.files.map((rel) => {
     const page = survey.pagesByRel.get(rel);
     const verdict = survey.verdicts.get(rel);
@@ -248,6 +248,8 @@ async function runExplainAll(options, deps) {
       sheetSourceSet: page && page.frontmatter && page.frontmatter.type === 'pc'
         ? Boolean(sheetSourceOf(page.frontmatter))
         : null,
+      // vault_check frontmatter reports these: its own reader accepts YAML this one rejects.
+      frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,
     };
   });
   out(JSON.stringify({ vaultPath: survey.vaultPath, pages }, null, 2));

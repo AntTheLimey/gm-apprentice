@@ -131,6 +131,10 @@ One of:
 - The entity's vault folder name is listed in `excludeDirs`
 - The entity's markdown file does not have a `type` frontmatter
   field
+- The file's frontmatter is not valid YAML, most often a key written
+  twice or an unquoted value with a colon in it (`role: a: b`). The
+  build skips the file, names it in a closing `WARNING: the build
+  skipped …` line, and still exits 0
 
 ### Diagnosis steps
 
@@ -138,9 +142,11 @@ For one entity, run `node "$TOOL" explain "<vault-relative path>"` — it
 prints the folder's `folderMap` mapping (or lack of one), the file's
 `type:` status, and the build's verdict in one shot. Vault-wide, `node
 "$TOOL" doctor --site --config <dir>/vault.config.json` reports the same
-two causes: `FOLDER_UNMAPPED` (a folder with typed pages inside that will
-not publish) and `FILE_UNTYPED` (no `type:` in frontmatter, so the file
-never publishes).
+causes: `FOLDER_UNMAPPED` (a folder with typed pages inside that will
+not publish), `FILE_UNTYPED` (no `type:` in frontmatter, so the file
+never publishes) and `FILE_UNPARSEABLE` (frontmatter the build cannot
+parse, with the parser's message). `vault_check.py <vault> frontmatter`
+lists the unparseable files too.
 
 ### Fix
 
@@ -161,6 +167,13 @@ different folder.
 **Missing type field:**
 Add `type: npc` (or the appropriate type) to the entity's
 frontmatter. See `schema-reference.md` for the list of known types.
+
+**Frontmatter that cannot be parsed:**
+Fix the YAML near the line the message names; for an unclosed quote
+the parser names the end of the block, not the line with the quote.
+Quote a value that holds a colon (`role: "a: b"`). For a key written
+twice, keep one; if the two values differ, ask the GM which is right.
+Then rebuild.
 
 ---
 

@@ -205,16 +205,11 @@ describe('explain', () => {
   // as "no `type:`" (NO_TYPE) — wrong, since there is no frontmatter to have read a
   // type from — and explain's own re-read for "sections stripped"/"gm-only blocks"
   // silently swallowed the same error, reporting "none"/"0" as if the file were clean.
-  // gray-matter caches a parse by exact string content for the life of the process,
-  // so re-scanning byte-identical malformed frontmatter a second time (the JSON
-  // check below, against the human-report check above) would see a cached, stale
-  // "success" instead of the real throw. Each check below therefore gets its own
-  // vault with its own marker so the content differs.
-  const malformedFrontmatter = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
+  const MALFORMED = `---\ntype: npc\nname: "Unterminated\n---\n\nBody.\n`;
 
-  function siteForMalformed(marker) {
+  function siteForMalformed() {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-'));
-    write(vault, 'Characters/NPCs/Bram.md', malformedFrontmatter(marker));
+    write(vault, 'Characters/NPCs/Bram.md', MALFORMED);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-site-'));
     const configPath = path.join(dir, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({
@@ -228,7 +223,7 @@ describe('explain', () => {
   }
 
   it('says the frontmatter could not be parsed, not NO_TYPE, for an unparseable file', async () => {
-    const { vault, dir, configPath } = siteForMalformed('human-check');
+    const { vault, dir, configPath } = siteForMalformed();
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Characters/NPCs/Bram.md' }, c.deps);
     assert.strictEqual(rc, 0);
@@ -243,7 +238,7 @@ describe('explain', () => {
   });
 
   it('--json carries the same FILE_UNPARSEABLE verdict and null stripped/gm-only fields', async () => {
-    const { vault, dir, configPath } = siteForMalformed('json-check');
+    const { vault, dir, configPath } = siteForMalformed();
     const j = capture();
     await runExplain({ configPath, target: 'Characters/NPCs/Bram.md', json: true }, j.deps);
     const payload = JSON.parse(j.out.join(''));
@@ -365,10 +360,28 @@ describe('explain --all (#276)', () => {
       code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
       strippedSections: ['GM Notes', 'Reconciliation Context'],
       sheetSourceSet: null,
+      frontmatterError: null,
     });
     assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
     assert.strictEqual(pages.get('Sessions/Session_08.md').publishes, false);
     assert.strictEqual(pages.get('Sessions/Session_08.md').code, 'AUTO_EXCLUDED_STATUS');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('carries the parser message for a file whose frontmatter cannot be parsed (#287)', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Dup.md', '---\ntype: pc\nsheet_source: paper\nsheet_source: PDF\n---\n\nA sailor.\n');
+    write(vault, 'Sessions/Colon.md', '---\ntype: npc\nrole: a: b\n---\n\nA clerk.\n');
+    const { rc, json } = await all(siteFor(vault));
+    assert.strictEqual(rc, 0);
+    const pages = byPath(json);
+    const dup = pages.get('Sessions/Dup.md');
+    assert.strictEqual(dup.code, 'FILE_UNPARSEABLE');
+    assert.strictEqual(dup.publishes, false);
+    assert.match(dup.frontmatterError, /duplicated mapping key/);
+    assert.strictEqual(pages.get('Sessions/Colon.md').code, 'FILE_UNPARSEABLE');
+    assert.ok(pages.get('Sessions/Colon.md').frontmatterError);
+    assert.strictEqual(pages.get('Sessions/Session_07.md').frontmatterError, null);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
