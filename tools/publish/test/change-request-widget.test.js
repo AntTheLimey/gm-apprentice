@@ -46,3 +46,38 @@ test('widget script ships the chat-log and hint UI hooks', () => {
   assert.ok(src.includes('cr-text'), 'has the resizable message box');
   assert.ok(src.includes("'cr:log'"), 'uses the cr:log storage key');
 });
+
+// With sheets off (#cr-root data-sheets="off") the widget is a question channel:
+// no sheet or change wording anywhere a player can read, same payload as ever.
+const cr = require('../js/change-request.js');
+const readSrc = () => fs.readFileSync(require('path').join(__dirname, '../js/change-request.js'), 'utf8');
+
+test('default widget copy is unchanged without data-sheets', () => {
+  const html = cr.widgetHtml(cr.copyFor(false));
+  assert.ok(html.includes('✎ Request a change / ask a question'));
+  assert.ok(html.includes('Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?").'));
+  assert.ok(html.includes('placeholder="Type your change or question…"'));
+  assert.ok(html.includes('💬 History'));
+  const c = cr.copyFor(false);
+  assert.strictEqual(c.empty, 'Type your request first.');
+  assert.strictEqual(c.received, 'Request received.');
+  assert.strictEqual(c.live, '✓ your change is live');
+});
+
+test('sheets-off widget asks a question and mentions no sheet or change', () => {
+  const html = cr.widgetHtml(cr.copyFor(true));
+  assert.ok(html.includes('>Ask the GM</button>'), 'toggle button');
+  assert.ok(html.includes('placeholder="Your question for the GM"'), 'placeholder');
+  assert.ok(!/sheet|change|\bxp\b|raise/i.test(html), 'no sheet-edit wording in markup');
+  for (const [k, v] of Object.entries(cr.copyFor(true))) {
+    assert.ok(!/sheet|change/i.test(v), `copy.${k} has no sheet wording`);
+  }
+  assert.ok(!/sheet|change/i.test(cr.GONE_TEXT), 'expiry message has no sheet wording');
+  assert.ok(html.includes('class="cr-send"') && html.includes('class="cr-text"'), 'same form controls');
+});
+
+test('widget reads data-sheets once and posts the same payload shape', () => {
+  const src = readSrc();
+  assert.ok(src.includes("root.dataset.sheets === 'off'"));
+  assert.ok(src.includes('JSON.stringify({ code: code, character: character, text: text })'));
+});

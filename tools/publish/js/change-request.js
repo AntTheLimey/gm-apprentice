@@ -79,6 +79,42 @@
     return 'bad';
   }
 
+  // User-visible copy. With sheets off (#cr-root data-sheets="off") the widget is
+  // only a question channel, so nothing may mention a sheet or a change.
+  var COPY_DEFAULT = {
+    toggle: '✎ Request a change / ask a question',
+    hint: 'Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?"). Can\'t afford something but the GM okayed it? Add "GM said OK" and it\'ll go through anyway.',
+    placeholder: 'Type your change or question…',
+    empty: 'Type your request first.',
+    received: 'Request received.',
+    live: '✓ your change is live',
+  };
+  var COPY_QUESTION = {
+    toggle: 'Ask the GM',
+    hint: 'Ask the GM a question and the reply will show up here and in your History.',
+    placeholder: 'Your question for the GM',
+    empty: 'Type your question first.',
+    received: 'Question received.',
+    live: '✓ the GM has replied',
+  };
+  function copyFor(sheetsOff) { return sheetsOff ? COPY_QUESTION : COPY_DEFAULT; }
+
+  function widgetHtml(copy) {
+    return '<div class="cr-bar">' +
+        '<div class="cr-barhead">' +
+          '<button type="button" class="cr-toggle" aria-expanded="false">' + copy.toggle + '</button>' +
+          '<button type="button" class="cr-log-btn" aria-expanded="false" aria-label="Open chat history">💬 History</button>' +
+        '</div>' +
+        '<div class="cr-panel" hidden>' +
+          '<p class="cr-hint">' + copy.hint + '</p>' +
+          '<input type="text" class="cr-code" maxlength="4" placeholder="4-char code" aria-label="Session code" hidden>' +
+          '<textarea class="cr-text" rows="5" aria-label="Your message" placeholder="' + copy.placeholder + '"></textarea>' +
+          '<button type="button" class="cr-send">Send</button>' +
+          '<span class="cr-msg" role="status"></span>' +
+        '</div>' +
+      '</div>';
+  }
+
   // ---- exports for node tests (no-op in browser) ----
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -95,6 +131,8 @@
       unreadCount: unreadCount,
       markAllRead: markAllRead,
       classifySubmitError: classifySubmitError,
+      copyFor: copyFor,
+      widgetHtml: widgetHtml,
     };
   }
 
@@ -112,20 +150,9 @@
     if (!root) return;
     var character = root.getAttribute('data-character') || '';
 
-    root.innerHTML =
-      '<div class="cr-bar">' +
-        '<div class="cr-barhead">' +
-          '<button type="button" class="cr-toggle" aria-expanded="false">✎ Request a change / ask a question</button>' +
-          '<button type="button" class="cr-log-btn" aria-expanded="false" aria-label="Open chat history">💬 History</button>' +
-        '</div>' +
-        '<div class="cr-panel" hidden>' +
-          '<p class="cr-hint">Type a change ("spend 1 xp to raise Streetwise") or a question ("is it worth raising DX?"). Can\'t afford something but the GM okayed it? Add "GM said OK" and it\'ll go through anyway.</p>' +
-          '<input type="text" class="cr-code" maxlength="4" placeholder="4-char code" aria-label="Session code" hidden>' +
-          '<textarea class="cr-text" rows="5" aria-label="Your message" placeholder="Type your change or question…"></textarea>' +
-          '<button type="button" class="cr-send">Send</button>' +
-          '<span class="cr-msg" role="status"></span>' +
-        '</div>' +
-      '</div>';
+    var copy = copyFor(root.dataset.sheets === 'off');
+
+    root.innerHTML = widgetHtml(copy);
 
     var toggle = root.querySelector('.cr-toggle');
     var panel = root.querySelector('.cr-panel');
@@ -222,7 +249,7 @@
     // Persisted "your change is live" flag from before a reload.
     if (localStorage.getItem(K_LIVE) === '1') {
       localStorage.removeItem(K_LIVE);
-      msg.textContent = '✓ your change is live';
+      msg.textContent = copy.live;
       panel.hidden = false;
       toggle.setAttribute('aria-expanded', 'true');
       codeInput.hidden = !shouldPromptForCode(readJSON(K_CODE), Date.now());
@@ -244,7 +271,7 @@
 
     send.addEventListener('click', function () {
       var text = (textInput.value || '').trim();
-      if (!text) { msg.textContent = 'Type your request first.'; return; }
+      if (!text) { msg.textContent = copy.empty; return; }
       var stored = readJSON(K_CODE);
       var code = codeInput.hidden ? (stored && stored.code) : (codeInput.value || '').trim();
       msg.textContent = 'Sending…';
@@ -260,7 +287,7 @@
           setLog(appendLog(getLog(), { id: out.id, ts: Date.now(), message: text }));
           renderLog();
           textInput.value = '';
-          msg.textContent = 'Request received.';
+          msg.textContent = copy.received;
           startPolling();
         });
         var kind = classifySubmitError(res.status);
