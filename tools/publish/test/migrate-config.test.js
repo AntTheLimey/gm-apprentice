@@ -288,7 +288,6 @@ describe('migrate-config', () => {
       const real = { warn: console.warn, log: console.log };
       console.warn = (...a) => lines.push(a.join(' '));
       console.log = (...a) => lines.push(a.join(' '));
-      delete require.cache[require.resolve(configPath)]; // build() loads the config with require()
       try { build({ configPath }); } finally { Object.assign(console, real); }
       return lines;
     };
@@ -324,6 +323,40 @@ describe('migrate-config', () => {
     const html = Object.keys(a).filter((f) => f.endsWith('.html'));
     assert.ok(html.length > 3);
     for (const f of html) assert.ok(read(a[f]) === read(b[f]), `${f} differs`);
+  });
+
+  it('16a: a second build in the same process reads the config file again', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-reread-'));
+    roots.push(root);
+    const vault = path.join(root, 'vault');
+    fs.cpSync(FIXTURE, vault, { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\ntype: meta\npublish:\n  mode: player\n---\n');
+    const configPath = path.join(root, 'vault.config.json');
+    const write = (extra) => fs.writeFileSync(configPath, JSON.stringify({ vaultPath: './vault', outputDir: './docs', ...extra }));
+    const run = () => {
+      const lines = [];
+      const real = { warn: console.warn, log: console.log };
+      console.warn = (...a) => lines.push(a.join(' '));
+      console.log = (...a) => lines.push(a.join(' '));
+      try { build({ configPath }); } finally { Object.assign(console, real); }
+      return lines;
+    };
+    write({ siteTitle: 'First Title', footer: 'Foot', system: 'gurps-4e' });
+    const first = run();
+    assert.ok(first.some((l) => l.includes('still holds campaign settings')), first.join('\n'));
+    assert.ok(read(path.join(root, 'docs', 'index.html')).includes('First Title'));
+    write({});
+    const second = run();
+    assert.ok(!second.some((l) => l.includes('still holds campaign settings')), second.join('\n'));
+    assert.ok(!read(path.join(root, 'docs', 'index.html')).includes('First Title'));
+  });
+
+  it('16c: an invalid vault.config.json fails with one line naming the file', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-badjson-'));
+    roots.push(root);
+    const configPath = path.join(root, 'vault.config.json');
+    fs.writeFileSync(configPath, '{ nope');
+    assert.throws(() => build({ configPath }), (e) => e.message.startsWith(`${configPath} could not be read as JSON:`) && !e.message.includes('\n'));
   });
 
   it('16b: a site-only exclude_sections entry hides the section before and after, byte-identical', () => {

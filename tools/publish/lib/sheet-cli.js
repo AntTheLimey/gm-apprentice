@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { scanVault, scanAllNotes, slugify } = require('./scanner');
-const { resolveConfig, vaultRelPath } = require('./config');
+const { resolveConfig, vaultRelPath, loadVaultConfig } = require('./config');
 const { pcKeepList } = require('./pc-prose');
 const {
   playerSafeMarkdown,
@@ -107,7 +107,7 @@ async function runSheetShow(deps) {
   // same exclude lists back this view as back the site.
   const configPath = path.resolve(deps.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const rawConfig = deps.config || require(configPath);
+  const rawConfig = loadVaultConfig(configPath, deps);
   const vaultPath = deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = deps.publishConfig
     ? { config: rawConfig, publishConfig: deps.publishConfig }

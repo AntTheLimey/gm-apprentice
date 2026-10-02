@@ -12,7 +12,7 @@ const { latestStateByPcSlug } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
-const { resolveConfig } = require('./config');
+const { resolveConfig, loadVaultConfig } = require('./config');
 const { detectStatusBar } = require('./backend-flags');
 
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
@@ -61,7 +61,7 @@ async function runFlush(deps) {
   // Resolve config exactly as build.js does (so campaignId/pcSlug match).
   const configPath = path.resolve(deps.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const rawConfig = deps.config || require(configPath);
+  const rawConfig = loadVaultConfig(configPath, deps);
   const vaultPath = deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = deps.publishConfig
     ? { config: rawConfig, publishConfig: deps.publishConfig }

@@ -262,9 +262,9 @@ function presetFamiliesFor(theme) {
 // Prefetch for a vault.config.json path, then the caller builds. Mirrors what build()
 // will resolve (same config, same preset families) so the cache is warm.
 async function prefetchForConfig(configPath, opts = {}) {
-  const { resolveConfig } = require('./config');
+  const { resolveConfig, loadVaultConfig } = require('./config');
   const resolved = path.resolve(configPath || './vault.config.json');
-  const config = require(resolved);
+  const config = loadVaultConfig(resolved);
   const vaultPath = path.resolve(path.dirname(resolved), config.vaultPath);
   // The build resolves the same config next and reports its warnings; say nothing twice.
   const { publishConfig } = resolveConfig(config, vaultPath, () => {});
