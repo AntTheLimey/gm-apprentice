@@ -25,6 +25,7 @@ const { hasRealKvId } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
+const { pcIdentity } = require('./templates/pc-identity');
 
 const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
@@ -83,6 +84,7 @@ function build(options = {}) {
   const excludeSections = publishConfig.exclude_sections;
   // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
   const pcKeepSections = pcKeepList(publishConfig);
+  const sheetsOff = !!pcKeepSections;
   const excludeCallouts = publishConfig.exclude_callouts;
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
@@ -823,7 +825,8 @@ function build(options = {}) {
           }
 
           const system = publishConfig.system;
-          const systemRenderer = getRenderer(system);
+          // With sheets off the renderer is never called: no sheet, tab, panel, island or party entry exists to leak.
+          const systemRenderer = sheetsOff ? null : getRenderer(system);
           const meta = {
             system,
             campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
@@ -846,11 +849,20 @@ function build(options = {}) {
           // sections only, so it is not expected to carry a sheet.
           const sourceFm = page.sourceFrontmatter || page.frontmatter;
           const sheetSource = sheetSourceOf(sourceFm);
+          // The identity strip reads the note with GM content stripped but before the keep-list,
+          // for this and nothing else. A note whose headings shift has no readable body.
+          let identity = [];
+          if (sheetsOff) {
+            const identityText = page.headingsUnstable ? '' : resolveWikiLinks(
+              playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm }).text,
+              linkMap, page.outputPath);
+            identity = pcIdentity(system, page.frontmatter, extractSections(identityText));
+          }
           const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
           const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
           if (sheetless && sheetExpected) sheetlessPcs.push(page.displayTitle || page.title);
           // A frontmatter stat is not read; with sheets off no sheet is built, so nothing is lost.
-          if (!(publishConfig.switches && publishConfig.switches.characterSheets === false)) {
+          if (!sheetsOff) {
             const retired = retiredSheetFieldsFor(sourceFm, system);
             if (retired.length) retiredFieldPcs.push({ rel: vaultRelPathOf(page), names: retired });
           }
@@ -882,6 +894,7 @@ function build(options = {}) {
             systemStatusPanelHtml: systemOut.statusPanelHtml || null,
             systemRecordHtml: systemOut.recordHtml || null,
             systemStatusBarHtml: systemOut.statusBarHtml || null,
+            identity,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
@@ -984,7 +997,7 @@ function build(options = {}) {
     // published values. When the status-bar tier is on it also goes live
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
-    const board = boardFor(publishConfig.system);
+    const board = sheetsOff ? null : boardFor(publishConfig.system);
     const live = publishConfig.live.stats;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
