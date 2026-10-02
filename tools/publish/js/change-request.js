@@ -1,6 +1,8 @@
 /* Change-request widget. Prepended to PC sheet pages via #cr-root. Submits
    natural-language sheet-edit requests to the Pages Function (Part 1), remembers
    the session code for 72h, and auto-refreshes when the player's change goes live.
+   When #cr-root carries data-sheets="off" there is no sheet to change: the same
+   widget is only a question channel (question copy, no page refresh on a reply).
    Pure helpers are exported for node tests; the DOM bootstrap only runs in a browser. */
 (function () {
   var CODE_TTL_MS = 72 * 3600 * 1000;
@@ -150,7 +152,8 @@
     if (!root) return;
     var character = root.getAttribute('data-character') || '';
 
-    var copy = copyFor(root.dataset.sheets === 'off');
+    var sheetsOff = root.dataset.sheets === 'off';
+    var copy = copyFor(sheetsOff);
 
     root.innerHTML = widgetHtml(copy);
 
@@ -332,7 +335,8 @@
         setLog(log);
         setPending(ids.filter(function (id) { return !removeIds[id]; }));
         renderLog();
-        if (needsReload(done)) {
+        // With sheets off there is no sheet to refresh: an `applied` reply is shown like any other.
+        if (needsReload(done) && !sheetsOff) {
           localStorage.setItem(K_LIVE, '1');
           // Cache-bust: a plain reload() can be served from bfcache on mobile,
           // showing the "live" banner over stale content. A unique URL forces
