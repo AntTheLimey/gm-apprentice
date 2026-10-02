@@ -1538,11 +1538,23 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     except PublishToolUnavailable as e:
         # No node, a node too old to run the tool, or a vault file the tool
         # will not parse. The file is then looked at here, and only for one
-        # thing: "no site" is said only when the file does not so much as
-        # mention site_dir. Anything else is a site until the tool says not.
-        refused = str(e).startswith("the publish tool refused")
-        return None, str(e), (f"fix {VAULT_CONFIG}" if refused
-                              else node_fix), _may_have_site(vault)
+        # thing: "no site" is said only when the file could not name one
+        # (`_site_hint`). Anything else is a site until the tool says not.
+        why = str(e)
+        if why.startswith("the publish tool refused"):
+            fix = f"fix {VAULT_CONFIG}"
+        elif why.endswith("is not understood"):
+            # The plugin's own tool answered in a shape this script does not
+            # know: the two are from different releases.
+            fix = "update the gm-apprentice plugin"
+        else:
+            fix = node_fix
+        hint = _site_hint(vault)
+        if hint is not None:
+            fix += f"; {VAULT_CONFIG} {hint}"
+            if hint != UNREADABLE:
+                fix += ": if this vault has no site, take that out"
+        return None, why, fix, hint is not None
     if site is None:
         return PUBLISH_TOOL, None, node_fix, False
     if publishes and (publish_block_inline(vault) or read_publish_list(
@@ -1584,19 +1596,57 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     return PUBLISH_TOOL, None, node_fix, True
 
 
-def _may_have_site(vault: Path) -> bool:
-    """Whether the vault file could name a site: it mentions `site_dir`
-    anywhere, or cannot be read. For the one time the publish tool's own
-    reading (`vault_site`) is not to be had. It errs toward "yes": a vault
-    wrongly taken to have a site is told to get the tool working, one
-    wrongly taken to have none could be written to on a guess."""
+UNREADABLE = "cannot be read"
+NOT_PLAIN = "which cannot be told from a site setting without the publish tool"
+# What frontmatter that is only plain `key: value` lines, lists and block
+# text is written with. Left out is everything YAML can build a key with
+# other than its letters: a backslash (an escape), `!` (a tag), `?` (a key
+# on its own line), `&` and `*` (a name for a value, and its use), braces
+# and `<` (a merged block). Checked against the tool's parser by hand and
+# by fuzzing; widen it only with the same check.
+_NOT_PLAIN_CHAR = re.compile(
+    r"""[^\w \t\r\n\-:./"',\[\]#()@%$+=;~|>\u0080-\u0084\u0086-‧"""
+    r"""‪-\U0010ffff]""")
+
+
+def _site_hint(vault: Path) -> str | None:
+    """What in the vault file could name a site, or None when nothing
+    could. For the one time the publish tool's own reading (`vault_site`)
+    is not to be had.
+
+    This is not a reading of the file, and "no site" is the only answer it
+    has to get right. It says so only for a file that mentions `site_dir`
+    nowhere, comment and prose included, and that has no frontmatter or
+    frontmatter in plain characters. Everything else is a site until the
+    tool says not: an opening line that is not a bare `---` (it can name
+    another language to read the block as), or a character YAML could
+    build a key with. A vault wrongly taken to have a site is told to get
+    the tool working, one wrongly taken to have none could be written to
+    on a guess."""
     try:
         text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
     except FileNotFoundError:
-        return False
+        return None
     except (OSError, UnicodeDecodeError):
-        return True
-    return "site_dir" in text
+        return UNREADABLE
+    if "site_dir" in text:
+        return "mentions site_dir"
+    if not text.startswith("---"):
+        return None
+    first, _, rest = text.partition("\n")
+    if first.rstrip() != "---":
+        return f"opens with {first.rstrip()!r}, not ---, {NOT_PLAIN}"
+    # Up to the first line that is a bare `---`: never less than the block
+    # the tool reads, which ends at the first line that starts with one.
+    block: list[str] = []
+    for line in rest.split("\n"):
+        if line.rstrip() == "---":
+            break
+        block.append(line)
+    odd = _NOT_PLAIN_CHAR.search("\n".join(block))
+    if odd:
+        return f"has {odd.group()!r} in its frontmatter, {NOT_PLAIN}"
+    return None
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -1647,9 +1697,12 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
         return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
                      f"tool what publishes ({why}) — nothing checked, "
                      f"nothing written; {fix}"]
+    # A vault file the tool refused is still to be fixed; a missing node is
+    # nothing a GM with no site has to act on.
+    todo = f"; {fix}" if fix == f"fix {VAULT_CONFIG}" else ""
     return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
                  f"hide on a site ({why}). This vault has no site "
-                 f"(publish.site_dir is not set), so nothing publishes"]
+                 f"(publish.site_dir is not set), so nothing publishes{todo}"]
 
 
 def _tool_gone_row(check: str, e: Exception) -> str:

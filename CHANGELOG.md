@@ -94,8 +94,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     still checked for what a `<!-- gm-only -->` block or an HTML
     comment hides; what an excluded section hides is the tool's to
     say, so a recap written under an excluded heading can be moved out
-    from under it. When the tool cannot be asked and the vault file
-    mentions `site_dir` at all, the vault is treated as having a site.
+    from under it. When the tool cannot be asked, "no site" is said
+    only for a vault file with no frontmatter, or one whose frontmatter
+    is plain `key: value` lines and lists that never mention
+    `site_dir`. Any mention of `site_dir`, an opening line that is not
+    a bare `---`, a character YAML can build a key with (a backslash,
+    `!`, `?`, `&`, `*`, `<`, braces) or a file that cannot be read
+    makes the vault one with a site. The ERROR row names what it was,
+    down to the character, and says to take it out if the vault has no
+    site. Checked against the tool's parser on 40,000 generated files.
   - **The site's own installed tool is the one asked.** With a
     `site_dir`, the questions go to the publish tool installed in that
     site folder, because that is what the site builds with. It is not

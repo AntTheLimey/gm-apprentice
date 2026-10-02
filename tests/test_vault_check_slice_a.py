@@ -1859,16 +1859,163 @@ class NoPublishToolTests(unittest.TestCase):
                 ("folded", "publish:\n  site_dir: >-\n    /some/site\n"),
                 ("one line", "publish: {site_dir: /some/site}\n"),
                 ("indented", "  publish:\n    site_dir: /some/site\n"),
-                ("not YAML", "publish:\n  site_dir: [\n")):
-            with self.subTest(form):
-                vault = make_vault(self, f"---\n{block}---\n")
+                ("not YAML", "publish:\n  site_dir: [\n"),
+                # YAML reads these keys as site_dir; the letters are not there.
+                ("escaped", 'publish:\n  "site\\x5Fdir": /some/site\n'),
+                ("escaped u", 'publish:\n  "site\\u005Fdir": /some/site\n'),
+                # No site_dir in the letters and no backslash either.
+                ("binary key", "publish:\n  ? !!binary c2l0ZV9kaXI=\n"
+                               "  : /some/site\n"),
+                ("quoted #", 'publish: {n: "x\n#", site_dir: /some/site}\n'),
+                ("line separator", "publish: {a: 1,\u2028#x, "
+                                   "site_dir: /some/site}\n"),
+                ("built in braces", "publish: {a: &k x, *k : /some/site}\n"),
+                ("in a comment", "publish:\n  # site_dir: set by init\n"),
+                ("blank", "publish:\n  site_dir:\n"),
+                ("on the next line", "publish:\n  site_dir:\n    /some/site\n")):
+            vault = make_vault(self, f"---\n{block}---\n")
+            (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+            (vault / "Jean.md").write_text(self.PC, encoding="utf-8")
+            self.no_tool()
+            for name, rows in (
+                    ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
+                    ("pc-body", vc.check_pc_body(vault)),
+                    ("wrapup", vc.check_wrapup(vault, None, True))):
+                with self.subTest(form=form, check=name):
+                    self.assertEqual(len(rows), 1, rows)
+                    self.assertTrue(rows[0].startswith(
+                        f"ERROR\t(vault)\t{name} could not ask"), rows)
+            self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_without_the_tool_another_language_on_the_opening_line_is_a_site(self):
+        # The tool reads ---js as JavaScript, which needs none of the letters.
+        for opener in ("---js", "--- js", "---yaml", "----"):
+            with self.subTest(opener):
+                vault = make_vault(
+                    self, f"{opener}\nObject.fromEntries([['publish', 1]])\n"
+                          f"---\n")
                 (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
                 self.no_tool()
                 rows = vc.check_wrapup(vault, None, True)
                 self.assertEqual(len(rows), 1, rows)
                 self.assertTrue(rows[0].startswith(
                     "ERROR\t(vault)\twrapup could not ask"), rows)
+                self.assertTrue(rows[0].endswith(
+                    f"_meta/vault-config.md opens with '{opener}', not ---, "
+                    f"which cannot be told from a site setting without the "
+                    f"publish tool: if this vault has no site, take that "
+                    f"out"), rows)
                 self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_the_row_for_a_site_that_is_only_a_mention_says_the_way_out(self):
+        # A GM with no site and no node, whose file has a blank site_dir or
+        # one in a comment, is stopped: the row says what to take out, not
+        # only "install node".
+        for block in ("publish:\n  site_dir:\n",
+                      "publish:\n  mode: player\n  # site_dir: later\n"):
+            with self.subTest(block):
+                vault = make_vault(self, f"---\n{block}---\n")
+                self.no_tool()
+                rows = vc.check_gm_leak(vault, None)
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
+                self.assertIn("it needs Node 22+ on PATH", rows[0])
+                self.assertTrue(rows[0].endswith(
+                    "_meta/vault-config.md mentions site_dir: if this vault "
+                    "has no site, take that out"), rows)
+
+    def test_the_row_names_the_character_that_could_spell_a_site(self):
+        for ch, line in (("&", 'title: "D&D night"'), ("?", "title: Who?"),
+                         ("!", "title: Run!"), ("{", "tags: {a: 1}"),
+                         ("*", "title: a *b"), ("\\", 'title: "a\\tb"'),
+                         ("<", "<<: x"), ("`", "title: `x`"),
+                         ("\u2028", "title: a\u2028b")):
+            with self.subTest(ch):
+                vault = make_vault(self, f"---\n{line}\n---\n")
+                self.no_tool()
+                rows = vc.check_gm_leak(vault, None)
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
+                self.assertIn(f"_meta/vault-config.md has {ch!r} in its "
+                              f"frontmatter, which cannot be told from a "
+                              f"site setting", rows[0])
+
+    def test_a_plain_vault_file_with_no_site_dir_is_not_a_site(self):
+        # What a vault kept without a site looks like: quoted values, a
+        # list, a comment, an accent, prose below. None of it is in the way.
+        for form, text in (
+                ("usual", '---\ntype: meta\ngm_apprentice_version: "1.10.25"\n'
+                          'publish:\n  system: "coc-7e"\n---\n\nNotes: a {b} '
+                          '\\ c!\n'),
+                ("list and comment", "---\n# the campaign\ntitle: 'Château "
+                                     "(2026)'\ntags: [a, b]\nplayers:\n"
+                                     "  - Jean\n---\n"),
+                ("block text and signs", "---\ndescription: |\n  A long one;"
+                                         " 100% — $5 + tax = more\nnote: >-\n"
+                                         "  folded\nmail: gm@example.org\n"
+                                         "none: ~\n---\n"),
+                ("windows line ends", "---\r\ntype: meta\r\n---\r\n"),
+                ("no frontmatter", "Just notes about {the} campaign!\n"),
+                ("empty", "")):
+            with self.subTest(form):
+                vault = make_vault(self, text)
+                (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+                self.no_tool()
+                leak = vc.check_gm_leak(vault, None)
+                self.assertEqual(len(leak), 1, leak)
+                self.assertTrue(leak[0].startswith("INFO\t(vault)\t"), leak)
+                wrap = vc.check_wrapup(vault, None, True)
+                self.assertFalse(rows_for(wrap, "ERROR\t(vault)"), wrap)
+                self.assertTrue(rows_for(wrap, "FIXED\tW.md"), wrap)
+
+    def test_a_vault_file_that_cannot_be_read_is_a_site(self):
+        vault = make_vault(self, "---\ntype: meta\n---\n")
+        (vault / "_meta" / "vault-config.md").write_bytes(b"---\n\xff\xfe\n")
+        self.no_tool()
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
+        self.assertIn("_meta/vault-config.md cannot be read", rows[0])
+
+    def test_a_site_and_a_node_too_old_for_the_tool_is_still_stopped(self):
+        gone = vaultlib.PublishToolUnavailable(
+            "the publish tool exited without answering")
+        vault = self.vault(site=True)
+        with mock.patch.object(vc, "vault_site", side_effect=gone):
+            for name, rows in (
+                    ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
+                    ("pc-body", vc.check_pc_body(vault)),
+                    ("wrapup", vc.check_wrapup(vault, None, True))):
+                with self.subTest(name):
+                    self.assertEqual(len(rows), 1, rows)
+                    self.assertTrue(rows[0].startswith(
+                        f"ERROR\t(vault)\t{name} could not ask"), rows)
+        self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_a_vault_file_the_tool_refuses_is_named_even_with_no_site(self):
+        # Broken YAML that never mentions site_dir: no site, so nothing is
+        # stopped, but the row says the file is to be fixed.
+        refused = vaultlib.PublishToolUnavailable(
+            "the publish tool refused: _meta/vault-config.md frontmatter is "
+            "not valid YAML: bad indentation")
+        vault = self.vault(site=False)
+        with mock.patch.object(vc, "vault_site", side_effect=refused):
+            rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("INFO\t(vault)\t"), rows)
+        self.assertIn("not valid YAML", rows[0])
+        self.assertTrue(rows[0].endswith("; fix _meta/vault-config.md"), rows)
+
+    def test_an_answer_that_is_not_understood_is_not_blamed_on_node(self):
+        odd = vaultlib.PublishToolUnavailable(
+            "the publish tool's answer about the site is not understood")
+        vault = self.vault(site=True)
+        with mock.patch.object(vc, "vault_site", side_effect=odd):
+            rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
+        self.assertNotIn("Node 22+", rows[0])
+        self.assertIn("update the gm-apprentice plugin", rows[0])
 
     def test_a_node_that_cannot_run_the_tool_does_not_block_a_vault_with_no_site(self):
         # Node is on PATH but too old: the tool exits without answering.

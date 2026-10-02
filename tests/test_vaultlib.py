@@ -447,6 +447,19 @@ class ExcludeSectionsTests(unittest.TestCase):
             got = vl.effective_exclude_sections(vault)
         self.assertEqual(got, ["GM Notes", "Keeper Notes"])
 
+    def test_a_byte_order_mark_does_not_hide_the_vault_list(self):
+        # Windows editors write one; with it read as text the opening ---
+        # is not seen and the defaults would stand in for the GM's list.
+        with tempfile.TemporaryDirectory() as d:
+            vault = Path(d)
+            write(vault, "_meta/vault-config.md",
+                  '﻿---\npublish:\n'
+                  '  exclude_sections: ["Keeper Notes"]\n---\n')
+            got = vl.effective_exclude_sections(vault)
+            seen = vl.read_publish_list(vault, "exclude_sections")
+        self.assertEqual(got, ["Keeper Notes"])
+        self.assertIsNotNone(seen.publish_line)
+
     def test_vault_list_replaces_the_defaults_block(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
